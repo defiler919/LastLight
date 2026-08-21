@@ -1,0 +1,32 @@
+# Unreal Engine generated output
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Content/Developers/
+
+# Generated plugin output
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+
+# Visual Studio and IDE state
+.vs/
+.idea/
+.vscode/
+*.sln
+*.slnx
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+*.opensdf
+*.sdf
+
+# Platform and tool noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local build artifacts
+BuildOutput/
+TestResults/

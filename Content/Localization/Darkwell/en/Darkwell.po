@@ -1,0 +1,630 @@
+﻿# Darkwell English translation.
+# Fill out your copyright notice in the Description page of Project Settings.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Darkwell\n"
+"POT-Creation-Date: 2026-08-22 08:05\n"
+"PO-Revision-Date: 2026-08-22 08:05\n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. Key:	4FE07B864A38EFA85698DBA5017E7D32
+#. SourceLocation:	/Game/Data/Items/DA_Item_Scrap.DA_Item_Scrap.DisplayName
+#: /Game/Data/Items/DA_Item_Scrap.DA_Item_Scrap.DisplayName
+msgctxt ",4FE07B864A38EFA85698DBA5017E7D32"
+msgid "Scrap"
+msgstr "Scrap"
+
+#. Key:	D49DC4AE4FD66E781CAB09B2F9201DB4
+#. SourceLocation:	/Game/Data/Items/DA_Item_Scrap.DA_Item_Scrap.ShortName
+#: /Game/Data/Items/DA_Item_Scrap.DA_Item_Scrap.ShortName
+msgctxt ",D49DC4AE4FD66E781CAB09B2F9201DB4"
+msgid "SCRAP"
+msgstr "SCRAP"
+
+#. Key:	CBDCE4574767CEA4C5FA568B7C0678B9
+#. SourceLocation:	/Game/Data/Items/DA_Item_ShotgunShells.DA_Item_ShotgunShells.DisplayName
+#: /Game/Data/Items/DA_Item_ShotgunShells.DA_Item_ShotgunShells.DisplayName
+msgctxt ",CBDCE4574767CEA4C5FA568B7C0678B9"
+msgid "Shotgun shells"
+msgstr "Shotgun shells"
+
+#. Key:	2334E4DA464EB2ADED07A5B2D2D86226
+#. SourceLocation:	/Game/Data/Items/DA_Item_ShotgunShells.DA_Item_ShotgunShells.ShortName
+#: /Game/Data/Items/DA_Item_ShotgunShells.DA_Item_ShotgunShells.ShortName
+msgctxt ",2334E4DA464EB2ADED07A5B2D2D86226"
+msgid "SHELLS"
+msgstr "SHELLS"
+
+#. Key:	5368775047DC2DF5310F18B996AB6003
+#. SourceLocation:	/Game/Data/Recipes/DA_Recipe_ShotgunShells.DA_Recipe_ShotgunShells.DisplayName
+#: /Game/Data/Recipes/DA_Recipe_ShotgunShells.DA_Recipe_ShotgunShells.DisplayName
+msgctxt ",5368775047DC2DF5310F18B996AB6003"
+msgid "Shotgun shells"
+msgstr "Shotgun shells"
+
+#. Key:	SupplyChest
+#. SourceLocation:	Source/Darkwell/Private/Game/DarkwellGameMode.cpp(132)
+#: Source/Darkwell/Private/Game/DarkwellGameMode.cpp(132)
+msgctxt "Darkwell,SupplyChest"
+msgid "Supply chest"
+msgstr "Supply chest"
+
+#. Key:	WorkshopCabinet
+#. SourceLocation:	Source/Darkwell/Private/Game/DarkwellGameMode.cpp(145)
+#: Source/Darkwell/Private/Game/DarkwellGameMode.cpp(145)
+msgctxt "Darkwell,WorkshopCabinet"
+msgid "Workshop cabinet"
+msgstr "Workshop cabinet"
+
+#. Key:	ObjectiveReachExit
+#. SourceLocation:	Source/Darkwell/Private/Game/DarkwellGameState.cpp(54)
+#: Source/Darkwell/Private/Game/DarkwellGameState.cpp(54)
+msgctxt "Darkwell,ObjectiveReachExit"
+msgid "REACH THE EMERGENCY EXIT"
+msgstr "REACH THE EMERGENCY EXIT"
+
+#. Key:	ObjectiveEscaped
+#. SourceLocation:	Source/Darkwell/Private/Game/DarkwellGameState.cpp(59)
+#: Source/Darkwell/Private/Game/DarkwellGameState.cpp(59)
+msgctxt "Darkwell,ObjectiveEscaped"
+msgid "ESCAPE COMPLETE"
+msgstr "ESCAPE COMPLETE"
+
+#. Key:	ObjectiveFindFuse
+#. SourceLocation:	Source/Darkwell/Private/Game/DarkwellGameState.cpp(62)
+#: Source/Darkwell/Private/Game/DarkwellGameState.cpp(62)
+msgctxt "Darkwell,ObjectiveFindFuse"
+msgid "FIND THE GENERATOR FUSE"
+msgstr "FIND THE GENERATOR FUSE"
+
+#. Key:	UnknownItem
+#. SourceLocation:	Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(117)
+#: Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(117)
+msgctxt "Darkwell,UnknownItem"
+msgid "Unknown item"
+msgstr "Unknown item"
+
+#. Key:	UnknownItemShortName
+#. SourceLocation:	Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(118)
+#: Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(118)
+msgctxt "Darkwell,UnknownItemShortName"
+msgid "UNKNOWN"
+msgstr "UNKNOWN"
+
+#. Key:	UnknownItemDescription
+#. SourceLocation:	Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(119)
+#: Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(119)
+msgctxt "Darkwell,UnknownItemDescription"
+msgid "No reliable information is available."
+msgstr "No reliable information is available."
+
+#. Key:	ShotgunShellItem
+#. SourceLocation:	Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(58)
+#: Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(58)
+msgctxt "Darkwell,ShotgunShellItem"
+msgid "Shotgun shells"
+msgstr "Shotgun shells"
+
+#. Key:	ShotgunShellShortName
+#. SourceLocation:	Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(59)
+#: Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(59)
+msgctxt "Darkwell,ShotgunShellShortName"
+msgid "SHELLS"
+msgstr "SHELLS"
+
+#. Key:	ShotgunShellDescription
+#. SourceLocation:	Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(60)
+#: Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(60)
+msgctxt "Darkwell,ShotgunShellDescription"
+msgid "Two-barrel shotgun ammunition. Scarce, loud, and decisive."
+msgstr "Two-barrel shotgun ammunition. Scarce, loud, and decisive."
+
+#. Key:	ScrapItem
+#. SourceLocation:	Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(68)
+#: Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(68)
+msgctxt "Darkwell,ScrapItem"
+msgid "Scrap"
+msgstr "Scrap"
+
+#. Key:	ScrapShortName
+#. SourceLocation:	Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(69)
+#: Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(69)
+msgctxt "Darkwell,ScrapShortName"
+msgid "SCRAP"
+msgstr "SCRAP"
+
+#. Key:	ScrapDescription
+#. SourceLocation:	Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(70)
+#: Source/Darkwell/Private/Inventory/DarkwellItemCatalog.cpp(70)
+msgctxt "Darkwell,ScrapDescription"
+msgid "Salvaged metal and wire used at workbenches."
+msgstr "Salvaged metal and wire used at workbenches."
+
+#. Key:	DisplayModeUnknown
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(201)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(201)
+msgctxt "Darkwell,DisplayModeUnknown"
+msgid "DISPLAY MODE"
+msgstr "DISPLAY MODE"
+
+#. Key:	DisplayModeFullscreen
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(206)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(206)
+msgctxt "Darkwell,DisplayModeFullscreen"
+msgid "DISPLAY: FULLSCREEN"
+msgstr "DISPLAY: FULLSCREEN"
+
+#. Key:	DisplayModeWindowed
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(208)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(208)
+msgctxt "Darkwell,DisplayModeWindowed"
+msgid "DISPLAY: WINDOWED"
+msgstr "DISPLAY: WINDOWED"
+
+#. Key:	DisplayModeBorderless
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(211)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(211)
+msgctxt "Darkwell,DisplayModeBorderless"
+msgid "DISPLAY: BORDERLESS"
+msgstr "DISPLAY: BORDERLESS"
+
+#. Key:	BackpackTitle
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(343)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(343)
+msgctxt "Darkwell,BackpackTitle"
+msgid "Backpack"
+msgstr "Backpack"
+
+#. Key:	WorkbenchTitle
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(383)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(383)
+msgctxt "Darkwell,WorkbenchTitle"
+msgid "Shell workbench"
+msgstr "Shell workbench"
+
+#. Key:	TakeAllMoved
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(422)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(422)
+msgctxt "Darkwell,TakeAllMoved"
+msgid "Took {0} items"
+msgstr "Took {0} items"
+
+#. Key:	TakeAllBlocked
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(428)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(428)
+msgctxt "Darkwell,TakeAllBlocked"
+msgid "Nothing could be transferred"
+msgstr "Nothing could be transferred"
+
+#. Key:	CraftedShells
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(454)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(454)
+msgctxt "Darkwell,CraftedShells"
+msgid "Crafted {0} shotgun shells"
+msgstr "Crafted {0} shotgun shells"
+
+#. Key:	CraftingBlocked
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(456)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(456)
+msgctxt "Darkwell,CraftingBlocked"
+msgid "Need scrap and enough backpack space"
+msgstr "Need scrap and enough backpack space"
+
+#. Key:	InventoryStackSelected
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(500)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(500)
+msgctxt "Darkwell,InventoryStackSelected"
+msgid "Stack selected; choose a slot"
+msgstr "Stack selected; choose a slot"
+
+#. Key:	InventoryMoveCancelled
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(513)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(513)
+msgctxt "Darkwell,InventoryMoveCancelled"
+msgid "Move cancelled"
+msgstr "Move cancelled"
+
+#. Key:	InventoryMoveComplete
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(521)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(521)
+msgctxt "Darkwell,InventoryMoveComplete"
+msgid "Stack moved"
+msgstr "Stack moved"
+
+#. Key:	InventoryMoveBlocked
+#. SourceLocation:	Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(522)
+#: Source/Darkwell/Private/Player/DarkwellPlayerController.cpp(522)
+msgctxt "Darkwell,InventoryMoveBlocked"
+msgid "Stack could not be moved"
+msgstr "Stack could not be moved"
+
+#. Key:	Loading
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(103)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(103)
+msgctxt "Darkwell,Loading"
+msgid "LOADING QUICKSAVE..."
+msgstr "LOADING QUICKSAVE..."
+
+#. Key:	NewGameBusy
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(114)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(114)
+msgctxt "Darkwell,NewGameBusy"
+msgid "SAVE OPERATION IN PROGRESS"
+msgstr "SAVE OPERATION IN PROGRESS"
+
+#. Key:	StartingNewGame
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(128)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(128)
+msgctxt "Darkwell,StartingNewGame"
+msgid "STARTING NEW GAME..."
+msgstr "STARTING NEW GAME..."
+
+#. Key:	MainMenuBusy
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(137)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(137)
+msgctxt "Darkwell,MainMenuBusy"
+msgid "SAVE OPERATION IN PROGRESS"
+msgstr "SAVE OPERATION IN PROGRESS"
+
+#. Key:	UnsupportedSave
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(183)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(183)
+msgctxt "Darkwell,UnsupportedSave"
+msgid "QUICKSAVE VERSION NOT SUPPORTED"
+msgstr "QUICKSAVE VERSION NOT SUPPORTED"
+
+#. Key:	RestoreFailed
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(194)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(194)
+msgctxt "Darkwell,RestoreFailed"
+msgid "QUICKSAVE RESTORE FAILED"
+msgstr "QUICKSAVE RESTORE FAILED"
+
+#. Key:	QuickSaveLoaded
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(302)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(302)
+msgctxt "Darkwell,QuickSaveLoaded"
+msgid "QUICKSAVE LOADED"
+msgstr "QUICKSAVE LOADED"
+
+#. Key:	AutosaveComplete
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(432)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(432)
+msgctxt "Darkwell,AutosaveComplete"
+msgid "AUTOSAVE COMPLETE"
+msgstr "AUTOSAVE COMPLETE"
+
+#. Key:	QuickSaveComplete
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(433)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(433)
+msgctxt "Darkwell,QuickSaveComplete"
+msgid "SAVE COMPLETE"
+msgstr "SAVE COMPLETE"
+
+#. Key:	QuickSaveFailed
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(434)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(434)
+msgctxt "Darkwell,QuickSaveFailed"
+msgid "SAVE FAILED"
+msgstr "SAVE FAILED"
+
+#. Key:	UnsupportedQuickSave
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(461)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(461)
+msgctxt "Darkwell,UnsupportedQuickSave"
+msgid "QUICKSAVE VERSION NOT SUPPORTED"
+msgstr "QUICKSAVE VERSION NOT SUPPORTED"
+
+#. Key:	QuickLoadFailed
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(462)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(462)
+msgctxt "Darkwell,QuickLoadFailed"
+msgid "QUICKLOAD FAILED"
+msgstr "QUICKLOAD FAILED"
+
+#. Key:	SaveBusy
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(64)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(64)
+msgctxt "Darkwell,SaveBusy"
+msgid "SAVE OPERATION IN PROGRESS"
+msgstr "SAVE OPERATION IN PROGRESS"
+
+#. Key:	SaveCaptureFailed
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(71)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(71)
+msgctxt "Darkwell,SaveCaptureFailed"
+msgid "QUICKSAVE FAILED"
+msgstr "QUICKSAVE FAILED"
+
+#. Key:	Autosaving
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(79)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(79)
+msgctxt "Darkwell,Autosaving"
+msgid "AUTOSAVING..."
+msgstr "AUTOSAVING..."
+
+#. Key:	Saving
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(80)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(80)
+msgctxt "Darkwell,Saving"
+msgid "SAVING..."
+msgstr "SAVING..."
+
+#. Key:	LoadBusy
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(91)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(91)
+msgctxt "Darkwell,LoadBusy"
+msgid "SAVE OPERATION IN PROGRESS"
+msgstr "SAVE OPERATION IN PROGRESS"
+
+#. Key:	NoQuickSave
+#. SourceLocation:	Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(97)
+#: Source/Darkwell/Private/Save/DarkwellSaveSubsystem.cpp(97)
+msgctxt "Darkwell,NoQuickSave"
+msgid "NO QUICKSAVE FOUND"
+msgstr "NO QUICKSAVE FOUND"
+
+#. Key:	MenuNewGame
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(56)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(56)
+msgctxt "Darkwell,MenuNewGame"
+msgid "NEW GAME"
+msgstr "NEW GAME"
+
+#. Key:	InventoryActionComplete
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(563)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(563)
+msgctxt "Darkwell,InventoryActionComplete"
+msgid "Inventory updated"
+msgstr "Inventory updated"
+
+#. Key:	InventoryActionBlocked
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(564)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(564)
+msgctxt "Darkwell,InventoryActionBlocked"
+msgid "No room or stack cannot be split"
+msgstr "No room or stack cannot be split"
+
+#. Key:	MenuContinue
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(57)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(57)
+msgctxt "Darkwell,MenuContinue"
+msgid "CONTINUE"
+msgstr "CONTINUE"
+
+#. Key:	MenuSettings
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(58)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(58)
+msgctxt "Darkwell,MenuSettings"
+msgid "SETTINGS"
+msgstr "SETTINGS"
+
+#. Key:	ContainerTransferComplete
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(581)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(581)
+msgctxt "Darkwell,ContainerTransferComplete"
+msgid "Items transferred"
+msgstr "Items transferred"
+
+#. Key:	ContainerTransferBlocked
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(582)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(582)
+msgctxt "Darkwell,ContainerTransferBlocked"
+msgid "Backpack has no room"
+msgstr "Backpack has no room"
+
+#. Key:	ContainerSplitComplete
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(589)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(589)
+msgctxt "Darkwell,ContainerSplitComplete"
+msgid "Stack split in container"
+msgstr "Stack split in container"
+
+#. Key:	MenuQuit
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(59)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(59)
+msgctxt "Darkwell,MenuQuit"
+msgid "QUIT"
+msgstr "QUIT"
+
+#. Key:	ContainerSplitBlocked
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(590)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(590)
+msgctxt "Darkwell,ContainerSplitBlocked"
+msgid "No free container slot or stack cannot be split"
+msgstr "No free container slot or stack cannot be split"
+
+#. Key:	MenuResume
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(62)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(62)
+msgctxt "Darkwell,MenuResume"
+msgid "RESUME"
+msgstr "RESUME"
+
+#. Key:	MenuSave
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(63)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(63)
+msgctxt "Darkwell,MenuSave"
+msgid "SAVE GAME"
+msgstr "SAVE GAME"
+
+#. Key:	MenuLoad
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(64)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(64)
+msgctxt "Darkwell,MenuLoad"
+msgid "LOAD GAME"
+msgstr "LOAD GAME"
+
+#. Key:	BackpackPanel
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(645)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(645)
+msgctxt "Darkwell,BackpackPanel"
+msgid "BACKPACK"
+msgstr "BACKPACK"
+
+#. Key:	MenuPauseSettings
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(65)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(65)
+msgctxt "Darkwell,MenuPauseSettings"
+msgid "SETTINGS"
+msgstr "SETTINGS"
+
+#. Key:	ContainerPanelWithCount
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(655)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(655)
+msgctxt "Darkwell,ContainerPanelWithCount"
+msgid "{0}  -  {1} ITEMS"
+msgstr "{0}  -  {1} ITEMS"
+
+#. Key:	EmptyContainerPanel
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(659)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(659)
+msgctxt "Darkwell,EmptyContainerPanel"
+msgid "{0}  -  EMPTY"
+msgstr "{0}  -  EMPTY"
+
+#. Key:	MenuReturnMain
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(66)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(66)
+msgctxt "Darkwell,MenuReturnMain"
+msgid "RETURN TO MAIN MENU"
+msgstr "RETURN TO MAIN MENU"
+
+#. Key:	TakeAllButton
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(679)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(679)
+msgctxt "Darkwell,TakeAllButton"
+msgid "TAKE ALL  [T]"
+msgstr "TAKE ALL  [T]"
+
+#. Key:	ContainerEmptyButton
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(680)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(680)
+msgctxt "Darkwell,ContainerEmptyButton"
+msgid "CONTAINER EMPTY"
+msgstr "CONTAINER EMPTY"
+
+#. Key:	ShellWorkbenchPanel
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(696)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(696)
+msgctxt "Darkwell,ShellWorkbenchPanel"
+msgid "SHELL WORKBENCH"
+msgstr "SHELL WORKBENCH"
+
+#. Key:	RecipeLabel
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(697)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(697)
+msgctxt "Darkwell,RecipeLabel"
+msgid "RECIPE"
+msgstr "RECIPE"
+
+#. Key:	MenuBack
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(70)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(70)
+msgctxt "Darkwell,MenuBack"
+msgid "BACK"
+msgstr "BACK"
+
+#. Key:	RecipeExchangeFormat
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(730)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(730)
+msgctxt "Darkwell,RecipeExchangeFormat"
+msgid "{0} {1}  ->  {2} {3}"
+msgstr "{0} {1}  ->  {2} {3}"
+
+#. Key:	ClickToCraft
+#. SourceLocation:	Source/Darkwell/Private/UI/DarkwellHUD.cpp(743)
+#: Source/Darkwell/Private/UI/DarkwellHUD.cpp(743)
+msgctxt "Darkwell,ClickToCraft"
+msgid "CLICK TO CRAFT"
+msgstr "CLICK TO CRAFT"
+
+#. Key:	TakeShells
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellAmmoPickup.cpp(102)
+#: Source/Darkwell/Private/World/DarkwellAmmoPickup.cpp(102)
+msgctxt "Darkwell,TakeShells"
+msgid "Take {0} shells"
+msgstr "Take {0} shells"
+
+#. Key:	ClosePassageDoor
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellDoor.cpp(81)
+#: Source/Darkwell/Private/World/DarkwellDoor.cpp(81)
+msgctxt "Darkwell,ClosePassageDoor"
+msgid "Close passage door"
+msgstr "Close passage door"
+
+#. Key:	OpenPassageDoor
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellDoor.cpp(82)
+#: Source/Darkwell/Private/World/DarkwellDoor.cpp(82)
+msgctxt "Darkwell,OpenPassageDoor"
+msgid "Open passage door"
+msgstr "Open passage door"
+
+#. Key:	UseEmergencyExit
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellExitGate.cpp(79)
+#: Source/Darkwell/Private/World/DarkwellExitGate.cpp(79)
+msgctxt "Darkwell,UseEmergencyExit"
+msgid "Use emergency exit"
+msgstr "Use emergency exit"
+
+#. Key:	ExitNeedsFuse
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellExitGate.cpp(80)
+#: Source/Darkwell/Private/World/DarkwellExitGate.cpp(80)
+msgctxt "Darkwell,ExitNeedsFuse"
+msgid "Exit locked - find generator fuse"
+msgstr "Exit locked - find generator fuse"
+
+#. Key:	TakeGeneratorFuse
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellFusePickup.cpp(62)
+#: Source/Darkwell/Private/World/DarkwellFusePickup.cpp(62)
+msgctxt "Darkwell,TakeGeneratorFuse"
+msgid "Take generator fuse"
+msgstr "Take generator fuse"
+
+#. Key:	TakeScrap
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellScrapPickup.cpp(101)
+#: Source/Darkwell/Private/World/DarkwellScrapPickup.cpp(101)
+msgctxt "Darkwell,TakeScrap"
+msgid "Take {0} scrap"
+msgstr "Take {0} scrap"
+
+#. Key:	InspectEmptyStorage
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellStorageContainer.cpp(148)
+#: Source/Darkwell/Private/World/DarkwellStorageContainer.cpp(148)
+msgctxt "Darkwell,InspectEmptyStorage"
+msgid "Inspect {0} (empty)"
+msgstr "Inspect {0} (empty)"
+
+#. Key:	SearchStorage
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellStorageContainer.cpp(152)
+#: Source/Darkwell/Private/World/DarkwellStorageContainer.cpp(152)
+msgctxt "Darkwell,SearchStorage"
+msgid "Search {0} ({1} items)"
+msgstr "Search {0} ({1} items)"
+
+#. Key:	StorageDefaultName
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellStorageContainer.cpp(50)
+#: Source/Darkwell/Private/World/DarkwellStorageContainer.cpp(50)
+msgctxt "Darkwell,StorageDefaultName"
+msgid "Storage"
+msgstr "Storage"
+
+#. Key:	UseWorkbench
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellWorkbench.cpp(109)
+#: Source/Darkwell/Private/World/DarkwellWorkbench.cpp(109)
+msgctxt "Darkwell,UseWorkbench"
+msgid "Use shell workbench"
+msgstr "Use shell workbench"
+
+#. Key:	FallbackShellRecipe
+#. SourceLocation:	Source/Darkwell/Private/World/DarkwellWorkbench.cpp(63)
+#: Source/Darkwell/Private/World/DarkwellWorkbench.cpp(63)
+msgctxt "Darkwell,FallbackShellRecipe"
+msgid "Shotgun shells"
+msgstr "Shotgun shells"

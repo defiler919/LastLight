@@ -4,7 +4,8 @@ Last updated: 2026-08-22
 
 ## Completed playable systems
 
-- Absolute top-down movement, cursor aiming, two-hand input, shotgun, switchable torch/lantern tools, and dangerous reload presentation.
+- Absolute top-down movement, rate-limited cursor turning, a faster `Shift` sprint that locks facing/vision to travel direction, two-hand input, shotgun, switchable torch/lantern tools, and dangerous reload presentation.
+- Native StarCraft-style player knowledge: pure-black unexplored space, dim remembered terrain, live current visibility, wall-occluded cone sight, short awareness radius, tool-dependent torch/lantern sight profiles, and saved exploration memory. Enemies and threat HUD rows disappear outside current sight; remotely changing exit/container presentation freezes until reacquired.
 - Contextual RMB short/long actions: torch swing plus heat, a held torch boundary field, lantern base light, a held focus beam with stun buildup, and a fuel-cost flash with cooldown.
 - Stalker perception, pursuit, attacks, damage/death feedback, stable held-torch stand-off behavior, visible lantern focus buildup, five-second full-meter stun, flash/swing light stun, and restart flow. Lantern focus does not interrupt or repel the enemy before the meter fills.
 - Native Warden archetype guarding the fuse: 260 health, slower movement, 28-damage attacks, a broad armored silhouette, magenta threat presentation, a closer 58% torch boundary, and the same full-meter five-second lantern stun. Native archetype Gameplay Tags and per-enemy HUD rows keep both threats distinct.
@@ -15,7 +16,7 @@ Last updated: 2026-08-22
 - Distinct animated chest and cabinet presentation: focused loot signals brighten, opening the inventory moves the lid/door, closing it restores the world state, and searched-empty containers become dim and remain slightly ajar. The inventory panel and interaction prompt expose live item totals and empty state.
 - Shell workbench that opens beside the backpack and atomically crafts two shells from two scrap.
 - Data-driven native item-definition assets for shotgun shells and scrap, plus a native workbench recipe asset; Gameplay Tags remain the stable item identity and C++ fallbacks protect the playable loop. Formal 1254px shell/scrap icons are bound as UI textures, inventory and recipe cards render them at square aspect, and the item/workbench presentation layer has compiled English and Simplified Chinese localization resources.
-- Versioned native continuation save v3 with asynchronous disk I/O and stable world-object IDs. It restores player transform/health/state, backpack contents and capacity, loaded shells, torch charge/heat, lantern fuel, equipped hands, mission and door state, container contents, runtime pickup quantities, and every spawned native enemy subclass by persistent ID after reconstructing the saved level. Versions 1 and 2 remain supported with right-tool resource defaults.
+- Versioned native continuation save v4 with asynchronous disk I/O and stable world-object IDs. It restores player transform/health/state, backpack contents and capacity, loaded shells, torch charge/heat, lantern fuel, equipped hands, explored fog cells, mission and door state, container contents, runtime pickup quantities, and every spawned native enemy subclass by persistent ID after reconstructing the saved level. Versions 1-3 remain supported; pre-v4 saves start with fresh exploration memory.
 - Native product shell with main, pause, and settings menus: New Game, Continue, resume, save/load, display mode, return to main menu, and quit. Continue/load disable themselves when no slot exists.
 - Fuse collection and successful workbench crafting create asynchronous autosaves. Loading grants the player and all native enemy AIs a three-second safety grace before combat resumes.
 
@@ -33,8 +34,8 @@ Last updated: 2026-08-22
 
 ## Next development candidates
 
-1. Tune the two-enemy encounter economy and replace greybox Warden/light feedback with authored animation, audio, and VFX.
-2. Add authored audio/VFX hooks for interaction, container motion, crafting, save feedback, swings, focus, flash, and overheat.
+1. Begin authored world construction under the visibility contract: solid `Visibility` collision on sight-blocking walls, deliberate exploration routes, persistent IDs on saved world objects, and encounter spaces sized around the current sight profiles.
+2. Tune the two-enemy encounter economy and replace greybox Warden/light feedback with authored animation, audio, and VFX.
 3. Expand the continuation policy to multiple slots and explicit save migrations when the campaign structure exists.
 
 Core runtime rules remain native C++; UI art and tuning data can migrate to assets without replacing inventory transactions.
@@ -42,7 +43,9 @@ Core runtime rules remain native C++; UI art and tuning data can migrate to asse
 ## Verification at handoff
 
 - `Scripts/BuildEditor.ps1`: passed (`DarkwellEditor Win64 Development`).
-- Unreal automation: 19/19 DARKWELL tests passed, including native Stalker/Warden archetype rules, the Warden's reduced torch boundary, right-tool gesture/heat rules, lantern stun buildup/decay, wheel release commit, save v3 serialization, and v1/v2/v3 compatibility policy.
+- Unreal automation: 21/21 DARKWELL tests passed, including native Stalker/Warden archetype rules, the Warden's reduced torch boundary, right-tool gesture/heat rules, lantern stun buildup/decay, wheel release commit, limited-turn/sprint rules, fog cell/cone/knowledge transitions, save v4 serialization, and v1-v4 compatibility policy.
+- PIE visibility regression: a new game rendered all three knowledge layers at once (pure-black unknown space, smoothly filtered dim remembered terrain, and an unobscured live sight region). Current sight now uses continuous source margins plus a per-frame 360-ray wall-occlusion field; remembered terrain uses a separate wide linear-time smoothing pass. Sustained lateral movement in the open room produced a stable camera-following mask and a continuous remembered trail without 10 Hz jumping or visible 100 cm cell steps. The editor used about two logical CPU cores during the PIE sampling window. Walls still clipped sight, relocated enemies remained absent from both world and threat HUD outside authoritative visibility, and runtime-only moves were discarded when PIE stopped.
+- PIE door-focus regression: at the central passage, the real cursor hit the door's moving interaction proxy through overhead wall/door-frame geometry; runtime inspection reported `FocusedActor = DarkwellDoor_0`, and real `F` input changed the native door tag from `State.World.Door.Closed` to `State.World.Door.Open`.
 - PIE enemy-roster regression: the native game mode spawned exactly one base Stalker and one Warden. Runtime inspection confirmed `Enemy.Archetype.Warden`, persistent ID `Enemy.Warden.FuseGuard`, 260 health, 28 damage, 1.65-second attack interval, 58% torch range, three-second lantern fill, five-second stun, location `(650,120)`, and the distinct `GreyboxBody`/`FacingMarker`/`ArmorShell` mesh set. The HUD rendered separate named threat rows for `STALKER` and `WARDEN`.
 - PIE held-torch regression: real RMB input kept the stalker in `HELD AT BAY` at both one and three seconds while player health remained at 100%; the enemy retreated to the deterrence boundary and did not resume approaching or attacking while the hold remained active.
 - PIE lantern-focus regression: after one second of uninterrupted focus the visible stun meter reached 23% while the stalker remained `HUNTING`; after approximately three seconds it changed to `LIGHT-STUNNED 4.8s`, and two seconds later the countdown showed 3.0 seconds while player health stopped falling. This confirms that focus has no partial behavioral effect and that a full meter applies the five-second stun.

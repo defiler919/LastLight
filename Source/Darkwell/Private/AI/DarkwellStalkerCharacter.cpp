@@ -70,6 +70,11 @@ void ADarkwellStalkerCharacter::BeginPlay()
 	SetBehaviorState(DarkwellGameplayTags::State_Enemy_Idle);
 }
 
+void ADarkwellStalkerCharacter::SetPlayerFogState(const EDarkwellFogCellState NewState)
+{
+	SetActorHiddenInGame(NewState != EDarkwellFogCellState::Visible);
+}
+
 float ADarkwellStalkerCharacter::TakeDamage(
 	const float DamageAmount,
 	const FDamageEvent& DamageEvent,

@@ -7,6 +7,8 @@ namespace DarkwellGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG(State_Player_Alive, "State.Player.Alive");
 	UE_DEFINE_GAMEPLAY_TAG(State_Player_Dead, "State.Player.Dead");
 	UE_DEFINE_GAMEPLAY_TAG(State_Player_Escaped, "State.Player.Escaped");
+	UE_DEFINE_GAMEPLAY_TAG(State_Player_Movement_Walking, "State.Player.Movement.Walking");
+	UE_DEFINE_GAMEPLAY_TAG(State_Player_Movement_Sprinting, "State.Player.Movement.Sprinting");
 	UE_DEFINE_GAMEPLAY_TAG(State_Player_Torch_On, "State.Player.Torch.On");
 	UE_DEFINE_GAMEPLAY_TAG(State_Player_Torch_Lowered, "State.Player.Torch.Lowered");
 	UE_DEFINE_GAMEPLAY_TAG(State_Player_Torch_Swinging, "State.Player.Torch.Swinging");

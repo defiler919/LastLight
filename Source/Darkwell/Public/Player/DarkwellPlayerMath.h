@@ -15,4 +15,17 @@ namespace Darkwell::PlayerMath
 		const FVector& RayDirection,
 		float PlaneHeight,
 		FVector& OutIntersection);
+
+	/** Turns toward DesiredYaw by at most TurnRate * DeltaTime using the shortest angular path. */
+	DARKWELL_API float TurnYawToward(
+		float CurrentYaw,
+		float DesiredYaw,
+		float TurnRateDegreesPerSecond,
+		float DeltaTime);
+
+	/** Sprinting requires an active request, gameplay permission, and a movement direction. */
+	DARKWELL_API bool ShouldSprint(
+		bool bSprintRequested,
+		bool bCanMove,
+		const FVector& MovementDirection);
 }

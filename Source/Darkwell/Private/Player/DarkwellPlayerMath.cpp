@@ -41,4 +41,23 @@ namespace Darkwell::PlayerMath
 		OutIntersection.Z = PlaneHeight;
 		return true;
 	}
+
+	float TurnYawToward(
+		const float CurrentYaw,
+		const float DesiredYaw,
+		const float TurnRateDegreesPerSecond,
+		const float DeltaTime)
+	{
+		const float MaximumDelta = FMath::Max(0.0f, TurnRateDegreesPerSecond)
+			* FMath::Max(0.0f, DeltaTime);
+		return FMath::FixedTurn(CurrentYaw, DesiredYaw, MaximumDelta);
+	}
+
+	bool ShouldSprint(
+		const bool bSprintRequested,
+		const bool bCanMove,
+		const FVector& MovementDirection)
+	{
+		return bSprintRequested && bCanMove && !MovementDirection.IsNearlyZero();
+	}
 }

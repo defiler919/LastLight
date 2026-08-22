@@ -70,6 +70,37 @@ bool FDarkwellPlanarAimTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellLimitedTurnTest,
+	"Darkwell.Player.Aim.LimitedTurn",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDarkwellLimitedTurnTest::RunTest(const FString& Parameters)
+{
+	TestEqual(
+		TEXT("Turning cannot exceed the configured angular speed"),
+		Darkwell::PlayerMath::TurnYawToward(0.0f, 90.0f, 90.0f, 0.5f),
+		45.0f);
+	TestEqual(
+		TEXT("Turning uses the shortest path across the yaw seam"),
+		Darkwell::PlayerMath::TurnYawToward(170.0f, -170.0f, 20.0f, 0.5f),
+		180.0f);
+	TestEqual(
+		TEXT("Negative delta time cannot rotate the player"),
+		Darkwell::PlayerMath::TurnYawToward(25.0f, 90.0f, 120.0f, -1.0f),
+		25.0f);
+	TestTrue(
+		TEXT("A held sprint input with movement enters sprint"),
+		Darkwell::PlayerMath::ShouldSprint(true, true, FVector::XAxisVector));
+	TestFalse(
+		TEXT("Holding sprint while stationary stays in walking state"),
+		Darkwell::PlayerMath::ShouldSprint(true, true, FVector::ZeroVector));
+	TestFalse(
+		TEXT("Menus and inventory block sprint state"),
+		Darkwell::PlayerMath::ShouldSprint(true, false, FVector::XAxisVector));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FDarkwellCursorPlaneIntersectionTest,
 	"Darkwell.Player.Aim.CursorPlaneIntersection",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

@@ -8,8 +8,10 @@
 #include "Combat/DarkwellLoadoutRules.h"
 #include "Game/DarkwellMissionRules.h"
 #include "Gameplay/DarkwellGameplayTags.h"
+#include "Gameplay/DarkwellFogSubject.h"
 #include "Gameplay/DarkwellResourceMath.h"
 #include "Gameplay/DarkwellSurvivalRules.h"
+#include "Gameplay/DarkwellVisibilityMath.h"
 #include "Engine/AssetManager.h"
 #include "Inventory/DarkwellCraftingRecipe.h"
 #include "Inventory/DarkwellInventoryComponent.h"
@@ -18,6 +20,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Misc/AutomationTest.h"
 #include "Save/DarkwellSaveGame.h"
+#include "World/DarkwellExitGate.h"
+#include "World/DarkwellStorageContainer.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FDarkwellSaveSerializationTest,
@@ -55,6 +59,7 @@ bool FDarkwellSaveSerializationTest::RunTest(const FString& Parameters)
 	SaveData->Player.bTorchOn = true;
 	SaveData->Player.EquippedLeftHandItem = DarkwellGameplayTags::Equipment_Left_Shotgun;
 	SaveData->Player.EquippedRightHandItem = DarkwellGameplayTags::Equipment_Right_Torch;
+	SaveData->Player.ExploredFogCells = {FIntPoint(-3, 4), FIntPoint(1, 2)};
 
 	FDarkwellContainerSaveData& Container = SaveData->Containers.AddDefaulted_GetRef();
 	Container.PersistentId = FName(TEXT("Container.Test"));
@@ -84,6 +89,8 @@ bool FDarkwellSaveSerializationTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Torch heat survives serialization"), LoadedData->Player.TorchHeat, 42.0f);
 		TestEqual(TEXT("Lantern fuel survives serialization"), LoadedData->Player.LanternFuel, 71.0f);
 		TestTrue(TEXT("Torch power state survives serialization"), LoadedData->Player.bTorchOn);
+		TestEqual(TEXT("Explored fog knowledge survives serialization"), LoadedData->Player.ExploredFogCells.Num(), 2);
+		TestEqual(TEXT("Negative explored cell survives serialization"), LoadedData->Player.ExploredFogCells[0], FIntPoint(-3, 4));
 		TestTrue(TEXT("Mission tag survives serialization"), LoadedData->MissionState == DarkwellGameplayTags::State_Mission_ReachExit);
 		TestEqual(TEXT("Container ID survives serialization"), LoadedData->Containers[0].PersistentId, FName(TEXT("Container.Test")));
 		TestEqual(TEXT("Collected pickup state survives serialization"), LoadedData->WorldPickups[0].Quantity, 0);
@@ -92,6 +99,29 @@ bool FDarkwellSaveSerializationTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("Enemy behavior survives serialization"), LoadedData->Enemies[0].BehaviorState == DarkwellGameplayTags::State_Enemy_Investigating);
 		TestTrue(TEXT("Enemy life state survives serialization"), LoadedData->Enemies[0].bAlive);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellFogKnowledgeRulesTest,
+	"Darkwell.Gameplay.Visibility.FogKnowledge",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDarkwellFogKnowledgeRulesTest::RunTest(const FString& Parameters)
+{
+	using namespace Darkwell::VisibilityMath;
+
+	TestEqual(TEXT("Positive world positions map to stable fog cells"), WorldToCell(FVector(149.0, 201.0, 0.0), 100.0f), FIntPoint(1, 2));
+	TestEqual(TEXT("Negative world positions floor into the preceding cell"), WorldToCell(FVector(-0.1, -100.1, 0.0), 100.0f), FIntPoint(-1, -2));
+	TestTrue(TEXT("A target directly ahead is inside the view cone"), IsInsideVisionCone(FVector::ZeroVector, FVector::XAxisVector, FVector(500.0, 0.0, 0.0), 600.0f, 45.0f));
+	TestFalse(TEXT("A target behind the player is outside the view cone"), IsInsideVisionCone(FVector::ZeroVector, FVector::XAxisVector, FVector(-100.0, 0.0, 0.0), 600.0f, 90.0f));
+	TestFalse(TEXT("A target beyond sight range is not visible"), IsInsideVisionCone(FVector::ZeroVector, FVector::XAxisVector, FVector(700.0, 0.0, 0.0), 600.0f, 45.0f));
+	TestEqual(TEXT("Never-seen cells remain black"), ResolveFogCellState(false, false), EDarkwellFogCellState::Unexplored);
+	TestEqual(TEXT("Seen cells outside current sight become remembered"), ResolveFogCellState(false, true), EDarkwellFogCellState::Explored);
+	TestEqual(TEXT("Current sight always exposes live state"), ResolveFogCellState(true, true), EDarkwellFogCellState::Visible);
+	TestTrue(TEXT("Mobile enemies participate in fog knowledge"), ADarkwellStalkerCharacter::StaticClass()->ImplementsInterface(UDarkwellFogSubject::StaticClass()));
+	TestTrue(TEXT("The powered exit freezes its last-known presentation"), ADarkwellExitGate::StaticClass()->ImplementsInterface(UDarkwellFogSubject::StaticClass()));
+	TestTrue(TEXT("Storage freezes its last-known presentation"), ADarkwellStorageContainer::StaticClass()->ImplementsInterface(UDarkwellFogSubject::StaticClass()));
 	return true;
 }
 
@@ -369,6 +399,8 @@ bool FDarkwellNativeStateTagsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Alive player state tag is registered"), DarkwellGameplayTags::State_Player_Alive.GetTag().IsValid());
 	TestTrue(TEXT("Dead player state tag is registered"), DarkwellGameplayTags::State_Player_Dead.GetTag().IsValid());
 	TestTrue(TEXT("Escaped player state tag is registered"), DarkwellGameplayTags::State_Player_Escaped.GetTag().IsValid());
+	TestTrue(TEXT("Walking state tag is registered"), DarkwellGameplayTags::State_Player_Movement_Walking.GetTag().IsValid());
+	TestTrue(TEXT("Sprinting state tag is registered"), DarkwellGameplayTags::State_Player_Movement_Sprinting.GetTag().IsValid());
 	TestTrue(TEXT("Torch state tag is registered"), DarkwellGameplayTags::State_Player_Torch_On.GetTag().IsValid());
 	TestTrue(TEXT("Lowered torch tag is registered"), DarkwellGameplayTags::State_Player_Torch_Lowered.GetTag().IsValid());
 	TestTrue(TEXT("Torch swing tag is registered"), DarkwellGameplayTags::State_Player_Torch_Swinging.GetTag().IsValid());

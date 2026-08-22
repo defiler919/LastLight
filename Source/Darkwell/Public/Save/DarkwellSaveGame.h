@@ -60,6 +60,10 @@ struct DARKWELL_API FDarkwellPlayerSaveData
 
 	UPROPERTY(SaveGame)
 	FGameplayTag EquippedRightHandItem;
+
+	/** Sparse world cells the player has seen at least once. Current visibility is recomputed after load. */
+	UPROPERTY(SaveGame)
+	TArray<FIntPoint> ExploredFogCells;
 };
 
 USTRUCT()
@@ -115,7 +119,7 @@ class DARKWELL_API UDarkwellSaveGame : public USaveGame
 
 public:
 	static constexpr int32 MinimumSupportedVersion = 1;
-	static constexpr int32 CurrentVersion = 3;
+	static constexpr int32 CurrentVersion = 4;
 
 	UPROPERTY(SaveGame)
 	int32 SaveVersion = CurrentVersion;

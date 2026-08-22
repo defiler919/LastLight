@@ -10,6 +10,7 @@
 #include "EngineUtils.h"
 #include "Game/DarkwellGameState.h"
 #include "Gameplay/DarkwellGameplayTags.h"
+#include "Gameplay/DarkwellVisibilityComponent.h"
 #include "Inventory/DarkwellInventoryComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Player/DarkwellCharacter.h"
@@ -216,6 +217,13 @@ bool UDarkwellSaveSubsystem::ApplyPendingLoad(UWorld& World)
 		PendingLoad->Player.Health,
 		PendingLoad->Player.LifeState,
 		PendingLoad->Player.CompletionState);
+	if (UDarkwellVisibilityComponent* Visibility = Character->GetVisibilityComponent())
+	{
+		Visibility->RestoreExploredCells(
+			PendingLoad->SaveVersion >= 4
+				? PendingLoad->Player.ExploredFogCells
+				: TArray<FIntPoint>());
+	}
 	Character->GrantLoadProtection(3.0f);
 
 	TMap<FName, const FDarkwellContainerSaveData*> ContainerDataById;
@@ -368,6 +376,10 @@ UDarkwellSaveGame* UDarkwellSaveSubsystem::CaptureCurrentGame(UWorld& World) con
 	SaveData->Player.bTorchOn = Loadout->IsTorchOn();
 	SaveData->Player.EquippedLeftHandItem = Loadout->GetEquippedLeftHandItem();
 	SaveData->Player.EquippedRightHandItem = Loadout->GetEquippedRightHandItem();
+	if (const UDarkwellVisibilityComponent* Visibility = Character->GetVisibilityComponent())
+	{
+		SaveData->Player.ExploredFogCells = Visibility->CaptureExploredCells();
+	}
 
 	for (TActorIterator<ADarkwellStorageContainer> It(&World); It; ++It)
 	{

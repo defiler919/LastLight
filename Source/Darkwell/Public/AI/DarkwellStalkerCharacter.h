@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Gameplay/DarkwellFogSubject.h"
 #include "GameplayTagContainer.h"
 #include "DarkwellStalkerCharacter.generated.h"
 
@@ -12,7 +13,7 @@ class UStaticMeshComponent;
 
 /** Greybox enemy body and durable state; decision-making lives in its native AI controller. */
 UCLASS()
-class DARKWELL_API ADarkwellStalkerCharacter : public ACharacter
+class DARKWELL_API ADarkwellStalkerCharacter : public ACharacter, public IDarkwellFogSubject
 {
 	GENERATED_BODY()
 
@@ -25,6 +26,7 @@ public:
 		struct FDamageEvent const& DamageEvent,
 		class AController* EventInstigator,
 		AActor* DamageCauser) override;
+	virtual void SetPlayerFogState(EDarkwellFogCellState NewState) override;
 
 	void SetBehaviorState(FGameplayTag NewState);
 	void ConfigurePersistentId(FName InPersistentId) { PersistentId = InPersistentId; }

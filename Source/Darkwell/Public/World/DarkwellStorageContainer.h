@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Gameplay/DarkwellFogSubject.h"
 #include "Interaction/DarkwellInteractable.h"
 #include "DarkwellStorageContainer.generated.h"
 
@@ -21,7 +22,7 @@ enum class EDarkwellStorageStyle : uint8
 
 /** Shared greybox storage used for chests and cabinets. */
 UCLASS()
-class DARKWELL_API ADarkwellStorageContainer : public AActor, public IDarkwellInteractable
+class DARKWELL_API ADarkwellStorageContainer : public AActor, public IDarkwellInteractable, public IDarkwellFogSubject
 {
 	GENERATED_BODY()
 
@@ -47,6 +48,7 @@ public:
 	virtual void Interact(ADarkwellCharacter& Character) override;
 	virtual FText GetInteractionPrompt(const ADarkwellCharacter& Character) const override;
 	virtual void OnInteractionFocusChanged(bool bFocused) override;
+	virtual void SetPlayerFogState(EDarkwellFogCellState NewState) override;
 
 private:
 	void ApplyStorageStyle();
@@ -100,4 +102,5 @@ private:
 	float DegreesPerSecond = 180.0f;
 
 	float TargetOpenAngle = 0.0f;
+	bool bFogPresentationLive = true;
 };

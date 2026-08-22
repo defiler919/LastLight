@@ -7,6 +7,7 @@
 #include "GameFramework/GameUserSettings.h"
 #include "InputCoreTypes.h"
 #include "InputKeyEventArgs.h"
+#include "Interaction/DarkwellInteractable.h"
 #include "Inventory/DarkwellInventoryComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -674,15 +675,15 @@ void ADarkwellPlayerController::UpdateAimFromCursor()
 	FHitResult HitResult;
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(DarkwellCursorAim), false, DarkwellCharacter);
 	constexpr double AimTraceDistance = 100000.0;
+	const FVector TraceEnd = RayOrigin + RayDirection * AimTraceDistance;
 	if (GetWorld()->LineTraceSingleByChannel(
 		HitResult,
 		RayOrigin,
-		RayOrigin + RayDirection * AimTraceDistance,
+		TraceEnd,
 		ECC_Visibility,
 		QueryParams))
 	{
 		AimPoint = HitResult.ImpactPoint;
-		DarkwellCharacter->UpdateInteractionFocus(HitResult.GetActor());
 	}
 	else if (!Darkwell::PlayerMath::TryIntersectHorizontalPlane(
 		RayOrigin,
@@ -693,10 +694,44 @@ void ADarkwellPlayerController::UpdateAimFromCursor()
 		DarkwellCharacter->UpdateInteractionFocus(nullptr);
 		return;
 	}
-	else
+	AActor* FocusCandidate = nullptr;
+	FVector FocusWorldPoint = FVector::ZeroVector;
+	FCollisionQueryParams FocusQueryParams(
+		SCENE_QUERY_STAT(DarkwellCursorInteraction),
+		false,
+		DarkwellCharacter);
+	FCollisionObjectQueryParams FocusObjectTypes;
+	FocusObjectTypes.AddObjectTypesToQuery(ECC_WorldStatic);
+	FocusObjectTypes.AddObjectTypesToQuery(ECC_WorldDynamic);
+	constexpr int32 MaximumFocusTraceSkips = 16;
+	for (int32 Attempt = 0; Attempt < MaximumFocusTraceSkips; ++Attempt)
 	{
-		DarkwellCharacter->UpdateInteractionFocus(nullptr);
+		FHitResult FocusHit;
+		if (!GetWorld()->LineTraceSingleByObjectType(
+			FocusHit,
+			RayOrigin,
+			TraceEnd,
+			FocusObjectTypes,
+			FocusQueryParams))
+		{
+			break;
+		}
+
+		AActor* HitActor = FocusHit.GetActor();
+		if (!HitActor)
+		{
+			break;
+		}
+		if (Cast<IDarkwellInteractable>(HitActor))
+		{
+			FocusCandidate = HitActor;
+			FocusWorldPoint = FocusHit.ImpactPoint;
+			break;
+		}
+
+		FocusQueryParams.AddIgnoredActor(HitActor);
 	}
+	DarkwellCharacter->UpdateInteractionFocusAtPoint(FocusCandidate, FocusWorldPoint);
 
 	DarkwellCharacter->AimAtWorldPoint(AimPoint);
 }

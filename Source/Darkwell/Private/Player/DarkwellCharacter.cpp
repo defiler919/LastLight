@@ -16,6 +16,7 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Gameplay/DarkwellGameplayTags.h"
 #include "Gameplay/DarkwellSurvivalRules.h"
+#include "Gameplay/DarkwellVisibilityComponent.h"
 #include "InputAction.h"
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
@@ -28,6 +29,7 @@
 
 ADarkwellCharacter::ADarkwellCharacter()
 {
+	PrimaryActorTick.bCanEverTick = true;
 	GetCapsuleComponent()->InitCapsuleSize(42.0f, 88.0f);
 
 	bUseControllerRotationPitch = false;
@@ -36,7 +38,7 @@ ADarkwellCharacter::ADarkwellCharacter()
 
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	Movement->bOrientRotationToMovement = false;
-	Movement->MaxWalkSpeed = 450.0f;
+	Movement->MaxWalkSpeed = WalkSpeed;
 	Movement->MaxAcceleration = 1800.0f;
 	Movement->BrakingDecelerationWalking = 1600.0f;
 
@@ -121,6 +123,7 @@ ADarkwellCharacter::ADarkwellCharacter()
 	InventoryComponent->InitializeInventory(16);
 	LoadoutComponent = CreateDefaultSubobject<UDarkwellLoadoutComponent>(TEXT("LoadoutComponent"));
 	InteractionComponent = CreateDefaultSubobject<UDarkwellInteractionComponent>(TEXT("InteractionComponent"));
+	VisibilityComponent = CreateDefaultSubobject<UDarkwellVisibilityComponent>(TEXT("VisibilityComponent"));
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	if (CylinderMesh.Succeeded())
@@ -154,6 +157,7 @@ ADarkwellCharacter::ADarkwellCharacter()
 	ReloadAction = CreateDefaultSubobject<UInputAction>(TEXT("ReloadAction"));
 	BackpackAction = CreateDefaultSubobject<UInputAction>(TEXT("BackpackAction"));
 	TakeAllAction = CreateDefaultSubobject<UInputAction>(TEXT("TakeAllAction"));
+	SprintAction = CreateDefaultSubobject<UInputAction>(TEXT("SprintAction"));
 
 	MoveForwardAction->ValueType = EInputActionValueType::Boolean;
 	MoveBackwardAction->ValueType = EInputActionValueType::Boolean;
@@ -167,6 +171,7 @@ ADarkwellCharacter::ADarkwellCharacter()
 	ReloadAction->ValueType = EInputActionValueType::Boolean;
 	BackpackAction->ValueType = EInputActionValueType::Boolean;
 	TakeAllAction->ValueType = EInputActionValueType::Boolean;
+	SprintAction->ValueType = EInputActionValueType::Boolean;
 
 	DefaultMappingContext->MapKey(MoveForwardAction, EKeys::W);
 	DefaultMappingContext->MapKey(MoveBackwardAction, EKeys::S);
@@ -180,6 +185,7 @@ ADarkwellCharacter::ADarkwellCharacter()
 	DefaultMappingContext->MapKey(ReloadAction, EKeys::R);
 	DefaultMappingContext->MapKey(BackpackAction, EKeys::Tab);
 	DefaultMappingContext->MapKey(TakeAllAction, EKeys::T);
+	DefaultMappingContext->MapKey(SprintAction, EKeys::LeftShift);
 
 	LoadoutComponent->SetRightHandPresentation(
 		TorchMesh,
@@ -195,8 +201,20 @@ void ADarkwellCharacter::BeginPlay()
 	Health = MaxHealth;
 	LifeState = DarkwellGameplayTags::State_Player_Alive;
 	CompletionState = FGameplayTag::EmptyTag;
+	MovementState = DarkwellGameplayTags::State_Player_Movement_Walking;
+	bSprintRequested = false;
+	bMoveForwardRequested = false;
+	bMoveBackwardRequested = false;
+	bMoveLeftRequested = false;
+	bMoveRightRequested = false;
 	InvulnerableUntilTimeSeconds = 0.0;
 	LastDamageTimeSeconds = -1.0;
+}
+
+void ADarkwellCharacter::Tick(const float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+	UpdateFacingAndMovement(DeltaTime);
 }
 
 float ADarkwellCharacter::TakeDamage(
@@ -267,6 +285,11 @@ bool ADarkwellCharacter::IsInventoryOpen() const
 	return PlayerController && PlayerController->IsInventoryOpen();
 }
 
+bool ADarkwellCharacter::IsSprinting() const
+{
+	return MovementState == DarkwellGameplayTags::State_Player_Movement_Sprinting;
+}
+
 void ADarkwellCharacter::GrantLoadProtection(const float DurationSeconds)
 {
 	const double CurrentTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
@@ -288,6 +311,12 @@ void ADarkwellCharacter::CompleteEscape()
 		PlayerController->CloseInventory();
 	}
 	ActiveWeaponWheel = EDarkwellWeaponWheelSide::None;
+	bSprintRequested = false;
+	bMoveForwardRequested = false;
+	bMoveBackwardRequested = false;
+	bMoveLeftRequested = false;
+	bMoveRightRequested = false;
+	MovementState = DarkwellGameplayTags::State_Player_Movement_Walking;
 	UpdateInteractionFocus(nullptr);
 	GetCharacterMovement()->DisableMovement();
 	LoadoutComponent->DeactivateForOwnerIncapacitated();
@@ -313,6 +342,12 @@ void ADarkwellCharacter::RestorePersistentState(
 	InvulnerableUntilTimeSeconds = 0.0;
 	LastDamageTimeSeconds = -1.0;
 	ActiveWeaponWheel = EDarkwellWeaponWheelSide::None;
+	bSprintRequested = false;
+	bMoveForwardRequested = false;
+	bMoveBackwardRequested = false;
+	bMoveLeftRequested = false;
+	bMoveRightRequested = false;
+	MovementState = DarkwellGameplayTags::State_Player_Movement_Walking;
 	UpdateInteractionFocus(nullptr);
 	SetActorTransform(SavedTransform, false, nullptr, ETeleportType::TeleportPhysics);
 
@@ -339,9 +374,17 @@ void ADarkwellCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 
 	UEnhancedInputComponent* EnhancedInput = CastChecked<UEnhancedInputComponent>(PlayerInputComponent);
 	EnhancedInput->BindAction(MoveForwardAction, ETriggerEvent::Triggered, this, &ThisClass::MoveForward);
+	EnhancedInput->BindAction(MoveForwardAction, ETriggerEvent::Completed, this, &ThisClass::MoveForward);
+	EnhancedInput->BindAction(MoveForwardAction, ETriggerEvent::Canceled, this, &ThisClass::MoveForward);
 	EnhancedInput->BindAction(MoveBackwardAction, ETriggerEvent::Triggered, this, &ThisClass::MoveBackward);
+	EnhancedInput->BindAction(MoveBackwardAction, ETriggerEvent::Completed, this, &ThisClass::MoveBackward);
+	EnhancedInput->BindAction(MoveBackwardAction, ETriggerEvent::Canceled, this, &ThisClass::MoveBackward);
 	EnhancedInput->BindAction(MoveLeftAction, ETriggerEvent::Triggered, this, &ThisClass::MoveLeft);
+	EnhancedInput->BindAction(MoveLeftAction, ETriggerEvent::Completed, this, &ThisClass::MoveLeft);
+	EnhancedInput->BindAction(MoveLeftAction, ETriggerEvent::Canceled, this, &ThisClass::MoveLeft);
 	EnhancedInput->BindAction(MoveRightAction, ETriggerEvent::Triggered, this, &ThisClass::MoveRight);
+	EnhancedInput->BindAction(MoveRightAction, ETriggerEvent::Completed, this, &ThisClass::MoveRight);
+	EnhancedInput->BindAction(MoveRightAction, ETriggerEvent::Canceled, this, &ThisClass::MoveRight);
 	EnhancedInput->BindAction(InteractAction, ETriggerEvent::Started, this, &ThisClass::Interact);
 	EnhancedInput->BindAction(UseRightHandAction, ETriggerEvent::Started, this, &ThisClass::BeginUseRightHand);
 	EnhancedInput->BindAction(UseRightHandAction, ETriggerEvent::Completed, this, &ThisClass::EndUseRightHand);
@@ -350,6 +393,9 @@ void ADarkwellCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 	EnhancedInput->BindAction(ReloadAction, ETriggerEvent::Started, this, &ThisClass::ReloadShotgun);
 	EnhancedInput->BindAction(BackpackAction, ETriggerEvent::Started, this, &ThisClass::ToggleBackpack);
 	EnhancedInput->BindAction(TakeAllAction, ETriggerEvent::Started, this, &ThisClass::TakeAllInventory);
+	EnhancedInput->BindAction(SprintAction, ETriggerEvent::Started, this, &ThisClass::BeginSprint);
+	EnhancedInput->BindAction(SprintAction, ETriggerEvent::Completed, this, &ThisClass::EndSprint);
+	EnhancedInput->BindAction(SprintAction, ETriggerEvent::Canceled, this, &ThisClass::EndSprint);
 }
 
 void ADarkwellCharacter::AimAtWorldPoint(const FVector& WorldPoint)
@@ -364,12 +410,74 @@ void ADarkwellCharacter::AimAtWorldPoint(const FVector& WorldPoint)
 	{
 		CurrentAimPoint = WorldPoint;
 		bHasAimPoint = true;
-		SetActorRotation(AimDirection.Rotation());
+	}
+}
+
+void ADarkwellCharacter::UpdateFacingAndMovement(const float DeltaTime)
+{
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (!Movement)
+	{
+		return;
+	}
+
+	const bool bCanMove = CanAcceptGameplayInput() && !IsInventoryOpen();
+	const FVector MovementDirection = GetRequestedMovementDirection();
+
+	const bool bShouldSprint = Darkwell::PlayerMath::ShouldSprint(
+		bSprintRequested,
+		bCanMove,
+		MovementDirection);
+	MovementState = bShouldSprint
+		? DarkwellGameplayTags::State_Player_Movement_Sprinting.GetTag()
+		: DarkwellGameplayTags::State_Player_Movement_Walking.GetTag();
+	Movement->MaxWalkSpeed = bShouldSprint ? SprintSpeed : WalkSpeed;
+
+	if (!bCanMove)
+	{
+		return;
+	}
+
+	FVector DesiredFacing = FVector::ZeroVector;
+	if (bShouldSprint)
+	{
+		DesiredFacing = MovementDirection;
+	}
+	else if (bHasAimPoint)
+	{
+		Darkwell::PlayerMath::TryGetPlanarDirection(GetActorLocation(), CurrentAimPoint, DesiredFacing);
+	}
+
+	if (!DesiredFacing.IsNearlyZero())
+	{
+		const float TurnRate = bShouldSprint
+			? SprintTurnRateDegreesPerSecond
+			: WalkTurnRateDegreesPerSecond;
+		const float NewYaw = Darkwell::PlayerMath::TurnYawToward(
+			GetActorRotation().Yaw,
+			DesiredFacing.Rotation().Yaw,
+			TurnRate,
+			DeltaTime);
+		SetActorRotation(FRotator(0.0f, NewYaw, 0.0f));
 	}
 }
 
 void ADarkwellCharacter::UpdateInteractionFocus(AActor* Candidate)
 {
+	UpdateInteractionFocusAtPoint(
+		Candidate,
+		Candidate ? Candidate->GetActorLocation() : FVector::ZeroVector);
+}
+
+void ADarkwellCharacter::UpdateInteractionFocusAtPoint(
+	AActor* Candidate,
+	const FVector& FocusWorldPoint)
+{
+	if (Candidate && VisibilityComponent
+		&& !VisibilityComponent->IsWorldLocationCurrentlyVisible(FocusWorldPoint))
+	{
+		Candidate = nullptr;
+	}
 	InteractionComponent->UpdateFocusedActor(CanAcceptGameplayInput() ? Candidate : nullptr);
 }
 
@@ -425,7 +533,8 @@ void ADarkwellCharacter::AddDefaultInputMapping()
 
 void ADarkwellCharacter::MoveForward(const FInputActionValue& Value)
 {
-	if (Value.Get<bool>())
+	bMoveForwardRequested = Value.Get<bool>();
+	if (bMoveForwardRequested)
 	{
 		MoveAlongCameraAxes(1.0f, 0.0f);
 	}
@@ -433,7 +542,8 @@ void ADarkwellCharacter::MoveForward(const FInputActionValue& Value)
 
 void ADarkwellCharacter::MoveBackward(const FInputActionValue& Value)
 {
-	if (Value.Get<bool>())
+	bMoveBackwardRequested = Value.Get<bool>();
+	if (bMoveBackwardRequested)
 	{
 		MoveAlongCameraAxes(-1.0f, 0.0f);
 	}
@@ -441,7 +551,8 @@ void ADarkwellCharacter::MoveBackward(const FInputActionValue& Value)
 
 void ADarkwellCharacter::MoveLeft(const FInputActionValue& Value)
 {
-	if (Value.Get<bool>())
+	bMoveLeftRequested = Value.Get<bool>();
+	if (bMoveLeftRequested)
 	{
 		MoveAlongCameraAxes(0.0f, -1.0f);
 	}
@@ -449,7 +560,8 @@ void ADarkwellCharacter::MoveLeft(const FInputActionValue& Value)
 
 void ADarkwellCharacter::MoveRight(const FInputActionValue& Value)
 {
-	if (Value.Get<bool>())
+	bMoveRightRequested = Value.Get<bool>();
+	if (bMoveRightRequested)
 	{
 		MoveAlongCameraAxes(0.0f, 1.0f);
 	}
@@ -468,6 +580,33 @@ void ADarkwellCharacter::MoveAlongCameraAxes(const float ForwardAmount, const fl
 
 	AddMovementInput(ForwardDirection, ForwardAmount);
 	AddMovementInput(RightDirection, RightAmount);
+}
+
+FVector ADarkwellCharacter::GetRequestedMovementDirection() const
+{
+	const float ForwardAmount = static_cast<float>(bMoveForwardRequested)
+		- static_cast<float>(bMoveBackwardRequested);
+	const float RightAmount = static_cast<float>(bMoveRightRequested)
+		- static_cast<float>(bMoveLeftRequested);
+	if (FMath::IsNearlyZero(ForwardAmount) && FMath::IsNearlyZero(RightAmount))
+	{
+		return FVector::ZeroVector;
+	}
+
+	const FRotator CameraYaw(0.0f, TopDownCamera->GetComponentRotation().Yaw, 0.0f);
+	const FVector ForwardDirection = FRotationMatrix(CameraYaw).GetUnitAxis(EAxis::X);
+	const FVector RightDirection = FRotationMatrix(CameraYaw).GetUnitAxis(EAxis::Y);
+	return (ForwardDirection * ForwardAmount + RightDirection * RightAmount).GetSafeNormal2D();
+}
+
+void ADarkwellCharacter::BeginSprint(const FInputActionValue& Value)
+{
+	bSprintRequested = Value.Get<bool>();
+}
+
+void ADarkwellCharacter::EndSprint(const FInputActionValue& Value)
+{
+	bSprintRequested = false;
 }
 
 void ADarkwellCharacter::Interact(const FInputActionValue& Value)
@@ -540,9 +679,7 @@ void ADarkwellCharacter::FireShotgun(const FInputActionValue& Value)
 		return;
 	}
 
-	const FVector AimPoint = bHasAimPoint
-		? CurrentAimPoint
-		: GetActorLocation() + GetActorForwardVector() * 2000.0f;
+	const FVector AimPoint = GetActorLocation() + GetActorForwardVector() * 2000.0f;
 	LoadoutComponent->TryFire(AimPoint);
 }
 
@@ -603,6 +740,12 @@ void ADarkwellCharacter::HandleDeath()
 		PlayerController->CloseInventory();
 	}
 	ActiveWeaponWheel = EDarkwellWeaponWheelSide::None;
+	bSprintRequested = false;
+	bMoveForwardRequested = false;
+	bMoveBackwardRequested = false;
+	bMoveLeftRequested = false;
+	bMoveRightRequested = false;
+	MovementState = DarkwellGameplayTags::State_Player_Movement_Walking;
 	UpdateInteractionFocus(nullptr);
 	GetCharacterMovement()->DisableMovement();
 	LoadoutComponent->DeactivateForOwnerIncapacitated();

@@ -2,6 +2,7 @@
 
 #include "World/DarkwellDoor.h"
 
+#include "Components/BoxComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -26,6 +27,17 @@ ADarkwellDoor::ADarkwellDoor()
 	DoorPanel->SetRelativeLocation(FVector(0.0f, 80.0f, 110.0f));
 	DoorPanel->SetRelativeScale3D(FVector(0.16f, 1.6f, 2.2f));
 	DoorPanel->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+
+	InteractionHitProxy = CreateDefaultSubobject<UBoxComponent>(TEXT("InteractionHitProxy"));
+	InteractionHitProxy->SetupAttachment(DoorHinge);
+	InteractionHitProxy->SetRelativeLocation(FVector(0.0f, 80.0f, 110.0f));
+	InteractionHitProxy->SetBoxExtent(FVector(45.0f, 110.0f, 130.0f));
+	InteractionHitProxy->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	InteractionHitProxy->SetCollisionObjectType(ECC_WorldDynamic);
+	InteractionHitProxy->SetCollisionResponseToAllChannels(ECR_Ignore);
+	InteractionHitProxy->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	InteractionHitProxy->SetGenerateOverlapEvents(false);
+	InteractionHitProxy->SetCanEverAffectNavigation(false);
 
 	PassageLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("PassageLight"));
 	PassageLight->SetupAttachment(SceneRoot);

@@ -80,6 +80,21 @@ FText ADarkwellExitGate::GetInteractionPrompt(const ADarkwellCharacter& Characte
 		: NSLOCTEXT("Darkwell", "ExitNeedsFuse", "Exit locked - find generator fuse");
 }
 
+void ADarkwellExitGate::SetPlayerFogState(const EDarkwellFogCellState NewState)
+{
+	const bool bShouldBeLive = NewState == EDarkwellFogCellState::Visible;
+	if (bShouldBeLive == bFogPresentationLive)
+	{
+		return;
+	}
+
+	bFogPresentationLive = bShouldBeLive;
+	if (bFogPresentationLive)
+	{
+		RefreshPresentation();
+	}
+}
+
 void ADarkwellExitGate::HandleMissionStateChanged(const FGameplayTag NewState)
 {
 	RefreshPresentation();
@@ -87,6 +102,11 @@ void ADarkwellExitGate::HandleMissionStateChanged(const FGameplayTag NewState)
 
 void ADarkwellExitGate::RefreshPresentation()
 {
+	if (!bFogPresentationLive)
+	{
+		return;
+	}
+
 	const ADarkwellGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ADarkwellGameState>() : nullptr;
 	const bool bReady = GameState && GameState->IsFuseCollected() && !GameState->IsEscapeComplete();
 	StatusLight->SetLightColor(bReady

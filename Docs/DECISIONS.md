@@ -11,6 +11,10 @@
 | Perspective | 3D top-down |
 | Prototype camera | Absolute top-down: fixed directly above the player at `Pitch -90°`, `Yaw 0°` |
 | Prototype movement and aiming | Camera-relative WASD movement; mouse cursor aims at the traced world point |
+| Turning and sprinting | Mouse aim is rate-limited to 240 degrees/second; holding Left Shift while moving raises speed from 430 to 650 cm/s and turns at 165 degrees/second toward movement, forcing the view cone forward |
+| Player knowledge | A native sparse XY grid owns authoritative actor visibility and explored memory; the per-frame visual mask evaluates the same native sight sources continuously and never changes gameplay knowledge |
+| Fog of war | StarCraft-style three states: unexplored cells are pure black, explored cells show a dim last-known presentation, and currently visible cells show live state; sight sources are blocked by world visibility collision |
+| Fog subjects | Mobile enemies disappear outside current sight; stateful fixed facilities keep their last-seen presentation and refresh to current state only when reacquired |
 | First playable loop | Find the generator fuse, survive the stalker and fuse-guard Warden, return to the powered emergency exit, and escape; native C++ owns progress and interaction rules |
 | Durable prototype state | Native Gameplay Tags represent player life, torch/lantern actions, shotgun, enemy archetypes/light-control, and door states |
 | Prototype content strategy | A lightweight saved map uses a C++-spawned room and actors until approved art assets arrive |
@@ -30,7 +34,7 @@
 | Item presentation localization | The Unreal GatherText pipeline compiles native English and Simplified Chinese (`zh-Hans`) resources; item and crafting HUD strings use stable localization keys, while generated source art remains under `SourceArt/UI/Items` and is imported through the Editor Python API |
 | Crafting integration | Interacting with a workbench opens the backpack and recipe panel together; material consumption and output insertion commit as one atomic inventory transaction |
 | Crafting recipes | Native Primary Data Assets provide recipe display names, tagged inputs, tagged outputs, and quantities; C++ owns validation and the atomic transaction |
-| Save architecture | A versioned native `USaveGame` payload and `UGameInstanceSubsystem` capture durable state, write/read one continuation slot asynchronously, reload the saved map, then restore runtime actors; v3 adds torch heat and lantern fuel while accepting v1/v2 |
+| Save architecture | A versioned native `USaveGame` payload and `UGameInstanceSubsystem` capture durable state, write/read one continuation slot asynchronously, reload the saved map, then restore runtime actors; v3 adds torch heat and lantern fuel, v4 adds sparse explored-fog knowledge, and v1-v4 remain accepted |
 | Persistent world identity | Containers and runtime pickups receive stable native `FName` IDs; save data never depends on transient actor names or spawn order |
 | Save product flow | Native main/pause/settings menus own New Game, Continue, manual save/load, return-to-menu, quit, and display mode; fuse collection and successful crafting autosave into the same continuation slot; F5/F9 remain development-only shortcuts |
 | Safe loading | Restore grants three seconds of player damage immunity and clears stalker awareness/movement for the same grace period |

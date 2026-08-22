@@ -10,6 +10,9 @@ The player survives oppressive darkness by balancing two hands:
 ## Survival pressure
 
 - Darkness limits reliable information instead of merely darkening the image.
+- Unexplored space is completely unknown; explored space becomes stale memory; only current sight is authoritative.
+- Walls and closed passages interrupt vision. HUD threat information and interactions must never reveal live state outside current sight.
+- Walking permits independent mouse aiming at a limited turn rate; sprinting sacrifices rear awareness by forcing sight toward travel.
 - Light reveals threats but can also reveal the player.
 - The shotgun is decisive, loud, and constrained to two immediate shots.
 - Reloading needs the right hand, forcing the player to put down or throw a burning torch.

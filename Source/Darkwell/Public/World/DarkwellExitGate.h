@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GameplayTagContainer.h"
+#include "Gameplay/DarkwellFogSubject.h"
 #include "Interaction/DarkwellInteractable.h"
 #include "DarkwellExitGate.generated.h"
 
@@ -14,7 +15,7 @@ class UStaticMeshComponent;
 
 /** Mission exit that remains locked until the generator fuse is collected. */
 UCLASS()
-class DARKWELL_API ADarkwellExitGate : public AActor, public IDarkwellInteractable
+class DARKWELL_API ADarkwellExitGate : public AActor, public IDarkwellInteractable, public IDarkwellFogSubject
 {
 	GENERATED_BODY()
 
@@ -27,6 +28,7 @@ public:
 	virtual bool CanInteract(const ADarkwellCharacter& Character) const override;
 	virtual void Interact(ADarkwellCharacter& Character) override;
 	virtual FText GetInteractionPrompt(const ADarkwellCharacter& Character) const override;
+	virtual void SetPlayerFogState(EDarkwellFogCellState NewState) override;
 
 private:
 	void HandleMissionStateChanged(FGameplayTag NewState);
@@ -40,4 +42,6 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Mission")
 	TObjectPtr<UPointLightComponent> StatusLight;
+
+	bool bFogPresentationLive = true;
 };

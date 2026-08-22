@@ -29,5 +29,6 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Interaction", meta = (ClampMin = "0.0"))
 	float MaxInteractionDistance = 300.0f;
 
+	UPROPERTY(VisibleInstanceOnly, Category = "Interaction")
 	TWeakObjectPtr<AActor> FocusedActor;
 };

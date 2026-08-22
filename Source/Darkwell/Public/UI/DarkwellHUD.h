@@ -18,6 +18,7 @@ public:
 	bool HandleInventoryPointer(const FVector2D& ScreenPosition, bool bSecondaryClick, bool bControlDown);
 
 private:
+	void DrawFogOfWar(const class ADarkwellCharacter& Character);
 	void DrawMenuInterface();
 	void DrawInventoryInterface();
 	void DrawInventoryPanel(
@@ -38,4 +39,14 @@ private:
 		const FVector2D& PanelOrigin,
 		int32 SlotCount,
 		int32& OutSlotIndex) const;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UTexture2D> FogTexture;
+
+	TArray<FColor> FogTexturePixels;
+	TArray<float> FogMemoryAlpha;
+	TArray<float> FogMemoryScratch;
+	TArray<float> FogOcclusionRanges;
+	int32 FogTextureWidth = 0;
+	int32 FogTextureHeight = 0;
 };

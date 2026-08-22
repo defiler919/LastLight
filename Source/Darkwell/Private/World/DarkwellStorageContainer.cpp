@@ -75,6 +75,11 @@ void ADarkwellStorageContainer::BeginPlay()
 void ADarkwellStorageContainer::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (!bFogPresentationLive)
+	{
+		SetActorTickEnabled(false);
+		return;
+	}
 
 	const FRotator CurrentRotation = MovingPanelPivot->GetRelativeRotation();
 	const float CurrentOpenAngle = StorageStyle == EDarkwellStorageStyle::Chest
@@ -125,7 +130,8 @@ void ADarkwellStorageContainer::SetContainerOpen(const bool bShouldOpen)
 	const float CurrentOpenAngle = StorageStyle == EDarkwellStorageStyle::Chest
 		? -CurrentRotation.Roll
 		: CurrentRotation.Yaw;
-	SetActorTickEnabled(!FMath::IsNearlyEqual(CurrentOpenAngle, TargetOpenAngle, 0.1f));
+	SetActorTickEnabled(bFogPresentationLive
+		&& !FMath::IsNearlyEqual(CurrentOpenAngle, TargetOpenAngle, 0.1f));
 }
 
 bool ADarkwellStorageContainer::CanInteract(const ADarkwellCharacter& Character) const
@@ -158,6 +164,26 @@ void ADarkwellStorageContainer::OnInteractionFocusChanged(const bool bFocused)
 {
 	bInteractionFocused = bFocused;
 	RefreshPresentation();
+}
+
+void ADarkwellStorageContainer::SetPlayerFogState(const EDarkwellFogCellState NewState)
+{
+	const bool bShouldBeLive = NewState == EDarkwellFogCellState::Visible;
+	if (bShouldBeLive == bFogPresentationLive)
+	{
+		return;
+	}
+
+	bFogPresentationLive = bShouldBeLive;
+	if (!bFogPresentationLive)
+	{
+		SetActorTickEnabled(false);
+		return;
+	}
+
+	ApplyMovingPanelAngle(TargetOpenAngle);
+	RefreshPresentation();
+	SetActorTickEnabled(false);
 }
 
 void ADarkwellStorageContainer::ApplyStorageStyle()
@@ -207,11 +233,17 @@ void ADarkwellStorageContainer::HandleInventoryChanged()
 	const float CurrentOpenAngle = StorageStyle == EDarkwellStorageStyle::Chest
 		? -CurrentRotation.Roll
 		: CurrentRotation.Yaw;
-	SetActorTickEnabled(!FMath::IsNearlyEqual(CurrentOpenAngle, TargetOpenAngle, 0.1f));
+	SetActorTickEnabled(bFogPresentationLive
+		&& !FMath::IsNearlyEqual(CurrentOpenAngle, TargetOpenAngle, 0.1f));
 }
 
 void ADarkwellStorageContainer::RefreshPresentation()
 {
+	if (!bFogPresentationLive)
+	{
+		return;
+	}
+
 	const bool bHasLoot = HasLoot();
 	if (bHasLoot)
 	{

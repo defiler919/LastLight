@@ -9,6 +9,7 @@
 #include "DarkwellDoor.generated.h"
 
 class USceneComponent;
+class UBoxComponent;
 class UPointLightComponent;
 class UStaticMeshComponent;
 
@@ -40,6 +41,10 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Door")
 	TObjectPtr<UStaticMeshComponent> DoorPanel;
+
+	/** Generous cursor target that follows the swinging panel without affecting pawn movement. */
+	UPROPERTY(VisibleAnywhere, Category = "Door")
+	TObjectPtr<UBoxComponent> InteractionHitProxy;
 
 	UPROPERTY(VisibleAnywhere, Category = "Door")
 	TObjectPtr<UPointLightComponent> PassageLight;

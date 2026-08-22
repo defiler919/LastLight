@@ -12,6 +12,7 @@ class UCameraComponent;
 class UDarkwellInteractionComponent;
 class UDarkwellInventoryComponent;
 class UDarkwellLoadoutComponent;
+class UDarkwellVisibilityComponent;
 class UInputAction;
 class UInputMappingContext;
 class UPointLightComponent;
@@ -29,6 +30,7 @@ class DARKWELL_API ADarkwellCharacter : public ACharacter
 public:
 	ADarkwellCharacter();
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
 	virtual float TakeDamage(
 		float DamageAmount,
 		struct FDamageEvent const& DamageEvent,
@@ -38,11 +40,13 @@ public:
 	/** Turns the character toward a world-space point while keeping the body upright. */
 	void AimAtWorldPoint(const FVector& WorldPoint);
 	void UpdateInteractionFocus(AActor* Candidate);
+	void UpdateInteractionFocusAtPoint(AActor* Candidate, const FVector& FocusWorldPoint);
 	void UpdateWeaponWheelInput(bool bLeftDown, bool bRightDown);
 
 	UDarkwellLoadoutComponent* GetLoadoutComponent() const { return LoadoutComponent; }
 	UDarkwellInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
 	UDarkwellInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
+	UDarkwellVisibilityComponent* GetVisibilityComponent() const { return VisibilityComponent; }
 	float GetHealth() const { return Health; }
 	float GetMaxHealth() const { return MaxHealth; }
 	float GetDamageFeedbackAlpha() const;
@@ -50,6 +54,8 @@ public:
 	bool HasEscaped() const;
 	bool CanAcceptGameplayInput() const;
 	bool IsInventoryOpen() const;
+	bool IsSprinting() const;
+	FGameplayTag GetMovementState() const { return MovementState; }
 	void CompleteEscape();
 	void RestorePersistentState(
 		const FTransform& SavedTransform,
@@ -72,6 +78,10 @@ private:
 	void MoveLeft(const FInputActionValue& Value);
 	void MoveRight(const FInputActionValue& Value);
 	void MoveAlongCameraAxes(float ForwardAmount, float RightAmount);
+	FVector GetRequestedMovementDirection() const;
+	void BeginSprint(const FInputActionValue& Value);
+	void EndSprint(const FInputActionValue& Value);
+	void UpdateFacingAndMovement(float DeltaTime);
 	void Interact(const FInputActionValue& Value);
 	void BeginUseRightHand(const FInputActionValue& Value);
 	void EndUseRightHand(const FInputActionValue& Value);
@@ -120,6 +130,9 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Gameplay")
 	TObjectPtr<UDarkwellInteractionComponent> InteractionComponent;
 
+	UPROPERTY(VisibleAnywhere, Category = "Gameplay")
+	TObjectPtr<UDarkwellVisibilityComponent> VisibilityComponent;
+
 	UPROPERTY(VisibleDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputMappingContext> DefaultMappingContext;
 
@@ -159,10 +172,34 @@ private:
 	UPROPERTY(VisibleDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> TakeAllAction;
 
+	UPROPERTY(VisibleDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> SprintAction;
+
+	UPROPERTY(VisibleInstanceOnly, Category = "Aim")
 	FVector CurrentAimPoint = FVector::ZeroVector;
 	bool bHasAimPoint = false;
 	bool bLeftWeaponWheelWasDown = false;
 	bool bRightWeaponWheelWasDown = false;
+	bool bSprintRequested = false;
+	bool bMoveForwardRequested = false;
+	bool bMoveBackwardRequested = false;
+	bool bMoveLeftRequested = false;
+	bool bMoveRightRequested = false;
+
+	UPROPERTY(VisibleInstanceOnly, Category = "Movement")
+	FGameplayTag MovementState;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Movement", meta = (ClampMin = "1.0"))
+	float WalkSpeed = 430.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Movement", meta = (ClampMin = "1.0"))
+	float SprintSpeed = 650.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Movement", meta = (ClampMin = "1.0"))
+	float WalkTurnRateDegreesPerSecond = 240.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Movement", meta = (ClampMin = "1.0"))
+	float SprintTurnRateDegreesPerSecond = 165.0f;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "Equipment")
 	EDarkwellWeaponWheelSide ActiveWeaponWheel = EDarkwellWeaponWheelSide::None;

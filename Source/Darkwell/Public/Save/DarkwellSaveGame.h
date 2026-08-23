@@ -64,6 +64,14 @@ struct DARKWELL_API FDarkwellPlayerSaveData
 	/** Sparse world cells the player has seen at least once. Current visibility is recomputed after load. */
 	UPROPERTY(SaveGame)
 	TArray<FIntPoint> ExploredFogCells;
+
+	/** Fine presentation memory used to reconstruct a stable, non-blocky explored silhouette. */
+	UPROPERTY(SaveGame)
+	TArray<FIntPoint> ExploredFogPresentationCells;
+
+	/** World-space size represented by one saved presentation cell. */
+	UPROPERTY(SaveGame)
+	float ExploredFogPresentationCellSize = 0.0f;
 };
 
 USTRUCT()
@@ -119,7 +127,7 @@ class DARKWELL_API UDarkwellSaveGame : public USaveGame
 
 public:
 	static constexpr int32 MinimumSupportedVersion = 1;
-	static constexpr int32 CurrentVersion = 4;
+	static constexpr int32 CurrentVersion = 6;
 
 	UPROPERTY(SaveGame)
 	int32 SaveVersion = CurrentVersion;

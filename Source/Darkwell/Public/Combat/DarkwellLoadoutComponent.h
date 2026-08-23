@@ -32,7 +32,7 @@ public:
 
 	void SetRightHandPresentation(
 		UStaticMeshComponent* InTorchMesh,
-		USpotLightComponent* InTorchLight,
+		UPointLightComponent* InTorchLight,
 		UStaticMeshComponent* InLanternMesh,
 		UPointLightComponent* InLanternBaseLight,
 		USpotLightComponent* InLanternFocusLight);
@@ -41,7 +41,7 @@ public:
 	void CancelRightHandUse();
 	bool CycleRightHandItem();
 	bool EquipRightHandItem(FGameplayTag ItemTag);
-	bool TryFire(const FVector& AimPoint);
+	bool TryFire(const FVector& AimPoint, float AimProgress = 0.0f);
 	bool BeginReload();
 	void DeactivateForOwnerIncapacitated();
 	int32 AddReserveShells(int32 Amount);
@@ -103,7 +103,10 @@ private:
 	float ShotRange = 2600.0f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shotgun", meta = (ClampMin = "0.0", ClampMax = "45.0"))
-	float SpreadHalfAngleDegrees = 3.0f;
+	float HipFireSpreadHalfAngleDegrees = 9.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Shotgun", meta = (ClampMin = "0.0", ClampMax = "45.0"))
+	float AimedSpreadHalfAngleDegrees = 3.0f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Torch", meta = (ClampMin = "0.0"))
 	float TorchCharge = 100.0f;
@@ -156,17 +159,8 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Torch|Reload", meta = (ClampMin = "0.0"))
 	float ReloadTorchRadius = 320.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Torch|Reload", meta = (ClampMin = "0.0", ClampMax = "89.0"))
-	float ReloadTorchInnerConeAngle = 38.0f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Torch|Reload", meta = (ClampMin = "0.0", ClampMax = "89.0"))
-	float ReloadTorchOuterConeAngle = 58.0f;
-
 	UPROPERTY(EditDefaultsOnly, Category = "Torch|Reload")
 	FVector ReloadTorchRelativeLocation = FVector(0.0f, 0.0f, 115.0f);
-
-	UPROPERTY(EditDefaultsOnly, Category = "Torch|Reload")
-	FRotator ReloadTorchRelativeRotation = FRotator(-90.0f, 0.0f, 0.0f);
 
 	UPROPERTY(EditDefaultsOnly, Category = "Lantern", meta = (ClampMin = "0.0"))
 	float LanternFuel = 100.0f;
@@ -214,7 +208,7 @@ private:
 	FGameplayTag EquippedRightHandItem;
 
 	UPROPERTY(Transient)
-	TObjectPtr<USpotLightComponent> TorchLight;
+	TObjectPtr<UPointLightComponent> TorchLight;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UStaticMeshComponent> TorchMesh;
@@ -229,11 +223,8 @@ private:
 	TObjectPtr<USpotLightComponent> LanternFocusLight;
 
 	FVector RaisedTorchRelativeLocation = FVector::ZeroVector;
-	FRotator RaisedTorchRelativeRotation = FRotator::ZeroRotator;
 	float RaisedTorchIntensity = 0.0f;
 	float RaisedTorchRadius = 0.0f;
-	float RaisedTorchInnerConeAngle = 0.0f;
-	float RaisedTorchOuterConeAngle = 0.0f;
 	bool bHasRaisedTorchPresentation = false;
 	FVector RaisedTorchMeshRelativeLocation = FVector::ZeroVector;
 	FRotator RaisedTorchMeshRelativeRotation = FRotator::ZeroRotator;

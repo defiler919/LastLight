@@ -35,12 +35,14 @@ ADarkwellStalkerCharacter::ADarkwellStalkerCharacter()
 	GreyboxBody->SetupAttachment(GetCapsuleComponent());
 	GreyboxBody->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	GreyboxBody->SetCanEverAffectNavigation(false);
+	GreyboxBody->SetCastShadow(false);
 	GreyboxBody->SetRelativeScale3D(FVector(0.62f, 0.62f, 1.55f));
 
 	FacingMarker = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("FacingMarker"));
 	FacingMarker->SetupAttachment(GetCapsuleComponent());
 	FacingMarker->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	FacingMarker->SetCanEverAffectNavigation(false);
+	FacingMarker->SetCastShadow(false);
 	FacingMarker->SetRelativeLocation(FVector(52.0f, 0.0f, 12.0f));
 	FacingMarker->SetRelativeScale3D(FVector(0.46f, 0.1f, 0.1f));
 
@@ -49,6 +51,7 @@ ADarkwellStalkerCharacter::ADarkwellStalkerCharacter()
 	StateLight->SetRelativeLocation(FVector(0.0f, 0.0f, 90.0f));
 	StateLight->SetAttenuationRadius(260.0f);
 	StateLight->SetIntensity(1000.0f);
+	StateLight->SetCastShadows(false);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	if (CylinderMesh.Succeeded())

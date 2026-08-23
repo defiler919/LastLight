@@ -18,16 +18,22 @@ public:
 	UDarkwellInteractionComponent();
 
 	void UpdateFocusedActor(AActor* Candidate);
+	void UpdateFocusedActorFromWorld();
 	bool TryInteract();
 
 	AActor* GetFocusedActor() const;
 	FText GetFocusedPrompt() const;
 
 private:
+	AActor* FindBestFacingProximityActor() const;
 	bool IsValidCandidate(AActor* Candidate) const;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Interaction", meta = (ClampMin = "0.0"))
 	float MaxInteractionDistance = 300.0f;
+
+	/** Forgiving half-angle used for every world interaction. */
+	UPROPERTY(EditDefaultsOnly, Category = "Interaction", meta = (ClampMin = "0.0", ClampMax = "180.0"))
+	float FacingInteractionHalfAngleDegrees = 60.0f;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "Interaction")
 	TWeakObjectPtr<AActor> FocusedActor;

@@ -25,4 +25,6 @@ namespace Darkwell::VisibilityMath
 		float Range,
 		float HalfAngleDegrees);
 	DARKWELL_API EDarkwellFogCellState ResolveFogCellState(bool bCurrentlyVisible, bool bPreviouslyExplored);
+	/** Prevents presentation smoothing from revealing beyond its continuous knowledge boundary. */
+	DARKWELL_API float ConstrainRememberedFogAlpha(float SmoothedAlpha, float BoundaryAlpha);
 }

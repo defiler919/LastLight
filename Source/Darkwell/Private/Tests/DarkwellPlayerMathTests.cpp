@@ -135,4 +135,96 @@ bool FDarkwellCursorPlaneIntersectionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellDirectionalMovementSpeedTest,
+	"Darkwell.Player.Movement.DirectionalSpeed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDarkwellDirectionalMovementSpeedTest::RunTest(const FString& Parameters)
+{
+	using Darkwell::PlayerMath::ComputeDirectionalSpeedScale;
+	constexpr float StrafeScale = 0.78f;
+	constexpr float BackpedalScale = 0.58f;
+
+	TestEqual(
+		TEXT("Moving with body facing reaches full speed"),
+		ComputeDirectionalSpeedScale(FVector::XAxisVector, FVector::XAxisVector, StrafeScale, BackpedalScale),
+		1.0f);
+	TestEqual(
+		TEXT("Side stepping uses the configured strafe speed"),
+		ComputeDirectionalSpeedScale(FVector::XAxisVector, FVector::YAxisVector, StrafeScale, BackpedalScale),
+		StrafeScale);
+	TestEqual(
+		TEXT("Moving opposite body facing uses the configured backpedal speed"),
+		ComputeDirectionalSpeedScale(FVector::XAxisVector, -FVector::XAxisVector, StrafeScale, BackpedalScale),
+		BackpedalScale);
+	TestTrue(
+		TEXT("A diagonal direction interpolates continuously between strafe and forward speed"),
+		FMath::IsNearlyEqual(
+			ComputeDirectionalSpeedScale(
+				FVector::XAxisVector,
+				FVector(1.0f, 1.0f, 0.0f),
+				StrafeScale,
+				BackpedalScale),
+			FMath::Lerp(StrafeScale, 1.0f, UE_INV_SQRT_2),
+			UE_KINDA_SMALL_NUMBER));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellPrimaryFireGestureTest,
+	"Darkwell.Player.Input.PrimaryFireGesture",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDarkwellPrimaryFireGestureTest::RunTest(const FString& Parameters)
+{
+	TestFalse(
+		TEXT("A quick click remains a hip-fire gesture"),
+		Darkwell::PlayerMath::IsPrimaryFireAimActive(0.08f, 0.18f));
+	TestTrue(
+		TEXT("Holding to the threshold enters aimed fire"),
+		Darkwell::PlayerMath::IsPrimaryFireAimActive(0.18f, 0.18f));
+	TestTrue(
+		TEXT("Holding beyond the threshold remains aimed"),
+		Darkwell::PlayerMath::IsPrimaryFireAimActive(0.6f, 0.18f));
+
+	using Darkwell::PlayerMath::ComputePrimaryFireAimProgress;
+	TestEqual(TEXT("Aim tightening begins at zero"), ComputePrimaryFireAimProgress(0.0f, 1.5f), 0.0f);
+	TestEqual(TEXT("Aim tightening is linear halfway through"), ComputePrimaryFireAimProgress(0.75f, 1.5f), 0.5f);
+	TestEqual(TEXT("Aim tightening completes after 1.5 seconds"), ComputePrimaryFireAimProgress(1.5f, 1.5f), 1.0f);
+	TestEqual(TEXT("Aim tightening remains clamped when held longer"), ComputePrimaryFireAimProgress(2.0f, 1.5f), 1.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellFacingPickupInteractionTest,
+	"Darkwell.Player.Interaction.FacingSelection",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDarkwellFacingPickupInteractionTest::RunTest(const FString& Parameters)
+{
+	using Darkwell::PlayerMath::IsFacingProximityCandidate;
+	TestTrue(
+		TEXT("A nearby interactable directly ahead is eligible"),
+		IsFacingProximityCandidate(FVector::XAxisVector, FVector(200.0f, 0.0f, 80.0f), 300.0f, 60.0f));
+	TestTrue(
+		TEXT("The forgiving cone accepts a nearby diagonal interactable"),
+		IsFacingProximityCandidate(FVector::XAxisVector, FVector(180.0f, 150.0f, 0.0f), 300.0f, 60.0f));
+	TestFalse(
+		TEXT("An interactable beside the player is outside the facing cone"),
+		IsFacingProximityCandidate(FVector::XAxisVector, FVector(0.0f, 180.0f, 0.0f), 300.0f, 60.0f));
+	TestFalse(
+		TEXT("A faced interactable beyond interaction range is ineligible"),
+		IsFacingProximityCandidate(FVector::XAxisVector, FVector(301.0f, 0.0f, 0.0f), 300.0f, 60.0f));
+
+	using Darkwell::PlayerMath::IsFacingInteractionCandidatePreferred;
+	TestTrue(
+		TEXT("A farther centerline target beats a closer off-center target"),
+		IsFacingInteractionCandidatePreferred(1.0f, FMath::Square(280.0f), 0.8f, FMath::Square(80.0f)));
+	TestTrue(
+		TEXT("Distance breaks a tie between equally centered targets"),
+		IsFacingInteractionCandidatePreferred(0.9f, FMath::Square(100.0f), 0.9f, FMath::Square(200.0f)));
+	return true;
+}
+
 #endif

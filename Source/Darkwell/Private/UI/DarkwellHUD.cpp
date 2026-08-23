@@ -4,7 +4,9 @@
 
 #include "AI/DarkwellStalkerCharacter.h"
 #include "AI/DarkwellStalkerController.h"
+#include "Async/ParallelFor.h"
 #include "Combat/DarkwellLoadoutComponent.h"
+#include "Camera/CameraComponent.h"
 #include "Engine/Canvas.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Texture2D.h"
@@ -17,11 +19,14 @@
 #include "Interaction/DarkwellInteractionComponent.h"
 #include "Inventory/DarkwellInventoryComponent.h"
 #include "Inventory/DarkwellItemCatalog.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "Player/DarkwellCharacter.h"
 #include "Player/DarkwellPlayerController.h"
 #include "Player/DarkwellPlayerMath.h"
 #include "Save/DarkwellSaveSubsystem.h"
 #include "World/DarkwellWorkbench.h"
+#include "UObject/ConstructorHelpers.h"
 
 namespace
 {
@@ -94,6 +99,49 @@ namespace
 	}
 }
 
+ADarkwellHUD::ADarkwellHUD()
+{
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
+	PrimaryActorTick.TickGroup = TG_PostUpdateWork;
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> FogMaterialFinder(
+		TEXT("/Game/UI/Fog/M_FogMemoryComposite.M_FogMemoryComposite"));
+	if (FogMaterialFinder.Succeeded())
+	{
+		FogCompositeMaterial = FogMaterialFinder.Object;
+	}
+}
+
+void ADarkwellHUD::Tick(const float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (!PlayerOwner)
+	{
+		return;
+	}
+
+	ADarkwellCharacter* Character = Cast<ADarkwellCharacter>(PlayerOwner->GetPawn());
+	const ADarkwellPlayerController* DarkwellController =
+		Cast<ADarkwellPlayerController>(PlayerOwner);
+	if (!Character || (DarkwellController && DarkwellController->IsMenuOpen()))
+	{
+		SetFogCompositeWeight(Character, 0.0f);
+		return;
+	}
+
+	int32 ViewportWidth = 0;
+	int32 ViewportHeight = 0;
+	PlayerOwner->GetViewportSize(ViewportWidth, ViewportHeight);
+	if (ViewportWidth > 0 && ViewportHeight > 0)
+	{
+		UpdateFogOfWar(
+			*Character,
+			FIntPoint(ViewportWidth, ViewportHeight),
+			DeltaSeconds);
+	}
+}
+
 void ADarkwellHUD::DrawHUD()
 {
 	Super::DrawHUD();
@@ -115,8 +163,6 @@ void ADarkwellHUD::DrawHUD()
 	{
 		return;
 	}
-
-	DrawFogOfWar(*Character);
 
 	UFont* Font = GEngine ? GEngine->GetSmallFont() : nullptr;
 	const UDarkwellLoadoutComponent* Loadout = Character->GetLoadoutComponent();
@@ -310,7 +356,7 @@ void ADarkwellHUD::DrawHUD()
 	if (Font)
 	{
 		DrawText(
-			TEXT("WASD MOVE   SHIFT SPRINT   MOUSE AIM   LMB FIRE   RMB TAP/HOLD TOOL   R RELOAD   Q/E WHEELS   F INTERACT   TAB BACKPACK   F5 SAVE   F9 LOAD"),
+			TEXT("WASD MOVE   SHIFT SPRINT   MOUSE AIM   LMB TAP FIRE / HOLD AIM   RMB TAP/HOLD TOOL   R RELOAD   Q/E WHEELS   F INTERACT   TAB BACKPACK   F5 SAVE   F9 LOAD"),
 			FLinearColor(0.55f, 0.58f, 0.62f),
 			35.0f,
 			Canvas->ClipY - 42.0f,
@@ -490,13 +536,29 @@ void ADarkwellHUD::DrawHUD()
 	}
 }
 
-void ADarkwellHUD::DrawFogOfWar(const ADarkwellCharacter& Character)
+void ADarkwellHUD::UpdateFogOfWar(
+	ADarkwellCharacter& Character,
+	const FIntPoint& ViewportSize,
+	const float DeltaSeconds)
 {
-	const UDarkwellVisibilityComponent* Visibility = Character.GetVisibilityComponent();
-	if (!Canvas || !PlayerOwner || !Visibility)
+	UDarkwellVisibilityComponent* Visibility = Character.GetVisibilityComponent();
+	if (!PlayerOwner || !Visibility || ViewportSize.X <= 0 || ViewportSize.Y <= 0)
 	{
 		return;
 	}
+	if (!EnsureFogComposite(Character))
+	{
+		return;
+	}
+	SetFogCompositeWeight(&Character, 1.0f);
+
+	FogUpdateTimeRemaining -= DeltaSeconds;
+	if (FogUpdateTimeRemaining > 0.0f)
+	{
+		return;
+	}
+	constexpr float FogUpdateIntervalSeconds = 1.0f / 30.0f;
+	FogUpdateTimeRemaining = FogUpdateIntervalSeconds;
 
 	const float PlaneHeight = Character.GetActorLocation().Z;
 	auto DeprojectToPlane = [this, PlaneHeight](const FVector2D& ScreenPoint, FVector& OutWorldPoint)
@@ -518,28 +580,27 @@ void ADarkwellHUD::DrawFogOfWar(const ADarkwellCharacter& Character)
 	const FVector2D ScreenCorners[] =
 	{
 		FVector2D(0.0f, 0.0f),
-		FVector2D(Canvas->ClipX, 0.0f),
-		FVector2D(0.0f, Canvas->ClipY),
-		FVector2D(Canvas->ClipX, Canvas->ClipY)
+		FVector2D(ViewportSize.X, 0.0f),
+		FVector2D(0.0f, ViewportSize.Y),
+		FVector2D(ViewportSize.X, ViewportSize.Y)
 	};
 	FVector WorldCorners[UE_ARRAY_COUNT(ScreenCorners)];
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ScreenCorners); ++Index)
 	{
 		if (!DeprojectToPlane(ScreenCorners[Index], WorldCorners[Index]))
 		{
-			DrawRect(FLinearColor::Black, 0.0f, 0.0f, Canvas->ClipX, Canvas->ClipY);
 			return;
 		}
 	}
 
 	const int32 DesiredTextureWidth = FMath::Clamp(
-		FMath::CeilToInt(Canvas->ClipX * 0.25f),
-		128,
-		640);
+		FMath::CeilToInt(ViewportSize.X * 0.5f),
+		320,
+		1024);
 	const int32 DesiredTextureHeight = FMath::Clamp(
-		FMath::CeilToInt(Canvas->ClipY * 0.25f),
-		72,
-		360);
+		FMath::CeilToInt(ViewportSize.Y * 0.5f),
+		180,
+		576);
 	const bool bTextureSizeChanged = !FogTexture
 		|| FogTextureWidth != DesiredTextureWidth
 		|| FogTextureHeight != DesiredTextureHeight;
@@ -551,7 +612,6 @@ void ADarkwellHUD::DrawFogOfWar(const ADarkwellCharacter& Character)
 			PF_B8G8R8A8);
 		if (!FogTexture)
 		{
-			DrawRect(FLinearColor::Black, 0.0f, 0.0f, Canvas->ClipX, Canvas->ClipY);
 			return;
 		}
 
@@ -563,108 +623,73 @@ void ADarkwellHUD::DrawFogOfWar(const ADarkwellCharacter& Character)
 		FogTexture->UpdateResource();
 		FogTextureWidth = DesiredTextureWidth;
 		FogTextureHeight = DesiredTextureHeight;
-		FogTexturePixels.SetNumUninitialized(FogTextureWidth * FogTextureHeight);
-		FogMemoryAlpha.SetNumUninitialized(FogTextureWidth * FogTextureHeight);
-		FogMemoryScratch.SetNumUninitialized(FogTextureWidth * FogTextureHeight);
+		FogTexturePixels.Init(FColor(0, 0, 0, 255), FogTextureWidth * FogTextureHeight);
+		FogRememberedCoverage.Init(0.0f, FogTextureWidth * FogTextureHeight);
+		FogRememberedScratch.Init(0.0f, FogTextureWidth * FogTextureHeight);
+		bFogMemoryProjectionValid = false;
+		FogCompositeMID->SetTextureParameterValue(TEXT("FogMaskTexture"), FogTexture);
+	}
+	const int32 FogPixelCount = FogTextureWidth * FogTextureHeight;
+	if (FogTexturePixels.Num() != FogPixelCount
+		|| FogRememberedCoverage.Num() != FogPixelCount
+		|| FogRememberedScratch.Num() != FogPixelCount)
+	{
+		FogTexturePixels.Init(FColor(0, 0, 0, 255), FogPixelCount);
+		FogRememberedCoverage.Init(0.0f, FogPixelCount);
+		FogRememberedScratch.Init(0.0f, FogPixelCount);
+		bFogMemoryProjectionValid = false;
 	}
 
-	auto GetMemoryAlpha = [Visibility](const FIntPoint& Cell)
-	{
-		return Visibility->GetCellState(Cell) == EDarkwellFogCellState::Unexplored
-			? 1.0f
-			: 0.84f;
-	};
-
-	const float KnowledgeCellSize = Visibility->GetCellSize();
-	auto SampleMemoryAlpha = [KnowledgeCellSize, &GetMemoryAlpha](const FVector2D& WorldPoint)
-	{
-		const FVector2D CenterGrid(
-			WorldPoint.X / KnowledgeCellSize - 0.5f,
-			WorldPoint.Y / KnowledgeCellSize - 0.5f);
-		const FIntPoint BaseCell(
-			FMath::FloorToInt(CenterGrid.X),
-			FMath::FloorToInt(CenterGrid.Y));
-		const float AlphaX = CenterGrid.X - BaseCell.X;
-		const float AlphaY = CenterGrid.Y - BaseCell.Y;
-		const float Bottom = FMath::Lerp(
-			GetMemoryAlpha(BaseCell),
-			GetMemoryAlpha(BaseCell + FIntPoint(1, 0)),
-			AlphaX);
-		const float Top = FMath::Lerp(
-			GetMemoryAlpha(BaseCell + FIntPoint(0, 1)),
-			GetMemoryAlpha(BaseCell + FIntPoint(1, 1)),
-			AlphaX);
-		return FMath::Lerp(Bottom, Top, AlphaY);
-	};
-
-	for (int32 Y = 0; Y < FogTextureHeight; ++Y)
-	{
-		const float V = (static_cast<float>(Y) + 0.5f) / FogTextureHeight;
-		for (int32 X = 0; X < FogTextureWidth; ++X)
-		{
-			const float U = (static_cast<float>(X) + 0.5f) / FogTextureWidth;
-			const FVector WorldTop = FMath::Lerp(WorldCorners[0], WorldCorners[1], U);
-			const FVector WorldBottom = FMath::Lerp(WorldCorners[2], WorldCorners[3], U);
-			const FVector WorldPoint = FMath::Lerp(WorldTop, WorldBottom, V);
-			FogMemoryAlpha[Y * FogTextureWidth + X] = SampleMemoryAlpha(
-				FVector2D(WorldPoint.X, WorldPoint.Y));
-		}
-	}
-
-	// The saved knowledge field intentionally remains coarse. A wide, linear-time
-	// separable filter turns that data into a presentation field without exposing
-	// the cell topology or making the gameplay/save grid more expensive.
-	constexpr int32 MemoryBlurRadius = 16;
-	const int32 MemoryBlurWindow = MemoryBlurRadius * 2 + 1;
-	for (int32 Y = 0; Y < FogTextureHeight; ++Y)
-	{
-		float Sum = 0.0f;
-		for (int32 Offset = -MemoryBlurRadius; Offset <= MemoryBlurRadius; ++Offset)
-		{
-			Sum += FogMemoryAlpha[
-				Y * FogTextureWidth + FMath::Clamp(Offset, 0, FogTextureWidth - 1)];
-		}
-		for (int32 X = 0; X < FogTextureWidth; ++X)
-		{
-			FogMemoryScratch[Y * FogTextureWidth + X] = Sum / MemoryBlurWindow;
-			const int32 RemoveX = FMath::Clamp(X - MemoryBlurRadius, 0, FogTextureWidth - 1);
-			const int32 AddX = FMath::Clamp(X + MemoryBlurRadius + 1, 0, FogTextureWidth - 1);
-			Sum += FogMemoryAlpha[Y * FogTextureWidth + AddX]
-				- FogMemoryAlpha[Y * FogTextureWidth + RemoveX];
-		}
-	}
-	for (int32 X = 0; X < FogTextureWidth; ++X)
-	{
-		float Sum = 0.0f;
-		for (int32 Offset = -MemoryBlurRadius; Offset <= MemoryBlurRadius; ++Offset)
-		{
-			Sum += FogMemoryScratch[
-				FMath::Clamp(Offset, 0, FogTextureHeight - 1) * FogTextureWidth + X];
-		}
-		for (int32 Y = 0; Y < FogTextureHeight; ++Y)
-		{
-			FogMemoryAlpha[Y * FogTextureWidth + X] = Sum / MemoryBlurWindow;
-			const int32 RemoveY = FMath::Clamp(Y - MemoryBlurRadius, 0, FogTextureHeight - 1);
-			const int32 AddY = FMath::Clamp(Y + MemoryBlurRadius + 1, 0, FogTextureHeight - 1);
-			Sum += FogMemoryScratch[AddY * FogTextureWidth + X]
-				- FogMemoryScratch[RemoveY * FogTextureWidth + X];
-		}
-	}
-
-	constexpr int32 OcclusionSampleCount = 360;
+	constexpr int32 OcclusionSampleCount = 1024;
 	Visibility->BuildVisualOcclusionRanges(OcclusionSampleCount, FogOcclusionRanges);
-	const FVector2D VisionOrigin(
-		Character.GetActorLocation().X,
-		Character.GetActorLocation().Y);
-	const float MaximumVisionRange = Visibility->GetCurrentMaximumVisionRange();
-	constexpr float VisionEdgeFeatherWorldUnits = 70.0f;
-	auto GetOcclusionMargin = [this, VisionOrigin, MaximumVisionRange](const FVector2D& WorldPoint)
+	FDarkwellVisionPresentationState VisionState;
+	Visibility->BuildVisualPresentationState(VisionState);
+	const float MaximumWorldPixelWidth = FMath::Max(
+		FVector::Distance(WorldCorners[0], WorldCorners[1]),
+		FVector::Distance(WorldCorners[2], WorldCorners[3])) / FogTextureWidth;
+	const float MaximumWorldPixelHeight = FMath::Max(
+		FVector::Distance(WorldCorners[0], WorldCorners[2]),
+		FVector::Distance(WorldCorners[1], WorldCorners[3])) / FogTextureHeight;
+	const float WorldPixelRadius = 0.5f * FMath::Sqrt(
+		FMath::Square(MaximumWorldPixelWidth) + FMath::Square(MaximumWorldPixelHeight));
+	const float VisionEdgeFeatherWorldUnits = FMath::Max(18.0f, WorldPixelRadius * 2.0f);
+	auto SampleOcclusionDistance = [this](float SamplePosition)
 	{
-		const FVector2D Delta = WorldPoint - VisionOrigin;
-		const float Distance = Delta.Size();
-		if (Distance <= UE_KINDA_SMALL_NUMBER || FogOcclusionRanges.Num() < 3)
+		const int32 SampleCount = FogOcclusionRanges.Num();
+		SamplePosition = FMath::Fmod(SamplePosition, static_cast<float>(SampleCount));
+		if (SamplePosition < 0.0f)
 		{
-			return MaximumVisionRange - Distance;
+			SamplePosition += SampleCount;
+		}
+		const int32 FirstIndex = FMath::FloorToInt(SamplePosition) % SampleCount;
+		const int32 SecondIndex = (FirstIndex + 1) % SampleCount;
+		const float Alpha = SamplePosition - FMath::Floor(SamplePosition);
+		return FMath::Lerp(
+			FogOcclusionRanges[FirstIndex],
+			FogOcclusionRanges[SecondIndex],
+			Alpha);
+	};
+	auto EvaluateRevealWithTolerance = [this, &VisionState, &SampleOcclusionDistance](
+		const FVector2D& WorldPoint,
+		const float RevealTolerance)
+	{
+		const FVector2D Delta = WorldPoint - VisionState.SightOrigin;
+		const float Distance = Delta.Size();
+		if (Distance > VisionState.SightRange + RevealTolerance)
+		{
+			return false;
+		}
+
+		const float SightMargin = VisionState.EvaluateSightMarginFromDelta(Delta, Distance);
+		const float LitSightMargin = FMath::Min(
+			SightMargin,
+			VisionState.EvaluateIlluminationMargin(WorldPoint));
+		const float FinalMargin = FMath::Max(
+			VisionState.EvaluateAwarenessMarginFromDistance(Distance),
+			LitSightMargin);
+		if (FinalMargin < -RevealTolerance || Distance <= UE_KINDA_SMALL_NUMBER)
+		{
+			return FinalMargin >= -RevealTolerance;
 		}
 
 		float NormalizedAngle = FMath::Atan2(Delta.Y, Delta.X) / UE_TWO_PI;
@@ -672,42 +697,265 @@ void ADarkwellHUD::DrawFogOfWar(const ADarkwellCharacter& Character)
 		{
 			NormalizedAngle += 1.0f;
 		}
-		const float SamplePosition = NormalizedAngle * FogOcclusionRanges.Num();
-		const int32 FirstIndex = FMath::FloorToInt(SamplePosition) % FogOcclusionRanges.Num();
-		const int32 SecondIndex = (FirstIndex + 1) % FogOcclusionRanges.Num();
-		const float Alpha = SamplePosition - FMath::Floor(SamplePosition);
-		const float OcclusionDistance = FMath::Lerp(
-			FogOcclusionRanges[FirstIndex],
-			FogOcclusionRanges[SecondIndex],
-			Alpha);
-		return OcclusionDistance - Distance;
+		return FogOcclusionRanges.Num() < 3
+			|| SampleOcclusionDistance(NormalizedAngle * FogOcclusionRanges.Num())
+				>= Distance - RevealTolerance;
 	};
 
-	for (int32 Y = 0; Y < FogTextureHeight; ++Y)
+	// Record the current screen-visible silhouette in a separate 10 cm presentation grid.
+	// The 100 cm grid remains authoritative for gameplay and AI; it is never used
+	// to reconstruct this visible contour.
+	const float PresentationCellSize = Visibility->GetPresentationCellSize();
+	const float PresentationRecordTolerance = VisionEdgeFeatherWorldUnits
+		+ PresentationCellSize * UE_INV_SQRT_2;
+	float MinimumWorldX = WorldCorners[0].X;
+	float MaximumWorldX = WorldCorners[0].X;
+	float MinimumWorldY = WorldCorners[0].Y;
+	float MaximumWorldY = WorldCorners[0].Y;
+	for (int32 Index = 1; Index < UE_ARRAY_COUNT(WorldCorners); ++Index)
+	{
+		MinimumWorldX = FMath::Min(MinimumWorldX, WorldCorners[Index].X);
+		MaximumWorldX = FMath::Max(MaximumWorldX, WorldCorners[Index].X);
+		MinimumWorldY = FMath::Min(MinimumWorldY, WorldCorners[Index].Y);
+		MaximumWorldY = FMath::Max(MaximumWorldY, WorldCorners[Index].Y);
+	}
+	const float PresentationRecordRange = VisionState.SightRange + PresentationRecordTolerance;
+	MinimumWorldX = FMath::Max(MinimumWorldX, VisionState.SightOrigin.X - PresentationRecordRange);
+	MaximumWorldX = FMath::Min(MaximumWorldX, VisionState.SightOrigin.X + PresentationRecordRange);
+	MinimumWorldY = FMath::Max(MinimumWorldY, VisionState.SightOrigin.Y - PresentationRecordRange);
+	MaximumWorldY = FMath::Min(MaximumWorldY, VisionState.SightOrigin.Y + PresentationRecordRange);
+	const FIntPoint MinimumPresentationCell(
+		FMath::FloorToInt(MinimumWorldX / PresentationCellSize),
+		FMath::FloorToInt(MinimumWorldY / PresentationCellSize));
+	const FIntPoint MaximumPresentationCell(
+		FMath::FloorToInt(MaximumWorldX / PresentationCellSize),
+		FMath::FloorToInt(MaximumWorldY / PresentationCellSize));
+	// Record every 30 Hz mask state rather than sampling memory at a slower rate.
+	// Otherwise a turning cone can visibly light a boundary between 10 Hz samples
+	// and leave that exact strip unknown after the cone moves away. The tolerance
+	// includes the visible mask feather and half a cell diagonal, so every portion
+	// of a presentation cell that reached the screen is conservatively retained.
+	for (int32 CellY = MinimumPresentationCell.Y; CellY <= MaximumPresentationCell.Y; ++CellY)
+	{
+		for (int32 CellX = MinimumPresentationCell.X; CellX <= MaximumPresentationCell.X; ++CellX)
+		{
+			const FIntPoint Cell(CellX, CellY);
+			const FVector CellCenter = Darkwell::VisibilityMath::CellToWorldCenter(
+				Cell,
+				PresentationCellSize,
+				PlaneHeight);
+			if (EvaluateRevealWithTolerance(
+				FVector2D(CellCenter.X, CellCenter.Y),
+				PresentationRecordTolerance))
+			{
+				Visibility->RecordExploredPresentationCell(Cell);
+			}
+		}
+	}
+	const uint64 CurrentMemoryRevision = Visibility->GetPresentationMemoryRevision();
+	bool bMemoryProjectionMoved = !bFogMemoryProjectionValid;
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(WorldCorners) && !bMemoryProjectionMoved; ++Index)
+	{
+		bMemoryProjectionMoved = !FogMemoryWorldCorners[Index].Equals(WorldCorners[Index], 0.25f);
+	}
+	const bool bRebuildRememberedMask = bTextureSizeChanged
+		|| bMemoryProjectionMoved
+		|| CurrentMemoryRevision != FogMemoryRevision;
+
+	auto SampleRememberedCoverage = [Visibility, PresentationCellSize](
+		const FVector2D& WorldPoint)
+	{
+		const FVector2D CenterGrid(
+			WorldPoint.X / PresentationCellSize - 0.5f,
+			WorldPoint.Y / PresentationCellSize - 0.5f);
+		const FIntPoint BaseCell(
+			FMath::FloorToInt(CenterGrid.X),
+			FMath::FloorToInt(CenterGrid.Y));
+		const float AlphaX = CenterGrid.X - BaseCell.X;
+		const float AlphaY = CenterGrid.Y - BaseCell.Y;
+		auto IsExplored = [Visibility](const FIntPoint& Cell)
+		{
+			return Visibility->IsPresentationCellExplored(Cell) ? 1.0f : 0.0f;
+		};
+		const float Bottom = FMath::Lerp(
+			IsExplored(BaseCell),
+			IsExplored(BaseCell + FIntPoint(1, 0)),
+			AlphaX);
+		const float Top = FMath::Lerp(
+			IsExplored(BaseCell + FIntPoint(0, 1)),
+			IsExplored(BaseCell + FIntPoint(1, 1)),
+			AlphaX);
+		return FMath::SmoothStep(0.35f, 0.65f, FMath::Lerp(Bottom, Top, AlphaY));
+	};
+
+	ParallelFor(FogTextureHeight, [
+		this,
+		&WorldCorners,
+		&VisionState,
+		&SampleOcclusionDistance,
+		&SampleRememberedCoverage,
+		VisionEdgeFeatherWorldUnits,
+		WorldPixelRadius,
+		bRebuildRememberedMask](const int32 Y)
 	{
 		const float V = (static_cast<float>(Y) + 0.5f) / FogTextureHeight;
+		const FVector WorldLeft = FMath::Lerp(WorldCorners[0], WorldCorners[2], V);
+		const FVector WorldRight = FMath::Lerp(WorldCorners[1], WorldCorners[3], V);
+		const FVector WorldStep = (WorldRight - WorldLeft) / FogTextureWidth;
+		FVector WorldPoint = WorldLeft + WorldStep * 0.5f;
 		for (int32 X = 0; X < FogTextureWidth; ++X)
 		{
-			const float U = (static_cast<float>(X) + 0.5f) / FogTextureWidth;
-			const FVector WorldTop = FMath::Lerp(WorldCorners[0], WorldCorners[1], U);
-			const FVector WorldBottom = FMath::Lerp(WorldCorners[2], WorldCorners[3], U);
-			const FVector WorldPoint = FMath::Lerp(WorldTop, WorldBottom, V);
 			const FVector2D WorldPoint2D(WorldPoint.X, WorldPoint.Y);
-			const float VisibilityMargin = FMath::Min(
-				Visibility->GetVisionSourceMargin(WorldPoint),
-				GetOcclusionMargin(WorldPoint2D));
-			const float CurrentReveal = FMath::SmoothStep(
-				-VisionEdgeFeatherWorldUnits,
-				VisionEdgeFeatherWorldUnits,
-				VisibilityMargin);
-			const float FogAlpha = FogMemoryAlpha[Y * FogTextureWidth + X]
-				* (1.0f - CurrentReveal);
-			FogTexturePixels[Y * FogTextureWidth + X] = FColor(
-				0,
-				0,
-				0,
-				FMath::RoundToInt(255.0f * FMath::Clamp(FogAlpha, 0.0f, 1.0f)));
+			const FVector2D VisionDelta = WorldPoint2D - VisionState.SightOrigin;
+			const float VisionDistance = VisionDelta.Size();
+			float CurrentReveal = 0.0f;
+			if (VisionDistance <= VisionState.SightRange + VisionEdgeFeatherWorldUnits)
+			{
+				float FinalMaskMargin =
+					VisionState.EvaluateAwarenessMarginFromDistance(VisionDistance);
+				const float SightMargin = VisionState.EvaluateSightMarginFromDelta(
+					VisionDelta,
+					VisionDistance);
+				if (SightMargin > -VisionEdgeFeatherWorldUnits)
+				{
+					const float IlluminationMargin = VisionState.EvaluateIlluminationMargin(WorldPoint2D);
+					FinalMaskMargin = FMath::Max(
+						FinalMaskMargin,
+						FMath::Min(SightMargin, IlluminationMargin));
+				}
+				if (FinalMaskMargin > -VisionEdgeFeatherWorldUnits
+					&& VisionDistance > UE_KINDA_SMALL_NUMBER && FogOcclusionRanges.Num() >= 3)
+				{
+					float NormalizedAngle = FMath::Atan2(VisionDelta.Y, VisionDelta.X) / UE_TWO_PI;
+					if (NormalizedAngle < 0.0f)
+					{
+						NormalizedAngle += 1.0f;
+					}
+					const float CenterSamplePosition = NormalizedAngle * FogOcclusionRanges.Num();
+					const float AngularPixelRadius = FMath::Atan2(
+						WorldPixelRadius,
+						VisionDistance) * FogOcclusionRanges.Num() / UE_TWO_PI;
+					float RevealSum = 0.0f;
+					for (const float SampleOffset :
+						{ -AngularPixelRadius, 0.0f, AngularPixelRadius })
+					{
+						const float OcclusionMargin = SampleOcclusionDistance(
+							CenterSamplePosition + SampleOffset) - VisionDistance;
+						RevealSum += FMath::SmoothStep(
+							-VisionEdgeFeatherWorldUnits,
+							VisionEdgeFeatherWorldUnits,
+							FMath::Min(FinalMaskMargin, OcclusionMargin));
+					}
+					CurrentReveal = RevealSum / 3.0f;
+				}
+				else if (FinalMaskMargin > -VisionEdgeFeatherWorldUnits)
+				{
+					CurrentReveal = FMath::SmoothStep(
+						-VisionEdgeFeatherWorldUnits,
+						VisionEdgeFeatherWorldUnits,
+						FinalMaskMargin);
+				}
+			}
+			const int32 PixelIndex = Y * FogTextureWidth + X;
+			FColor& Pixel = FogTexturePixels[PixelIndex];
+			Pixel.R = static_cast<uint8>(FMath::RoundToInt(
+				255.0f * FMath::Clamp(CurrentReveal, 0.0f, 1.0f)));
+			Pixel.B = 0;
+			Pixel.A = 255;
+			if (bRebuildRememberedMask)
+			{
+				FogRememberedCoverage[PixelIndex] = SampleRememberedCoverage(WorldPoint2D);
+			}
+			WorldPoint += WorldStep;
 		}
+	});
+
+	// The sparse 10 cm memory field is exact but its binary contour still forms
+	// visible stairs at shallow angles. Three small separable box passes produce
+	// a Gaussian-like continuous field in linear time; a narrow, inward-biased
+	// threshold turns that field back into a crisp one-pixel presentation edge.
+	// This changes presentation only and never writes authoritative knowledge.
+	constexpr int32 MemoryContourRadius = 3;
+	constexpr int32 MemoryContourPassCount = 3;
+	const int32 MemoryContourWindow = MemoryContourRadius * 2 + 1;
+	auto BlurRememberedHorizontal = [this, MemoryContourRadius, MemoryContourWindow](
+		const TArray<float>& Source,
+		TArray<float>& Destination)
+	{
+		ParallelFor(FogTextureHeight, [this, &Source, &Destination, MemoryContourRadius, MemoryContourWindow](const int32 Y)
+		{
+			float Sum = 0.0f;
+			for (int32 Offset = -MemoryContourRadius; Offset <= MemoryContourRadius; ++Offset)
+			{
+				Sum += Source[
+					Y * FogTextureWidth + FMath::Clamp(Offset, 0, FogTextureWidth - 1)];
+			}
+			for (int32 X = 0; X < FogTextureWidth; ++X)
+			{
+				Destination[Y * FogTextureWidth + X] = Sum / MemoryContourWindow;
+				const int32 RemoveX = FMath::Clamp(
+					X - MemoryContourRadius,
+					0,
+					FogTextureWidth - 1);
+				const int32 AddX = FMath::Clamp(
+					X + MemoryContourRadius + 1,
+					0,
+					FogTextureWidth - 1);
+				Sum += Source[Y * FogTextureWidth + AddX]
+					- Source[Y * FogTextureWidth + RemoveX];
+			}
+		});
+	};
+	auto BlurRememberedVertical = [this, MemoryContourRadius, MemoryContourWindow](
+		const TArray<float>& Source,
+		TArray<float>& Destination)
+	{
+		ParallelFor(FogTextureWidth, [this, &Source, &Destination, MemoryContourRadius, MemoryContourWindow](const int32 X)
+		{
+			float Sum = 0.0f;
+			for (int32 Offset = -MemoryContourRadius; Offset <= MemoryContourRadius; ++Offset)
+			{
+				Sum += Source[
+					FMath::Clamp(Offset, 0, FogTextureHeight - 1) * FogTextureWidth + X];
+			}
+			for (int32 Y = 0; Y < FogTextureHeight; ++Y)
+			{
+				Destination[Y * FogTextureWidth + X] = Sum / MemoryContourWindow;
+				const int32 RemoveY = FMath::Clamp(
+					Y - MemoryContourRadius,
+					0,
+					FogTextureHeight - 1);
+				const int32 AddY = FMath::Clamp(
+					Y + MemoryContourRadius + 1,
+					0,
+					FogTextureHeight - 1);
+				Sum += Source[AddY * FogTextureWidth + X]
+					- Source[RemoveY * FogTextureWidth + X];
+			}
+		});
+	};
+	if (bRebuildRememberedMask)
+	{
+		for (int32 PassIndex = 0; PassIndex < MemoryContourPassCount; ++PassIndex)
+		{
+			BlurRememberedHorizontal(FogRememberedCoverage, FogRememberedScratch);
+			BlurRememberedVertical(FogRememberedScratch, FogRememberedCoverage);
+		}
+		ParallelFor(FogTexturePixels.Num(), [this](const int32 PixelIndex)
+		{
+			const float ContinuousRememberedCoverage = FMath::SmoothStep(
+				0.54f,
+				0.60f,
+				FogRememberedCoverage[PixelIndex]);
+			FogTexturePixels[PixelIndex].G = static_cast<uint8>(FMath::RoundToInt(
+				255.0f * ContinuousRememberedCoverage));
+		});
+		for (int32 Index = 0; Index < UE_ARRAY_COUNT(WorldCorners); ++Index)
+		{
+			FogMemoryWorldCorners[Index] = WorldCorners[Index];
+		}
+		FogMemoryRevision = CurrentMemoryRevision;
+		bFogMemoryProjectionValid = true;
 	}
 
 	const uint32 SourcePitch = FogTextureWidth * sizeof(FColor);
@@ -734,19 +982,47 @@ void ADarkwellHUD::DrawFogOfWar(const ADarkwellCharacter& Character)
 			delete SourceRegions;
 		});
 
-	if (FTextureResource* FogResource = FogTexture->GetResource())
+}
+
+bool ADarkwellHUD::EnsureFogComposite(ADarkwellCharacter& Character)
+{
+	UCameraComponent* Camera = Character.GetTopDownCamera();
+	if (!Camera || !FogCompositeMaterial)
 	{
-		FCanvasTileItem FogItem(
-			FVector2D::ZeroVector,
-			FogResource,
-			FVector2D(Canvas->ClipX, Canvas->ClipY),
-			FLinearColor::White);
-		FogItem.BlendMode = SE_BLEND_Translucent;
-		Canvas->DrawItem(FogItem);
+		return false;
 	}
-	else
+	if (!FogCompositeMID)
 	{
-		DrawRect(FLinearColor::Black, 0.0f, 0.0f, Canvas->ClipX, Canvas->ClipY);
+		FogCompositeMID = UMaterialInstanceDynamic::Create(FogCompositeMaterial, this);
+		if (!FogCompositeMID)
+		{
+			return false;
+		}
+	}
+	if (FogCompositeCamera.Get() != Camera)
+	{
+		if (UCameraComponent* PreviousCamera = FogCompositeCamera.Get())
+		{
+			PreviousCamera->AddOrUpdateBlendable(FogCompositeMID, 0.0f);
+		}
+		Camera->AddOrUpdateBlendable(FogCompositeMID, 1.0f);
+		FogCompositeCamera = Camera;
+		bFogMemoryProjectionValid = false;
+	}
+	if (FogTexture)
+	{
+		FogCompositeMID->SetTextureParameterValue(TEXT("FogMaskTexture"), FogTexture);
+	}
+	return true;
+}
+
+void ADarkwellHUD::SetFogCompositeWeight(ADarkwellCharacter* Character, const float Weight)
+{
+	UCameraComponent* Camera = Character ? Character->GetTopDownCamera() : FogCompositeCamera.Get();
+	if (Camera && FogCompositeMID)
+	{
+		Camera->AddOrUpdateBlendable(FogCompositeMID, Weight);
+		FogCompositeCamera = Camera;
 	}
 }
 

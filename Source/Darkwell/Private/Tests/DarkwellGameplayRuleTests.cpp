@@ -11,7 +11,9 @@
 #include "Gameplay/DarkwellFogSubject.h"
 #include "Gameplay/DarkwellResourceMath.h"
 #include "Gameplay/DarkwellSurvivalRules.h"
+#include "Gameplay/DarkwellVisibilityComponent.h"
 #include "Gameplay/DarkwellVisibilityMath.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/AssetManager.h"
 #include "Inventory/DarkwellCraftingRecipe.h"
 #include "Inventory/DarkwellInventoryComponent.h"
@@ -21,6 +23,9 @@
 #include "Misc/AutomationTest.h"
 #include "Save/DarkwellSaveGame.h"
 #include "World/DarkwellExitGate.h"
+#include "World/DarkwellAmmoPickup.h"
+#include "World/DarkwellFusePickup.h"
+#include "World/DarkwellScrapPickup.h"
 #include "World/DarkwellStorageContainer.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -60,6 +65,9 @@ bool FDarkwellSaveSerializationTest::RunTest(const FString& Parameters)
 	SaveData->Player.EquippedLeftHandItem = DarkwellGameplayTags::Equipment_Left_Shotgun;
 	SaveData->Player.EquippedRightHandItem = DarkwellGameplayTags::Equipment_Right_Torch;
 	SaveData->Player.ExploredFogCells = {FIntPoint(-3, 4), FIntPoint(1, 2)};
+	SaveData->Player.ExploredFogPresentationCells =
+		{FIntPoint(-12, 16), FIntPoint(-11, 16), FIntPoint(4, 8)};
+	SaveData->Player.ExploredFogPresentationCellSize = 10.0f;
 
 	FDarkwellContainerSaveData& Container = SaveData->Containers.AddDefaulted_GetRef();
 	Container.PersistentId = FName(TEXT("Container.Test"));
@@ -91,6 +99,18 @@ bool FDarkwellSaveSerializationTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("Torch power state survives serialization"), LoadedData->Player.bTorchOn);
 		TestEqual(TEXT("Explored fog knowledge survives serialization"), LoadedData->Player.ExploredFogCells.Num(), 2);
 		TestEqual(TEXT("Negative explored cell survives serialization"), LoadedData->Player.ExploredFogCells[0], FIntPoint(-3, 4));
+		TestEqual(
+			TEXT("Fine explored fog presentation survives serialization"),
+			LoadedData->Player.ExploredFogPresentationCells.Num(),
+			3);
+		TestEqual(
+			TEXT("Fine negative explored cell survives serialization"),
+			LoadedData->Player.ExploredFogPresentationCells[0],
+			FIntPoint(-12, 16));
+		TestEqual(
+			TEXT("Fine explored fog cell size survives serialization"),
+			LoadedData->Player.ExploredFogPresentationCellSize,
+			10.0f);
 		TestTrue(TEXT("Mission tag survives serialization"), LoadedData->MissionState == DarkwellGameplayTags::State_Mission_ReachExit);
 		TestEqual(TEXT("Container ID survives serialization"), LoadedData->Containers[0].PersistentId, FName(TEXT("Container.Test")));
 		TestEqual(TEXT("Collected pickup state survives serialization"), LoadedData->WorldPickups[0].Quantity, 0);
@@ -119,9 +139,46 @@ bool FDarkwellFogKnowledgeRulesTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Never-seen cells remain black"), ResolveFogCellState(false, false), EDarkwellFogCellState::Unexplored);
 	TestEqual(TEXT("Seen cells outside current sight become remembered"), ResolveFogCellState(false, true), EDarkwellFogCellState::Explored);
 	TestEqual(TEXT("Current sight always exposes live state"), ResolveFogCellState(true, true), EDarkwellFogCellState::Visible);
+	TestTrue(
+		TEXT("Remembered-fog smoothing cannot reveal beyond its continuous boundary"),
+		FMath::IsNearlyEqual(ConstrainRememberedFogAlpha(0.84f, 1.0f), 1.0f));
+	TestTrue(
+		TEXT("Remembered-fog smoothing may safely darken inside its boundary"),
+		FMath::IsNearlyEqual(ConstrainRememberedFogAlpha(0.95f, 0.84f), 0.95f));
+	FDarkwellVisionPresentationState PresentationState;
+	PresentationState.SetSightCone(FVector2D::ZeroVector, FVector2D(1.0f, 0.0f), 600.0f, 45.0f);
+	PresentationState.SetAwarenessRadius(120.0f);
+	PresentationState.AddLightCircle(FVector(400.0f, 0.0f, 50.0f), 150.0f);
+	PresentationState.AddLightCircle(FVector(-50.0f, 0.0f, 50.0f), 200.0f);
+	TestTrue(TEXT("A lit point inside the sight cone is visible"), PresentationState.EvaluateMargin(FVector2D(400.0f, 0.0f)) > 0.0f);
+	TestTrue(TEXT("Sight geometry remains independent from illumination"), PresentationState.EvaluateSightMargin(FVector2D(200.0f, 0.0f)) > 0.0f);
+	TestTrue(TEXT("The light mask remains independent from sight"), PresentationState.EvaluateIlluminationMargin(FVector2D(400.0f, 100.0f)) > 0.0f);
+	TestTrue(TEXT("An unlit point inside the sight cone stays hidden"), PresentationState.EvaluateMargin(FVector2D(200.0f, 0.0f)) < 0.0f);
+	TestTrue(TEXT("The close awareness disk remains round behind the player"), PresentationState.EvaluateMargin(FVector2D(-50.0f, 0.0f)) > 0.0f);
+	TestTrue(TEXT("A lit point behind both sight and awareness stays hidden"), PresentationState.EvaluateMargin(FVector2D(-200.0f, 0.0f)) < 0.0f);
+	FDarkwellVisionPresentationState SpotlightState;
+	SpotlightState.SetSightCone(FVector2D::ZeroVector, FVector2D(1.0f, 0.0f), 800.0f, 60.0f);
+	SpotlightState.AddLightCone(FVector::ZeroVector, FVector2D(1.0f, 0.0f), 700.0f, 15.0f);
+	TestTrue(TEXT("A spotlight illuminates its forward beam"), SpotlightState.EvaluateMargin(FVector2D(500.0f, 0.0f)) > 0.0f);
+	TestTrue(TEXT("A spotlight does not illuminate outside its beam"), SpotlightState.EvaluateMargin(FVector2D(300.0f, 250.0f)) < 0.0f);
+	UDarkwellVisibilityComponent* MigratedVisibility = NewObject<UDarkwellVisibilityComponent>();
+	MigratedVisibility->RestoreExploredCells(
+		TArray<FIntPoint>(),
+		{FIntPoint(0, 0)},
+		25.0f);
+	TestTrue(
+		TEXT("Older 25 cm fog memory migrates across the full original footprint"),
+		MigratedVisibility->IsPresentationCellExplored(FIntPoint(2, 2)));
+	TestEqual(
+		TEXT("Precomputed delta path matches direct sight-light intersection"),
+		PresentationState.EvaluateMarginFromDelta(FVector2D(400.0f, 0.0f), 400.0f),
+		PresentationState.EvaluateMargin(FVector2D(400.0f, 0.0f)));
 	TestTrue(TEXT("Mobile enemies participate in fog knowledge"), ADarkwellStalkerCharacter::StaticClass()->ImplementsInterface(UDarkwellFogSubject::StaticClass()));
 	TestTrue(TEXT("The powered exit freezes its last-known presentation"), ADarkwellExitGate::StaticClass()->ImplementsInterface(UDarkwellFogSubject::StaticClass()));
 	TestTrue(TEXT("Storage freezes its last-known presentation"), ADarkwellStorageContainer::StaticClass()->ImplementsInterface(UDarkwellFogSubject::StaticClass()));
+	TestTrue(TEXT("Shell pickups are visible only in current sight"), ADarkwellAmmoPickup::StaticClass()->ImplementsInterface(UDarkwellFogSubject::StaticClass()));
+	TestTrue(TEXT("Scrap pickups are visible only in current sight"), ADarkwellScrapPickup::StaticClass()->ImplementsInterface(UDarkwellFogSubject::StaticClass()));
+	TestTrue(TEXT("Mission pickups are visible only in current sight"), ADarkwellFusePickup::StaticClass()->ImplementsInterface(UDarkwellFogSubject::StaticClass()));
 	return true;
 }
 
@@ -568,6 +625,27 @@ bool FDarkwellEnemyArchetypeTest::RunTest(const FString& Parameters)
 		TEXT("The warden pushes deeper through held torch light"),
 		Warden->GetTorchDeterrenceRangeScale() < Stalker->GetTorchDeterrenceRangeScale());
 	TestEqual(TEXT("A full lantern focus stuns the warden for five seconds"), Warden->GetLanternFocusStunDuration(), 5.0f);
+
+	auto TestPrimitivePresentationDoesNotCastWorldShadows = [this](
+		const TCHAR* Description,
+		const ADarkwellStalkerCharacter& Enemy)
+	{
+		TInlineComponentArray<UStaticMeshComponent*> PresentationMeshes;
+		Enemy.GetComponents(PresentationMeshes);
+		TestTrue(Description, PresentationMeshes.Num() > 0);
+		for (const UStaticMeshComponent* Mesh : PresentationMeshes)
+		{
+			TestFalse(
+				TEXT("Primitive enemy presentation does not cast magnified local-light shadows"),
+				Mesh && Mesh->CastShadow);
+		}
+	};
+	TestPrimitivePresentationDoesNotCastWorldShadows(
+		TEXT("The stalker has native primitive presentation meshes"),
+		*Stalker);
+	TestPrimitivePresentationDoesNotCastWorldShadows(
+		TEXT("The warden has native primitive presentation meshes"),
+		*Warden);
 
 	const float FacingThreshold = FMath::Cos(FMath::DegreesToRadians(36.0f));
 	const float WardenTorchRange = 760.0f * Warden->GetTorchDeterrenceRangeScale();

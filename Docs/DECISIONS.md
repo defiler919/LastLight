@@ -11,7 +11,7 @@
 | Perspective | 3D top-down |
 | Prototype camera | Absolute top-down: fixed directly above the player at `Pitch -90°`, `Yaw 0°` |
 | Prototype movement and aiming | Camera-relative WASD movement; mouse cursor aims at the traced world point |
-| Turning and sprinting | Mouse aim is rate-limited to 240 degrees/second; holding Left Shift while moving raises speed from 430 to 650 cm/s and turns at 165 degrees/second toward movement, forcing the view cone forward |
+| Turning and sprinting | Mouse aim is rate-limited to 280 degrees/second; forward/strafe/backpedal movement uses 100%/78%/58% of the active base speed with continuous angular interpolation. Holding Left Shift while moving raises the base speed from 430 to 650 cm/s and turns at 190 degrees/second toward movement, forcing the view cone forward |
 | Player knowledge | A native sparse XY grid owns authoritative actor visibility and explored memory; the per-frame visual mask evaluates the same native sight sources continuously and never changes gameplay knowledge |
 | Fog of war | StarCraft-style three states: unexplored cells are pure black, explored cells show a dim last-known presentation, and currently visible cells show live state; sight sources are blocked by world visibility collision |
 | Fog subjects | Mobile enemies disappear outside current sight; stateful fixed facilities keep their last-seen presentation and refresh to current state only when reacquired |
@@ -23,7 +23,7 @@
 | Second enemy archetype | The Warden is a slow 260-health, 28-damage fuse guard with a distinct armored greybox silhouette. It advances through the outer torch field until a closer 58% stand-off boundary, while full lantern focus still creates a five-second stun |
 | Prototype player danger | The stalker deals timed close-range damage; overlapping hits receive brief invulnerability, damage flashes red, and death presents an explicit `R` restart flow |
 | Prototype mission state | Native GameState and Gameplay Tags represent find-fuse, reach-exit, and escaped states; `R` restarts after either defeat or victory |
-| Required mission passage | The central divider door follows the standard cursor-focused `F` interaction and uses amber/green state lighting to communicate its state |
+| Required mission passage | The central divider door follows the standard facing-proximity `F` interaction and uses amber/green state lighting to communicate its state |
 | Reload torch behavior | A lit torch becomes a small foot-level light pool for the player, but enemies treat it as extinguished until reload completes |
 | Hand input layout | `Q` left-hand weapon wheel, `E` right-hand tool wheel, `F` interaction, LMB/RMB use the equipped left/right item |
 | Equipment extensibility | Native equipment tags distinguish left-hand firearms and right-hand tools; shotgun, torch, and lantern are implemented, and releasing E cycles the two right-hand choices in the current wheel prototype |
@@ -39,7 +39,7 @@
 | Save product flow | Native main/pause/settings menus own New Game, Continue, manual save/load, return-to-menu, quit, and display mode; fuse collection and successful crafting autosave into the same continuation slot; F5/F9 remain development-only shortcuts |
 | Safe loading | Restore grants three seconds of player damage immunity and clears stalker awareness/movement for the same grace period |
 | Primary weapon | Left-hand, one-handed sawed-off double-barrel shotgun |
-| Fire input | Left mouse button |
+| Fire input | LMB quick release fires a wide 9-degree-half-angle shotgun blast; holding beyond 0.18 seconds enters aimed fire, while sight and spread tighten linearly from the initial press over 1.5 seconds (52 to 35 degrees of sight, 9 to 3 degrees of spread) before release fires |
 | Right-hand tools | Torch for close group control; lantern for baseline information and focused high-threat control |
 | Torch capabilities | Passive illumination, RMB tap swing with heat, RMB hold stand-off boundary, dangerous reload lowering; future throwing/ignition |
 | Lantern capabilities | Passive area illumination, RMB hold focus beam with approximately three-second stun buildup and five-second full-meter stun, RMB tap fuel-cost flash with cooldown and a short immediate control window |

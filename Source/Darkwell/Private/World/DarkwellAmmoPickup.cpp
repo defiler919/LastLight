@@ -40,6 +40,7 @@ ADarkwellAmmoPickup::ADarkwellAmmoPickup()
 void ADarkwellAmmoPickup::BeginPlay()
 {
 	Super::BeginPlay();
+	SetPlayerFogState(EDarkwellFogCellState::Unexplored);
 	if (UGameInstance* GameInstance = GetGameInstance())
 	{
 		if (UDarkwellSaveSubsystem* SaveSubsystem = GameInstance->GetSubsystem<UDarkwellSaveSubsystem>())
@@ -47,6 +48,15 @@ void ADarkwellAmmoPickup::BeginPlay()
 			SaveSubsystem->RegisterWorldPickup(PersistentId, ShellCount);
 		}
 	}
+}
+
+void ADarkwellAmmoPickup::SetPlayerFogState(const EDarkwellFogCellState NewState)
+{
+	bFogPresentationVisible = NewState == EDarkwellFogCellState::Visible;
+	PickupMesh->SetHiddenInGame(!bFogPresentationVisible);
+	PickupMesh->SetCollisionResponseToChannel(
+		ECC_Visibility,
+		bFogPresentationVisible ? ECR_Block : ECR_Ignore);
 }
 
 void ADarkwellAmmoPickup::ConfigurePickup(const FName InPersistentId)
@@ -101,4 +111,11 @@ FText ADarkwellAmmoPickup::GetInteractionPrompt(const ADarkwellCharacter& Charac
 	return FText::Format(
 		NSLOCTEXT("Darkwell", "TakeShells", "Take {0} shells"),
 		FText::AsNumber(ShellCount));
+}
+
+void ADarkwellAmmoPickup::OnInteractionFocusChanged(const bool bFocused)
+{
+	PickupMesh->SetRelativeScale3D(bFocused
+		? FVector(0.4f, 0.4f, 0.225f)
+		: FVector(0.32f, 0.32f, 0.18f));
 }

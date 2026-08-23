@@ -40,6 +40,7 @@ ADarkwellScrapPickup::ADarkwellScrapPickup()
 void ADarkwellScrapPickup::BeginPlay()
 {
 	Super::BeginPlay();
+	SetPlayerFogState(EDarkwellFogCellState::Unexplored);
 	if (UGameInstance* GameInstance = GetGameInstance())
 	{
 		if (UDarkwellSaveSubsystem* SaveSubsystem = GameInstance->GetSubsystem<UDarkwellSaveSubsystem>())
@@ -47,6 +48,15 @@ void ADarkwellScrapPickup::BeginPlay()
 			SaveSubsystem->RegisterWorldPickup(PersistentId, ScrapQuantity);
 		}
 	}
+}
+
+void ADarkwellScrapPickup::SetPlayerFogState(const EDarkwellFogCellState NewState)
+{
+	bFogPresentationVisible = NewState == EDarkwellFogCellState::Visible;
+	PickupMesh->SetHiddenInGame(!bFogPresentationVisible);
+	PickupMesh->SetCollisionResponseToChannel(
+		ECC_Visibility,
+		bFogPresentationVisible ? ECR_Block : ECR_Ignore);
 }
 
 void ADarkwellScrapPickup::ConfigurePickup(const FName InPersistentId)
@@ -100,4 +110,11 @@ FText ADarkwellScrapPickup::GetInteractionPrompt(const ADarkwellCharacter& Chara
 	return FText::Format(
 		NSLOCTEXT("Darkwell", "TakeScrap", "Take {0} scrap"),
 		FText::AsNumber(ScrapQuantity));
+}
+
+void ADarkwellScrapPickup::OnInteractionFocusChanged(const bool bFocused)
+{
+	PickupMesh->SetRelativeScale3D(bFocused
+		? FVector(0.375f, 0.3f, 0.225f)
+		: FVector(0.3f, 0.24f, 0.18f));
 }

@@ -50,6 +50,7 @@ ADarkwellWardenCharacter::ADarkwellWardenCharacter()
 	ArmorShell->SetupAttachment(GetCapsuleComponent());
 	ArmorShell->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	ArmorShell->SetCanEverAffectNavigation(false);
+	ArmorShell->SetCastShadow(false);
 	ArmorShell->SetRelativeLocation(FVector(0.0f, 0.0f, 54.0f));
 	ArmorShell->SetRelativeScale3D(FVector(0.58f, 1.16f, 0.26f));
 

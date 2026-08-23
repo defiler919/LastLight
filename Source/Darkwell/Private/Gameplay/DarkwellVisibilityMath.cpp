@@ -58,4 +58,11 @@ namespace Darkwell::VisibilityMath
 			? EDarkwellFogCellState::Explored
 			: EDarkwellFogCellState::Unexplored;
 	}
+
+	float ConstrainRememberedFogAlpha(
+		const float SmoothedAlpha,
+		const float BoundaryAlpha)
+	{
+		return FMath::Clamp(FMath::Max(SmoothedAlpha, BoundaryAlpha), 0.0f, 1.0f);
+	}
 }

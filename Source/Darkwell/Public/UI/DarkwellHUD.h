@@ -13,12 +13,19 @@ class DARKWELL_API ADarkwellHUD : public AHUD
 	GENERATED_BODY()
 
 public:
+	ADarkwellHUD();
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void DrawHUD() override;
 	bool HandleMenuPointer(const FVector2D& ScreenPosition);
 	bool HandleInventoryPointer(const FVector2D& ScreenPosition, bool bSecondaryClick, bool bControlDown);
 
 private:
-	void DrawFogOfWar(const class ADarkwellCharacter& Character);
+	void UpdateFogOfWar(
+		class ADarkwellCharacter& Character,
+		const FIntPoint& ViewportSize,
+		float DeltaSeconds);
+	bool EnsureFogComposite(class ADarkwellCharacter& Character);
+	void SetFogCompositeWeight(class ADarkwellCharacter* Character, float Weight);
 	void DrawMenuInterface();
 	void DrawInventoryInterface();
 	void DrawInventoryPanel(
@@ -43,10 +50,22 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<class UTexture2D> FogTexture;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Fog")
+	TObjectPtr<class UMaterialInterface> FogCompositeMaterial;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UMaterialInstanceDynamic> FogCompositeMID;
+
+	TWeakObjectPtr<class UCameraComponent> FogCompositeCamera;
+
 	TArray<FColor> FogTexturePixels;
-	TArray<float> FogMemoryAlpha;
-	TArray<float> FogMemoryScratch;
+	TArray<float> FogRememberedCoverage;
+	TArray<float> FogRememberedScratch;
 	TArray<float> FogOcclusionRanges;
 	int32 FogTextureWidth = 0;
 	int32 FogTextureHeight = 0;
+	float FogUpdateTimeRemaining = 0.0f;
+	FVector FogMemoryWorldCorners[4]{};
+	uint64 FogMemoryRevision = ~uint64(0);
+	bool bFogMemoryProjectionValid = false;
 };

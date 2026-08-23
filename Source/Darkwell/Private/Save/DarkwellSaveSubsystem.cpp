@@ -222,7 +222,13 @@ bool UDarkwellSaveSubsystem::ApplyPendingLoad(UWorld& World)
 		Visibility->RestoreExploredCells(
 			PendingLoad->SaveVersion >= 4
 				? PendingLoad->Player.ExploredFogCells
-				: TArray<FIntPoint>());
+				: TArray<FIntPoint>(),
+			PendingLoad->SaveVersion >= 5
+				? PendingLoad->Player.ExploredFogPresentationCells
+				: TArray<FIntPoint>(),
+			PendingLoad->SaveVersion >= 6
+				? PendingLoad->Player.ExploredFogPresentationCellSize
+				: 25.0f);
 	}
 	Character->GrantLoadProtection(3.0f);
 
@@ -379,6 +385,10 @@ UDarkwellSaveGame* UDarkwellSaveSubsystem::CaptureCurrentGame(UWorld& World) con
 	if (const UDarkwellVisibilityComponent* Visibility = Character->GetVisibilityComponent())
 	{
 		SaveData->Player.ExploredFogCells = Visibility->CaptureExploredCells();
+		SaveData->Player.ExploredFogPresentationCells =
+			Visibility->CaptureExploredPresentationCells();
+		SaveData->Player.ExploredFogPresentationCellSize =
+			Visibility->GetPresentationCellSize();
 	}
 
 	for (TActorIterator<ADarkwellStorageContainer> It(&World); It; ++It)

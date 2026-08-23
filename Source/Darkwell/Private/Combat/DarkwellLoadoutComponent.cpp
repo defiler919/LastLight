@@ -63,7 +63,7 @@ void UDarkwellLoadoutComponent::TickComponent(
 
 void UDarkwellLoadoutComponent::SetRightHandPresentation(
 	UStaticMeshComponent* InTorchMesh,
-	USpotLightComponent* InTorchLight,
+	UPointLightComponent* InTorchLight,
 	UStaticMeshComponent* InLanternMesh,
 	UPointLightComponent* InLanternBaseLight,
 	USpotLightComponent* InLanternFocusLight)
@@ -76,11 +76,8 @@ void UDarkwellLoadoutComponent::SetRightHandPresentation(
 	if (TorchLight && !bHasRaisedTorchPresentation)
 	{
 		RaisedTorchRelativeLocation = TorchLight->GetRelativeLocation();
-		RaisedTorchRelativeRotation = TorchLight->GetRelativeRotation();
 		RaisedTorchIntensity = TorchLight->Intensity;
 		RaisedTorchRadius = TorchLight->AttenuationRadius;
-		RaisedTorchInnerConeAngle = TorchLight->InnerConeAngle;
-		RaisedTorchOuterConeAngle = TorchLight->OuterConeAngle;
 		bHasRaisedTorchPresentation = true;
 	}
 	if (TorchMesh)
@@ -188,7 +185,7 @@ bool UDarkwellLoadoutComponent::EquipRightHandItem(const FGameplayTag ItemTag)
 	return true;
 }
 
-bool UDarkwellLoadoutComponent::TryFire(const FVector& AimPoint)
+bool UDarkwellLoadoutComponent::TryFire(const FVector& AimPoint, const float AimProgress)
 {
 	if (EquippedLeftHandItem != DarkwellGameplayTags::Equipment_Left_Shotgun
 		|| IsReloading()
@@ -223,10 +220,16 @@ bool UDarkwellLoadoutComponent::TryFire(const FVector& AimPoint)
 	const FVector AimDirection = (AimPoint - TraceStart).GetSafeNormal(UE_SMALL_NUMBER, Owner->GetActorForwardVector());
 	FRandomStream ShotRandom(FPlatformTime::Cycles());
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(DarkwellShotgun), false, Owner);
+	const float ActiveSpreadHalfAngleDegrees = FMath::Lerp(
+		HipFireSpreadHalfAngleDegrees,
+		AimedSpreadHalfAngleDegrees,
+		FMath::Clamp(AimProgress, 0.0f, 1.0f));
 
 	for (int32 PelletIndex = 0; PelletIndex < PelletCount; ++PelletIndex)
 	{
-		const FVector PelletDirection = ShotRandom.VRandCone(AimDirection, FMath::DegreesToRadians(SpreadHalfAngleDegrees));
+		const FVector PelletDirection = ShotRandom.VRandCone(
+			AimDirection,
+			FMath::DegreesToRadians(ActiveSpreadHalfAngleDegrees));
 		const FVector TraceEnd = TraceStart + PelletDirection * ShotRange;
 		FHitResult HitResult;
 		const bool bHit = GetWorld()->LineTraceSingleByChannel(
@@ -694,36 +697,26 @@ void UDarkwellLoadoutComponent::RefreshRightHandPresentation()
 		if (PresentationMode == EDarkwellTorchPresentationMode::ReloadPool)
 		{
 			TorchLight->SetRelativeLocation(ReloadTorchRelativeLocation);
-			TorchLight->SetRelativeRotation(ReloadTorchRelativeRotation);
 			TorchLight->SetIntensity(ReloadTorchIntensity);
 			TorchLight->SetAttenuationRadius(ReloadTorchRadius);
-			TorchLight->SetInnerConeAngle(ReloadTorchInnerConeAngle);
-			TorchLight->SetOuterConeAngle(ReloadTorchOuterConeAngle);
 		}
 		else if (bHasRaisedTorchPresentation)
 		{
 			TorchLight->SetRelativeLocation(RaisedTorchRelativeLocation);
-			TorchLight->SetRelativeRotation(RaisedTorchRelativeRotation);
 			if (PresentationMode == EDarkwellTorchPresentationMode::Deterrent)
 			{
 				TorchLight->SetIntensity(12000.0f);
 				TorchLight->SetAttenuationRadius(1800.0f);
-				TorchLight->SetInnerConeAngle(30.0f);
-				TorchLight->SetOuterConeAngle(58.0f);
 			}
 			else if (PresentationMode == EDarkwellTorchPresentationMode::Swing)
 			{
 				TorchLight->SetIntensity(9000.0f);
 				TorchLight->SetAttenuationRadius(1350.0f);
-				TorchLight->SetInnerConeAngle(34.0f);
-				TorchLight->SetOuterConeAngle(62.0f);
 			}
 			else
 			{
 				TorchLight->SetIntensity(RaisedTorchIntensity);
 				TorchLight->SetAttenuationRadius(RaisedTorchRadius);
-				TorchLight->SetInnerConeAngle(RaisedTorchInnerConeAngle);
-				TorchLight->SetOuterConeAngle(RaisedTorchOuterConeAngle);
 			}
 		}
 	}

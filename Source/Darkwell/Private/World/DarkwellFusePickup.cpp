@@ -36,6 +36,21 @@ ADarkwellFusePickup::ADarkwellFusePickup()
 	}
 }
 
+void ADarkwellFusePickup::BeginPlay()
+{
+	Super::BeginPlay();
+	SetPlayerFogState(EDarkwellFogCellState::Unexplored);
+}
+
+void ADarkwellFusePickup::SetPlayerFogState(const EDarkwellFogCellState NewState)
+{
+	bFogPresentationVisible = NewState == EDarkwellFogCellState::Visible;
+	FuseMesh->SetHiddenInGame(!bFogPresentationVisible);
+	FuseMesh->SetCollisionResponseToChannel(
+		ECC_Visibility,
+		bFogPresentationVisible ? ECR_Block : ECR_Ignore);
+}
+
 bool ADarkwellFusePickup::CanInteract(const ADarkwellCharacter& Character) const
 {
 	const ADarkwellGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ADarkwellGameState>() : nullptr;
@@ -60,4 +75,11 @@ void ADarkwellFusePickup::Interact(ADarkwellCharacter& Character)
 FText ADarkwellFusePickup::GetInteractionPrompt(const ADarkwellCharacter& Character) const
 {
 	return NSLOCTEXT("Darkwell", "TakeGeneratorFuse", "Take generator fuse");
+}
+
+void ADarkwellFusePickup::OnInteractionFocusChanged(const bool bFocused)
+{
+	FuseMesh->SetRelativeScale3D(bFocused
+		? FVector(0.225f, 0.225f, 0.6f)
+		: FVector(0.18f, 0.18f, 0.48f));
 }

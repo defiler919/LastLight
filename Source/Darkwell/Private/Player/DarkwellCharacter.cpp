@@ -81,15 +81,15 @@ ADarkwellCharacter::ADarkwellCharacter()
 	TorchMesh->SetRelativeRotation(FRotator(0.0f, 90.0f, 0.0f));
 	TorchMesh->SetRelativeScale3D(FVector(0.08f, 0.08f, 0.32f));
 
-	TorchLight = CreateDefaultSubobject<USpotLightComponent>(TEXT("TorchLight"));
+	TorchLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("TorchLight"));
 	TorchLight->SetupAttachment(GetCapsuleComponent());
 	TorchLight->SetRelativeLocation(FVector(48.0f, 27.0f, 48.0f));
-	TorchLight->SetRelativeRotation(FRotator(-5.0f, 0.0f, 0.0f));
 	TorchLight->SetLightColor(FLinearColor(1.0f, 0.72f, 0.38f));
 	TorchLight->SetIntensity(5200.0f);
 	TorchLight->SetAttenuationRadius(1250.0f);
-	TorchLight->SetInnerConeAngle(24.0f);
-	TorchLight->SetOuterConeAngle(48.0f);
+	TorchLight->SetSourceRadius(6.0f);
+	TorchLight->SetSoftSourceRadius(12.0f);
+	TorchLight->ShadowResolutionScale = 4.0f;
 	TorchLight->SetVisibility(false);
 
 	LanternMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LanternMesh"));
@@ -106,6 +106,9 @@ ADarkwellCharacter::ADarkwellCharacter()
 	LanternBaseLight->SetLightColor(FLinearColor(0.78f, 0.9f, 1.0f));
 	LanternBaseLight->SetIntensity(3000.0f);
 	LanternBaseLight->SetAttenuationRadius(900.0f);
+	LanternBaseLight->SetSourceRadius(10.0f);
+	LanternBaseLight->SetSoftSourceRadius(20.0f);
+	LanternBaseLight->ShadowResolutionScale = 3.0f;
 	LanternBaseLight->SetVisibility(false);
 
 	LanternFocusLight = CreateDefaultSubobject<USpotLightComponent>(TEXT("LanternFocusLight"));
@@ -117,6 +120,9 @@ ADarkwellCharacter::ADarkwellCharacter()
 	LanternFocusLight->SetAttenuationRadius(2200.0f);
 	LanternFocusLight->SetInnerConeAngle(8.0f);
 	LanternFocusLight->SetOuterConeAngle(18.0f);
+	LanternFocusLight->SetSourceRadius(8.0f);
+	LanternFocusLight->SetSoftSourceRadius(16.0f);
+	LanternFocusLight->ShadowResolutionScale = 4.0f;
 	LanternFocusLight->SetVisibility(false);
 
 	InventoryComponent = CreateDefaultSubobject<UDarkwellInventoryComponent>(TEXT("InventoryComponent"));
@@ -207,6 +213,7 @@ void ADarkwellCharacter::BeginPlay()
 	bMoveBackwardRequested = false;
 	bMoveLeftRequested = false;
 	bMoveRightRequested = false;
+	ResetPrimaryFireGesture();
 	InvulnerableUntilTimeSeconds = 0.0;
 	LastDamageTimeSeconds = -1.0;
 }
@@ -214,6 +221,7 @@ void ADarkwellCharacter::BeginPlay()
 void ADarkwellCharacter::Tick(const float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	UpdatePrimaryFireGesture(DeltaTime);
 	UpdateFacingAndMovement(DeltaTime);
 }
 
@@ -290,6 +298,15 @@ bool ADarkwellCharacter::IsSprinting() const
 	return MovementState == DarkwellGameplayTags::State_Player_Movement_Sprinting;
 }
 
+float ADarkwellCharacter::GetShotgunAimProgress() const
+{
+	return bPrimaryFireHeld
+		? Darkwell::PlayerMath::ComputePrimaryFireAimProgress(
+			PrimaryFireHeldSeconds,
+			PrimaryFireAimTightenDuration)
+		: 0.0f;
+}
+
 void ADarkwellCharacter::GrantLoadProtection(const float DurationSeconds)
 {
 	const double CurrentTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
@@ -316,6 +333,7 @@ void ADarkwellCharacter::CompleteEscape()
 	bMoveBackwardRequested = false;
 	bMoveLeftRequested = false;
 	bMoveRightRequested = false;
+	ResetPrimaryFireGesture();
 	MovementState = DarkwellGameplayTags::State_Player_Movement_Walking;
 	UpdateInteractionFocus(nullptr);
 	GetCharacterMovement()->DisableMovement();
@@ -347,6 +365,7 @@ void ADarkwellCharacter::RestorePersistentState(
 	bMoveBackwardRequested = false;
 	bMoveLeftRequested = false;
 	bMoveRightRequested = false;
+	ResetPrimaryFireGesture();
 	MovementState = DarkwellGameplayTags::State_Player_Movement_Walking;
 	UpdateInteractionFocus(nullptr);
 	SetActorTransform(SavedTransform, false, nullptr, ETeleportType::TeleportPhysics);
@@ -389,7 +408,9 @@ void ADarkwellCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 	EnhancedInput->BindAction(UseRightHandAction, ETriggerEvent::Started, this, &ThisClass::BeginUseRightHand);
 	EnhancedInput->BindAction(UseRightHandAction, ETriggerEvent::Completed, this, &ThisClass::EndUseRightHand);
 	EnhancedInput->BindAction(UseRightHandAction, ETriggerEvent::Canceled, this, &ThisClass::EndUseRightHand);
-	EnhancedInput->BindAction(FireAction, ETriggerEvent::Started, this, &ThisClass::FireShotgun);
+	EnhancedInput->BindAction(FireAction, ETriggerEvent::Started, this, &ThisClass::BeginPrimaryFire);
+	EnhancedInput->BindAction(FireAction, ETriggerEvent::Completed, this, &ThisClass::EndPrimaryFire);
+	EnhancedInput->BindAction(FireAction, ETriggerEvent::Canceled, this, &ThisClass::CancelPrimaryFire);
 	EnhancedInput->BindAction(ReloadAction, ETriggerEvent::Started, this, &ThisClass::ReloadShotgun);
 	EnhancedInput->BindAction(BackpackAction, ETriggerEvent::Started, this, &ThisClass::ToggleBackpack);
 	EnhancedInput->BindAction(TakeAllAction, ETriggerEvent::Started, this, &ThisClass::TakeAllInventory);
@@ -431,7 +452,15 @@ void ADarkwellCharacter::UpdateFacingAndMovement(const float DeltaTime)
 	MovementState = bShouldSprint
 		? DarkwellGameplayTags::State_Player_Movement_Sprinting.GetTag()
 		: DarkwellGameplayTags::State_Player_Movement_Walking.GetTag();
-	Movement->MaxWalkSpeed = bShouldSprint ? SprintSpeed : WalkSpeed;
+	const float BaseSpeed = bShouldSprint ? SprintSpeed : WalkSpeed;
+	const float DirectionalSpeedScale = MovementDirection.IsNearlyZero()
+		? 1.0f
+		: Darkwell::PlayerMath::ComputeDirectionalSpeedScale(
+			GetActorForwardVector(),
+			MovementDirection,
+			StrafeSpeedScale,
+			BackpedalSpeedScale);
+	Movement->MaxWalkSpeed = BaseSpeed * DirectionalSpeedScale;
 
 	if (!bCanMove)
 	{
@@ -464,27 +493,26 @@ void ADarkwellCharacter::UpdateFacingAndMovement(const float DeltaTime)
 
 void ADarkwellCharacter::UpdateInteractionFocus(AActor* Candidate)
 {
-	UpdateInteractionFocusAtPoint(
-		Candidate,
-		Candidate ? Candidate->GetActorLocation() : FVector::ZeroVector);
+	InteractionComponent->UpdateFocusedActor(CanAcceptGameplayInput() ? Candidate : nullptr);
 }
 
-void ADarkwellCharacter::UpdateInteractionFocusAtPoint(
-	AActor* Candidate,
-	const FVector& FocusWorldPoint)
+void ADarkwellCharacter::RefreshFacingInteractionFocus()
 {
-	if (Candidate && VisibilityComponent
-		&& !VisibilityComponent->IsWorldLocationCurrentlyVisible(FocusWorldPoint))
+	if (CanAcceptGameplayInput())
 	{
-		Candidate = nullptr;
+		InteractionComponent->UpdateFocusedActorFromWorld();
 	}
-	InteractionComponent->UpdateFocusedActor(CanAcceptGameplayInput() ? Candidate : nullptr);
+	else
+	{
+		InteractionComponent->UpdateFocusedActor(nullptr);
+	}
 }
 
 void ADarkwellCharacter::UpdateWeaponWheelInput(const bool bLeftDown, const bool bRightDown)
 {
 	if (!CanAcceptGameplayInput() || IsInventoryOpen())
 	{
+		ResetPrimaryFireGesture();
 		LoadoutComponent->CancelRightHandUse();
 		ActiveWeaponWheel = EDarkwellWeaponWheelSide::None;
 		bLeftWeaponWheelWasDown = bLeftDown;
@@ -499,6 +527,7 @@ void ADarkwellCharacter::UpdateWeaponWheelInput(const bool bLeftDown, const bool
 		ActiveWeaponWheel);
 	if (bRightJustPressed)
 	{
+		ResetPrimaryFireGesture();
 		LoadoutComponent->CancelRightHandUse();
 	}
 
@@ -658,7 +687,7 @@ void ADarkwellCharacter::EndUseRightHand(const FInputActionValue& Value)
 	LoadoutComponent->EndRightHandUse();
 }
 
-void ADarkwellCharacter::FireShotgun(const FInputActionValue& Value)
+void ADarkwellCharacter::BeginPrimaryFire(const FInputActionValue& Value)
 {
 	if (!CanAcceptGameplayInput())
 	{
@@ -679,8 +708,65 @@ void ADarkwellCharacter::FireShotgun(const FInputActionValue& Value)
 		return;
 	}
 
+	bPrimaryFireHeld = true;
+	bShotgunAiming = false;
+	PrimaryFireHeldSeconds = 0.0f;
+}
+
+void ADarkwellCharacter::EndPrimaryFire(const FInputActionValue& Value)
+{
+	if (!bPrimaryFireHeld)
+	{
+		return;
+	}
+
+	const bool bAimedShot = bShotgunAiming;
+	const float AimProgress = bAimedShot ? GetShotgunAimProgress() : 0.0f;
+	ResetPrimaryFireGesture();
+	if (CanAcceptGameplayInput() && !IsInventoryOpen() && !IsWeaponWheelOpen())
+	{
+		FireShotgun(AimProgress);
+	}
+}
+
+void ADarkwellCharacter::CancelPrimaryFire(const FInputActionValue& Value)
+{
+	ResetPrimaryFireGesture();
+}
+
+void ADarkwellCharacter::ResetPrimaryFireGesture()
+{
+	bPrimaryFireHeld = false;
+	bShotgunAiming = false;
+	PrimaryFireHeldSeconds = 0.0f;
+}
+
+void ADarkwellCharacter::UpdatePrimaryFireGesture(const float DeltaTime)
+{
+	if (!bPrimaryFireHeld)
+	{
+		return;
+	}
+	if (!CanAcceptGameplayInput() || IsInventoryOpen() || IsWeaponWheelOpen()
+		|| LoadoutComponent->IsReloading())
+	{
+		ResetPrimaryFireGesture();
+		return;
+	}
+
+	PrimaryFireHeldSeconds += FMath::Max(0.0f, DeltaTime);
+	if (Darkwell::PlayerMath::IsPrimaryFireAimActive(
+		PrimaryFireHeldSeconds,
+		PrimaryFireHoldThreshold))
+	{
+		bShotgunAiming = true;
+	}
+}
+
+void ADarkwellCharacter::FireShotgun(const float AimProgress)
+{
 	const FVector AimPoint = GetActorLocation() + GetActorForwardVector() * 2000.0f;
-	LoadoutComponent->TryFire(AimPoint);
+	LoadoutComponent->TryFire(AimPoint, AimProgress);
 }
 
 void ADarkwellCharacter::ReloadShotgun(const FInputActionValue& Value)
@@ -696,6 +782,7 @@ void ADarkwellCharacter::ReloadShotgun(const FInputActionValue& Value)
 
 	if (!IsInventoryOpen() && !IsWeaponWheelOpen())
 	{
+		ResetPrimaryFireGesture();
 		LoadoutComponent->BeginReload();
 	}
 }
@@ -715,6 +802,7 @@ void ADarkwellCharacter::ToggleBackpack(const FInputActionValue& Value)
 		}
 		else
 		{
+			ResetPrimaryFireGesture();
 			LoadoutComponent->CancelRightHandUse();
 			PlayerController->OpenBackpack();
 		}
@@ -745,6 +833,7 @@ void ADarkwellCharacter::HandleDeath()
 	bMoveBackwardRequested = false;
 	bMoveLeftRequested = false;
 	bMoveRightRequested = false;
+	ResetPrimaryFireGesture();
 	MovementState = DarkwellGameplayTags::State_Player_Movement_Walking;
 	UpdateInteractionFocus(nullptr);
 	GetCharacterMovement()->DisableMovement();

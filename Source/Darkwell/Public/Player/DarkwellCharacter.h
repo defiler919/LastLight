@@ -40,13 +40,14 @@ public:
 	/** Turns the character toward a world-space point while keeping the body upright. */
 	void AimAtWorldPoint(const FVector& WorldPoint);
 	void UpdateInteractionFocus(AActor* Candidate);
-	void UpdateInteractionFocusAtPoint(AActor* Candidate, const FVector& FocusWorldPoint);
+	void RefreshFacingInteractionFocus();
 	void UpdateWeaponWheelInput(bool bLeftDown, bool bRightDown);
 
 	UDarkwellLoadoutComponent* GetLoadoutComponent() const { return LoadoutComponent; }
 	UDarkwellInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
 	UDarkwellInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
 	UDarkwellVisibilityComponent* GetVisibilityComponent() const { return VisibilityComponent; }
+	UCameraComponent* GetTopDownCamera() const { return TopDownCamera; }
 	float GetHealth() const { return Health; }
 	float GetMaxHealth() const { return MaxHealth; }
 	float GetDamageFeedbackAlpha() const;
@@ -55,6 +56,8 @@ public:
 	bool CanAcceptGameplayInput() const;
 	bool IsInventoryOpen() const;
 	bool IsSprinting() const;
+	bool IsAimingShotgun() const { return bShotgunAiming; }
+	float GetShotgunAimProgress() const;
 	FGameplayTag GetMovementState() const { return MovementState; }
 	void CompleteEscape();
 	void RestorePersistentState(
@@ -85,7 +88,12 @@ private:
 	void Interact(const FInputActionValue& Value);
 	void BeginUseRightHand(const FInputActionValue& Value);
 	void EndUseRightHand(const FInputActionValue& Value);
-	void FireShotgun(const FInputActionValue& Value);
+	void BeginPrimaryFire(const FInputActionValue& Value);
+	void EndPrimaryFire(const FInputActionValue& Value);
+	void CancelPrimaryFire(const FInputActionValue& Value);
+	void ResetPrimaryFireGesture();
+	void UpdatePrimaryFireGesture(float DeltaTime);
+	void FireShotgun(float AimProgress);
 	void ReloadShotgun(const FInputActionValue& Value);
 	void ToggleBackpack(const FInputActionValue& Value);
 	void TakeAllInventory(const FInputActionValue& Value);
@@ -110,7 +118,7 @@ private:
 	TObjectPtr<UStaticMeshComponent> TorchMesh;
 
 	UPROPERTY(VisibleAnywhere, Category = "Equipment")
-	TObjectPtr<USpotLightComponent> TorchLight;
+	TObjectPtr<UPointLightComponent> TorchLight;
 
 	UPROPERTY(VisibleAnywhere, Category = "Greybox")
 	TObjectPtr<UStaticMeshComponent> LanternMesh;
@@ -185,6 +193,9 @@ private:
 	bool bMoveBackwardRequested = false;
 	bool bMoveLeftRequested = false;
 	bool bMoveRightRequested = false;
+	bool bPrimaryFireHeld = false;
+	bool bShotgunAiming = false;
+	float PrimaryFireHeldSeconds = 0.0f;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "Movement")
 	FGameplayTag MovementState;
@@ -195,11 +206,25 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Movement", meta = (ClampMin = "1.0"))
 	float SprintSpeed = 650.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Movement", meta = (ClampMin = "1.0"))
-	float WalkTurnRateDegreesPerSecond = 240.0f;
+	UPROPERTY(EditDefaultsOnly, Category = "Movement", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float StrafeSpeedScale = 0.78f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Movement", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float BackpedalSpeedScale = 0.58f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Movement", meta = (ClampMin = "1.0"))
-	float SprintTurnRateDegreesPerSecond = 165.0f;
+	float WalkTurnRateDegreesPerSecond = 280.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Movement", meta = (ClampMin = "1.0"))
+	float SprintTurnRateDegreesPerSecond = 190.0f;
+
+	/** Maximum recognition delay for a click; holding past it enters aimed fire. */
+	UPROPERTY(EditDefaultsOnly, Category = "Shotgun", meta = (ClampMin = "0.05", ClampMax = "0.5"))
+	float PrimaryFireHoldThreshold = 0.18f;
+
+	/** Time from LMB press until sight and pellet spread finish tightening. */
+	UPROPERTY(EditDefaultsOnly, Category = "Shotgun", meta = (ClampMin = "0.1", ClampMax = "5.0"))
+	float PrimaryFireAimTightenDuration = 1.5f;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "Equipment")
 	EDarkwellWeaponWheelSide ActiveWeaponWheel = EDarkwellWeaponWheelSide::None;

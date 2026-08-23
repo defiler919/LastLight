@@ -4,15 +4,16 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Gameplay/DarkwellFogSubject.h"
 #include "Interaction/DarkwellInteractable.h"
 #include "DarkwellAmmoPickup.generated.h"
 
 class UPointLightComponent;
 class UStaticMeshComponent;
 
-/** Cursor-focused shell pickup used by the greybox resource loop. */
+/** Facing-proximity shell pickup used by the greybox resource loop. */
 UCLASS()
-class DARKWELL_API ADarkwellAmmoPickup : public AActor, public IDarkwellInteractable
+class DARKWELL_API ADarkwellAmmoPickup : public AActor, public IDarkwellInteractable, public IDarkwellFogSubject
 {
 	GENERATED_BODY()
 
@@ -22,11 +23,14 @@ public:
 	void ConfigurePickup(FName InPersistentId);
 	FName GetPersistentId() const { return PersistentId; }
 	int32 GetRemainingQuantity() const { return ShellCount; }
+	bool IsPickupPresentationVisible() const { return bFogPresentationVisible; }
 	void RestoreRemainingQuantity(int32 Quantity);
 
 	virtual bool CanInteract(const ADarkwellCharacter& Character) const override;
 	virtual void Interact(ADarkwellCharacter& Character) override;
 	virtual FText GetInteractionPrompt(const ADarkwellCharacter& Character) const override;
+	virtual void OnInteractionFocusChanged(bool bFocused) override;
+	virtual void SetPlayerFogState(EDarkwellFogCellState NewState) override;
 
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Pickup")
@@ -40,4 +44,6 @@ private:
 
 	UPROPERTY(EditInstanceOnly, Category = "Persistence")
 	FName PersistentId;
+
+	bool bFogPresentationVisible = false;
 };

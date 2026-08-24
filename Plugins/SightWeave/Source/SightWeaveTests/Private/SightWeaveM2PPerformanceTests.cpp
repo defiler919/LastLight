@@ -156,6 +156,7 @@ namespace SightWeave::M2P::PerformanceTests
 	struct FReferenceSample
 	{
 		double Total = 0.0;
+		double Wall = 0.0;
 		double Boundary = 0.0;
 		double CandidateEvents = 0.0;
 		double Sort = 0.0;
@@ -169,29 +170,49 @@ namespace SightWeave::M2P::PerformanceTests
 		uint64 WorkingBytes = 0;
 		uint64 TraversedNodes = 0;
 		uint64 TestedSegments = 0;
+		TArray<double> SolveTotals;
 		bool bValid = true;
 	};
 
-	FReferenceSample RunSolverSample(
+	struct FSolverFixture
+	{
+		TArray<FSightWeaveReferenceSolveInput> Inputs;
+		TArray<FSightWeaveReferenceSolveResult> Results;
+	};
+
+	FSolverFixture MakeSolverFixture(
 		const int32 SourceCount,
 		const int32 SegmentsPerSource,
 		const ESightWeaveSourceShape Shape,
 		const bool bDense,
-		const int32 Seed,
-		const ESightWeaveSolverMode SolverMode)
+		const int32 Seed)
 	{
-		FReferenceSample Sample;
+		FSolverFixture Fixture;
+		Fixture.Inputs.Reserve(SourceCount);
 		for (int32 SourceIndex = 0; SourceIndex < SourceCount; ++SourceIndex)
 		{
 			const TArray<FSightWeaveSegment2D> Segments = MakeSegments(
 				SegmentsPerSource,
 				Seed + SourceIndex * 7919,
 				bDense);
-			const FSightWeaveReferenceSolveResult Solve = SightWeave::Geometry::SolvePolygon(
-				SolveInput(Segments, SourceIndex, SourceCount, Shape),
-				SolverMode);
+			Fixture.Inputs.Add(SolveInput(Segments, SourceIndex, SourceCount, Shape));
+		}
+		Fixture.Results.SetNum(SourceCount);
+		return Fixture;
+	}
+
+	FReferenceSample RunSolverSample(FSolverFixture& Fixture, const ESightWeaveSolverMode SolverMode)
+	{
+		FReferenceSample Sample;
+		Sample.SolveTotals.Reserve(Fixture.Inputs.Num());
+		const double WallStartSeconds = FPlatformTime::Seconds();
+		for (int32 SourceIndex = 0; SourceIndex < Fixture.Inputs.Num(); ++SourceIndex)
+		{
+			FSightWeaveReferenceSolveResult& Solve = Fixture.Results[SourceIndex];
+			SightWeave::Geometry::SolvePolygonInto(Fixture.Inputs[SourceIndex], SolverMode, Solve);
 			Sample.bValid &= Solve.bSucceeded;
 			Sample.Total += Solve.StageMetrics.TotalMicroseconds;
+			Sample.SolveTotals.Add(Solve.StageMetrics.TotalMicroseconds);
 			Sample.Boundary += Solve.StageMetrics.BoundaryEventMicroseconds;
 			Sample.CandidateEvents += Solve.StageMetrics.CandidateFilterAndEndpointEventMicroseconds;
 			Sample.Sort += Solve.StageMetrics.EventSortDeduplicateMicroseconds;
@@ -206,6 +227,7 @@ namespace SightWeave::M2P::PerformanceTests
 			Sample.TraversedNodes += Solve.StageMetrics.TraversedAccelerationNodes;
 			Sample.TestedSegments += Solve.StageMetrics.TestedSegments;
 		}
+		Sample.Wall = (FPlatformTime::Seconds() - WallStartSeconds) * 1000000.0;
 		return Sample;
 	}
 
@@ -221,11 +243,19 @@ namespace SightWeave::M2P::PerformanceTests
 		const int32 Warmups,
 		const int32 Repeats)
 	{
+		FSolverFixture Fixture = MakeSolverFixture(
+			SourceCount,
+			SegmentsPerSource,
+			Shape,
+			bDense,
+			0x51A7E);
 		for (int32 Warmup = 0; Warmup < Warmups; ++Warmup)
 		{
-			RunSolverSample(SourceCount, SegmentsPerSource, Shape, bDense, 0x51A7E, SolverMode);
+			RunSolverSample(Fixture, SolverMode);
 		}
 		TArray<double> Total;
+		TArray<double> Wall;
+		TArray<double> SingleSolve;
 		TArray<double> Boundary;
 		TArray<double> CandidateEvents;
 		TArray<double> Sort;
@@ -236,9 +266,11 @@ namespace SightWeave::M2P::PerformanceTests
 		FReferenceSample Last;
 		for (int32 Repeat = 0; Repeat < Repeats; ++Repeat)
 		{
-			Last = RunSolverSample(SourceCount, SegmentsPerSource, Shape, bDense, 0x51A7E, SolverMode);
+			Last = RunSolverSample(Fixture, SolverMode);
 			Test.TestTrue(*FString::Printf(TEXT("%s %s sample succeeds"), Name, SolverName), Last.bValid);
 			Total.Add(Last.Total);
+			Wall.Add(Last.Wall);
+			SingleSolve.Append(Last.SolveTotals);
 			Boundary.Add(Last.Boundary);
 			CandidateEvents.Add(Last.CandidateEvents);
 			Sort.Add(Last.Sort);
@@ -248,6 +280,8 @@ namespace SightWeave::M2P::PerformanceTests
 			Topology.Add(Last.Topology);
 		}
 		const FDistribution TotalStats = Distribution(Total);
+		const FDistribution WallStats = Distribution(Wall);
+		const FDistribution SingleSolveStats = Distribution(SingleSolve);
 		const FDistribution BoundaryStats = Distribution(Boundary);
 		const FDistribution CandidateStats = Distribution(CandidateEvents);
 		const FDistribution SortStats = Distribution(Sort);
@@ -256,7 +290,7 @@ namespace SightWeave::M2P::PerformanceTests
 		const FDistribution PostStats = Distribution(PostProcess);
 		const FDistribution TopologyStats = Distribution(Topology);
 		Test.AddInfo(FString::Printf(
-			TEXT("M2P_SOLVER mode=%s name=%s sources=%d segments_per_source=%d relevant_segments_sum=%d shape=%d dense=%d repeats=%d candidates=%lld rays=%lld vertices=%lld working_bytes=%llu traversed_nodes=%llu tested_segments=%llu total_us=%.3f/%.3f/%.3f/%.3f boundary_us=%.3f/%.3f/%.3f/%.3f candidate_us=%.3f/%.3f/%.3f/%.3f sort_us=%.3f/%.3f/%.3f/%.3f acceleration_us=%.3f/%.3f/%.3f/%.3f ray_us=%.3f/%.3f/%.3f/%.3f post_us=%.3f/%.3f/%.3f/%.3f topology_us=%.3f/%.3f/%.3f/%.3f"),
+			TEXT("M2P_SOLVER mode=%s name=%s sources=%d segments_per_source=%d relevant_segments_sum=%d shape=%d dense=%d repeats=%d candidates=%lld rays=%lld vertices=%lld working_bytes=%llu traversed_nodes=%llu tested_segments=%llu total_us=%.3f/%.3f/%.3f/%.3f single_solve_us=%.3f/%.3f/%.3f/%.3f sequential_wall_us=%.3f/%.3f/%.3f/%.3f boundary_us=%.3f/%.3f/%.3f/%.3f candidate_us=%.3f/%.3f/%.3f/%.3f sort_us=%.3f/%.3f/%.3f/%.3f acceleration_us=%.3f/%.3f/%.3f/%.3f ray_us=%.3f/%.3f/%.3f/%.3f post_us=%.3f/%.3f/%.3f/%.3f topology_us=%.3f/%.3f/%.3f/%.3f"),
 			SolverName,
 			Name,
 			SourceCount,
@@ -272,6 +306,8 @@ namespace SightWeave::M2P::PerformanceTests
 			Last.TraversedNodes,
 			Last.TestedSegments,
 			TotalStats.Median, TotalStats.P95, TotalStats.P99, TotalStats.Max,
+			SingleSolveStats.Median, SingleSolveStats.P95, SingleSolveStats.P99, SingleSolveStats.Max,
+			WallStats.Median, WallStats.P95, WallStats.P99, WallStats.Max,
 			BoundaryStats.Median, BoundaryStats.P95, BoundaryStats.P99, BoundaryStats.Max,
 			CandidateStats.Median, CandidateStats.P95, CandidateStats.P99, CandidateStats.Max,
 			SortStats.Median, SortStats.P95, SortStats.P99, SortStats.Max,

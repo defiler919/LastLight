@@ -7,8 +7,8 @@
 - Baseline SHA: `d0b90d2e5687105f1e25bf03476a07d6bb5337de`
 - Working branch: `codex/m2p1-sightweave-final-performance-gate`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current checkpoint: checkpoint 3 — reusable solver scratch ready for commit
-- Last safe commit: `test: instrument SightWeave hot-path allocations` (`1284174d0dbc9ed096e4c7eb347a3c3a0ac788ce`)
+- Current checkpoint: checkpoint 4 — exact extreme-authority optimization ready for commit
+- Last safe commit: `perf: add reusable SightWeave solver scratch` (`141aedf172b73af225d9eeadab609c55674f5587`)
 - Next recovery command: `git switch codex/m2p1-sightweave-final-performance-gate; git pull --ff-only origin codex/m2p1-sightweave-final-performance-gate`
 
 ## Objective and scope
@@ -70,11 +70,19 @@ Post-change allocator proof `after-scratch-v3` passed one capture and one analys
 
 The new eight-worker deterministic isolation test and eight-level reentrancy test both passed with zero warnings/errors. The complete SightWeave suite then passed 87/87 with zero warnings/errors. A full `DarkwellEditor Win64 Development` build also passed; the only build warning remains the local MSVC 14.51 versus Epic-preferred 14.50 toolchain notice. Home Screen is disabled before editor-module startup in the proof script, eliminating the unrelated `google.com/generate_204` timeout that contaminated one discarded analysis run.
 
+Checkpoint 3 was committed and pushed as `141aedf172b73af225d9eeadab609c55674f5587`; local HEAD, upstream, and the remote branch were identical before checkpoint 4 work began.
+
+The checkpoint 4 solver keeps the exact Reference event set and arithmetic while adding exact double radix sorting, a pure-radial cyclic endpoint-event merge, cached source-relative segment metadata, distance-ordered active pruning, binary active insertion with expiry gating, exact division avoidance only for provably in-range fractions, sequential result writes, exact base-direction reuse for ±epsilon events, and the proven local `i`/`i+2` topology parity guard. Rejected reciprocal and normalized-direction experiments were removed after differential failures.
+
+The latest retained `ProfileTopologyOffset2` result is 1,706.500/1,729.101/1,747.902/1,747.902 us single-solve median/p95/p99/max for 4,096 segments per source. Eight-source cumulative CPU is 13,656.195 us median and sequential wall is 13,657.503 us median. The p99 gate now passes; the median remains above 1 ms and is not relabeled as a pass. The 4,096-total fixture is 213.500/222.202 us median/p99 per solve, and typical 8x64 radial all-source is 318.699/327.297 us median/p99, both comfortably within their non-regression gates. Full stage and iteration evidence is in `Docs/SIGHTWEAVE_M2P1_EXTREME_PERFORMANCE.md`.
+
+The retained candidate passed both `SightWeave.M2P.Differential.Geometry` tests: all nine manual adversarial cases and all 96 fixed-seed randomized cases. The latest full Editor build passed with only the already documented MSVC preferred-version warning. The current synchronous dynamic-door measurement is 329.003/338.700/340.398/340.398 us median/p95/p99/max, improved from the M2P 653/694 us result but still above the strict 250 us gate. Source transform is 60.599/66.198 us median/p99; batch 512 is 237.498/249.803 us median/p99; no-change update is 0.298/0.302 us and preserves revision.
+
 ## Unverified items
 
 - Real startup-safe allocator-call instrumentation, the 30-sample baseline, and the post-scratch 30-sample proof are complete. The solver/query allocation gate is closed; full dynamic updates remain nonzero.
-- The 4,096/source stage distribution has not yet been re-measured on this branch.
+- The 4,096/source stage distribution and exact per-solve distribution are recorded. Extreme p99 passes, but the 1 ms median gate remains open at 1.7065 ms.
 - Reusable scratch, caller-output reuse, bounded high-water reclamation, eight-worker isolation, and eight-level reentrancy are implemented and tested. High-count Reference differential expansion remains pending.
-- Dynamic occluder updates remain synchronous; no pending-window or stale-result policy exists.
+- Dynamic occluder updates remain synchronous at 0.329/0.340 ms median/p99; no pending-window or stale-result policy exists. Synchronous publication/materialization is the next measured target before considering an explicit async policy.
 - The allocation instrumentation and reusable-scratch C++ have passed full Editor builds plus capture/analyze and focused scratch Automation.
 - Final Editor/Automation/Lab/BuildPlugin/clean-host/dependency/Git/LFS validation is pending.

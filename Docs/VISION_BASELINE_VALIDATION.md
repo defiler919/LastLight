@@ -4,7 +4,7 @@ Validation date: 2026-08-24 (Asia/Shanghai)
 
 ## Scope and evidence policy
 
-This document records the repository and machine state observed before designing an independent vision plugin. Repository source at commit `46d9f9d093e3ceaf8afab71ff29367ab9b1ec2c1` is treated as authoritative. Historical build, automation, PIE, and performance claims are not repeated as current results unless they were reproduced during this validation.
+This document records the repository and machine state observed before designing an independent vision plugin. The runtime source remains the source from commit `46d9f9d093e3ceaf8afab71ff29367ab9b1ec2c1`; the design branch was at documentation-only commit `2650ef6` for the successful build/test/PIE follow-up. Historical build, automation, PIE, and performance claims are not repeated as current results unless they were reproduced during this validation.
 
 No gameplay code, build configuration, material, map, or Unreal asset was changed. Generated files under `Saved` and `Intermediate` were produced by the attempted build/test commands and remain ignored by Git.
 
@@ -17,7 +17,9 @@ No gameplay code, build configuration, material, map, or Unreal asset was change
 | Initial worktree | Clean |
 | Git LFS | No objects to push, commit, or stage |
 | Design branch | Created locally as `design/independent-vision-plugin` from `46d9f9d` |
-| Remote operations | None; no fetch, merge, or push was performed |
+| Follow-up branch state | `2650ef6 (HEAD -> design/independent-vision-plugin) docs: define independent vision plugin foundation` before this validation update |
+| Preserved local change | `Darkwell.uproject` has an unstaged machine-local EngineAssociation GUID; it is deliberately excluded from the documentation commit |
+| Main integration | None; `main` was not merged or changed |
 
 The first Git invocation was rejected by Git's dubious-ownership protection because the directory owner is `BUILTIN/Administrators` and the process user is `defiler919`. All subsequent Git commands used the command-local option `-c safe.directory=D:/UE_projects/LastLight`; global Git configuration was not changed.
 
@@ -41,23 +43,11 @@ Build.bat DarkwellEditor Win64 Development <project> -WaitMutex -FromMsBuild
 
 ## Editor build
 
-Result: **failed before source compilation; Editor target not validated**.
+Result after toolchain repair: **passed**.
 
-Two attempts were made:
+`Scripts/BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8` completed successfully for `DarkwellEditor Win64 Development` in 74.59 seconds. The expected module exists at `Binaries/Win64/UnrealEditor-Darkwell.dll`. Unreal Engine reports `5.8.1-56057345`; Win64 SDK validation is now valid, and the installed compiler is Visual Studio Community 2026/MSVC 14.51.36256. The build emitted compiler-version preference and engine deprecation warnings but no compile or link error.
 
-1. The sandboxed attempt could not create `Saved/UnrealBuildTool` or write `C:\Users\defiler919\AppData\Local\UnrealBuildTool\Trace.uba`. The script returned UnrealBuildTool exit code 6. This was a permissions failure, not a compiler result.
-2. The same script was rerun with permission to write Unreal build state. UnrealBuildTool initialized successfully, but rejected Win64 because no valid Windows SDK was discoverable: minimum required `10.0.19041.0`, expected AutoSDK `10.0.22621.0`. It returned exit code 6 before compiling DARKWELL.
-
-Additional machine evidence:
-
-- Unreal Engine reports `5.8.1-56057345`.
-- Visual Studio Community 2022 `17.14.36202.13` is registered at `D:\Program Files\Microsoft Visual Studio\2022\Community`.
-- MSVC tool directories `14.38.33130` and `14.44.35207` exist.
-- `HKLM\SOFTWARE\Microsoft\Windows Kits\Installed Roots` has no `KitsRoot10` value, and no usable Windows SDK `bin`/`Lib` version directory was found.
-- UnrealEditor also reported VC++ Redistributable `14.44.35211.0` as older than its required `14.50.35719.0`.
-- `Binaries/Win64/UnrealEditor-Darkwell.dll` and a project target receipt were absent.
-
-Required environment repair before a genuine full build: install a UE 5.8.1-compatible Windows 10/11 SDK (at least `10.0.19041.0`; the engine's AutoSDK metadata asks for `10.0.22621.0`), update the x64 VC++ Redistributable using the engine-provided installer, and rerun `Scripts/BuildEditor.ps1`. This validation did not install or alter machine dependencies.
+The earlier SDK-blocked attempts remain useful historical evidence, but they no longer describe the current machine gate. The successful build is the binary used by the automation and PIE follow-up below.
 
 ## Unreal automation tests
 
@@ -96,21 +86,22 @@ Sources: `Source/Darkwell/Private/Tests/DarkwellPlayerMathTests.cpp` (7) and `So
 
 ### Actual run result on this machine
 
-The full `Darkwell` filter was launched through `UnrealEditor-Cmd.exe` with `-unattended`, `-NullRHI`, and `-TestExit`. UnrealEditor exited before loading the game module because `UnrealEditor-Darkwell.dll` was missing and the SDK failure prevented rebuilding it.
+The full `Darkwell` filter was rerun through `UnrealEditor-Cmd.exe` with `-unattended`, `-NullRHI`, `-TestExit`, and JSON report export. The rebuilt game module loaded, Unreal discovered the 24 source-defined DARKWELL tests, and the queue completed normally.
 
 | Metric | Actual result |
 | --- | ---: |
 | Source definitions | 24 |
-| Tests discovered by a loaded DARKWELL module | 0 |
-| Tests run | 0 |
-| Passed | 0 |
+| Tests discovered by a loaded DARKWELL module | 24 |
+| Tests run | 24 |
+| Passed | 24 |
 | Failed test cases | 0 |
 | Skipped | 0 |
-| Process result | Exit code 1 before test discovery |
+| Succeeded with warnings | 0 |
+| Process result | Exit code 0; `Automation Test Queue Empty 24 tests performed` |
 
-There are no failing test names because no test case started. The process-level error was: game module `Darkwell` could not be found; confirm that it exists and has been compiled. Therefore **24/24 was not established**.
+The generated JSON report records `succeeded=24`, `succeededWithWarnings=0`, `failed=0`, `notRun=0`, `inProcess=0`, and 24 result entries, each with `state=Success`, `warnings=0`, and `errors=0`. Therefore **24/24 is established on this machine**.
 
-The full log is the generated, ignored file `Saved/Logs/VISION_BASELINE_AUTOMATION.log`.
+Evidence is in the generated, ignored files `Saved/Logs/VISION_BASELINE_AUTOMATION_RERUN.log` and `Saved/AutomationReports/VisionBaseline_20260824/index.json`. UE 5.8.1 warned that `-ReportOutputPath` is renamed to `-ReportExportPath`, but still exported both JSON and HTML successfully. The log also contains engine startup self-diagnostic `UnifiedErrorTest`/`LogAutomationTest: Error: Condition failed` lines before automation worker discovery; they are not DARKWELL test failures and do not appear as warnings or errors in any of the 24 report entries.
 
 ### 23/23 handoff discrepancy
 
@@ -120,7 +111,7 @@ The full log is the generated, ignored file `Saved/Logs/VISION_BASELINE_AUTOMATI
 - `Darkwell.Player.Input.PrimaryFireGesture`
 - `Darkwell.Player.Interaction.FacingSelection`
 
-The handoff count changed from 21 to 23 in the same commit, so its denominator did not include one of those three new definitions. No durable automation report in the repository proves which 23 were discovered or run at handoff. The discrepancy is a documentation/counting drift; a successful rebuilt Editor run is still required to establish the executable result.
+The handoff count changed from 21 to 23 in the same commit, so its denominator did not include one of those three new definitions. No durable automation report in the repository proves which 23 were discovered or run at handoff. The discrepancy is historical documentation/counting drift; the new exported report supersedes the denominator ambiguity with an executable **24/24** result.
 
 ## Save version and documentation drift
 
@@ -150,11 +141,24 @@ No file existed under `Saved/SaveGames` during validation, so an on-disk continu
 
 ## PIE and gameplay regression
 
-PIE result: **not executed / not verified**.
+PIE result: **editor-driven baseline smoke passed; full manual gameplay matrix remains incomplete**.
 
-Reason: the DARKWELL Editor module is absent, cannot be rebuilt without the Windows SDK, and UnrealEditor exits when asked to load the project. No editor-control path can start PIE until the module loads. Command-line engine startup is not a substitute for a gameplay PIE result.
+PIE was started from the Unreal Editor Play toolbar against `/Game/Maps/L_Prototype`. The editor log records creation of `/Game/Maps/UEDPIE_0_L_Prototype`, `DarkwellGameMode`, world bring-up, and an initial total start time of 0.221 seconds (a later clean session started in 0.114 seconds). The following observations were reproduced through the actual editor viewport:
 
-Required manual regression after toolchain repair:
+- the native main menu rendered with New Game, disabled Continue, Settings, and Quit;
+- New Game reconstructed the prototype world and populated the native gameplay actors;
+- objective, health, shotgun, torch/heat, interaction hints, and Stalker threat state rendered;
+- black/unknown space and the current lit/visible region were visually distinct;
+- a quick left click fired once and changed the shotgun state from `2/4` to `1/4`;
+- the Stalker acquired the player, applied damage, and reached the death/restart presentation;
+- `R`, after explicitly focusing the game viewport, reconstructed the level and returned to the main menu;
+- the final PIE session was stopped through the editor toolbar and returned to the unchanged editor map without saving an asset.
+
+From the first PIE-start marker through the final teardown, `Saved/Logs/Darkwell.log` contains no `Error:`, ensure, assertion, fatal, or critical-error entry. The adjacent pre-PIE interval contains one render-thread-safety warning for `r.MotionVectorSimulation`, and New Game/restart/PIE teardown emits repeated `LogCrowdFollowing` warnings: `Unable to find RecastNavMesh instance while trying to create UCrowdManager instance`. Those warnings are preserved as baseline evidence rather than treated as clean-log silence.
+
+Keyboard-chord validation is **inconclusive under the automated Windows input path**: one `Escape` observation ended PIE instead of showing the pause menu, while a later synthetic `Shift+F8` was not observed to stop PIE and the toolbar Stop action did. Because focus/modifier delivery could not be independently established, this is not promoted to a confirmed gameplay defect or a pass. A human in-viewport retest of Escape pause/resume and Shift+F8 stop remains required.
+
+The following broader manual regression remains outstanding and must not be inferred from the smoke result:
 
 - player movement, directional speed, sprint-facing, and mouse aim;
 - quick/held shotgun fire, two shots, dangerous reload, and ammunition state;
@@ -168,18 +172,38 @@ Required manual regression after toolchain repair:
 
 ## Performance sample
 
-No current-machine fog performance sample was collected. The project could not enter PIE, and static code inspection is not a runtime performance measurement. Historical statements in `Docs/PROGRESS.md` are not promoted to current evidence. Any later sample must record CPU/GPU, resolution, RHI, scene, observer/occluder counts, capture duration, and whether it is Editor or packaged Development; it must remain labeled as a sample from that machine, not a minimum-spec conclusion.
+No current-machine fog performance sample was collected. Entering PIE establishes runtime availability but the short visual smoke is not a controlled performance measurement. Historical statements in `Docs/PROGRESS.md` are not promoted to current evidence. Any later sample must record CPU/GPU, resolution, RHI, scene, observer/occluder counts, capture duration, and whether it is Editor or packaged Development; it must remain labeled as a sample from that machine, not a minimum-spec conclusion.
 
 ## Baseline disposition
 
 - Repository/source audit may proceed.
 - Architecture and migration documentation may proceed.
-- Build, automation, PIE, and runtime performance acceptance remain blocked on local toolchain repair.
+- Full Editor build and all 24 existing DARKWELL automation tests are now validated on the repaired local toolchain.
+- Editor-driven PIE smoke is validated with the warning and keyboard-chord qualifications above; the complete manual gameplay matrix and controlled runtime performance evidence remain outstanding.
 - No formal plugin implementation should begin until the architecture questions in `VISION_SYSTEM_ARCHITECTURE.md` receive human confirmation.
 
 ## Commands executed
 
-The following shell commands were actually executed during validation and audit. Commands that only read source are included so the investigation is reproducible.
+The following successful follow-up commands were executed after the toolchain repair. PIE itself was launched, driven, and stopped through the Unreal Editor UI; shell commands were used only to inspect the resulting log.
+
+```powershell
+# Successful full Editor build
+Scripts/BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8
+
+# Successful full DARKWELL automation rerun and durable report
+& 'D:/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe' 'D:/UE_projects/LastLight/Darkwell.uproject' -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests Darkwell' '-TestExit=Automation Test Queue Empty' '-ReportOutputPath=D:/UE_projects/LastLight/Saved/AutomationReports/VisionBaseline_20260824' '-AbsLog=D:/UE_projects/LastLight/Saved/Logs/VISION_BASELINE_AUTOMATION_RERUN.log'
+$report = Get-Content -Raw -LiteralPath Saved/AutomationReports/VisionBaseline_20260824/index.json | ConvertFrom-Json
+$report | Select-Object reportCreatedOn,succeeded,succeededWithWarnings,failed,notRun,inProcess,totalDuration
+$report.tests | Where-Object { $_.state -ne 'Success' -or $_.warnings -ne 0 -or $_.errors -ne 0 }
+rg -n "Test Started|Test Completed|Automation Test Queue Empty|Exported report" Saved/Logs/VISION_BASELINE_AUTOMATION_RERUN.log
+
+# PIE evidence and asset-safety checks
+rg -n "PIE:|LogPlayLevel|DarkwellGameMode|BeginTearingDown|CleanupWorld|Warning:|Error:|ensure|assert|fatal|critical error" Saved/Logs/Darkwell.log
+git -c safe.directory=D:/UE_projects/LastLight status --short --branch
+git -c safe.directory=D:/UE_projects/LastLight diff --name-only -- '*.uasset' '*.umap'
+```
+
+The earlier command history below records the initial validation and blocked attempts. Commands that only read source are included so the investigation is reproducible.
 
 ```powershell
 # Initial checks (Git rejected these four operations because safe.directory was not yet command-local)

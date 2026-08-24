@@ -7,8 +7,8 @@
 - Baseline SHA: `d0b90d2e5687105f1e25bf03476a07d6bb5337de`
 - Working branch: `codex/m2p1-sightweave-final-performance-gate`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current checkpoint: checkpoint 1 — context recovery and persistent handoff
-- Last safe commit: `docs: start SightWeave final performance gate` (this document's containing commit; resolve with `git log -1 --format=%H`)
+- Current checkpoint: checkpoint 2 — real allocation baseline ready for commit
+- Last safe commit: `docs: start SightWeave final performance gate` (`397b9d6382f07b77980e585274a558fb26e1987b`)
 - Next recovery command: `git switch codex/m2p1-sightweave-final-performance-gate; git pull --ff-only origin codex/m2p1-sightweave-final-performance-gate`
 
 ## Objective and scope
@@ -53,15 +53,20 @@ git lfs pull
 git lfs status
 git ls-remote --heads origin codex/m2p1-sightweave-final-performance-gate
 git switch -c codex/m2p1-sightweave-final-performance-gate
+& .\Scripts\BuildEditor.ps1 -Configuration Development -EngineRoot 'D:\UE_5.8'
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe ... '-trace=memory,sightweaveallocation' '-ExecCmds=Automation RunTests SightWeave.M2P1.Allocation.Capture' ...
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe ... '-ExecCmds=Automation RunTests SightWeave.M2P1.Allocation.Analyze' ...
 ```
 
 The baseline was clean and exactly matched the required SHA. The target branch did not exist locally or remotely. Repository guidance, requirements, architecture, migration, M2/M2P handoffs, M2P performance evidence, plugin README, the relevant Runtime implementation, and all M1/M2/M2P tests and benchmarks were read before runtime source changes.
 
+The full `DarkwellEditor Win64 Development` build passed after adding the Editor-only allocation instrumentation. Capture and offline analysis each passed one Automation test with zero test warnings/errors. The exact baseline and method are in `Docs/SIGHTWEAVE_M2P1_ALLOCATION_BASELINE.md`. The key result is that each Optimized solve currently performs six allocations and five reallocations; 8×4,096 allocates 14,231,360 bytes across the eight-solve marked scope. Batch 512, clean publication, and no-change update are proven zero-allocation already.
+
 ## Unverified items
 
-- No real allocator-call instrumentation or fresh allocation baseline has been produced yet.
+- Real startup-safe allocator-call instrumentation and a fresh 30-sample baseline are complete; post-optimization evidence is pending.
 - The 4,096/source stage distribution has not yet been re-measured on this branch.
 - Reusable scratch, concurrency/reentrancy behavior, bounded high-water reclamation, and worker isolation are not implemented.
 - Dynamic occluder updates remain synchronous; no pending-window or stale-result policy exists.
-- No M2P.1 C++ change has been built or tested yet.
+- The allocation instrumentation C++ has passed a full Editor build plus capture/analyze Automation. Runtime optimization has not started.
 - Final Editor/Automation/Lab/BuildPlugin/clean-host/dependency/Git/LFS validation is pending.

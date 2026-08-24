@@ -14,6 +14,8 @@ public class SightWeaveTests : ModuleRules
 			"UnrealEd",
 			"AssetRegistry",
 			"Projects",
+			"TraceAnalysis",
+			"TraceLog",
 			"SightWeaveRuntime"
 		});
 	}

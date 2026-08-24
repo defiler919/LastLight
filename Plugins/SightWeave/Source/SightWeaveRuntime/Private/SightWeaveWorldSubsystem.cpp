@@ -70,6 +70,185 @@ namespace
 		OutMin = Bounds.bIsValid ? Bounds.Min : FVector2D::ZeroVector;
 		OutMax = Bounds.bIsValid ? Bounds.Max : FVector2D::ZeroVector;
 	}
+
+	double NormalizeQueryRadians(double Angle)
+	{
+		constexpr double TwoPi = 2.0 * PI;
+		if (Angle < -PI) Angle += TwoPi;
+		else if (Angle >= PI) Angle -= TwoPi;
+		return Angle;
+	}
+
+	double CrossQuery2D(const FVector2D& A, const FVector2D& B)
+	{
+		return A.X * B.Y - A.Y * B.X;
+	}
+
+	void BuildPolarAngleUpperBoundLut(
+		TConstArrayView<double> Angles,
+		TArray<int32>& OutUpperBounds)
+	{
+		constexpr int32 BinCount = 1024;
+		OutUpperBounds.SetNumUninitialized(BinCount);
+		int32 UpperBound = 0;
+		for (int32 Bin = 0; Bin < BinCount; ++Bin)
+		{
+			const double CenterAngle = -PI
+				+ (2.0 * PI) * (static_cast<double>(Bin) + 0.5) / static_cast<double>(BinCount);
+			while (UpperBound < Angles.Num() && Angles[UpperBound] <= CenterAngle)
+			{
+				++UpperBound;
+			}
+			OutUpperBounds[Bin] = UpperBound;
+		}
+	}
+
+	bool IsPointInPolarVisibilityPolygon(
+		const FVector2D& Point,
+		const FVector2D& Origin,
+		const double ForwardAngle,
+		const bool bFullCircle,
+		TConstArrayView<double> Angles,
+		TConstArrayView<FVector2D> BoundaryPoints,
+		TConstArrayView<int32> AngleUpperBoundLut,
+		TConstArrayView<FVector> Vertices,
+		const FSightWeaveGeometryTolerances& Tolerances)
+	{
+		auto ExactFallback = [&]()
+		{
+			return SightWeave::Geometry::IsPointInPolygon(Point, Vertices, Tolerances);
+		};
+		if (Angles.Num() < 2 || Angles.Num() != BoundaryPoints.Num())
+		{
+			return ExactFallback();
+		}
+
+		const FVector2D Offset = Point - Origin;
+		const double QueryDistance = Offset.Size();
+		if (QueryDistance <= Tolerances.PointOnEdgeEpsilon)
+		{
+			return ExactFallback();
+		}
+		const FVector2D RayDirection = Offset / QueryDistance;
+		const double RelativeAngle = NormalizeQueryRadians(
+			FMath::Atan2(RayDirection.Y, RayDirection.X) - ForwardAngle);
+
+		int32 FirstGreater = 0;
+		if (!AngleUpperBoundLut.IsEmpty())
+		{
+			const double Normalized = FMath::Clamp((RelativeAngle + PI) / (2.0 * PI), 0.0, 1.0);
+			const int32 Bin = FMath::Min(
+				FMath::FloorToInt(Normalized * AngleUpperBoundLut.Num()),
+				AngleUpperBoundLut.Num() - 1);
+			FirstGreater = FMath::Clamp(AngleUpperBoundLut[Bin], 0, Angles.Num());
+			while (FirstGreater > 0 && Angles[FirstGreater - 1] > RelativeAngle)
+			{
+				--FirstGreater;
+			}
+			while (FirstGreater < Angles.Num() && Angles[FirstGreater] <= RelativeAngle)
+			{
+				++FirstGreater;
+			}
+		}
+		else
+		{
+			int32 UpperBound = Angles.Num();
+			while (FirstGreater < UpperBound)
+			{
+				const int32 Middle = FirstGreater + (UpperBound - FirstGreater) / 2;
+				if (Angles[Middle] <= RelativeAngle)
+				{
+					FirstGreater = Middle + 1;
+				}
+				else
+				{
+					UpperBound = Middle;
+				}
+			}
+		}
+
+		int32 LowerIndex = INDEX_NONE;
+		int32 UpperIndex = INDEX_NONE;
+		if (bFullCircle)
+		{
+			LowerIndex = FirstGreater == 0 ? Angles.Num() - 1 : FirstGreater - 1;
+			UpperIndex = FirstGreater == Angles.Num() ? 0 : FirstGreater;
+		}
+		else
+		{
+			if (RelativeAngle < Angles[0] - 1.0e-12
+				|| RelativeAngle > Angles.Last() + 1.0e-12)
+			{
+				return ExactFallback();
+			}
+			UpperIndex = FMath::Clamp(FirstGreater, 1, Angles.Num() - 1);
+			LowerIndex = UpperIndex - 1;
+		}
+
+		const FVector2D A = BoundaryPoints[LowerIndex];
+		const FVector2D B = BoundaryPoints[UpperIndex];
+		const FVector2D Edge = B - A;
+		const double Denominator = CrossQuery2D(RayDirection, Edge);
+		if (FMath::Abs(Denominator) <= Tolerances.RayParallelEpsilon)
+		{
+			return ExactFallback();
+		}
+		const double BoundaryDistance = CrossQuery2D(A - Origin, Edge) / Denominator;
+		const double EdgeLengthSquared = Edge.SizeSquared();
+		if (!FMath::IsFinite(BoundaryDistance)
+			|| BoundaryDistance < 0.0
+			|| EdgeLengthSquared <= UE_DOUBLE_SMALL_NUMBER)
+		{
+			return ExactFallback();
+		}
+
+		const double BoundaryEpsilon = FMath::Max3(
+			Tolerances.PointOnEdgeEpsilon,
+			Tolerances.PointInPolygonEpsilon,
+			Tolerances.DuplicateVertexEpsilon);
+		const double ScaledRadialDifference =
+			FMath::Abs(QueryDistance - BoundaryDistance) * FMath::Abs(Denominator);
+		if (FMath::Square(ScaledRadialDifference)
+			<= FMath::Square(BoundaryEpsilon) * EdgeLengthSquared)
+		{
+			return ExactFallback();
+		}
+		return QueryDistance < BoundaryDistance;
+	}
+
+	bool IsPointInVisionSnapshotEntry(
+		const FVector2D& Point,
+		const FSightWeaveVisionSnapshotEntry& Entry,
+		const FSightWeaveGeometryTolerances& Tolerances)
+	{
+		return IsPointInPolarVisibilityPolygon(
+			Point,
+			Entry.PolarOrigin,
+			Entry.PolarForwardAngleRadians,
+			Entry.bPolarBoundaryFullCircle,
+			Entry.CandidateAnglesRadians,
+			Entry.CandidateBoundaryPoints,
+			Entry.PolarAngleUpperBoundLut,
+			Entry.Polygon.Vertices,
+			Tolerances);
+	}
+
+	bool IsPointInIlluminationSnapshotEntry(
+		const FVector2D& Point,
+		const FSightWeaveIlluminationSnapshotEntry& Entry,
+		const FSightWeaveGeometryTolerances& Tolerances)
+	{
+		return IsPointInPolarVisibilityPolygon(
+			Point,
+			Entry.PolarOrigin,
+			Entry.PolarForwardAngleRadians,
+			Entry.bPolarBoundaryFullCircle,
+			Entry.CandidateAnglesRadians,
+			Entry.CandidateBoundaryPoints,
+			Entry.PolarAngleUpperBoundLut,
+			Entry.Polygon.Vertices,
+			Tolerances);
+	}
 }
 
 void USightWeaveWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -250,6 +429,14 @@ bool USightWeaveWorldSubsystem::UpdateVisionSource(
 	{
 		NormalizedDescription.Compatibility.AcceptedCapabilities.Reset();
 	}
+	const FSightWeaveVisionSourceDescription& ExistingDescription = VisionSources.FindChecked(Handle.GetValue());
+	if (FSightWeaveVisionSourceDescription::StaticStruct()->CompareScriptStruct(
+		&ExistingDescription,
+		&NormalizedDescription,
+		0))
+	{
+		return true;
+	}
 	VisionSources.FindChecked(Handle.GetValue()) = MoveTemp(NormalizedDescription);
 	DirtyVisionSources.Add(Handle.GetValue());
 	PendingVisionSnapshotRebuilds.Add(Handle.GetValue());
@@ -317,6 +504,15 @@ bool USightWeaveWorldSubsystem::UpdateIlluminationSource(
 
 	FSightWeaveIlluminationSourceDescription NormalizedDescription = Description;
 	NormalizedDescription.NormalizeCapabilities();
+	const FSightWeaveIlluminationSourceDescription& ExistingDescription =
+		IlluminationSources.FindChecked(Handle.GetValue());
+	if (FSightWeaveIlluminationSourceDescription::StaticStruct()->CompareScriptStruct(
+		&ExistingDescription,
+		&NormalizedDescription,
+		0))
+	{
+		return true;
+	}
 	IlluminationSources.FindChecked(Handle.GetValue()) = MoveTemp(NormalizedDescription);
 	DirtyIlluminationSources.Add(Handle.GetValue());
 	PendingIlluminationSnapshotRebuilds.Add(Handle.GetValue());
@@ -408,6 +604,7 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 	{
 		return false;
 	}
+	const int64 NextSegmentIdBeforePrepare = NextSegmentId;
 	TArray<FSightWeaveSegment2D> Prepared = PrepareOccluderSegments(Handle, Segments, bDynamic);
 	if (Prepared.IsEmpty())
 	{
@@ -423,6 +620,19 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 	for (int32 SegmentIndex = 0; SegmentIndex < FMath::Min(Prepared.Num(), Record->Segments.Num()); ++SegmentIndex)
 	{
 		Prepared[SegmentIndex].StableId = Record->Segments[SegmentIndex].StableId;
+	}
+	bool bSegmentsUnchanged = Prepared.Num() == Record->Segments.Num();
+	for (int32 SegmentIndex = 0; bSegmentsUnchanged && SegmentIndex < Prepared.Num(); ++SegmentIndex)
+	{
+		bSegmentsUnchanged = FSightWeaveSegment2D::StaticStruct()->CompareScriptStruct(
+			&Prepared[SegmentIndex],
+			&Record->Segments[SegmentIndex],
+			0);
+	}
+	if (bSegmentsUnchanged && Record->bDynamic == bDynamic && Record->bEnabled == bEnabled)
+	{
+		NextSegmentId = NextSegmentIdBeforePrepare;
+		return true;
 	}
 	const FSightWeaveFloorId OldFloor = Record->Segments.IsEmpty() ? FSightWeaveFloorId() : Record->Segments[0].FloorId;
 	const FBox2D OldBounds = Record->Bounds;
@@ -744,55 +954,133 @@ FSightWeaveVisibilityQueryResult USightWeaveWorldSubsystem::QueryEffectiveLiveIn
 	const FSightWeaveVisionSourceHandle* RestrictToSource,
 	const bool bPureVision) const
 {
+	FSightWeaveVisibilityQueryResult Result;
+	QueryEffectiveLiveInternalInto(
+		KnowledgeOwnerId,
+		FloorId,
+		WorldLocation,
+		RestrictToSource,
+		bPureVision,
+		Result);
+	return Result;
+}
+
+void USightWeaveWorldSubsystem::QueryEffectiveLiveInternalInto(
+	const FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+	const FSightWeaveFloorId FloorId,
+	const FVector WorldLocation,
+	const FSightWeaveVisionSourceHandle* RestrictToSource,
+	const bool bPureVision,
+	FSightWeaveVisibilityQueryResult& Result) const
+{
 	if (!FloorId.IsValid())
 	{
-		return MakeQueryResult(ESightWeaveQueryStatus::InvalidFloor, KnowledgeOwnerId, FloorId);
+		InitializeQueryResult(Result, ESightWeaveQueryStatus::InvalidFloor, KnowledgeOwnerId, FloorId);
+		return;
 	}
 	if (!KnowledgeOwnerId.IsValid() || WorldLocation.ContainsNaN())
 	{
-		return MakeQueryResult(ESightWeaveQueryStatus::InvalidInput, KnowledgeOwnerId, FloorId);
+		InitializeQueryResult(Result, ESightWeaveQueryStatus::InvalidInput, KnowledgeOwnerId, FloorId);
+		return;
 	}
 	const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot = PublishedSnapshot;
 	if (!bSightWeaveInitialized || !Snapshot.IsValid() || !Snapshot->bPublished)
 	{
-		return MakeQueryResult(ESightWeaveQueryStatus::NotReady, KnowledgeOwnerId, FloorId);
+		InitializeQueryResult(Result, ESightWeaveQueryStatus::NotReady, KnowledgeOwnerId, FloorId);
+		return;
 	}
 	const FSightWeaveFloorDefinition* Floor = Snapshot->Floors.FindByPredicate(
 		[FloorId](const FSightWeaveFloorDefinition& Candidate) { return Candidate.FloorId == FloorId; });
 	if (!Floor)
 	{
-		return MakeQueryResult(
+		InitializeQueryResult(
+			Result,
 			Snapshot->Floors.IsEmpty() ? ESightWeaveQueryStatus::NotReady : ESightWeaveQueryStatus::InvalidFloor,
 			KnowledgeOwnerId,
 			FloorId);
+		return;
 	}
 
-	FSightWeaveVisibilityQueryResult Result = MakeQueryResult(
+	const FSightWeaveGeometryTolerances& Tolerances = GetDefault<USightWeaveSettings>()->GeometryTolerances;
+	QueryEffectiveLiveValidated(
+		KnowledgeOwnerId,
+		FloorId,
+		WorldLocation,
+		RestrictToSource,
+		bPureVision,
+		*Snapshot,
+		*Floor,
+		Tolerances,
+		Result);
+}
+
+void USightWeaveWorldSubsystem::QueryEffectiveLiveValidated(
+	const FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+	const FSightWeaveFloorId FloorId,
+	const FVector WorldLocation,
+	const FSightWeaveVisionSourceHandle* RestrictToSource,
+	const bool bPureVision,
+	const FSightWeaveFrameSnapshot& Snapshot,
+	const FSightWeaveFloorDefinition& Floor,
+	const FSightWeaveGeometryTolerances& Tolerances,
+	FSightWeaveVisibilityQueryResult& Result) const
+{
+	InitializeQueryResult(
+		Result,
 		ESightWeaveQueryStatus::AuthoritativeResult,
 		KnowledgeOwnerId,
-		FloorId);
+		FloorId,
+		&Snapshot.Revision);
 	Result.bAuthoritative = true;
-	const FSightWeaveGeometryTolerances& Tolerances = GetDefault<USightWeaveSettings>()->GeometryTolerances;
 	const FVector2D Point2D(WorldLocation.X, WorldLocation.Y);
-	const bool bInsideFloorBounds = WorldLocation.X >= Floor->BoundsMin.X - Tolerances.PointOnEdgeEpsilon
-		&& WorldLocation.X <= Floor->BoundsMax.X + Tolerances.PointOnEdgeEpsilon
-		&& WorldLocation.Y >= Floor->BoundsMin.Y - Tolerances.PointOnEdgeEpsilon
-		&& WorldLocation.Y <= Floor->BoundsMax.Y + Tolerances.PointOnEdgeEpsilon;
-	if (!Floor->bEnabled || !Floor->bActiveForQueries || !bInsideFloorBounds)
+	const bool bInsideFloorBounds = WorldLocation.X >= Floor.BoundsMin.X - Tolerances.PointOnEdgeEpsilon
+		&& WorldLocation.X <= Floor.BoundsMax.X + Tolerances.PointOnEdgeEpsilon
+		&& WorldLocation.Y >= Floor.BoundsMin.Y - Tolerances.PointOnEdgeEpsilon
+		&& WorldLocation.Y <= Floor.BoundsMax.Y + Tolerances.PointOnEdgeEpsilon;
+	if (!Floor.bEnabled || !Floor.bActiveForQueries || !bInsideFloorBounds)
 	{
 		Result.RejectionFlags |= static_cast<int32>(ESightWeaveQueryRejectionReason::FloorUnavailable);
-		return Result;
+		return;
 	}
-	if (!IsPointInHeightRange(WorldLocation.Z, Floor->HeightRange, Tolerances.HeightOverlapEpsilon))
+	if (!IsPointInHeightRange(WorldLocation.Z, Floor.HeightRange, Tolerances.HeightOverlapEpsilon))
 	{
 		Result.RejectionFlags |= static_cast<int32>(ESightWeaveQueryRejectionReason::HeightMismatch);
-		return Result;
+		return;
 	}
 
 	bool bNominalVisionCoverage = false;
 	bool bHeightMismatch = false;
 	bool bEffectiveBeforeSuppression = false;
-	for (const FSightWeaveVisionSnapshotEntry& Entry : Snapshot->VisionSources)
+	uint64 EvaluatedIlluminationMask = 0;
+	uint64 LegalIlluminationMask = 0;
+	uint64 ContributedIlluminationMask = 0;
+	auto HasLegalIllumination = [&](const int32 IlluminationIndex)
+	{
+		if (!Snapshot.IlluminationSources.IsValidIndex(IlluminationIndex))
+		{
+			return false;
+		}
+		const uint64 Bit = IlluminationIndex < 64 ? (uint64{1} << IlluminationIndex) : 0;
+		if (Bit != 0 && (EvaluatedIlluminationMask & Bit) != 0)
+		{
+			return (LegalIlluminationMask & Bit) != 0;
+		}
+		const FSightWeaveIlluminationSnapshotEntry& Illumination = Snapshot.IlluminationSources[IlluminationIndex];
+		const bool bLegal = Illumination.Description.bActive
+			&& IsPointInHeightRange(
+				WorldLocation.Z,
+				Illumination.Description.HeightRange,
+				Tolerances.HeightOverlapEpsilon)
+			&& Illumination.Polygon.IsValid()
+			&& IsPointInIlluminationSnapshotEntry(Point2D, Illumination, Tolerances);
+		if (Bit != 0)
+		{
+			EvaluatedIlluminationMask |= Bit;
+			if (bLegal) LegalIlluminationMask |= Bit;
+		}
+		return bLegal;
+	};
+	for (const FSightWeaveVisionSnapshotEntry& Entry : Snapshot.VisionSources)
 	{
 		if ((RestrictToSource && Entry.Handle != *RestrictToSource)
 			|| Entry.Description.KnowledgeOwnerId != KnowledgeOwnerId
@@ -806,22 +1094,23 @@ FSightWeaveVisibilityQueryResult USightWeaveWorldSubsystem::QueryEffectiveLiveIn
 			bHeightMismatch = true;
 			continue;
 		}
-		bNominalVisionCoverage |= IsPointInNominalShape(
-			WorldLocation,
-			Entry.Description.Transform,
-			Entry.Description.Shape,
-			Entry.Description.Range,
-			Entry.Description.HalfAngleDegrees,
-			Entry.Description.NearAwarenessRadius,
-			Tolerances.PointOnEdgeEpsilon);
 		if (!Entry.Polygon.IsValid()
-			|| !SightWeave::Geometry::IsPointInPolygon(Point2D, Entry.Polygon.Vertices, Tolerances))
+			|| !IsPointInVisionSnapshotEntry(Point2D, Entry, Tolerances))
 		{
+			bNominalVisionCoverage |= IsPointInNominalShape(
+				WorldLocation,
+				Entry.Description.Transform,
+				Entry.Description.Shape,
+				Entry.Description.Range,
+				Entry.Description.HalfAngleDegrees,
+				Entry.Description.NearAwarenessRadius,
+				Tolerances.PointOnEdgeEpsilon);
 			continue;
 		}
 
+		bNominalVisionCoverage = true;
 		Result.bInVisionPolygon = true;
-		AddUniqueHandle(Result.ContributingVisionSources, Entry.Handle);
+		Result.ContributingVisionSources.Add(Entry.Handle);
 		if (bPureVision)
 		{
 			bEffectiveBeforeSuppression = true;
@@ -835,24 +1124,27 @@ FSightWeaveVisibilityQueryResult USightWeaveWorldSubsystem::QueryEffectiveLiveIn
 		}
 
 		bool bThisSourceHasIllumination = false;
-		for (const FSightWeaveIlluminationSourceHandle CompatibleHandle : Entry.CompatibleIlluminationSources)
+		for (const int32 IlluminationIndex : Entry.CompatibleIlluminationSourceIndices)
 		{
-			const FSightWeaveIlluminationSnapshotEntry* Illumination = Snapshot->IlluminationSources.FindByPredicate(
-				[CompatibleHandle](const FSightWeaveIlluminationSnapshotEntry& Candidate)
-				{
-					return Candidate.Handle == CompatibleHandle;
-				});
-			if (!Illumination
-				|| !Illumination->Description.bActive
-				|| !IsPointInHeightRange(WorldLocation.Z, Illumination->Description.HeightRange, Tolerances.HeightOverlapEpsilon)
-				|| !Illumination->Polygon.IsValid()
-				|| !SightWeave::Geometry::IsPointInPolygon(Point2D, Illumination->Polygon.Vertices, Tolerances))
+			if (!HasLegalIllumination(IlluminationIndex))
 			{
 				continue;
 			}
 			bThisSourceHasIllumination = true;
 			Result.bHasLegalIllumination = true;
-			AddUniqueHandle(Result.ContributingIlluminationSources, CompatibleHandle);
+			const uint64 IlluminationBit = IlluminationIndex < 64 ? (uint64{1} << IlluminationIndex) : 0;
+			if (IlluminationBit == 0)
+			{
+				AddUniqueHandle(
+					Result.ContributingIlluminationSources,
+					Snapshot.IlluminationSources[IlluminationIndex].Handle);
+			}
+			else if ((ContributedIlluminationMask & IlluminationBit) == 0)
+			{
+				ContributedIlluminationMask |= IlluminationBit;
+				Result.ContributingIlluminationSources.Add(
+					Snapshot.IlluminationSources[IlluminationIndex].Handle);
+			}
 		}
 		if (bThisSourceHasIllumination)
 		{
@@ -875,9 +1167,9 @@ FSightWeaveVisibilityQueryResult USightWeaveWorldSubsystem::QueryEffectiveLiveIn
 		}
 	}
 
-	if (!bPureVision && bEffectiveBeforeSuppression)
+	if (!bPureVision && bEffectiveBeforeSuppression && !Snapshot.HardSuppressions.IsEmpty())
 	{
-		Result.bRejectedBySuppression = IsPointSuppressed(*Snapshot, FloorId, WorldLocation, Result.ContributingSuppressions);
+		Result.bRejectedBySuppression = IsPointSuppressed(Snapshot, FloorId, WorldLocation, Result.ContributingSuppressions);
 		if (Result.bRejectedBySuppression)
 		{
 			Result.RejectionFlags |= static_cast<int32>(ESightWeaveQueryRejectionReason::SuppressedLiveVision);
@@ -888,7 +1180,7 @@ FSightWeaveVisibilityQueryResult USightWeaveWorldSubsystem::QueryEffectiveLiveIn
 	Result.bEligibleForMemoryWrite = Result.bVisible && !bPureVision;
 	Result.EvaluatedSampleCount = 1;
 	Result.PassingSampleCount = Result.bVisible ? 1 : 0;
-	return Result;
+	return;
 }
 
 FSightWeaveIlluminationQueryResult USightWeaveWorldSubsystem::QueryLegalIlluminationAtLocation(
@@ -956,7 +1248,7 @@ FSightWeaveIlluminationQueryResult USightWeaveWorldSubsystem::QueryLegalIllumina
 			0.0,
 			Tolerances.PointOnEdgeEpsilon);
 		if (Entry.Polygon.IsValid()
-			&& SightWeave::Geometry::IsPointInPolygon(Point2D, Entry.Polygon.Vertices, Tolerances))
+			&& IsPointInIlluminationSnapshotEntry(Point2D, Entry, Tolerances))
 		{
 			Result.bLegallyIlluminated = true;
 			AddUniqueHandle(Result.ContributingIlluminationSources, Entry.Handle);
@@ -1082,10 +1374,67 @@ void USightWeaveWorldSubsystem::QueryBatch(
 	const TArray<FSightWeaveQueryRequest>& Requests,
 	TArray<FSightWeaveVisibilityQueryResult>& OutResults) const
 {
-	OutResults.Reset(Requests.Num());
-	for (const FSightWeaveQueryRequest& Request : Requests)
+	OutResults.SetNum(Requests.Num(), EAllowShrinking::No);
+	const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot = PublishedSnapshot;
+	const FSightWeaveGeometryTolerances& Tolerances = GetDefault<USightWeaveSettings>()->GeometryTolerances;
+	FSightWeaveFloorId CachedFloorId;
+	const FSightWeaveFloorDefinition* CachedFloor = nullptr;
+	for (int32 RequestIndex = 0; RequestIndex < Requests.Num(); ++RequestIndex)
 	{
-		OutResults.Add(QuerySamples(Request.KnowledgeOwnerId, Request.FloorId, Request.SampleSet));
+		const FSightWeaveQueryRequest& Request = Requests[RequestIndex];
+		const bool bValidAnchor = Request.SampleSet.Rule == ESightWeaveSampleRule::Anchor
+			&& Request.SampleSet.Samples.IsValidIndex(Request.SampleSet.AnchorIndex)
+			&& !Request.SampleSet.Samples[Request.SampleSet.AnchorIndex].ContainsNaN();
+		const bool bCanUseValidatedPath = bSightWeaveInitialized
+			&& Snapshot.IsValid()
+			&& Snapshot->bPublished
+			&& Request.KnowledgeOwnerId.IsValid()
+			&& Request.FloorId.IsValid()
+			&& bValidAnchor;
+		if (bCanUseValidatedPath)
+		{
+			if (Request.FloorId != CachedFloorId)
+			{
+				CachedFloorId = Request.FloorId;
+				CachedFloor = Snapshot->Floors.FindByPredicate(
+					[&Request](const FSightWeaveFloorDefinition& Candidate)
+					{
+						return Candidate.FloorId == Request.FloorId;
+					});
+			}
+			if (CachedFloor)
+			{
+				QueryEffectiveLiveValidated(
+					Request.KnowledgeOwnerId,
+					Request.FloorId,
+					Request.SampleSet.Samples[Request.SampleSet.AnchorIndex],
+					nullptr,
+					false,
+					*Snapshot,
+					*CachedFloor,
+					Tolerances,
+					OutResults[RequestIndex]);
+				continue;
+			}
+		}
+
+		if (bValidAnchor)
+		{
+			QueryEffectiveLiveInternalInto(
+				Request.KnowledgeOwnerId,
+				Request.FloorId,
+				Request.SampleSet.Samples[Request.SampleSet.AnchorIndex],
+				nullptr,
+				false,
+				OutResults[RequestIndex]);
+		}
+		else
+		{
+			OutResults[RequestIndex] = QuerySamples(
+				Request.KnowledgeOwnerId,
+				Request.FloorId,
+				Request.SampleSet);
+		}
 	}
 }
 
@@ -1094,6 +1443,13 @@ FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 	if (!bSightWeaveInitialized)
 	{
 		return FSightWeaveRevision();
+	}
+	if (PublishedSnapshot.IsValid()
+		&& PublishedSnapshot->Revision == Revision
+		&& PendingVisionSnapshotRebuilds.IsEmpty()
+		&& PendingIlluminationSnapshotRebuilds.IsEmpty())
+	{
+		return Revision;
 	}
 
 	TArray<int64> DirtyVision = PendingVisionSnapshotRebuilds.Array();
@@ -1203,10 +1559,14 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		const FVector Forward3 = Description->Transform.GetUnitAxis(EAxis::X);
 		Input.Forward = FVector2D(Forward3.X, Forward3.Y);
 		if (!Input.Forward.Normalize()) Input.Forward = FVector2D(1.0, 0.0);
+		Entry.PolarOrigin = FVector2D(Input.Origin.X, Input.Origin.Y);
+		Entry.PolarForwardAngleRadians = FMath::Atan2(Input.Forward.Y, Input.Forward.X);
 		Input.Shape = Description->Shape;
 		Input.Range = Description->Range;
 		Input.HalfAngleDegrees = Description->HalfAngleDegrees;
 		Input.NearAwarenessRadius = Description->NearAwarenessRadius;
+		Entry.bPolarBoundaryFullCircle =
+			Input.Shape == ESightWeaveSourceShape::Radial || Input.NearAwarenessRadius > 0.0;
 		Input.FloorId = Description->FloorId;
 		Input.HeightRange = Description->HeightRange;
 		const USightWeaveSettings* Settings = GetDefault<USightWeaveSettings>();
@@ -1224,6 +1584,9 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
 		Entry.CandidateRayCount = SolveResult.CastRayCount;
 		Entry.CandidateAnglesRadians = MoveTemp(SolveResult.CandidateAnglesRadians);
+		Entry.CandidateDistances = MoveTemp(SolveResult.CandidateDistances);
+		Entry.CandidateBoundaryPoints = MoveTemp(SolveResult.CandidateBoundaryPoints);
+		BuildPolarAngleUpperBoundLut(Entry.CandidateAnglesRadians, Entry.PolarAngleUpperBoundLut);
 		if (SolveResult.bSucceeded)
 		{
 			Entry.Polygon.Vertices = MoveTemp(SolveResult.Vertices);
@@ -1261,10 +1624,13 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		const FVector Forward3 = Description->Transform.GetUnitAxis(EAxis::X);
 		Input.Forward = FVector2D(Forward3.X, Forward3.Y);
 		if (!Input.Forward.Normalize()) Input.Forward = FVector2D(1.0, 0.0);
+		Entry.PolarOrigin = FVector2D(Input.Origin.X, Input.Origin.Y);
+		Entry.PolarForwardAngleRadians = FMath::Atan2(Input.Forward.Y, Input.Forward.X);
 		Input.Shape = Description->Shape;
 		Input.Range = Description->Range;
 		Input.HalfAngleDegrees = Description->HalfAngleDegrees;
 		Input.NearAwarenessRadius = 0.0;
+		Entry.bPolarBoundaryFullCircle = Input.Shape == ESightWeaveSourceShape::Radial;
 		Input.FloorId = Description->FloorId;
 		Input.HeightRange = Description->HeightRange;
 		const USightWeaveSettings* Settings = GetDefault<USightWeaveSettings>();
@@ -1282,6 +1648,9 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
 		Entry.CandidateRayCount = SolveResult.CastRayCount;
 		Entry.CandidateAnglesRadians = MoveTemp(SolveResult.CandidateAnglesRadians);
+		Entry.CandidateDistances = MoveTemp(SolveResult.CandidateDistances);
+		Entry.CandidateBoundaryPoints = MoveTemp(SolveResult.CandidateBoundaryPoints);
+		BuildPolarAngleUpperBoundLut(Entry.CandidateAnglesRadians, Entry.PolarAngleUpperBoundLut);
 		if (SolveResult.bSucceeded)
 		{
 			Entry.Polygon.Vertices = MoveTemp(SolveResult.Vertices);
@@ -1296,13 +1665,15 @@ void USightWeaveWorldSubsystem::ResolveSnapshotCompatibility(FSightWeaveFrameSna
 	for (FSightWeaveVisionSnapshotEntry& Vision : Snapshot.VisionSources)
 	{
 		Vision.CompatibleIlluminationSources.Reset();
+		Vision.CompatibleIlluminationSourceIndices.Reset();
 		if (!Vision.Description.bActive
 			|| Vision.Description.IlluminationPolicy == ESightWeaveIlluminationPolicy::BypassLegalIllumination)
 		{
 			continue;
 		}
-		for (const FSightWeaveIlluminationSnapshotEntry& Illumination : Snapshot.IlluminationSources)
+		for (int32 IlluminationIndex = 0; IlluminationIndex < Snapshot.IlluminationSources.Num(); ++IlluminationIndex)
 		{
+			const FSightWeaveIlluminationSnapshotEntry& Illumination = Snapshot.IlluminationSources[IlluminationIndex];
 			if (Illumination.Description.bActive
 				&& Illumination.Description.KnowledgeOwnerId == Vision.Description.KnowledgeOwnerId
 				&& Illumination.Description.FloorId == Vision.Description.FloorId
@@ -1311,6 +1682,7 @@ void USightWeaveWorldSubsystem::ResolveSnapshotCompatibility(FSightWeaveFrameSna
 					Illumination.Description.EmittedCapabilities))
 			{
 				Vision.CompatibleIlluminationSources.Add(Illumination.Handle);
+				Vision.CompatibleIlluminationSourceIndices.Add(IlluminationIndex);
 			}
 		}
 	}
@@ -1454,15 +1826,46 @@ FSightWeaveVisibilityQueryResult USightWeaveWorldSubsystem::MakeQueryResult(
 	const FSightWeaveFloorId FloorId) const
 {
 	FSightWeaveVisibilityQueryResult Result;
+	InitializeQueryResult(Result, Status, KnowledgeOwnerId, FloorId);
+	return Result;
+}
+
+void USightWeaveWorldSubsystem::InitializeQueryResult(
+	FSightWeaveVisibilityQueryResult& Result,
+	const ESightWeaveQueryStatus Status,
+	const FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+	const FSightWeaveFloorId FloorId,
+	const FSightWeaveRevision* SnapshotRevision) const
+{
 	Result.Status = Status;
 	Result.KnowledgeState = ESightWeaveKnowledgeState::Unknown;
 	Result.bVisible = false;
-	const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot = PublishedSnapshot;
-	Result.SnapshotRevision = Snapshot.IsValid() ? Snapshot->Revision : Revision;
+	Result.bAuthoritative = false;
+	Result.bInVisionPolygon = false;
+	Result.bHasLegalIllumination = false;
+	Result.bUsedBypass = false;
+	Result.bOccluded = false;
+	Result.bRejectedByIllumination = false;
+	Result.bRejectedBySuppression = false;
+	Result.bEligibleForMemoryWrite = false;
+	Result.RejectionFlags = 0;
+	if (SnapshotRevision)
+	{
+		Result.SnapshotRevision = *SnapshotRevision;
+	}
+	else
+	{
+		const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot = PublishedSnapshot;
+		Result.SnapshotRevision = Snapshot.IsValid() ? Snapshot->Revision : Revision;
+	}
 	Result.Revision = Result.SnapshotRevision;
 	Result.KnowledgeOwnerId = KnowledgeOwnerId;
 	Result.FloorId = FloorId;
-	return Result;
+	Result.ContributingVisionSources.Reset();
+	Result.ContributingIlluminationSources.Reset();
+	Result.ContributingSuppressions.Reset();
+	Result.EvaluatedSampleCount = 0;
+	Result.PassingSampleCount = 0;
 }
 
 FSightWeaveIlluminationQueryResult USightWeaveWorldSubsystem::MakeIlluminationQueryResult(

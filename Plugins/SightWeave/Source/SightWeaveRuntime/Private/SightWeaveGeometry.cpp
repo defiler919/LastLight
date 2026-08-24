@@ -391,6 +391,16 @@ namespace
 			OutError = TEXT("candidate angle count differs");
 			return false;
 		}
+		if (Optimized.CandidateDistances.Num() != Reference.CandidateDistances.Num())
+		{
+			OutError = TEXT("candidate distance count differs");
+			return false;
+		}
+		if (Optimized.CandidateBoundaryPoints.Num() != Reference.CandidateBoundaryPoints.Num())
+		{
+			OutError = TEXT("candidate boundary point count differs");
+			return false;
+		}
 		for (int32 Index = 0; Index < Optimized.CandidateAnglesRadians.Num(); ++Index)
 		{
 			if (!FMath::IsNearlyEqual(
@@ -399,6 +409,22 @@ namespace
 				1.0e-12))
 			{
 				OutError = FString::Printf(TEXT("candidate angle %d differs"), Index);
+				return false;
+			}
+			if (!FMath::IsNearlyEqual(
+				Optimized.CandidateDistances[Index],
+				Reference.CandidateDistances[Index],
+				FMath::Max(Tolerances.DuplicateVertexEpsilon, 1.0e-6)))
+			{
+				OutError = FString::Printf(TEXT("candidate distance %d differs"), Index);
+				return false;
+			}
+			if (FVector2D::DistSquared(
+				Optimized.CandidateBoundaryPoints[Index],
+				Reference.CandidateBoundaryPoints[Index])
+				> FMath::Square(FMath::Max(Tolerances.DuplicateVertexEpsilon, 1.0e-6)))
+			{
+				OutError = FString::Printf(TEXT("candidate boundary point %d differs"), Index);
 				return false;
 			}
 		}
@@ -839,6 +865,8 @@ namespace SightWeave::Geometry
 			Result.Vertices.Add(Input.Origin);
 		}
 		Result.Vertices.Reserve(Result.CandidateAnglesRadians.Num() + (bFullCircle ? 0 : 1));
+		Result.CandidateDistances.Reserve(Result.CandidateAnglesRadians.Num());
+		Result.CandidateBoundaryPoints.Reserve(Result.CandidateAnglesRadians.Num());
 		Result.StageMetrics.EventSortDeduplicateMicroseconds =
 			(FPlatformTime::Seconds() - EventSortStartSeconds) * 1000000.0;
 
@@ -873,8 +901,10 @@ namespace SightWeave::Geometry
 					ClosestStableId = Hit.StableSegmentId;
 				}
 			}
+			Result.CandidateDistances.Add(ClosestDistance);
 			++Result.CastRayCount;
 			const FVector2D Vertex2D = Origin + Direction * ClosestDistance;
+			Result.CandidateBoundaryPoints.Add(Vertex2D);
 			const FVector Vertex(Vertex2D.X, Vertex2D.Y, Input.Origin.Z);
 			if (Result.Vertices.IsEmpty()
 				|| FVector::DistSquared2D(Result.Vertices.Last(), Vertex) > FMath::Square(Input.Tolerances.DuplicateVertexEpsilon))
@@ -906,6 +936,8 @@ namespace SightWeave::Geometry
 		Result.StageMetrics.WorkingSetAllocatedBytes =
 			Result.Vertices.GetAllocatedSize()
 			+ Result.CandidateAnglesRadians.GetAllocatedSize()
+			+ Result.CandidateDistances.GetAllocatedSize()
+			+ Result.CandidateBoundaryPoints.GetAllocatedSize()
 			+ CandidateSegments.GetAllocatedSize();
 
 		const double TopologyStartSeconds = FPlatformTime::Seconds();
@@ -1039,6 +1071,8 @@ namespace SightWeave::Geometry
 			Result.Vertices.Add(Input.Origin);
 		}
 		Result.Vertices.Reserve(Result.CandidateAnglesRadians.Num() + (bFullCircle ? 0 : 1));
+		Result.CandidateDistances.Reserve(Result.CandidateAnglesRadians.Num());
+		Result.CandidateBoundaryPoints.Reserve(Result.CandidateAnglesRadians.Num());
 		Result.StageMetrics.EventSortDeduplicateMicroseconds =
 			(FPlatformTime::Seconds() - EventSortStartSeconds) * 1000000.0;
 
@@ -1110,8 +1144,10 @@ namespace SightWeave::Geometry
 				}
 			}
 
+			Result.CandidateDistances.Add(ClosestDistance);
 			++Result.CastRayCount;
 			const FVector2D Vertex2D = Origin + Direction * ClosestDistance;
+			Result.CandidateBoundaryPoints.Add(Vertex2D);
 			const FVector Vertex(Vertex2D.X, Vertex2D.Y, Input.Origin.Z);
 			if (Result.Vertices.IsEmpty()
 				|| FVector::DistSquared2D(Result.Vertices.Last(), Vertex)
@@ -1144,6 +1180,8 @@ namespace SightWeave::Geometry
 		Result.StageMetrics.WorkingSetAllocatedBytes =
 			Result.Vertices.GetAllocatedSize()
 			+ Result.CandidateAnglesRadians.GetAllocatedSize()
+			+ Result.CandidateDistances.GetAllocatedSize()
+			+ Result.CandidateBoundaryPoints.GetAllocatedSize()
 			+ CandidateSegments.GetAllocatedSize()
 			+ AngularIntervals.GetAllocatedSize()
 			+ ActiveIntervalIndices.GetAllocatedSize();

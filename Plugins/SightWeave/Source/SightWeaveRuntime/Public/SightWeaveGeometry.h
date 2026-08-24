@@ -218,6 +218,10 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult
 	bool bSucceeded = false;
 	TArray<FVector> Vertices;
 	TArray<double> CandidateAnglesRadians;
+	/** Nearest-hit distance for each candidate angle, used by the O(log n) authority query path. */
+	TArray<double> CandidateDistances;
+	/** Parallel XY nearest-hit points, avoiding trigonometry in authority queries. */
+	TArray<FVector2D> CandidateBoundaryPoints;
 	int32 CandidateSegmentCount = 0;
 	int32 CastRayCount = 0;
 	ESightWeaveSolverMode SolverModeUsed = ESightWeaveSolverMode::Reference;

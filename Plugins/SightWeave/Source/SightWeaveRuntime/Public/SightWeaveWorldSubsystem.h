@@ -241,6 +241,29 @@ private:
 		FVector WorldLocation,
 		const FSightWeaveVisionSourceHandle* RestrictToSource,
 		bool bPureVision) const;
+	void QueryEffectiveLiveInternalInto(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		FVector WorldLocation,
+		const FSightWeaveVisionSourceHandle* RestrictToSource,
+		bool bPureVision,
+		FSightWeaveVisibilityQueryResult& OutResult) const;
+	void QueryEffectiveLiveValidated(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		FVector WorldLocation,
+		const FSightWeaveVisionSourceHandle* RestrictToSource,
+		bool bPureVision,
+		const FSightWeaveFrameSnapshot& Snapshot,
+		const FSightWeaveFloorDefinition& Floor,
+		const FSightWeaveGeometryTolerances& Tolerances,
+		FSightWeaveVisibilityQueryResult& OutResult) const;
+	void InitializeQueryResult(
+		FSightWeaveVisibilityQueryResult& Result,
+		ESightWeaveQueryStatus Status,
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		const FSightWeaveRevision* SnapshotRevision = nullptr) const;
 	bool IsPointSuppressed(
 		const FSightWeaveFrameSnapshot& Snapshot,
 		FSightWeaveFloorId FloorId,

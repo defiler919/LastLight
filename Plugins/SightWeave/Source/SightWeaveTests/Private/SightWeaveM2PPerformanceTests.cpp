@@ -534,13 +534,19 @@ bool FSightWeaveM2PRuntimePipelineBaselineTest::RunTest(const FString& Parameter
 		Request.SampleSet.Samples.Add(FVector(FMath::Cos(Angle) * 500.0, FMath::Sin(Angle) * 500.0, 100.0));
 	}
 	TArray<FSightWeaveVisibilityQueryResult> BatchResults;
+	Subsystem->QueryBatch(Requests, BatchResults);
+	const uint64 BatchOuterBytesBefore = BatchResults.GetAllocatedSize();
+	const uint64 BatchInnerBytesBefore = QueryResultAllocatedBytes(BatchResults);
 	const FDistribution Batch = TimeOperation(3, 31, [&](int32)
 	{
 		Subsystem->QueryBatch(Requests, BatchResults);
 	});
 	LogDistribution(*this, TEXT("authority_batch_512"), Batch,
-		*FString::Printf(TEXT("outer_bytes=%llu inner_bytes=%llu"),
-			BatchResults.GetAllocatedSize(), QueryResultAllocatedBytes(BatchResults)));
+		*FString::Printf(TEXT("outer_bytes=%llu inner_bytes=%llu steady_capacity_growth_bytes=%llu"),
+			BatchResults.GetAllocatedSize(),
+			QueryResultAllocatedBytes(BatchResults),
+			(BatchResults.GetAllocatedSize() - BatchOuterBytesBefore)
+				+ (QueryResultAllocatedBytes(BatchResults) - BatchInnerBytesBefore)));
 
 	FSightWeaveSegment2D Door;
 	Door.A = FVector2D(250.0, -100.0);
@@ -567,6 +573,17 @@ bool FSightWeaveM2PRuntimePipelineBaselineTest::RunTest(const FString& Parameter
 		Subsystem->UpdateVisionSource(VisionHandles[0], Description);
 	});
 	LogDistribution(*this, TEXT("source_transform_update_solve_publish"), SourceUpdate);
+
+	const FSightWeaveRevision RevisionBeforeNoChange = Subsystem->GetRevision();
+	const FDistribution NoChangeSourceUpdate = TimeOperation(5, 101, [&](int32)
+	{
+		Subsystem->UpdateVisionSource(VisionHandles[0], VisionDescriptions[0]);
+	});
+	LogDistribution(*this, TEXT("no_change_source_update"), NoChangeSourceUpdate,
+		*FString::Printf(TEXT("revision_before=%lld revision_after=%lld"),
+			RevisionBeforeNoChange.GetValue(),
+			Subsystem->GetRevision().GetValue()));
+	TestEqual(TEXT("No-change source update preserves revision"), Subsystem->GetRevision(), RevisionBeforeNoChange);
 
 	TestTrue(TEXT("Runtime benchmark point query remains authoritative"), PointResult.bAuthoritative);
 	TestEqual(TEXT("Runtime benchmark batch count"), BatchResults.Num(), 512);

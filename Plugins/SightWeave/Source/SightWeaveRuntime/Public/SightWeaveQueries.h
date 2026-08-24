@@ -138,6 +138,10 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveVisionSnapshotEntry
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	TArray<FSightWeaveIlluminationSourceHandle> CompatibleIlluminationSources;
 
+	/** Immutable indices into the containing frame snapshot; avoids hot-query handle scans. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	TArray<int32> CompatibleIlluminationSourceIndices;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	FSightWeaveRevision SourceRevision;
 
@@ -150,6 +154,26 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveVisionSnapshotEntry
 	/** Stable endpoint/boundary event angles used by the reference solver. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	TArray<double> CandidateAnglesRadians;
+
+	/** Parallel to CandidateAnglesRadians; immutable polar boundary acceleration. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	TArray<double> CandidateDistances;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	TArray<FVector2D> CandidateBoundaryPoints;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	FVector2D PolarOrigin = FVector2D::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	double PolarForwardAngleRadians = 0.0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	bool bPolarBoundaryFullCircle = false;
+
+	/** Coarse immutable seed for exact upper-bound refinement in the angle array. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	TArray<int32> PolarAngleUpperBoundLut;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	double SolveTimeMicroseconds = 0.0;
@@ -180,6 +204,24 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveIlluminationSnapshotEntry
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	TArray<double> CandidateAnglesRadians;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	TArray<double> CandidateDistances;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	TArray<FVector2D> CandidateBoundaryPoints;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	FVector2D PolarOrigin = FVector2D::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	double PolarForwardAngleRadians = 0.0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	bool bPolarBoundaryFullCircle = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	TArray<int32> PolarAngleUpperBoundLut;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	double SolveTimeMicroseconds = 0.0;

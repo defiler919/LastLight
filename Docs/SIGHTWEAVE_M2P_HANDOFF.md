@@ -7,8 +7,8 @@
 - Baseline SHA: `517a486779b53a890377f7cd0bc12b6f1cc62640`
 - Working branch: `codex/m2p-sightweave-authority-performance`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current phase: checkpoint 3 — optimized angular-interval solver implemented and profiled
-- Last safe commit: `8fda558d80cad9654aaf8aaee1d5e6db7410fb92`
+- Current phase: checkpoint 4 — runtime query/update/snapshot pipeline hardened
+- Last safe commit: `d2566f542adf181e42d2725220bc7c3bd3be0e03`
 - Next recovery command: `git switch codex/m2p-sightweave-authority-performance; git pull --ff-only origin codex/m2p-sightweave-authority-performance`
 
 ## Objective
@@ -75,7 +75,22 @@ Final candidate measurements on the same machine:
 - Candidate/ray/vertex counts match the Reference baseline in every benchmark row.
 - Full Editor builds passed after each solver iteration. `SightWeave.M2` with the optimized runtime path passed 59/59, zero failed/warning/not-run; the known 13 startup self-test error lines predate and are outside Automation test results.
 
-The next checkpoint is large fixed-seed and manual-edge Optimized-vs-Reference differential coverage, followed by runtime query/update/allocation hardening.
+The next checkpoint is large fixed-seed and manual-edge Optimized-vs-Reference differential coverage.
+
+## Checkpoint 4 runtime result
+
+Immutable snapshot entries now carry exact polar boundary points, a deterministic angle lookup table, and direct compatible-illumination indices. Authority containment is O(1)-seeded/O(log n)-fallback and returns to the original polygon test in the conservative boundary band. Batch queries reuse result-array capacity, share one immutable snapshot/floor context, and cache repeated illumination containment. Clean `PublishSnapshot` calls are no-ops. Identical normalized source, illumination, and occluder updates preserve revision and skip solve/publication.
+
+Final runtime candidate on the 4-vision/2-light/64-segment fixture:
+
+- authority point query median/p95/p99/max: 0.697/0.902/3.502/3.900 µs;
+- 512 batch: 244.800/252.001/268.500/268.500 µs; warmed result capacity growth was 0 bytes;
+- source transform update + solve + publish: 83.100/89.601/90.502/90.502 µs;
+- dynamic door local update + affected solve + publish: 503.898/510.599/511.102/511.102 µs;
+- identical source update: 0.298/0.302/0.302/0.302 µs and revision stayed 54;
+- clean snapshot publish median 0.000 µs; public by-value snapshot copy median 11.001 µs.
+
+The 512-batch median is under 0.25 ms, while p95/p99 remain slightly above; both are retained. Zero capacity growth is not an allocator-hook measurement, so the strict zero-heap-allocation gate remains unproven. The hardened `SightWeave.M2` run passed 59/59 with zero Automation warnings/failures/not-run.
 
 ## Commands executed
 
@@ -99,6 +114,6 @@ Read in full: root `AGENTS.md`; requirements, architecture, migration plan, M1/M
 ## Unverified items
 
 - Broad fixed-seed differential gameplay classification and attribution coverage is not complete; current evidence is matching benchmark geometry plus the existing M2 suite.
-- Runtime batch/query, no-change revision, dispatch, and actual allocator-call hardening are not complete.
+- Actual allocator-call instrumentation and reusable solver scratch are not complete. Batch capacity is stable after warm-up, but that is narrower evidence than zero heap calls.
 - M1/all SightWeave/DARKWELL, Lab smoke, BuildPlugin/clean hosts, dependency scans, Git/LFS, and final warnings/fatals audit remain.
 - Final state must remain `PARTIAL` unless every hard correctness, isolation, build, and performance gate passes. The 4,096-per-source stress interpretation currently exceeds the worker solve budget even though the documented 4,096-total scale passes per solve.

@@ -117,3 +117,22 @@ At the documented 4,096-total scale, the eight-solve sample is approximately 0.3
 The 8×64 all-source warm p99 is 0.495 ms, comfortably below its explicit 2 ms gate. The interval sweep tests 8,334 exact segment intersections instead of the Reference path's 2,097,152 potential ray/segment pairs in that sample. At 4,096 total it tests 34,520 instead of 13,107,200 potential pairs. Output candidate, ray, and vertex counts match Reference in every row.
 
 Raw final candidate report: `Saved/AutomationReports/SightWeaveM2P_OptimizedFinalCandidate_20260824/index.json` (ignored, not committed). Remaining runtime, allocator-call, and differential evidence is recorded in later sections/checkpoints; solver performance alone is not a final M2P completion claim.
+
+## Hardened runtime pipeline — final candidate 2026-08-24
+
+The query path uses immutable polar boundary points plus a 1,024-bin exact-refinement lookup, with conservative fallback to the original polygon classifier near any boundary. Compatibility is resolved to direct immutable snapshot indices, duplicate illumination containment is cached per query, batch output arrays retain their capacity, and one snapshot/floor context is shared across an anchor batch. Clean publication and identical normalized updates return without a new snapshot or revision.
+
+| Operation | Median | p95 | p99 | Max | Result |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Spatial candidate query, 64 | 7.801 | 8.099 | 8.300 | 11.601 | stable |
+| Clean snapshot publish | 0.000 | 0.101 | 5.800 | 5.800 | no-copy fast path |
+| Public snapshot value copy | 11.001 | 11.999 | 12.100 | 12.100 | explicit caller copy |
+| Authority point query | 0.697 | 0.902 | 3.502 | 3.900 | 25.8× median speedup |
+| 512-request batch | **244.800** | 252.001 | 268.500 | 268.500 | median passes 0.25 ms; tail does not |
+| Dynamic door local update + solve + publish | 503.898 | 510.599 | 511.102 | 511.102 | 31.5× median speedup |
+| Source transform update + solve + publish | **83.100** | 89.601 | 90.502 | 90.502 | dispatch gate passes |
+| Identical source update | 0.298 | 0.302 | 0.302 | 0.302 | no revision change |
+
+The warmed 512-result outer and attribution-array capacities grew by **0 bytes** over the timed distribution. This proves no `TArray` capacity growth in that fixture, not global allocator call count. The optimized solver still owns per-call result/work arrays, so the strict “0 heap allocations” gate is not claimed without allocator-hook evidence and reusable solver scratch.
+
+Report: `Saved/AutomationReports/SightWeaveM2_RuntimeHardened_20260824/index.json`; **59 discovered/run/passed, 0 failed/warning/not-run**. The 512-batch median is 47.5× faster than baseline. Its p95/p99 remain 2.001/18.500 µs over 0.25 ms, and are explicitly retained as a remaining tail risk.

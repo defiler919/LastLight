@@ -1,20 +1,22 @@
 # Independent vision plugin architecture
 
-Status: proposed architecture for human approval. No plugin source, shader, asset, or game adapter is implemented in this milestone.
+Status: architecture revised with the latest human product decisions. No plugin source, shader, asset, or game Adapter is implemented or authorized by this documentation milestone.
 
-Working package/product name: `WorldVision` (provisional).
+Temporary internal code name: `WorldVision`. The public plugin/package/module name remains undecided and must be approved before source creation.
 
 ## Decision summary
 
 Use a **hybrid architecture with explicit 2.5D geometry as authority**:
 
-1. Runtime sources and explicit height-banded occluder segments produce stable per-source visibility polygons in CPU world space.
-2. Gameplay subjects, HUD, interaction, and memory-write eligibility query those hard polygons directly.
-3. The render path rasterizes the same polygons into floor-aware world-space live masks and mirrors a CPU-owned persistent memory tile field into GPU masks.
-4. A post-process material applies presentation-only antialiasing and composites live scene, detailed gray memory, and black unknown.
-5. Immutable environment may use stable current-frame material attributes because it cannot change. Stateful/moving subjects use policy-controlled live render primitives and render-only last-seen proxies so current state cannot leak into memory.
+1. Explicit vision sources and explicit legal-illumination sources use height-banded occluder segments to produce separate stable vision and illumination polygons in CPU world space.
+2. Gameplay subjects, HUD, interaction, legal-illumination checks, and memory-write eligibility use hard CPU queries. Effective live coverage is illumination-gated vision intersected with legal illumination, unioned with explicitly permitted illumination-bypass vision.
+3. The render path rasterizes the same immutable revisions into separate world-space vision, illumination, bypass, and effective-live masks, then mirrors a CPU-owned persistent memory tile field into GPU masks.
+4. A permanent player-attached circular source takes the illumination-bypass path. It still obeys occlusion, floor/height, and `SuppressLiveVision`.
+5. A post-process material applies presentation-only antialiasing and composites live scene, neutral-gray detailed memory, and black unknown.
+6. Immutable environment may use stable material attributes because it cannot change. Stateful/moving subjects use policy-controlled live render primitives and render-only last-seen proxies so current state cannot leak into memory.
+7. Attacker hit feedback uses an independent, transient Subject Reveal Override presentation lane. It never changes the `Visible`/`Remembered`/`Unknown` knowledge state and never writes memory.
 
-This keeps the stable-wall and deterministic-query strengths of visibility polygons while using the GPU for the workload it handles well: triangle rasterization, tiled mask combination, and final full-screen composition.
+This keeps the stable-wall and deterministic-query strengths of explicit polygons while using the GPU for the workload it handles well: triangle rasterization, the vision-mask/illumination-mask intersection, tiled mask combination, and final full-screen composition.
 
 ## Why this is the recommended algorithm
 
@@ -36,7 +38,7 @@ The plugin should not compute a polygon union merely to answer gameplay queries.
 | --- | --- | --- | --- |
 | Straight-wall stability | Strong: analytic vertices remain on explicit segments; world-space raster is camera independent | Medium: depth texel/raymarch step, capture projection, bias, and temporal sampling can move edges | Strong: explicit polygon is hard authority; GPU only rasterizes/softens it |
 | Dynamic doors | Strong: update one registered segment/shape and affected sources | Visually automatic if capture sees the door, but capture timing/bias and gameplay query agreement remain difficult | Strong: door component updates explicit geometry; render follows same revision |
-| Multiple floors/heights | Natural 2.5D floor/height bands; requires authored portals for stacked views | Better raw 3D representation, but one/more depth captures per source/floor and ambiguous saved XY memory | Explicit floor authority with optional presentation capture only for exceptional authored cases |
+| Multiple floors/heights | Natural 2.5D floor/height bands; simultaneous stacked views require a later extension | Better raw 3D representation, but one/more depth captures per source/floor and ambiguous saved XY memory | Explicit floor authority with exactly one active floor in v1; unsupported stacked views are validated |
 | Multiple observers | CPU cost scales with relevant segments per source; polygons rasterize cheaply | Capture and raymarch cost scale sharply per source, face, and resolution | CPU source solves plus one union mask pass; remote sources work off-screen |
 | Dynamic occluders | Good for a bounded explicit set; event-driven updates | Good visually for arbitrary renderable meshes | Explicit for gameplay-relevant occluders; optional visual-only depth detail cannot change authority |
 | CPU cost | Spatial query + angular sweep/rays; deterministic and worker-friendly | Low visibility CPU but still needs a separate exact-query solution | Bounded CPU authority; no CPU screen-pixel evaluation/upload |
@@ -55,15 +57,15 @@ Conclusion: use the hybrid column. A pure Scene Capture/GPU raymarch system woul
 
 ### Plugin descriptor
 
-Provisional plugin root after approval: `Plugins/WorldVision/`.
+Plugin root after separate implementation and naming approval: `Plugins/<ApprovedName>/`. `WorldVision` must not be baked into public paths merely because it is the current code name.
 
 | Module | Type | Owns | Must not own |
 | --- | --- | --- | --- |
-| `WorldVisionRuntime` | Runtime | subsystem, floor/source/occluder/subject/modifier components, geometry solver, queries, CPU memory tiles, save snapshot structs, render-resource bridge, public C++/Blueprint API | DARKWELL actors/tags, missions, save slots, HUD text, Niagara/audio, third-party libraries |
-| `WorldVisionEditor` | Editor | component visualizers, occluder/polygon editing, mesh/collision conversion assistance, floor tools, validation, debug panels, example-map authoring helpers | runtime gameplay decisions or editor code in the Runtime module |
-| `WorldVisionTests` | Developer/Editor-only | pure geometry, runtime functional, rendering comparison, persistence, and performance harnesses | shipping runtime dependencies |
+| `<ApprovedName>Runtime` | Runtime | subsystem, floor/vision-source/illumination-source/occluder/subject/modifier components, geometry solvers, hard queries, Subject Reveal Overrides, CPU memory tiles, save snapshot structs, render-resource bridge, public C++/Blueprint API | DARKWELL actors/tags, missions, save slots, HUD text, Niagara/audio, third-party libraries |
+| `<ApprovedName>Editor` | Editor | component visualizers, occluder/polygon editing, mesh/collision conversion assistance, floor tools, validation, debug panels, example-map authoring helpers | runtime gameplay decisions or editor code in the Runtime module |
+| `<ApprovedName>Tests` | Developer/Editor-only | pure geometry, runtime functional, rendering comparison, persistence, and performance harnesses | shipping runtime dependencies |
 
-Rendering remains a private area inside `WorldVisionRuntime` for v1 so public users depend on one runtime module. If the render path later requires substantial alternate RHI/server packaging, it may split into `WorldVisionRendering` without changing public authority/query types.
+Rendering remains a private area inside the approved Runtime module for v1 so public users depend on one runtime module. If the render path later requires substantial alternate RHI/server packaging, it may split into a dedicated Rendering module without changing public authority/query types.
 
 ### Plugin content
 
@@ -80,32 +82,35 @@ No DARKWELL map, item, enemy, mission, or material belongs in plugin content.
 
 Project-owned adapter code, later placed under `Source/Darkwell` (or a separate project plugin only if approved), maps:
 
-- player facing/aim/equipment to source profiles;
-- security cameras and remote observation items to source activation;
-- DARKWELL illumination rules to optional source filtering;
-- monster black fog to memory/live modifier regions;
+- player facing/aim/equipment to illumination-gated vision-source profiles;
+- the permanent player-attached circular awareness source to an illumination-bypass vision profile;
+- DARKWELL legal lights to explicit illumination-source components/profiles rather than generic source filters;
+- security cameras and all remote observation/illumination sources to Adapter-controlled activation;
+- monster permanent blackout to an explicit `ClearMemory` mutation plus an active `BlockMemoryWrites` region;
 - enemies, pickups, doors, containers, machines, and objective items to generic subject policies;
+- designated attacker-subject damage-received events to time-bounded Subject Reveal Overrides;
 - current-visibility events to HUD, interaction, Niagara, and audio;
 - plugin snapshots into DARKWELL's versioned continuation save.
 
-The adapter may reference both DARKWELL and WorldVision. WorldVision must never reference DARKWELL.
+The Adapter may reference both DARKWELL and the eventual generic system. The generic system must never reference DARKWELL.
 
 ## Proposed runtime classes and responsibilities
 
-Names are API drafts, not implementation commitments.
+Names reflect the current code name and are API drafts, not implementation commitments. They must be renamed consistently if the approved public name changes.
 
 | Type | Responsibility |
 | --- | --- |
 | `UWorldVisionSubsystem : UWorldSubsystem` | registry, revisions, scheduling, immutable frame snapshots, queries, memory mutation, floor/stream lifecycle, debug/stats, snapshot capture/restore |
-| `UVisionSourceComponent` | source transform/profile, knowledge owner, active floor, activation, dirty tracking, optional filter/provider interface |
+| `UVisionSourceComponent` | vision transform/profile, knowledge owner, active floor, activation, illumination requirement/bypass policy, dirty tracking, optional non-illumination filter/provider interface |
+| `UVisionIlluminationSourceComponent` | explicit legal-illumination transform/profile, knowledge/channel compatibility, active floor, activation, hard polygon, dirty tracking; never inferred from render luminance |
 | `UVisionOccluderComponent` | explicit local polygon/segments, height band, floor, static/dynamic mode, transform revision |
-| `UVisionSubjectComponent` | visibility samples, policy, live primitive set, last-seen provider/proxy, state-transition events, persistent ID |
-| `UVisionFloorComponent` or `AVisionFloorVolume` | stable floor ID, XY bounds, `ZMin`/`ZMax`, active presentation layer, optional portal references |
+| `UVisionSubjectComponent` | visibility samples, knowledge policy, live/reveal primitive sets, last-seen provider/proxy, knowledge-state events, separate reveal-override events, persistent ID |
+| `UVisionFloorComponent` or `AVisionFloorVolume` | stable floor ID, XY bounds, `ZMin`/`ZMax`, and the single active-presentation-floor state |
 | `AMemoryModifierVolume` | editor/runtime region actor wrapping one or more modifier operations |
 | `UVisionBlueprintLibrary` | safe subsystem lookup, point/bounds/batch queries, region builders, debug helpers |
 | `UVisionSettings` | project/plugin defaults, tolerances, tile resolution, scheduling/budgets, debug and rendering configuration |
 | `IVisionSubjectSnapshotProvider` | host callback for semantic last-seen capture, proxy construction/update, and snapshot serialization |
-| `IVisionSourceFilterProvider` | optional host callback/field profile for rules beyond a direct source polygon; cannot read presentation masks |
+| `IVisionSourceFilterProvider` | optional host callback/profile for hard rules beyond vision and legal illumination; cannot replace illumination authority or read presentation masks |
 
 Components self-register in `OnRegister`/world begin play and unregister safely. The subsystem stores handles and plain immutable solve data; workers never dereference gameplay UObjects.
 
@@ -120,7 +125,12 @@ FVisionFloorId / FVisionFloorDefinition
 
 FVisionSourceHandle / FVisionSourceState
     generation-safe handle, knowledge ID, floor, origin/eye Z, facing,
-    shape/profile, enabled/filter state, transform/profile revisions
+    shape/profile, enabled/filter state, illumination requirement/bypass,
+    transform/profile revisions
+
+FVisionIlluminationSourceHandle / FVisionIlluminationSourceState
+    generation-safe handle, compatible knowledge/channel profile, floor,
+    origin/height, shape/profile, enabled state, transform/profile revisions
 
 FVisionOccluderHandle / FVisionSegment2D
     generation-safe handle, endpoints A/B, floor, ZMin/ZMax,
@@ -130,16 +140,33 @@ FVisionPolygon
     source handle, floor, ordered world-space vertices, bounds,
     hard-edge epsilon policy, source/occluder revision tuple
 
+FVisionIlluminationPolygon
+    illumination-source handle, floor, ordered world-space vertices, bounds,
+    compatibility profile, hard-edge epsilon, source/occluder revision tuple
+
 FVisionFrameSnapshot
-    monotonically increasing revision, source polygons, spatial lookup,
-    active modifier query data; immutable during queries/render submission
+    monotonically increasing revision, vision and illumination polygons,
+    spatial lookup, active modifier query data; immutable during hard queries,
+    memory writes, and render submission
 
 FVisionSubjectSampleSet
     anchor/bounds/custom points plus any/all/required-count rule
 
 FVisionQueryResult
     Unknown/Remembered/Visible, hard live boolean, remembered boolean,
-    source handle(s), floor, rejection flags, snapshot revision
+    vision source handle(s), legal-illumination handle(s) or bypass reason,
+    floor, rejection flags, snapshot revision; contains no reveal override
+
+FVisionIlluminationQueryResult
+    hard illuminated boolean, illumination-source handle(s), floor,
+    occlusion/rejection flags, snapshot revision
+
+FSubjectRevealOverrideHandle / FSubjectRevealOverrideState
+    subject handle, Adapter-supplied reason, start/expiry/revocation,
+    presentation policy, revision; never serialized as knowledge
+
+FVisionSubjectPresentationResult
+    unchanged FVisionQueryResult plus a separate list of active reveal overrides
 
 FVisionRegionShape
     circle/oriented box/room-volume reference/polygon, floor, Z range
@@ -183,19 +210,18 @@ Doors and other approved dynamics register a small local segment set. Transform/
 
 Dynamic skeletal meshes, mobs, cloth, particles, and arbitrary physics debris do not become blockers automatically. A simplified explicit component is required if their occlusion matters to gameplay.
 
-## Visibility-polygon solve
+## Vision- and illumination-polygon solve
 
 ### Correctness reference
 
-The correctness implementation clips the source shape to its floor and evaluates candidate angles at:
+The correctness implementation is shared by explicit vision and legal-illumination sources. It clips each source shape to its floor and evaluates candidate angles at:
 
 - source cone boundary rays;
 - every relevant segment endpoint angle;
 - endpoint angle minus/plus a documented small angular epsilon;
-- stable tessellation angles for radial/curved source boundaries;
-- optional authored portal boundaries.
+- stable tessellation angles/events required by radial or curved source boundaries.
 
-For each candidate ray, analytic ray/segment intersection selects the nearest valid segment whose height band blocks the configured source/target band. Intersections are sorted by angle and deduplicated by deterministic distance/segment-ID rules. Vertices remain in world coordinates and on the source boundary or the actual occluder segment.
+For each candidate ray, analytic ray/segment intersection selects the nearest valid segment whose height band blocks the configured source/target or illumination band. Intersections are sorted by angle and deduplicated by deterministic distance/segment-ID rules. Vertices remain in world coordinates and on the source boundary or the actual occluder segment. Vision polygons and illumination polygons retain distinct source handles and revisions even when they use the same solver implementation.
 
 ### Optimized solve
 
@@ -205,45 +231,74 @@ After reference tests pass, an angular sweep maintains active segments sorted by
 
 World weld, ray/segment parallel, endpoint angular, point-in-polygon, and boundary-visible epsilons live in one settings structure and are reported in debug output. Tolerances use world units and scale bounds, not viewport pixels. Stable segment IDs break exact ties.
 
-### Source union and filters
+### Vision/illumination combination and filters
 
-Per-source polygons stay separate. A point/subject is hard-visible if any active legal source for the knowledge owner passes:
+Vision and illumination polygons stay separate. For a knowledge owner, floor, and point `p`, the authoritative hard-live rule is:
+
+```text
+Gated(p) = any gated vision polygon v containing p
+           for which a legal-illumination polygon compatible with v contains p
+Bypass(p) = any explicitly illumination-bypass vision polygon containing p
+HardLive(p) = (Gated(p) OR Bypass(p)) AND NOT SuppressLiveVision(p)
+```
+
+Before contributing to `Gated` or `Bypass`, every vision polygon must pass:
 
 1. floor/height membership;
 2. source polygon containment;
-3. optional hard source-filter result;
-4. no hard live-suppression modifier at the sample.
+3. its optional additional hard source-filter result.
 
-The GPU draws all passing polygons into the same live mask. Optional DARKWELL illumination filtering must either produce hard world-space field geometry/query results or configure the source profile; it may not sample a blurred light buffer or final scene color.
+Legal illumination must independently pass floor/height membership, illumination-polygon containment, and compatibility profile. The permanent player-attached circular source is an explicit `BypassLegalIllumination` source; it is not synthesized from proximity and is not disabled when rendered lights are absent. It still fails on occlusion, inactive floor, or live suppression.
+
+The CPU exposes direct hard illumination queries and the combined hard-live query with both source attributions. A legal-illumination polygon alone has no reveal or memory effect. Additional DARKWELL-specific filters may further narrow a source but cannot implement legal illumination as an opaque callback, sample a blurred light buffer, or sample final scene color.
 
 ## Frame/update model
 
-1. Game thread drains registrations and source/occluder/floor/modifier/subject dirty events.
+1. Game thread drains vision-source, illumination-source, occluder, floor, modifier, subject, and reveal-override events.
 2. Plain solve inputs are copied into generation-safe arrays.
-3. Worker tasks update dirty source polygons and affected hard-memory tiles.
+3. Worker tasks update dirty vision/illumination polygons and affected hard-memory tiles.
 4. Game thread publishes one immutable `FVisionFrameSnapshot` at a controlled sync point.
-5. Batched subject queries consume that snapshot and enqueue state transitions.
-6. Game-thread component callbacks apply live/proxy presentation and notify host adapters.
-7. Render thread rasterizes the same polygon revision into world-space masks and uploads only dirty memory tiles.
-8. Post process samples hard masks, applies presentation-only feather, and composites the scene.
+5. Batched illumination/live/subject queries consume that snapshot and enqueue knowledge-state transitions; reveal overrides remain a separate presentation result.
+6. Game-thread component callbacks apply live/proxy/reveal presentation and notify host Adapters without converting reveal into `Visible`.
+7. Render thread rasterizes the same vision and illumination revisions into separate world-space masks, derives effective live coverage, and uploads only dirty memory tiles.
+8. Post process samples effective hard masks, applies presentation-only feather, and composites the scene.
 
 Source solve cadence can be capped, but a door/source transform change must carry explicit maximum latency. Gameplay and rendering always identify which snapshot revision they consumed.
 
 ## Live, memory, and modifier data flow
 
 ```text
-registered source profile + floor/height
+registered illumination-gated vision source + floor/height
     + nearby explicit occluder segments
     -> per-source hard visibility polygon
-    -> optional hard source filter
+    -> hard gated-vision coverage
+
+registered legal-illumination source + floor/height
+    + nearby explicit occluder segments
+    -> per-source hard illumination polygon
+    -> hard legal-illumination coverage
+
+registered illumination-bypass vision source (including permanent body circle)
+    + nearby explicit occluder segments
+    -> hard bypass-vision coverage
+
+CPU immutable FVisionFrameSnapshot
+    -> ((gated vision INTERSECT legal illumination) UNION bypass vision)
     -> subtract hard SuppressLiveVision regions
-    -> FVisionFrameSnapshot
-       |-> exact point/bounds/subject/HUD/gameplay queries
-       |-> rasterize live mask (GPU world-space floor tiles)
+    -> effective hard live coverage
+       |-> exact illumination/live point/bounds/subject/HUD/gameplay queries
        |-> intersect with !BlockMemoryWrites (CPU hard regions)
            -> set persistent CPU memory bits
            -> invalidate/refresh last-seen subject snapshots
            -> upload dirty memory tiles to GPU
+
+GPU from the same revisions
+    -> rasterize hard VisionMask
+    -> rasterize hard IlluminationMask
+    -> rasterize hard BypassVisionMask
+    -> EffectiveLiveMask = (VisionMask INTERSECT IlluminationMask)
+                           UNION BypassVisionMask
+    -> subtract SuppressLiveVisionMask
 
 persistent memory bits
     - ClearMemory mutation
@@ -251,10 +306,14 @@ persistent memory bits
     - (BlockMemoryWrites regions union SuppressMemoryPresentation regions) for display only
     -> effective memory presentation mask
 
-live mask + effective memory mask + controlled live/memory subject primitives
+effective live mask + effective memory mask + controlled live/memory subject primitives
     -> presentation-only edge AA/feather
-    -> detailed gray memory composite
+    -> neutral-gray detailed memory composite
     -> pure black unknown/suppressed area
+
+independent Subject Reveal Override (for example attacker hit feedback)
+    -> approved temporary reveal primitives only
+    -> no change to FVisionQueryResult, live masks, memory bits, or snapshots
 ```
 
 ### Modifier semantics
@@ -271,22 +330,24 @@ live mask + effective memory mask + controlled live/memory subject primitives
 
 - registration and generation-safe handles;
 - floors/heights and segment spatial index;
-- source polygons and exact containment/bounds queries;
+- separate vision and legal-illumination polygons and exact containment/bounds queries;
+- the hard “gated vision intersect illumination, union bypass vision” result and both source attributions;
 - hard modifier membership;
 - persistent memory bits;
-- subject state transitions and last-seen metadata;
+- subject knowledge-state transitions, last-seen metadata, and a separate transient reveal-override registry;
 - deterministic snapshot serialization/compression;
 - debug reasons and counters.
 
 ### GPU owns presentation
 
-- rasterizing already-approved polygons to live R8 mask tiles/atlas;
+- rasterizing already-approved gated-vision, legal-illumination, and illumination-bypass polygons to separate R8 mask tiles/atlases;
+- intersecting hard gated-vision and illumination masks, unioning the bypass-vision mask, and applying live suppression to derive effective live presentation;
 - mirroring dirty memory and modifier-presentation tiles;
-- max/union of multiple source polygons;
+- max/union of multiple polygons inside each mask class;
 - distance/coverage-based edge antialiasing within a bounded presentation width;
-- full-screen composition and optional debug overlays.
+- full-screen composition, independent subject-reveal presentation, and optional debug overlays.
 
-The plugin does not read a blurred GPU mask back to answer queries or save memory. Save capture never waits for a full GPU readback.
+The plugin does not read a blurred GPU mask—or a rendered-light buffer—back to answer illumination/live queries or save memory. Save capture never waits for a full GPU readback.
 
 ## World-space mask design
 
@@ -295,7 +356,9 @@ Use floor-local, stable XY-to-UV mapping. Two implementation candidates must be 
 1. sparse/tiled `UTextureRenderTarget2D` atlas managed per active knowledge owner/floor;
 2. `UTextureRenderTarget2DArray` or render-graph pooled texture layers where UE 5.8.1 platform support and material sampling are reliable.
 
-The CPU memory store uses packed bits at a configurable world resolution (provisional default 25 cm). GPU tiles use R8 for filterable presentation. Live masks may use a finer active-window resolution (provisional 10-12.5 cm) because they are not saved. Tile borders include a one/filter-radius gutter to avoid seams. World origin and tile indices, not camera position, determine UVs.
+The CPU memory store uses packed bits at a configurable world resolution. No default is selected yet: the same reference scenes and motion paths must compare 2.5 cm, 5 cm, 10 cm, and 25 cm for boundary fidelity, CPU update time, GPU dirty-upload cost, runtime bytes, and compressed save bytes before a shipping value is chosen. GPU memory tiles use R8 for filterable presentation. Vision and illumination masks may use a separately measured finer active-window resolution because they are not saved. Tile borders include a one/filter-radius gutter to avoid seams. World origin and tile indices, not camera position, determine UVs.
+
+At minimum the renderer exposes separately inspectable `VisionMask` (illumination-gated vision only), `IlluminationMask`, `BypassVisionMask`, `SuppressLiveVisionMask`, and derived `EffectiveLiveMask`. When compatibility profiles require more than one illumination class, the renderer either keeps matching mask layers or rejects the unsupported configuration; it must not over-union incompatible illumination.
 
 Floating-origin/world-partition shifts require an explicit floor-origin/rebase event; raw large-world floating coordinates must not be baked into irreversible save keys.
 
@@ -303,7 +366,7 @@ Floating-origin/world-partition shifts require an explicit floor-origin/rebase e
 
 ### Immutable environment path
 
-Static environment remains rendered normally under the fog post process. In the remembered-only region, the material uses stable material attributes—principally Base Color with controlled desaturation/contrast, plus stable normal/AO/depth cues—to produce gray detail. It does not use `PostProcessInput0` lighting for memory. Thus fixed texture details remain readable while current point lights, flashes, exposure, and moving shadows cannot update memory.
+Static environment remains rendered normally under the fog post process. In the remembered-only region, the decided treatment uses stable material attributes—principally desaturated Base Color with controlled contrast, plus stable normal/AO/depth cues—to produce neutral-gray detail under stable neutral shading. It does not use `PostProcessInput0` lighting and does not freeze the last lit image. Thus fixed texture details remain readable while current point lights, flashes, exposure, and moving shadows cannot update memory.
 
 The style must retain more than a depth outline. Default tuning should preserve mid-frequency base-color texture contrast and use depth edges only as a secondary cue.
 
@@ -315,7 +378,7 @@ The style must retain more than a depth outline. Default tuning should preserve 
 - **memory primitives/proxy**, render-only and enabled only when a valid remembered snapshot is effective;
 - authoritative gameplay actor/collision, never owned or frozen by the plugin.
 
-For simple static-mesh subjects, an optional generic descriptor may capture mesh/material slots, transform, visibility, and selected material parameters. Complex skeletal pose, construction-script semantics, Niagara, audio, inventory state, or arbitrary MID state requires `IVisionSubjectSnapshotProvider` from the host adapter.
+For simple static-mesh subjects, an optional generic descriptor may capture mesh/material slots, transform, visibility, and selected material parameters. DARKWELL fixed, uncollected items use `LastSeenSnapshot`; their Adapter must supply stable identity and any semantic snapshot data not covered by the descriptor. Complex skeletal pose, construction-script semantics, Niagara, audio, inventory state, or arbitrary MID state requires `IVisionSubjectSnapshotProvider` from the host Adapter.
 
 The proxy contributes Base Color/normal/depth to the same detailed memory material path. It never ticks gameplay, casts gameplay collision, or emits live light/audio/VFX.
 
@@ -337,6 +400,18 @@ An aligned Scene Capture may later render a curated memory-only scene for projec
 
 Transitions are driven from hard snapshot results. A subject with multiple samples uses its configured any/all/threshold rule. The result includes source attribution so a host may distinguish player/camera/item observation without changing core state.
 
+### Independent Subject Reveal Override lane
+
+Subject Reveal Overrides are not another row or value in the knowledge-state table. The DARKWELL Adapter may add a time-bounded attacker-subject reveal after that subject receives the relevant hit/damage event; the subsystem returns it beside, never inside, the `FVisionQueryResult`. A reveal may enable only explicitly registered reveal primitives or a conservative reveal material. It does not:
+
+- set `Visible`, `hard live`, or a contributing vision/illumination source;
+- enable ordinary target selection, prompts, threat HUD, or interaction;
+- set memory bits or create/refresh `LastSeenSnapshot` metadata;
+- survive expiry as a proxy or remembered image;
+- serialize into the memory snapshot.
+
+Reveal handles carry subject, reason, start/expiry, revocation, presentation policy, and revision. Debug views show the underlying knowledge state and active reveal override simultaneously. Whether a specific region is allowed to suppress a reveal is an explicit reveal-policy check; it must never be implemented by falsifying the knowledge state.
+
 ## Multi-floor strategy
 
 ### V1 model
@@ -344,13 +419,13 @@ Transitions are driven from hard snapshot results. A subject with multiple sampl
 - each floor has a stable ID, XY bounds, `ZMin`, `ZMax`, and local mask origin;
 - sources, occluders, subjects, memory/modifiers, and tiles belong to one floor at a time;
 - an occluder blocks a source when its height interval crosses the configured eye/target band;
-- the local view normally selects one presentation floor, while other floor memories remain stored but not composited;
+- the local view has exactly one active queried/presented floor, while other floor memories remain stored but not composited;
 - stairs/elevators change floor assignment through volumes/adapter events;
-- explicitly authored portals may project visibility between floors as a bounded advanced feature after the single-floor solver is accepted.
+- simultaneous inter-floor portals are outside v1.
 
 ### Non-silent limitations
 
-Stacked floors visible in the same XY pixels, open atria, balconies, and long vertical sight lines cannot be inferred safely by one 2D polygon. V1 validation either requires authored portal/layer rules or marks the arrangement unsupported. The plugin must never merge those floors into one unexplained memory bitfield.
+Stacked floors visible in the same XY pixels, open atria, balconies, portals, and long vertical sight lines cannot be inferred safely by one 2D polygon. V1 validation marks simultaneous-floor presentation unsupported. The plugin must never merge floors into one unexplained memory bitfield.
 
 ## Public C++ API draft
 
@@ -359,9 +434,14 @@ Illustrative signatures only:
 ```cpp
 // Components normally self-register; explicit handles support runtime-created data.
 FVisionSourceHandle RegisterSource(const FVisionSourceRegistration& Registration);
+FVisionIlluminationSourceHandle RegisterIlluminationSource(
+    const FVisionIlluminationSourceRegistration& Registration);
 FVisionOccluderHandle RegisterOccluder(const FVisionOccluderRegistration& Registration);
 FVisionModifierHandle AddModifier(const FVisionModifierRegistration& Registration);
 bool UpdateSource(FVisionSourceHandle Handle, const FVisionSourceUpdate& Update);
+bool UpdateIlluminationSource(
+    FVisionIlluminationSourceHandle Handle,
+    const FVisionIlluminationSourceUpdate& Update);
 bool UpdateOccluder(FVisionOccluderHandle Handle, const FTransform& Transform, bool bEnabled);
 bool RemoveModifier(FVisionModifierHandle Handle);
 
@@ -379,6 +459,18 @@ FVisionQueryResult QuerySamples(
 
 void QueryBatch(TConstArrayView<FVisionQueryRequest> Requests,
                 TArray<FVisionQueryResult>& OutResults) const;
+
+FVisionIlluminationQueryResult QueryIlluminationPoint(
+    FVisionKnowledgeId Knowledge,
+    FVisionFloorId Floor,
+    const FVector& WorldPoint) const;
+
+FSubjectRevealOverrideHandle AddSubjectRevealOverride(
+    FVisionSubjectHandle Subject,
+    const FSubjectRevealOverrideRegistration& Registration);
+bool RemoveSubjectRevealOverride(FSubjectRevealOverrideHandle Handle);
+FVisionSubjectPresentationResult QuerySubjectPresentation(
+    FVisionSubjectHandle Subject) const;
 
 FVisionMemoryMutationResult ClearMemory(
     FVisionKnowledgeId Knowledge,
@@ -408,12 +500,22 @@ Public results use enums/structs rather than booleans so new reasons/states can 
 - `SetVisionFloor(FVisionFloorId)`
 - `GetLastSolvedRevision()`
 
+`UVisionIlluminationSourceComponent`:
+
+- `SetIlluminationSourceEnabled(bool)`
+- `SetIlluminationSourceProfile(FVisionIlluminationSourceProfile)`
+- `SetIlluminationKnowledgeOwner(FVisionKnowledgeId)`
+- `SetIlluminationFloor(FVisionFloorId)`
+- `GetLastSolvedRevision()`
+
 `UVisionSubjectComponent`:
 
 - `SetVisionSubjectPolicy(EVisionSubjectPolicy)`
 - `SetVisionSamples(FVisionSubjectSampleSet)`
 - `GetEffectiveVisionState()`
 - `OnVisionStateChanged(Result)`
+- `GetActiveRevealOverrides()`
+- `OnSubjectRevealOverrideChanged(Result)`
 - `InvalidateLastSeenSnapshot()`
 
 `AMemoryModifierVolume`:
@@ -426,13 +528,16 @@ Public results use enums/structs rather than booleans so new reasons/states can 
 
 - `GetWorldVisionSubsystem`
 - `QueryVisionAtLocation`
+- `QueryLegalIlluminationAtLocation`
 - `QueryActorVision`
+- `AddSubjectRevealOverride`
+- `RemoveSubjectRevealOverride`
 - circle/box/polygon region constructors;
 - `ClearVisionMemory`
 - runtime modifier create/update/remove;
 - snapshot capture/restore wrappers where Blueprint serialization is appropriate.
 
-Blueprint events carry generic IDs/results only. DARKWELL Blueprint/C++ adapters translate them into game tags, HUD, VFX, or audio.
+Blueprint events carry generic IDs/results only. Knowledge-state events and Subject Reveal Override events are different types and delegates. DARKWELL Blueprint/C++ Adapters translate them into game tags, HUD, VFX, or audio without treating a reveal callback as `Visible`.
 
 ## Save schema and versioning
 
@@ -457,11 +562,13 @@ Blueprint events carry generic IDs/results only. DARKWELL Blueprint/C++ adapters
 1. Validate version, limits, duplicates, floor mapping, settings compatibility, and provider availability.
 2. Migrate into the current in-memory schema without partially applying invalid data.
 3. Publish memory in one restore revision.
-4. Recompute live source polygons; never restore serialized live state.
+4. Recompute vision and legal-illumination polygons; never restore serialized live state.
 5. Lazily create memory proxies as their floor streams in.
 6. Mark GPU tiles dirty for derived upload.
 
-Plugin migrations remain independent from DARKWELL save v6. A later DARKWELL adapter may convert old 100/10 cm cells into WorldVision memory tiles once, but old fields remain readable until a separately approved campaign-save migration.
+Live vision/illumination polygons, active-source state, GPU masks, and Subject Reveal Overrides are not snapshot contents; the host reactivates sources after restore and transient reveals are discarded.
+
+Plugin schema migrations remain independent from DARKWELL save v6. The decided DARKWELL policy is **no v6 fog-memory migration**: old v6 grid/cell data is never converted into WorldVision tiles. A save without a valid WorldVision snapshot starts with empty WorldVision memory. While legacy authority remains available, its old fog data may still be read only by that legacy path.
 
 ## Editor authoring workflow
 
@@ -470,8 +577,8 @@ Plugin migrations remain independent from DARKWELL save v6. A later DARKWELL ada
 3. Inspect/weld/simplify generated outlines without closing deliberate gaps.
 4. Mark dynamic doors with explicit local segments and height range.
 5. Add modifier volumes/polygons and inspect operation/floor colors.
-6. Add source/subject components in the plugin example map.
-7. Run validation: missing/duplicate floor IDs, out-of-bounds data, self intersections, overlapping ambiguous floors, zero/duplicate segments, unsupported remembered materials, missing subject persistent IDs, excessive dynamic blockers, stale baked data.
+6. Add distinct vision-source/illumination-source, subject, and reveal-override examples in the plugin example map.
+7. Run validation: missing/duplicate floor IDs, zero or multiple active floors, out-of-bounds data, self intersections, overlapping ambiguous floors, zero/duplicate segments, incompatible illumination profiles, unsupported remembered materials, missing subject persistent IDs, excessive dynamic blockers, stale baked data.
 8. Save generated data explicitly with undo/source references.
 
 Conversion is assistance, not hidden runtime magic. Fab users can author segments manually for small maps and use bake tools for larger static layouts.
@@ -480,21 +587,23 @@ Conversion is assistance, not hidden runtime magic. Fab users can author segment
 
 Runtime views:
 
-- source profile/cone/range/eye height and activation reason;
+- vision-source profile/cone/range/eye height, illumination requirement/bypass, and activation reason;
+- legal-illumination-source profile/range/height, Adapter activation reason, and hard polygon;
 - nearby occluder spatial cells, segments, height bands, normals/endpoints;
-- per-source polygon and current polygon revision;
-- union hard live mask versus feathered presentation mask;
-- floor/layer selection and portal links;
+- per-vision-source and per-illumination-source polygons and current revisions;
+- separate gated-vision, illumination, bypass-vision, live-suppression, and derived effective-live masks;
+- hard illumination query, hard live intersection, and feathered presentation comparison;
+- loaded floors and the exactly one active queried/presented floor;
 - memory tile state/dirty rect/revision;
 - write-block, memory-suppress, and live-suppress masks in distinct colors;
-- subject sample points, policy, effective state, source attribution, proxy state;
+- subject sample points, policy, underlying knowledge state, vision/illumination attribution or bypass reason, proxy state, and separate reveal-override handles/expiry;
 - clear/fade transitions;
 - save restore/provider diagnostics.
 
 Stats:
 
-- active/dirty sources, relevant segments, emitted vertices, solve queue/latency;
-- point/batch/subject queries and time;
+- active/dirty vision and illumination sources, relevant segments, emitted vertices, solve queue/latency;
+- illumination/live point, batch, and subject queries and time;
 - active floors, allocated/dirty memory tiles, CPU/GPU bytes;
 - polygon raster and composite GPU timing;
 - modifier count and invalidations;
@@ -508,17 +617,18 @@ Stats:
 | Geometry unit | segment intersection; endpoint +/- epsilon; parallel/collinear/duplicate segments; source on edge/corner; cone/radial clip; deterministic stable IDs; very small/large coordinates |
 | Polygon topology | straight wall, L/T corners, closed room, doorway, thin blocker, adjacent rooms, holes/openings, moving/rotating door, reference solver vs optimized sweep |
 | Height/floor | occluder below/above eye, intersecting band, floor isolation, floor change, unloaded floor, duplicate/missing floor ID, unsupported stacked-floor validation |
-| Sources | activation/profile/transform revisions, off-screen remote source, multi-source union/attribution, source limit diagnostics, optional hard filter |
-| Queries | point boundary epsilon, bounds any/all/threshold, batch equivalence, immutable revision, no presentation feedback |
-| Memory | legal write, occluded no-write, off-screen remote write, clear/re-explore, capacity diagnostics, tile edge/gutter, world-origin mapping |
-| Modifiers | all shapes, height/floor, each operation, overlap union, strict no-memory composition, fade with re-exploration, enable/disable invalidation |
-| Subjects | never-remember enemy, visible-only pickup, immutable environment, last-seen simple proxy, custom provider, clear/suppress/reacquire, duplicate/missing persistent IDs |
-| Persistence | deterministic round trip, compression, corrupt/future/oversized data, floor remap, provider migration/missing provider, independent schema migration |
-| Rendering | hard-mask CPU reference vs GPU raster, straight-wall motion capture, 1080p/1440p/window resize, tile seams, gray base-detail, no live-light/enemy/dynamic-state leakage |
+| Sources | separate vision/illumination registration; Adapter-controlled remote activation; profile/transform revisions; multi-source union/attribution; permanent attached body circle; source-limit diagnostics; optional additional hard filter |
+| Illumination | explicit illumination polygon; point/bounds/batch hard query; gated vision outside/inside illumination; illumination alone reveals/writes nothing; source compatibility; ordinary rendered light has no authority |
+| Queries | point boundary epsilon; bounds any/all/threshold; gated intersection; bypass attribution; batch equivalence; immutable shared revisions; CPU/GPU agreement; no presentation feedback |
+| Memory | legal effective-live write; illumination-only no-write; occluded no-write; off-screen Adapter-activated remote write; clear/re-explore; 2.5/5/10/25 cm comparison; capacity diagnostics; tile edge/gutter; world-origin mapping |
+| Modifiers | all shapes, height/floor, each operation, overlap union, strict no-memory composition, monster `ClearMemory` plus `BlockMemoryWrites`, fade with re-exploration, enable/disable invalidation |
+| Subjects | never-remember enemy; fixed uncollected item `LastSeenSnapshot`; immutable environment; last-seen simple proxy; custom provider; clear/suppress/reacquire; duplicate/missing persistent IDs; attacker-hit Subject Reveal Override remains separate and writes no bit/snapshot |
+| Persistence | deterministic round trip, compression, corrupt/future/oversized data, floor remap, provider migration/missing provider, independent plugin schema migration, explicit no-v6-fog-import behavior, no transient reveal serialization |
+| Rendering | CPU reference vs GPU vision/illumination/intersection/bypass masks, straight-wall motion capture, 1080p/1440p/window resize, tile seams, neutral-gray base detail, no live-light/enemy/dynamic-state leakage |
 | Lifecycle | PIE restart, world teardown, streaming load/unload, source/subject destroyed during solve, authority switch, no stale callbacks/handles |
 | Performance | declared 1/4/8-source workloads, static/dynamic segment mixes, 512 subjects, modifier stress, memory growth/save size, Development packaged and Editor samples |
 
-The independent example map must include labeled test lanes for straight wall, diagonal wall, corner, closed/opening doorway, rotating door, rooms, multiple height bands, stacked-floor rejection/portal case, multiple observers, each modifier, each subject policy, and save/reload.
+The independent example map must include labeled test lanes for straight wall, diagonal wall, corner, closed/opening doorway, rotating door, rooms, multiple height bands, stacked-floor rejection, multiple vision and illumination sources, body-circle bypass, vision/illumination intersection, each modifier, each subject policy, attacker-hit reveal override, and save/reload.
 
 ## Performance architecture and budgets
 
@@ -527,7 +637,7 @@ The provisional budgets in `VISION_SYSTEM_REQUIREMENTS.md` are supported by thes
 - event-driven dirty source/occluder tracking, not repeated world-wide actor scans;
 - floor-local spatial index and source-range culling;
 - plain immutable worker data and reusable arrays;
-- per-source polygon caching and source-attribution preservation;
+- per-vision/illumination-source polygon caching and source-attribution preservation;
 - no polygon union on CPU for normal queries;
 - batched subject queries;
 - packed CPU memory bits and dirty tiles;
@@ -536,7 +646,7 @@ The provisional budgets in `VISION_SYSTEM_REQUIREMENTS.md` are supported by thes
 - bounded, opt-in dynamic occluders and snapshot proxies;
 - stats/caps that fail visibly rather than silently dropping sources/memory.
 
-Reference workload proposed for first measurement: 8 active sources, 4 floors loaded (one presented), 4,096 relevant segments across dirty sources, 32 dynamic door segments, 512 subjects, 256 m x 256 m explored area at 25 cm memory resolution, 1920x1080 DX12/SM6 Development build. The user must approve or replace this workload and minimum hardware before budgets become acceptance criteria.
+Reference workload proposed for first measurement: 8 active vision sources, 8 active illumination sources, 4 floors loaded with exactly one active/presented, 4,096 relevant segments across dirty sources, 32 dynamic door segments, 512 subjects, 256 m x 256 m explored area, and 1920x1080 DX12/SM6 Development build. Run the workload independently at 2.5, 5, 10, and 25 cm memory precision; there is no selected default until the comparison is reviewed. The user must approve or replace the workload and minimum hardware before budgets become acceptance criteria.
 
 ## Main risks and mitigations
 
@@ -544,8 +654,9 @@ Reference workload proposed for first measurement: 8 active sources, 4 floors lo
 | --- | --- | --- |
 | Robust endpoint/collinear geometry | cracks, false wedges, nondeterminism | central epsilon policy, stable IDs, normalized authoring, reference solver, adversarial tests |
 | Dynamic door churn | repeated source solves | overlap-based invalidation, transform thresholds, bounded dynamic blocker budget, finish-state caching |
+| Vision/illumination authority drift | CPU query, memory write, and GPU composition disagree | one immutable revision, explicit hard illumination queries, separate masks, CPU/GPU reference comparisons, no rendered-light sampling |
 | Simplified 2.5D mismatch with authored meshes | visual gap between blocker and art | editor preview/validation, explicit author adjustment, complex visual depth remains presentation-only |
-| Stacked floors/atria | XY ambiguity and leakage | one active floor v1, explicit portals/layers, reject unsupported layouts instead of guessing |
+| Stacked floors/atria | XY ambiguity and leakage | exactly one active floor in v1; reject simultaneous-floor layouts instead of guessing |
 | World-space tile seams/origin | visible seams or save drift | tile gutters, stable floor origins, integer keys, rebase events, render/reference tests |
 | Memory proxy setup cost | poor Fab usability | simple automatic static-mesh descriptor, adapter templates, validators, example subjects; complex actors remain explicit |
 | GBuffer/material limitations | missing translucent/unlit/decal detail | supported-material matrix, opaque proxy fallback, optional curated capture later |
@@ -553,7 +664,7 @@ Reference workload proposed for first measurement: 8 active sources, 4 floors lo
 | GPU/RHI path on UE 5.8.1 | render target/array/shader variation | isolate private renderer, DX12/SM6 reference tests, fallback atlas path, no renderer dependency in queries/save |
 | Save growth/provider incompatibility | large/corrupt saves or missing proxies | bit tiles, compression, size bounds, deterministic records, provider versions, atomic validation/restore |
 | Old/new coexistence | double masking/hiding and divergent memory | separate lab map, single authority switch, adapter gates every consumer, explicit render-state reset |
-| Scope expansion toward full 3D/multiplayer | delayed Fab-quality v1 | keep voxel, arbitrary vertical sight, and multiplayer explicit non-goals until v1 evidence exists |
+| Scope expansion toward full 3D/multiplayer | delayed v1 | keep voxel, arbitrary vertical sight, multiple active floors, and multiplayer explicit non-goals until v1 evidence exists |
 
 The largest technical risk is not polygon computation itself; it is preserving credible last-seen object/material presentation across arbitrary host content without leaking live state or imposing excessive adapter work. V1 must define a conservative supported subject/material set and make unsupported cases visible in validation.
 
@@ -563,27 +674,26 @@ The largest technical risk is not polygon computation itself; it is preserving c
 2. **If texture-array support complicates UE 5.8.1 material/RHI compatibility**, use a floor/tile atlas with explicit UV metadata. Authority remains unchanged.
 3. **If automatic subject proxies are unreliable**, narrow v1 to immutable environment, visible-only/never-remember subjects, and adapter-provided snapshot proxies. Do not show current dynamic state as memory.
 4. **If GBuffer memory styling misses required materials**, provide opaque memory-proxy materials first. Evaluate curated Scene Capture only as optional presentation after cost/feature tests.
-5. **If the approved map requires simultaneous stacked-floor sight**, add explicit portal/layer composition as a separate milestone; do not jump to full voxel fog without evidence.
+5. **If a post-v1 map requires simultaneous stacked-floor sight**, evaluate explicit portal/layer composition as a separately approved extension; do not weaken the v1 one-active-floor rule or jump to full voxel fog without evidence.
 
-## Questions requiring user decisions
+## Recorded human decisions and remaining gates
 
-Architecture approval should answer these before formal implementation. Recommended defaults are included.
+The following product decisions are settled for this architecture revision:
 
-1. **Product/API name:** approve provisional `WorldVision`, or provide the desired plugin/module prefix? Recommended: choose a distinctive Fab-searchable name before source creation so public types do not need redirects.
-2. **Minimum hardware and workload:** what CPU/GPU, resolution, expected active sources, map extent, simultaneous floors, dynamic doors, and subjects define acceptance? Recommended interim workload is listed above; budgets cannot be final without this.
-3. **DARKWELL illumination semantics:** should the player cone directly grant vision, or must it still intersect explicit illumination fields as the old system does? Recommended: plugin sources grant vision directly; a DARKWELL adapter adds a hard illumination filter only if the game design still requires darkness-gated sight.
-4. **Remote observation activation:** do security-camera/remote-item sources always share knowledge when active, or only while the player is connected/using them? Recommended: adapter-controlled activation; the plugin unions only active sources.
-5. **Memory look:** should gray memory preserve desaturated Base Color/material detail with stable neutral shading, or freeze the last lit color image? Recommended: material detail with neutral shading; do not store live lighting/shadows.
-6. **V1 subject snapshots:** is automatic static-mesh snapshot plus adapter-provided complex snapshots sufficient? Recommended: yes; exclude arbitrary skeletal/Niagara/translucent snapshots from v1.
-7. **Pickup memory policy:** the request says uncollected items need last-seen support while moving/nonrememberable objects do not. Should DARKWELL pickups default to last-seen or visible-only? Recommended: important stationary placed items may be `LastSeenSnapshot`; loose/removable loot remains `VisibleOnly` unless explicitly opted in.
-8. **Floor scope:** can v1 display one active floor at a time with authored floor transitions, treating atria/stacked simultaneous views as a later portal feature? Recommended: yes.
-9. **`BlockMemoryWrites` and old memory:** after the blocker is removed, should memory written before it appeared return? Recommended core semantic: yes; while the blocker is active the area is still black outside live vision, and `ClearMemory` is available when prior memory must be destroyed.
-10. **Clear fade semantics:** approve immediate knowledge deletion with presentation-only fade and new exploration winning during the fade? Recommended: yes.
-11. **Modifier persistence:** should placed/runtime suppression/block volumes persist only through game state, while `ClearMemory` changes are naturally present in saved memory bits? Recommended: yes; plugin snapshot stores resulting memory and subject records, host saves dynamic modifier actors/state separately unless explicitly requested.
-12. **Supported materials:** is opaque/masked static environment plus opaque memory proxies an acceptable v1 baseline, with translucent/unlit/dynamic decal/Niagara remembered detail deferred? Recommended: yes.
-13. **Fab scope:** keep v1 single-player/local-knowledge only and defer multiplayer/replication? Recommended: yes, consistent with repository constraints.
-14. **Old-grid migration:** after plugin acceptance, should existing DARKWELL v6 exploration be converted once or should plugin-enabled saves begin with fresh memory? Recommended: provide a one-way v6 grid-to-plugin migration in the DARKWELL adapter, then retain backward load support for at least one product save-version cycle.
+1. `WorldVision` is a temporary internal code name, not a committed plugin/API name.
+2. Legal illumination is independent first-class authority with an explicit component, hard polygons/queries, and separate CPU/GPU data; gated live coverage is the vision/illumination intersection.
+3. The permanent player-attached circular source bypasses illumination while still obeying occlusion, floor, and live suppression.
+4. Remote vision and illumination sources are activated by the DARKWELL Adapter; the core never infers activation.
+5. Remembered environment uses neutral-gray material detail and stable neutral shading, never a frozen last-lit image.
+6. DARKWELL fixed, uncollected items use `LastSeenSnapshot`.
+7. V1 is single-player with exactly one active queried/presented floor.
+8. Old DARKWELL v6 fog memory is not migrated; WorldVision memory starts fresh when no WorldVision snapshot exists.
+9. Monster permanent blackout is composed from `ClearMemory` plus `BlockMemoryWrites`.
+10. Attacker hit feedback is an independent, non-memory-writing Subject Reveal Override and never becomes normal `Visible` state.
+11. Memory precision is selected only after comparing 2.5, 5, 10, and 25 cm.
+
+The remaining implementation gates are the public plugin/API name, approved minimum hardware and reference workload, exact supported remembered-material domains, automatic simple-proxy scope versus Adapter-provided snapshots, modifier persistence/fade details, the selected precision after measurement, and the approved reveal primitive/material and suppression policy. None of these remaining gates may be silently fixed by an implementation default.
 
 ## Approval gate
 
-Approval means agreeing to the explicit-geometry/hybrid authority model, module boundary, memory-proxy strategy, v1 floor scope, and answers to the questions above. Approval does not authorize deleting the old fog system. The next implementation milestone should create only the plugin skeleton, tests, and independent lab map described in `VISION_SYSTEM_MIGRATION_PLAN.md`.
+The decisions above revise the target architecture but do not authorize source, shaders, plugin content, Unreal assets, or deletion of the old fog system. A separate implementation approval must close or explicitly defer the remaining gates. Only then may the next implementation milestone create the approved-name skeleton, tests, and independent lab map described in `VISION_SYSTEM_MIGRATION_PLAN.md`.

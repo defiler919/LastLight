@@ -1,12 +1,12 @@
 # Independent vision system requirements
 
-Status: design proposal; implementation is not authorized until human architecture approval.
+Status: design requirements revised with the latest human product decisions; this documentation-only revision does not authorize implementation.
 
-Working product name in this document: **WorldVision**. This is a neutral placeholder, not an approved Fab listing name or C++ namespace commitment.
+Temporary internal code name in this document: **WorldVision**. It is not an approved Fab listing name, plugin directory, module prefix, or public C++ namespace commitment.
 
 ## Product intent
 
-WorldVision is a reusable Unreal Engine plugin for authoritative 2.5D field-of-view, fog-of-war memory, object visibility policy, regional memory control, persistence, debugging, and editor authoring. Its generic modules must not reference DARKWELL classes, gameplay tags, mission rules, enemies, items, Niagara systems, or audio.
+WorldVision is a reusable Unreal Engine system for authoritative 2.5D field-of-view, legal illumination, fog-of-war memory, object visibility policy, regional memory control, persistence, debugging, and editor authoring. Its generic modules must not reference DARKWELL classes, gameplay tags, mission rules, enemies, items, Niagara systems, or audio.
 
 DARKWELL integrates through project-owned adapters for the player, security cameras, remote observation/lighting items, monster black fog, doors, containers, machines, pickups, HUD, Niagara, and audio.
 
@@ -14,14 +14,16 @@ DARKWELL integrates through project-owned adapters for the player, security came
 
 | Term | Meaning |
 | --- | --- |
-| Vision source / observer | Explicitly registered component allowed to create current vision and, unless blocked, memory |
+| Vision source / observer | Explicitly registered component that creates a hard vision polygon; its illumination policy declares whether legal illumination is required or bypassed |
+| Legal illumination source | Explicitly registered component that creates a hard illumination polygon; it is independent of Unreal's rendered light contribution |
 | Occluder | Explicit 2.5D line/polygon geometry with floor and height metadata that blocks a source |
-| Live vision | Stable, authoritative area currently visible to at least one active legal source |
+| Live vision | Stable, authoritative area produced by the hard intersection of illumination-gated vision and legal illumination, unioned with permitted illumination-bypass vision |
 | Memory | Persistent player knowledge produced only by prior legal live vision |
 | Subject | Actor/component whose live and remembered presentation is governed by policy |
+| Subject Reveal Override | Temporary subject-only presentation permission, such as attacker hit feedback, that is separate from the knowledge state and never writes memory |
 | Modifier | Region that clears, blocks writing, suppresses memory presentation, or optionally suppresses live vision |
 | Floor | A 2.5D spatial layer identified by a stable ID plus `ZMin`/`ZMax` |
-| Presentation mask | World-space raster used only to render live/memory/unknown states; it is not gameplay authority |
+| Presentation mask | World-space raster of vision, illumination, effective live, or memory coverage used only for rendering; it is not gameplay authority |
 
 ## Required knowledge states
 
@@ -31,11 +33,15 @@ DARKWELL integrates through project-owned adapters for the player, security came
 2. **Remembered**: a gray, non-authoritative last-seen presentation is allowed.
 3. **Unknown**: completely black; no geometry, subject, prompt, or threat information is presented.
 
+These are knowledge states for the ordinary vision/memory pipeline. A Subject Reveal Override is an orthogonal, subject-only presentation channel and is never a fourth knowledge state.
+
 `REQ-STATE-002` Live vision wins over ordinary remembered/unknown state unless an active `SuppressLiveVision` modifier applies.
 
 `REQ-STATE-003` Memory may be created only by a legal source. Screen color, UE light contribution, camera frustum presence, proximity, sound, AI perception, or a softened post-process edge must never write memory by themselves.
 
 `REQ-STATE-004` Gameplay visibility, memory-write eligibility, and presentation softness must be independently inspectable results.
+
+`REQ-STATE-005` A `Subject Reveal Override` never changes the subject's effective `Visible`/`Remembered`/`Unknown` knowledge state. It is returned and debugged through a separate result channel and cannot grant normal visibility, interaction, threat-HUD eligibility, or memory writes.
 
 ## Observer requirements
 
@@ -46,17 +52,33 @@ DARKWELL integrates through project-owned adapters for the player, security came
 - a directional cone with range and configurable near awareness region;
 - a camera-style directional cone;
 - a point/radial source where the game explicitly requests it;
-- remote observation/illumination sources located away from the player;
+- remote observation sources located away from the player;
 - multiple simultaneous sources whose valid live areas are unioned for one knowledge owner;
 - runtime activation, deactivation, transform/profile change, floor change, and owner reassignment.
 
-`REQ-SOURCE-003` A remote illumination/observation item is a real source. If its exact visibility query succeeds, it may show enemies and write memory. It is not inferred from an ordinary `ULightComponent`.
+`REQ-SOURCE-003` Every vision source explicitly declares `RequiresLegalIllumination` or `BypassLegalIllumination`. A generic filter may further restrict a source but cannot stand in for the first-class illumination system.
 
-`REQ-SOURCE-004` The core plugin must support an optional source-filter callback or channel/tag profile so a game adapter can model rules such as “directional sight intersected with legal illumination” without hard-coding DARKWELL light behavior.
+`REQ-SOURCE-004` DARKWELL always has a permanent, player-attached circular vision source with `BypassLegalIllumination`. It remains subject to explicit occlusion, floor/height rules, and `SuppressLiveVision`; darkness or loss of a rendered light cannot disable it.
 
 `REQ-SOURCE-005` Source computation is world-space and independent of whether its area is inside the player's current screen.
 
 `REQ-SOURCE-006` Source edge softness is presentation-only. A query point is inside or outside the authoritative polygon using stable geometric rules and documented boundary epsilon.
+
+`REQ-SOURCE-007` Remote vision and illumination sources are activated and deactivated only by the DARKWELL Adapter. The core unions only sources whose explicit registered state is active; proximity, rendering, or component existence cannot activate them implicitly.
+
+## Legal illumination requirements
+
+`REQ-LIGHT-001` Legal illumination is an independent first-class system with an explicit registered illumination-source component, stable runtime handle, floor/height metadata, activation state, profile, and dirty revision.
+
+`REQ-LIGHT-002` Each active legal illumination source produces one or more hard world-space illumination polygons against explicit occluders. Ordinary `ULightComponent` presence, brightness, attenuation pixels, shadows, emissive materials, exposure, Scene Color, or GBuffer luminance are never legal-illumination authority.
+
+`REQ-LIGHT-003` The system provides exact point, bounds/multi-sample, and batched hard illumination queries. Results identify contributing illumination-source handles, floor, occlusion/rejection reason, and the immutable revision consumed.
+
+`REQ-LIGHT-004` For each illumination-gated vision source, authoritative live coverage is its hard vision polygon intersected with the union of compatible hard illumination polygons. Illumination-bypass vision is unioned afterward. `SuppressLiveVision` is then applied to both paths.
+
+`REQ-LIGHT-005` An illumination polygon alone never reveals a point or subject and never writes memory. Only effective hard live coverage resulting from the vision/illumination rule may do so.
+
+`REQ-LIGHT-006` CPU hard queries and GPU presentation consume the same immutable vision and illumination revisions. The GPU must rasterize separately addressable hard vision and illumination masks and form the effective live mask from their intersection plus the bypass-vision mask; a filtered lighting buffer cannot replace this data flow.
 
 ## Occlusion requirements
 
@@ -76,13 +98,13 @@ DARKWELL integrates through project-owned adapters for the player, security came
 
 ## Live-vision and gameplay-query requirements
 
-`REQ-LIVE-001` Authoritative live areas are computed from source shape, explicit occluders, source filters, floor/height rules, and live-suppression modifiers.
+`REQ-LIVE-001` Authoritative live areas are computed from vision shape, explicit occluders, floor/height rules, compatible hard legal-illumination polygons when required, any additional hard source filters, illumination-bypass policy, and live-suppression modifiers.
 
 `REQ-LIVE-002` Subject/HUD/gameplay visibility must query authoritative polygons or an equivalent exact geometric result. It must never read post-process color, filtered Render Targets, antialiased pixels, SceneDepth outlines, or memory masks.
 
 `REQ-LIVE-003` Point, sphere/bounds, and multi-sample subject queries are required. Subject policy chooses “anchor visible”, “any sample visible”, “all required samples visible”, or adapter-provided samples.
 
-`REQ-LIVE-004` Query output must include at least: effective state, source handle(s) that contributed, floor, whether occluded, whether blocked by a modifier, and a frame/revision identifier for debugging.
+`REQ-LIVE-004` Query output must include at least: effective knowledge state, contributing vision-source handle(s), contributing legal-illumination handle(s) or the explicit bypass reason, floor, whether occluded, whether blocked by illumination or a modifier, and a frame/revision identifier for debugging. Subject Reveal Overrides are never folded into this result.
 
 `REQ-LIVE-005` Queries and render-mask generation consume the same immutable visibility snapshot for a frame/update. Presentation may lag by a bounded configured amount but may not feed back into authority.
 
@@ -102,6 +124,8 @@ DARKWELL integrates through project-owned adapters for the player, security came
 
 `REQ-MEM-007` Capacity exhaustion may not silently stop writes. The plugin must expose budgets/counters and a defined partition, eviction, or hard-error policy.
 
+`REQ-MEM-008` CPU memory precision is a test parameter, not a settled 25 cm default. The implementation spike and acceptance evidence must compare 2.5 cm, 5 cm, 10 cm, and 25 cm using identical paths and report visual fidelity, boundary error, CPU cost, GPU upload cost, runtime memory, and compressed save size before selecting a value.
+
 ## Regional modifier requirements
 
 Every modifier supports circle, oriented box, authored room volume, and 2D polygon footprints plus floor/`ZMin`/`ZMax`. Modifiers may be placed in the editor or created/updated through C++ and Blueprint.
@@ -120,6 +144,8 @@ Every modifier supports circle, oriented box, authored room volume, and 2D polyg
 
 `REQ-REGION-007` Modifier state changes increment revisions and invalidate only affected spatial tiles/sources/subjects where practical.
 
+`REQ-REGION-008` DARKWELL monster permanent-blackout behavior is composed explicitly: `ClearMemory` permanently removes existing memory/snapshots and `BlockMemoryWrites` prevents reacquisition while the blackout remains active. It is not a new implicit modifier semantic.
+
 ## Subject and last-seen requirements
 
 `REQ-SUBJECT-001` The generic subject component supports at least these policies:
@@ -127,12 +153,12 @@ Every modifier supports circle, oriented box, authored room volume, and 2D polyg
 - `NeverRemember`: enemies, active monsters, and other moving threats; visible only in legal current vision;
 - `StaticEnvironment`: immutable geometry/details may be shown wherever remembered;
 - `LastSeenSnapshot`: current render state is shown while visible; a render-only cached presentation is shown in memory;
-- `VisibleOnly`: pickup or transient object shown only while currently visible, with no remembered proxy;
+- `VisibleOnly`: transient object shown only while currently visible, with no remembered proxy;
 - `Custom`: game adapter supplies samples, snapshot data, and presentation callbacks.
 
 `REQ-SUBJECT-002` Enemies and active monsters must never remain in gray memory. The same current-vision query gates world rendering, interaction prompts, target UI, and threat HUD.
 
-`REQ-SUBJECT-003` Doors, containers, machines, and uncollected items may use last-seen state. The plugin provides generic snapshot identity/version/timestamp and render-proxy lifecycle; game-specific semantic state remains in the adapter.
+`REQ-SUBJECT-003` Doors, containers, and machines may use last-seen state. DARKWELL fixed, uncollected items use `LastSeenSnapshot` as the decided policy. The plugin provides generic snapshot identity/version/timestamp and render-proxy lifecycle; game-specific semantic state remains in the Adapter.
 
 `REQ-SUBJECT-004` Memory proxies are render-only. They do not own collision, AI, interaction, audio, Niagara simulation, gameplay state, replication, or save-slot policy.
 
@@ -140,27 +166,31 @@ Every modifier supports circle, oriented box, authored room volume, and 2D polyg
 
 `REQ-SUBJECT-006` Clearing memory or unloading a floor removes affected remembered proxies. Suppression may hide proxies without deleting their snapshots.
 
+`REQ-SUBJECT-007` Feedback when a designated attacker subject receives a hit is implemented as a time-bounded `Subject Reveal Override` activated explicitly by the DARKWELL Adapter. It may enable only the approved reveal presentation for that subject; it must not set `Visible`, refresh/create `LastSeenSnapshot`, set memory bits, or qualify ordinary HUD, interaction, targeting, or threat queries.
+
+`REQ-SUBJECT-008` Reveal overrides have independent handles, reasons, expiry/revocation, optional presentation primitive policy, and debug output. When the override ends, presentation returns to the unchanged underlying knowledge state without a remembered afterimage.
+
 ## Multi-floor and height requirements
 
 `REQ-FLOOR-001` Version 1 is 2.5D, not a 3D voxel system.
 
 `REQ-FLOOR-002` Every source, occluder, subject, memory tile, and modifier resolves to a stable `FloorId` (or equivalent handle) with `ZMin`/`ZMax`.
 
-`REQ-FLOOR-003` A source computes on its active floor and against occluders whose height range intersects the configured observer/target visibility band.
+`REQ-FLOOR-003` A vision or legal-illumination source computes on its active floor and against occluders whose height range intersects its configured observer/target or illumination band.
 
-`REQ-FLOOR-004` Floor changes, streaming, stairs, elevators, and explicitly authored inter-floor portals must invalidate/reassign data predictably. V1 may restrict normal presentation to one active floor per local view, but must not merge all floors into one XY memory plane.
+`REQ-FLOOR-004` V1 presents and queries exactly one active floor for the local view at a time. Floor changes, streaming, stairs, and elevators must invalidate/reassign data predictably; inactive-floor memory remains stored separately and is not composited or merged into the active XY memory plane.
 
-`REQ-FLOOR-005` Simultaneously visible stacked floors/atria are an explicit advanced case and must be either supported by authored portals/layers or rejected by validation; silent leakage is unacceptable.
+`REQ-FLOOR-005` Simultaneously visible stacked floors, atria, balconies, and inter-floor portals are outside v1 and must be rejected or clearly reported by validation; silent leakage is unacceptable.
 
 ## Rendering requirements
 
 `REQ-RENDER-001` Hard live and memory masks are rasterized in stable world-space coordinates, preferably into floor-aware tiled R8 textures/Render Targets. Camera-relative half-resolution texture generation is not the world authority.
 
-`REQ-RENDER-002` Live and memory masks are separate resources/channels. Modifier masks are separate or independently addressable.
+`REQ-RENDER-002` Hard vision, hard illumination, illumination-bypass vision, effective live, memory, and modifier masks are separate or independently addressable resources/channels. The effective live presentation mask is derived as “vision mask intersect illumination mask, union bypass-vision mask,” then live suppression is applied.
 
 `REQ-RENDER-003` Limited edge antialiasing/feather is allowed after hard rasterization. It may darken/soften presentation but cannot change hard queries or memory writes.
 
-`REQ-RENDER-004` Gray environment presentation retains base material texture/detail and stable spatial cues while excluding live illumination changes. The first implementation must document which material domains/features are supported and provide a fallback for unsupported translucent/unlit/VFX surfaces.
+`REQ-RENDER-004` Remembered environment uses a neutral-gray material treatment that retains desaturated base-material texture/detail and stable spatial cues while excluding current or last-captured live illumination. Freezing the last lit color image is not supported. The first implementation must document supported material domains/features and provide a fallback for unsupported translucent/unlit/VFX surfaces.
 
 `REQ-RENDER-005` Unknown and effectively suppressed areas output pure black before UI. UI itself remains legible and must not reveal hidden subject data.
 
@@ -172,15 +202,15 @@ Every modifier supports circle, oriented box, authored room volume, and 2D polyg
 
 `REQ-SAVE-002` Snapshot data includes plugin schema version, floor identity/bounds metadata, compressed memory tiles, modifier mutations that are defined as persistent, and last-seen subject records keyed by adapter-provided persistent IDs.
 
-`REQ-SAVE-003` Live vision, active source polygons, transient fades, GPU resources, and derived caches are recomputed after load and are not serialized as authority.
+`REQ-SAVE-003` Live vision, vision/illumination polygons, active source state, Subject Reveal Overrides, transient fades, GPU resources, and derived caches are recomputed or reactivated by the host after load and are not serialized as memory authority.
 
 `REQ-SAVE-004` Snapshot ordering and serialization are deterministic. Corrupt, incompatible, oversized, duplicate-ID, missing-floor, and future-version data fail with explicit diagnostics and a documented fallback.
 
-`REQ-SAVE-005` Plugin schema migrations are independent of the host game's save version. The host adapter decides how a plugin snapshot is embedded and when old DARKWELL v6 grid data is migrated.
+`REQ-SAVE-005` Plugin schema migrations are independent of the host game's save version. DARKWELL's old v6 fog-memory grid is not migrated into WorldVision; a WorldVision-enabled save begins with fresh WorldVision memory unless it already contains a valid WorldVision snapshot. Legacy v6 fog data remains relevant only to the legacy authority path while that path exists.
 
 ## Public API requirements
 
-`REQ-API-001` Source, occluder, subject, floor, and modifier lifecycle operations are available in C++ and Blueprint where runtime authoring is safe.
+`REQ-API-001` Vision source, legal-illumination source, occluder, subject, Subject Reveal Override, floor, and modifier lifecycle operations are available in C++ and Blueprint where runtime authoring is safe.
 
 `REQ-API-002` Query APIs are callable without accessing renderer internals and support one-shot and batched forms.
 
@@ -196,7 +226,7 @@ Every modifier supports circle, oriented box, authored room volume, and 2D polyg
 
 `REQ-EDITOR-002` Editor tools never modify source assets silently. Generated/baked data has explicit ownership, rebuild commands, undo support, and stale-data diagnostics.
 
-`REQ-DEBUG-001` Runtime debug views display source shapes, per-source polygons, union live area, occluder segments/endpoints/heights, floor IDs, hard vs feathered masks, memory tiles, modifier effects, subject samples/policy/result, and contributing source/rejection reason.
+`REQ-DEBUG-001` Runtime debug views display vision and illumination source shapes, their separate polygons, illumination-gated intersection, bypass-vision coverage, effective live area, occluder segments/endpoints/heights, active floor, hard vs feathered masks, memory tiles, modifier effects, subject samples/policy/knowledge result, independent Subject Reveal Overrides, and contributing/rejection reasons.
 
 `REQ-DEBUG-002` Runtime stats expose source/segment/polygon/subject/tile counts, solve time, query time, raster/composite GPU time, dirty tiles, upload/readback bytes, memory allocation, and save size.
 
@@ -204,17 +234,19 @@ Every modifier supports circle, oriented box, authored room volume, and 2D polyg
 
 `REQ-TEST-001` Pure C++ geometry tests cover cone clipping, visibility polygons, segment endpoints, collinear/duplicate edges, tangents, door openings, height bands, floor isolation, and deterministic epsilon behavior.
 
-`REQ-TEST-002` Runtime tests cover registration, multiple-source union, subject policies, modifier overlaps, clear/re-explore, block-write behavior, suppression restore, save round-trip/migration, streaming/floor lifecycle, and authority switching.
+`REQ-TEST-002` Runtime tests cover vision/illumination registration and activation, polygon intersection, hard illumination queries, permanent body-circle bypass, multiple-source union, subject policies, independent no-memory Subject Reveal Overrides, modifier overlaps, monster `ClearMemory` plus `BlockMemoryWrites`, clear/re-explore, suppression restore, save round-trip, single-active-floor lifecycle, and authority switching.
 
 `REQ-TEST-003` Rendering tests compare hard masks and selected visual reference images for straight walls, diagonal walls, corners, doorway motion, resolution changes, and memory detail. Image differences are presentation tests only and never define gameplay truth.
 
-`REQ-TEST-004` Performance tests use declared source/occluder/subject/floor workloads and record hardware, build type, RHI, resolution, and frame statistics.
+`REQ-TEST-004` Performance tests use declared vision-source/illumination-source/occluder/subject/floor workloads and record hardware, build type, RHI, resolution, frame statistics, and the complete 2.5/5/10/25 cm memory-precision comparison.
 
-`REQ-ACCEPT-001` Before DARKWELL integration, a standalone plugin test map must pass straight wall, wall corner, room, doorway, dynamic door, different heights, multiple observers, all modifier types, subject-memory policies, save/restore, and debug inspection.
+`REQ-ACCEPT-001` Before DARKWELL integration, a standalone plugin test map must pass straight wall, wall corner, room, doorway, dynamic door, different heights, multiple vision/illumination sources, their hard intersection, permanent body-circle bypass, all modifier types, subject-memory/reveal policies, save/restore, and debug inspection.
 
 `REQ-ACCEPT-002` A static straight wall must remain visually stable during a repeatable lateral-motion/rotation camera path at supported resolutions. Acceptance thresholds are set after a capture harness exists; subjective “looks better” is insufficient.
 
 `REQ-ACCEPT-003` No enemy can be visible or listed by HUD outside hard current vision in automated/runtime checks, regardless of edge feather.
+
+`REQ-ACCEPT-004` Attacker hit feedback may appear outside hard current vision only through an active Subject Reveal Override. During and after that override, the subject's knowledge query remains unchanged and no memory bit or last-seen record is created or refreshed.
 
 ## Provisional performance budgets
 
@@ -236,12 +268,25 @@ All counts and thresholds are provisional until the user supplies minimum hardwa
 - full 3D voxel visibility or arbitrary volumetric fog simulation;
 - using hardware ray tracing as gameplay truth;
 - multiplayer/replication infrastructure;
+- more than one active/presented floor per local view;
 - AI perception, stealth/noise rules, lighting renderer replacement, Niagara, audio, quest, inventory, or mission logic;
 - automatic semantic snapshots of arbitrary game actors with no adapter contract;
 - copying DARKWELL source names or game-specific behavior into plugin core;
 - third-party runtime libraries or external fog-of-war plugins;
 - deleting or modifying the existing DARKWELL fog system during the design/prototype phase.
 
-## Requirement decisions still requiring approval
+## Recorded human product decisions
 
-The unresolved product/architecture choices are listed with recommendations in `VISION_SYSTEM_ARCHITECTURE.md`. They include product name, minimum hardware/workload, illumination semantics, first-floor/atrium scope, remembered material treatment, automatic versus adapter-provided object snapshots, modifier persistence, and the initial supported material domains.
+- `WorldVision` is a temporary internal code name only; the public plugin/API name remains unset until source creation is separately approved.
+- Legal illumination is an independent first-class system with explicit illumination-source components, hard illumination polygons/queries, and separate CPU/GPU masks intersected with vision.
+- DARKWELL has a permanent player-attached circular vision source that bypasses illumination.
+- Attacker hit feedback is a non-memory-writing Subject Reveal Override and is never a normal `Visible` state.
+- Remembered geometry uses neutral-gray material detail, not a frozen last-lit image.
+- DARKWELL fixed, uncollected items use `LastSeenSnapshot`.
+- V1 is single-player and presents one active floor at a time.
+- Old DARKWELL v6 fog memory is not migrated.
+- Remote sources are activated only by the DARKWELL Adapter.
+- Monster permanent blackout composes `ClearMemory` with `BlockMemoryWrites`.
+- Memory precision remains unselected until the 2.5/5/10/25 cm comparison is complete.
+
+Remaining architecture/acceptance gates are limited to implementation-facing choices such as public package naming, minimum hardware/reference workload, supported material domains, and measured selection of the memory precision. They are tracked in `VISION_SYSTEM_ARCHITECTURE.md`.

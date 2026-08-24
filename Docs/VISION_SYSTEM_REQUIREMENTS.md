@@ -1,12 +1,12 @@
 # Independent vision system requirements
 
-Status: design requirements revised with the latest human product decisions; this documentation-only revision does not authorize implementation.
+Status: design requirements revised with the latest human product decisions. SightWeave M1 implementation is separately authorized on `codex/m1-sightweave-skeleton-lab`; later milestones still require separate scope approval.
 
-Temporary internal code name in this document: **WorldVision**. It is not an approved Fab listing name, plugin directory, module prefix, or public C++ namespace commitment.
+Approved plugin and public API name: **SightWeave**. Runtime, Editor, and Tests modules are named `SightWeaveRuntime`, `SightWeaveEditor`, and `SightWeaveTests`.
 
 ## Product intent
 
-WorldVision is a reusable Unreal Engine system for authoritative 2.5D field-of-view, legal illumination, fog-of-war memory, object visibility policy, regional memory control, persistence, debugging, and editor authoring. Its generic modules must not reference DARKWELL classes, gameplay tags, mission rules, enemies, items, Niagara systems, or audio.
+SightWeave is a reusable Unreal Engine system for authoritative 2.5D field-of-view, legal illumination, fog-of-war memory, object visibility policy, regional memory control, persistence, debugging, and editor authoring. Its generic modules must not reference DARKWELL classes, gameplay tags, mission rules, enemies, items, Niagara systems, or audio.
 
 DARKWELL integrates through project-owned adapters for the player, security cameras, remote observation/lighting items, monster black fog, doors, containers, machines, pickups, HUD, Niagara, and audio.
 
@@ -206,7 +206,7 @@ Every modifier supports circle, oriented box, authored room volume, and 2D polyg
 
 `REQ-SAVE-004` Snapshot ordering and serialization are deterministic. Corrupt, incompatible, oversized, duplicate-ID, missing-floor, and future-version data fail with explicit diagnostics and a documented fallback.
 
-`REQ-SAVE-005` Plugin schema migrations are independent of the host game's save version. DARKWELL's old v6 fog-memory grid is not migrated into WorldVision; a WorldVision-enabled save begins with fresh WorldVision memory unless it already contains a valid WorldVision snapshot. Legacy v6 fog data remains relevant only to the legacy authority path while that path exists.
+`REQ-SAVE-005` Plugin schema migrations are independent of the host game's save version. DARKWELL's old v6 fog-memory grid is not migrated into SightWeave; a SightWeave-enabled save begins with fresh SightWeave memory unless it already contains a valid SightWeave snapshot. Legacy v6 fog data remains relevant only to the legacy authority path while that path exists.
 
 ## Public API requirements
 
@@ -287,7 +287,7 @@ All counts and thresholds are provisional until the user supplies minimum hardwa
 
 ## Recorded human product decisions
 
-- `WorldVision` is a temporary internal code name only; the public plugin/API name remains unset until source creation is separately approved.
+- `SightWeave` is the approved plugin and public API name for source, module, and asset paths.
 - Legal illumination is an independent first-class system with explicit illumination-source components, hard illumination polygons/queries, and per-source or equivalently profile-grouped CPU/GPU compatibility intersections; incompatible illumination channels never share an unqualified global intersection.
 - DARKWELL has a permanent player-attached circular vision source that bypasses illumination.
 - Damage-source reveal is applied to the attacker Subject after the Knowledge Owner receives a qualifying attack/damage event; it is a non-memory-writing Subject Reveal Override and never a normal `Visible` state.

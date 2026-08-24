@@ -1,6 +1,6 @@
 # Independent vision system migration plan
 
-Status: migration plan revised with the latest human product decisions. This documentation-only revision does not authorize plugin source, shaders, or Unreal assets; milestones after M0 still require separate implementation approval.
+Status: migration plan revised with the latest human product decisions. SightWeave M1 is separately authorized; all later milestones still require separate implementation approval.
 
 ## Migration invariants
 
@@ -48,7 +48,7 @@ Do not combine legacy deletion with adapter integration or save migration.
 
 - review `VISION_BASELINE_VALIDATION.md`, `VISION_EXISTING_SYSTEM_AUDIT.md`, `VISION_SYSTEM_REQUIREMENTS.md`, and `VISION_SYSTEM_ARCHITECTURE.md`;
 - review the recorded human decisions and close or explicitly defer the remaining implementation gates;
-- replace the `WorldVision` code name with an approved product/API name before public C++ types or plugin paths are created;
+- use the approved `SightWeave` product/API name for public C++ types, modules, plugin paths, and plugin assets;
 - repair the local Windows toolchain: install a compatible Windows SDK and current VC++ Redistributable;
 - rerun the full `DarkwellEditor Win64 Development` build;
 - rerun all `Darkwell` automation tests and confirm whether 24/24 are discovered and pass;
@@ -68,7 +68,7 @@ No plugin implementation begins before the architecture approval portion of this
 
 ### Work after approval
 
-- create `Plugins/<ApprovedName>/` with Runtime, Editor, and Tests modules only after implementation and public-name approval;
+- create `Plugins/SightWeave/` with Runtime, Editor, and Tests modules under the approved name;
 - add neutral settings, distinct vision-source/illumination-source/reveal-override handle and result types, normalized complete illumination-compatibility configuration/key types, and a world subsystem shell;
 - create a plugin-owned lab/example map through Unreal Editor APIs;
 - add simple authored lanes for straight wall, diagonal wall, corner, room, opening, rotating door, height bands, stacked-floor rejection, visible-only and infrared-only compatibility, a source accepting both types, an always-active attached circular bypass source, and two explicitly activated remote sources;
@@ -242,13 +242,13 @@ Create a dedicated DARKWELL integration map through Unreal Editor asset APIs, fo
 
 Use one project-owned setting with mutually exclusive modes:
 
-| Mode | Legacy computes/presents/hides/writes | WorldVision computes/presents/hides/writes | Purpose |
+| Mode | Legacy computes/presents/hides/writes | SightWeave computes/presents/hides/writes | Purpose |
 | --- | --- | --- | --- |
 | `Legacy` | Yes | No | production rollback/baseline |
-| `WorldVisionObserveOnly` | Yes | Debug computation only; no masks, subject callbacks, memory, HUD, save | compare queries safely without dual control |
-| `WorldVision` | No | Yes | integration and acceptance |
+| `SightWeaveObserveOnly` | Yes | Debug computation only; no masks, subject callbacks, memory, HUD, save | compare queries safely without dual control |
+| `SightWeave` | No | Yes | integration and acceptance |
 
-Observe-only may compute separate vision/illumination polygons, per-source compatibility coverage, profile-keyed GPU-equivalent intersections, bypass results, and stats but cannot change actor render state, UI, interaction, memory, reveal presentation, or save data. `Legacy` and `WorldVision` modes must restore all component/proxy/reveal/blendable state when switching during development; shipping should select at world start.
+Observe-only may compute separate vision/illumination polygons, per-source compatibility coverage, profile-keyed GPU-equivalent intersections, bypass results, and stats but cannot change actor render state, UI, interaction, memory, reveal presentation, or save data. `Legacy` and `SightWeave` modes must restore all component/proxy/reveal/blendable state when switching during development; shipping should select at world start.
 
 ### DARKWELL adapters
 
@@ -263,8 +263,8 @@ Observe-only may compute separate vision/illumination polygons, per-source compa
 - truly transient/moving subjects -> explicit `VisibleOnly`/`NeverRemember` policy rather than inheriting the fixed-item rule;
 - exit, door, container, machine -> snapshot provider/proxy;
 - Knowledge Owner receives a qualifying attack/damage event -> Adapter resolves the attack source/Instigator -> apply a time-bounded Subject Reveal Override to that attacker Subject, not a `Visible` state transition;
-- HUD threat rows and interaction focus -> one WorldVision query/result path;
-- legacy v6 explored cells -> no WorldVision conversion; start fresh unless the save already contains a valid WorldVision snapshot;
+- HUD threat rows and interaction focus -> one SightWeave query/result path;
+- legacy v6 explored cells -> no SightWeave conversion; start fresh unless the save already contains a valid SightWeave snapshot;
 - plugin snapshot -> field embedded in the next approved DARKWELL save schema.
 
 Niagara/audio reactions remain in DARKWELL event adapters and are not plugin dependencies.
@@ -273,7 +273,7 @@ Niagara/audio reactions remain in DARKWELL event adapters and are not plugin dep
 
 1. Observe-only vision-source/illumination-source/complete-compatibility/occluder/single-floor mapping and source-compatible hard-query comparison.
 2. Switch final post-process ownership on the integration map; legacy blendable off and profile-keyed vision/compatible-illumination mask pairs plus bypass mask active.
-3. Route HUD/interactions to WorldVision's hard effective-live result while subjects remain visibly instrumented.
+3. Route HUD/interactions to SightWeave's hard effective-live result while subjects remain visibly instrumented.
 4. Route enemy/fixed-item/facility subject authority and attacker-on-owner-hit damage-source reveal overrides; legacy callbacks/tick disabled.
 5. Add DARKWELL snapshot providers.
 6. Add save embedding with explicit no-v6-fog-migration behavior only after runtime state is stable.
@@ -289,7 +289,7 @@ Niagara/audio reactions remain in DARKWELL event adapters and are not plugin dep
 
 ## M7 — DARKWELL acceptance on production content
 
-Only after M6 approval should WorldVision be enabled for an acceptance build using `/Game/Maps/L_Prototype` or its approved successor. This is integration/tuning, not algorithm development.
+Only after M6 approval should SightWeave be enabled for an acceptance build using `/Game/Maps/L_Prototype` or its approved successor. This is integration/tuning, not algorithm development.
 
 ### Required automation/build
 
@@ -335,9 +335,9 @@ This milestone is not authorized by the current task and must receive explicit a
 
 - remove legacy HUD CPU mask generation and blendable wiring;
 - remove old visibility component/grid/radial occlusion code and old-only tests;
-- remove superseded game-specific fog-subject callback implementations while retaining the accepted WorldVision Adapter paths;
+- remove superseded game-specific fog-subject callback implementations while retaining the accepted SightWeave Adapter paths;
 - remove legacy material/Python generation assets only through Unreal Editor/official asset APIs;
-- do not add or retain a v6-fog-to-WorldVision converter; old v6 fog memory is intentionally not migrated, although unrelated host save fields may have their own compatibility policy;
+- do not add or retain a v6-fog-to-SightWeave converter; old v6 fog memory is intentionally not migrated, although unrelated host save fields may have their own compatibility policy;
 - remove authority switch/legacy mode only after rollback is no longer required;
 - update README, progress, decisions, visibility contract, architecture, and save docs.
 
@@ -355,7 +355,7 @@ Do not mix this commit with new plugin features, gameplay tuning, unrelated clea
 
 - full Editor build and complete automation pass;
 - production PIE/manual regression pass;
-- old saves follow the approved no-v6-fog-migration policy and begin with empty WorldVision memory unless they already contain a valid WorldVision snapshot;
+- old saves follow the approved no-v6-fog-migration policy and begin with empty SightWeave memory unless they already contain a valid SightWeave snapshot;
 - Git diff confirms only approved legacy removal and no v6 fog-memory converter;
 - no orphaned asset references or duplicate visibility authority remains.
 
@@ -366,18 +366,18 @@ Before any integration session:
 - assert exactly one subject authority mode;
 - assert exactly one final fog composite has nonzero weight;
 - assert only the selected system writes memory;
-- assert effective WorldVision live coverage is the union of per-source compatible gated coverage plus explicit bypass vision, and that CPU mappings and GPU complete-compatibility groups share one revision;
+- assert effective SightWeave live coverage is the union of per-source compatible gated coverage plus explicit bypass vision, and that CPU mappings and GPU complete-compatibility groups share one revision;
 - assert HUD and interactions query the selected authority;
 - assert Subject Reveal Overrides cannot contribute Legal Illumination or Live Vision, set `Visible`, qualify HUD/interaction, reveal neighboring subjects/environment, or write/refresh memory;
 - assert the non-selected system does not restore/save memory;
 - reset previously hidden live primitives and destroy/hide stale memory proxies on mode change;
 - log authority mode, snapshot revision, and save schema at world start;
-- keep legacy and WorldVision save fields separately versioned and never convert v6 fog cells into WorldVision tiles;
+- keep legacy and SightWeave save fields separately versioned and never convert v6 fog cells into SightWeave tiles;
 - never use ordinary filesystem commands to copy/rename/delete `.uasset` or `.umap` files.
 
 ## Rollback plan
 
-Until M8 begins, rollback is setting authority mode to `Legacy` and loading a save whose compatibility is documented. Plugin components may remain present but must unregister/disable all effects. A failed WorldVision restore must not partially replace valid legacy memory. There is no legacy-fog migration into WorldVision: selecting WorldVision with no valid WorldVision snapshot starts fresh, while selecting `Legacy` may continue to use its own separately versioned v6 fog payload.
+Until M8 begins, rollback is setting authority mode to `Legacy` and loading a save whose compatibility is documented. Plugin components may remain present but must unregister/disable all effects. A failed SightWeave restore must not partially replace valid legacy memory. There is no legacy-fog migration into SightWeave: selecting SightWeave with no valid SightWeave snapshot starts fresh, while selecting `Legacy` may continue to use its own separately versioned v6 fog payload.
 
 If plugin performance or material support fails acceptance, keep the old system, retain lab evidence, and narrow/revise the plugin architecture without deleting production fog.
 

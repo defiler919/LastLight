@@ -1,8 +1,8 @@
 # Independent vision plugin architecture
 
-Status: architecture revised with the latest human product decisions. No plugin source, shader, asset, or game Adapter is implemented or authorized by this documentation milestone.
+Status: architecture revised with the latest human product decisions. SightWeave M1 source and isolated lab assets are separately authorized; algorithms, rendering, game Adapter integration, and legacy replacement remain outside M1.
 
-Temporary internal code name: `WorldVision`. The public plugin/package/module name remains undecided and must be approved before source creation.
+Approved plugin and public API name: `SightWeave`. The modules are `SightWeaveRuntime`, `SightWeaveEditor`, and `SightWeaveTests`.
 
 ## Decision summary
 
@@ -57,13 +57,13 @@ Conclusion: use the hybrid column. A pure Scene Capture/GPU raymarch system woul
 
 ### Plugin descriptor
 
-Plugin root after separate implementation and naming approval: `Plugins/<ApprovedName>/`. `WorldVision` must not be baked into public paths merely because it is the current code name.
+Approved plugin root: `Plugins/SightWeave/`.
 
 | Module | Type | Owns | Must not own |
 | --- | --- | --- | --- |
-| `<ApprovedName>Runtime` | Runtime | subsystem, floor/vision-source/illumination-source/occluder/subject/modifier components, geometry solvers, hard queries, Subject Reveal Overrides, CPU memory tiles, save snapshot structs, render-resource bridge, public C++/Blueprint API | DARKWELL actors/tags, missions, save slots, HUD text, Niagara/audio, third-party libraries |
-| `<ApprovedName>Editor` | Editor | component visualizers, occluder/polygon editing, mesh/collision conversion assistance, floor tools, validation, debug panels, example-map authoring helpers | runtime gameplay decisions or editor code in the Runtime module |
-| `<ApprovedName>Tests` | Developer/Editor-only | pure geometry, runtime functional, rendering comparison, persistence, and performance harnesses | shipping runtime dependencies |
+| `SightWeaveRuntime` | Runtime | subsystem, floor/vision-source/illumination-source/occluder/subject/modifier components, geometry solvers, hard queries, Subject Reveal Overrides, CPU memory tiles, save snapshot structs, render-resource bridge, public C++/Blueprint API | DARKWELL actors/tags, missions, save slots, HUD text, Niagara/audio, third-party libraries |
+| `SightWeaveEditor` | Editor | component visualizers, occluder/polygon editing, mesh/collision conversion assistance, floor tools, validation, debug panels, example-map authoring helpers | runtime gameplay decisions or editor code in the Runtime module |
+| `SightWeaveTests` | Developer/Editor-only | pure geometry, runtime functional, rendering comparison, persistence, and performance harnesses | shipping runtime dependencies |
 
 Rendering remains a private area inside the approved Runtime module for v1 so public users depend on one runtime module. If the render path later requires substantial alternate RHI/server packaging, it may split into a dedicated Rendering module without changing public authority/query types.
 
@@ -96,11 +96,11 @@ The Adapter may reference both DARKWELL and the eventual generic system. The gen
 
 ## Proposed runtime classes and responsibilities
 
-Names reflect the current code name and are API drafts, not implementation commitments. They must be renamed consistently if the approved public name changes.
+Names use the approved SightWeave prefix. Types beyond the authorized M1 foundation remain API drafts rather than implementation commitments.
 
 | Type | Responsibility |
 | --- | --- |
-| `UWorldVisionSubsystem : UWorldSubsystem` | registry, revisions, scheduling, immutable frame snapshots, queries, memory mutation, floor/stream lifecycle, debug/stats, snapshot capture/restore |
+| `USightWeaveWorldSubsystem : UWorldSubsystem` | registry, revisions, scheduling, immutable frame snapshots, queries, memory mutation, floor/stream lifecycle, debug/stats, snapshot capture/restore |
 | `UVisionSourceComponent` | vision transform/profile, knowledge owner, active floor, activation, illumination requirement/bypass policy, dirty tracking, optional non-illumination filter/provider interface |
 | `UVisionIlluminationSourceComponent` | explicit legal-illumination transform/profile, knowledge scope/emitted illumination capabilities, active floor, activation, hard polygon, dirty tracking; never inferred from render luminance |
 | `UVisionOccluderComponent` | explicit local polygon/segments, height band, floor, static/dynamic mode, transform revision |
@@ -188,7 +188,7 @@ FVisionSubjectSnapshotRecord
     stable subject ID, floor, last-seen transform/time/revision,
     provider type/version, render descriptor or opaque provider payload
 
-FWorldVisionSaveSnapshot
+FSightWeaveSaveSnapshot
     schema version, settings fingerprint, floor records, compressed tiles,
     persistent clear mutations if required, subject snapshot records
 ```
@@ -512,10 +512,10 @@ FVisionModifierHandle BlockMemoryWrites(...);
 FVisionModifierHandle SuppressMemoryPresentation(...);
 FVisionModifierHandle SuppressLiveVision(...);
 
-FWorldVisionSaveSnapshot CaptureMemorySnapshot(FVisionKnowledgeId Knowledge) const;
+FSightWeaveSaveSnapshot CaptureMemorySnapshot(FVisionKnowledgeId Knowledge) const;
 EVisionRestoreResult RestoreMemorySnapshot(
     FVisionKnowledgeId Knowledge,
-    const FWorldVisionSaveSnapshot& Snapshot,
+    const FSightWeaveSaveSnapshot& Snapshot,
     const FVisionRestoreOptions& Options);
 ```
 
@@ -557,7 +557,7 @@ Public results use enums/structs rather than booleans so new reasons/states can 
 
 `UVisionBlueprintLibrary`:
 
-- `GetWorldVisionSubsystem`
+- `GetSightWeaveWorldSubsystem`
 - `QueryVisionAtLocation`
 - `QueryLegalIlluminationAtLocation`
 - `QueryActorVision`
@@ -574,7 +574,7 @@ Blueprint events carry generic IDs/results only. Knowledge-state events and Subj
 
 ### Ownership
 
-`FWorldVisionSaveSnapshot` is a serializable value embedded by the host. WorldVision never calls `SaveGameToSlot`, opens levels, or chooses autosave timing.
+`FSightWeaveSaveSnapshot` is a serializable value embedded by the host. SightWeave never calls `SaveGameToSlot`, opens levels, or chooses autosave timing.
 
 ### V1 snapshot contents
 
@@ -599,7 +599,7 @@ Blueprint events carry generic IDs/results only. Knowledge-state events and Subj
 
 Live vision/illumination polygons, active-source state, GPU masks, and Subject Reveal Overrides are not snapshot contents; the host reactivates sources after restore and transient reveals are discarded.
 
-Plugin schema migrations remain independent from DARKWELL save v6. The decided DARKWELL policy is **no v6 fog-memory migration**: old v6 grid/cell data is never converted into WorldVision tiles. A save without a valid WorldVision snapshot starts with empty WorldVision memory. While legacy authority remains available, its old fog data may still be read only by that legacy path.
+Plugin schema migrations remain independent from DARKWELL save v6. The decided DARKWELL policy is **no v6 fog-memory migration**: old v6 grid/cell data is never converted into SightWeave tiles. A save without a valid SightWeave snapshot starts with empty SightWeave memory. While legacy authority remains available, its old fog data may still be read only by that legacy path.
 
 ## Editor authoring workflow
 
@@ -711,20 +711,20 @@ The largest technical risk is not polygon computation itself; it is preserving c
 
 The following product decisions are settled for this architecture revision:
 
-1. `WorldVision` is a temporary internal code name, not a committed plugin/API name.
+1. `SightWeave` is the approved plugin and public API name.
 2. Legal illumination is independent first-class authority with an explicit component, hard polygons/queries, and shared CPU/GPU compatibility data; gated live coverage is the union of per-source compatible intersections, never an unqualified global vision/illumination intersection.
 3. The permanent player-attached circular source bypasses illumination while still obeying occlusion, floor, and live suppression.
 4. Remote vision and illumination sources are activated by the DARKWELL Adapter; the core never infers activation.
 5. Remembered environment uses neutral-gray material detail and stable neutral shading, never a frozen last-lit image.
 6. DARKWELL fixed, uncollected items use `LastSeenSnapshot`.
 7. V1 is single-player with exactly one active queried/presented floor.
-8. Old DARKWELL v6 fog memory is not migrated; WorldVision memory starts fresh when no WorldVision snapshot exists.
+8. Old DARKWELL v6 fog memory is not migrated; SightWeave memory starts fresh when no SightWeave snapshot exists.
 9. Monster permanent blackout is composed from `ClearMemory` plus `BlockMemoryWrites`.
 10. After a Knowledge Owner receives a qualifying attack/damage event, the DARKWELL Adapter applies damage-source reveal to the resolved attacker Subject. The reverse direction is not automatic; the reveal is an independent, non-memory-writing Subject Reveal Override and never becomes normal `Visible` state.
 11. Memory precision is selected only after comparing 2.5, 5, 10, and 25 cm.
 
-The remaining implementation gates are the public plugin/API name, approved minimum hardware and reference workload, exact supported remembered-material domains, automatic simple-proxy scope versus Adapter-provided snapshots, modifier persistence/fade details, the selected precision after measurement, and the approved reveal primitive/material and suppression policy. None of these remaining gates may be silently fixed by an implementation default.
+The remaining implementation gates after M1 are approved minimum hardware and reference workload, exact supported remembered-material domains, automatic simple-proxy scope versus Adapter-provided snapshots, modifier persistence/fade details, the selected precision after measurement, and the approved reveal primitive/material and suppression policy. None of these remaining gates may be silently fixed by an implementation default.
 
 ## Approval gate
 
-The decisions above revise the target architecture but do not authorize source, shaders, plugin content, Unreal assets, or deletion of the old fog system. A separate implementation approval must close or explicitly defer the remaining gates. Only then may the next implementation milestone create the approved-name skeleton, tests, and independent lab map described in `VISION_SYSTEM_MIGRATION_PLAN.md`.
+The separate SightWeave M1 approval authorizes only the plugin skeleton, neutral public foundation, lifecycle tests, and isolated lab map described in `VISION_SYSTEM_MIGRATION_PLAN.md`. Shaders, algorithms, DARKWELL adapters, and deletion of the old fog system remain unauthorized.

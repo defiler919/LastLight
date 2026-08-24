@@ -45,6 +45,7 @@
 | Lantern capabilities | Passive area illumination, RMB hold focus beam with approximately three-second stun buildup and five-second full-meter stun, RMB tap fuel-cost flash with cooldown and a short immediate control window |
 | Ammunition | Scarce; shells crafted at workbenches |
 | First milestone | Greybox gameplay prototype before a polished vertical slice |
+| Independent vision plugin identity | `SightWeave`; modules `SightWeaveRuntime`, `SightWeaveEditor`, and `SightWeaveTests`; public C++ types use the `SightWeave` prefix |
 
 ## Deferred decisions
 

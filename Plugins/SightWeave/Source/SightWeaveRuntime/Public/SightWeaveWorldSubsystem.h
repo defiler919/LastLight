@@ -236,6 +236,12 @@ public:
 	{
 		return LastDynamicUpdateStageMetrics;
 	}
+
+	TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe>
+	AcquirePublishedSnapshotForTesting() const
+	{
+		return PublishedSnapshot;
+	}
 #endif
 
 	void QueryOccluderSegments(

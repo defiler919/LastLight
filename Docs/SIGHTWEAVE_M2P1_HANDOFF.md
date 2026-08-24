@@ -7,8 +7,8 @@
 - Baseline SHA: `d0b90d2e5687105f1e25bf03476a07d6bb5337de`
 - Working branch: `codex/m2p1-sightweave-final-performance-gate`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current checkpoint: checkpoint 5 — synchronous dynamic authority and zero-allocation dispatch ready for commit
-- Last safe commit: `perf: optimize SightWeave extreme authority workloads` (`22cf4f63c5e8a629019429cb41162fd650922a57`)
+- Current checkpoint: checkpoint 6 — high-count differential and publication lifetime coverage ready for commit
+- Last safe commit: `perf: harden dynamic occluder dispatch and publication` (`6fc0deb1134520b3b03fed13c3962d10440dcb30`)
 - Next recovery command: `git switch codex/m2p1-sightweave-final-performance-gate; git pull --ff-only origin codex/m2p1-sightweave-final-performance-gate`
 
 ## Objective and scope
@@ -92,11 +92,13 @@ The final startup-memory trace proof is `Saved/SightWeaveM2P1/AllocationProof/af
 
 The final checkpoint-5 runtime differential passed after spatial in-place updates. The full geometry differential again passed both tests (nine manual plus 96 fixed seed). Exact design and distribution evidence is in `Docs/SIGHTWEAVE_M2P1_DYNAMIC_PERFORMANCE.md`.
 
+Checkpoint 6 adds a fixed-seed 512-segment Reference/Optimized geometry differential and publication-lifetime coverage without exposing test hooks in Shipping. A held immutable snapshot remained unchanged across 32 alternating synchronous door updates and remained safe ordinary data after world teardown. A two-world test proved that updating one world changes neither the other world's revision nor its geometry. Together with the existing scratch concurrency/reentrancy checks, the focused `SightWeave.M2P1` queue passed 7/7 with zero test warnings/errors after a full `DarkwellEditor Win64 Development` build. Because the runtime remains strictly synchronous, stale/out-of-order worker result tests remain not applicable rather than silently omitted.
+
 ## Unverified items
 
 - Real startup-safe allocator-call instrumentation, the 30-sample baseline, and the post-scratch 30-sample proof are complete. The solver/query allocation gate is closed; full dynamic updates remain nonzero.
 - The 4,096/source stage distribution and exact per-solve distribution are recorded. Extreme p99 passes, but the 1 ms median gate remains open at 1.7065 ms.
-- Reusable scratch, caller-output reuse, bounded high-water reclamation, eight-worker isolation, and eight-level reentrancy are implemented and tested. High-count Reference differential expansion remains pending.
-- Dynamic occluder updates remain synchronous and now pass the strict median/p99 gate in all three final distributions. Async pending/revision/teardown cases are not applicable because no async path was introduced; snapshot-reader lifetime coverage remains pending.
+- Reusable scratch, caller-output reuse, bounded high-water reclamation, eight-worker isolation, eight-level reentrancy, and a fixed-seed 512-segment Reference differential are implemented and tested.
+- Dynamic occluder updates remain synchronous and now pass the strict median/p99 gate in all three final distributions. Async pending/revision cases are not applicable because no async path was introduced; held-reader immutability, rapid updates, world teardown, and multiworld isolation are covered.
 - The allocation instrumentation, solver scratch, dynamic prepared caches, spatial reuse, and snapshot double buffer have passed full Editor builds, final capture/analyze, focused runtime differential, and full geometry differential.
-- High-count Reference differential expansion and final Editor/Automation/Lab/BuildPlugin/clean-host/dependency/Git/LFS validation remain pending.
+- Final Editor/Automation/Lab/BuildPlugin/clean-host/dependency/Git/LFS validation remains pending.

@@ -620,6 +620,30 @@ bool FSightWeaveM2PRandomGeometryDifferentialTest::RunTest(const FString& Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P1HighCountGeometryDifferentialTest,
+	"SightWeave.M2P1.Differential.Geometry.HighSegmentCount",
+	SightWeave::M2P::DifferentialTests::TestFlags)
+
+bool FSightWeaveM2P1HighCountGeometryDifferentialTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P::DifferentialTests;
+	FRandomStream Random(0xD1FF512);
+	FSightWeaveReferenceSolveInput Input = RadialInput();
+	Input.Origin = FVector(31.0, -47.0, 100.0);
+	Input.Forward = FVector2D(0.6, 0.8);
+	Input.Range = 1200.0;
+	Input.Tolerances.RadialBoundarySteps = 128;
+	Input.Segments = RandomTangentialSegments(Random, 512);
+	const bool bMatched = CompareSolve(
+		*this,
+		TEXT("fixed-seed-high-count-512"),
+		Input,
+		false);
+	TestTrue(TEXT("512-segment Reference/Optimized differential matches"), bMatched);
+	return bMatched;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FSightWeaveM2PRuntimeAuthorityDifferentialTest,
 	"SightWeave.M2P.Differential.Runtime.AuthorityAndUpdates",
 	SightWeave::M2P::DifferentialTests::TestFlags)

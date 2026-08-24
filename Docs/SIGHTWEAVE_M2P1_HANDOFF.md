@@ -2,13 +2,13 @@
 
 ## Status
 
-- State: **IN_PROGRESS**
+- State: **PARTIAL**
 - Baseline branch: `codex/m2p-sightweave-authority-performance`
 - Baseline SHA: `d0b90d2e5687105f1e25bf03476a07d6bb5337de`
 - Working branch: `codex/m2p1-sightweave-final-performance-gate`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current checkpoint: checkpoint 6 — high-count differential and publication lifetime coverage ready for commit
-- Last safe commit: `perf: harden dynamic occluder dispatch and publication` (`6fc0deb1134520b3b03fed13c3962d10440dcb30`)
+- Current checkpoint: checkpoint 7 — final validation complete
+- Last safe commit: `docs: record SightWeave final performance validation` (this document's containing commit; resolve with `git log -1 --format=%H`)
 - Next recovery command: `git switch codex/m2p1-sightweave-final-performance-gate; git pull --ff-only origin codex/m2p1-sightweave-final-performance-gate`
 
 ## Objective and scope
@@ -94,11 +94,14 @@ The final checkpoint-5 runtime differential passed after spatial in-place update
 
 Checkpoint 6 adds a fixed-seed 512-segment Reference/Optimized geometry differential and publication-lifetime coverage without exposing test hooks in Shipping. A held immutable snapshot remained unchanged across 32 alternating synchronous door updates and remained safe ordinary data after world teardown. A two-world test proved that updating one world changes neither the other world's revision nor its geometry. Together with the existing scratch concurrency/reentrancy checks, the focused `SightWeave.M2P1` queue passed 7/7 with zero test warnings/errors after a full `DarkwellEditor Win64 Development` build. Because the runtime remains strictly synchronous, stale/out-of-order worker result tests remain not applicable rather than silently omitted.
 
-## Unverified items
+Checkpoint 7 completed the full Editor, Automation, Lab, extended-performance, allocator-trace, BuildPlugin/clean-host, Shipping dependency, Git, and LFS matrix. Exact final distributions, accurate test counts, warnings, build/package results, repository gates, remaining architectural limit, and recovery command are recorded in `Docs/SIGHTWEAVE_M2P1_FINAL_VALIDATION.md`. The state is PARTIAL because the final 4,096/source individual solve is 1,733.102/1,856.200/1,896.501/1,896.501 us median/p95/p99/max: p99 passes, but median does not meet the strict 1 ms gate. The next meaningful CPU step is a prepared scene/source event-index architecture with incremental exact-order maintenance, not another local arithmetic/container change. One of the latest six batch-512 distributions also retains a host scheduling/frequency tail failure.
 
-- Real startup-safe allocator-call instrumentation, the 30-sample baseline, and the post-scratch 30-sample proof are complete. The solver/query allocation gate is closed; full dynamic updates remain nonzero.
-- The 4,096/source stage distribution and exact per-solve distribution are recorded. Extreme p99 passes, but the 1 ms median gate remains open at 1.7065 ms.
+## Final unverified/not-applicable items
+
+- Real startup-safe allocator-call instrumentation, baseline evidence, and final proof are complete. Solver, point, batch, dynamic door, clean publication, and no-change are zero-allocation/reallocation; source transform remains explicitly nonzero but passes its latency gate.
+- The latest 4,096/source stage and exact per-solve distributions are recorded. Extreme p99 passes at 1.896501 ms, but the 1 ms median gate remains open at 1.733102 ms.
 - Reusable scratch, caller-output reuse, bounded high-water reclamation, eight-worker isolation, eight-level reentrancy, and a fixed-seed 512-segment Reference differential are implemented and tested.
 - Dynamic occluder updates remain synchronous and now pass the strict median/p99 gate in all three final distributions. Async pending/revision cases are not applicable because no async path was introduced; held-reader immutability, rapid updates, world teardown, and multiworld isolation are covered.
-- The allocation instrumentation, solver scratch, dynamic prepared caches, spatial reuse, and snapshot double buffer have passed full Editor builds, final capture/analyze, focused runtime differential, and full geometry differential.
-- Final Editor/Automation/Lab/BuildPlugin/clean-host/dependency/Git/LFS validation remains pending.
+- The allocation instrumentation, solver scratch, dynamic prepared caches, spatial reuse, and snapshot double buffer passed the full final validation matrix.
+- Async worker completion order, stale-task rejection, pending policy, and multi-worker wall time are not applicable because production remains strictly synchronous and sequential. No result is hidden behind a stale snapshot or dispatch-only timer.
+- M3 and the prepared exact-event-index architecture remain future work. Do not merge main or begin M3 from this handoff.

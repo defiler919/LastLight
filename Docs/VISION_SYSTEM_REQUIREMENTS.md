@@ -17,10 +17,10 @@ DARKWELL integrates through project-owned adapters for the player, security came
 | Vision source / observer | Explicitly registered component that creates a hard vision polygon; its illumination policy declares whether legal illumination is required or bypassed |
 | Legal illumination source | Explicitly registered component that creates a hard illumination polygon; it is independent of Unreal's rendered light contribution |
 | Occluder | Explicit 2.5D line/polygon geometry with floor and height metadata that blocks a source |
-| Live vision | Stable, authoritative area produced by the hard intersection of illumination-gated vision and legal illumination, unioned with permitted illumination-bypass vision |
+| Live vision | Stable, authoritative area produced by unioning every gated vision source's source-compatible hard coverage with permitted illumination-bypass vision, then applying live suppression |
 | Memory | Persistent player knowledge produced only by prior legal live vision |
 | Subject | Actor/component whose live and remembered presentation is governed by policy |
-| Subject Reveal Override | Temporary subject-only presentation permission, such as attacker hit feedback, that is separate from the knowledge state and never writes memory |
+| Subject Reveal Override | Temporary subject-only presentation permission, such as a damage-source reveal applied to an attacker after the Knowledge Owner receives a qualifying attack/damage event; it is separate from the knowledge state and never writes memory |
 | Modifier | Region that clears, blocks writing, suppresses memory presentation, or optionally suppresses live vision |
 | Floor | A 2.5D spatial layer identified by a stable ID plus `ZMin`/`ZMax` |
 | Presentation mask | World-space raster of vision, illumination, effective live, or memory coverage used only for rendering; it is not gameplay authority |
@@ -74,11 +74,11 @@ These are knowledge states for the ordinary vision/memory pipeline. A Subject Re
 
 `REQ-LIGHT-003` The system provides exact point, bounds/multi-sample, and batched hard illumination queries. Results identify contributing illumination-source handles, floor, occlusion/rejection reason, and the immutable revision consumed.
 
-`REQ-LIGHT-004` For each illumination-gated vision source, authoritative live coverage is its hard vision polygon intersected with the union of compatible hard illumination polygons. Illumination-bypass vision is unioned afterward. `SuppressLiveVision` is then applied to both paths.
+`REQ-LIGHT-004` Compatibility is preserved per illumination-gated vision source. For every gated source `s`, `GatedCoverage(s) = VisionPolygon(s) intersect Union(IlluminationPolygon(l) for every legal illumination source l compatible with s)`. Authoritative effective live coverage is the union of every `GatedCoverage(s)` plus the union of every illumination-bypass vision polygon. `SuppressLiveVision` is applied only after those unions. A global union of all gated vision intersected with a global union of all illumination is forbidden because it loses source-to-illumination compatibility.
 
 `REQ-LIGHT-005` An illumination polygon alone never reveals a point or subject and never writes memory. Only effective hard live coverage resulting from the vision/illumination rule may do so.
 
-`REQ-LIGHT-006` CPU hard queries and GPU presentation consume the same immutable vision and illumination revisions. The GPU must rasterize separately addressable hard vision and illumination masks and form the effective live mask from their intersection plus the bypass-vision mask; a filtered lighting buffer cannot replace this data flow.
+`REQ-LIGHT-006` CPU hard queries and GPU presentation consume the same registered compatibility configurations and immutable vision/illumination revision. Within the same Knowledge Owner and floor, the GPU may group gated sources by a full compatibility configuration `p`, but must compute `Union over p (VisionMask[p] intersect CompatibleIlluminationMask[p])`, then union `BypassVisionMask`. Here `p` represents the complete accepted illumination set or an exactly equivalent configuration, not merely one channel. A filtered lighting buffer or one unqualified global vision/illumination intersection cannot replace this data flow.
 
 ## Occlusion requirements
 
@@ -106,7 +106,7 @@ These are knowledge states for the ordinary vision/memory pipeline. A Subject Re
 
 `REQ-LIVE-004` Query output must include at least: effective knowledge state, contributing vision-source handle(s), contributing legal-illumination handle(s) or the explicit bypass reason, floor, whether occluded, whether blocked by illumination or a modifier, and a frame/revision identifier for debugging. Subject Reveal Overrides are never folded into this result.
 
-`REQ-LIVE-005` Queries and render-mask generation consume the same immutable visibility snapshot for a frame/update. Presentation may lag by a bounded configured amount but may not feed back into authority.
+`REQ-LIVE-005` Queries and render-mask generation consume the same immutable visibility snapshot, including the same compatibility configuration, registered source data, and revision. Any compatibility change creates a new revision and invalidates the affected CPU query data and GPU mask groups together. Presentation may lag by a bounded configured amount but may not feed back into authority.
 
 ## Memory requirements
 
@@ -166,9 +166,9 @@ Every modifier supports circle, oriented box, authored room volume, and 2D polyg
 
 `REQ-SUBJECT-006` Clearing memory or unloading a floor removes affected remembered proxies. Suppression may hide proxies without deleting their snapshots.
 
-`REQ-SUBJECT-007` Feedback when a designated attacker subject receives a hit is implemented as a time-bounded `Subject Reveal Override` activated explicitly by the DARKWELL Adapter. It may enable only the approved reveal presentation for that subject; it must not set `Visible`, refresh/create `LastSeenSnapshot`, set memory bits, or qualify ordinary HUD, interaction, targeting, or threat queries.
+`REQ-SUBJECT-007` Damage-source reveal direction is explicit: a Knowledge Owner receives a qualifying attack/damage event, the event identifies an attack source or Instigator, the DARKWELL Adapter resolves that attacker to a Subject, and the Adapter applies a time-bounded `Subject Reveal Override` to the attacker Subject. The generic plugin does not listen to DARKWELL damage events or decide whether zero final damage, armor absorption, blocking, or similar cases qualify. The Knowledge Owner attacking that enemy does not trigger this rule unless project code separately and explicitly applies an override.
 
-`REQ-SUBJECT-008` Reveal overrides have independent handles, reasons, expiry/revocation, optional presentation primitive policy, and debug output. When the override ends, presentation returns to the unchanged underlying knowledge state without a remembered afterimage.
+`REQ-SUBJECT-008` Reveal overrides have independent handles, Knowledge Owner and Subject identity, reasons, expiry/revocation, and a `RevealSpecification` that explicitly controls reveal primitives plus darkness, ordinary-occlusion, and suppression policy. The approved reveal follows only the specified attacker Subject as it moves, reveals no surrounding environment or nearby subjects, and does not alter actor transform or gameplay state. It cannot set `Visible`, refresh/create `LastSeenSnapshot`, set memory bits, illuminate the environment, or qualify ordinary HUD, interaction, targeting, or threat queries. When it ends, presentation returns to the unchanged underlying knowledge state without a remembered afterimage.
 
 ## Multi-floor and height requirements
 
@@ -186,7 +186,7 @@ Every modifier supports circle, oriented box, authored room volume, and 2D polyg
 
 `REQ-RENDER-001` Hard live and memory masks are rasterized in stable world-space coordinates, preferably into floor-aware tiled R8 textures/Render Targets. Camera-relative half-resolution texture generation is not the world authority.
 
-`REQ-RENDER-002` Hard vision, hard illumination, illumination-bypass vision, effective live, memory, and modifier masks are separate or independently addressable resources/channels. The effective live presentation mask is derived as “vision mask intersect illumination mask, union bypass-vision mask,” then live suppression is applied.
+`REQ-RENDER-002` Hard gated vision, compatible legal illumination, illumination-bypass vision, effective live, memory, and modifier masks are separate or independently addressable resources/channels. For every distinct full compatibility configuration `p` within a Knowledge Owner/floor scope, the renderer derives `VisionMask[p]` and `CompatibleIlluminationMask[p]`; `EffectiveLiveMask = Union over p (VisionMask[p] intersect CompatibleIlluminationMask[p]) union BypassVisionMask`. Bypass vision is never assigned to a compatibility group. Live suppression is applied afterward, and presentation feathering is applied only to that final hard result.
 
 `REQ-RENDER-003` Limited edge antialiasing/feather is allowed after hard rasterization. It may darken/soften presentation but cannot change hard queries or memory writes.
 
@@ -220,13 +220,15 @@ Every modifier supports circle, oriented box, authored room volume, and 2D polyg
 
 `REQ-API-005` APIs use generic plugin types and neutral names. Host-specific tags/classes are carried as opaque IDs, user data, or adapter callbacks.
 
+`REQ-API-006` The generic reveal API is semantically equivalent to `ApplySubjectRevealOverride(KnowledgeOwner, Subject, RevealSpecification)`. It accepts an already resolved Knowledge Owner and Subject and does not depend on DARKWELL's damage system. Trigger qualification and attacker/Instigator resolution belong to the host Adapter.
+
 ## Editor and debugging requirements
 
 `REQ-EDITOR-001` An Editor module provides occluder/polygon authoring, floor assignment, modifier visualization, validation, and optional conversion/bake assistance from selected meshes/collision.
 
 `REQ-EDITOR-002` Editor tools never modify source assets silently. Generated/baked data has explicit ownership, rebuild commands, undo support, and stale-data diagnostics.
 
-`REQ-DEBUG-001` Runtime debug views display vision and illumination source shapes, their separate polygons, illumination-gated intersection, bypass-vision coverage, effective live area, occluder segments/endpoints/heights, active floor, hard vs feathered masks, memory tiles, modifier effects, subject samples/policy/knowledge result, independent Subject Reveal Overrides, and contributing/rejection reasons.
+`REQ-DEBUG-001` Runtime debug views display vision and illumination source shapes, their separate polygons, per-source/per-compatibility-profile gated coverage, bypass-vision coverage, effective live area, occluder segments/endpoints/heights, active floor, hard vs feathered masks, memory tiles, modifier effects, subject samples/policy/knowledge result, independent Subject Reveal Overrides, and contributing/rejection reasons.
 
 `REQ-DEBUG-002` Runtime stats expose source/segment/polygon/subject/tile counts, solve time, query time, raster/composite GPU time, dirty tiles, upload/readback bytes, memory allocation, and save size.
 
@@ -240,13 +242,21 @@ Every modifier supports circle, oriented box, authored room volume, and 2D polyg
 
 `REQ-TEST-004` Performance tests use declared vision-source/illumination-source/occluder/subject/floor workloads and record hardware, build type, RHI, resolution, frame statistics, and the complete 2.5/5/10/25 cm memory-precision comparison.
 
-`REQ-ACCEPT-001` Before DARKWELL integration, a standalone plugin test map must pass straight wall, wall corner, room, doorway, dynamic door, different heights, multiple vision/illumination sources, their hard intersection, permanent body-circle bypass, all modifier types, subject-memory/reveal policies, save/restore, and debug inspection.
+`REQ-TEST-005` Damage-source direction tests place Enemy A outside ordinary live vision and have Enemy A cause a qualifying attack/damage event on the player Knowledge Owner. The Adapter must apply a Subject Reveal Override to Enemy A, and only Enemy A's approved reveal primitive follows Enemy A temporarily. The test must also prove that the player shooting Enemy A does not trigger this rule by itself, nearby Enemy B and the surrounding environment remain unrevealed and unilluminated, environment memory is not written, no last-seen proxy is refreshed, and ordinary visibility/HUD/interaction/targeting results remain unchanged.
+
+`REQ-TEST-006` Visible/infrared isolation tests use overlapping vision polygons where Source A accepts only visible illumination, Source B accepts only infrared illumination, and only infrared legal illumination covers the sample. Source A must remain not live, Source B must become live, and the CPU exact query must agree with the GPU hard-mask result.
+
+`REQ-TEST-007` Multi-channel compatibility tests use Source C whose complete compatibility configuration accepts both visible and infrared legal illumination. Either accepted type must satisfy Source C, while an unrelated incompatible illumination type must not. CPU attribution and the matching GPU compatibility group must agree.
+
+`REQ-TEST-008` Bypass tests run the player body-circle vision with no legal illumination. Its coverage must remain live while obeying walls, `FloorId`, height rules, and `SuppressLiveVision`; it must never be assigned to or satisfied through an illumination compatibility group.
+
+`REQ-ACCEPT-001` Before DARKWELL integration, a standalone plugin test map must pass straight wall, wall corner, room, doorway, dynamic door, different heights, multiple vision/illumination sources, visible/infrared compatibility isolation, multi-channel accepted sets, permanent body-circle bypass, all modifier types, subject-memory/reveal policies, save/restore, and debug inspection.
 
 `REQ-ACCEPT-002` A static straight wall must remain visually stable during a repeatable lateral-motion/rotation camera path at supported resolutions. Acceptance thresholds are set after a capture harness exists; subjective “looks better” is insufficient.
 
 `REQ-ACCEPT-003` No enemy can be visible or listed by HUD outside hard current vision in automated/runtime checks, regardless of edge feather.
 
-`REQ-ACCEPT-004` Attacker hit feedback may appear outside hard current vision only through an active Subject Reveal Override. During and after that override, the subject's knowledge query remains unchanged and no memory bit or last-seen record is created or refreshed.
+`REQ-ACCEPT-004` When a Knowledge Owner receives a qualifying attack/damage event, damage-source presentation may reveal only the resolved attacker Subject outside hard current vision and only through an active Subject Reveal Override. The reverse event—the Knowledge Owner attacking that Subject—does not activate this rule by itself. During and after the override, the attacker's knowledge query remains unchanged and no environment memory bit or last-seen record is created or refreshed.
 
 ## Provisional performance budgets
 
@@ -278,9 +288,9 @@ All counts and thresholds are provisional until the user supplies minimum hardwa
 ## Recorded human product decisions
 
 - `WorldVision` is a temporary internal code name only; the public plugin/API name remains unset until source creation is separately approved.
-- Legal illumination is an independent first-class system with explicit illumination-source components, hard illumination polygons/queries, and separate CPU/GPU masks intersected with vision.
+- Legal illumination is an independent first-class system with explicit illumination-source components, hard illumination polygons/queries, and per-source or equivalently profile-grouped CPU/GPU compatibility intersections; incompatible illumination channels never share an unqualified global intersection.
 - DARKWELL has a permanent player-attached circular vision source that bypasses illumination.
-- Attacker hit feedback is a non-memory-writing Subject Reveal Override and is never a normal `Visible` state.
+- Damage-source reveal is applied to the attacker Subject after the Knowledge Owner receives a qualifying attack/damage event; it is a non-memory-writing Subject Reveal Override and never a normal `Visible` state.
 - Remembered geometry uses neutral-gray material detail, not a frozen last-lit image.
 - DARKWELL fixed, uncollected items use `LastSeenSnapshot`.
 - V1 is single-player and presents one active floor at a time.

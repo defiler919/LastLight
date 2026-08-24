@@ -11,7 +11,7 @@ Status: migration plan revised with the latest human product decisions. This doc
 5. DARKWELL integration is through project-owned adapters and an explicit single-authority switch.
 6. Old and new systems never both control enemy/subject hiding, HUD visibility, interactions, memory writes, save restoration, or final post-process composition in one run.
 7. Vision and legal illumination are separate explicit authorities. Old/new systems never infer legal illumination from Scene Color, rendered light brightness, or an ordinary `ULightComponent`.
-8. Hard CPU queries and GPU presentation use the same vision and illumination revisions; effective live coverage is the vision-mask/illumination-mask intersection unioned with explicitly bypassing vision.
+8. Hard CPU queries and GPU presentation use the same normalized compatibility configurations, registered source data, and revision. Effective live coverage is the union of per-source compatible gated coverage, represented on GPU by matching complete-compatibility mask groups, plus explicitly bypassing vision; one global vision/illumination intersection is forbidden.
 9. Subject Reveal Overrides are presentation-only and remain separate from `Visible`/`Remembered`/`Unknown`; they never write memory or last-seen snapshots.
 10. V1 is single-player and has exactly one active queried/presented floor.
 11. Dynamic door, straight wall, room/opening, height/floor, vision/illumination multi-source, modifier, subject-memory/reveal, and save tests pass before DARKWELL integration.
@@ -24,7 +24,7 @@ Current design branch: `design/independent-vision-plugin`.
 This branch contains validation, audit, requirements, architecture, and migration documentation only. This decision revision must not create a plugin directory, C++/shader source, or Unreal asset. The current documentation commit is:
 
 ```text
-docs: revise WorldVision design decisions
+docs: correct reveal trigger and illumination compatibility
 ```
 
 After architecture approval, implementation should use a new `codex/`-prefixed feature branch unless the user requests another branch name. Suggested commits remain small and reviewable:
@@ -69,9 +69,9 @@ No plugin implementation begins before the architecture approval portion of this
 ### Work after approval
 
 - create `Plugins/<ApprovedName>/` with Runtime, Editor, and Tests modules only after implementation and public-name approval;
-- add neutral settings, distinct vision-source/illumination-source/reveal-override handle and result types, and a world subsystem shell;
+- add neutral settings, distinct vision-source/illumination-source/reveal-override handle and result types, normalized complete illumination-compatibility configuration/key types, and a world subsystem shell;
 - create a plugin-owned lab/example map through Unreal Editor APIs;
-- add simple authored lanes for straight wall, diagonal wall, corner, room, opening, rotating door, height bands, stacked-floor rejection, vision/illumination intersection, an always-active attached circular bypass source, and two explicitly activated remote sources;
+- add simple authored lanes for straight wall, diagonal wall, corner, room, opening, rotating door, height bands, stacked-floor rejection, visible-only and infrared-only compatibility, a source accepting both types, an always-active attached circular bypass source, and two explicitly activated remote sources;
 - establish automation categories and test-map loading without adding an algorithm shortcut;
 - add an example single local knowledge owner, explicit vision/illumination sources, subject, and Subject Reveal Override using generic actors only.
 
@@ -94,8 +94,9 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 - implement floor definitions and separate explicit vision-source, legal-illumination-source, and occluder components;
 - implement authoring normalization and floor-local segment spatial index;
 - implement the correctness/reference polygon solver for both vision and legal illumination while preserving distinct source handles/revisions;
-- implement exact illumination, vision, combined-live, point/multi-sample, and batched queries with vision/illumination/bypass attribution;
-- implement the hard formula “illumination-gated vision intersect compatible legal illumination, union illumination-bypass vision, subtract `SuppressLiveVision`”;
+- implement exact illumination, vision, combined-live, point/multi-sample, and batched queries with vision/illumination/compatibility/bypass attribution;
+- implement the hard formula `GatedCoverage(s) = VisionPolygon(s) intersect Union(compatible IlluminationPolygon(l) for s)`, then union all `GatedCoverage(s)` and every bypass polygon before subtracting `SuppressLiveVision`;
+- normalize each complete accepted-illumination set into a compatibility key and make any source/profile compatibility change publish one new revision for affected CPU mappings and GPU groups;
 - implement a generic always-active attached circular test source as an illumination-bypass profile; the DARKWELL player mapping waits for M6;
 - implement immutable revisions and event-driven dirty updates;
 - add debug drawing for vision/illumination source shape, segments, endpoint rays/events, separate polygons, intersection/bypass result, floor, and query reason;
@@ -111,9 +112,11 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 - static and dynamic geometry revision invalidation;
 - floor separation and occluder height below/through/above eye band;
 - two and eight vision sources plus matching/nonmatching illumination sources, including Adapter-simulated remote off-screen activation;
+- visible/infrared isolation: overlapping Source A (visible only) and Source B (infrared only) under infrared-only coverage rejects A, accepts B, and preserves CPU attribution;
+- multi-channel compatibility: Source C accepts visible plus infrared, either accepted type satisfies it, and an unrelated channel does not;
 - legal illumination alone reveals and writes nothing;
-- gated vision is rejected outside illumination and accepted inside the hard intersection;
-- permanent body-circle coverage remains live without illumination but still stops at occlusion and `SuppressLiveVision`;
+- each gated source is rejected outside its own compatible illumination union and accepted inside its source-compatible gated coverage;
+- permanent body-circle coverage remains live without illumination, is never assigned a compatibility key, and still stops at occlusion, floor/height rejection, and `SuppressLiveVision`;
 - illumination, live, and bounds/multi-sample queries at the exact hard boundary;
 - deterministic results across repeated runs.
 
@@ -122,7 +125,7 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 - all geometry tests pass;
 - straight-wall polygon vertices remain on the authored wall line within the documented world-space epsilon;
 - door transitions create the expected polygon opening without stale segments;
-- gameplay and memory queries consume only the immutable hard combined result and expose both source attributions or the bypass reason;
+- gameplay and memory queries consume only the immutable source-compatible hard result and expose both source attributions or the bypass reason;
 - debug tools make every rejection/contribution explainable.
 
 ## M3 — World-space vision/illumination masks, neutral-gray memory, and modifiers
@@ -130,8 +133,9 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 ### Work
 
 - choose atlas versus texture-array path using a focused UE 5.8.1 spike;
-- rasterize illumination-gated vision polygons, legal-illumination polygons, and illumination-bypass polygons into separate stable world-space masks;
-- derive the GPU effective-live mask as `(VisionMask INTERSECT IlluminationMask) UNION BypassVisionMask`, then apply live suppression, using the same immutable CPU revisions;
+- within each Knowledge Owner/floor scope, group only sources with semantically identical complete compatibility configurations `p`, rasterizing `VisionMask[p]` and `CompatibleIlluminationMask[p]` into paired stable world-space resources while keeping illumination-bypass polygons separate;
+- derive `EffectiveLiveMask = Union over p (VisionMask[p] INTERSECT CompatibleIlluminationMask[p]) UNION BypassVisionMask`, then apply live suppression, using the same registration data and immutable revision as CPU authority;
+- permit grouped textures, array layers, bitmasks, or multiple passes only when they preserve the complete compatibility relation; never merge incompatible channels into a single global pair;
 - add CPU packed memory tiles and dirty GPU mirrors;
 - treat memory precision as a spike parameter and run identical 2.5 cm, 5 cm, 10 cm, and 25 cm configurations before selecting any default;
 - implement hard memory writes independent of viewport;
@@ -144,11 +148,13 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 
 ### Required tests
 
-- hard CPU reference versus separate GPU vision, illumination, intersection, bypass, suppression, and effective-live masks within an approved edge tolerance;
+- hard CPU per-source compatibility reference versus GPU profile-keyed vision/compatible-illumination intersections, bypass, suppression, and effective-live masks within an approved edge tolerance;
+- visible/infrared isolation agrees on CPU and GPU: infrared-only coverage satisfies Source B but never visible-only Source A even where their vision polygons overlap;
+- Source C's visible-plus-infrared configuration is satisfied by either accepted type and never by an unrelated channel, with CPU/GPU agreement;
 - straight/diagonal wall capture under 1080p, 1440p, window resize, movement, and turn paths;
 - memory written only by effective live coverage from an Adapter-activated off-screen remote source;
 - illumination-only and vision-outside-illumination paths write no memory;
-- body-circle bypass writes legal memory without illumination inside its own occluded polygon;
+- body-circle bypass writes legal memory without illumination inside its own occluded polygon and never enters a compatibility mask group;
 - no memory written across an occluder or by visual feather;
 - clear then re-explore;
 - blocker with live vision normal and no new memory;
@@ -162,7 +168,7 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 
 ### Exit criteria
 
-- vision/illumination/intersection/bypass masks and hard queries agree at the same revision;
+- every CPU per-source compatible result agrees with its GPU complete-compatibility group and the final bypass union at the same revision;
 - unchanged straight walls meet the approved stability threshold;
 - neutral-gray memory is materially richer than depth/normal outlines and contains no current or captured last-lit information;
 - a memory precision is selected only from reviewed 2.5/5/10/25 cm evidence; until then it remains unset;
@@ -181,7 +187,7 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 - ensure proxies are render-only and emit no collision/audio/VFX/live light;
 - implement versioned deterministic plugin snapshot, tile compression, provider records, validation, and atomic restore;
 - add clear/suppress/floor-stream behavior for snapshots/proxies;
-- implement time-bounded Subject Reveal Override handles/results, reveal primitive policy, expiry/revocation, and callbacks as a lane separate from the knowledge-state machine and save schema.
+- implement the neutral `ApplySubjectRevealOverride(KnowledgeOwner, Subject, RevealSpecification)` semantic, time-bounded handles/results, moving-subject reveal primitives, expiry/revocation, and callbacks as a lane separate from damage systems, the knowledge-state machine, legal illumination, live masks, and the save schema.
 
 ### Required tests
 
@@ -193,7 +199,10 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 - clear deletes proxy record; suppression hides then restores it;
 - save round-trip is deterministic; corrupt/future/oversized/duplicate/missing-provider cases fail explicitly;
 - restore recomputes live state and uploads derived GPU tiles without restoring stale live polygons;
-- attacker-hit reveal may render only through an active Subject Reveal Override while the underlying query remains unchanged; it never enables normal HUD/interaction/targeting, never sets memory, never refreshes a last-seen record, leaves no remembered afterimage, and is not restored from save.
+- damage-source direction: with Enemy A outside ordinary live vision, Enemy A causes a qualifying attack/damage event on the player Knowledge Owner; the Adapter resolves A from the event and applies the override to A, whose approved reveal follows A temporarily;
+- reverse-direction and isolation: the player shooting Enemy A does not trigger this rule by itself; nearby Enemy B and surrounding environment remain unrevealed and unilluminated; ordinary queries/HUD/interaction/targeting remain unchanged;
+- persistence isolation: damage-source reveal sets no memory, refreshes no last-seen record, leaves no remembered afterimage, and is not restored from save;
+- policy ownership: Adapter tests decide whether armor-absorbed, blocked, zero-final-damage, or similar attack events qualify; the generic plugin has no DARKWELL damage dependency.
 
 ### Exit criteria
 
@@ -206,7 +215,7 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 
 ### Work
 
-- complete distinct vision-source/illumination-source, polygon/intersection/bypass, reveal-override, and single-active-floor Editor visualizers plus conversion preview, undo, and validation;
+- complete distinct vision-source/illumination-source, per-compatibility-group intersection, bypass, reveal-override, and single-active-floor Editor visualizers plus conversion preview, undo, and validation;
 - create neutral example actors/maps and user documentation;
 - verify clean-project installation and removal;
 - verify UE 5.8.1 DX12/SM6, Editor, and packaged Development;
@@ -217,7 +226,7 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 
 ### Exit criteria
 
-- a new project can configure the single active floor, occluders, vision sources, legal-illumination sources, illumination bypass, modifiers, subjects, reveal overrides, and save restore from documented steps;
+- a new project can configure the single active floor, occluders, vision sources, legal-illumination sources, complete accepted-illumination profiles, illumination bypass, modifiers, subjects, reveal overrides, and save restore from documented steps;
 - no DARKWELL reference exists in plugin Runtime/Editor/Tests/content;
 - all functional, render, persistence, lifecycle, and performance suites pass;
 - performance budgets are met or revised with user approval and evidence;
@@ -239,7 +248,7 @@ Use one project-owned setting with mutually exclusive modes:
 | `WorldVisionObserveOnly` | Yes | Debug computation only; no masks, subject callbacks, memory, HUD, save | compare queries safely without dual control |
 | `WorldVision` | No | Yes | integration and acceptance |
 
-Observe-only may compute separate vision/illumination polygons, hard intersections, bypass results, and stats but cannot change actor render state, UI, interaction, memory, reveal presentation, or save data. `Legacy` and `WorldVision` modes must restore all component/proxy/reveal/blendable state when switching during development; shipping should select at world start.
+Observe-only may compute separate vision/illumination polygons, per-source compatibility coverage, profile-keyed GPU-equivalent intersections, bypass results, and stats but cannot change actor render state, UI, interaction, memory, reveal presentation, or save data. `Legacy` and `WorldVision` modes must restore all component/proxy/reveal/blendable state when switching during development; shipping should select at world start.
 
 ### DARKWELL adapters
 
@@ -253,7 +262,7 @@ Observe-only may compute separate vision/illumination polygons, hard intersectio
 - fixed, uncollected items -> `LastSeenSnapshot`;
 - truly transient/moving subjects -> explicit `VisibleOnly`/`NeverRemember` policy rather than inheriting the fixed-item rule;
 - exit, door, container, machine -> snapshot provider/proxy;
-- designated attacker subject receives the relevant hit/damage event -> time-bounded Subject Reveal Override, not a `Visible` state transition;
+- Knowledge Owner receives a qualifying attack/damage event -> Adapter resolves the attack source/Instigator -> apply a time-bounded Subject Reveal Override to that attacker Subject, not a `Visible` state transition;
 - HUD threat rows and interaction focus -> one WorldVision query/result path;
 - legacy v6 explored cells -> no WorldVision conversion; start fresh unless the save already contains a valid WorldVision snapshot;
 - plugin snapshot -> field embedded in the next approved DARKWELL save schema.
@@ -262,10 +271,10 @@ Niagara/audio reactions remain in DARKWELL event adapters and are not plugin dep
 
 ### Integration order
 
-1. Observe-only vision-source/illumination-source/occluder/single-floor mapping and hard query/intersection comparison.
-2. Switch final post-process ownership on the integration map; legacy blendable off and separate vision/illumination/bypass masks active.
+1. Observe-only vision-source/illumination-source/complete-compatibility/occluder/single-floor mapping and source-compatible hard-query comparison.
+2. Switch final post-process ownership on the integration map; legacy blendable off and profile-keyed vision/compatible-illumination mask pairs plus bypass mask active.
 3. Route HUD/interactions to WorldVision's hard effective-live result while subjects remain visibly instrumented.
-4. Route enemy/fixed-item/facility subject authority and attacker-hit reveal overrides; legacy callbacks/tick disabled.
+4. Route enemy/fixed-item/facility subject authority and attacker-on-owner-hit damage-source reveal overrides; legacy callbacks/tick disabled.
 5. Add DARKWELL snapshot providers.
 6. Add save embedding with explicit no-v6-fog-migration behavior only after runtime state is stable.
 7. Run full automation and PIE regression.
@@ -273,9 +282,9 @@ Niagara/audio reactions remain in DARKWELL event adapters and are not plugin dep
 ### Exit criteria
 
 - all lab gates remain green;
-- integration map passes straight walls, rooms/openings, dynamic door, height/single-active-floor, multiple vision/illumination sources, hard intersection, body-circle bypass, modifiers, subjects/reveal overrides, and save/load;
+- integration map passes straight walls, rooms/openings, dynamic door, height/single-active-floor, multiple vision/illumination sources, visible/infrared isolation, multi-channel compatibility, body-circle bypass, modifiers, subjects/reveal overrides, and save/load;
 - exactly one camera fog blendable and one subject visibility authority are active;
-- enemy world/HUD/interaction results agree with hard current vision; attacker-hit reveal remains a separately inspectable presentation exception and does not change those query results;
+- enemy world/HUD/interaction results agree with source-compatible hard current vision; damage-source reveal remains a separately inspectable presentation exception applied only to the attacker after the Knowledge Owner is attacked and does not change those query results;
 - legacy mode still behaves as its baseline and remains a one-setting rollback.
 
 ## M7 — DARKWELL acceptance on production content
@@ -295,9 +304,9 @@ Only after M6 approval should WorldVision be enabled for an acceptance build usi
 - movement/facing/sprint/aim while live edge remains stable;
 - shooting/reload and torch/lantern profiles;
 - enemy world and threat-HUD visibility under illumination-gated player vision, permanent body-circle bypass, camera, and Adapter-activated remote sources;
-- legal-illumination polygons/queries and the CPU/GPU “vision mask intersect illumination mask” path;
+- legal-illumination polygons/queries and CPU/GPU agreement for per-source compatibility represented by matching complete-compatibility mask groups;
 - exploration, neutral-gray detail, leaving/re-entering sight;
-- fixed uncollected-item `LastSeenSnapshot` behavior and attacker-hit Subject Reveal Override with no memory/HUD/interaction authority;
+- fixed uncollected-item `LastSeenSnapshot` behavior and attacker-on-owner-hit damage-source Subject Reveal Override with correct direction, no nearby-subject/environment reveal, and no memory/HUD/interaction authority;
 - every memory modifier behavior;
 - dynamic door and fixed facility last-seen state;
 - save/exit/load including plugin memory and snapshots;
@@ -308,7 +317,7 @@ Only after M6 approval should WorldVision be enabled for an acceptance build usi
 
 ### Acceptance evidence
 
-Capture build/test logs, deterministic motion-path images/video for wall stability, separate vision/illumination/intersection/bypass query and mask captures, source/segment/subject/reveal counts, CPU/GPU timings, machine/RHI/resolution/build configuration, 2.5/5/10/25 cm comparison data, save size, and unsupported-content warnings.
+Capture build/test logs, deterministic motion-path images/video for wall stability, per-source CPU compatibility and profile-keyed GPU intersection/bypass captures, visible/infrared isolation evidence, source/segment/subject/reveal counts, CPU/GPU timings, machine/RHI/resolution/build configuration, 2.5/5/10/25 cm comparison data, save size, and unsupported-content warnings.
 
 ### Exit criteria
 
@@ -357,9 +366,9 @@ Before any integration session:
 - assert exactly one subject authority mode;
 - assert exactly one final fog composite has nonzero weight;
 - assert only the selected system writes memory;
-- assert effective WorldVision live coverage is the hard gated-vision/illumination intersection unioned with explicit bypass vision at one shared revision;
+- assert effective WorldVision live coverage is the union of per-source compatible gated coverage plus explicit bypass vision, and that CPU mappings and GPU complete-compatibility groups share one revision;
 - assert HUD and interactions query the selected authority;
-- assert Subject Reveal Overrides cannot set `Visible`, qualify HUD/interaction, or write/refresh memory;
+- assert Subject Reveal Overrides cannot contribute Legal Illumination or Live Vision, set `Visible`, qualify HUD/interaction, reveal neighboring subjects/environment, or write/refresh memory;
 - assert the non-selected system does not restore/save memory;
 - reset previously hidden live primitives and destroy/hide stale memory proxies on mode change;
 - log authority mode, snapshot revision, and save schema at world start;

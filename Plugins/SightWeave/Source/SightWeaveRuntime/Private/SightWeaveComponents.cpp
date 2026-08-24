@@ -406,3 +406,91 @@ bool USightWeaveOccluderComponent::BuildWorldSegments(TArray<FSightWeaveSegment2
 	OutSegments = MoveTemp(Normalized.Segments);
 	return true;
 }
+
+USightWeaveHardSuppressionComponent::USightWeaveHardSuppressionComponent()
+{
+	PrimaryComponentTick.bCanEverTick = false;
+	bWantsOnUpdateTransform = true;
+	Description.FloorId = FSightWeaveFloorId(FName(TEXT("Default")));
+}
+
+void USightWeaveHardSuppressionComponent::OnRegister()
+{
+	Super::OnRegister();
+	RefreshHardSuppressionRegistration();
+}
+
+void USightWeaveHardSuppressionComponent::OnUnregister()
+{
+	if (USightWeaveWorldSubsystem* Subsystem = GetSightWeaveSubsystem(this); Subsystem && Handle.IsValid())
+	{
+		Subsystem->UnregisterHardLiveSuppression(Handle);
+	}
+	Handle = FSightWeaveHardSuppressionHandle();
+	Super::OnUnregister();
+}
+
+void USightWeaveHardSuppressionComponent::OnUpdateTransform(
+	const EUpdateTransformFlags UpdateTransformFlags,
+	const ETeleportType Teleport)
+{
+	Super::OnUpdateTransform(UpdateTransformFlags, Teleport);
+	if (IsRegistered())
+	{
+		RefreshHardSuppressionRegistration();
+	}
+}
+
+#if WITH_EDITOR
+void USightWeaveHardSuppressionComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	RefreshHardSuppressionRegistration();
+}
+#endif
+
+void USightWeaveHardSuppressionComponent::SetHardSuppressionEnabled(const bool bEnabled)
+{
+	Description.bEnabled = bEnabled;
+	RefreshHardSuppressionRegistration();
+}
+
+bool USightWeaveHardSuppressionComponent::RefreshHardSuppressionRegistration()
+{
+	USightWeaveWorldSubsystem* Subsystem = GetSightWeaveSubsystem(this);
+	FSightWeaveHardSuppressionDescription WorldDescription;
+	if (!Subsystem || !BuildWorldDescription(WorldDescription))
+	{
+		return false;
+	}
+	if (Handle.IsValid())
+	{
+		return Subsystem->UpdateHardLiveSuppression(Handle, WorldDescription);
+	}
+	Handle = Subsystem->RegisterHardLiveSuppression(WorldDescription, this);
+	return Handle.IsValid();
+}
+
+bool USightWeaveHardSuppressionComponent::BuildWorldDescription(
+	FSightWeaveHardSuppressionDescription& OutDescription) const
+{
+	const FTransform Transform = GetComponentTransform();
+	const FVector Scale = Transform.GetScale3D();
+	if (!FMath::IsFinite(Scale.X)
+		|| !FMath::IsFinite(Scale.Y)
+		|| !FMath::IsFinite(Scale.Z)
+		|| Scale.X <= 0.0
+		|| Scale.Y <= 0.0
+		|| Scale.Z <= 0.0
+		|| !FMath::IsNearlyEqual(Scale.X, Scale.Y, 1.0e-4))
+	{
+		return false;
+	}
+	OutDescription = Description;
+	const FVector WorldCenter = Transform.TransformPosition(FVector(Description.Center.X, Description.Center.Y, 0.0));
+	OutDescription.Center = FVector2D(WorldCenter.X, WorldCenter.Y);
+	OutDescription.Radius = Description.Radius * Scale.X;
+	OutDescription.HeightRange.ZMin = Transform.GetLocation().Z + Description.HeightRange.ZMin * Scale.Z;
+	OutDescription.HeightRange.ZMax = Transform.GetLocation().Z + Description.HeightRange.ZMax * Scale.Z;
+	return OutDescription.IsValid();
+}

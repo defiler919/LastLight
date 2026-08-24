@@ -345,4 +345,40 @@ bool FSightWeaveM2ComponentDoorTransformTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2HardSuppressionComponentLifecycleTest,
+	"SightWeave.M2.Runtime.HardSuppressionComponentLifecycle",
+	SightWeave::M2::RuntimeTests::TestFlags)
+
+bool FSightWeaveM2HardSuppressionComponentLifecycleTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2::RuntimeTests;
+	FTestWorld World(TEXT("SightWeaveM2HardSuppressionComponent"));
+	USightWeaveWorldSubsystem* Subsystem = World.GetSubsystem();
+	AActor* Actor = World.Get() ? World.Get()->SpawnActor<AActor>() : nullptr;
+	if (TestNotNull(TEXT("Subsystem exists"), Subsystem) && TestNotNull(TEXT("Fixture actor exists"), Actor))
+	{
+		TestTrue(TEXT("Ground floor registers"), Subsystem->RegisterFloor(Floor(TEXT("Ground"), true), nullptr));
+		USceneComponent* Root = AddRoot(Actor);
+		USightWeaveHardSuppressionComponent* Component = NewObject<USightWeaveHardSuppressionComponent>(Actor);
+		Component->Description.FloorId = FSightWeaveFloorId(FName(TEXT("Ground")));
+		Component->Description.HeightRange.ZMin = 0.0f;
+		Component->Description.HeightRange.ZMax = 300.0f;
+		Component->Description.Radius = 100.0f;
+		Actor->AddInstanceComponent(Component);
+		Component->SetupAttachment(Root);
+		Component->RegisterComponent();
+		TestTrue(TEXT("Authoring component registers suppression"), Component->GetHardSuppressionHandle().IsValid());
+		TestEqual(TEXT("Subsystem owns one suppression"), Subsystem->GetHardLiveSuppressionCount(), 1);
+		Component->SetRelativeLocation(FVector(250.0, 0.0, 0.0));
+		const FSightWeaveFrameSnapshot Snapshot = Subsystem->GetPublishedSnapshot();
+		TestTrue(TEXT("Component transform updates suppression center"),
+			Snapshot.HardSuppressions.Num() == 1
+			&& FMath::IsNearlyEqual(Snapshot.HardSuppressions[0].Description.Center.X, 250.0));
+		Actor->Destroy();
+		TestEqual(TEXT("Actor destruction unregisters suppression"), Subsystem->GetHardLiveSuppressionCount(), 0);
+	}
+	return true;
+}
+
 #endif

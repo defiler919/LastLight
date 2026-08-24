@@ -7,9 +7,9 @@
 - Baseline SHA: `3ec080180b3de3c95258ce07d48fa8165d04701b`
 - Working branch: `codex/m2-sightweave-2p5d-authority`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current checkpoint: Checkpoint 2 — 2.5D components and spatial index complete
-- Last completed checkpoint: Checkpoint 2 build, SpatialIndex, Runtime, and M1 automation passed
-- Next command: implement immutable polygon snapshots, compatibility-preserving live queries, bypass, and hard suppression
+- Current checkpoint: Checkpoint 3 — immutable snapshots and authoritative live queries complete
+- Last completed checkpoint: Checkpoint 3 Editor build, full M2 automation, and M1 regression passed
+- Next command: implement query debug data/draw, expand the idempotent M2 lab fixtures, and add performance/debug automation
 
 ## M2 scope recovered from repository documentation
 
@@ -34,6 +34,8 @@ GPU masks/RDG/render targets, fog and memory presentation, memory tiles, last-se
 - `FSightWeaveQuerySampleSet`, `ESightWeaveSampleRule`, and query rejection flags
 - minimal hard-live suppression handle/region API
 - immutable snapshot access and point, bounds, multi-sample, batch, and source-specific query APIs
+
+Checkpoint 3 implements this inventory in `SightWeaveQueries.h`, `SightWeaveComponents.h`, and `USightWeaveWorldSubsystem`. Registry mutations synchronously publish `TSharedPtr<const FSightWeaveFrameSnapshot>` data. Separate pending-dirty sets are consumed by the polygon cache while diagnostic dirty sets remain inspectable. Vision entries resolve only same-owner/same-floor legal-illumination handles with overlapping normalized capability sets; bypass entries discard and never resolve a compatibility key. Point queries evaluate per vision source, then apply M2 hard-live circle suppression after gated/bypass union. Sample, bounds, batch, and source-specific hard queries reuse the same point semantics and published revision.
 
 M1 handles, registration entry points, result types, and all `SightWeave.M1` tests remain supported unless an explicitly documented compatibility adjustment is required.
 
@@ -67,7 +69,11 @@ The required repository guidance, five vision design/audit/baseline documents, M
 - `SightWeave.M2.Runtime` first run: 8 discovered/run, 7 passed and 1 failed. The failure revealed that UE only calls `USceneComponent::OnUpdateTransform` for ordinary transform changes when `bWantsOnUpdateTransform` is enabled. All four SightWeave scene components now enable it explicitly.
 - `SightWeave.M2.Runtime` final run: **8/8 passed**, zero warnings/errors/not-run, process exit code 0. It covers the single-active-floor rule, handle/revision lifecycle, disabled occluders, local dynamic-door replacement, affected-source dirtying, component self-registration/destruction, explicit transform rejection, and component-driven door motion. JSON: `Saved/AutomationReports/SightWeaveM2Runtime_20260824_Final/index.json`.
 - `SightWeave.M1` Checkpoint 2 regression: **21 discovered/run, 21 passed, 0 failed/warning/not-run**, process exit code 0. JSON: `Saved/AutomationReports/SightWeaveM1_M2Checkpoint2_20260824/index.json`.
-- Full `SightWeave.M2`: later categories are not implemented or run yet.
+- Checkpoint 3 initial compile after the snapshot/query API: passed, exit code 0, UBT `Result: Succeeded`, 12.47 seconds; only the MSVC preference warning.
+- Initial `SightWeave.M2.Query` run before the final profile-update and suppression aggregation assertions: **13/13 passed**, zero test warnings/errors/not-run, process exit code 0. JSON: `Saved/AutomationReports/SightWeaveM2Query_20260824_Initial/index.json`. No query implementation failure occurred in this run.
+- Checkpoint 3 final Editor build: passed, exit code 0, UBT `Result: Succeeded`, 12.82 seconds; only the installed MSVC 14.51.36256 preference warning.
+- Full `SightWeave.M2` Checkpoint 3 run: **52 discovered, 52 run, 52 passed, 0 failed, 0 warning, 0 error, 0 skipped/not-run**, process exit code 0, report duration 0.4393 seconds. Category counts: Geometry 21, SpatialIndex 8, Runtime 9, Query 14. JSON: `Saved/AutomationReports/SightWeaveM2_Checkpoint3_Final_20260824/index.json`.
+- `SightWeave.M1` Checkpoint 3 regression: **21 discovered/run, 21 passed, 0 failed/warning/error/not-run**, process exit code 0, report duration 0.2000 seconds. JSON: `Saved/AutomationReports/SightWeaveM1_Checkpoint3_Final_20260824/index.json`.
 - Combined `SightWeave`: not run yet.
 - `Darkwell`: not run yet on the M2 branch.
 - Lab load/game smoke: not run yet for M2.
@@ -77,7 +83,8 @@ The required repository guidance, five vision design/audit/baseline documents, M
 
 - `2d5b230374a03607679c6a4605ff67ccf13f03ae` — `docs: start SightWeave M2 authority implementation`
 - `d5c24f9235ccf451c8475bf9e4b40b046f338f3c` — `feat: add SightWeave reference geometry solver`
-- Checkpoint 2: `feat: add SightWeave 2.5D authority components` — pending in this document's containing commit.
+- `82dbefe517387f905148ea805c56c1c43ec3d49d` — `feat: add SightWeave 2.5D authority components`
+- Checkpoint 3: `feat: add SightWeave authoritative live queries` — pending in this document's containing commit.
 
 ## Blockers and unverified items
 

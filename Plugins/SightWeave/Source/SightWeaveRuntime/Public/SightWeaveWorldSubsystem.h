@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "SightWeaveGeometry.h"
+#include "SightWeaveQueries.h"
 #include "SightWeaveSpatialIndex.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "SightWeaveTypes.h"
@@ -85,6 +86,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Occluder")
 	FSightWeaveRevision GetOccluderGeometryRevision(FSightWeaveOccluderHandle Handle) const;
 
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|M2 Hard Live Suppression")
+	FSightWeaveHardSuppressionHandle RegisterHardLiveSuppression(
+		const FSightWeaveHardSuppressionDescription& Description,
+		UObject* Owner);
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|M2 Hard Live Suppression")
+	bool UpdateHardLiveSuppression(
+		FSightWeaveHardSuppressionHandle Handle,
+		const FSightWeaveHardSuppressionDescription& Description);
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|M2 Hard Live Suppression")
+	bool UnregisterHardLiveSuppression(FSightWeaveHardSuppressionHandle Handle);
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|M2 Hard Live Suppression")
+	bool IsHardLiveSuppressionHandleValid(FSightWeaveHardSuppressionHandle Handle) const;
+
 	UFUNCTION(BlueprintCallable, Category = "SightWeave|Subject Reveal")
 	FSightWeaveSubjectRevealHandle ApplySubjectRevealOverride(const FSightWeaveSubjectRevealSpecification& Specification, UObject* Owner);
 
@@ -106,6 +123,57 @@ public:
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Query")
 	FSightWeaveVisibilityQueryResult QueryVisionSourceAtLocation(FSightWeaveVisionSourceHandle Handle, FSightWeaveFloorId FloorId, FVector WorldLocation) const;
 
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Query")
+	FSightWeaveVisibilityQueryResult QueryPureVisionAtLocation(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		FVector WorldLocation) const;
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Query")
+	FSightWeaveIlluminationQueryResult QueryLegalIlluminationAtLocation(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		FVector WorldLocation) const;
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Query")
+	FSightWeaveVisibilityQueryResult QueryEffectiveLiveAtLocation(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		FVector WorldLocation) const;
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Query")
+	FSightWeaveVisibilityQueryResult QueryVisionSourceHardLiveAtLocation(
+		FSightWeaveVisionSourceHandle Handle,
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		FVector WorldLocation) const;
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Query")
+	FSightWeaveVisibilityQueryResult QuerySamples(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		const FSightWeaveQuerySampleSet& SampleSet) const;
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Query")
+	FSightWeaveVisibilityQueryResult QueryBounds(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		FBox WorldBounds,
+		ESightWeaveSampleRule Rule = ESightWeaveSampleRule::AnySample,
+		int32 RequiredCount = 1) const;
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Query")
+	void QueryBatch(
+		const TArray<FSightWeaveQueryRequest>& Requests,
+		TArray<FSightWeaveVisibilityQueryResult>& OutResults) const;
+
+	/** Publishes registry changes and dirty polygons into an immutable ordinary-data snapshot. */
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Snapshot")
+	FSightWeaveRevision PublishSnapshot();
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Snapshot")
+	FSightWeaveFrameSnapshot GetPublishedSnapshot() const;
+
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
 	int32 GetVisionSourceCount() const { return VisionSources.Num(); }
 
@@ -120,6 +188,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
 	int32 GetOccluderCount() const { return Occluders.Num(); }
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
+	int32 GetHardLiveSuppressionCount() const { return HardSuppressions.Num(); }
 
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
 	int32 GetDirtyVisionSourceCount() const { return DirtyVisionSources.Num(); }
@@ -146,7 +217,28 @@ public:
 private:
 	void AdvanceRevision();
 	void ResetState();
-	FSightWeaveVisibilityQueryResult MakeQueryResult(ESightWeaveQueryStatus Status, FSightWeaveFloorId FloorId) const;
+	FSightWeaveVisibilityQueryResult MakeQueryResult(
+		ESightWeaveQueryStatus Status,
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId) const;
+	FSightWeaveIlluminationQueryResult MakeIlluminationQueryResult(
+		ESightWeaveQueryStatus Status,
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId) const;
+	FSightWeaveVisibilityQueryResult QueryEffectiveLiveInternal(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		FVector WorldLocation,
+		const FSightWeaveVisionSourceHandle* RestrictToSource,
+		bool bPureVision) const;
+	bool IsPointSuppressed(
+		const FSightWeaveFrameSnapshot& Snapshot,
+		FSightWeaveFloorId FloorId,
+		FVector WorldLocation,
+		TArray<FSightWeaveHardSuppressionHandle>& OutHandles) const;
+	void RebuildVisionSnapshotEntry(int64 SourceId);
+	void RebuildIlluminationSnapshotEntry(int64 SourceId);
+	void ResolveSnapshotCompatibility(FSightWeaveFrameSnapshot& Snapshot) const;
 	bool IsFloorDefinitionAllowed(const FSightWeaveFloorDefinition& Definition, const FSightWeaveFloorId* IgnoreFloor) const;
 	void MarkSourcesAffectedByOccluderChange(
 		FSightWeaveFloorId OldFloor,
@@ -172,21 +264,33 @@ private:
 	int64 NextIlluminationSourceId = 1;
 	int64 NextSubjectRevealId = 1;
 	int64 NextOccluderId = 1;
+	int64 NextHardSuppressionId = 1;
 	int64 NextSegmentId = 1;
 	FSightWeaveRevision Revision;
+	FSightWeaveRevision LastOccluderRevision;
 
 	TMap<FSightWeaveFloorId, FSightWeaveFloorDefinition> Floors;
 	TMap<int64, FSightWeaveVisionSourceDescription> VisionSources;
 	TMap<int64, FSightWeaveIlluminationSourceDescription> IlluminationSources;
 	TMap<int64, FSightWeaveSubjectRevealSpecification> SubjectReveals;
 	TMap<int64, FOccluderRecord> Occluders;
+	TMap<int64, FSightWeaveHardSuppressionDescription> HardSuppressions;
+	TMap<int64, FSightWeaveRevision> HardSuppressionRevisions;
 	FSightWeaveFloorSpatialIndex SpatialIndex;
 	TSet<int64> DirtyVisionSources;
 	TSet<int64> DirtyIlluminationSources;
+	TSet<int64> PendingVisionSnapshotRebuilds;
+	TSet<int64> PendingIlluminationSnapshotRebuilds;
+	TMap<int64, FSightWeaveRevision> VisionSourceRevisions;
+	TMap<int64, FSightWeaveRevision> IlluminationSourceRevisions;
+	TMap<int64, FSightWeaveVisionSnapshotEntry> CachedVisionSnapshotEntries;
+	TMap<int64, FSightWeaveIlluminationSnapshotEntry> CachedIlluminationSnapshotEntries;
+	TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> PublishedSnapshot;
 
 	TMap<FSightWeaveFloorId, TWeakObjectPtr<UObject>> FloorOwners;
 	TMap<int64, TWeakObjectPtr<UObject>> VisionOwners;
 	TMap<int64, TWeakObjectPtr<UObject>> IlluminationOwners;
 	TMap<int64, TWeakObjectPtr<UObject>> SubjectRevealOwners;
 	TMap<int64, TWeakObjectPtr<UObject>> OccluderOwners;
+	TMap<int64, TWeakObjectPtr<UObject>> HardSuppressionOwners;
 };

@@ -2,6 +2,7 @@
 
 #include "Components/SceneComponent.h"
 #include "SightWeaveGeometry.h"
+#include "SightWeaveQueries.h"
 #include "SightWeaveTypes.h"
 
 #include "SightWeaveComponents.generated.h"
@@ -157,4 +158,38 @@ private:
 	bool BuildWorldSegments(TArray<FSightWeaveSegment2D>& OutSegments);
 	FSightWeaveOccluderHandle Handle;
 	FString LastValidationError;
+};
+
+/** Authorable circle for the deliberately minimal M2 hard-live suppression API. */
+UCLASS(ClassGroup = (SightWeave), BlueprintType, Blueprintable, meta = (BlueprintSpawnableComponent))
+class SIGHTWEAVERUNTIME_API USightWeaveHardSuppressionComponent final : public USceneComponent
+{
+	GENERATED_BODY()
+
+public:
+	USightWeaveHardSuppressionComponent();
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|M2 Hard Live Suppression")
+	FSightWeaveHardSuppressionDescription Description;
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|M2 Hard Live Suppression")
+	void SetHardSuppressionEnabled(bool bEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|M2 Hard Live Suppression")
+	bool RefreshHardSuppressionRegistration();
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|M2 Hard Live Suppression")
+	FSightWeaveHardSuppressionHandle GetHardSuppressionHandle() const { return Handle; }
+
+protected:
+	virtual void OnRegister() override;
+	virtual void OnUnregister() override;
+	virtual void OnUpdateTransform(EUpdateTransformFlags UpdateTransformFlags, ETeleportType Teleport) override;
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
+
+private:
+	bool BuildWorldDescription(FSightWeaveHardSuppressionDescription& OutDescription) const;
+	FSightWeaveHardSuppressionHandle Handle;
 };

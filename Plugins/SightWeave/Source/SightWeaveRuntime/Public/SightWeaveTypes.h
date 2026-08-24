@@ -398,7 +398,41 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveVisibilityQueryResult
 	bool bVisible = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	bool bAuthoritative = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	bool bInVisionPolygon = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	bool bHasLegalIllumination = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	bool bUsedBypass = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	bool bOccluded = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	bool bRejectedByIllumination = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	bool bRejectedBySuppression = false;
+
+	/** M2 reports eligibility but never mutates a memory tile. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	bool bEligibleForMemoryWrite = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave", meta = (Bitmask, BitmaskEnum = "/Script/SightWeaveRuntime.ESightWeaveQueryRejectionReason"))
+	int32 RejectionFlags = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
 	FSightWeaveRevision Revision;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	FSightWeaveRevision SnapshotRevision;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	FSightWeaveKnowledgeOwnerId KnowledgeOwnerId;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
 	FSightWeaveFloorId FloorId;
@@ -408,4 +442,13 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveVisibilityQueryResult
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
 	TArray<FSightWeaveIlluminationSourceHandle> ContributingIlluminationSources;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	TArray<FSightWeaveHardSuppressionHandle> ContributingSuppressions;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	int32 EvaluatedSampleCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	int32 PassingSampleCount = 0;
 };

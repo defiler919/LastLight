@@ -369,6 +369,55 @@ namespace
 		Angles.SetNum(WriteIndex, EAllowShrinking::No);
 	}
 
+	bool HasLocalVisibilityTopologyDegeneracy(
+		TConstArrayView<FVector> Vertices,
+		const FSightWeaveGeometryTolerances& Tolerances)
+	{
+		if (Vertices.Num() < 3)
+		{
+			return true;
+		}
+
+		// The optimized output is a polar-ordered, star-shaped boundary, so remote
+		// edges cannot cross by construction. The Reference oracle can still reject
+		// tightly clustered endpoint/cone events when its inclusive topology epsilon
+		// treats near-collinear edges as touching. Match that established local policy
+		// in O(vertices) without restoring the Reference O(vertices^2) hot path.
+		const double TopologyEpsilon = FMath::Max(
+			1.0e-9,
+			FMath::Min(Tolerances.PointOnEdgeEpsilon, Tolerances.DuplicateVertexEpsilon) * 0.01);
+		for (int32 AIndex = 0; AIndex < Vertices.Num(); ++AIndex)
+		{
+			const int32 ANext = (AIndex + 1) % Vertices.Num();
+			const FVector2D A0(Vertices[AIndex]);
+			const FVector2D A1(Vertices[ANext]);
+			if (FVector2D::DistSquared(A0, A1) <= FMath::Square(Tolerances.DuplicateVertexEpsilon))
+			{
+				return true;
+			}
+
+			for (int32 Offset = 2; Offset <= 4 && Offset < Vertices.Num() - 1; ++Offset)
+			{
+				const int32 BIndex = (AIndex + Offset) % Vertices.Num();
+				const int32 BNext = (BIndex + 1) % Vertices.Num();
+				if (ANext == BIndex || BNext == AIndex)
+				{
+					continue;
+				}
+				if (SegmentsIntersectInclusive(
+						A0,
+						A1,
+						FVector2D(Vertices[BIndex]),
+						FVector2D(Vertices[BNext]),
+						TopologyEpsilon))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	bool SolveResultsMatch(
 		const FSightWeaveReferenceSolveResult& Optimized,
 		const FSightWeaveReferenceSolveResult& Reference,
@@ -1177,6 +1226,18 @@ namespace SightWeave::Geometry
 		}
 		Result.StageMetrics.PolygonPostProcessMicroseconds =
 			(FPlatformTime::Seconds() - PostProcessStartSeconds) * 1000000.0;
+		const double TopologyStartSeconds = FPlatformTime::Seconds();
+		if (HasLocalVisibilityTopologyDegeneracy(Result.Vertices, Input.Tolerances))
+		{
+			Result.Error = TEXT("Optimized solve emitted a local topology degeneracy");
+			Result.StageMetrics.TopologyValidationMicroseconds =
+				(FPlatformTime::Seconds() - TopologyStartSeconds) * 1000000.0;
+			Result.StageMetrics.TotalMicroseconds =
+				(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
+			return Result;
+		}
+		Result.StageMetrics.TopologyValidationMicroseconds =
+			(FPlatformTime::Seconds() - TopologyStartSeconds) * 1000000.0;
 		Result.StageMetrics.WorkingSetAllocatedBytes =
 			Result.Vertices.GetAllocatedSize()
 			+ Result.CandidateAnglesRadians.GetAllocatedSize()

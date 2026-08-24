@@ -7,8 +7,8 @@
 - Baseline SHA: `517a486779b53a890377f7cd0bc12b6f1cc62640`
 - Working branch: `codex/m2p-sightweave-authority-performance`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current phase: checkpoint 4 — runtime query/update/snapshot pipeline hardened
-- Last safe commit: `d2566f542adf181e42d2725220bc7c3bd3be0e03`
+- Current phase: checkpoint 5 — optimized/reference differential coverage complete; final validation next
+- Last safe commit: `4a1924d6575a3092de55a493a3bd5630f77acc80`
 - Next recovery command: `git switch codex/m2p-sightweave-authority-performance; git pull --ff-only origin codex/m2p-sightweave-authority-performance`
 
 ## Objective
@@ -75,7 +75,7 @@ Final candidate measurements on the same machine:
 - Candidate/ray/vertex counts match the Reference baseline in every benchmark row.
 - Full Editor builds passed after each solver iteration. `SightWeave.M2` with the optimized runtime path passed 59/59, zero failed/warning/not-run; the known 13 startup self-test error lines predate and are outside Automation test results.
 
-The next checkpoint is large fixed-seed and manual-edge Optimized-vs-Reference differential coverage.
+These measurements predate the linear local-topology parity guard found by checkpoint 5. The post-differential final measurements are recorded below and in `Docs/SIGHTWEAVE_M2P_PERFORMANCE.md`.
 
 ## Checkpoint 4 runtime result
 
@@ -91,6 +91,28 @@ Final runtime candidate on the 4-vision/2-light/64-segment fixture:
 - clean snapshot publish median 0.000 µs; public by-value snapshot copy median 11.001 µs.
 
 The 512-batch median is under 0.25 ms, while p95/p99 remain slightly above; both are retained. Zero capacity growth is not an allocator-hook measurement, so the strict zero-heap-allocation gate remains unproven. The hardened `SightWeave.M2` run passed 59/59 with zero Automation warnings/failures/not-run.
+
+## Checkpoint 5 differential result
+
+`SightWeave.M2P.Differential` now contains three independent tests:
+
+- 9 hand-authored adversarial solve cases covering radial/cone near awareness, long walls, L/T corners, collinear/shared/duplicate endpoints, narrow opening, source on/near edge, and floor/height filtering;
+- 96 fixed-seed randomized cases with non-crossing polar-sector authored geometry and varied source transform, radial/directional/camera shape, range, cone, near awareness, tessellation, segment radius, and segment length;
+- a Reference-vs-Optimized runtime trace comparing point classification, pure vision, legal-illumination gating, hard-live, bypass, suppression, source-specific queries, floor/height/owner/capability isolation, boundary epsilon, attribution/rejection flags, samples, batch queries, dynamic-door open/close, no-change updates, revision sequences, determinism, and current-snapshot use.
+
+Comparison checks success/candidate/ray state, exact candidate-angle ordering, nearest-hit distances and critical boundary points, canonical vertices, bounds, area, dense deterministic classification, boundary-offset classification, repeated optimized output, and every public visibility-result field.
+
+The first valid randomized pass exposed four CameraCone near-awareness cases where the Reference Oracle's inclusive topology epsilon rejected two near-collinear edges separated by one boundary edge. Optimized emitted the same boundary but initially skipped that failure classification. The retained minimum reproductions were fixed with a constant-neighborhood, linear `HasLocalVisibilityTopologyDegeneracy` check. It matches the Reference local event-cluster policy while keeping the quadratic general `IsSimplePolygon` exclusively in Reference/diagnostic paths.
+
+Final differential report: `Saved/AutomationReports/SightWeaveM2P_Differential_Pass_20260824/index.json`; **3/3 passed**, zero error/warning/not-run, duration 0.1638 seconds. Full `SightWeave.M2` afterward passed **62/62**, zero failed/warning/not-run, duration 1.1759 seconds.
+
+Post-parity final solver evidence remains inside the documented scale:
+
+- 8×64 radial all-source median/p99: 0.750/0.766 ms;
+- 8×512 = 4,096 total median/p99: 4.490/4.606 ms for all eight solves, approximately 0.561/0.576 ms per solve;
+- 8×4,096-per-source stress median/p99: 44.405/44.786 ms for all eight solves, approximately 5.551/5.598 ms per solve, still failing the deliberately severe interpretation.
+
+The latest runtime distribution reported a 512-query batch at 206.102/210.300/211.101/211.101 µs median/p95/p99/max, now below 0.25 ms throughout that run; source update p99 was 122.700 µs and dynamic-door p99 was 694.402 µs. Strict allocator-call zero remains unproven despite zero warmed capacity growth.
 
 ## Commands executed
 
@@ -113,7 +135,6 @@ Read in full: root `AGENTS.md`; requirements, architecture, migration plan, M1/M
 
 ## Unverified items
 
-- Broad fixed-seed differential gameplay classification and attribution coverage is not complete; current evidence is matching benchmark geometry plus the existing M2 suite.
 - Actual allocator-call instrumentation and reusable solver scratch are not complete. Batch capacity is stable after warm-up, but that is narrower evidence than zero heap calls.
 - M1/all SightWeave/DARKWELL, Lab smoke, BuildPlugin/clean hosts, dependency scans, Git/LFS, and final warnings/fatals audit remain.
 - Final state must remain `PARTIAL` unless every hard correctness, isolation, build, and performance gate passes. The 4,096-per-source stress interpretation currently exceeds the worker solve budget even though the documented 4,096-total scale passes per solve.

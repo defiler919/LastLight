@@ -136,3 +136,34 @@ The query path uses immutable polar boundary points plus a 1,024-bin exact-refin
 The warmed 512-result outer and attribution-array capacities grew by **0 bytes** over the timed distribution. This proves no `TArray` capacity growth in that fixture, not global allocator call count. The optimized solver still owns per-call result/work arrays, so the strict “0 heap allocations” gate is not claimed without allocator-hook evidence and reusable solver scratch.
 
 Report: `Saved/AutomationReports/SightWeaveM2_RuntimeHardened_20260824/index.json`; **59 discovered/run/passed, 0 failed/warning/not-run**. The 512-batch median is 47.5× faster than baseline. Its p95/p99 remain 2.001/18.500 µs over 0.25 ms, and are explicitly retained as a remaining tail risk.
+
+## Differential correctness and post-parity final measurements — 2026-08-24
+
+The completed differential suite compares the Reference and Optimized solver at geometry and gameplay-query levels. It includes 9 manual adversarial cases, 96 fixed-seed valid randomized cases, dense point/boundary classification, and a paired runtime trace covering vision, illumination, bypass, suppression, attribution/rejection, isolation, batch/sample rules, dynamic-door transitions, revision/determinism, and stale-snapshot rejection.
+
+An initial randomized generator was tightened to keep every segment strictly inside a disjoint polar sector, avoiding the same invalid crossing-authored-geometry problem already recorded in the baseline history. With valid geometry, four CameraCone near-awareness cases still produced a real semantic difference: Reference rejected a near-collinear local boundary-event cluster as non-simple while Optimized accepted the identical boundary. The minimum failures were always edge `i` against `i+2`. Optimized now applies an O(vertices) constant-neighborhood topology-degeneracy guard using the same inclusive topology tolerance. General O(vertices²) `IsSimplePolygon` remains out of Optimized and Shipping.
+
+Final differential report: `Saved/AutomationReports/SightWeaveM2P_Differential_Pass_20260824/index.json`; **3/3 passed**, zero failed/warning/not-run. The subsequent full `SightWeave.M2` prefix passed **62/62**, zero failed/warning/not-run.
+
+The parity guard adds measured linear work, so the table below supersedes the earlier optimized timing table for final acceptance. Times remain microseconds as `median / p95 / p99 / max` for all eight solves unless stated otherwise.
+
+| Workload | Final optimized total µs median / p95 / p99 / max | Approx. per-solve median / p99 | Gate |
+| --- | ---: | ---: | --- |
+| Typical radial, 8 × 64 | 749.797 / 762.004 / 765.700 / 765.700 | 93.7 / 95.7 | pass |
+| Typical directional cone, 8 × 64 | 351.306 / 358.496 / 358.794 / 358.794 | 43.9 / 44.8 | pass |
+| Typical radial, 8 × 256 | 3,080.703 / 3,105.994 / 3,153.399 / 3,153.399 | 385.1 / 394.2 | pass |
+| Dense radial, 8 × 1,024 | 9,322.096 / 10,863.200 / 11,238.996 / 11,238.996 | 1,165.3 / 1,404.9 | pass |
+| Dense radial, **4,096 total** = 8 × 512 | 4,489.996 / 4,578.594 / 4,606.094 / 4,606.094 | **561.2 / 575.8** | pass |
+| Dense radial, **4,096/source** = 8 × 4,096 | 44,404.898 / 44,786.401 / 44,786.401 / 44,786.401 | **5,550.6 / 5,598.3** | fail severe interpretation |
+
+The post-differential runtime run measured:
+
+| Operation | Median | p95 | p99 | Max | Result |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Authority point query | 0.499 | 0.700 | 0.801 | 1.099 | pass |
+| 512-request batch | **206.102** | **210.300** | **211.101** | **211.101** | pass this distribution |
+| Dynamic door update + solve + publish | 652.701 | 675.201 | 694.402 | 694.402 | local affected solve only |
+| Source transform update + solve + publish | **115.298** | 121.802 | 122.700 | 122.700 | dispatch gate passes |
+| Identical source update | 0.298 | 0.302 | 0.302 | 0.302 | no revision change |
+
+Raw reports: `Saved/AutomationReports/SightWeaveM2P_OptimizedAfterDifferential_20260824/index.json` and `Saved/AutomationReports/SightWeaveM2_AfterDifferential_20260824/index.json`. Candidate/ray/vertex counts continue to match Reference. Zero warmed `TArray` capacity growth is retained as evidence, but actual allocator-call count remains uninstrumented; therefore the strict zero-heap gate is not claimed.

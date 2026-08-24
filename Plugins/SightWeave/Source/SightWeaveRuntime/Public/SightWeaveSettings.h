@@ -31,6 +31,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Geometry")
 	FSightWeaveGeometryTolerances GeometryTolerances;
 
+	/** Reference and Verify are diagnostic-only; Shipping always uses Optimized. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Geometry")
+	ESightWeaveSolverMode SolverMode = ESightWeaveSolverMode::Optimized;
+
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Spatial Index", meta = (ClampMin = "1.0"))
 	double SpatialCellSizeCentimeters = 500.0;
 

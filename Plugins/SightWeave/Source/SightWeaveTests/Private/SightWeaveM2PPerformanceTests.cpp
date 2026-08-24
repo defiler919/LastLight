@@ -159,6 +159,7 @@ namespace SightWeave::M2P::PerformanceTests
 		double Boundary = 0.0;
 		double CandidateEvents = 0.0;
 		double Sort = 0.0;
+		double Acceleration = 0.0;
 		double RayCast = 0.0;
 		double PostProcess = 0.0;
 		double Topology = 0.0;
@@ -166,15 +167,18 @@ namespace SightWeave::M2P::PerformanceTests
 		int64 Rays = 0;
 		int64 Vertices = 0;
 		uint64 WorkingBytes = 0;
+		uint64 TraversedNodes = 0;
+		uint64 TestedSegments = 0;
 		bool bValid = true;
 	};
 
-	FReferenceSample RunReferenceSample(
+	FReferenceSample RunSolverSample(
 		const int32 SourceCount,
 		const int32 SegmentsPerSource,
 		const ESightWeaveSourceShape Shape,
 		const bool bDense,
-		const int32 Seed)
+		const int32 Seed,
+		const ESightWeaveSolverMode SolverMode)
 	{
 		FReferenceSample Sample;
 		for (int32 SourceIndex = 0; SourceIndex < SourceCount; ++SourceIndex)
@@ -183,13 +187,15 @@ namespace SightWeave::M2P::PerformanceTests
 				SegmentsPerSource,
 				Seed + SourceIndex * 7919,
 				bDense);
-			const FSightWeaveReferenceSolveResult Solve = SightWeave::Geometry::SolveReferencePolygon(
-				SolveInput(Segments, SourceIndex, SourceCount, Shape));
+			const FSightWeaveReferenceSolveResult Solve = SightWeave::Geometry::SolvePolygon(
+				SolveInput(Segments, SourceIndex, SourceCount, Shape),
+				SolverMode);
 			Sample.bValid &= Solve.bSucceeded;
 			Sample.Total += Solve.StageMetrics.TotalMicroseconds;
 			Sample.Boundary += Solve.StageMetrics.BoundaryEventMicroseconds;
 			Sample.CandidateEvents += Solve.StageMetrics.CandidateFilterAndEndpointEventMicroseconds;
 			Sample.Sort += Solve.StageMetrics.EventSortDeduplicateMicroseconds;
+			Sample.Acceleration += Solve.StageMetrics.AccelerationBuildMicroseconds;
 			Sample.RayCast += Solve.StageMetrics.RayCastMicroseconds;
 			Sample.PostProcess += Solve.StageMetrics.PolygonPostProcessMicroseconds;
 			Sample.Topology += Solve.StageMetrics.TopologyValidationMicroseconds;
@@ -197,8 +203,82 @@ namespace SightWeave::M2P::PerformanceTests
 			Sample.Rays += Solve.CastRayCount;
 			Sample.Vertices += Solve.Vertices.Num();
 			Sample.WorkingBytes += Solve.StageMetrics.WorkingSetAllocatedBytes;
+			Sample.TraversedNodes += Solve.StageMetrics.TraversedAccelerationNodes;
+			Sample.TestedSegments += Solve.StageMetrics.TestedSegments;
 		}
 		return Sample;
+	}
+
+	void LogSolverDistribution(
+		FAutomationTestBase& Test,
+		const TCHAR* SolverName,
+		const ESightWeaveSolverMode SolverMode,
+		const TCHAR* Name,
+		const int32 SourceCount,
+		const int32 SegmentsPerSource,
+		const ESightWeaveSourceShape Shape,
+		const bool bDense,
+		const int32 Warmups,
+		const int32 Repeats)
+	{
+		for (int32 Warmup = 0; Warmup < Warmups; ++Warmup)
+		{
+			RunSolverSample(SourceCount, SegmentsPerSource, Shape, bDense, 0x51A7E, SolverMode);
+		}
+		TArray<double> Total;
+		TArray<double> Boundary;
+		TArray<double> CandidateEvents;
+		TArray<double> Sort;
+		TArray<double> Acceleration;
+		TArray<double> RayCast;
+		TArray<double> PostProcess;
+		TArray<double> Topology;
+		FReferenceSample Last;
+		for (int32 Repeat = 0; Repeat < Repeats; ++Repeat)
+		{
+			Last = RunSolverSample(SourceCount, SegmentsPerSource, Shape, bDense, 0x51A7E, SolverMode);
+			Test.TestTrue(*FString::Printf(TEXT("%s %s sample succeeds"), Name, SolverName), Last.bValid);
+			Total.Add(Last.Total);
+			Boundary.Add(Last.Boundary);
+			CandidateEvents.Add(Last.CandidateEvents);
+			Sort.Add(Last.Sort);
+			Acceleration.Add(Last.Acceleration);
+			RayCast.Add(Last.RayCast);
+			PostProcess.Add(Last.PostProcess);
+			Topology.Add(Last.Topology);
+		}
+		const FDistribution TotalStats = Distribution(Total);
+		const FDistribution BoundaryStats = Distribution(Boundary);
+		const FDistribution CandidateStats = Distribution(CandidateEvents);
+		const FDistribution SortStats = Distribution(Sort);
+		const FDistribution AccelerationStats = Distribution(Acceleration);
+		const FDistribution RayStats = Distribution(RayCast);
+		const FDistribution PostStats = Distribution(PostProcess);
+		const FDistribution TopologyStats = Distribution(Topology);
+		Test.AddInfo(FString::Printf(
+			TEXT("M2P_SOLVER mode=%s name=%s sources=%d segments_per_source=%d relevant_segments_sum=%d shape=%d dense=%d repeats=%d candidates=%lld rays=%lld vertices=%lld working_bytes=%llu traversed_nodes=%llu tested_segments=%llu total_us=%.3f/%.3f/%.3f/%.3f boundary_us=%.3f/%.3f/%.3f/%.3f candidate_us=%.3f/%.3f/%.3f/%.3f sort_us=%.3f/%.3f/%.3f/%.3f acceleration_us=%.3f/%.3f/%.3f/%.3f ray_us=%.3f/%.3f/%.3f/%.3f post_us=%.3f/%.3f/%.3f/%.3f topology_us=%.3f/%.3f/%.3f/%.3f"),
+			SolverName,
+			Name,
+			SourceCount,
+			SegmentsPerSource,
+			SourceCount * SegmentsPerSource,
+			static_cast<int32>(Shape),
+			bDense ? 1 : 0,
+			Repeats,
+			Last.Candidates,
+			Last.Rays,
+			Last.Vertices,
+			Last.WorkingBytes,
+			Last.TraversedNodes,
+			Last.TestedSegments,
+			TotalStats.Median, TotalStats.P95, TotalStats.P99, TotalStats.Max,
+			BoundaryStats.Median, BoundaryStats.P95, BoundaryStats.P99, BoundaryStats.Max,
+			CandidateStats.Median, CandidateStats.P95, CandidateStats.P99, CandidateStats.Max,
+			SortStats.Median, SortStats.P95, SortStats.P99, SortStats.Max,
+			AccelerationStats.Median, AccelerationStats.P95, AccelerationStats.P99, AccelerationStats.Max,
+			RayStats.Median, RayStats.P95, RayStats.P99, RayStats.Max,
+			PostStats.Median, PostStats.P95, PostStats.P99, PostStats.Max,
+			TopologyStats.Median, TopologyStats.P95, TopologyStats.P99, TopologyStats.Max));
 	}
 
 	void LogReferenceDistribution(
@@ -211,57 +291,40 @@ namespace SightWeave::M2P::PerformanceTests
 		const int32 Warmups,
 		const int32 Repeats)
 	{
-		for (int32 Warmup = 0; Warmup < Warmups; ++Warmup)
-		{
-			RunReferenceSample(SourceCount, SegmentsPerSource, Shape, bDense, 0x51A7E);
-		}
-		TArray<double> Total;
-		TArray<double> Boundary;
-		TArray<double> CandidateEvents;
-		TArray<double> Sort;
-		TArray<double> RayCast;
-		TArray<double> PostProcess;
-		TArray<double> Topology;
-		FReferenceSample Last;
-		for (int32 Repeat = 0; Repeat < Repeats; ++Repeat)
-		{
-			Last = RunReferenceSample(SourceCount, SegmentsPerSource, Shape, bDense, 0x51A7E);
-			Test.TestTrue(*FString::Printf(TEXT("%s reference sample succeeds"), Name), Last.bValid);
-			Total.Add(Last.Total);
-			Boundary.Add(Last.Boundary);
-			CandidateEvents.Add(Last.CandidateEvents);
-			Sort.Add(Last.Sort);
-			RayCast.Add(Last.RayCast);
-			PostProcess.Add(Last.PostProcess);
-			Topology.Add(Last.Topology);
-		}
-		const FDistribution TotalStats = Distribution(Total);
-		const FDistribution BoundaryStats = Distribution(Boundary);
-		const FDistribution CandidateStats = Distribution(CandidateEvents);
-		const FDistribution SortStats = Distribution(Sort);
-		const FDistribution RayStats = Distribution(RayCast);
-		const FDistribution PostStats = Distribution(PostProcess);
-		const FDistribution TopologyStats = Distribution(Topology);
-		Test.AddInfo(FString::Printf(
-			TEXT("M2P_BASELINE_REFERENCE name=%s sources=%d segments_per_source=%d relevant_segments_sum=%d shape=%d dense=%d repeats=%d candidates=%lld rays=%lld vertices=%lld working_bytes=%llu total_us=%.3f/%.3f/%.3f/%.3f boundary_us=%.3f/%.3f/%.3f/%.3f candidate_us=%.3f/%.3f/%.3f/%.3f sort_us=%.3f/%.3f/%.3f/%.3f ray_us=%.3f/%.3f/%.3f/%.3f post_us=%.3f/%.3f/%.3f/%.3f topology_us=%.3f/%.3f/%.3f/%.3f"),
+		LogSolverDistribution(
+			Test,
+			TEXT("reference"),
+			ESightWeaveSolverMode::Reference,
 			Name,
 			SourceCount,
 			SegmentsPerSource,
-			SourceCount * SegmentsPerSource,
-			static_cast<int32>(Shape),
-			bDense ? 1 : 0,
-			Repeats,
-			Last.Candidates,
-			Last.Rays,
-			Last.Vertices,
-			Last.WorkingBytes,
-			TotalStats.Median, TotalStats.P95, TotalStats.P99, TotalStats.Max,
-			BoundaryStats.Median, BoundaryStats.P95, BoundaryStats.P99, BoundaryStats.Max,
-			CandidateStats.Median, CandidateStats.P95, CandidateStats.P99, CandidateStats.Max,
-			SortStats.Median, SortStats.P95, SortStats.P99, SortStats.Max,
-			RayStats.Median, RayStats.P95, RayStats.P99, RayStats.Max,
-			PostStats.Median, PostStats.P95, PostStats.P99, PostStats.Max,
-			TopologyStats.Median, TopologyStats.P95, TopologyStats.P99, TopologyStats.Max));
+			Shape,
+			bDense,
+			Warmups,
+			Repeats);
+	}
+
+	void LogOptimizedDistribution(
+		FAutomationTestBase& Test,
+		const TCHAR* Name,
+		const int32 SourceCount,
+		const int32 SegmentsPerSource,
+		const ESightWeaveSourceShape Shape,
+		const bool bDense,
+		const int32 Warmups,
+		const int32 Repeats)
+	{
+		LogSolverDistribution(
+			Test,
+			TEXT("optimized"),
+			ESightWeaveSolverMode::Optimized,
+			Name,
+			SourceCount,
+			SegmentsPerSource,
+			Shape,
+			bDense,
+			Warmups,
+			Repeats);
 	}
 
 	template <typename CallbackType>
@@ -353,6 +416,32 @@ bool FSightWeaveM2PReferenceStageBaselineTest::RunTest(const FString& Parameters
 		LogReferenceDistribution(*this, TEXT("dense_8x1024_radial"), 8, 1024, ESightWeaveSourceShape::Radial, true, 1, 5);
 		LogReferenceDistribution(*this, TEXT("dense_8x512_total4096"), 8, 512, ESightWeaveSourceShape::Radial, true, 1, 5);
 		LogReferenceDistribution(*this, TEXT("dense_8x4096_each"), 8, 4096, ESightWeaveSourceShape::Radial, true, 0, 3);
+	}
+	else
+	{
+		AddInfo(TEXT("Extended 256/1024/4096 workloads require -SightWeaveExtendedBenchmarks."));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2POptimizedStagePerformanceTest,
+	"SightWeave.M2P.Performance.Optimized.SolverStages",
+	SightWeave::M2P::PerformanceTests::TestFlags)
+
+bool FSightWeaveM2POptimizedStagePerformanceTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P::PerformanceTests;
+	const bool bExtended = FParse::Param(FCommandLine::Get(), TEXT("SightWeaveExtendedBenchmarks"));
+	LogOptimizedDistribution(*this, TEXT("typical_2x64_radial"), 2, 64, ESightWeaveSourceShape::Radial, false, 4, 31);
+	LogOptimizedDistribution(*this, TEXT("typical_8x64_radial"), 8, 64, ESightWeaveSourceShape::Radial, false, 4, 31);
+	LogOptimizedDistribution(*this, TEXT("typical_8x64_cone"), 8, 64, ESightWeaveSourceShape::DirectionalCone, false, 4, 31);
+	if (bExtended)
+	{
+		LogOptimizedDistribution(*this, TEXT("typical_8x256_radial"), 8, 256, ESightWeaveSourceShape::Radial, false, 2, 21);
+		LogOptimizedDistribution(*this, TEXT("dense_8x1024_radial"), 8, 1024, ESightWeaveSourceShape::Radial, true, 2, 21);
+		LogOptimizedDistribution(*this, TEXT("dense_8x512_total4096"), 8, 512, ESightWeaveSourceShape::Radial, true, 2, 21);
+		LogOptimizedDistribution(*this, TEXT("dense_8x4096_each"), 8, 4096, ESightWeaveSourceShape::Radial, true, 1, 11);
 	}
 	else
 	{

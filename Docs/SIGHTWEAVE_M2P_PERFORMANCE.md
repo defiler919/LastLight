@@ -88,8 +88,32 @@ The spatial lookup and clean snapshot copy are already small. Batch query is app
 - Corrected rebuild: passed, UBT success, 5.85 seconds.
 - Corrected extended benchmark: **2 discovered, 2 run, 2 passed, 0 failed/warning/not-run**, process exit code 0, duration 170.033 seconds. Report: `Saved/AutomationReports/SightWeaveM2P_Baseline_ValidDense_20260824/index.json`.
 
-## Optimization direction selected from evidence
+## Optimized solver — final candidate 2026-08-24
 
-The production path should keep the exact endpoint-event semantics but replace all-segments-per-ray scans with deterministic spatial acceleration (a local 2D segment BVH or an equivalently exact angular structure). This is lower semantic risk than immediately introducing a fragile active-order angular sweep because it can reuse the same analytic intersection and stable-ID tie-break. Optimized construction must guarantee topology and omit O(vertices²) validation from the production hot path; Reference and Verify retain it. Scratch buffers and batch output must be reused, compatibility lookup must be pre-resolved, and no-change mutations must avoid new revisions/publications.
+Profile evidence led to a deterministic angular-interval candidate sweep rather than the initially prototyped BVH. The optimized solver deliberately keeps the Reference event set and exact intersection/tie semantics:
 
-No performance gate is passed yet. These are optimization-before measurements.
+1. filter the same floor/height candidates and emit the same fixed boundary plus endpoint/±epsilon rays;
+2. prepare cache-local segment data and conservative angular intervals expanded for the existing inclusive endpoint tolerance;
+3. sort intervals deterministically, then sweep the sorted candidate rays while maintaining only intervals that cover the current ray;
+4. run the same analytic intersection and stable-ID nearest-hit rule on that reduced set;
+5. construct by sorted angle and omit quadratic topology validation only in Optimized production mode.
+
+Reference remains callable as the Oracle. Non-Shipping Verify runs both and visibly falls back to Reference on a detected mismatch. Shipping always executes Optimized and contains no mode that runs Reference/Verify.
+
+Times below are microseconds as `median / p95 / p99 / max`. A sample includes all named source solves, matching the Reference table.
+
+| Workload | Candidates / rays / vertices | Optimized total µs median / p95 / p99 / max | Median speedup |
+| --- | ---: | ---: | ---: |
+| Typical radial, 2 × 64 | 128 / 1,024 / 898 | 117.801 / 120.398 / 126.000 / 126.000 | 48.1× |
+| Typical radial, 8 × 64 | 512 / 4,096 / 3,635 | 485.197 / 492.286 / 495.002 / 495.002 | 46.9× |
+| Typical cone, 8 × 64 | 512 / 1,448 / 1,359 | 251.401 / 256.103 / 259.001 / 259.001 | 24.8× |
+| Typical radial, 8 × 256 | 2,048 / 13,312 / 8,838 | 2,330.702 / 2,346.803 / 2,358.802 / 2,358.802 | 99.9× |
+| Dense radial, 8 × 1,024 | 8,192 / 50,176 / 46,520 | 5,960.889 / 6,031.394 / 6,142.505 / 6,142.505 | 568.9× |
+| Dense radial, **4,096 total** = 8 × 512 | 4,096 / 25,600 / 24,784 | 2,828.199 / 2,864.107 / 2,870.202 / 2,870.202 | 324.5× |
+| Dense radial, **4,096/source** = 8 × 4,096 | 32,768 / 197,632 / 156,641 | 31,627.502 / 31,659.801 / 31,659.801 / 31,659.801 | 1,484.5× |
+
+At the documented 4,096-total scale, the eight-solve sample is approximately 0.354 ms median and 0.359 ms p99 per solve, below the 1/2 ms worker thresholds. The intentionally harsher 4,096-per-source interpretation is approximately 3.953/3.957 ms per solve and therefore fails that stress interpretation; it is not relabeled as a pass.
+
+The 8×64 all-source warm p99 is 0.495 ms, comfortably below its explicit 2 ms gate. The interval sweep tests 8,334 exact segment intersections instead of the Reference path's 2,097,152 potential ray/segment pairs in that sample. At 4,096 total it tests 34,520 instead of 13,107,200 potential pairs. Output candidate, ray, and vertex counts match Reference in every row.
+
+Raw final candidate report: `Saved/AutomationReports/SightWeaveM2P_OptimizedFinalCandidate_20260824/index.json` (ignored, not committed). Remaining runtime, allocator-call, and differential evidence is recorded in later sections/checkpoints; solver performance alone is not a final M2P completion claim.

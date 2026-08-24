@@ -186,6 +186,18 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveInput
 	TArray<FSightWeaveSegment2D> Segments;
 };
 
+/**
+ * Selects the CPU authority implementation. Shipping builds always execute the
+ * optimized solver even if stale configuration requests a diagnostic mode.
+ */
+UENUM(BlueprintType)
+enum class ESightWeaveSolverMode : uint8
+{
+	Optimized UMETA(DisplayName = "Optimized"),
+	Reference UMETA(DisplayName = "Reference (Development Only)"),
+	Verify UMETA(DisplayName = "Verify And Fallback (Development Only)")
+};
+
 struct SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult
 {
 	struct FStageMetrics
@@ -193,11 +205,14 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult
 		double BoundaryEventMicroseconds = 0.0;
 		double CandidateFilterAndEndpointEventMicroseconds = 0.0;
 		double EventSortDeduplicateMicroseconds = 0.0;
+		double AccelerationBuildMicroseconds = 0.0;
 		double RayCastMicroseconds = 0.0;
 		double PolygonPostProcessMicroseconds = 0.0;
 		double TopologyValidationMicroseconds = 0.0;
 		double TotalMicroseconds = 0.0;
 		uint64 WorkingSetAllocatedBytes = 0;
+		uint64 TraversedAccelerationNodes = 0;
+		uint64 TestedSegments = 0;
 	};
 
 	bool bSucceeded = false;
@@ -205,7 +220,11 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult
 	TArray<double> CandidateAnglesRadians;
 	int32 CandidateSegmentCount = 0;
 	int32 CastRayCount = 0;
+	ESightWeaveSolverMode SolverModeUsed = ESightWeaveSolverMode::Reference;
+	bool bVerificationMatched = false;
+	bool bUsedReferenceFallback = false;
 	FStageMetrics StageMetrics;
+	FString VerificationError;
 	FString Error;
 };
 
@@ -239,4 +258,13 @@ namespace SightWeave::Geometry
 
 	SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult SolveReferencePolygon(
 		const FSightWeaveReferenceSolveInput& Input);
+
+	/** Exact endpoint-event solver accelerated by a deterministic angular-interval sweep. */
+	SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult SolveOptimizedPolygon(
+		const FSightWeaveReferenceSolveInput& Input);
+
+	/** Production entry point. Reference and Verify are unavailable in Shipping. */
+	SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult SolvePolygon(
+		const FSightWeaveReferenceSolveInput& Input,
+		ESightWeaveSolverMode Mode = ESightWeaveSolverMode::Optimized);
 }

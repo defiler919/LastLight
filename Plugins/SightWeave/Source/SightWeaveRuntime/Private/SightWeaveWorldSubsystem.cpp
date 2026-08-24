@@ -1209,7 +1209,8 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		Input.NearAwarenessRadius = Description->NearAwarenessRadius;
 		Input.FloorId = Description->FloorId;
 		Input.HeightRange = Description->HeightRange;
-		Input.Tolerances = GetDefault<USightWeaveSettings>()->GeometryTolerances;
+		const USightWeaveSettings* Settings = GetDefault<USightWeaveSettings>();
+		Input.Tolerances = Settings->GeometryTolerances;
 		Input.Tolerances.Normalize();
 		const FVector Origin = Description->Transform.GetLocation();
 		const FBox2D QueryBounds(
@@ -1218,7 +1219,7 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		QueryOccluderSegments(Description->FloorId, QueryBounds, Description->HeightRange, Input.Segments);
 
 		const double StartSeconds = FPlatformTime::Seconds();
-		FSightWeaveReferenceSolveResult SolveResult = SightWeave::Geometry::SolveReferencePolygon(Input);
+		FSightWeaveReferenceSolveResult SolveResult = SightWeave::Geometry::SolvePolygon(Input, Settings->SolverMode);
 		Entry.SolveTimeMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
 		Entry.CandidateRayCount = SolveResult.CastRayCount;
@@ -1266,7 +1267,8 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		Input.NearAwarenessRadius = 0.0;
 		Input.FloorId = Description->FloorId;
 		Input.HeightRange = Description->HeightRange;
-		Input.Tolerances = GetDefault<USightWeaveSettings>()->GeometryTolerances;
+		const USightWeaveSettings* Settings = GetDefault<USightWeaveSettings>();
+		Input.Tolerances = Settings->GeometryTolerances;
 		Input.Tolerances.Normalize();
 		const FVector Origin = Description->Transform.GetLocation();
 		const FBox2D QueryBounds(
@@ -1275,7 +1277,7 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		QueryOccluderSegments(Description->FloorId, QueryBounds, Description->HeightRange, Input.Segments);
 
 		const double StartSeconds = FPlatformTime::Seconds();
-		FSightWeaveReferenceSolveResult SolveResult = SightWeave::Geometry::SolveReferencePolygon(Input);
+		FSightWeaveReferenceSolveResult SolveResult = SightWeave::Geometry::SolvePolygon(Input, Settings->SolverMode);
 		Entry.SolveTimeMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
 		Entry.CandidateRayCount = SolveResult.CastRayCount;

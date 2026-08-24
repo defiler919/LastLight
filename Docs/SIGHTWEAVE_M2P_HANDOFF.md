@@ -7,8 +7,8 @@
 - Baseline SHA: `517a486779b53a890377f7cd0bc12b6f1cc62640`
 - Working branch: `codex/m2p-sightweave-authority-performance`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current phase: checkpoint 2 — trustworthy Reference and runtime baseline captured
-- Last safe commit: `fdd54ff2b450f4289f06a23e2ac0186bd53056c9`
+- Current phase: checkpoint 3 — optimized angular-interval solver implemented and profiled
+- Last safe commit: `8fda558d80cad9654aaf8aaee1d5e6db7410fb92`
 - Next recovery command: `git switch codex/m2p-sightweave-authority-performance; git pull --ff-only origin codex/m2p-sightweave-authority-performance`
 
 ## Objective
@@ -63,7 +63,19 @@ The documents also state that these budgets are provisional until minimum hardwa
 - spatial candidate query and clean snapshot copy are not current primary hotspots.
 - Existing `SightWeave.M2.Geometry` after instrumentation: 21/21 passed, zero warning/error/not-run, duration 0.1688 seconds.
 
-The selected next implementation is an exact deterministic 2D segment BVH using the same endpoint events, analytic intersection, inclusive boundary, and stable-ID tie-break. Reference keeps quadratic topology validation; Optimized will guarantee construction and Verify will compare both.
+## Checkpoint 3 optimized solver result
+
+The production-default solver keeps the exact Reference boundary and endpoint/±epsilon event set, but builds conservative angular coverage intervals for every relevant segment. A deterministic sweep over the already sorted rays maintains only intervals that can intersect the current ray; those candidates still use the same analytic ray/segment math, inclusive tolerance, and stable-ID tie-break. This replaced the measured `rays × all segments` scan without reducing sampling. Production construction omits quadratic `IsSimplePolygon`; Reference retains it. `Optimized`, `Reference`, and non-Shipping `Verify` modes are explicit, and Shipping always selects Optimized.
+
+Final candidate measurements on the same machine:
+
+- 8×64 radial warm median/p99: 0.485/0.495 ms for all 8 solves, versus 22.773/22.872 ms Reference (46.9×/46.2× faster).
+- 8×512 = 4,096 total median/p99: 2.828/2.870 ms for all 8 solves, or approximately 0.354/0.359 ms per solve, versus 917.852/920.468 ms Reference.
+- 8×4,096 per-source stress median/p99: 31.628/31.660 ms for all 8 solves, or approximately 3.953/3.957 ms per solve. This deliberately severe interpretation remains over the worker budget and will be reported separately from the documented 4,096-total scale.
+- Candidate/ray/vertex counts match the Reference baseline in every benchmark row.
+- Full Editor builds passed after each solver iteration. `SightWeave.M2` with the optimized runtime path passed 59/59, zero failed/warning/not-run; the known 13 startup self-test error lines predate and are outside Automation test results.
+
+The next checkpoint is large fixed-seed and manual-edge Optimized-vs-Reference differential coverage, followed by runtime query/update/allocation hardening.
 
 ## Commands executed
 
@@ -86,7 +98,7 @@ Read in full: root `AGENTS.md`; requirements, architecture, migration plan, M1/M
 
 ## Unverified items
 
-- No M2P benchmark, profile, optimized implementation, differential suite, build, automation, Lab smoke, or packaging validation has run yet.
-- Current workstation hardware/compiler details have not yet been captured.
-- The profile-selected BVH production algorithm, solver modes, and scratch/allocation strategy are not implemented yet.
-- Final state must remain `PARTIAL` unless every hard correctness, isolation, build, and performance gate passes.
+- Broad fixed-seed differential gameplay classification and attribution coverage is not complete; current evidence is matching benchmark geometry plus the existing M2 suite.
+- Runtime batch/query, no-change revision, dispatch, and actual allocator-call hardening are not complete.
+- M1/all SightWeave/DARKWELL, Lab smoke, BuildPlugin/clean hosts, dependency scans, Git/LFS, and final warnings/fatals audit remain.
+- Final state must remain `PARTIAL` unless every hard correctness, isolation, build, and performance gate passes. The 4,096-per-source stress interpretation currently exceeds the worker solve budget even though the documented 4,096-total scale passes per solve.

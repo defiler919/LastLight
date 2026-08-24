@@ -1,8 +1,9 @@
 #include "SightWeaveGeometry.h"
 
-#include "Algo/Sort.h"
 #include "Algo/Unique.h"
 #include "HAL/PlatformTime.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogSightWeaveGeometry, Log, All);
 
 namespace
 {
@@ -235,6 +236,192 @@ namespace
 			OutMax.X = FMath::Max(OutMax.X, Vertex.X);
 			OutMax.Y = FMath::Max(OutMax.Y, Vertex.Y);
 		}
+	}
+
+	struct FSightWeavePreparedSegment
+	{
+		FVector2D A = FVector2D::ZeroVector;
+		FVector2D Vector = FVector2D::ZeroVector;
+		double FractionEpsilon = 0.0;
+		int64 StableId = 0;
+	};
+
+	struct FSightWeaveAngularInterval
+	{
+		double StartAngle = 0.0;
+		double EndAngle = 0.0;
+		int32 SegmentIndex = INDEX_NONE;
+	};
+
+	void AddClippedAngularInterval(
+		TArray<FSightWeaveAngularInterval>& Intervals,
+		const double UnwrappedStart,
+		const double UnwrappedEnd,
+		const int32 SegmentIndex)
+	{
+		for (int32 Wrap = -1; Wrap <= 1; ++Wrap)
+		{
+			const double Offset = static_cast<double>(Wrap) * SightWeaveTwoPi;
+			const double Start = FMath::Max(-PI, UnwrappedStart + Offset);
+			const double End = FMath::Min(PI, UnwrappedEnd + Offset);
+			if (Start <= End)
+			{
+				Intervals.Add({ Start, End, SegmentIndex });
+			}
+		}
+	}
+
+	void BuildAngularIntervals(
+		const TArray<FSightWeavePreparedSegment>& Segments,
+		const FVector2D& Origin,
+		const double ForwardAngle,
+		const FSightWeaveGeometryTolerances& Tolerances,
+		TArray<FSightWeaveAngularInterval>& OutIntervals)
+	{
+		OutIntervals.Reset();
+		OutIntervals.Reserve(Segments.Num() * 2);
+		const double NumericAngularPadding = FMath::Max(1.0e-12, Tolerances.RayParallelEpsilon);
+		for (int32 SegmentIndex = 0; SegmentIndex < Segments.Num(); ++SegmentIndex)
+		{
+			const FSightWeavePreparedSegment& Segment = Segments[SegmentIndex];
+			const FVector2D B = Segment.A + Segment.Vector;
+			if (DistanceSquaredToSegment(Origin, Segment.A, B)
+				<= FMath::Square(Tolerances.PointOnEdgeEpsilon))
+			{
+				OutIntervals.Add({ -PI, PI, SegmentIndex });
+				continue;
+			}
+
+			const double AAngle = NormalizeRadians(
+				FMath::Atan2(Segment.A.Y - Origin.Y, Segment.A.X - Origin.X) - ForwardAngle);
+			const double BAngle = NormalizeRadians(
+				FMath::Atan2(B.Y - Origin.Y, B.X - Origin.X) - ForwardAngle);
+			const double SignedSpan = NormalizeRadians(BAngle - AAngle);
+			const double MinimumEndpointDistance = FMath::Min(
+				FVector2D::Distance(Origin, Segment.A),
+				FVector2D::Distance(Origin, B));
+			const double AngularPadding = FMath::Max(
+				NumericAngularPadding,
+				FMath::Atan2(
+					Tolerances.PointOnEdgeEpsilon,
+					FMath::Max(MinimumEndpointDistance, Tolerances.PointOnEdgeEpsilon)));
+			const double Start = (SignedSpan >= 0.0 ? AAngle : BAngle) - AngularPadding;
+			const double End = Start + FMath::Abs(SignedSpan) + 2.0 * AngularPadding;
+			AddClippedAngularInterval(OutIntervals, Start, End, SegmentIndex);
+		}
+
+		OutIntervals.Sort([&Segments](const FSightWeaveAngularInterval& A, const FSightWeaveAngularInterval& B)
+		{
+			if (A.StartAngle != B.StartAngle)
+			{
+				return A.StartAngle < B.StartAngle;
+			}
+			if (A.EndAngle != B.EndAngle)
+			{
+				return A.EndAngle < B.EndAngle;
+			}
+			const int64 AStableId = Segments[A.SegmentIndex].StableId;
+			const int64 BStableId = Segments[B.SegmentIndex].StableId;
+			return AStableId != BStableId ? AStableId < BStableId : A.SegmentIndex < B.SegmentIndex;
+		});
+	}
+
+	bool IntersectTrustedRaySegment(
+		const FVector2D& RayOrigin,
+		const FVector2D& NormalizedRayDirection,
+		const FSightWeavePreparedSegment& Segment,
+		const FSightWeaveGeometryTolerances& Tolerances,
+		double& OutRayDistance)
+	{
+		const double Denominator = Cross2D(NormalizedRayDirection, Segment.Vector);
+		if (FMath::Abs(Denominator) <= Tolerances.RayParallelEpsilon)
+		{
+			return false;
+		}
+		const FVector2D Offset = Segment.A - RayOrigin;
+		const double RayDistance = Cross2D(Offset, Segment.Vector) / Denominator;
+		const double SegmentFraction = Cross2D(Offset, NormalizedRayDirection) / Denominator;
+		if (RayDistance < -Tolerances.PointOnEdgeEpsilon
+			|| SegmentFraction < -Segment.FractionEpsilon
+			|| SegmentFraction > 1.0 + Segment.FractionEpsilon)
+		{
+			return false;
+		}
+		OutRayDistance = FMath::Max(0.0, RayDistance);
+		return true;
+	}
+
+	void SortAndDeduplicateAnglesLinear(TArray<double>& Angles)
+	{
+		Angles.Sort();
+		if (Angles.Num() < 2)
+		{
+			return;
+		}
+		int32 WriteIndex = 1;
+		for (int32 ReadIndex = 1; ReadIndex < Angles.Num(); ++ReadIndex)
+		{
+			if (FMath::Abs(Angles[ReadIndex] - Angles[WriteIndex - 1]) > 1.0e-12)
+			{
+				Angles[WriteIndex++] = Angles[ReadIndex];
+			}
+		}
+		Angles.SetNum(WriteIndex, EAllowShrinking::No);
+	}
+
+	bool SolveResultsMatch(
+		const FSightWeaveReferenceSolveResult& Optimized,
+		const FSightWeaveReferenceSolveResult& Reference,
+		const FSightWeaveGeometryTolerances& Tolerances,
+		FString& OutError)
+	{
+		if (Optimized.bSucceeded != Reference.bSucceeded)
+		{
+			OutError = TEXT("success state differs");
+			return false;
+		}
+		if (Optimized.CandidateSegmentCount != Reference.CandidateSegmentCount
+			|| Optimized.CastRayCount != Reference.CastRayCount)
+		{
+			OutError = TEXT("candidate segment or ray count differs");
+			return false;
+		}
+		if (Optimized.CandidateAnglesRadians.Num() != Reference.CandidateAnglesRadians.Num())
+		{
+			OutError = TEXT("candidate angle count differs");
+			return false;
+		}
+		for (int32 Index = 0; Index < Optimized.CandidateAnglesRadians.Num(); ++Index)
+		{
+			if (!FMath::IsNearlyEqual(
+				Optimized.CandidateAnglesRadians[Index],
+				Reference.CandidateAnglesRadians[Index],
+				1.0e-12))
+			{
+				OutError = FString::Printf(TEXT("candidate angle %d differs"), Index);
+				return false;
+			}
+		}
+		if (Optimized.Vertices.Num() != Reference.Vertices.Num())
+		{
+			OutError = FString::Printf(
+				TEXT("vertex count differs (%d optimized, %d reference)"),
+				Optimized.Vertices.Num(),
+				Reference.Vertices.Num());
+			return false;
+		}
+		const double VertexToleranceSquared = FMath::Square(
+			FMath::Max(Tolerances.DuplicateVertexEpsilon, 1.0e-6));
+		for (int32 Index = 0; Index < Optimized.Vertices.Num(); ++Index)
+		{
+			if (FVector::DistSquared2D(Optimized.Vertices[Index], Reference.Vertices[Index])
+				> VertexToleranceSquared)
+			{
+				OutError = FString::Printf(TEXT("vertex %d differs"), Index);
+				return false;
+			}
+		}
+		return true;
 	}
 }
 
@@ -548,6 +735,7 @@ namespace SightWeave::Geometry
 	FSightWeaveReferenceSolveResult SolveReferencePolygon(const FSightWeaveReferenceSolveInput& Input)
 	{
 		FSightWeaveReferenceSolveResult Result;
+		Result.SolverModeUsed = ESightWeaveSolverMode::Reference;
 		const double TotalStartSeconds = FPlatformTime::Seconds();
 		if (!IsFiniteVector(Input.Origin)
 			|| !IsFiniteVector(Input.Forward)
@@ -668,6 +856,7 @@ namespace SightWeave::Geometry
 			int64 ClosestStableId = MAX_int64;
 			for (const FSightWeaveSegment2D* Segment : CandidateSegments)
 			{
+				++Result.StageMetrics.TestedSegments;
 				const FSightWeaveRaySegmentHit Hit = IntersectRaySegment(Origin, Direction, *Segment, Input.Tolerances);
 				if (!Hit.bHit
 					|| Hit.RayDistance <= Input.Tolerances.PointOnEdgeEpsilon
@@ -736,5 +925,268 @@ namespace SightWeave::Geometry
 		Result.StageMetrics.TotalMicroseconds =
 			(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
 		return Result;
+	}
+
+	FSightWeaveReferenceSolveResult SolveOptimizedPolygon(const FSightWeaveReferenceSolveInput& Input)
+	{
+		FSightWeaveReferenceSolveResult Result;
+		Result.SolverModeUsed = ESightWeaveSolverMode::Optimized;
+		const double TotalStartSeconds = FPlatformTime::Seconds();
+		if (!IsFiniteVector(Input.Origin)
+			|| !IsFiniteVector(Input.Forward)
+			|| Input.Forward.IsNearlyZero()
+			|| !Input.FloorId.IsValid()
+			|| !Input.HeightRange.IsValid()
+			|| !FMath::IsFinite(Input.Range)
+			|| Input.Range <= 0.0
+			|| !FMath::IsFinite(Input.HalfAngleDegrees)
+			|| Input.HalfAngleDegrees < 0.0
+			|| Input.HalfAngleDegrees > 180.0
+			|| !FMath::IsFinite(Input.NearAwarenessRadius)
+			|| Input.NearAwarenessRadius < 0.0
+			|| Input.NearAwarenessRadius > Input.Range
+			|| !Input.Tolerances.IsValid())
+		{
+			Result.Error = TEXT("Invalid optimized solve input");
+			return Result;
+		}
+
+		const FVector2D Origin(Input.Origin.X, Input.Origin.Y);
+		const FVector2D Forward = Input.Forward.GetSafeNormal();
+		const double ForwardAngle = FMath::Atan2(Forward.Y, Forward.X);
+		const double HalfAngleRadians = FMath::DegreesToRadians(Input.HalfAngleDegrees);
+		const double AngularEpsilon = FMath::DegreesToRadians(Input.Tolerances.EndpointAngularEpsilonDegrees);
+		const bool bFullCircle = Input.Shape == ESightWeaveSourceShape::Radial || Input.NearAwarenessRadius > 0.0;
+
+		const double BoundaryEventStartSeconds = FPlatformTime::Seconds();
+		if (bFullCircle)
+		{
+			for (int32 Step = 0; Step < Input.Tolerances.RadialBoundarySteps; ++Step)
+			{
+				AddUniqueAngle(Result.CandidateAnglesRadians,
+					-PI + SightWeaveTwoPi * static_cast<double>(Step) / Input.Tolerances.RadialBoundarySteps);
+			}
+			if (Input.Shape != ESightWeaveSourceShape::Radial)
+			{
+				for (const double Boundary : { -HalfAngleRadians, HalfAngleRadians })
+				{
+					AddUniqueAngle(Result.CandidateAnglesRadians, Boundary - AngularEpsilon);
+					AddUniqueAngle(Result.CandidateAnglesRadians, Boundary);
+					AddUniqueAngle(Result.CandidateAnglesRadians, Boundary + AngularEpsilon);
+				}
+			}
+		}
+		else
+		{
+			const int32 ArcSteps = FMath::Max(2, FMath::CeilToInt(
+				Input.Tolerances.RadialBoundarySteps * (2.0 * Input.HalfAngleDegrees / 360.0)));
+			for (int32 Step = 0; Step <= ArcSteps; ++Step)
+			{
+				const double Alpha = static_cast<double>(Step) / ArcSteps;
+				Result.CandidateAnglesRadians.Add(FMath::Lerp(-HalfAngleRadians, HalfAngleRadians, Alpha));
+			}
+			Result.CandidateAnglesRadians.Add(-HalfAngleRadians);
+			Result.CandidateAnglesRadians.Add(HalfAngleRadians);
+		}
+		Result.StageMetrics.BoundaryEventMicroseconds =
+			(FPlatformTime::Seconds() - BoundaryEventStartSeconds) * 1000000.0;
+
+		const double CandidateEventStartSeconds = FPlatformTime::Seconds();
+		TArray<FSightWeavePreparedSegment> CandidateSegments;
+		CandidateSegments.Reserve(Input.Segments.Num());
+		Result.CandidateAnglesRadians.Reserve(
+			Result.CandidateAnglesRadians.Num() + Input.Segments.Num() * 6);
+		for (const FSightWeaveSegment2D& Segment : Input.Segments)
+		{
+			if (!Segment.IsFinite()
+				|| Segment.FloorId != Input.FloorId
+				|| !HeightRangesOverlap(Segment.HeightRange, Input.HeightRange, Input.Tolerances.HeightOverlapEpsilon))
+			{
+				continue;
+			}
+			FSightWeavePreparedSegment& Prepared = CandidateSegments.AddDefaulted_GetRef();
+			Prepared.A = Segment.A;
+			Prepared.Vector = Segment.B - Segment.A;
+			Prepared.FractionEpsilon =
+				Input.Tolerances.PointOnEdgeEpsilon / FMath::Max(Prepared.Vector.Size(), 1.0);
+			Prepared.StableId = Segment.StableId;
+			for (const FVector2D Endpoint : { Segment.A, Segment.B })
+			{
+				const double EndpointAngle = NormalizeRadians(
+					FMath::Atan2(Endpoint.Y - Origin.Y, Endpoint.X - Origin.X) - ForwardAngle);
+				for (const double Offset : { -AngularEpsilon, 0.0, AngularEpsilon })
+				{
+					const double CandidateAngle = NormalizeRadians(EndpointAngle + Offset);
+					if (SourceRadiusAtRelativeAngle(Input, CandidateAngle) > 0.0)
+					{
+						AddUniqueAngle(Result.CandidateAnglesRadians, CandidateAngle);
+					}
+				}
+			}
+		}
+		Result.CandidateSegmentCount = CandidateSegments.Num();
+		Result.StageMetrics.CandidateFilterAndEndpointEventMicroseconds =
+			(FPlatformTime::Seconds() - CandidateEventStartSeconds) * 1000000.0;
+
+		const double EventSortStartSeconds = FPlatformTime::Seconds();
+		SortAndDeduplicateAnglesLinear(Result.CandidateAnglesRadians);
+		if (!bFullCircle)
+		{
+			Result.CandidateAnglesRadians.RemoveAll([HalfAngleRadians](const double Angle)
+			{
+				return Angle < -HalfAngleRadians - 1.0e-12 || Angle > HalfAngleRadians + 1.0e-12;
+			});
+			Result.Vertices.Add(Input.Origin);
+		}
+		Result.Vertices.Reserve(Result.CandidateAnglesRadians.Num() + (bFullCircle ? 0 : 1));
+		Result.StageMetrics.EventSortDeduplicateMicroseconds =
+			(FPlatformTime::Seconds() - EventSortStartSeconds) * 1000000.0;
+
+		const double AccelerationStartSeconds = FPlatformTime::Seconds();
+		TArray<FSightWeaveAngularInterval> AngularIntervals;
+		BuildAngularIntervals(
+			CandidateSegments,
+			Origin,
+			ForwardAngle,
+			Input.Tolerances,
+			AngularIntervals);
+		Result.StageMetrics.AccelerationBuildMicroseconds =
+			(FPlatformTime::Seconds() - AccelerationStartSeconds) * 1000000.0;
+
+		const double RayCastStartSeconds = FPlatformTime::Seconds();
+		int32 NextIntervalIndex = 0;
+		TArray<int32, TInlineAllocator<64>> ActiveIntervalIndices;
+		for (const double RelativeAngle : Result.CandidateAnglesRadians)
+		{
+			while (NextIntervalIndex < AngularIntervals.Num()
+				&& AngularIntervals[NextIntervalIndex].StartAngle <= RelativeAngle + 1.0e-12)
+			{
+				ActiveIntervalIndices.Add(NextIntervalIndex++);
+			}
+			for (int32 ActiveIndex = ActiveIntervalIndices.Num() - 1; ActiveIndex >= 0; --ActiveIndex)
+			{
+				if (AngularIntervals[ActiveIntervalIndices[ActiveIndex]].EndAngle < RelativeAngle - 1.0e-12)
+				{
+					ActiveIntervalIndices.RemoveAtSwap(ActiveIndex, 1, EAllowShrinking::No);
+				}
+			}
+
+			const double MaximumDistance = SourceRadiusAtRelativeAngle(Input, RelativeAngle);
+			if (MaximumDistance <= 0.0)
+			{
+				continue;
+			}
+			const double WorldAngle = ForwardAngle + RelativeAngle;
+			const FVector2D Direction(FMath::Cos(WorldAngle), FMath::Sin(WorldAngle));
+			const FVector2D NormalizedDirection = Direction.GetSafeNormal();
+			double ClosestDistance = MaximumDistance;
+			int64 ClosestStableId = MAX_int64;
+			for (const int32 ActiveIntervalIndex : ActiveIntervalIndices)
+			{
+				const FSightWeavePreparedSegment& Segment = CandidateSegments[
+					AngularIntervals[ActiveIntervalIndex].SegmentIndex];
+				++Result.StageMetrics.TestedSegments;
+				double HitDistance = 0.0;
+				if (!IntersectTrustedRaySegment(
+						Origin,
+						NormalizedDirection,
+						Segment,
+						Input.Tolerances,
+						HitDistance)
+					|| HitDistance <= Input.Tolerances.PointOnEdgeEpsilon
+					|| HitDistance > MaximumDistance + Input.Tolerances.PointOnEdgeEpsilon)
+				{
+					continue;
+				}
+				const bool bCloser =
+					HitDistance < ClosestDistance - Input.Tolerances.DuplicateVertexEpsilon;
+				const bool bStableTie =
+					FMath::Abs(HitDistance - ClosestDistance) <= Input.Tolerances.DuplicateVertexEpsilon
+					&& Segment.StableId < ClosestStableId;
+				if (bCloser || bStableTie)
+				{
+					ClosestDistance = HitDistance;
+					ClosestStableId = Segment.StableId;
+				}
+			}
+
+			++Result.CastRayCount;
+			const FVector2D Vertex2D = Origin + Direction * ClosestDistance;
+			const FVector Vertex(Vertex2D.X, Vertex2D.Y, Input.Origin.Z);
+			if (Result.Vertices.IsEmpty()
+				|| FVector::DistSquared2D(Result.Vertices.Last(), Vertex)
+					> FMath::Square(Input.Tolerances.DuplicateVertexEpsilon))
+			{
+				Result.Vertices.Add(Vertex);
+			}
+		}
+		Result.StageMetrics.RayCastMicroseconds =
+			(FPlatformTime::Seconds() - RayCastStartSeconds) * 1000000.0;
+
+		const double PostProcessStartSeconds = FPlatformTime::Seconds();
+		if (Result.Vertices.Num() >= 2
+			&& FVector::DistSquared2D(Result.Vertices[0], Result.Vertices.Last())
+				<= FMath::Square(Input.Tolerances.DuplicateVertexEpsilon))
+		{
+			Result.Vertices.Pop(EAllowShrinking::No);
+		}
+		if (Result.Vertices.Num() < 3)
+		{
+			Result.Error = TEXT("Optimized solve emitted fewer than three vertices");
+			Result.StageMetrics.PolygonPostProcessMicroseconds =
+				(FPlatformTime::Seconds() - PostProcessStartSeconds) * 1000000.0;
+			Result.StageMetrics.TotalMicroseconds =
+				(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
+			return Result;
+		}
+		Result.StageMetrics.PolygonPostProcessMicroseconds =
+			(FPlatformTime::Seconds() - PostProcessStartSeconds) * 1000000.0;
+		Result.StageMetrics.WorkingSetAllocatedBytes =
+			Result.Vertices.GetAllocatedSize()
+			+ Result.CandidateAnglesRadians.GetAllocatedSize()
+			+ CandidateSegments.GetAllocatedSize()
+			+ AngularIntervals.GetAllocatedSize()
+			+ ActiveIntervalIndices.GetAllocatedSize();
+		Result.bSucceeded = true;
+		Result.StageMetrics.TotalMicroseconds =
+			(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
+		return Result;
+	}
+
+	FSightWeaveReferenceSolveResult SolvePolygon(
+		const FSightWeaveReferenceSolveInput& Input,
+		const ESightWeaveSolverMode Mode)
+	{
+#if UE_BUILD_SHIPPING
+		return SolveOptimizedPolygon(Input);
+#else
+		if (Mode == ESightWeaveSolverMode::Reference)
+		{
+			return SolveReferencePolygon(Input);
+		}
+		FSightWeaveReferenceSolveResult Optimized = SolveOptimizedPolygon(Input);
+		if (Mode != ESightWeaveSolverMode::Verify)
+		{
+			return Optimized;
+		}
+
+		FSightWeaveReferenceSolveResult Reference = SolveReferencePolygon(Input);
+		FString VerificationError;
+		if (SolveResultsMatch(Optimized, Reference, Input.Tolerances, VerificationError))
+		{
+			Optimized.bVerificationMatched = true;
+			return Optimized;
+		}
+
+		Reference.bVerificationMatched = false;
+		Reference.bUsedReferenceFallback = true;
+		Reference.VerificationError = MoveTemp(VerificationError);
+		UE_LOG(
+			LogSightWeaveGeometry,
+			Error,
+			TEXT("Optimized solver verification mismatch; using reference result: %s"),
+			*Reference.VerificationError);
+		return Reference;
+#endif
 	}
 }

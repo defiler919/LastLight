@@ -265,6 +265,9 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveVisionSourceDescription
 	FTransform Transform = FTransform::Identity;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
+	FSightWeaveKnowledgeOwnerId KnowledgeOwnerId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
 	FSightWeaveFloorId FloorId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
@@ -303,6 +306,9 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveIlluminationSourceDescription
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
 	FTransform Transform = FTransform::Identity;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
+	FSightWeaveKnowledgeOwnerId KnowledgeOwnerId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
 	FSightWeaveFloorId FloorId;

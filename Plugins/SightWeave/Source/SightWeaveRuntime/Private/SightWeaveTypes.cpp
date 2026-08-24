@@ -36,7 +36,8 @@ bool FSightWeaveIlluminationCompatibilityProfile::IsEquivalentTo(const FSightWea
 }
 
 FSightWeaveVisionSourceDescription::FSightWeaveVisionSourceDescription()
-	: FloorId(FName(TEXT("Default")))
+	: KnowledgeOwnerId(FName(TEXT("Local")))
+	, FloorId(FName(TEXT("Default")))
 {
 }
 
@@ -52,11 +53,17 @@ bool FSightWeaveVisionSourceDescription::IsValid() const
 		&& NearAwarenessRadius <= Range;
 	const bool bCompatibilityValid = IlluminationPolicy == ESightWeaveIlluminationPolicy::BypassLegalIllumination
 		|| Compatibility.AcceptedCapabilities.ContainsByPredicate([](const FName Capability) { return !Capability.IsNone(); });
-	return !Transform.ContainsNaN() && FloorId.IsValid() && HeightRange.IsValid() && bShapeValuesValid && bCompatibilityValid;
+	return !Transform.ContainsNaN()
+		&& KnowledgeOwnerId.IsValid()
+		&& FloorId.IsValid()
+		&& HeightRange.IsValid()
+		&& bShapeValuesValid
+		&& bCompatibilityValid;
 }
 
 FSightWeaveIlluminationSourceDescription::FSightWeaveIlluminationSourceDescription()
-	: FloorId(FName(TEXT("Default")))
+	: KnowledgeOwnerId(FName(TEXT("Local")))
+	, FloorId(FName(TEXT("Default")))
 {
 	EmittedCapabilities.Add(FName(TEXT("Visible")));
 }
@@ -69,6 +76,7 @@ void FSightWeaveIlluminationSourceDescription::NormalizeCapabilities()
 bool FSightWeaveIlluminationSourceDescription::IsValid() const
 {
 	return !Transform.ContainsNaN()
+		&& KnowledgeOwnerId.IsValid()
 		&& FloorId.IsValid()
 		&& HeightRange.IsValid()
 		&& FMath::IsFinite(Range)

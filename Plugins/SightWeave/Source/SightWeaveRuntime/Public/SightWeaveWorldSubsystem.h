@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "SightWeaveGeometry.h"
+#include "SightWeaveSpatialIndex.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "SightWeaveTypes.h"
 
@@ -20,6 +22,21 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "SightWeave")
 	FSightWeaveRevision GetRevision() const { return Revision; }
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Floor")
+	bool RegisterFloor(const FSightWeaveFloorDefinition& Definition, UObject* Owner);
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Floor")
+	bool UpdateFloor(FSightWeaveFloorId ExistingFloorId, const FSightWeaveFloorDefinition& Definition);
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Floor")
+	bool UnregisterFloor(FSightWeaveFloorId FloorId);
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Floor")
+	bool IsFloorRegistered(FSightWeaveFloorId FloorId) const;
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Floor")
+	FSightWeaveFloorId GetActiveFloorId() const;
 
 	UFUNCTION(BlueprintCallable, Category = "SightWeave|Vision")
 	FSightWeaveVisionSourceHandle RegisterVisionSource(const FSightWeaveVisionSourceDescription& Description, UObject* Owner);
@@ -44,6 +61,29 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Illumination")
 	bool IsIlluminationSourceHandleValid(FSightWeaveIlluminationSourceHandle Handle) const;
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Occluder")
+	FSightWeaveOccluderHandle RegisterOccluder(
+		const TArray<FSightWeaveSegment2D>& Segments,
+		bool bDynamic,
+		bool bEnabled,
+		UObject* Owner);
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Occluder")
+	bool UpdateOccluder(
+		FSightWeaveOccluderHandle Handle,
+		const TArray<FSightWeaveSegment2D>& Segments,
+		bool bDynamic,
+		bool bEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Occluder")
+	bool UnregisterOccluder(FSightWeaveOccluderHandle Handle);
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Occluder")
+	bool IsOccluderHandleValid(FSightWeaveOccluderHandle Handle) const;
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Occluder")
+	FSightWeaveRevision GetOccluderGeometryRevision(FSightWeaveOccluderHandle Handle) const;
 
 	UFUNCTION(BlueprintCallable, Category = "SightWeave|Subject Reveal")
 	FSightWeaveSubjectRevealHandle ApplySubjectRevealOverride(const FSightWeaveSubjectRevealSpecification& Specification, UObject* Owner);
@@ -75,22 +115,78 @@ public:
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
 	int32 GetSubjectRevealCount() const { return SubjectReveals.Num(); }
 
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
+	int32 GetFloorCount() const { return Floors.Num(); }
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
+	int32 GetOccluderCount() const { return Occluders.Num(); }
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
+	int32 GetDirtyVisionSourceCount() const { return DirtyVisionSources.Num(); }
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
+	int32 GetDirtyIlluminationSourceCount() const { return DirtyIlluminationSources.Num(); }
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
+	FSightWeaveSpatialIndexStats GetSpatialIndexStats() const { return SpatialIndex.GetStats(); }
+
+	void QueryOccluderSegments(
+		FSightWeaveFloorId FloorId,
+		const FBox2D& Bounds,
+		const FSightWeaveHeightRange& HeightRange,
+		TArray<FSightWeaveSegment2D>& OutSegments) const;
+
+	/** Clears diagnostic dirty sets after a caller has consumed them. */
+	void ClearDirtySourceFlags()
+	{
+		DirtyVisionSources.Reset();
+		DirtyIlluminationSources.Reset();
+	}
+
 private:
 	void AdvanceRevision();
 	void ResetState();
 	FSightWeaveVisibilityQueryResult MakeQueryResult(ESightWeaveQueryStatus Status, FSightWeaveFloorId FloorId) const;
+	bool IsFloorDefinitionAllowed(const FSightWeaveFloorDefinition& Definition, const FSightWeaveFloorId* IgnoreFloor) const;
+	void MarkSourcesAffectedByOccluderChange(
+		FSightWeaveFloorId OldFloor,
+		const FBox2D& OldBounds,
+		FSightWeaveFloorId NewFloor,
+		const FBox2D& NewBounds);
+	TArray<FSightWeaveSegment2D> PrepareOccluderSegments(
+		FSightWeaveOccluderHandle Handle,
+		TConstArrayView<FSightWeaveSegment2D> Segments,
+		bool bDynamic);
+
+	struct FOccluderRecord
+	{
+		TArray<FSightWeaveSegment2D> Segments;
+		FBox2D Bounds = FBox2D(ForceInit);
+		FSightWeaveRevision GeometryRevision;
+		bool bDynamic = false;
+		bool bEnabled = true;
+	};
 
 	bool bSightWeaveInitialized = false;
 	int64 NextVisionSourceId = 1;
 	int64 NextIlluminationSourceId = 1;
 	int64 NextSubjectRevealId = 1;
+	int64 NextOccluderId = 1;
+	int64 NextSegmentId = 1;
 	FSightWeaveRevision Revision;
 
+	TMap<FSightWeaveFloorId, FSightWeaveFloorDefinition> Floors;
 	TMap<int64, FSightWeaveVisionSourceDescription> VisionSources;
 	TMap<int64, FSightWeaveIlluminationSourceDescription> IlluminationSources;
 	TMap<int64, FSightWeaveSubjectRevealSpecification> SubjectReveals;
+	TMap<int64, FOccluderRecord> Occluders;
+	FSightWeaveFloorSpatialIndex SpatialIndex;
+	TSet<int64> DirtyVisionSources;
+	TSet<int64> DirtyIlluminationSources;
 
+	TMap<FSightWeaveFloorId, TWeakObjectPtr<UObject>> FloorOwners;
 	TMap<int64, TWeakObjectPtr<UObject>> VisionOwners;
 	TMap<int64, TWeakObjectPtr<UObject>> IlluminationOwners;
 	TMap<int64, TWeakObjectPtr<UObject>> SubjectRevealOwners;
+	TMap<int64, TWeakObjectPtr<UObject>> OccluderOwners;
 };

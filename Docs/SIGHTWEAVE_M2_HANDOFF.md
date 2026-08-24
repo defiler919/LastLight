@@ -7,9 +7,9 @@
 - Baseline SHA: `3ec080180b3de3c95258ce07d48fa8165d04701b`
 - Working branch: `codex/m2-sightweave-2p5d-authority`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current checkpoint: Checkpoint 1 — reference geometry solver complete
-- Last completed checkpoint: Checkpoint 1 build and `SightWeave.M2.Geometry` automation passed
-- Next command: implement floor-local spatial indexing and the four neutral M2 actor components
+- Current checkpoint: Checkpoint 2 — 2.5D components and spatial index complete
+- Last completed checkpoint: Checkpoint 2 build, SpatialIndex, Runtime, and M1 automation passed
+- Next command: implement immutable polygon snapshots, compatibility-preserving live queries, bypass, and hard suppression
 
 ## M2 scope recovered from repository documentation
 
@@ -61,7 +61,12 @@ The required repository guidance, five vision design/audit/baseline documents, M
 - Independent Checkpoint 1 BuildPlugin compile: passed, exit code 0, including UnrealEditor Development, UnrealGame Development, and UnrealGame Shipping. Clean shared PCHs emitted UE-header deprecation warnings; no warning originated from a SightWeave source line.
 - `SightWeave.M2.Geometry` first run: 21 discovered/run, 12 passed, 9 failed, 0 warnings, 0 not-run. The common defect was topology validation using the inclusive gameplay boundary epsilon, which classified short collinear endpoint-event runs as self intersections. The wall-motion assertion also initially included source/range-boundary vertices. The implementation now uses a tight topology-only intersection epsilon while retaining the documented inclusive gameplay boundary, and the assertion selects only genuinely clipped rays.
 - `SightWeave.M2.Geometry` final run: **21 discovered, 21 run, 21 passed, 0 failed, 0 succeeded-with-warnings, 0 skipped/not-run, 0 in-process**; process exit code 0; report duration 0.1679 seconds. JSON: `Saved/AutomationReports/SightWeaveM2Geometry_20260824_Final/index.json`.
-- `SightWeave.M1` Checkpoint 1 regression: **21 discovered/run, 21 passed, 0 failed/warning/not-run**, process exit code 0. JSON: `Saved/AutomationReports/SightWeaveM1_M2Checkpoint1_20260824/index.json`.
+- Checkpoint 2 Editor build: passed, exit code 0, UBT `Result: Succeeded`, 12.60 seconds; only the existing MSVC preference warning.
+- `SightWeave.M2.SpatialIndex` first run: 8 discovered/run, 7 passed and 1 failed because the test used strict `FBox2D::IsInside` on a boundary point. The implementation preserved the exact old bounds; the assertion now compares Min/Max directly.
+- `SightWeave.M2.SpatialIndex` final run: **8/8 passed**, zero warnings/errors/not-run, process exit code 0. JSON: `Saved/AutomationReports/SightWeaveM2SpatialIndex_20260824_Final/index.json`.
+- `SightWeave.M2.Runtime` first run: 8 discovered/run, 7 passed and 1 failed. The failure revealed that UE only calls `USceneComponent::OnUpdateTransform` for ordinary transform changes when `bWantsOnUpdateTransform` is enabled. All four SightWeave scene components now enable it explicitly.
+- `SightWeave.M2.Runtime` final run: **8/8 passed**, zero warnings/errors/not-run, process exit code 0. It covers the single-active-floor rule, handle/revision lifecycle, disabled occluders, local dynamic-door replacement, affected-source dirtying, component self-registration/destruction, explicit transform rejection, and component-driven door motion. JSON: `Saved/AutomationReports/SightWeaveM2Runtime_20260824_Final/index.json`.
+- `SightWeave.M1` Checkpoint 2 regression: **21 discovered/run, 21 passed, 0 failed/warning/not-run**, process exit code 0. JSON: `Saved/AutomationReports/SightWeaveM1_M2Checkpoint2_20260824/index.json`.
 - Full `SightWeave.M2`: later categories are not implemented or run yet.
 - Combined `SightWeave`: not run yet.
 - `Darkwell`: not run yet on the M2 branch.
@@ -71,7 +76,8 @@ The required repository guidance, five vision design/audit/baseline documents, M
 ## Commits
 
 - `2d5b230374a03607679c6a4605ff67ccf13f03ae` — `docs: start SightWeave M2 authority implementation`
-- Checkpoint 1: `feat: add SightWeave reference geometry solver` — pending in this document's containing commit.
+- `d5c24f9235ccf451c8475bf9e4b40b046f338f3c` — `feat: add SightWeave reference geometry solver`
+- Checkpoint 2: `feat: add SightWeave 2.5D authority components` — pending in this document's containing commit.
 
 ## Blockers and unverified items
 

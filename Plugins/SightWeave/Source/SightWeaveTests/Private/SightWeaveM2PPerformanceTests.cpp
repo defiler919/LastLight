@@ -573,7 +573,7 @@ bool FSightWeaveM2PRuntimePipelineBaselineTest::RunTest(const FString& Parameter
 	Subsystem->QueryBatch(Requests, BatchResults);
 	const uint64 BatchOuterBytesBefore = BatchResults.GetAllocatedSize();
 	const uint64 BatchInnerBytesBefore = QueryResultAllocatedBytes(BatchResults);
-	const FDistribution Batch = TimeOperation(3, 31, [&](int32)
+	const FDistribution Batch = TimeOperation(10, 101, [&](int32)
 	{
 		Subsystem->QueryBatch(Requests, BatchResults);
 	});
@@ -591,18 +591,70 @@ bool FSightWeaveM2PRuntimePipelineBaselineTest::RunTest(const FString& Parameter
 	Door.HeightRange.ZMin = 0.0f;
 	Door.HeightRange.ZMax = 300.0f;
 	const FSightWeaveOccluderHandle DoorHandle = Subsystem->RegisterOccluder({ Door }, true, true, nullptr);
-	const FDistribution DoorUpdate = TimeOperation(2, 21, [&](int32 Index)
+	TArray<double> DoorPrepareSamples;
+	TArray<double> DoorSpatialSamples;
+	TArray<double> DoorDirtySamples;
+	TArray<double> DoorPublicationSamples;
+	TArray<double> DoorVisionRebuildSamples;
+	TArray<double> DoorIlluminationRebuildSamples;
+	TArray<double> DoorMaterializationSamples;
+	for (int32 Warmup = 0; Warmup < 10; ++Warmup)
 	{
-		const double X = Index % 2 == 0 ? 250.0 : 850.0;
+		const double X = Warmup % 2 == 0 ? 250.0 : 850.0;
 		Door.A.X = X;
 		Door.B.X = X;
 		Subsystem->UpdateOccluder(DoorHandle, { Door }, true, true);
-	});
+	}
+	TArray<double> DoorTotalSamples;
+	DoorTotalSamples.Reserve(101);
+	DoorPrepareSamples.Reserve(101);
+	DoorSpatialSamples.Reserve(101);
+	DoorDirtySamples.Reserve(101);
+	DoorPublicationSamples.Reserve(101);
+	DoorVisionRebuildSamples.Reserve(101);
+	DoorIlluminationRebuildSamples.Reserve(101);
+	DoorMaterializationSamples.Reserve(101);
+	for (int32 SampleIndex = 0; SampleIndex < 101; ++SampleIndex)
+	{
+		const double X = SampleIndex % 2 == 0 ? 250.0 : 850.0;
+		Door.A.X = X;
+		Door.B.X = X;
+		const double DoorStartSeconds = FPlatformTime::Seconds();
+		Subsystem->UpdateOccluder(DoorHandle, { Door }, true, true);
+		DoorTotalSamples.Add((FPlatformTime::Seconds() - DoorStartSeconds) * 1000000.0);
+		const FSightWeaveDynamicUpdateStageMetrics& Stages = Subsystem->GetLastDynamicUpdateStageMetrics();
+		DoorPrepareSamples.Add(Stages.PrepareAndCompareMicroseconds);
+		DoorSpatialSamples.Add(Stages.SpatialIndexMicroseconds);
+		DoorDirtySamples.Add(Stages.DirtyDiscoveryMicroseconds);
+		DoorPublicationSamples.Add(Stages.PublicationMicroseconds);
+		DoorVisionRebuildSamples.Add(Stages.VisionRebuildMicroseconds);
+		DoorIlluminationRebuildSamples.Add(Stages.IlluminationRebuildMicroseconds);
+		DoorMaterializationSamples.Add(Stages.SnapshotMaterializationMicroseconds);
+	}
+	const FDistribution DoorUpdate = Distribution(DoorTotalSamples);
 	LogDistribution(*this, TEXT("dynamic_door_update_solve_publish"), DoorUpdate,
 		*FString::Printf(TEXT("dynamic_updates=%lld"), Subsystem->GetSpatialIndexStats().DynamicUpdateCount));
+	const FDistribution DoorPrepare = Distribution(DoorPrepareSamples);
+	const FDistribution DoorSpatial = Distribution(DoorSpatialSamples);
+	const FDistribution DoorDirty = Distribution(DoorDirtySamples);
+	const FDistribution DoorPublication = Distribution(DoorPublicationSamples);
+	const FDistribution DoorVisionRebuild = Distribution(DoorVisionRebuildSamples);
+	const FDistribution DoorIlluminationRebuild = Distribution(DoorIlluminationRebuildSamples);
+	const FDistribution DoorMaterialization = Distribution(DoorMaterializationSamples);
+	AddInfo(FString::Printf(
+		TEXT("M2P_DYNAMIC_STAGES prepare_us=%.3f/%.3f/%.3f/%.3f spatial_us=%.3f/%.3f/%.3f/%.3f dirty_us=%.3f/%.3f/%.3f/%.3f publication_us=%.3f/%.3f/%.3f/%.3f"),
+		DoorPrepare.Median, DoorPrepare.P95, DoorPrepare.P99, DoorPrepare.Max,
+		DoorSpatial.Median, DoorSpatial.P95, DoorSpatial.P99, DoorSpatial.Max,
+		DoorDirty.Median, DoorDirty.P95, DoorDirty.P99, DoorDirty.Max,
+		DoorPublication.Median, DoorPublication.P95, DoorPublication.P99, DoorPublication.Max));
+	AddInfo(FString::Printf(
+		TEXT("M2P_PUBLICATION_STAGES vision_rebuild_us=%.3f/%.3f/%.3f/%.3f illumination_rebuild_us=%.3f/%.3f/%.3f/%.3f materialization_us=%.3f/%.3f/%.3f/%.3f"),
+		DoorVisionRebuild.Median, DoorVisionRebuild.P95, DoorVisionRebuild.P99, DoorVisionRebuild.Max,
+		DoorIlluminationRebuild.Median, DoorIlluminationRebuild.P95, DoorIlluminationRebuild.P99, DoorIlluminationRebuild.Max,
+		DoorMaterialization.Median, DoorMaterialization.P95, DoorMaterialization.P99, DoorMaterialization.Max));
 
 	int32 SourceUpdateIndex = 0;
-	const FDistribution SourceUpdate = TimeOperation(2, 21, [&](int32)
+	const FDistribution SourceUpdate = TimeOperation(10, 101, [&](int32)
 	{
 		FSightWeaveVisionSourceDescription& Description = VisionDescriptions[0];
 		Description.Transform.SetLocation(FVector(SourceUpdateIndex++ % 2 == 0 ? 0.0 : 5.0, 0.0, 100.0));

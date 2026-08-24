@@ -269,6 +269,8 @@ namespace SightWeave::M2P1::AllocationTests
 		uint64 AllocatedBytes = 0;
 		uint64 PeakTemporaryBytes = 0;
 		uint64 CurrentTemporaryBytes = 0;
+		TArray<uint64> AllocationSizes;
+		TArray<uint32> AllocationCallstackIds;
 		TMap<uint64, uint64> TemporaryAllocations;
 	};
 
@@ -335,6 +337,8 @@ namespace SightWeave::M2P1::AllocationTests
 				const uint64 Size = DecodeSize(Context.EventData);
 				++Active->AllocationCalls;
 				Active->AllocatedBytes += Size;
+				Active->AllocationSizes.Add(Size);
+				Active->AllocationCallstackIds.Add(Context.EventData.GetValue<uint32>("CallstackId"));
 				TrackAllocation(*Active, Address, Size);
 				break;
 			}
@@ -369,11 +373,22 @@ namespace SightWeave::M2P1::AllocationTests
 
 		FString MakeCsv() const
 		{
-			FString Csv(TEXT("workload,sample,thread_id,allocation_calls,reallocation_calls,free_calls,allocated_bytes,peak_temporary_bytes,end_temporary_bytes\n"));
+			FString Csv(TEXT("workload,sample,thread_id,allocation_calls,reallocation_calls,free_calls,allocated_bytes,peak_temporary_bytes,end_temporary_bytes,allocation_details\n"));
 			for (const FAllocationSample& Sample : Samples)
 			{
+				FString AllocationDetails;
+				for (int32 Index = 0; Index < Sample.AllocationSizes.Num(); ++Index)
+				{
+					if (Index > 0) AllocationDetails += TEXT("|");
+					AllocationDetails += FString::Printf(
+						TEXT("%llu@%u"),
+						Sample.AllocationSizes[Index],
+						Sample.AllocationCallstackIds.IsValidIndex(Index)
+							? Sample.AllocationCallstackIds[Index]
+							: 0);
+				}
 				Csv += FString::Printf(
-					TEXT("%s,%u,%u,%llu,%llu,%llu,%llu,%llu,%llu\n"),
+					TEXT("%s,%u,%u,%llu,%llu,%llu,%llu,%llu,%llu,%s\n"),
 					WorkloadName(Sample.Workload),
 					Sample.Sample,
 					Sample.ThreadId,
@@ -382,7 +397,8 @@ namespace SightWeave::M2P1::AllocationTests
 					Sample.FreeCalls,
 					Sample.AllocatedBytes,
 					Sample.PeakTemporaryBytes,
-					Sample.CurrentTemporaryBytes);
+					Sample.CurrentTemporaryBytes,
+					*AllocationDetails);
 			}
 			return Csv;
 		}
@@ -523,15 +539,25 @@ bool FSightWeaveM2P1AllocationCaptureTest::RunTest(const FString& Parameters)
 	Door.FloorId = Ground;
 	Door.HeightRange.ZMin = 0.0f;
 	Door.HeightRange.ZMax = 300.0f;
-	const FSightWeaveOccluderHandle DoorHandle = Subsystem->RegisterOccluder({ Door }, true, true, nullptr);
+	TArray<FSightWeaveSegment2D> DoorSegments;
+	DoorSegments.Add(Door);
+	const FSightWeaveOccluderHandle DoorHandle =
+		Subsystem->RegisterOccluder(DoorSegments, true, true, nullptr);
+	for (int32 Warmup = 0; Warmup < 2; ++Warmup)
+	{
+		const double X = Warmup % 2 == 0 ? 850.0 : 250.0;
+		DoorSegments[0].A.X = X;
+		DoorSegments[0].B.X = X;
+		Subsystem->UpdateOccluder(DoorHandle, DoorSegments, true, true);
+	}
 	for (uint16 Sample = 0; Sample < 3; ++Sample)
 	{
 		const double X = Sample % 2 == 0 ? 850.0 : 250.0;
-		Door.A.X = X;
-		Door.B.X = X;
+		DoorSegments[0].A.X = X;
+		DoorSegments[0].B.X = X;
 		EmitScope(EWorkload::DynamicDoorUpdate, Sample, [&]
 		{
-			Subsystem->UpdateOccluder(DoorHandle, { Door }, true, true);
+			Subsystem->UpdateOccluder(DoorHandle, DoorSegments, true, true);
 		});
 	}
 

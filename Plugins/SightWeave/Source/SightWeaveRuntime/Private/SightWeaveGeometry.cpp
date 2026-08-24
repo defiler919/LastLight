@@ -1,5 +1,7 @@
 #include "SightWeaveGeometry.h"
 
+#include "SightWeaveOptimizedSolveCache.h"
+
 #include "Algo/Unique.h"
 #include "HAL/PlatformTime.h"
 #include "HAL/ThreadSingleton.h"
@@ -257,19 +259,7 @@ namespace
 		}
 	}
 
-	struct FSightWeavePreparedSegment
-	{
-		FVector2D OffsetA = FVector2D::ZeroVector;
-		FVector2D Vector = FVector2D::ZeroVector;
-		double RayDistanceNumerator = 0.0;
-		double AAngle = 0.0;
-		double BAngle = 0.0;
-		double MinimumEndpointDistance = 0.0;
-		double OriginDistanceSquared = 0.0;
-		double FractionEpsilon = 0.0;
-		int64 StableId = 0;
-		bool bOriginOnSegment = false;
-	};
+	using FSightWeavePreparedSegment = FSightWeaveOptimizedPreparedSegment;
 
 	struct FSightWeaveAngularInterval
 	{
@@ -459,7 +449,6 @@ namespace
 	{
 		OutIntervals.Reset();
 		OutIntervals.Reserve(Segments.Num() * 2);
-		const double NumericAngularPadding = FMath::Max(1.0e-12, Tolerances.RayParallelEpsilon);
 		for (int32 SegmentIndex = 0; SegmentIndex < Segments.Num(); ++SegmentIndex)
 		{
 			const FSightWeavePreparedSegment& Segment = Segments[SegmentIndex];
@@ -470,13 +459,9 @@ namespace
 			}
 
 			const double SignedSpan = NormalizeRadians(Segment.BAngle - Segment.AAngle);
-			const double AngularPadding = FMath::Max(
-				NumericAngularPadding,
-				FMath::Atan2(
-					Tolerances.PointOnEdgeEpsilon,
-					FMath::Max(Segment.MinimumEndpointDistance, Tolerances.PointOnEdgeEpsilon)));
-			const double Start = (SignedSpan >= 0.0 ? Segment.AAngle : Segment.BAngle) - AngularPadding;
-			const double End = Start + FMath::Abs(SignedSpan) + 2.0 * AngularPadding;
+			const double Start =
+				(SignedSpan >= 0.0 ? Segment.AAngle : Segment.BAngle) - Segment.AngularPadding;
+			const double End = Start + FMath::Abs(SignedSpan) + 2.0 * Segment.AngularPadding;
 			AddClippedAngularInterval(OutIntervals, Start, End, SegmentIndex);
 		}
 
@@ -640,24 +625,78 @@ namespace
 		int32 Starts[3] = {};
 		int32 Positions[3] = {};
 		double CurrentValues[3] = {};
+		const bool bSingleWrapOffsets = AngularEpsilon < SightWeaveTwoPi;
+		if (bSingleWrapOffsets && !EndpointAngles.IsEmpty())
+		{
+			auto LowerBoundAngle = [&EndpointAngles](const double Threshold)
+			{
+				int32 Lower = 0;
+				int32 Upper = EndpointAngles.Num();
+				while (Lower < Upper)
+				{
+					const int32 Middle = Lower + (Upper - Lower) / 2;
+					if (EndpointAngles[Middle] < Threshold)
+					{
+						Lower = Middle + 1;
+					}
+					else
+					{
+						Upper = Middle;
+					}
+				}
+				return Lower;
+			};
+			Starts[0] = LowerBoundAngle(-PI + AngularEpsilon);
+			if (Starts[0] == EndpointAngles.Num())
+			{
+				Starts[0] = 0;
+			}
+			Starts[2] = LowerBoundAngle(PI - AngularEpsilon);
+			if (Starts[2] == EndpointAngles.Num())
+			{
+				Starts[2] = 0;
+			}
+		}
+		else
+		{
+			for (int32 SequenceIndex = 0; SequenceIndex < 3; ++SequenceIndex)
+			{
+				double Previous = EndpointAngles.IsEmpty()
+					? 0.0
+					: NormalizeRadians(EndpointAngles[0] + Offsets[SequenceIndex]);
+				for (int32 Index = 1; Index < EndpointAngles.Num(); ++Index)
+				{
+					const double Value = NormalizeRadians(EndpointAngles[Index] + Offsets[SequenceIndex]);
+					if (Value < Previous)
+					{
+						Starts[SequenceIndex] = Index;
+						break;
+					}
+					Previous = Value;
+				}
+			}
+		}
+		auto NormalizeEndpointOffset = [bSingleWrapOffsets](const double Value)
+		{
+			if (!bSingleWrapOffsets)
+			{
+				return NormalizeRadians(Value);
+			}
+			if (Value < -PI)
+			{
+				return Value + SightWeaveTwoPi;
+			}
+			if (Value >= PI)
+			{
+				return Value - SightWeaveTwoPi;
+			}
+			return Value;
+		};
 		for (int32 SequenceIndex = 0; SequenceIndex < 3; ++SequenceIndex)
 		{
-			double Previous = EndpointAngles.IsEmpty()
-				? 0.0
-				: NormalizeRadians(EndpointAngles[0] + Offsets[SequenceIndex]);
-			for (int32 Index = 1; Index < EndpointAngles.Num(); ++Index)
-			{
-				const double Value = NormalizeRadians(EndpointAngles[Index] + Offsets[SequenceIndex]);
-				if (Value < Previous)
-				{
-					Starts[SequenceIndex] = Index;
-					break;
-				}
-				Previous = Value;
-			}
 			if (!EndpointAngles.IsEmpty())
 			{
-				CurrentValues[SequenceIndex] = NormalizeRadians(
+				CurrentValues[SequenceIndex] = NormalizeEndpointOffset(
 					EndpointAngles[Starts[SequenceIndex]] + Offsets[SequenceIndex]);
 			}
 		}
@@ -730,7 +769,7 @@ namespace
 				{
 					EndpointIndex -= EndpointCount;
 				}
-				CurrentValues[SequenceIndex] = NormalizeRadians(
+				CurrentValues[SequenceIndex] = NormalizeEndpointOffset(
 					EndpointAngles[EndpointIndex] + Offsets[SequenceIndex]);
 			}
 		}
@@ -1392,9 +1431,10 @@ namespace SightWeave::Geometry
 		return Result;
 	}
 
-	void SolveOptimizedPolygonInto(
+	void SolveOptimizedPolygonIntoInternal(
 		const FSightWeaveReferenceSolveInput& Input,
-		FSightWeaveReferenceSolveResult& Result)
+		FSightWeaveReferenceSolveResult& Result,
+		FSightWeaveOptimizedSolveCache* PreparedCache)
 	{
 		ResetOptimizedSolveResult(Result);
 		const double TotalStartSeconds = FPlatformTime::Seconds();
@@ -1419,7 +1459,9 @@ namespace SightWeave::Geometry
 
 		FSightWeaveSolverFrameLease FrameLease;
 		FSightWeaveSolverFrame& SolverFrame = FrameLease.Get();
-		TArray<FSightWeavePreparedSegment>& CandidateSegments = SolverFrame.CandidateSegments;
+		TArray<FSightWeavePreparedSegment>& CandidateSegments = PreparedCache
+			? PreparedCache->CandidateSegments
+			: SolverFrame.CandidateSegments;
 		TArray<FSightWeaveAngularInterval>& AngularIntervals = SolverFrame.AngularIntervals;
 		TArray<FSightWeaveAngularInterval>& AngularIntervalSortBuffer = SolverFrame.AngularIntervalSortBuffer;
 		TArray<FSightWeaveActiveInterval>& ActiveIntervals = SolverFrame.ActiveIntervals;
@@ -1480,6 +1522,51 @@ namespace SightWeave::Geometry
 			(FPlatformTime::Seconds() - BoundaryEventStartSeconds) * 1000000.0;
 
 		const double CandidateEventStartSeconds = FPlatformTime::Seconds();
+		if (PreparedCache)
+		{
+			const FSightWeaveGeometryTolerances& Cached = PreparedCache->Tolerances;
+			const bool bTolerancesMatch =
+				Cached.AuthoringWeldEpsilon == Input.Tolerances.AuthoringWeldEpsilon
+				&& Cached.ZeroLengthEpsilon == Input.Tolerances.ZeroLengthEpsilon
+				&& Cached.RayParallelEpsilon == Input.Tolerances.RayParallelEpsilon
+				&& Cached.EndpointAngularEpsilonDegrees == Input.Tolerances.EndpointAngularEpsilonDegrees
+				&& Cached.PointOnEdgeEpsilon == Input.Tolerances.PointOnEdgeEpsilon
+				&& Cached.PointInPolygonEpsilon == Input.Tolerances.PointInPolygonEpsilon
+				&& Cached.DuplicateVertexEpsilon == Input.Tolerances.DuplicateVertexEpsilon
+				&& Cached.HeightOverlapEpsilon == Input.Tolerances.HeightOverlapEpsilon
+				&& Cached.RadialBoundarySteps == Input.Tolerances.RadialBoundarySteps;
+			const bool bInputInvariantMatches = PreparedCache->bInputInvariantInitialized
+				&& PreparedCache->Origin.X == Origin.X
+				&& PreparedCache->Origin.Y == Origin.Y
+				&& PreparedCache->Forward.X == Forward.X
+				&& PreparedCache->Forward.Y == Forward.Y
+				&& PreparedCache->FloorId == Input.FloorId
+				&& PreparedCache->HeightRange.ZMin == Input.HeightRange.ZMin
+				&& PreparedCache->HeightRange.ZMax == Input.HeightRange.ZMax
+				&& bTolerancesMatch;
+			if (!bInputInvariantMatches)
+			{
+				PreparedCache->bInputInvariantInitialized = true;
+				PreparedCache->Origin = Origin;
+				PreparedCache->Forward = Forward;
+				PreparedCache->FloorId = Input.FloorId;
+				PreparedCache->HeightRange = Input.HeightRange;
+				PreparedCache->Tolerances = Input.Tolerances;
+				for (FSightWeaveOptimizedPreparedSegmentSlot& Slot : PreparedCache->SegmentSlots)
+				{
+					Slot.bHasKey = false;
+				}
+			}
+			if (PreparedCache->SegmentSlots.Num() != Input.Segments.Num())
+			{
+				PreparedCache->SegmentSlots.SetNum(Input.Segments.Num(), EAllowShrinking::No);
+				for (FSightWeaveOptimizedPreparedSegmentSlot& Slot : PreparedCache->SegmentSlots)
+				{
+					Slot.bHasKey = false;
+				}
+			}
+		}
+		CandidateSegments.Reset();
 		CandidateSegments.Reserve(Input.Segments.Num());
 		if (bPureRadial)
 		{
@@ -1490,35 +1577,81 @@ namespace SightWeave::Geometry
 			Result.CandidateAnglesRadians.Reserve(
 				Result.CandidateAnglesRadians.Num() + Input.Segments.Num() * 6);
 		}
-		for (const FSightWeaveSegment2D& Segment : Input.Segments)
+		for (int32 SegmentIndex = 0; SegmentIndex < Input.Segments.Num(); ++SegmentIndex)
 		{
-			if (!Segment.IsFinite()
-				|| Segment.FloorId != Input.FloorId
-				|| !HeightRangesOverlap(Segment.HeightRange, Input.HeightRange, Input.Tolerances.HeightOverlapEpsilon))
+			const FSightWeaveSegment2D& Segment = Input.Segments[SegmentIndex];
+			const bool bCandidate = Segment.IsFinite()
+				&& Segment.FloorId == Input.FloorId
+				&& HeightRangesOverlap(
+					Segment.HeightRange,
+					Input.HeightRange,
+					Input.Tolerances.HeightOverlapEpsilon);
+			if (!bCandidate)
 			{
+				if (PreparedCache)
+				{
+					FSightWeaveOptimizedPreparedSegmentSlot& Slot =
+						PreparedCache->SegmentSlots[SegmentIndex];
+					if (!Slot.Matches(Segment))
+					{
+						Slot.StoreKey(Segment);
+						Slot.bCandidate = false;
+					}
+				}
 				continue;
 			}
-			FSightWeavePreparedSegment& Prepared = CandidateSegments.AddDefaulted_GetRef();
-			Prepared.OffsetA = Segment.A - Origin;
-			Prepared.Vector = Segment.B - Segment.A;
-			const FVector2D OffsetB = Prepared.OffsetA + Prepared.Vector;
-			Prepared.RayDistanceNumerator = Cross2D(Prepared.OffsetA, Prepared.Vector);
-			Prepared.AAngle = NormalizeRadians(
-				FMath::Atan2(Prepared.OffsetA.Y, Prepared.OffsetA.X) - ForwardAngle);
-			Prepared.BAngle = NormalizeRadians(
+
+			FSightWeavePreparedSegment* Prepared = nullptr;
+			if (PreparedCache)
+			{
+				FSightWeaveOptimizedPreparedSegmentSlot& Slot =
+					PreparedCache->SegmentSlots[SegmentIndex];
+				if (Slot.Matches(Segment) && Slot.bCandidate)
+				{
+					CandidateSegments.Add(Slot.Prepared);
+					continue;
+				}
+				Slot.StoreKey(Segment);
+				Slot.bCandidate = true;
+				Prepared = &Slot.Prepared;
+			}
+			else
+			{
+				Prepared = &CandidateSegments.AddDefaulted_GetRef();
+			}
+
+			Prepared->OffsetA = Segment.A - Origin;
+			Prepared->Vector = Segment.B - Segment.A;
+			const FVector2D OffsetB = Prepared->OffsetA + Prepared->Vector;
+			Prepared->RayDistanceNumerator = Cross2D(Prepared->OffsetA, Prepared->Vector);
+			Prepared->AAngle = NormalizeRadians(
+				FMath::Atan2(Prepared->OffsetA.Y, Prepared->OffsetA.X) - ForwardAngle);
+			Prepared->BAngle = NormalizeRadians(
 				FMath::Atan2(OffsetB.Y, OffsetB.X) - ForwardAngle);
-			Prepared.MinimumEndpointDistance = FMath::Sqrt(FMath::Min(
-				Prepared.OffsetA.SizeSquared(),
+			const double MinimumEndpointDistance = FMath::Sqrt(FMath::Min(
+				Prepared->OffsetA.SizeSquared(),
 				OffsetB.SizeSquared()));
-			Prepared.FractionEpsilon =
-				Input.Tolerances.PointOnEdgeEpsilon / FMath::Max(Prepared.Vector.Size(), 1.0);
-			Prepared.StableId = Segment.StableId;
-			Prepared.OriginDistanceSquared = DistanceSquaredToSegment(
+			Prepared->AngularPadding = FMath::Max(
+				FMath::Max(1.0e-12, Input.Tolerances.RayParallelEpsilon),
+				FMath::Atan2(
+					Input.Tolerances.PointOnEdgeEpsilon,
+					FMath::Max(MinimumEndpointDistance, Input.Tolerances.PointOnEdgeEpsilon)));
+			Prepared->FractionEpsilon =
+				Input.Tolerances.PointOnEdgeEpsilon / FMath::Max(Prepared->Vector.Size(), 1.0);
+			Prepared->StableId = Segment.StableId;
+			Prepared->OriginDistanceSquared = DistanceSquaredToSegment(
 				FVector2D::ZeroVector,
-				Prepared.OffsetA,
+				Prepared->OffsetA,
 				OffsetB);
-			Prepared.bOriginOnSegment = Prepared.OriginDistanceSquared
+			Prepared->bOriginOnSegment = Prepared->OriginDistanceSquared
 				<= FMath::Square(Input.Tolerances.PointOnEdgeEpsilon);
+			if (PreparedCache)
+			{
+				CandidateSegments.Add(*Prepared);
+			}
+		}
+		for (const FSightWeavePreparedSegment& Prepared : CandidateSegments)
+		{
 			const double PreparedEndpointAngles[] = { Prepared.AAngle, Prepared.BAngle };
 			for (int32 EndpointIndex = 0; EndpointIndex < 2; ++EndpointIndex)
 			{
@@ -1755,6 +1888,21 @@ namespace SightWeave::Geometry
 		Result.bSucceeded = true;
 		Result.StageMetrics.TotalMicroseconds =
 			(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
+	}
+
+	void SolveOptimizedPolygonInto(
+		const FSightWeaveReferenceSolveInput& Input,
+		FSightWeaveReferenceSolveResult& Result)
+	{
+		SolveOptimizedPolygonIntoInternal(Input, Result, nullptr);
+	}
+
+	void SolveOptimizedPolygonIntoCached(
+		const FSightWeaveReferenceSolveInput& Input,
+		FSightWeaveReferenceSolveResult& Result,
+		FSightWeaveOptimizedSolveCache& Cache)
+	{
+		SolveOptimizedPolygonIntoInternal(Input, Result, &Cache);
 	}
 
 	FSightWeaveReferenceSolveResult SolveOptimizedPolygon(const FSightWeaveReferenceSolveInput& Input)

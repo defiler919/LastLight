@@ -12,6 +12,9 @@ void FSightWeaveFloorSpatialIndex::Reset()
 	OccluderSegments.Reset();
 	StaticSegmentIds.Reset();
 	DynamicSegmentIds.Reset();
+	ReusableCellIdArrays.Reset();
+	ReusableSourceEdgeIndexArrays.Reset();
+	UpdateCellsScratch.Reset();
 	LastCandidateCount = 0;
 	StaticBuildCount = 0;
 	DynamicInsertCount = 0;
@@ -126,6 +129,103 @@ bool FSightWeaveFloorSpatialIndex::UpdateOccluder(
 		return false;
 	}
 	OutOldBounds = CalculateOccluderBounds(*ExistingIds);
+
+	// A transform-only update preserves stable IDs, floor, and segment count.
+	// Update those entries and their cell memberships in place so warmed dynamic
+	// authority dispatch does not destroy/recreate nested array storage.
+	bool bCanUpdateInPlace = ExistingIds->Num() == Segments.Num();
+	bool bPreviouslyDynamic = false;
+	for (const FSightWeaveSegment2D& Segment : Segments)
+	{
+		const FSightWeaveFloorId* ExistingFloorId = SegmentFloors.Find(Segment.StableId);
+		FFloorData* Floor = ExistingFloorId ? Floors.Find(*ExistingFloorId) : nullptr;
+		bCanUpdateInPlace = bCanUpdateInPlace
+			&& ExistingIds->Contains(Segment.StableId)
+			&& ExistingFloorId
+			&& *ExistingFloorId == Segment.FloorId
+			&& Floor
+			&& Floor->Segments.Contains(Segment.StableId);
+		bPreviouslyDynamic |= DynamicSegmentIds.Contains(Segment.StableId);
+	}
+	if (bCanUpdateInPlace)
+	{
+		OutNewBounds = FBox2D(ForceInit);
+		for (const FSightWeaveSegment2D& Segment : Segments)
+		{
+			FFloorData& Floor = Floors.FindChecked(Segment.FloorId);
+			FSegmentEntry& Entry = Floor.Segments.FindChecked(Segment.StableId);
+			GetCellsForBounds(Segment.GetBounds(), UpdateCellsScratch);
+			UpdateCellsScratch.Sort([](const FIntPoint& A, const FIntPoint& B)
+			{
+				return A.X < B.X || (A.X == B.X && A.Y < B.Y);
+			});
+
+			for (const FIntPoint& OldCell : Entry.Cells)
+			{
+				if (UpdateCellsScratch.Contains(OldCell))
+				{
+					continue;
+				}
+				if (TArray<int64>* CellIds = Floor.CellSegmentIds.Find(OldCell))
+				{
+					CellIds->RemoveSingle(Segment.StableId);
+					if (CellIds->IsEmpty())
+					{
+						ReusableCellIdArrays.Add(MoveTemp(*CellIds));
+						Floor.CellSegmentIds.Remove(OldCell);
+					}
+				}
+			}
+			for (const FIntPoint& NewCell : UpdateCellsScratch)
+			{
+				if (Entry.Cells.Contains(NewCell))
+				{
+					continue;
+				}
+				TArray<int64>* CellIds = Floor.CellSegmentIds.Find(NewCell);
+				if (!CellIds)
+				{
+					TArray<int64>& NewCellIds = Floor.CellSegmentIds.Add(NewCell);
+					if (!ReusableCellIdArrays.IsEmpty())
+					{
+						NewCellIds = MoveTemp(ReusableCellIdArrays.Last());
+						ReusableCellIdArrays.Pop(EAllowShrinking::No);
+						NewCellIds.Reset();
+					}
+					CellIds = &NewCellIds;
+				}
+				CellIds->Add(Segment.StableId);
+				CellIds->Sort();
+			}
+
+			Entry.Segment.A = Segment.A;
+			Entry.Segment.B = Segment.B;
+			Entry.Segment.FloorId = Segment.FloorId;
+			Entry.Segment.HeightRange = Segment.HeightRange;
+			Entry.Segment.OccluderHandle = Segment.OccluderHandle;
+			Entry.Segment.bDynamic = Segment.bDynamic;
+			Entry.Segment.StableId = Segment.StableId;
+			Entry.Segment.SourceEdgeIndices.Reset();
+			Entry.Segment.SourceEdgeIndices.Append(Segment.SourceEdgeIndices);
+			Swap(Entry.Cells, UpdateCellsScratch);
+			OutNewBounds += Segment.A;
+			OutNewBounds += Segment.B;
+		}
+
+		if (bPreviouslyDynamic != bDynamic)
+		{
+			for (const int64 StableId : *ExistingIds)
+			{
+				(bPreviouslyDynamic ? DynamicSegmentIds : StaticSegmentIds).Remove(StableId);
+				(bDynamic ? DynamicSegmentIds : StaticSegmentIds).Add(StableId);
+			}
+		}
+		if (bPreviouslyDynamic) ++DynamicRemoveCount;
+		if (bDynamic) ++DynamicInsertCount;
+		if (bDynamic) ++DynamicUpdateCount;
+		return true;
+	}
+
 	if (!RemoveOccluder(Handle, nullptr))
 	{
 		return false;
@@ -274,7 +374,20 @@ bool FSightWeaveFloorSpatialIndex::InsertSegment(const FSightWeaveSegment2D& Seg
 	}
 	FFloorData& Floor = Floors.FindOrAdd(Segment.FloorId);
 	FSegmentEntry Entry;
-	Entry.Segment = Segment;
+	Entry.Segment.A = Segment.A;
+	Entry.Segment.B = Segment.B;
+	Entry.Segment.FloorId = Segment.FloorId;
+	Entry.Segment.HeightRange = Segment.HeightRange;
+	Entry.Segment.OccluderHandle = Segment.OccluderHandle;
+	Entry.Segment.bDynamic = Segment.bDynamic;
+	Entry.Segment.StableId = Segment.StableId;
+	if (!ReusableSourceEdgeIndexArrays.IsEmpty())
+	{
+		Entry.Segment.SourceEdgeIndices = MoveTemp(ReusableSourceEdgeIndexArrays.Last());
+		ReusableSourceEdgeIndexArrays.Pop(EAllowShrinking::No);
+	}
+	Entry.Segment.SourceEdgeIndices.Reset();
+	Entry.Segment.SourceEdgeIndices.Append(Segment.SourceEdgeIndices);
 	GetCellsForBounds(Segment.GetBounds(), Entry.Cells);
 	Entry.Cells.Sort([](const FIntPoint& A, const FIntPoint& B)
 	{
@@ -282,7 +395,19 @@ bool FSightWeaveFloorSpatialIndex::InsertSegment(const FSightWeaveSegment2D& Seg
 	});
 	for (const FIntPoint& Cell : Entry.Cells)
 	{
-		TArray<int64>& CellIds = Floor.CellSegmentIds.FindOrAdd(Cell);
+		TArray<int64>* ExistingCellIds = Floor.CellSegmentIds.Find(Cell);
+		if (!ExistingCellIds)
+		{
+			TArray<int64>& NewCellIds = Floor.CellSegmentIds.Add(Cell);
+			if (!ReusableCellIdArrays.IsEmpty())
+			{
+				NewCellIds = MoveTemp(ReusableCellIdArrays.Last());
+				ReusableCellIdArrays.Pop(EAllowShrinking::No);
+				NewCellIds.Reset();
+			}
+			ExistingCellIds = &NewCellIds;
+		}
+		TArray<int64>& CellIds = *ExistingCellIds;
 		CellIds.Add(Segment.StableId);
 		CellIds.Sort();
 	}
@@ -312,10 +437,12 @@ bool FSightWeaveFloorSpatialIndex::RemoveSegment(const int64 StableId)
 			CellIds->RemoveSingle(StableId);
 			if (CellIds->IsEmpty())
 			{
+				ReusableCellIdArrays.Add(MoveTemp(*CellIds));
 				Floor->CellSegmentIds.Remove(Cell);
 			}
 		}
 	}
+	ReusableSourceEdgeIndexArrays.Add(MoveTemp(Entry->Segment.SourceEdgeIndices));
 	Floor->Segments.Remove(StableId);
 	StaticSegmentIds.Remove(StableId);
 	DynamicSegmentIds.Remove(StableId);

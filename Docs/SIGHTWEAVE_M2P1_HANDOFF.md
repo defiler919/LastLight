@@ -7,8 +7,8 @@
 - Baseline SHA: `d0b90d2e5687105f1e25bf03476a07d6bb5337de`
 - Working branch: `codex/m2p1-sightweave-final-performance-gate`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current checkpoint: checkpoint 4 — exact extreme-authority optimization ready for commit
-- Last safe commit: `perf: add reusable SightWeave solver scratch` (`141aedf172b73af225d9eeadab609c55674f5587`)
+- Current checkpoint: checkpoint 5 — synchronous dynamic authority and zero-allocation dispatch ready for commit
+- Last safe commit: `perf: optimize SightWeave extreme authority workloads` (`22cf4f63c5e8a629019429cb41162fd650922a57`)
 - Next recovery command: `git switch codex/m2p1-sightweave-final-performance-gate; git pull --ff-only origin codex/m2p1-sightweave-final-performance-gate`
 
 ## Objective and scope
@@ -58,6 +58,10 @@ git switch -c codex/m2p1-sightweave-final-performance-gate
 & D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe ... '-ExecCmds=Automation RunTests SightWeave.M2P1.Allocation.Analyze' ...
 & D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe ... '-ExecCmds=Automation RunTests SightWeave.M2P1.Scratch' ...
 & .\Scripts\RunSightWeaveAllocationProof.ps1 -Label 'after-scratch-v3' -EngineRoot 'D:\UE_5.8'
+& .\Scripts\RunSightWeaveAllocationProof.ps1 -Label 'after-dynamic-cache-final' -EngineRoot 'D:\UE_5.8'
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe ... '-ExecCmds=Automation RunTests SightWeave.M2P.Performance.Baseline.RuntimePipeline' ...
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe ... '-ExecCmds=Automation RunTests SightWeave.M2P.Differential.Runtime.AuthorityAndUpdates' ...
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe ... '-ExecCmds=Automation RunTests SightWeave.M2P.Differential.Geometry' ...
 ```
 
 The baseline was clean and exactly matched the required SHA. The target branch did not exist locally or remotely. Repository guidance, requirements, architecture, migration, M2/M2P handoffs, M2P performance evidence, plugin README, the relevant Runtime implementation, and all M1/M2/M2P tests and benchmarks were read before runtime source changes.
@@ -76,13 +80,23 @@ The checkpoint 4 solver keeps the exact Reference event set and arithmetic while
 
 The latest retained `ProfileTopologyOffset2` result is 1,706.500/1,729.101/1,747.902/1,747.902 us single-solve median/p95/p99/max for 4,096 segments per source. Eight-source cumulative CPU is 13,656.195 us median and sequential wall is 13,657.503 us median. The p99 gate now passes; the median remains above 1 ms and is not relabeled as a pass. The 4,096-total fixture is 213.500/222.202 us median/p99 per solve, and typical 8x64 radial all-source is 318.699/327.297 us median/p99, both comfortably within their non-regression gates. Full stage and iteration evidence is in `Docs/SIGHTWEAVE_M2P1_EXTREME_PERFORMANCE.md`.
 
-The retained candidate passed both `SightWeave.M2P.Differential.Geometry` tests: all nine manual adversarial cases and all 96 fixed-seed randomized cases. The latest full Editor build passed with only the already documented MSVC preferred-version warning. The current synchronous dynamic-door measurement is 329.003/338.700/340.398/340.398 us median/p95/p99/max, improved from the M2P 653/694 us result but still above the strict 250 us gate. Source transform is 60.599/66.198 us median/p99; batch 512 is 237.498/249.803 us median/p99; no-change update is 0.298/0.302 us and preserves revision.
+The retained checkpoint-4 candidate passed both `SightWeave.M2P.Differential.Geometry` tests: all nine manual adversarial cases and all 96 fixed-seed randomized cases. The latest full Editor build passed with only the already documented MSVC preferred-version warning. Before checkpoint 5, synchronous dynamic door measured 329.003/338.700/340.398/340.398 us median/p95/p99/max, improved from the M2P 653/694 us result but still above the strict 250 us gate.
+
+Checkpoint 5 retains strict synchronous Authority. It adds stable-ID raw-segment patching; source-local prepared-segment and angular-padding caches; exact radial wrap-start and unnormalized-ray fast paths; safe immutable snapshot double buffering; retained publication/materialization scratch; a one-edge allocation-stable normalizer; and stable-ID spatial-index in-place updates with reusable nested arrays and a general remove/insert fallback. Source/occluder lifecycle and world reset invalidate the applicable caches. Shipping still forces Optimized; Reference and Verify semantics are unchanged.
+
+The three latest 101-sample dynamic distributions are 222.400/226.900/230.700/231.899 us, 221.301/230.897/233.699/252.098 us, and 223.100/229.903/234.298/236.101 us median/p95/p99/max. All three pass the synchronous median and p99 below 250 us gate. No async work or stale publication window exists: public dispatch contains the full synchronous work and publication adds zero delay after return.
+
+The corresponding batch 512 distributions are 233.799/239.700/243.198/243.600 us, 238.001/250.001/288.300/291.802 us, and 235.099/239.801/245.102/245.702 us. The middle run contains a retained host scheduling/frequency band and fails the tail gate. The immediately preceding three distributions all passed at 235.800/243.802, 235.900/242.900, and 235.800/245.102 us median/p99. Five of the latest six pass; the evidence is not relabeled as a uniform pass. Source transform is about 52.1–52.8/56.0–58.8 us median/p99. No-change is 0.201–0.298/0.302 us and preserves revision.
+
+The final startup-memory trace proof is `Saved/SightWeaveM2P1/AllocationProof/after-dynamic-cache-final`. All three samples for every solver size, point, batch, dynamic door, clean publication, and no-change update are exactly 0 allocation/reallocation/free calls and 0 bytes. Dynamic door progressed from 416/67 allocations/reallocations and about 376 KB at baseline, through 389/45 and about 219 KB after solver scratch, to 0/0/0. Source transform remains 75 allocations, 11–13 reallocations, and 36,516–48,156 bytes; its required latency gate passes, but it is not called zero-allocation. The analyzer now records allocation-size/callstack-ID details and remains test-only.
+
+The final checkpoint-5 runtime differential passed after spatial in-place updates. The full geometry differential again passed both tests (nine manual plus 96 fixed seed). Exact design and distribution evidence is in `Docs/SIGHTWEAVE_M2P1_DYNAMIC_PERFORMANCE.md`.
 
 ## Unverified items
 
 - Real startup-safe allocator-call instrumentation, the 30-sample baseline, and the post-scratch 30-sample proof are complete. The solver/query allocation gate is closed; full dynamic updates remain nonzero.
 - The 4,096/source stage distribution and exact per-solve distribution are recorded. Extreme p99 passes, but the 1 ms median gate remains open at 1.7065 ms.
 - Reusable scratch, caller-output reuse, bounded high-water reclamation, eight-worker isolation, and eight-level reentrancy are implemented and tested. High-count Reference differential expansion remains pending.
-- Dynamic occluder updates remain synchronous at 0.329/0.340 ms median/p99; no pending-window or stale-result policy exists. Synchronous publication/materialization is the next measured target before considering an explicit async policy.
-- The allocation instrumentation and reusable-scratch C++ have passed full Editor builds plus capture/analyze and focused scratch Automation.
-- Final Editor/Automation/Lab/BuildPlugin/clean-host/dependency/Git/LFS validation is pending.
+- Dynamic occluder updates remain synchronous and now pass the strict median/p99 gate in all three final distributions. Async pending/revision/teardown cases are not applicable because no async path was introduced; snapshot-reader lifetime coverage remains pending.
+- The allocation instrumentation, solver scratch, dynamic prepared caches, spatial reuse, and snapshot double buffer have passed full Editor builds, final capture/analyze, focused runtime differential, and full geometry differential.
+- High-count Reference differential expansion and final Editor/Automation/Lab/BuildPlugin/clean-host/dependency/Git/LFS validation remain pending.

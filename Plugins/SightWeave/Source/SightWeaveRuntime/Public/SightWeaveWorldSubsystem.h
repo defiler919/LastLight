@@ -10,6 +10,19 @@
 
 #include "SightWeaveWorldSubsystem.generated.h"
 
+#if WITH_DEV_AUTOMATION_TESTS
+struct FSightWeaveDynamicUpdateStageMetrics
+{
+	double PrepareAndCompareMicroseconds = 0.0;
+	double SpatialIndexMicroseconds = 0.0;
+	double DirtyDiscoveryMicroseconds = 0.0;
+	double PublicationMicroseconds = 0.0;
+	double VisionRebuildMicroseconds = 0.0;
+	double IlluminationRebuildMicroseconds = 0.0;
+	double SnapshotMaterializationMicroseconds = 0.0;
+};
+#endif
+
 UCLASS()
 class SIGHTWEAVERUNTIME_API USightWeaveWorldSubsystem final : public UWorldSubsystem
 {
@@ -218,6 +231,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
 	FSightWeaveSpatialIndexStats GetSpatialIndexStats() const { return SpatialIndex.GetStats(); }
 
+#if WITH_DEV_AUTOMATION_TESTS
+	const FSightWeaveDynamicUpdateStageMetrics& GetLastDynamicUpdateStageMetrics() const
+	{
+		return LastDynamicUpdateStageMetrics;
+	}
+#endif
+
 	void QueryOccluderSegments(
 		FSightWeaveFloorId FloorId,
 		const FBox2D& Bounds,
@@ -289,6 +309,11 @@ private:
 		FSightWeaveOccluderHandle Handle,
 		TConstArrayView<FSightWeaveSegment2D> Segments,
 		bool bDynamic);
+	bool PrepareDynamicOccluderSegmentsInto(
+		FSightWeaveOccluderHandle Handle,
+		TConstArrayView<FSightWeaveSegment2D> Segments,
+		bool bDynamic,
+		TArray<FSightWeaveSegment2D>& OutPrepared);
 
 	struct FOccluderRecord
 	{
@@ -325,7 +350,22 @@ private:
 	TMap<int64, FSightWeaveRevision> IlluminationSourceRevisions;
 	TMap<int64, FSightWeaveVisionSnapshotEntry> CachedVisionSnapshotEntries;
 	TMap<int64, FSightWeaveIlluminationSnapshotEntry> CachedIlluminationSnapshotEntries;
-	TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> PublishedSnapshot;
+	TMap<int64, TArray<FSightWeaveSegment2D>> CachedVisionSolveSegments;
+	TMap<int64, TArray<FSightWeaveSegment2D>> CachedIlluminationSolveSegments;
+	TMap<int64, TSharedPtr<FSightWeaveOptimizedSolveCache>> CachedVisionPreparedSolves;
+	TMap<int64, TSharedPtr<FSightWeaveOptimizedSolveCache>> CachedIlluminationPreparedSolves;
+	TArray<FSightWeaveSegment2D> DynamicPreparedSegmentsScratch;
+	TArray<int64> PublicationDirtyVisionIds;
+	TArray<int64> PublicationDirtyIlluminationIds;
+	TArray<int64> PublicationVisionIds;
+	TArray<int64> PublicationIlluminationIds;
+	TArray<int64> PublicationSuppressionIds;
+	TSharedPtr<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> PublishedSnapshot;
+	TSharedPtr<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> StandbySnapshot;
+
+#if WITH_DEV_AUTOMATION_TESTS
+	FSightWeaveDynamicUpdateStageMetrics LastDynamicUpdateStageMetrics;
+#endif
 
 	TMap<FSightWeaveFloorId, TWeakObjectPtr<UObject>> FloorOwners;
 	TMap<int64, TWeakObjectPtr<UObject>> VisionOwners;

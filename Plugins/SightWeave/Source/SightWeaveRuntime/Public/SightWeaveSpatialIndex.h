@@ -131,6 +131,9 @@ private:
 	TMap<FSightWeaveOccluderHandle, TArray<int64>> OccluderSegments;
 	TSet<int64> StaticSegmentIds;
 	TSet<int64> DynamicSegmentIds;
+	TArray<TArray<int64>> ReusableCellIdArrays;
+	TArray<TArray<int32>> ReusableSourceEdgeIndexArrays;
+	TArray<FIntPoint> UpdateCellsScratch;
 
 	mutable int32 LastCandidateCount = 0;
 	int64 StaticBuildCount = 0;

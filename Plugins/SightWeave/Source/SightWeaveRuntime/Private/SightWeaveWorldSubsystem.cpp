@@ -2,6 +2,7 @@
 
 #include "Algo/Sort.h"
 #include "HAL/PlatformTime.h"
+#include "SightWeaveOptimizedSolveCache.h"
 #include "SightWeaveSettings.h"
 
 namespace
@@ -88,7 +89,10 @@ namespace
 		TConstArrayView<double> Angles,
 		TArray<int32>& OutUpperBounds)
 	{
-		constexpr int32 BinCount = 1024;
+		// This LUT only seeds the exact upper-bound refinement below; reducing its
+		// density changes no query result and makes dirty-source publication
+		// materially cheaper when several polygons rebuild together.
+		constexpr int32 BinCount = 256;
 		OutUpperBounds.SetNumUninitialized(BinCount);
 		int32 UpperBound = 0;
 		for (int32 Bin = 0; Bin < BinCount; ++Bin)
@@ -124,14 +128,13 @@ namespace
 		}
 
 		const FVector2D Offset = Point - Origin;
-		const double QueryDistance = Offset.Size();
-		if (QueryDistance <= Tolerances.PointOnEdgeEpsilon)
+		const double QueryDistanceSquared = Offset.SizeSquared();
+		if (QueryDistanceSquared <= FMath::Square(Tolerances.PointOnEdgeEpsilon))
 		{
 			return ExactFallback();
 		}
-		const FVector2D RayDirection = Offset / QueryDistance;
 		const double RelativeAngle = NormalizeQueryRadians(
-			FMath::Atan2(RayDirection.Y, RayDirection.X) - ForwardAngle);
+			FMath::Atan2(Offset.Y, Offset.X) - ForwardAngle);
 
 		int32 FirstGreater = 0;
 		if (!AngleUpperBoundLut.IsEmpty())
@@ -188,15 +191,18 @@ namespace
 		const FVector2D A = BoundaryPoints[LowerIndex];
 		const FVector2D B = BoundaryPoints[UpperIndex];
 		const FVector2D Edge = B - A;
-		const double Denominator = CrossQuery2D(RayDirection, Edge);
-		if (FMath::Abs(Denominator) <= Tolerances.RayParallelEpsilon)
+		const double Denominator = CrossQuery2D(Offset, Edge);
+		if (FMath::Square(Denominator)
+			<= FMath::Square(Tolerances.RayParallelEpsilon) * QueryDistanceSquared)
 		{
 			return ExactFallback();
 		}
-		const double BoundaryDistance = CrossQuery2D(A - Origin, Edge) / Denominator;
+		const double Numerator = CrossQuery2D(A - Origin, Edge);
 		const double EdgeLengthSquared = Edge.SizeSquared();
-		if (!FMath::IsFinite(BoundaryDistance)
-			|| BoundaryDistance < 0.0
+		if (!FMath::IsFinite(Denominator)
+			|| !FMath::IsFinite(Numerator)
+			|| (Numerator > 0.0 && Denominator < 0.0)
+			|| (Numerator < 0.0 && Denominator > 0.0)
 			|| EdgeLengthSquared <= UE_DOUBLE_SMALL_NUMBER)
 		{
 			return ExactFallback();
@@ -206,14 +212,16 @@ namespace
 			Tolerances.PointOnEdgeEpsilon,
 			Tolerances.PointInPolygonEpsilon,
 			Tolerances.DuplicateVertexEpsilon);
-		const double ScaledRadialDifference =
-			FMath::Abs(QueryDistance - BoundaryDistance) * FMath::Abs(Denominator);
+		// Parameterize the query point itself as t=1 on the unnormalized ray.
+		// |denominator - numerator| is algebraically identical to the former
+		// distance-scaled boundary difference, without sqrt or division.
+		const double ScaledRadialDifference = FMath::Abs(Denominator - Numerator);
 		if (FMath::Square(ScaledRadialDifference)
 			<= FMath::Square(BoundaryEpsilon) * EdgeLengthSquared)
 		{
 			return ExactFallback();
 		}
-		return QueryDistance < BoundaryDistance;
+		return Denominator > 0.0 ? Numerator > Denominator : Numerator < Denominator;
 	}
 
 	bool IsPointInVisionSnapshotEntry(
@@ -438,6 +446,8 @@ bool USightWeaveWorldSubsystem::UpdateVisionSource(
 		return true;
 	}
 	VisionSources.FindChecked(Handle.GetValue()) = MoveTemp(NormalizedDescription);
+	CachedVisionSolveSegments.Remove(Handle.GetValue());
+	CachedVisionPreparedSolves.Remove(Handle.GetValue());
 	DirtyVisionSources.Add(Handle.GetValue());
 	PendingVisionSnapshotRebuilds.Add(Handle.GetValue());
 	AdvanceRevision();
@@ -458,6 +468,8 @@ bool USightWeaveWorldSubsystem::UnregisterVisionSource(const FSightWeaveVisionSo
 	PendingVisionSnapshotRebuilds.Remove(Handle.GetValue());
 	VisionSourceRevisions.Remove(Handle.GetValue());
 	CachedVisionSnapshotEntries.Remove(Handle.GetValue());
+	CachedVisionSolveSegments.Remove(Handle.GetValue());
+	CachedVisionPreparedSolves.Remove(Handle.GetValue());
 	AdvanceRevision();
 	PublishSnapshot();
 	return true;
@@ -514,6 +526,8 @@ bool USightWeaveWorldSubsystem::UpdateIlluminationSource(
 		return true;
 	}
 	IlluminationSources.FindChecked(Handle.GetValue()) = MoveTemp(NormalizedDescription);
+	CachedIlluminationSolveSegments.Remove(Handle.GetValue());
+	CachedIlluminationPreparedSolves.Remove(Handle.GetValue());
 	DirtyIlluminationSources.Add(Handle.GetValue());
 	PendingIlluminationSnapshotRebuilds.Add(Handle.GetValue());
 	AdvanceRevision();
@@ -534,6 +548,8 @@ bool USightWeaveWorldSubsystem::UnregisterIlluminationSource(const FSightWeaveIl
 	PendingIlluminationSnapshotRebuilds.Remove(Handle.GetValue());
 	IlluminationSourceRevisions.Remove(Handle.GetValue());
 	CachedIlluminationSnapshotEntries.Remove(Handle.GetValue());
+	CachedIlluminationSolveSegments.Remove(Handle.GetValue());
+	CachedIlluminationPreparedSolves.Remove(Handle.GetValue());
 	AdvanceRevision();
 	PublishSnapshot();
 	return true;
@@ -589,6 +605,10 @@ FSightWeaveOccluderHandle USightWeaveWorldSubsystem::RegisterOccluder(
 	}
 	const FOccluderRecord& Stored = Occluders.FindChecked(Handle.GetValue());
 	MarkSourcesAffectedByOccluderChange(FSightWeaveFloorId(), FBox2D(ForceInit), FloorId, Stored.Bounds);
+	CachedVisionSolveSegments.Reset();
+	CachedIlluminationSolveSegments.Reset();
+	CachedVisionPreparedSolves.Reset();
+	CachedIlluminationPreparedSolves.Reset();
 	PublishSnapshot();
 	return Handle;
 }
@@ -604,9 +624,13 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 	{
 		return false;
 	}
+#if WITH_DEV_AUTOMATION_TESTS
+	LastDynamicUpdateStageMetrics = {};
+	const double PrepareStartSeconds = FPlatformTime::Seconds();
+#endif
 	const int64 NextSegmentIdBeforePrepare = NextSegmentId;
-	TArray<FSightWeaveSegment2D> Prepared = PrepareOccluderSegments(Handle, Segments, bDynamic);
-	if (Prepared.IsEmpty())
+	TArray<FSightWeaveSegment2D>& Prepared = DynamicPreparedSegmentsScratch;
+	if (!PrepareDynamicOccluderSegmentsInto(Handle, Segments, bDynamic, Prepared))
 	{
 		return false;
 	}
@@ -642,6 +666,11 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 		NewBounds += Segment.A;
 		NewBounds += Segment.B;
 	}
+#if WITH_DEV_AUTOMATION_TESTS
+	const double SpatialStartSeconds = FPlatformTime::Seconds();
+	LastDynamicUpdateStageMetrics.PrepareAndCompareMicroseconds =
+		(SpatialStartSeconds - PrepareStartSeconds) * 1000000.0;
+#endif
 
 	if (Record->bEnabled && bEnabled)
 	{
@@ -666,8 +695,105 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 			return false;
 		}
 	}
+#if WITH_DEV_AUTOMATION_TESTS
+	const double DirtyStartSeconds = FPlatformTime::Seconds();
+	LastDynamicUpdateStageMetrics.SpatialIndexMicroseconds =
+		(DirtyStartSeconds - SpatialStartSeconds) * 1000000.0;
+#endif
+	const double HeightOverlapEpsilon = GetDefault<USightWeaveSettings>()->GeometryTolerances.HeightOverlapEpsilon;
+	auto PatchCachedSegments = [
+		&Prepared,
+		&OldSegments = Record->Segments,
+		Handle,
+		bEnabled,
+		HeightOverlapEpsilon](auto& SegmentCaches, const auto& SourceDescriptions)
+	{
+		for (auto& CachePair : SegmentCaches)
+		{
+			const auto* Description = SourceDescriptions.Find(CachePair.Key);
+			TArray<FSightWeaveSegment2D>& CachedSegments = CachePair.Value;
+			if (!Description)
+			{
+				CachedSegments.Reset();
+				continue;
+			}
+			const FVector SourceOrigin = Description->Transform.GetLocation();
+			const FBox2D SourceBounds(
+				FVector2D(SourceOrigin.X - Description->Range, SourceOrigin.Y - Description->Range),
+				FVector2D(SourceOrigin.X + Description->Range, SourceOrigin.Y + Description->Range));
+			auto IsRelevant = [Description, &SourceBounds, bEnabled, HeightOverlapEpsilon](
+				const FSightWeaveSegment2D& Segment)
+			{
+				return bEnabled
+					&& Segment.FloorId == Description->FloorId
+					&& SightWeave::Geometry::HeightRangesOverlap(
+						Segment.HeightRange,
+						Description->HeightRange,
+						HeightOverlapEpsilon)
+					&& SourceBounds.Intersect(Segment.GetBounds());
+			};
+			auto LowerBoundStableId = [&CachedSegments](const int64 StableId)
+			{
+				int32 Lower = 0;
+				int32 Upper = CachedSegments.Num();
+				while (Lower < Upper)
+				{
+					const int32 Middle = Lower + (Upper - Lower) / 2;
+					if (CachedSegments[Middle].StableId < StableId)
+					{
+						Lower = Middle + 1;
+					}
+					else
+					{
+						Upper = Middle;
+					}
+				}
+				return Lower;
+			};
 
-	Record->Segments = MoveTemp(Prepared);
+			for (const FSightWeaveSegment2D& OldSegment : OldSegments)
+			{
+				const int32 CachedIndex = LowerBoundStableId(OldSegment.StableId);
+				if (!CachedSegments.IsValidIndex(CachedIndex)
+					|| CachedSegments[CachedIndex].StableId != OldSegment.StableId
+					|| CachedSegments[CachedIndex].OccluderHandle != Handle)
+				{
+					continue;
+				}
+				const FSightWeaveSegment2D* Replacement = Prepared.FindByPredicate(
+					[&OldSegment, &IsRelevant](const FSightWeaveSegment2D& Segment)
+					{
+						return Segment.StableId == OldSegment.StableId
+							&& IsRelevant(Segment);
+					});
+				if (Replacement)
+				{
+					CachedSegments[CachedIndex] = *Replacement;
+				}
+				else
+				{
+					CachedSegments.RemoveAt(CachedIndex, 1, EAllowShrinking::No);
+				}
+			}
+			for (const FSightWeaveSegment2D& Segment : Prepared)
+			{
+				if (!IsRelevant(Segment))
+				{
+					continue;
+				}
+				const int32 CachedIndex = LowerBoundStableId(Segment.StableId);
+				if (!CachedSegments.IsValidIndex(CachedIndex)
+					|| CachedSegments[CachedIndex].StableId != Segment.StableId)
+				{
+					CachedSegments.Insert(Segment, CachedIndex);
+				}
+			}
+		}
+	};
+	PatchCachedSegments(CachedVisionSolveSegments, VisionSources);
+	PatchCachedSegments(CachedIlluminationSolveSegments, IlluminationSources);
+
+	Swap(Record->Segments, Prepared);
 	Record->Bounds = NewBounds;
 	Record->bDynamic = bDynamic;
 	Record->bEnabled = bEnabled;
@@ -675,7 +801,16 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 	LastOccluderRevision = Revision;
 	Record->GeometryRevision = Revision;
 	MarkSourcesAffectedByOccluderChange(OldFloor, OldBounds, NewFloor, NewBounds);
+#if WITH_DEV_AUTOMATION_TESTS
+	const double PublicationStartSeconds = FPlatformTime::Seconds();
+	LastDynamicUpdateStageMetrics.DirtyDiscoveryMicroseconds =
+		(PublicationStartSeconds - DirtyStartSeconds) * 1000000.0;
+#endif
 	PublishSnapshot();
+#if WITH_DEV_AUTOMATION_TESTS
+	LastDynamicUpdateStageMetrics.PublicationMicroseconds =
+		(FPlatformTime::Seconds() - PublicationStartSeconds) * 1000000.0;
+#endif
 	return true;
 }
 
@@ -697,6 +832,10 @@ bool USightWeaveWorldSubsystem::UnregisterOccluder(const FSightWeaveOccluderHand
 	AdvanceRevision();
 	LastOccluderRevision = Revision;
 	MarkSourcesAffectedByOccluderChange(OldFloor, OldBounds, FSightWeaveFloorId(), FBox2D(ForceInit));
+	CachedVisionSolveSegments.Reset();
+	CachedIlluminationSolveSegments.Reset();
+	CachedVisionPreparedSolves.Reset();
+	CachedIlluminationPreparedSolves.Reset();
 	PublishSnapshot();
 	return true;
 }
@@ -1467,22 +1606,57 @@ FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 		return Revision;
 	}
 
-	TArray<int64> DirtyVision = PendingVisionSnapshotRebuilds.Array();
-	TArray<int64> DirtyIllumination = PendingIlluminationSnapshotRebuilds.Array();
+	TArray<int64>& DirtyVision = PublicationDirtyVisionIds;
+	TArray<int64>& DirtyIllumination = PublicationDirtyIlluminationIds;
+	DirtyVision.Reset();
+	DirtyVision.Reserve(PendingVisionSnapshotRebuilds.Num());
+	for (const int64 SourceId : PendingVisionSnapshotRebuilds)
+	{
+		DirtyVision.Add(SourceId);
+	}
+	DirtyIllumination.Reset();
+	DirtyIllumination.Reserve(PendingIlluminationSnapshotRebuilds.Num());
+	for (const int64 SourceId : PendingIlluminationSnapshotRebuilds)
+	{
+		DirtyIllumination.Add(SourceId);
+	}
 	DirtyVision.Sort();
 	DirtyIllumination.Sort();
+#if WITH_DEV_AUTOMATION_TESTS
+	const double VisionRebuildStartSeconds = FPlatformTime::Seconds();
+#endif
 	for (const int64 SourceId : DirtyVision)
 	{
 		RebuildVisionSnapshotEntry(SourceId);
 	}
+#if WITH_DEV_AUTOMATION_TESTS
+	const double IlluminationRebuildStartSeconds = FPlatformTime::Seconds();
+	LastDynamicUpdateStageMetrics.VisionRebuildMicroseconds =
+		(IlluminationRebuildStartSeconds - VisionRebuildStartSeconds) * 1000000.0;
+#endif
 	for (const int64 SourceId : DirtyIllumination)
 	{
 		RebuildIlluminationSnapshotEntry(SourceId);
 	}
+#if WITH_DEV_AUTOMATION_TESTS
+	const double SnapshotMaterializationStartSeconds = FPlatformTime::Seconds();
+	LastDynamicUpdateStageMetrics.IlluminationRebuildMicroseconds =
+		(SnapshotMaterializationStartSeconds - IlluminationRebuildStartSeconds) * 1000000.0;
+#endif
 	PendingVisionSnapshotRebuilds.Reset();
 	PendingIlluminationSnapshotRebuilds.Reset();
 
-	FSightWeaveFrameSnapshot NewSnapshot;
+	TSharedPtr<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> NewSharedSnapshot;
+	if (StandbySnapshot.IsValid() && StandbySnapshot.GetSharedReferenceCount() == 1)
+	{
+		NewSharedSnapshot = MoveTemp(StandbySnapshot);
+	}
+	else
+	{
+		StandbySnapshot.Reset();
+		NewSharedSnapshot = MakeShared<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe>();
+	}
+	FSightWeaveFrameSnapshot& NewSnapshot = *NewSharedSnapshot;
 	NewSnapshot.Revision = Revision;
 	NewSnapshot.RebuiltVisionPolygonCount = DirtyVision.Num();
 	NewSnapshot.RebuiltIlluminationPolygonCount = DirtyIllumination.Num();
@@ -1494,27 +1668,44 @@ FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 		return A.FloorId.GetValue().LexicalLess(B.FloorId.GetValue());
 	});
 
-	TArray<int64> VisionIds;
+	TArray<int64>& VisionIds = PublicationVisionIds;
 	CachedVisionSnapshotEntries.GenerateKeyArray(VisionIds);
 	VisionIds.Sort();
-	for (const int64 SourceId : VisionIds)
+	NewSnapshot.VisionSources.SetNum(VisionIds.Num(), EAllowShrinking::No);
+	for (int32 SourceIndex = 0; SourceIndex < VisionIds.Num(); ++SourceIndex)
 	{
-		NewSnapshot.VisionSources.Add(CachedVisionSnapshotEntries.FindChecked(SourceId));
+		NewSnapshot.VisionSources[SourceIndex] =
+			CachedVisionSnapshotEntries.FindChecked(VisionIds[SourceIndex]);
 	}
 
-	TArray<int64> IlluminationIds;
+	TArray<int64>& IlluminationIds = PublicationIlluminationIds;
 	CachedIlluminationSnapshotEntries.GenerateKeyArray(IlluminationIds);
 	IlluminationIds.Sort();
-	for (const int64 SourceId : IlluminationIds)
+	NewSnapshot.IlluminationSources.SetNum(IlluminationIds.Num(), EAllowShrinking::No);
+	for (int32 SourceIndex = 0; SourceIndex < IlluminationIds.Num(); ++SourceIndex)
 	{
-		NewSnapshot.IlluminationSources.Add(CachedIlluminationSnapshotEntries.FindChecked(SourceId));
+		NewSnapshot.IlluminationSources[SourceIndex] =
+			CachedIlluminationSnapshotEntries.FindChecked(IlluminationIds[SourceIndex]);
 	}
 
+	int32 EnabledSegmentCount = 0;
 	for (const TPair<int64, FOccluderRecord>& Pair : Occluders)
 	{
 		if (Pair.Value.bEnabled)
 		{
-			NewSnapshot.OccluderSegments.Append(Pair.Value.Segments);
+			EnabledSegmentCount += Pair.Value.Segments.Num();
+		}
+	}
+	NewSnapshot.OccluderSegments.SetNum(EnabledSegmentCount, EAllowShrinking::No);
+	int32 SegmentWriteIndex = 0;
+	for (const TPair<int64, FOccluderRecord>& Pair : Occluders)
+	{
+		if (Pair.Value.bEnabled)
+		{
+			for (const FSightWeaveSegment2D& Segment : Pair.Value.Segments)
+			{
+				NewSnapshot.OccluderSegments[SegmentWriteIndex++] = Segment;
+			}
 		}
 	}
 	NewSnapshot.OccluderSegments.Sort([](const FSightWeaveSegment2D& A, const FSightWeaveSegment2D& B)
@@ -1522,21 +1713,28 @@ FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 		return A.StableId < B.StableId;
 	});
 
-	TArray<int64> SuppressionIds;
+	TArray<int64>& SuppressionIds = PublicationSuppressionIds;
 	HardSuppressions.GenerateKeyArray(SuppressionIds);
 	SuppressionIds.Sort();
-	for (const int64 SuppressionId : SuppressionIds)
+	NewSnapshot.HardSuppressions.SetNum(SuppressionIds.Num(), EAllowShrinking::No);
+	for (int32 SuppressionIndex = 0; SuppressionIndex < SuppressionIds.Num(); ++SuppressionIndex)
 	{
-		FSightWeaveHardSuppressionSnapshotEntry& Entry = NewSnapshot.HardSuppressions.AddDefaulted_GetRef();
+		const int64 SuppressionId = SuppressionIds[SuppressionIndex];
+		FSightWeaveHardSuppressionSnapshotEntry& Entry = NewSnapshot.HardSuppressions[SuppressionIndex];
 		Entry.Handle = FSightWeaveHardSuppressionHandle(SuppressionId);
 		Entry.Description = HardSuppressions.FindChecked(SuppressionId);
 		Entry.Revision = HardSuppressionRevisions.FindRef(SuppressionId);
 	}
 
 	ResolveSnapshotCompatibility(NewSnapshot);
-	TSharedRef<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> NewSharedSnapshot =
-		MakeShared<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe>(MoveTemp(NewSnapshot));
-	PublishedSnapshot = NewSharedSnapshot;
+	TSharedPtr<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> PreviousSnapshot =
+		MoveTemp(PublishedSnapshot);
+	PublishedSnapshot = MoveTemp(NewSharedSnapshot);
+	StandbySnapshot = MoveTemp(PreviousSnapshot);
+#if WITH_DEV_AUTOMATION_TESTS
+	LastDynamicUpdateStageMetrics.SnapshotMaterializationMicroseconds =
+		(FPlatformTime::Seconds() - SnapshotMaterializationStartSeconds) * 1000000.0;
+#endif
 	return Revision;
 }
 
@@ -1607,10 +1805,38 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		const FBox2D QueryBounds(
 			FVector2D(Origin.X - Description->Range, Origin.Y - Description->Range),
 			FVector2D(Origin.X + Description->Range, Origin.Y + Description->Range));
-		QueryOccluderSegments(Description->FloorId, QueryBounds, Description->HeightRange, Input.Segments);
+		TArray<FSightWeaveSegment2D>* CachedSegments = CachedVisionSolveSegments.Find(SourceId);
+		if (!CachedSegments)
+		{
+			CachedSegments = &CachedVisionSolveSegments.Add(SourceId);
+			QueryOccluderSegments(
+				Description->FloorId,
+				QueryBounds,
+				Description->HeightRange,
+				*CachedSegments);
+		}
+		Input.Segments = MoveTemp(*CachedSegments);
 
 		const double StartSeconds = FPlatformTime::Seconds();
-		SightWeave::Geometry::SolvePolygonInto(Input, Settings->SolverMode, SolveResult);
+		TSharedPtr<FSightWeaveOptimizedSolveCache>& PreparedCache =
+			CachedVisionPreparedSolves.FindOrAdd(SourceId);
+		if (!PreparedCache.IsValid())
+		{
+			PreparedCache = MakeShared<FSightWeaveOptimizedSolveCache>();
+		}
+#if UE_BUILD_SHIPPING
+		SightWeave::Geometry::SolveOptimizedPolygonIntoCached(Input, SolveResult, *PreparedCache);
+#else
+		if (Settings->SolverMode == ESightWeaveSolverMode::Optimized)
+		{
+			SightWeave::Geometry::SolveOptimizedPolygonIntoCached(Input, SolveResult, *PreparedCache);
+		}
+		else
+		{
+			SightWeave::Geometry::SolvePolygonInto(Input, Settings->SolverMode, SolveResult);
+		}
+#endif
+		*CachedSegments = MoveTemp(Input.Segments);
 		Entry.SolveTimeMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
 		Entry.CandidateRayCount = SolveResult.CastRayCount;
@@ -1684,10 +1910,38 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		const FBox2D QueryBounds(
 			FVector2D(Origin.X - Description->Range, Origin.Y - Description->Range),
 			FVector2D(Origin.X + Description->Range, Origin.Y + Description->Range));
-		QueryOccluderSegments(Description->FloorId, QueryBounds, Description->HeightRange, Input.Segments);
+		TArray<FSightWeaveSegment2D>* CachedSegments = CachedIlluminationSolveSegments.Find(SourceId);
+		if (!CachedSegments)
+		{
+			CachedSegments = &CachedIlluminationSolveSegments.Add(SourceId);
+			QueryOccluderSegments(
+				Description->FloorId,
+				QueryBounds,
+				Description->HeightRange,
+				*CachedSegments);
+		}
+		Input.Segments = MoveTemp(*CachedSegments);
 
 		const double StartSeconds = FPlatformTime::Seconds();
-		SightWeave::Geometry::SolvePolygonInto(Input, Settings->SolverMode, SolveResult);
+		TSharedPtr<FSightWeaveOptimizedSolveCache>& PreparedCache =
+			CachedIlluminationPreparedSolves.FindOrAdd(SourceId);
+		if (!PreparedCache.IsValid())
+		{
+			PreparedCache = MakeShared<FSightWeaveOptimizedSolveCache>();
+		}
+#if UE_BUILD_SHIPPING
+		SightWeave::Geometry::SolveOptimizedPolygonIntoCached(Input, SolveResult, *PreparedCache);
+#else
+		if (Settings->SolverMode == ESightWeaveSolverMode::Optimized)
+		{
+			SightWeave::Geometry::SolveOptimizedPolygonIntoCached(Input, SolveResult, *PreparedCache);
+		}
+		else
+		{
+			SightWeave::Geometry::SolvePolygonInto(Input, Settings->SolverMode, SolveResult);
+		}
+#endif
+		*CachedSegments = MoveTemp(Input.Segments);
 		Entry.SolveTimeMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
 		Entry.CandidateRayCount = SolveResult.CastRayCount;
@@ -1823,6 +2077,57 @@ TArray<FSightWeaveSegment2D> USightWeaveWorldSubsystem::PrepareOccluderSegments(
 	return MoveTemp(Normalized.Segments);
 }
 
+bool USightWeaveWorldSubsystem::PrepareDynamicOccluderSegmentsInto(
+	const FSightWeaveOccluderHandle Handle,
+	const TConstArrayView<FSightWeaveSegment2D> Segments,
+	const bool bDynamic,
+	TArray<FSightWeaveSegment2D>& OutPrepared)
+{
+	// A single moving door edge needs only the one-segment subset of the exact
+	// normalizer: finite/floor validation, endpoint weld and zero-length rejection,
+	// attribution initialization, and runtime identity assignment. Retain the
+	// outer and nested arrays so this common mutation remains allocation-stable.
+	if (Segments.Num() == 1)
+	{
+		FSightWeaveGeometryTolerances Tolerances =
+			GetDefault<USightWeaveSettings>()->GeometryTolerances;
+		Tolerances.Normalize();
+		const FSightWeaveSegment2D& Input = Segments[0];
+		const double LengthSquared = FVector2D::DistSquared(Input.A, Input.B);
+		if (!Input.IsFinite()
+			|| !Input.FloorId.IsValid()
+			|| LengthSquared <= FMath::Square(Tolerances.AuthoringWeldEpsilon)
+			|| LengthSquared <= FMath::Square(Tolerances.ZeroLengthEpsilon))
+		{
+			OutPrepared.Reset();
+			return false;
+		}
+
+		OutPrepared.SetNum(1, EAllowShrinking::No);
+		FSightWeaveSegment2D& Output = OutPrepared[0];
+		Output.A = Input.A;
+		Output.B = Input.B;
+		Output.FloorId = Input.FloorId;
+		Output.HeightRange = Input.HeightRange;
+		Output.OccluderHandle = Handle;
+		Output.bDynamic = bDynamic;
+		Output.StableId = NextSegmentId++;
+		Output.SourceEdgeIndices.Reset();
+		if (Input.SourceEdgeIndices.IsEmpty())
+		{
+			Output.SourceEdgeIndices.Add(0);
+		}
+		else
+		{
+			Output.SourceEdgeIndices.Append(Input.SourceEdgeIndices);
+		}
+		return true;
+	}
+
+	OutPrepared = PrepareOccluderSegments(Handle, Segments, bDynamic);
+	return !OutPrepared.IsEmpty();
+}
+
 void USightWeaveWorldSubsystem::AdvanceRevision()
 {
 	Revision = FSightWeaveRevision(Revision.GetValue() + 1);
@@ -1846,7 +2151,13 @@ void USightWeaveWorldSubsystem::ResetState()
 	IlluminationSourceRevisions.Reset();
 	CachedVisionSnapshotEntries.Reset();
 	CachedIlluminationSnapshotEntries.Reset();
+	CachedVisionSolveSegments.Reset();
+	CachedIlluminationSolveSegments.Reset();
+	CachedVisionPreparedSolves.Reset();
+	CachedIlluminationPreparedSolves.Reset();
+	DynamicPreparedSegmentsScratch.Reset();
 	PublishedSnapshot.Reset();
+	StandbySnapshot.Reset();
 	FloorOwners.Reset();
 	VisionOwners.Reset();
 	IlluminationOwners.Reset();

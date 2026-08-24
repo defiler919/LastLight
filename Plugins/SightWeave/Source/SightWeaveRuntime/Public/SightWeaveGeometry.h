@@ -232,6 +232,8 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult
 	FString Error;
 };
 
+struct FSightWeaveOptimizedSolveCache;
+
 namespace SightWeave::Geometry
 {
 	SIGHTWEAVERUNTIME_API bool HeightRangesOverlap(
@@ -275,6 +277,12 @@ namespace SightWeave::Geometry
 	SIGHTWEAVERUNTIME_API void SolveOptimizedPolygonInto(
 		const FSightWeaveReferenceSolveInput& Input,
 		FSightWeaveReferenceSolveResult& OutResult);
+
+	/** Internal production path that incrementally reuses source-local prepared segments. */
+	SIGHTWEAVERUNTIME_API void SolveOptimizedPolygonIntoCached(
+		const FSightWeaveReferenceSolveInput& Input,
+		FSightWeaveReferenceSolveResult& OutResult,
+		FSightWeaveOptimizedSolveCache& Cache);
 
 	/** Production entry point. Reference and Verify are unavailable in Shipping. */
 	SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult SolvePolygon(

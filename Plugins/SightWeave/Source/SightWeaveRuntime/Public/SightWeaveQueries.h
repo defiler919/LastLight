@@ -147,6 +147,10 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveVisionSnapshotEntry
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	int32 CandidateRayCount = 0;
 
+	/** Stable endpoint/boundary event angles used by the reference solver. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	TArray<double> CandidateAnglesRadians;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	double SolveTimeMicroseconds = 0.0;
 };
@@ -173,6 +177,9 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveIlluminationSnapshotEntry
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	int32 CandidateRayCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	TArray<double> CandidateAnglesRadians;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	double SolveTimeMicroseconds = 0.0;

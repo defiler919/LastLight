@@ -7,9 +7,9 @@
 - Baseline SHA: `3ec080180b3de3c95258ce07d48fa8165d04701b`
 - Working branch: `codex/m2-sightweave-2p5d-authority`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current checkpoint: Checkpoint 3 — immutable snapshots and authoritative live queries complete
-- Last completed checkpoint: Checkpoint 3 Editor build, full M2 automation, and M1 regression passed
-- Next command: implement query debug data/draw, expand the idempotent M2 lab fixtures, and add performance/debug automation
+- Current checkpoint: Checkpoint 4 — debug data/draw, component-backed M2 lab, and performance automation complete
+- Last completed checkpoint: Checkpoint 4 Editor build, M2 56-test suite, M1 regression, idempotent lab generation, and headless lab game smoke passed
+- Next command: commit/push Checkpoint 4, then run combined SightWeave, DARKWELL, BuildPlugin, Git/LFS, and final validation gates
 
 ## M2 scope recovered from repository documentation
 
@@ -74,6 +74,15 @@ The required repository guidance, five vision design/audit/baseline documents, M
 - Checkpoint 3 final Editor build: passed, exit code 0, UBT `Result: Succeeded`, 12.82 seconds; only the installed MSVC 14.51.36256 preference warning.
 - Full `SightWeave.M2` Checkpoint 3 run: **52 discovered, 52 run, 52 passed, 0 failed, 0 warning, 0 error, 0 skipped/not-run**, process exit code 0, report duration 0.4393 seconds. Category counts: Geometry 21, SpatialIndex 8, Runtime 9, Query 14. JSON: `Saved/AutomationReports/SightWeaveM2_Checkpoint3_Final_20260824/index.json`.
 - `SightWeave.M1` Checkpoint 3 regression: **21 discovered/run, 21 passed, 0 failed/warning/error/not-run**, process exit code 0, report duration 0.2000 seconds. JSON: `Saved/AutomationReports/SightWeaveM1_Checkpoint3_Final_20260824/index.json`.
+- Debug API first build emitted an IWYU diagnostic because `SightWeaveDebug.cpp` did not include `SightWeaveDebug.h` first. UBT still reported success, but the include order was corrected and the immediate rebuild passed in 6.12 seconds with no SightWeave diagnostic.
+- Initial `SightWeave.M2.Debug`: **3/3 passed**, zero warnings/errors/not-run. The deterministic `0x51A7E` sample measured two sources at 64 segments / 127 candidates / 1018 rays / 997 vertices / 6173.402 microseconds and eight sources at 64 / 509 / 4078 / 3868 / 23962.598 microseconds. JSON: `Saved/AutomationReports/SightWeaveM2Debug_20260824_Initial/index.json`.
+- The first M2 lab generation stopped before saving when Python positional `Rotator` arguments produced Pitch instead of Yaw and the 2.5D occluder validator correctly rejected the diagonal actor. Named `roll/pitch/yaw` arguments fixed the authoring script. The next run and two subsequent idempotency runs succeeded and saved `/SightWeave/Maps/L_SightWeave_Lab` through Editor asset APIs.
+- The first no-tick Debug Query component build failed, exit code 1 / UBT code 6, because `SightWeaveComponents.h` did not include the header declaring `FSightWeaveDebugDrawOptions`. Adding `SightWeaveDebug.h` fixed the dependency; the next build passed in 10.81 seconds.
+- Checkpoint 4 final Editor build: passed, exit code 0, UBT `Result: Succeeded`, 5.66 seconds; only the installed MSVC preference warning.
+- Full `SightWeave.M2` Checkpoint 4 run: **56 discovered, 56 run, 56 passed, 0 failed/warning/error/skipped/not-run**, process exit code 0, report duration 0.5599 seconds. Categories: Geometry 21, SpatialIndex 8, Runtime 9, Query 14, Debug 4. JSON: `Saved/AutomationReports/SightWeaveM2_Checkpoint4_Final_20260824/index.json`.
+- Final recorded deterministic reference sample in that run: two sources = 64 segments / 127 candidates / 1018 rays / 997 vertices / 6197.903 microseconds; eight sources = 64 / 509 / 4078 / 3868 / 24202.801 microseconds. Repeated samples produced identical candidate/ray/vertex counts and quantized geometry hashes. Angular Sweep remains deliberately deferred: the reference path is correct and fast enough at this M2 sample scale, so no unproven boundary-risk optimization is enabled.
+- `SightWeave.M1` Checkpoint 4 regression: **21/21 passed**, zero warnings/errors/not-run, process exit code 0, duration 0.2024 seconds. This includes map load and asset dependency isolation after the M2 lab rewrite. JSON: `Saved/AutomationReports/SightWeaveM1_Checkpoint4_Final_20260824/index.json`.
+- M2 lab headless game smoke: passed, exit code 0. The no-tick BeginPlay marker reported `AuthoritativeResult`, `authoritative=1`, `live=1`, `vision=1`, `bypass=1`, snapshot 58, and one attributed vision source. No SightWeave Error/Ensure/Assert/Fatal occurred. Log: `Saved/Logs/SIGHTWEAVE_M2_LAB_GAME_SMOKE.log`.
 - Combined `SightWeave`: not run yet.
 - `Darkwell`: not run yet on the M2 branch.
 - Lab load/game smoke: not run yet for M2.
@@ -84,7 +93,8 @@ The required repository guidance, five vision design/audit/baseline documents, M
 - `2d5b230374a03607679c6a4605ff67ccf13f03ae` — `docs: start SightWeave M2 authority implementation`
 - `d5c24f9235ccf451c8475bf9e4b40b046f338f3c` — `feat: add SightWeave reference geometry solver`
 - `82dbefe517387f905148ea805c56c1c43ec3d49d` — `feat: add SightWeave 2.5D authority components`
-- Checkpoint 3: `feat: add SightWeave authoritative live queries` — pending in this document's containing commit.
+- `5aec48493eba7feb9de36a9de2c3c871c61bbe2c` — `feat: add SightWeave authoritative live queries`
+- Checkpoint 4: `test: expand SightWeave M2 lab and geometry coverage` — pending in this document's containing commit.
 
 ## Blockers and unverified items
 

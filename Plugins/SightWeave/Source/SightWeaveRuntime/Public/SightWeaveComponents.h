@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Components/SceneComponent.h"
+#include "SightWeaveDebug.h"
 #include "SightWeaveGeometry.h"
 #include "SightWeaveQueries.h"
 #include "SightWeaveTypes.h"
@@ -192,4 +193,35 @@ protected:
 private:
 	bool BuildWorldDescription(FSightWeaveHardSuppressionDescription& OutDescription) const;
 	FSightWeaveHardSuppressionHandle Handle;
+};
+
+/** No-tick marker that samples and optionally draws one authoritative query at BeginPlay. */
+UCLASS(ClassGroup = (SightWeave), BlueprintType, Blueprintable, meta = (BlueprintSpawnableComponent))
+class SIGHTWEAVERUNTIME_API USightWeaveDebugQueryComponent final : public USceneComponent
+{
+	GENERATED_BODY()
+
+public:
+	USightWeaveDebugQueryComponent();
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Debug")
+	FSightWeaveKnowledgeOwnerId KnowledgeOwnerId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Debug")
+	FSightWeaveFloorId FloorId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Debug")
+	bool bDrawAtBeginPlay = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Debug")
+	FSightWeaveDebugDrawOptions DrawOptions;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Debug")
+	FSightWeaveVisibilityQueryResult LastResult;
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Debug")
+	FSightWeaveVisibilityQueryResult RefreshDebugQuery();
+
+protected:
+	virtual void BeginPlay() override;
 };

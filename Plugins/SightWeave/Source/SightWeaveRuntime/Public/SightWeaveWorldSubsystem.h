@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "SightWeaveDebug.h"
 #include "SightWeaveGeometry.h"
 #include "SightWeaveQueries.h"
 #include "SightWeaveSpatialIndex.h"
@@ -173,6 +174,15 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Snapshot")
 	FSightWeaveFrameSnapshot GetPublishedSnapshot() const;
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Debug")
+	FSightWeaveDebugData BuildDebugData() const;
+
+	/** Draws explanatory data only in non-Shipping builds; it never contributes to authority. */
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Debug")
+	bool DrawDebugSnapshot(
+		const FSightWeaveDebugDrawOptions& Options,
+		const TArray<FSightWeaveDebugQueryMarker>& QueryMarkers) const;
 
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
 	int32 GetVisionSourceCount() const { return VisionSources.Num(); }

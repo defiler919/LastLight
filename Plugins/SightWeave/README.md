@@ -13,6 +13,8 @@ SightWeave is a reusable Unreal Engine plugin intended to provide authoritative 
 - Synchronously published immutable CPU snapshots. Only dirty source polygons are rebuilt; snapshots contain ordinary data and stable handles, not UObject pointers.
 - Source-specific compatibility resolution, illumination bypass, and post-union hard-live suppression.
 - Authoritative point, source-specific, bounds, anchor/any/all/required-count sample, and batch queries with attribution, rejection flags, and memory-write eligibility.
+- Ordinary-data debug snapshots plus explicit non-Shipping `DrawDebug` for floors, cells, height bands, endpoint events/rays, distinct polygons, compatibility, suppression, and attributed query markers.
+- Thin generic authoring actors that host one SightWeave component each; authority remains in the components/subsystem and no actor ticks are required.
 - An isolated lab map at `/SightWeave/Maps/L_SightWeave_Lab`.
 - Automation tests under `SightWeave.M1` and `SightWeave.M2`.
 
@@ -36,5 +38,7 @@ From the host project root:
 Scripts/BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8
 & 'D:/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe' 'D:/UE_projects/LastLight/Darkwell.uproject' -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M1' '-TestExit=Automation Test Queue Empty'
 ```
+
+The idempotent `Content/Python/create_sightweave_lab.py` script rebuilds 20 M2 fixture zones using normal Unreal asset APIs. The map contains real floor, vision, legal-illumination, occluder, hard-suppression, dynamic-door, and no-tick debug-query components; it has no `/Game/` or `/Script/Darkwell` dependency.
 
 For standalone validation, use Unreal Automation Tool's `BuildPlugin` command against `SightWeave.uplugin` and a temporary package directory outside the repository.

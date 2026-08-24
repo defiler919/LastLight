@@ -41,6 +41,27 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveSpatialIndexStats
 	int64 DynamicUpdateCount = 0;
 };
 
+USTRUCT(BlueprintType)
+struct SIGHTWEAVERUNTIME_API FSightWeaveSpatialCellDebug
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Spatial Index")
+	FSightWeaveFloorId FloorId;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Spatial Index")
+	FIntPoint Cell = FIntPoint::ZeroValue;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Spatial Index")
+	FVector2D BoundsMin = FVector2D::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Spatial Index")
+	FVector2D BoundsMax = FVector2D::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Spatial Index")
+	int32 SegmentCount = 0;
+};
+
 /**
  * Deterministic floor-local uniform grid containing only plain geometry data.
  * The class has no UObject references and is safe to copy into later solve jobs.
@@ -83,6 +104,7 @@ public:
 	bool ContainsSegment(int64 StableId) const;
 	bool ContainsOccluder(FSightWeaveOccluderHandle Handle) const;
 	FSightWeaveSpatialIndexStats GetStats() const;
+	void GetDebugCells(TArray<FSightWeaveSpatialCellDebug>& OutCells) const;
 
 private:
 	struct FSegmentEntry

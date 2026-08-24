@@ -1222,6 +1222,7 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		Entry.SolveTimeMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
 		Entry.CandidateRayCount = SolveResult.CastRayCount;
+		Entry.CandidateAnglesRadians = MoveTemp(SolveResult.CandidateAnglesRadians);
 		if (SolveResult.bSucceeded)
 		{
 			Entry.Polygon.Vertices = MoveTemp(SolveResult.Vertices);
@@ -1278,6 +1279,7 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		Entry.SolveTimeMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
 		Entry.CandidateRayCount = SolveResult.CastRayCount;
+		Entry.CandidateAnglesRadians = MoveTemp(SolveResult.CandidateAnglesRadians);
 		if (SolveResult.bSucceeded)
 		{
 			Entry.Polygon.Vertices = MoveTemp(SolveResult.Vertices);

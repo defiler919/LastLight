@@ -4,6 +4,8 @@
 #include "SightWeaveSettings.h"
 #include "SightWeaveWorldSubsystem.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogSightWeaveDebugQuery, Log, All);
+
 namespace
 {
 	USightWeaveWorldSubsystem* GetSightWeaveSubsystem(const UActorComponent* Component)
@@ -493,4 +495,48 @@ bool USightWeaveHardSuppressionComponent::BuildWorldDescription(
 	OutDescription.HeightRange.ZMin = Transform.GetLocation().Z + Description.HeightRange.ZMin * Scale.Z;
 	OutDescription.HeightRange.ZMax = Transform.GetLocation().Z + Description.HeightRange.ZMax * Scale.Z;
 	return OutDescription.IsValid();
+}
+
+USightWeaveDebugQueryComponent::USightWeaveDebugQueryComponent()
+	: KnowledgeOwnerId(FName(TEXT("Local")))
+	, FloorId(FName(TEXT("Default")))
+{
+	PrimaryComponentTick.bCanEverTick = false;
+	DrawOptions.DurationSeconds = 10.0f;
+}
+
+void USightWeaveDebugQueryComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	LastResult = RefreshDebugQuery();
+	UE_LOG(LogSightWeaveDebugQuery, Display,
+		TEXT("SightWeave debug query actor=%s status=%d authoritative=%d live=%d vision=%d light=%d bypass=%d snapshot=%lld visionSources=%d illuminationSources=%d"),
+		*GetNameSafe(GetOwner()),
+		static_cast<int32>(LastResult.Status),
+		LastResult.bAuthoritative ? 1 : 0,
+		LastResult.bVisible ? 1 : 0,
+		LastResult.bInVisionPolygon ? 1 : 0,
+		LastResult.bHasLegalIllumination ? 1 : 0,
+		LastResult.bUsedBypass ? 1 : 0,
+		LastResult.SnapshotRevision.GetValue(),
+		LastResult.ContributingVisionSources.Num(),
+		LastResult.ContributingIlluminationSources.Num());
+}
+
+FSightWeaveVisibilityQueryResult USightWeaveDebugQueryComponent::RefreshDebugQuery()
+{
+	USightWeaveWorldSubsystem* Subsystem = GetSightWeaveSubsystem(this);
+	if (!Subsystem)
+	{
+		return FSightWeaveVisibilityQueryResult();
+	}
+	LastResult = Subsystem->QueryEffectiveLiveAtLocation(KnowledgeOwnerId, FloorId, GetComponentLocation());
+	if (bDrawAtBeginPlay)
+	{
+		FSightWeaveDebugQueryMarker Marker;
+		Marker.WorldLocation = GetComponentLocation();
+		Marker.Result = LastResult;
+		Subsystem->DrawDebugSnapshot(DrawOptions, { Marker });
+	}
+	return LastResult;
 }

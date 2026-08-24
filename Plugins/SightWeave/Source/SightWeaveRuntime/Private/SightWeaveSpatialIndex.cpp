@@ -213,6 +213,31 @@ FSightWeaveSpatialIndexStats FSightWeaveFloorSpatialIndex::GetStats() const
 	return Stats;
 }
 
+void FSightWeaveFloorSpatialIndex::GetDebugCells(TArray<FSightWeaveSpatialCellDebug>& OutCells) const
+{
+	OutCells.Reset();
+	for (const TPair<FSightWeaveFloorId, FFloorData>& FloorPair : Floors)
+	{
+		for (const TPair<FIntPoint, TArray<int64>>& CellPair : FloorPair.Value.CellSegmentIds)
+		{
+			FSightWeaveSpatialCellDebug& DebugCell = OutCells.AddDefaulted_GetRef();
+			DebugCell.FloorId = FloorPair.Key;
+			DebugCell.Cell = CellPair.Key;
+			DebugCell.BoundsMin = FVector2D(CellPair.Key.X * CellSize, CellPair.Key.Y * CellSize);
+			DebugCell.BoundsMax = DebugCell.BoundsMin + FVector2D(CellSize, CellSize);
+			DebugCell.SegmentCount = CellPair.Value.Num();
+		}
+	}
+	OutCells.Sort([](const FSightWeaveSpatialCellDebug& A, const FSightWeaveSpatialCellDebug& B)
+	{
+		if (A.FloorId != B.FloorId)
+		{
+			return A.FloorId.GetValue().LexicalLess(B.FloorId.GetValue());
+		}
+		return A.Cell.X < B.Cell.X || (A.Cell.X == B.Cell.X && A.Cell.Y < B.Cell.Y);
+	});
+}
+
 FIntPoint FSightWeaveFloorSpatialIndex::ToCell(const FVector2D& Point) const
 {
 	return FIntPoint(

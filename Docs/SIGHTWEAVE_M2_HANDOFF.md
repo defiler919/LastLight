@@ -2,14 +2,14 @@
 
 ## Status
 
-- State: **IN PROGRESS**
+- State: **COMPLETED**
 - Baseline branch: `codex/m1-sightweave-skeleton-lab`
 - Baseline SHA: `3ec080180b3de3c95258ce07d48fa8165d04701b`
 - Working branch: `codex/m2-sightweave-2p5d-authority`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current checkpoint: Checkpoint 4 — debug data/draw, component-backed M2 lab, and performance automation complete
-- Last completed checkpoint: Checkpoint 4 Editor build, M2 56-test suite, M1 regression, idempotent lab generation, and headless lab game smoke passed
-- Next command: commit/push Checkpoint 4, then run combined SightWeave, DARKWELL, BuildPlugin, Git/LFS, and final validation gates
+- Current checkpoint: Checkpoint 5 — final validation complete
+- Last completed checkpoint: combined SightWeave, DARKWELL, BuildPlugin, Lab smoke, Editor build, and Git/LFS gates passed
+- Next command: `git switch codex/m2-sightweave-2p5d-authority; git pull --ff-only origin codex/m2-sightweave-2p5d-authority`
 
 ## M2 scope recovered from repository documentation
 
@@ -83,10 +83,11 @@ The required repository guidance, five vision design/audit/baseline documents, M
 - Final recorded deterministic reference sample in that run: two sources = 64 segments / 127 candidates / 1018 rays / 997 vertices / 6197.903 microseconds; eight sources = 64 / 509 / 4078 / 3868 / 24202.801 microseconds. Repeated samples produced identical candidate/ray/vertex counts and quantized geometry hashes. Angular Sweep remains deliberately deferred: the reference path is correct and fast enough at this M2 sample scale, so no unproven boundary-risk optimization is enabled.
 - `SightWeave.M1` Checkpoint 4 regression: **21/21 passed**, zero warnings/errors/not-run, process exit code 0, duration 0.2024 seconds. This includes map load and asset dependency isolation after the M2 lab rewrite. JSON: `Saved/AutomationReports/SightWeaveM1_Checkpoint4_Final_20260824/index.json`.
 - M2 lab headless game smoke: passed, exit code 0. The no-tick BeginPlay marker reported `AuthoritativeResult`, `authoritative=1`, `live=1`, `vision=1`, `bypass=1`, snapshot 58, and one attributed vision source. No SightWeave Error/Ensure/Assert/Fatal occurred. Log: `Saved/Logs/SIGHTWEAVE_M2_LAB_GAME_SMOKE.log`.
-- Combined `SightWeave`: not run yet.
-- `Darkwell`: not run yet on the M2 branch.
-- Lab load/game smoke: not run yet for M2.
-- BuildPlugin: not run yet for M2.
+- Combined `SightWeave` final run: **77 discovered, 77 run, 77 passed, 0 failed/warning/error/skipped/not-run**, process exit code 0, duration 0.7557 seconds. It contains M1 21 and M2 56. JSON: `Saved/AutomationReports/SightWeave_All_Final_20260824/index.json`.
+- `Darkwell` final regression: **24 discovered, 24 run, 24 passed, 0 failed/warning/error/skipped/not-run**, process exit code 0, duration 0.1911 seconds. JSON: `Saved/AutomationReports/Darkwell_Regression_SightWeaveM2_Final_20260824/index.json`.
+- Final BuildPlugin: **BUILD SUCCESSFUL**, AutomationTool exit code 0, duration 1 minute 33 seconds. A clean host project built UnrealEditor Win64 Development, UnrealGame Win64 Development, and UnrealGame Win64 Shipping. Output: `C:\Users\defiler\AppData\Local\Temp\SightWeaveM2Final_815fe6a`. The packaged Runtime source has no DARKWELL, UnrealEd, Editor, or Tests reference.
+- Build warnings: MSVC 14.51.36256 is newer than UE 5.8's preferred 14.50.35717. Clean BuildPlugin shared PCH and compile output also reports C4996 deprecations in UE 5.8 headers such as `CoreUObject/Public/UObject/Class.h` and `Engine/Public/Subsystems/WorldSubsystem.h`; no warning points to a SightWeave source line.
+- Final Git/LFS audit before this document update: `git diff --check` passed; `git lfs fsck` reported `Git LFS fsck OK`; the Lab map is an uploaded LFS object; no generated Binaries, Intermediate, Saved, DerivedDataCache, automation report/log, or BuildPlugin package is tracked. UAT-created untracked `Plugins/SightWeave/Config/FilterPlugin.ini` was identified and removed.
 
 ## Commits
 
@@ -94,11 +95,12 @@ The required repository guidance, five vision design/audit/baseline documents, M
 - `d5c24f9235ccf451c8475bf9e4b40b046f338f3c` — `feat: add SightWeave reference geometry solver`
 - `82dbefe517387f905148ea805c56c1c43ec3d49d` — `feat: add SightWeave 2.5D authority components`
 - `5aec48493eba7feb9de36a9de2c3c871c61bbe2c` — `feat: add SightWeave authoritative live queries`
-- Checkpoint 4: `test: expand SightWeave M2 lab and geometry coverage` — pending in this document's containing commit.
+- `815fe6a2099f7eb6f38437954764d3aa03237aeb` — `test: expand SightWeave M2 lab and geometry coverage`
+- Checkpoint 5: `docs: record SightWeave M2 validation` — this document's containing commit; resolve its SHA with `git log -1 --format=%H`.
 
 ## Blockers and unverified items
 
-- No implementation blocker is known.
-- Interactive visual inspection is not yet performed.
-- Angular Sweep is deliberately deferred until the reference solver passes correctness tests and profiling demonstrates a need.
-- Build, automation, lab, packaged plugin, and final Git/LFS checks remain pending.
+- No implementation or validation blocker is known.
+- Interactive human viewport inspection was not performed in this headless pass. The map was instead generated three successful times, structurally inspected by automation, loaded by M1, and exercised through a headless game BeginPlay authority query. A user may still open `/SightWeave/Maps/L_SightWeave_Lab` for aesthetic inspection.
+- Angular Sweep is intentionally not implemented. Correctness tests, deterministic geometry hashes, and measured 2/8-source reference timings support keeping the reference solver as the M2 authority; this is the architecture-approved fallback, not a missing correctness path.
+- No M2 feature was connected to DARKWELL gameplay or `/Game/Maps/L_Prototype`, and no GPU fog, memory tile, final reveal presentation, persistence, or full modifier system was added.

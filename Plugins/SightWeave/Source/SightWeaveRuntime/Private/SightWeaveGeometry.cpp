@@ -2,6 +2,7 @@
 
 #include "Algo/Sort.h"
 #include "Algo/Unique.h"
+#include "HAL/PlatformTime.h"
 
 namespace
 {
@@ -547,6 +548,7 @@ namespace SightWeave::Geometry
 	FSightWeaveReferenceSolveResult SolveReferencePolygon(const FSightWeaveReferenceSolveInput& Input)
 	{
 		FSightWeaveReferenceSolveResult Result;
+		const double TotalStartSeconds = FPlatformTime::Seconds();
 		if (!IsFiniteVector(Input.Origin)
 			|| !IsFiniteVector(Input.Forward)
 			|| Input.Forward.IsNearlyZero()
@@ -573,6 +575,7 @@ namespace SightWeave::Geometry
 		const double AngularEpsilon = FMath::DegreesToRadians(Input.Tolerances.EndpointAngularEpsilonDegrees);
 		const bool bFullCircle = Input.Shape == ESightWeaveSourceShape::Radial || Input.NearAwarenessRadius > 0.0;
 
+		const double BoundaryEventStartSeconds = FPlatformTime::Seconds();
 		if (bFullCircle)
 		{
 			for (int32 Step = 0; Step < Input.Tolerances.RadialBoundarySteps; ++Step)
@@ -602,8 +605,14 @@ namespace SightWeave::Geometry
 			Result.CandidateAnglesRadians.Add(-HalfAngleRadians);
 			Result.CandidateAnglesRadians.Add(HalfAngleRadians);
 		}
+		Result.StageMetrics.BoundaryEventMicroseconds =
+			(FPlatformTime::Seconds() - BoundaryEventStartSeconds) * 1000000.0;
 
+		const double CandidateEventStartSeconds = FPlatformTime::Seconds();
 		TArray<const FSightWeaveSegment2D*> CandidateSegments;
+		CandidateSegments.Reserve(Input.Segments.Num());
+		Result.CandidateAnglesRadians.Reserve(
+			Result.CandidateAnglesRadians.Num() + Input.Segments.Num() * 6);
 		for (const FSightWeaveSegment2D& Segment : Input.Segments)
 		{
 			if (!Segment.IsFinite()
@@ -627,6 +636,10 @@ namespace SightWeave::Geometry
 			}
 		}
 		Result.CandidateSegmentCount = CandidateSegments.Num();
+		Result.StageMetrics.CandidateFilterAndEndpointEventMicroseconds =
+			(FPlatformTime::Seconds() - CandidateEventStartSeconds) * 1000000.0;
+
+		const double EventSortStartSeconds = FPlatformTime::Seconds();
 		SortAndDeduplicateAngles(Result.CandidateAnglesRadians);
 
 		if (!bFullCircle)
@@ -637,7 +650,11 @@ namespace SightWeave::Geometry
 			});
 			Result.Vertices.Add(Input.Origin);
 		}
+		Result.Vertices.Reserve(Result.CandidateAnglesRadians.Num() + (bFullCircle ? 0 : 1));
+		Result.StageMetrics.EventSortDeduplicateMicroseconds =
+			(FPlatformTime::Seconds() - EventSortStartSeconds) * 1000000.0;
 
+		const double RayCastStartSeconds = FPlatformTime::Seconds();
 		for (const double RelativeAngle : Result.CandidateAnglesRadians)
 		{
 			const double MaximumDistance = SourceRadiusAtRelativeAngle(Input, RelativeAngle);
@@ -676,7 +693,10 @@ namespace SightWeave::Geometry
 				Result.Vertices.Add(Vertex);
 			}
 		}
+		Result.StageMetrics.RayCastMicroseconds =
+			(FPlatformTime::Seconds() - RayCastStartSeconds) * 1000000.0;
 
+		const double PostProcessStartSeconds = FPlatformTime::Seconds();
 		if (Result.Vertices.Num() >= 2
 			&& FVector::DistSquared2D(Result.Vertices[0], Result.Vertices.Last()) <= FMath::Square(Input.Tolerances.DuplicateVertexEpsilon))
 		{
@@ -686,15 +706,35 @@ namespace SightWeave::Geometry
 		if (Result.Vertices.Num() < 3)
 		{
 			Result.Error = TEXT("Reference solve emitted fewer than three vertices");
+			Result.StageMetrics.PolygonPostProcessMicroseconds =
+				(FPlatformTime::Seconds() - PostProcessStartSeconds) * 1000000.0;
+			Result.StageMetrics.TotalMicroseconds =
+				(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
 			return Result;
 		}
+		Result.StageMetrics.PolygonPostProcessMicroseconds =
+			(FPlatformTime::Seconds() - PostProcessStartSeconds) * 1000000.0;
+		Result.StageMetrics.WorkingSetAllocatedBytes =
+			Result.Vertices.GetAllocatedSize()
+			+ Result.CandidateAnglesRadians.GetAllocatedSize()
+			+ CandidateSegments.GetAllocatedSize();
+
+		const double TopologyStartSeconds = FPlatformTime::Seconds();
 		if (!IsSimplePolygon(Result.Vertices, Input.Tolerances))
 		{
 			Result.Error = TEXT("Reference solve emitted a non-simple polygon");
+			Result.StageMetrics.TopologyValidationMicroseconds =
+				(FPlatformTime::Seconds() - TopologyStartSeconds) * 1000000.0;
+			Result.StageMetrics.TotalMicroseconds =
+				(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
 			return Result;
 		}
+		Result.StageMetrics.TopologyValidationMicroseconds =
+			(FPlatformTime::Seconds() - TopologyStartSeconds) * 1000000.0;
 
 		Result.bSucceeded = true;
+		Result.StageMetrics.TotalMicroseconds =
+			(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
 		return Result;
 	}
 }

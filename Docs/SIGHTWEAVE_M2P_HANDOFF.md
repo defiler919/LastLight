@@ -7,8 +7,8 @@
 - Baseline SHA: `517a486779b53a890377f7cd0bc12b6f1cc62640`
 - Working branch: `codex/m2p-sightweave-authority-performance`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current phase: checkpoint 1 — scope recovery and starting handoff
-- Last safe commit: `517a486779b53a890377f7cd0bc12b6f1cc62640`
+- Current phase: checkpoint 2 — trustworthy Reference and runtime baseline captured
+- Last safe commit: `fdd54ff2b450f4289f06a23e2ac0186bd53056c9`
 - Next recovery command: `git switch codex/m2p-sightweave-authority-performance; git pull --ff-only origin codex/m2p-sightweave-authority-performance`
 
 ## Objective
@@ -51,6 +51,20 @@ The documents also state that these budgets are provisional until minimum hardwa
 5. Add manual-edge and large fixed-seed randomized Optimized-vs-Reference differential coverage.
 6. Run complete Editor/test/Lab/BuildPlugin/clean-host/dependency/Git/LFS validation and record final performance evidence.
 
+## Checkpoint 2 baseline result
+
+`Docs/SIGHTWEAVE_M2P_PERFORMANCE.md` records the full machine/configuration, methodology, median/p95/p99/max, failure history, and stage profile. The corrected extended run passed 2/2. Key baseline facts:
+
+- 8×64 radial warm p99: 22.872 ms; raycast 58.2%, topology validation 41.0%.
+- 8×512 = 4,096 relevant segments total warm p99: 920.468 ms.
+- 8×4,096 relevant segments per source warm p99: 46,987.216 ms.
+- 512 batch median/p99: 11.631/11.974 ms.
+- source transform update + synchronous solve/publish median/p99: 2.925/2.960 ms.
+- spatial candidate query and clean snapshot copy are not current primary hotspots.
+- Existing `SightWeave.M2.Geometry` after instrumentation: 21/21 passed, zero warning/error/not-run, duration 0.1688 seconds.
+
+The selected next implementation is an exact deterministic 2D segment BVH using the same endpoint events, analytic intersection, inclusive boundary, and stable-ID tie-break. Reference keeps quadratic topology validation; Optimized will guarantee construction and Verify will compare both.
+
 ## Commands executed
 
 ```powershell
@@ -74,5 +88,5 @@ Read in full: root `AGENTS.md`; requirements, architecture, migration plan, M1/M
 
 - No M2P benchmark, profile, optimized implementation, differential suite, build, automation, Lab smoke, or packaging validation has run yet.
 - Current workstation hardware/compiler details have not yet been captured.
-- The production algorithm and exact scratch/allocation strategy remain pending profile evidence.
+- The profile-selected BVH production algorithm, solver modes, and scratch/allocation strategy are not implemented yet.
 - Final state must remain `PARTIAL` unless every hard correctness, isolation, build, and performance gate passes.

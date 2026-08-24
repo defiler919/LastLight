@@ -188,11 +188,24 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveInput
 
 struct SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult
 {
+	struct FStageMetrics
+	{
+		double BoundaryEventMicroseconds = 0.0;
+		double CandidateFilterAndEndpointEventMicroseconds = 0.0;
+		double EventSortDeduplicateMicroseconds = 0.0;
+		double RayCastMicroseconds = 0.0;
+		double PolygonPostProcessMicroseconds = 0.0;
+		double TopologyValidationMicroseconds = 0.0;
+		double TotalMicroseconds = 0.0;
+		uint64 WorkingSetAllocatedBytes = 0;
+	};
+
 	bool bSucceeded = false;
 	TArray<FVector> Vertices;
 	TArray<double> CandidateAnglesRadians;
 	int32 CandidateSegmentCount = 0;
 	int32 CastRayCount = 0;
+	FStageMetrics StageMetrics;
 	FString Error;
 };
 

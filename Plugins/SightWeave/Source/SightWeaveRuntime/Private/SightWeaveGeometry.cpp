@@ -2,6 +2,7 @@
 
 #include "Algo/Unique.h"
 #include "HAL/PlatformTime.h"
+#include "HAL/ThreadSingleton.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSightWeaveGeometry, Log, All);
 
@@ -252,6 +253,107 @@ namespace
 		double EndAngle = 0.0;
 		int32 SegmentIndex = INDEX_NONE;
 	};
+
+	struct FSightWeaveSolverFrame
+	{
+		TArray<FSightWeavePreparedSegment> CandidateSegments;
+		TArray<FSightWeaveAngularInterval> AngularIntervals;
+		TArray<int32> ActiveIntervalIndices;
+
+		void Reset()
+		{
+			CandidateSegments.Reset();
+			AngularIntervals.Reset();
+			ActiveIntervalIndices.Reset();
+		}
+
+		void TrimAbnormalHighWater()
+		{
+			constexpr uint64 MaximumRetainedBytes = 8ull * 1024ull * 1024ull;
+			const uint64 RetainedBytes = CandidateSegments.GetAllocatedSize()
+				+ AngularIntervals.GetAllocatedSize()
+				+ ActiveIntervalIndices.GetAllocatedSize();
+			if (RetainedBytes > MaximumRetainedBytes)
+			{
+				CandidateSegments.Empty();
+				AngularIntervals.Empty();
+				ActiveIntervalIndices.Empty();
+			}
+		}
+	};
+
+	struct FSightWeaveThreadSolverScratch final : TThreadSingleton<FSightWeaveThreadSolverScratch>
+	{
+		friend TThreadSingleton<FSightWeaveThreadSolverScratch>;
+		static constexpr int32 ReentrantFrameCount = 4;
+		FSightWeaveSolverFrame Frames[ReentrantFrameCount];
+		int32 ActiveDepth = 0;
+	};
+
+	class FSightWeaveSolverFrameLease
+	{
+	public:
+		FSightWeaveSolverFrameLease()
+			: Scratch(FSightWeaveThreadSolverScratch::Get())
+		{
+			const int32 FrameIndex = Scratch.ActiveDepth++;
+			Frame = FrameIndex < FSightWeaveThreadSolverScratch::ReentrantFrameCount
+				? &Scratch.Frames[FrameIndex]
+				: &OverflowFrame;
+			Frame->Reset();
+		}
+
+		~FSightWeaveSolverFrameLease()
+		{
+			Frame->TrimAbnormalHighWater();
+			check(Scratch.ActiveDepth > 0);
+			--Scratch.ActiveDepth;
+		}
+
+		FSightWeaveSolverFrame& Get() const { return *Frame; }
+
+	private:
+		FSightWeaveThreadSolverScratch& Scratch;
+		FSightWeaveSolverFrame OverflowFrame;
+		FSightWeaveSolverFrame* Frame = nullptr;
+	};
+
+#if WITH_DEV_AUTOMATION_TESTS
+	bool ExerciseScratchReentrancy(
+		const int32 RemainingDepth,
+		TArray<const FSightWeaveSolverFrame*>& ActiveFrames)
+	{
+		FSightWeaveSolverFrameLease Lease;
+		const FSightWeaveSolverFrame* Frame = &Lease.Get();
+		if (ActiveFrames.Contains(Frame))
+		{
+			return false;
+		}
+
+		ActiveFrames.Add(Frame);
+		const bool bNestedFramesWereDistinct = RemainingDepth <= 1
+			|| ExerciseScratchReentrancy(RemainingDepth - 1, ActiveFrames);
+		ActiveFrames.Pop(EAllowShrinking::No);
+		return bNestedFramesWereDistinct;
+	}
+#endif
+
+	void ResetOptimizedSolveResult(FSightWeaveReferenceSolveResult& Result)
+	{
+		Result.bSucceeded = false;
+		Result.Vertices.Reset();
+		Result.CandidateAnglesRadians.Reset();
+		Result.CandidateDistances.Reset();
+		Result.CandidateBoundaryPoints.Reset();
+		Result.CandidateSegmentCount = 0;
+		Result.CastRayCount = 0;
+		Result.SolverModeUsed = ESightWeaveSolverMode::Optimized;
+		Result.bVerificationMatched = false;
+		Result.bUsedReferenceFallback = false;
+		Result.StageMetrics = {};
+		Result.VerificationError.Reset();
+		Result.Error.Reset();
+	}
 
 	void AddClippedAngularInterval(
 		TArray<FSightWeaveAngularInterval>& Intervals,
@@ -1008,10 +1110,11 @@ namespace SightWeave::Geometry
 		return Result;
 	}
 
-	FSightWeaveReferenceSolveResult SolveOptimizedPolygon(const FSightWeaveReferenceSolveInput& Input)
+	void SolveOptimizedPolygonInto(
+		const FSightWeaveReferenceSolveInput& Input,
+		FSightWeaveReferenceSolveResult& Result)
 	{
-		FSightWeaveReferenceSolveResult Result;
-		Result.SolverModeUsed = ESightWeaveSolverMode::Optimized;
+		ResetOptimizedSolveResult(Result);
 		const double TotalStartSeconds = FPlatformTime::Seconds();
 		if (!IsFiniteVector(Input.Origin)
 			|| !IsFiniteVector(Input.Forward)
@@ -1029,8 +1132,14 @@ namespace SightWeave::Geometry
 			|| !Input.Tolerances.IsValid())
 		{
 			Result.Error = TEXT("Invalid optimized solve input");
-			return Result;
+			return;
 		}
+
+		FSightWeaveSolverFrameLease FrameLease;
+		FSightWeaveSolverFrame& SolverFrame = FrameLease.Get();
+		TArray<FSightWeavePreparedSegment>& CandidateSegments = SolverFrame.CandidateSegments;
+		TArray<FSightWeaveAngularInterval>& AngularIntervals = SolverFrame.AngularIntervals;
+		TArray<int32>& ActiveIntervalIndices = SolverFrame.ActiveIntervalIndices;
 
 		const FVector2D Origin(Input.Origin.X, Input.Origin.Y);
 		const FVector2D Forward = Input.Forward.GetSafeNormal();
@@ -1073,7 +1182,6 @@ namespace SightWeave::Geometry
 			(FPlatformTime::Seconds() - BoundaryEventStartSeconds) * 1000000.0;
 
 		const double CandidateEventStartSeconds = FPlatformTime::Seconds();
-		TArray<FSightWeavePreparedSegment> CandidateSegments;
 		CandidateSegments.Reserve(Input.Segments.Num());
 		Result.CandidateAnglesRadians.Reserve(
 			Result.CandidateAnglesRadians.Num() + Input.Segments.Num() * 6);
@@ -1126,7 +1234,6 @@ namespace SightWeave::Geometry
 			(FPlatformTime::Seconds() - EventSortStartSeconds) * 1000000.0;
 
 		const double AccelerationStartSeconds = FPlatformTime::Seconds();
-		TArray<FSightWeaveAngularInterval> AngularIntervals;
 		BuildAngularIntervals(
 			CandidateSegments,
 			Origin,
@@ -1138,7 +1245,7 @@ namespace SightWeave::Geometry
 
 		const double RayCastStartSeconds = FPlatformTime::Seconds();
 		int32 NextIntervalIndex = 0;
-		TArray<int32, TInlineAllocator<64>> ActiveIntervalIndices;
+		ActiveIntervalIndices.Reserve(AngularIntervals.Num());
 		for (const double RelativeAngle : Result.CandidateAnglesRadians)
 		{
 			while (NextIntervalIndex < AngularIntervals.Num()
@@ -1222,7 +1329,7 @@ namespace SightWeave::Geometry
 				(FPlatformTime::Seconds() - PostProcessStartSeconds) * 1000000.0;
 			Result.StageMetrics.TotalMicroseconds =
 				(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
-			return Result;
+			return;
 		}
 		Result.StageMetrics.PolygonPostProcessMicroseconds =
 			(FPlatformTime::Seconds() - PostProcessStartSeconds) * 1000000.0;
@@ -1234,7 +1341,7 @@ namespace SightWeave::Geometry
 				(FPlatformTime::Seconds() - TopologyStartSeconds) * 1000000.0;
 			Result.StageMetrics.TotalMicroseconds =
 				(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
-			return Result;
+			return;
 		}
 		Result.StageMetrics.TopologyValidationMicroseconds =
 			(FPlatformTime::Seconds() - TopologyStartSeconds) * 1000000.0;
@@ -1249,32 +1356,40 @@ namespace SightWeave::Geometry
 		Result.bSucceeded = true;
 		Result.StageMetrics.TotalMicroseconds =
 			(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
+	}
+
+	FSightWeaveReferenceSolveResult SolveOptimizedPolygon(const FSightWeaveReferenceSolveInput& Input)
+	{
+		FSightWeaveReferenceSolveResult Result;
+		SolveOptimizedPolygonInto(Input, Result);
 		return Result;
 	}
 
-	FSightWeaveReferenceSolveResult SolvePolygon(
+	void SolvePolygonInto(
 		const FSightWeaveReferenceSolveInput& Input,
-		const ESightWeaveSolverMode Mode)
+		const ESightWeaveSolverMode Mode,
+		FSightWeaveReferenceSolveResult& Result)
 	{
 #if UE_BUILD_SHIPPING
-		return SolveOptimizedPolygon(Input);
+		SolveOptimizedPolygonInto(Input, Result);
 #else
 		if (Mode == ESightWeaveSolverMode::Reference)
 		{
-			return SolveReferencePolygon(Input);
+			Result = SolveReferencePolygon(Input);
+			return;
 		}
-		FSightWeaveReferenceSolveResult Optimized = SolveOptimizedPolygon(Input);
+		SolveOptimizedPolygonInto(Input, Result);
 		if (Mode != ESightWeaveSolverMode::Verify)
 		{
-			return Optimized;
+			return;
 		}
 
 		FSightWeaveReferenceSolveResult Reference = SolveReferencePolygon(Input);
 		FString VerificationError;
-		if (SolveResultsMatch(Optimized, Reference, Input.Tolerances, VerificationError))
+		if (SolveResultsMatch(Result, Reference, Input.Tolerances, VerificationError))
 		{
-			Optimized.bVerificationMatched = true;
-			return Optimized;
+			Result.bVerificationMatched = true;
+			return;
 		}
 
 		Reference.bVerificationMatched = false;
@@ -1285,7 +1400,34 @@ namespace SightWeave::Geometry
 			Error,
 			TEXT("Optimized solver verification mismatch; using reference result: %s"),
 			*Reference.VerificationError);
-		return Reference;
+		Result = MoveTemp(Reference);
 #endif
 	}
+
+	FSightWeaveReferenceSolveResult SolvePolygon(
+		const FSightWeaveReferenceSolveInput& Input,
+		const ESightWeaveSolverMode Mode)
+	{
+		FSightWeaveReferenceSolveResult Result;
+		SolvePolygonInto(Input, Mode, Result);
+		return Result;
+	}
+
+#if WITH_DEV_AUTOMATION_TESTS
+	namespace Testing
+	{
+		bool ExerciseOptimizedSolverScratchReentrancy(const int32 Depth)
+		{
+			if (Depth <= 0 || Depth > 64)
+			{
+				return false;
+			}
+
+			TArray<const FSightWeaveSolverFrame*> ActiveFrames;
+			ActiveFrames.Reserve(Depth);
+			return ExerciseScratchReentrancy(Depth, ActiveFrames)
+				&& ActiveFrames.IsEmpty();
+		}
+	}
+#endif
 }

@@ -211,23 +211,27 @@ namespace SightWeave::M2P1::AllocationTests
 			Inputs.Add(SolveInput(Segments, SourceIndex, SourceCount));
 		}
 
-		for (const FSightWeaveReferenceSolveInput& Input : Inputs)
+		TArray<FSightWeaveReferenceSolveResult> Results;
+		Results.SetNum(SourceCount);
+		for (int32 SourceIndex = 0; SourceIndex < Inputs.Num(); ++SourceIndex)
 		{
-			const FSightWeaveReferenceSolveResult WarmResult = SightWeave::Geometry::SolvePolygon(
-				Input,
-				ESightWeaveSolverMode::Optimized);
-			ResultSink += WarmResult.Vertices.Num();
+			SightWeave::Geometry::SolvePolygonInto(
+				Inputs[SourceIndex],
+				ESightWeaveSolverMode::Optimized,
+				Results[SourceIndex]);
+			ResultSink += Results[SourceIndex].Vertices.Num();
 		}
 
 		for (uint16 Sample = 0; Sample < 3; ++Sample)
 		{
 			FAllocationScope Scope(Workload, Sample);
-			for (const FSightWeaveReferenceSolveInput& Input : Inputs)
+			for (int32 SourceIndex = 0; SourceIndex < Inputs.Num(); ++SourceIndex)
 			{
-				const FSightWeaveReferenceSolveResult Result = SightWeave::Geometry::SolvePolygon(
-					Input,
-					ESightWeaveSolverMode::Optimized);
-				ResultSink += Result.Vertices.Num();
+				SightWeave::Geometry::SolvePolygonInto(
+					Inputs[SourceIndex],
+					ESightWeaveSolverMode::Optimized,
+					Results[SourceIndex]);
+				ResultSink += Results[SourceIndex].Vertices.Num();
 			}
 		}
 	}
@@ -441,6 +445,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FSightWeaveM2P1AllocationCaptureTest::RunTest(const FString& Parameters)
 {
 	using namespace SightWeave::M2P1::AllocationTests;
+	if (!FParse::Param(FCommandLine::Get(), TEXT("SightWeaveAllocationCapture")))
+	{
+		AddInfo(TEXT("Allocation capture requires the explicit -SightWeaveAllocationCapture mode."));
+		return true;
+	}
 	if (!TestTrue(TEXT("SightWeave allocation trace channel is enabled"), UE_TRACE_CHANNELEXPR_IS_ENABLED(SightWeaveAllocationChannel))
 		|| !TestTrue(TEXT("Engine memory allocation trace channel is enabled"), UE_TRACE_CHANNELEXPR_IS_ENABLED(MemAllocChannel)))
 	{
@@ -478,15 +487,16 @@ bool FSightWeaveM2P1AllocationCaptureTest::RunTest(const FString& Parameters)
 	}
 
 	FSightWeaveVisibilityQueryResult PointResult;
-	PointResult = Subsystem->QueryEffectiveLiveAtLocation(Local, Ground, FVector(400.0, 0.0, 100.0));
+	Subsystem->QueryEffectiveLiveAtLocationInto(Local, Ground, FVector(400.0, 0.0, 100.0), PointResult);
 	for (uint16 Sample = 0; Sample < 3; ++Sample)
 	{
 		EmitScope(EWorkload::PointQuery, Sample, [&]
 		{
-			PointResult = Subsystem->QueryEffectiveLiveAtLocation(
+			Subsystem->QueryEffectiveLiveAtLocationInto(
 				Local,
 				Ground,
-				FVector(400.0, static_cast<double>(Sample), 100.0));
+				FVector(400.0, static_cast<double>(Sample), 100.0),
+				PointResult);
 		});
 	}
 
@@ -562,6 +572,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FSightWeaveM2P1AllocationAnalyzeTest::RunTest(const FString& Parameters)
 {
 	using namespace SightWeave::M2P1::AllocationTests;
+	if (!FParse::Param(FCommandLine::Get(), TEXT("SightWeaveAllocationAnalyze")))
+	{
+		AddInfo(TEXT("Allocation analysis requires the explicit -SightWeaveAllocationAnalyze mode."));
+		return true;
+	}
 	FString TracePath;
 	FString ReportPath;
 	if (!FParse::Value(FCommandLine::Get(), TEXT("SightWeaveAllocationTrace="), TracePath)

@@ -267,8 +267,31 @@ namespace SightWeave::Geometry
 	SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult SolveOptimizedPolygon(
 		const FSightWeaveReferenceSolveInput& Input);
 
+	/**
+	 * Allocation-stable production overload. Reuses OutResult storage and a
+	 * bounded per-thread workspace; callers must warm the expected high-water
+	 * workload before entering a zero-allocation region.
+	 */
+	SIGHTWEAVERUNTIME_API void SolveOptimizedPolygonInto(
+		const FSightWeaveReferenceSolveInput& Input,
+		FSightWeaveReferenceSolveResult& OutResult);
+
 	/** Production entry point. Reference and Verify are unavailable in Shipping. */
 	SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult SolvePolygon(
 		const FSightWeaveReferenceSolveInput& Input,
 		ESightWeaveSolverMode Mode = ESightWeaveSolverMode::Optimized);
+
+	/** Allocation-stable production entry point; diagnostic modes may allocate. */
+	SIGHTWEAVERUNTIME_API void SolvePolygonInto(
+		const FSightWeaveReferenceSolveInput& Input,
+		ESightWeaveSolverMode Mode,
+		FSightWeaveReferenceSolveResult& OutResult);
+
+#if WITH_DEV_AUTOMATION_TESTS
+	namespace Testing
+	{
+		/** Test-only validation that nested leases never alias an active scratch frame. */
+		SIGHTWEAVERUNTIME_API bool ExerciseOptimizedSolverScratchReentrancy(int32 Depth);
+	}
+#endif
 }

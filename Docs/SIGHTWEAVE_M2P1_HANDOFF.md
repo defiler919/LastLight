@@ -7,8 +7,8 @@
 - Baseline SHA: `d0b90d2e5687105f1e25bf03476a07d6bb5337de`
 - Working branch: `codex/m2p1-sightweave-final-performance-gate`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current checkpoint: checkpoint 2 — real allocation baseline ready for commit
-- Last safe commit: `docs: start SightWeave final performance gate` (`397b9d6382f07b77980e585274a558fb26e1987b`)
+- Current checkpoint: checkpoint 3 — reusable solver scratch ready for commit
+- Last safe commit: `test: instrument SightWeave hot-path allocations` (`1284174d0dbc9ed096e4c7eb347a3c3a0ac788ce`)
 - Next recovery command: `git switch codex/m2p1-sightweave-final-performance-gate; git pull --ff-only origin codex/m2p1-sightweave-final-performance-gate`
 
 ## Objective and scope
@@ -56,17 +56,25 @@ git switch -c codex/m2p1-sightweave-final-performance-gate
 & .\Scripts\BuildEditor.ps1 -Configuration Development -EngineRoot 'D:\UE_5.8'
 & D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe ... '-trace=memory,sightweaveallocation' '-ExecCmds=Automation RunTests SightWeave.M2P1.Allocation.Capture' ...
 & D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe ... '-ExecCmds=Automation RunTests SightWeave.M2P1.Allocation.Analyze' ...
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe ... '-ExecCmds=Automation RunTests SightWeave.M2P1.Scratch' ...
+& .\Scripts\RunSightWeaveAllocationProof.ps1 -Label 'after-scratch-v3' -EngineRoot 'D:\UE_5.8'
 ```
 
 The baseline was clean and exactly matched the required SHA. The target branch did not exist locally or remotely. Repository guidance, requirements, architecture, migration, M2/M2P handoffs, M2P performance evidence, plugin README, the relevant Runtime implementation, and all M1/M2/M2P tests and benchmarks were read before runtime source changes.
 
 The full `DarkwellEditor Win64 Development` build passed after adding the Editor-only allocation instrumentation. Capture and offline analysis each passed one Automation test with zero test warnings/errors. The exact baseline and method are in `Docs/SIGHTWEAVE_M2P1_ALLOCATION_BASELINE.md`. The key result is that each Optimized solve currently performs six allocations and five reallocations; 8×4,096 allocates 14,231,360 bytes across the eight-solve marked scope. Batch 512, clean publication, and no-change update are proven zero-allocation already.
 
+Checkpoint 2 was committed and pushed as `1284174d0dbc9ed096e4c7eb347a3c3a0ac788ce`; local HEAD, upstream, and the remote branch were then identical. The current uncommitted checkpoint adds reusable caller-output and per-thread solver storage. Each thread owns four retained reentrant frames; deeper nesting receives stack-owned overflow storage, and any frame above an 8 MiB combined high-water mark is emptied at release. Scratch stores no world or `UObject` references. Snapshot entry rebuild and point-query callers now reuse output arrays.
+
+Post-change allocator proof `after-scratch-v3` passed one capture and one analysis test with zero test warnings/errors. All solver sizes, point query, batch 512, clean publication, and no-change update measured exactly 0 allocations/reallocations/bytes in every sample. Door update dropped from 416/67 alloc/realloc and 376,468–376,804 bytes to 389/45 and 218,812–219,148 bytes; source update dropped from 169/17–18 and 189,720–190,344 bytes to 162/12–13 and 148,096–148,720 bytes. Exact evidence and design rationale are in `Docs/SIGHTWEAVE_M2P1_SCRATCH.md`.
+
+The new eight-worker deterministic isolation test and eight-level reentrancy test both passed with zero warnings/errors. The complete SightWeave suite then passed 87/87 with zero warnings/errors. A full `DarkwellEditor Win64 Development` build also passed; the only build warning remains the local MSVC 14.51 versus Epic-preferred 14.50 toolchain notice. Home Screen is disabled before editor-module startup in the proof script, eliminating the unrelated `google.com/generate_204` timeout that contaminated one discarded analysis run.
+
 ## Unverified items
 
-- Real startup-safe allocator-call instrumentation and a fresh 30-sample baseline are complete; post-optimization evidence is pending.
+- Real startup-safe allocator-call instrumentation, the 30-sample baseline, and the post-scratch 30-sample proof are complete. The solver/query allocation gate is closed; full dynamic updates remain nonzero.
 - The 4,096/source stage distribution has not yet been re-measured on this branch.
-- Reusable scratch, concurrency/reentrancy behavior, bounded high-water reclamation, and worker isolation are not implemented.
+- Reusable scratch, caller-output reuse, bounded high-water reclamation, eight-worker isolation, and eight-level reentrancy are implemented and tested. High-count Reference differential expansion remains pending.
 - Dynamic occluder updates remain synchronous; no pending-window or stale-result policy exists.
-- The allocation instrumentation C++ has passed a full Editor build plus capture/analyze Automation. Runtime optimization has not started.
+- The allocation instrumentation and reusable-scratch C++ have passed full Editor builds plus capture/analyze and focused scratch Automation.
 - Final Editor/Automation/Lab/BuildPlugin/clean-host/dependency/Git/LFS validation is pending.

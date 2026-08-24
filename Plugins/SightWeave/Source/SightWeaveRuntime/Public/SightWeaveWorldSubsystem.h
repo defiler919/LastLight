@@ -142,6 +142,13 @@ public:
 		FSightWeaveFloorId FloorId,
 		FVector WorldLocation) const;
 
+	/** Reuses result attribution storage for allocation-stable authority queries. */
+	void QueryEffectiveLiveAtLocationInto(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		FVector WorldLocation,
+		FSightWeaveVisibilityQueryResult& OutResult) const;
+
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Query")
 	FSightWeaveVisibilityQueryResult QueryVisionSourceHardLiveAtLocation(
 		FSightWeaveVisionSourceHandle Handle,

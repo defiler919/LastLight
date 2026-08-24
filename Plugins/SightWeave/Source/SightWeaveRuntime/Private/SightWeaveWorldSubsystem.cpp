@@ -934,6 +934,21 @@ FSightWeaveVisibilityQueryResult USightWeaveWorldSubsystem::QueryEffectiveLiveAt
 	return QueryEffectiveLiveInternal(KnowledgeOwnerId, FloorId, WorldLocation, nullptr, false);
 }
 
+void USightWeaveWorldSubsystem::QueryEffectiveLiveAtLocationInto(
+	const FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+	const FSightWeaveFloorId FloorId,
+	const FVector WorldLocation,
+	FSightWeaveVisibilityQueryResult& OutResult) const
+{
+	QueryEffectiveLiveInternalInto(
+		KnowledgeOwnerId,
+		FloorId,
+		WorldLocation,
+		nullptr,
+		false,
+		OutResult);
+}
+
 FSightWeaveVisibilityQueryResult USightWeaveWorldSubsystem::QueryVisionSourceHardLiveAtLocation(
 	const FSightWeaveVisionSourceHandle Handle,
 	const FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
@@ -1540,7 +1555,21 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		return;
 	}
 
-	FSightWeaveVisionSnapshotEntry Entry;
+	FSightWeaveVisionSnapshotEntry& Entry = CachedVisionSnapshotEntries.FindOrAdd(SourceId);
+	FSightWeaveReferenceSolveResult SolveResult;
+	SolveResult.Vertices = MoveTemp(Entry.Polygon.Vertices);
+	SolveResult.CandidateAnglesRadians = MoveTemp(Entry.CandidateAnglesRadians);
+	SolveResult.CandidateDistances = MoveTemp(Entry.CandidateDistances);
+	SolveResult.CandidateBoundaryPoints = MoveTemp(Entry.CandidateBoundaryPoints);
+	Entry.CompatibleIlluminationSources.Reset();
+	Entry.CompatibleIlluminationSourceIndices.Reset();
+	Entry.PolarAngleUpperBoundLut.Reset();
+	Entry.CandidateSegmentCount = 0;
+	Entry.CandidateRayCount = 0;
+	Entry.SolveTimeMicroseconds = 0.0;
+	Entry.PolarOrigin = FVector2D::ZeroVector;
+	Entry.PolarForwardAngleRadians = 0.0;
+	Entry.bPolarBoundaryFullCircle = false;
 	Entry.Handle = FSightWeaveVisionSourceHandle(SourceId);
 	Entry.Description = *Description;
 	Entry.SourceRevision = VisionSourceRevisions.FindRef(SourceId);
@@ -1550,6 +1579,8 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 	Entry.Polygon.Revision = Revision;
 	Entry.Polygon.SourceRevision = Entry.SourceRevision;
 	Entry.Polygon.OccluderRevision = LastOccluderRevision;
+	Entry.Polygon.BoundsMin = FVector2D::ZeroVector;
+	Entry.Polygon.BoundsMax = FVector2D::ZeroVector;
 
 	const FSightWeaveFloorDefinition* Floor = Floors.Find(Description->FloorId);
 	if (Description->bActive && Floor && Floor->bEnabled && Floor->bActiveForQueries)
@@ -1579,7 +1610,7 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		QueryOccluderSegments(Description->FloorId, QueryBounds, Description->HeightRange, Input.Segments);
 
 		const double StartSeconds = FPlatformTime::Seconds();
-		FSightWeaveReferenceSolveResult SolveResult = SightWeave::Geometry::SolvePolygon(Input, Settings->SolverMode);
+		SightWeave::Geometry::SolvePolygonInto(Input, Settings->SolverMode, SolveResult);
 		Entry.SolveTimeMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
 		Entry.CandidateRayCount = SolveResult.CastRayCount;
@@ -1593,7 +1624,6 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 			SetPolygonBounds(Entry.Polygon.Vertices, Entry.Polygon.BoundsMin, Entry.Polygon.BoundsMax);
 		}
 	}
-	CachedVisionSnapshotEntries.Add(SourceId, MoveTemp(Entry));
 }
 
 void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 SourceId)
@@ -1605,7 +1635,19 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		return;
 	}
 
-	FSightWeaveIlluminationSnapshotEntry Entry;
+	FSightWeaveIlluminationSnapshotEntry& Entry = CachedIlluminationSnapshotEntries.FindOrAdd(SourceId);
+	FSightWeaveReferenceSolveResult SolveResult;
+	SolveResult.Vertices = MoveTemp(Entry.Polygon.Vertices);
+	SolveResult.CandidateAnglesRadians = MoveTemp(Entry.CandidateAnglesRadians);
+	SolveResult.CandidateDistances = MoveTemp(Entry.CandidateDistances);
+	SolveResult.CandidateBoundaryPoints = MoveTemp(Entry.CandidateBoundaryPoints);
+	Entry.PolarAngleUpperBoundLut.Reset();
+	Entry.CandidateSegmentCount = 0;
+	Entry.CandidateRayCount = 0;
+	Entry.SolveTimeMicroseconds = 0.0;
+	Entry.PolarOrigin = FVector2D::ZeroVector;
+	Entry.PolarForwardAngleRadians = 0.0;
+	Entry.bPolarBoundaryFullCircle = false;
 	Entry.Handle = FSightWeaveIlluminationSourceHandle(SourceId);
 	Entry.Description = *Description;
 	Entry.SourceRevision = IlluminationSourceRevisions.FindRef(SourceId);
@@ -1615,6 +1657,8 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 	Entry.Polygon.Revision = Revision;
 	Entry.Polygon.SourceRevision = Entry.SourceRevision;
 	Entry.Polygon.OccluderRevision = LastOccluderRevision;
+	Entry.Polygon.BoundsMin = FVector2D::ZeroVector;
+	Entry.Polygon.BoundsMax = FVector2D::ZeroVector;
 
 	const FSightWeaveFloorDefinition* Floor = Floors.Find(Description->FloorId);
 	if (Description->bActive && Floor && Floor->bEnabled && Floor->bActiveForQueries)
@@ -1643,7 +1687,7 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		QueryOccluderSegments(Description->FloorId, QueryBounds, Description->HeightRange, Input.Segments);
 
 		const double StartSeconds = FPlatformTime::Seconds();
-		FSightWeaveReferenceSolveResult SolveResult = SightWeave::Geometry::SolvePolygon(Input, Settings->SolverMode);
+		SightWeave::Geometry::SolvePolygonInto(Input, Settings->SolverMode, SolveResult);
 		Entry.SolveTimeMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
 		Entry.CandidateRayCount = SolveResult.CastRayCount;
@@ -1657,7 +1701,6 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 			SetPolygonBounds(Entry.Polygon.Vertices, Entry.Polygon.BoundsMin, Entry.Polygon.BoundsMax);
 		}
 	}
-	CachedIlluminationSnapshotEntries.Add(SourceId, MoveTemp(Entry));
 }
 
 void USightWeaveWorldSubsystem::ResolveSnapshotCompatibility(FSightWeaveFrameSnapshot& Snapshot) const

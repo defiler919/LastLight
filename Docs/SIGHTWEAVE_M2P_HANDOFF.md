@@ -2,13 +2,13 @@
 
 ## Status
 
-- State: **IN_PROGRESS**
+- State: **PARTIAL**
 - Baseline branch: `codex/m2-sightweave-2p5d-authority`
 - Baseline SHA: `517a486779b53a890377f7cd0bc12b6f1cc62640`
 - Working branch: `codex/m2p-sightweave-authority-performance`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current phase: checkpoint 5 — optimized/reference differential coverage complete; final validation next
-- Last safe commit: `4a1924d6575a3092de55a493a3bd5630f77acc80`
+- Current phase: checkpoint 6 — final validation complete; hard performance gaps retained
+- Last safe commit: `708f15acd116e77196b36eb41a5f64e684f5435b`
 - Next recovery command: `git switch codex/m2p-sightweave-authority-performance; git pull --ff-only origin codex/m2p-sightweave-authority-performance`
 
 ## Objective
@@ -114,6 +114,46 @@ Post-parity final solver evidence remains inside the documented scale:
 
 The latest runtime distribution reported a 512-query batch at 206.102/210.300/211.101/211.101 µs median/p95/p99/max, now below 0.25 ms throughout that run; source update p99 was 122.700 µs and dynamic-door p99 was 694.402 µs. Strict allocator-call zero remains unproven despite zero warmed capacity growth.
 
+## Checkpoint 6 final validation
+
+The final state is **PARTIAL**, not `COMPLETED`. Correctness, regression, Editor build, Lab smoke, plugin isolation, clean-host build, dependency, Git, and LFS gates pass. The following hard performance claims do not all pass:
+
+- actual allocator-call count was not instrumented; zero warmed `TArray` capacity growth is not proof of the required zero heap allocations;
+- the deliberately required 4,096-relevant-segments-per-source stress interpretation is 5.551 ms median / 5.598 ms p99 per solve, above 1/2 ms;
+- dynamic-door mutation still performs its affected solve and publication synchronously at 0.653 ms median / 0.694 ms p99, above 0.25 ms if treated as a main-thread dispatch budget. Source transform update itself passes at 0.115/0.123 ms median/p99.
+
+Final validation evidence:
+
+- Final full `DarkwellEditor Win64 Development`: UBT `Result: Succeeded`, exit code 0. It was up to date after the preceding successful full rebuild of the changed Runtime/Tests objects.
+- `SightWeave.M1`: **21 discovered/run/passed**, 0 failed/warning/not-run, 0.2005 seconds.
+- `SightWeave.M2` prefix: **62 discovered/run/passed**, 0 failed/warning/not-run, 1.1759 seconds. This includes 56 core M2 and 6 M2P tests.
+- `SightWeave.M2P.Differential`: **3/3 passed**, 0 failed/warning/not-run, 0.1638 seconds.
+- Complete `SightWeave`: **83/83 passed**, 0 failed/warning/not-run, 1.3732 seconds; M1 21, core M2 56, M2P 6.
+- `Darkwell`: **24/24 passed**, 0 failed/warning/not-run, 0.2035 seconds.
+- Dynamic-door authority smoke `SightWeave.M2.Query.DynamicDoor.OpenCloseDeterminism`: **1/1 passed**, 0 failed/warning/not-run.
+- Lab headless Game smoke: `/SightWeave/Maps/L_SightWeave_Lab` loaded in 0.0470 seconds, entered play under `GameModeBase`, and its BeginPlay marker reported authoritative/live/vision/bypass = 1, snapshot 58, one attributed vision source.
+- Extended final optimized benchmark: **1/1 passed**; the post-parity distributions are recorded in `Docs/SIGHTWEAVE_M2P_PERFORMANCE.md`.
+- BuildPlugin: **BUILD SUCCESSFUL**, AutomationTool exit code 0, 2 minutes 17 seconds. Its repository-external clean HostProject built UnrealEditor Win64 Development, UnrealGame Win64 Development, and UnrealGame Win64 Shipping; all three reported UBT `Result: Succeeded`.
+- Runtime dependency scan: Runtime Build.cs contains only `Core`, `CoreUObject`, `Engine`, and `DeveloperSettings`; repository and packaged Runtime source contain no `Darkwell`, `UnrealEd`, `SightWeaveEditor`, or `SightWeaveTests` reference. The packaged Runtime DLL import table contains only those four UE modules plus Windows/CRT dependencies.
+- `git diff --check` and cached diff check passed. No generated `Binaries`, `DerivedDataCache`, `Intermediate`, or `Saved` path is tracked. The UAT-created untracked `Plugins/SightWeave/Config/FilterPlugin.ini` template was inspected and removed.
+- `git lfs status` is empty and `git lfs fsck` reports `Git LFS fsck OK`. The sole SightWeave map remains LFS-filtered.
+
+Warnings/errors audit:
+
+- Final Automation JSON entries contain zero test warnings/errors. Each Unreal startup still emits the 13 previously documented `LogAutomationTest: Error: Condition failed` engine self-diagnostic lines before worker discovery; there are zero `LogAutomationController` errors/warnings afterward.
+- Final test and Lab logs contain zero ensure, assertion, fatal, critical error, or unhandled exception.
+- Builds report that installed MSVC 14.51.36256 is newer than UE 5.8's preferred 14.50.35717. Clean-host compilation also exposes C4996 warnings from UE 5.8 headers; no warning points to a SightWeave source line.
+- During development, the new test first failed to compile because UE 5.8 defines `TGuardValue` in `Templates/UnrealTemplate.h`, not `Misc/GuardValue.h`; the corrected full rebuild passed. Valid randomized differential cases then exposed the four local CameraCone topology mismatches described above; the retained linear parity fix passes the final suite.
+
+Checkpoint commits pushed to the working branch:
+
+1. `fdd54ff2b450f4289f06a23e2ac0186bd53056c9` — `docs: start SightWeave authority performance hardening`
+2. `8fda558d80cad9654aaf8aaee1d5e6db7410fb92` — `test: add SightWeave authority performance benchmarks`
+3. `d2566f542adf181e42d2725220bc7c3bd3be0e03` — `feat: add optimized SightWeave visibility solver`
+4. `4a1924d6575a3092de55a493a3bd5630f77acc80` — `perf: harden SightWeave runtime update pipeline`
+5. `708f15acd116e77196b36eb41a5f64e684f5435b` — `test: add optimized reference differential coverage`
+6. `docs: record SightWeave M2P performance validation` — this document's containing commit; resolve with `git log -1 --format=%H`.
+
 ## Commands executed
 
 ```powershell
@@ -135,6 +175,8 @@ Read in full: root `AGENTS.md`; requirements, architecture, migration plan, M1/M
 
 ## Unverified items
 
-- Actual allocator-call instrumentation and reusable solver scratch are not complete. Batch capacity is stable after warm-up, but that is narrower evidence than zero heap calls.
-- M1/all SightWeave/DARKWELL, Lab smoke, BuildPlugin/clean hosts, dependency scans, Git/LFS, and final warnings/fatals audit remain.
-- Final state must remain `PARTIAL` unless every hard correctness, isolation, build, and performance gate passes. The 4,096-per-source stress interpretation currently exceeds the worker solve budget even though the documented 4,096-total scale passes per solve.
+- Actual allocator-call instrumentation and reusable solver scratch remain incomplete. Batch capacity is stable after warm-up, but that is narrower evidence than zero heap calls.
+- The documented 4,096-total scale passes per solve, but 4,096 per source does not. This ambiguity is not resolved by relabeling the easier workload.
+- Dynamic-door work is correctly local, but remains a synchronous 0.65–0.69 ms public mutation rather than a sub-0.25 ms dispatch plus deterministic deferred publication.
+- Interactive human viewport inspection was not performed. The existing asset was instead loaded by M1 automation and exercised in a headless Game world without modifying the `.umap`.
+- Recommended next work: add allocator-hook/LLM call-count instrumentation and reusable per-worker solver scratch, then separate dynamic-door dirty dispatch from deterministic solve/publication. Re-run the same differential and full gate before changing this status.

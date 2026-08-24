@@ -167,3 +167,21 @@ The post-differential runtime run measured:
 | Identical source update | 0.298 | 0.302 | 0.302 | 0.302 | no revision change |
 
 Raw reports: `Saved/AutomationReports/SightWeaveM2P_OptimizedAfterDifferential_20260824/index.json` and `Saved/AutomationReports/SightWeaveM2_AfterDifferential_20260824/index.json`. Candidate/ray/vertex counts continue to match Reference. Zero warmed `TArray` capacity growth is retained as evidence, but actual allocator-call count remains uninstrumented; therefore the strict zero-heap gate is not claimed.
+
+## Final acceptance decision
+
+Status is **PARTIAL**. The profile-guided angular-interval solver, runtime query/batch caches, no-change publication path, differential equivalence, regression, builds, isolation, and documented 4,096-total solve budgets pass. The task cannot be marked complete because the strict zero-heap gate is unproven, the 4,096-per-source stress interpretation fails, and the synchronous dynamic-door mutation exceeds 0.25 ms if classified as main-thread dispatch.
+
+Final optimized-vs-Reference median speedups after the linear parity guard are:
+
+| Workload | Reference median µs | Final optimized median µs | Speedup |
+| --- | ---: | ---: | ---: |
+| 2 × 64 radial | 5,663.604 | 188.500 | 30.0× |
+| 8 × 64 radial | 22,773.497 | 749.797 | 30.4× |
+| 8 × 64 directional cone | 6,243.899 | 351.306 | 17.8× |
+| 8 × 256 radial | 232,822.005 | 3,080.703 | 75.6× |
+| 8 × 1,024 radial | 3,390,991.498 | 9,322.096 | 363.8× |
+| 4,096 total = 8 × 512 | 917,852.398 | 4,489.996 | 204.4× |
+| 4,096 per source = 8 × 4,096 | 46,951,673.295 | 44,404.898 | 1,057.4× |
+
+Final runtime median speedups versus baseline are 36.1× for a point query, 56.4× for the 512-query batch, 24.3× for a dynamic-door update/solve/publish, and 25.4× for a source transform update/solve/publish. The final 512-query distribution is 206.102/210.300/211.101/211.101 µs median/p95/p99/max and passes its specified median budget.

@@ -1,6 +1,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "Components/SceneComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
@@ -527,7 +528,7 @@ bool FSightWeaveOwnershipCleanupTest::RunTest(const FString& Parameters)
 	USightWeaveWorldSubsystem* Subsystem = TestWorld.GetSubsystem();
 	if (TestNotNull(TEXT("World subsystem exists"), Subsystem))
 	{
-		UObject* Owner = NewObject<UObject>(TestWorld.Get());
+		UObject* Owner = NewObject<USceneComponent>(TestWorld.Get());
 		Subsystem->RegisterVisionSource(FSightWeaveVisionSourceDescription(), Owner);
 		Subsystem->RegisterIlluminationSource(FSightWeaveIlluminationSourceDescription(), Owner);
 		Subsystem->ApplySubjectRevealOverride(SightWeave::Tests::MakeRevealSpecification(), Owner);

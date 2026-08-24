@@ -7,9 +7,9 @@
 - Baseline SHA: `3ec080180b3de3c95258ce07d48fa8165d04701b`
 - Working branch: `codex/m2-sightweave-2p5d-authority`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current checkpoint: Checkpoint 0 — context restored and M2 branch published
-- Last completed checkpoint: M1 validation at the baseline SHA
-- Next command: implement the pure geometry, normalization, and reference polygon solver under `Plugins/SightWeave/Source/SightWeaveRuntime`
+- Current checkpoint: Checkpoint 1 — reference geometry solver complete
+- Last completed checkpoint: Checkpoint 1 build and `SightWeave.M2.Geometry` automation passed
+- Next command: implement floor-local spatial indexing and the four neutral M2 actor components
 
 ## M2 scope recovered from repository documentation
 
@@ -57,9 +57,12 @@ The required repository guidance, five vision design/audit/baseline documents, M
 
 ## Build and test results
 
-- Editor build: not run yet for M2.
-- `SightWeave.M1`: not run yet on the M2 branch.
-- `SightWeave.M2`: not implemented or run yet.
+- Editor build: passed after Checkpoint 1, exit code 0, UBT `Result: Succeeded`, 8.52 seconds. The only build warning was the installed MSVC 14.51.36256 being newer than UE's preferred 14.50.35717.
+- Independent Checkpoint 1 BuildPlugin compile: passed, exit code 0, including UnrealEditor Development, UnrealGame Development, and UnrealGame Shipping. Clean shared PCHs emitted UE-header deprecation warnings; no warning originated from a SightWeave source line.
+- `SightWeave.M2.Geometry` first run: 21 discovered/run, 12 passed, 9 failed, 0 warnings, 0 not-run. The common defect was topology validation using the inclusive gameplay boundary epsilon, which classified short collinear endpoint-event runs as self intersections. The wall-motion assertion also initially included source/range-boundary vertices. The implementation now uses a tight topology-only intersection epsilon while retaining the documented inclusive gameplay boundary, and the assertion selects only genuinely clipped rays.
+- `SightWeave.M2.Geometry` final run: **21 discovered, 21 run, 21 passed, 0 failed, 0 succeeded-with-warnings, 0 skipped/not-run, 0 in-process**; process exit code 0; report duration 0.1679 seconds. JSON: `Saved/AutomationReports/SightWeaveM2Geometry_20260824_Final/index.json`.
+- `SightWeave.M1` Checkpoint 1 regression: **21 discovered/run, 21 passed, 0 failed/warning/not-run**, process exit code 0. JSON: `Saved/AutomationReports/SightWeaveM1_M2Checkpoint1_20260824/index.json`.
+- Full `SightWeave.M2`: later categories are not implemented or run yet.
 - Combined `SightWeave`: not run yet.
 - `Darkwell`: not run yet on the M2 branch.
 - Lab load/game smoke: not run yet for M2.
@@ -67,7 +70,8 @@ The required repository guidance, five vision design/audit/baseline documents, M
 
 ## Commits
 
-- Checkpoint 0: `docs: start SightWeave M2 authority implementation` — pending in this document's initial commit.
+- `2d5b230374a03607679c6a4605ff67ccf13f03ae` — `docs: start SightWeave M2 authority implementation`
+- Checkpoint 1: `feat: add SightWeave reference geometry solver` — pending in this document's containing commit.
 
 ## Blockers and unverified items
 
@@ -75,4 +79,3 @@ The required repository guidance, five vision design/audit/baseline documents, M
 - Interactive visual inspection is not yet performed.
 - Angular Sweep is deliberately deferred until the reference solver passes correctness tests and profiling demonstrates a need.
 - Build, automation, lab, packaged plugin, and final Git/LFS checks remain pending.
-

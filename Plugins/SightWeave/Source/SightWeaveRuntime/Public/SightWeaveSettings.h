@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
+#include "SightWeaveGeometry.h"
 #include "SightWeaveTypes.h"
 
 #include "SightWeaveSettings.generated.h"
@@ -25,6 +26,10 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "M1 Defaults", meta = (ClampMin = "0.0001"))
 	float BoundaryEpsilonCentimeters = 0.1f;
+
+	/** M2 CPU-authority tolerances. Invalid config values are normalized before use. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Geometry")
+	FSightWeaveGeometryTolerances GeometryTolerances;
 
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Debug")
 	bool bEnableRuntimeDebug = false;

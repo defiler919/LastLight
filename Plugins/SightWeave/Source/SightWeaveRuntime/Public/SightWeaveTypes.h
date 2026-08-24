@@ -49,6 +49,48 @@ private:
 };
 
 USTRUCT(BlueprintType)
+struct SIGHTWEAVERUNTIME_API FSightWeaveOccluderHandle
+{
+	GENERATED_BODY()
+
+public:
+	FSightWeaveOccluderHandle() = default;
+	explicit FSightWeaveOccluderHandle(const int64 InValue) : Value(InValue) {}
+
+	bool IsValid() const { return Value > 0; }
+	int64 GetValue() const { return Value; }
+
+	friend bool operator==(const FSightWeaveOccluderHandle& A, const FSightWeaveOccluderHandle& B) { return A.Value == B.Value; }
+	friend bool operator!=(const FSightWeaveOccluderHandle& A, const FSightWeaveOccluderHandle& B) { return !(A == B); }
+	friend uint32 GetTypeHash(const FSightWeaveOccluderHandle& Handle) { return GetTypeHash(Handle.Value); }
+
+private:
+	UPROPERTY(VisibleAnywhere, Category = "SightWeave")
+	int64 Value = 0;
+};
+
+USTRUCT(BlueprintType)
+struct SIGHTWEAVERUNTIME_API FSightWeaveHardSuppressionHandle
+{
+	GENERATED_BODY()
+
+public:
+	FSightWeaveHardSuppressionHandle() = default;
+	explicit FSightWeaveHardSuppressionHandle(const int64 InValue) : Value(InValue) {}
+
+	bool IsValid() const { return Value > 0; }
+	int64 GetValue() const { return Value; }
+
+	friend bool operator==(const FSightWeaveHardSuppressionHandle& A, const FSightWeaveHardSuppressionHandle& B) { return A.Value == B.Value; }
+	friend bool operator!=(const FSightWeaveHardSuppressionHandle& A, const FSightWeaveHardSuppressionHandle& B) { return !(A == B); }
+	friend uint32 GetTypeHash(const FSightWeaveHardSuppressionHandle& Handle) { return GetTypeHash(Handle.Value); }
+
+private:
+	UPROPERTY(VisibleAnywhere, Category = "SightWeave")
+	int64 Value = 0;
+};
+
+USTRUCT(BlueprintType)
 struct SIGHTWEAVERUNTIME_API FSightWeaveSubjectRevealHandle
 {
 	GENERATED_BODY()
@@ -113,6 +155,27 @@ private:
 };
 
 USTRUCT(BlueprintType)
+struct SIGHTWEAVERUNTIME_API FSightWeaveKnowledgeOwnerId
+{
+	GENERATED_BODY()
+
+public:
+	FSightWeaveKnowledgeOwnerId() = default;
+	explicit FSightWeaveKnowledgeOwnerId(const FName InValue) : Value(InValue) {}
+
+	bool IsValid() const { return !Value.IsNone(); }
+	FName GetValue() const { return Value; }
+
+	friend bool operator==(const FSightWeaveKnowledgeOwnerId& A, const FSightWeaveKnowledgeOwnerId& B) { return A.Value == B.Value; }
+	friend bool operator!=(const FSightWeaveKnowledgeOwnerId& A, const FSightWeaveKnowledgeOwnerId& B) { return !(A == B); }
+	friend uint32 GetTypeHash(const FSightWeaveKnowledgeOwnerId& OwnerId) { return GetTypeHash(OwnerId.Value); }
+
+private:
+	UPROPERTY(EditAnywhere, Category = "SightWeave")
+	FName Value = NAME_None;
+};
+
+USTRUCT(BlueprintType)
 struct SIGHTWEAVERUNTIME_API FSightWeaveHeightRange
 {
 	GENERATED_BODY()
@@ -124,6 +187,43 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveHeightRange
 	float ZMax = 300.0f;
 
 	bool IsValid() const { return FMath::IsFinite(ZMin) && FMath::IsFinite(ZMax) && ZMin <= ZMax; }
+};
+
+USTRUCT(BlueprintType)
+struct SIGHTWEAVERUNTIME_API FSightWeaveFloorDefinition
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
+	FSightWeaveFloorId FloorId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
+	FVector2D BoundsMin = FVector2D(-10000.0, -10000.0);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
+	FVector2D BoundsMax = FVector2D(10000.0, 10000.0);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
+	FSightWeaveHeightRange HeightRange;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
+	bool bEnabled = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave")
+	bool bActiveForQueries = true;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	FSightWeaveRevision Revision;
+
+	bool IsValid() const
+	{
+		return FloorId.IsValid()
+			&& HeightRange.IsValid()
+			&& !BoundsMin.ContainsNaN()
+			&& !BoundsMax.ContainsNaN()
+			&& BoundsMin.X < BoundsMax.X
+			&& BoundsMin.Y < BoundsMax.Y;
+	}
 };
 
 UENUM(BlueprintType)

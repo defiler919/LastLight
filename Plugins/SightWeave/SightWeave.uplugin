@@ -1,0 +1,29 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "SightWeave",
+	"Description": "A reusable, world-scoped foundation for authoritative 2.5D vision and legal illumination.",
+	"Category": "Gameplay",
+	"EnabledByDefault": true,
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "SightWeaveRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "SightWeaveEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "SightWeaveTests",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}

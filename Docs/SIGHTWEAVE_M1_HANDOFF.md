@@ -6,9 +6,9 @@
 - Baseline branch: `design/independent-vision-plugin`
 - Baseline SHA: `d3060604db18f406f8eecef6fff7d3602c82ee85`
 - Working branch: `codex/m1-sightweave-skeleton-lab`
-- Current phase: Checkpoint 0 — approved identity and initial handoff
-- Last completed checkpoint: remote working branch created from the validated baseline
-- Next command: `git -c safe.directory=D:/UE_projects/LastLight add Docs/DECISIONS.md Docs/VISION_SYSTEM_REQUIREMENTS.md Docs/VISION_SYSTEM_ARCHITECTURE.md Docs/VISION_SYSTEM_MIGRATION_PLAN.md Docs/SIGHTWEAVE_M1_HANDOFF.md`
+- Current phase: Checkpoint 1 — plugin foundation built successfully; commit and push pending
+- Last completed checkpoint: Checkpoint 0 committed and pushed
+- Next command: `git -c safe.directory=D:/UE_projects/LastLight add Docs/SIGHTWEAVE_M1_HANDOFF.md Plugins/SightWeave/SightWeave.uplugin Plugins/SightWeave/README.md Plugins/SightWeave/Source`
 
 ## Approved identity
 
@@ -42,6 +42,9 @@
 - Fetched `origin` successfully.
 - Created and pushed `codex/m1-sightweave-skeleton-lab`; local HEAD, upstream, and remote branch initially matched the baseline SHA.
 - Approved the formal plugin/module/API identity as SightWeave.
+- Created the content-capable `SightWeave.uplugin` descriptor with Runtime, Editor, and editor-only Tests modules using UE 5.8-supported module types.
+- Implemented neutral strong handles, floor/height/source/compatibility/reveal/query types, settings, copied per-world registries, owner cleanup, revisions, and explicit not-ready queries.
+- Added 21 `SightWeave.M1.*` automation definitions covering the M1 foundation, lab loading, and dependency isolation.
 
 ## Modified files
 
@@ -50,6 +53,11 @@
 - `Docs/VISION_SYSTEM_ARCHITECTURE.md`
 - `Docs/VISION_SYSTEM_MIGRATION_PLAN.md`
 - `Docs/SIGHTWEAVE_M1_HANDOFF.md`
+- `Plugins/SightWeave/SightWeave.uplugin`
+- `Plugins/SightWeave/README.md`
+- `Plugins/SightWeave/Source/SightWeaveRuntime/`
+- `Plugins/SightWeave/Source/SightWeaveEditor/`
+- `Plugins/SightWeave/Source/SightWeaveTests/`
 
 ## Commands executed
 
@@ -62,11 +70,16 @@ git -c safe.directory=D:/UE_projects/LastLight lfs status
 git -c safe.directory=D:/UE_projects/LastLight fetch origin
 git -c safe.directory=D:/UE_projects/LastLight switch -c codex/m1-sightweave-skeleton-lab
 git -c safe.directory=D:/UE_projects/LastLight push -u origin codex/m1-sightweave-skeleton-lab
+rg -n -U '"Name"\\s*:\\s*"[^"]*(Tests|Test)[^"]*"[\\s\\S]{0,240}?"Type"\\s*:\\s*"[^"]+"' D:\UE_5.8\Engine\Plugins -g '*.uplugin'
+Scripts/BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8
 ```
 
 ## Build and test results
 
-- Editor build: not yet run for this branch.
+- Editor build: **passed** on 2026-08-24 from `17:17:00.5630187+08:00` to `17:17:23.9905069+08:00` (23.43 seconds), process exit code 0, UBT `Result: Succeeded`.
+- Build warnings: 1 UBT warning — MSVC `14.51.36256` is newer than the UE preferred `14.50.35717`; no compile/link warning was emitted from SightWeave source.
+- Build errors: 0.
+- Generated module binaries verified locally: `UnrealEditor-SightWeaveRuntime.dll`, `UnrealEditor-SightWeaveEditor.dll`, and `UnrealEditor-SightWeaveTests.dll` under ignored plugin `Binaries/Win64`.
 - SightWeave M1 automation: not yet implemented or run.
 - DARKWELL regression: not yet run for this branch.
 - Lab map load/PIE: not yet created or run.
@@ -80,10 +93,11 @@ git -c safe.directory=D:/UE_projects/LastLight push -u origin codex/m1-sightweav
 
 ## Commits
 
-- Pending Checkpoint 0: `docs: approve SightWeave plugin identity`
+- `9b5ecbce40a0356c4c0e91c6c2f7293c912f8d16` — `docs: approve SightWeave plugin identity`
+- Pending Checkpoint 1: `feat: add SightWeave plugin foundation`
 
 ## Remote synchronization
 
 - Remote: `origin`
 - Remote branch: `origin/codex/m1-sightweave-skeleton-lab`
-- State: branch created and pushed at baseline; documentation checkpoint pending push.
+- State: Checkpoint 0 is pushed; Checkpoint 1 has passed its Editor build and is pending commit/push.

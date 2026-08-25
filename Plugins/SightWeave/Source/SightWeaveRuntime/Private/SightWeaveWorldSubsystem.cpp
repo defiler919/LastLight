@@ -11,6 +11,31 @@
 
 namespace
 {
+#if WITH_DEV_AUTOMATION_TESTS
+	FSightWeaveDynamicUpdateStageProbe GDynamicUpdateStageProbe = nullptr;
+	FSightWeaveBatchQueryStageProbe GBatchQueryStageProbe = nullptr;
+
+	void EmitDynamicUpdateStage(
+		const ESightWeaveDynamicUpdateStage Stage,
+		const bool bBegin)
+	{
+		if (GDynamicUpdateStageProbe)
+		{
+			GDynamicUpdateStageProbe(Stage, bBegin);
+		}
+	}
+
+	void EmitBatchQueryStage(
+		const ESightWeaveBatchQueryStage Stage,
+		const bool bBegin)
+	{
+		if (GBatchQueryStageProbe)
+		{
+			GBatchQueryStageProbe(Stage, bBegin);
+		}
+	}
+#endif
+
 	bool IsPointInHeightRange(const double Z, const FSightWeaveHeightRange& Range, const double Epsilon)
 	{
 		return Z >= static_cast<double>(Range.ZMin) - Epsilon
@@ -290,6 +315,20 @@ namespace
 			Tolerances);
 	}
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+void USightWeaveWorldSubsystem::SetDynamicUpdateStageProbeForTesting(
+	const FSightWeaveDynamicUpdateStageProbe Probe)
+{
+	GDynamicUpdateStageProbe = Probe;
+}
+
+void USightWeaveWorldSubsystem::SetBatchQueryStageProbeForTesting(
+	const FSightWeaveBatchQueryStageProbe Probe)
+{
+	GBatchQueryStageProbe = Probe;
+}
+#endif
 
 void USightWeaveWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -721,16 +760,23 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 #if WITH_DEV_AUTOMATION_TESTS
 	LastDynamicUpdateStageMetrics = {};
 	const double PrepareStartSeconds = FPlatformTime::Seconds();
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::OccluderNormalization, true);
 #endif
 	const int64 NextSegmentIdBeforePrepare = NextSegmentId;
 	TArray<FSightWeaveSegment2D>& Prepared = DynamicPreparedSegmentsScratch;
 	if (!PrepareDynamicOccluderSegmentsInto(Handle, Segments, bDynamic, Prepared))
 	{
+#if WITH_DEV_AUTOMATION_TESTS
+		EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::OccluderNormalization, false);
+#endif
 		return false;
 	}
 	const FSightWeaveFloorId NewFloor = Prepared[0].FloorId;
 	if (Prepared.ContainsByPredicate([NewFloor](const FSightWeaveSegment2D& Segment) { return Segment.FloorId != NewFloor; }))
 	{
+#if WITH_DEV_AUTOMATION_TESTS
+		EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::OccluderNormalization, false);
+#endif
 		return false;
 	}
 	// Preserve per-edge stable IDs across ordinary transform updates so exact-distance ties
@@ -750,6 +796,9 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 	if (bSegmentsUnchanged && Record->bDynamic == bDynamic && Record->bEnabled == bEnabled)
 	{
 		NextSegmentId = NextSegmentIdBeforePrepare;
+#if WITH_DEV_AUTOMATION_TESTS
+		EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::OccluderNormalization, false);
+#endif
 		return true;
 	}
 	const FSightWeaveFloorId OldFloor = Record->Segments.IsEmpty() ? FSightWeaveFloorId() : Record->Segments[0].FloorId;
@@ -761,9 +810,11 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 		NewBounds += Segment.B;
 	}
 #if WITH_DEV_AUTOMATION_TESTS
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::OccluderNormalization, false);
 	const double SpatialStartSeconds = FPlatformTime::Seconds();
 	LastDynamicUpdateStageMetrics.PrepareAndCompareMicroseconds =
 		(SpatialStartSeconds - PrepareStartSeconds) * 1000000.0;
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::SpatialIndexPatch, true);
 #endif
 
 	if (Record->bEnabled && bEnabled)
@@ -772,6 +823,9 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 		FBox2D IndexedNewBounds(ForceInit);
 		if (!SpatialIndex.UpdateOccluder(Handle, Prepared, bDynamic, IndexedOldBounds, IndexedNewBounds))
 		{
+#if WITH_DEV_AUTOMATION_TESTS
+			EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::SpatialIndexPatch, false);
+#endif
 			return false;
 		}
 	}
@@ -779,6 +833,9 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 	{
 		if (!SpatialIndex.RemoveOccluder(Handle))
 		{
+#if WITH_DEV_AUTOMATION_TESTS
+			EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::SpatialIndexPatch, false);
+#endif
 			return false;
 		}
 	}
@@ -786,10 +843,14 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 	{
 		if (!SpatialIndex.InsertOccluder(Handle, Prepared, bDynamic))
 		{
+#if WITH_DEV_AUTOMATION_TESTS
+			EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::SpatialIndexPatch, false);
+#endif
 			return false;
 		}
 	}
 #if WITH_DEV_AUTOMATION_TESTS
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::SpatialIndexPatch, false);
 	const double DirtyStartSeconds = FPlatformTime::Seconds();
 	LastDynamicUpdateStageMetrics.SpatialIndexMicroseconds =
 		(DirtyStartSeconds - SpatialStartSeconds) * 1000000.0;
@@ -884,8 +945,15 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 			}
 		}
 	};
+#if WITH_DEV_AUTOMATION_TESTS
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::PreparedIndexInvalidation, true);
+#endif
 	PatchCachedSegments(CachedVisionSolveSegments, VisionSources);
 	PatchCachedSegments(CachedIlluminationSolveSegments, IlluminationSources);
+#if WITH_DEV_AUTOMATION_TESTS
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::PreparedIndexInvalidation, false);
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::AffectedSourceDiscovery, true);
+#endif
 
 	Swap(Record->Segments, Prepared);
 	Record->Bounds = NewBounds;
@@ -896,6 +964,7 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 	Record->GeometryRevision = Revision;
 	MarkSourcesAffectedByOccluderChange(OldFloor, OldBounds, NewFloor, NewBounds);
 #if WITH_DEV_AUTOMATION_TESTS
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::AffectedSourceDiscovery, false);
 	const double PublicationStartSeconds = FPlatformTime::Seconds();
 	LastDynamicUpdateStageMetrics.DirtyDiscoveryMicroseconds =
 		(PublicationStartSeconds - DirtyStartSeconds) * 1000000.0;
@@ -1680,6 +1749,14 @@ void USightWeaveWorldSubsystem::QueryBatch(
 	OutResults.SetNum(Requests.Num(), EAllowShrinking::No);
 	const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot = PublishedSnapshot;
 	const FSightWeaveGeometryTolerances& Tolerances = GetDefault<USightWeaveSettings>()->GeometryTolerances;
+#if WITH_DEV_AUTOMATION_TESTS
+	LastBatchQueryDiagnostics = {};
+	LastBatchQueryDiagnostics.RequestCount = Requests.Num();
+	LastBatchQueryDiagnostics.bSnapshotAvailable = Snapshot.IsValid() && Snapshot->bPublished;
+	LastBatchQueryDiagnostics.VisionSourceCount = Snapshot.IsValid() ? Snapshot->VisionSources.Num() : 0;
+	LastBatchQueryDiagnostics.IlluminationSourceCount = Snapshot.IsValid() ? Snapshot->IlluminationSources.Num() : 0;
+	EmitBatchQueryStage(ESightWeaveBatchQueryStage::Classification, true);
+#endif
 	if (Requests.Num() >= 256
 		&& Requests.Num() <= 512
 		&& bSightWeaveInitialized
@@ -1774,6 +1851,11 @@ void USightWeaveWorldSubsystem::QueryBatch(
 					PrefilteredIlluminationEligibilityMask |= uint64{1} << IlluminationIndex;
 				}
 			}
+#if WITH_DEV_AUTOMATION_TESTS
+			LastBatchQueryDiagnostics.bFastPath = true;
+			EmitBatchQueryStage(ESightWeaveBatchQueryStage::Classification, false);
+			EmitBatchQueryStage(ESightWeaveBatchQueryStage::ResultMaterialization, true);
+#endif
 			for (int32 RequestIndex = 0; RequestIndex < Requests.Num(); ++RequestIndex)
 			{
 				const FSightWeaveQueryRequest& Request = Requests[RequestIndex];
@@ -1793,9 +1875,16 @@ void USightWeaveWorldSubsystem::QueryBatch(
 					bPrefilteredHeightMismatch,
 					true);
 			}
+#if WITH_DEV_AUTOMATION_TESTS
+			EmitBatchQueryStage(ESightWeaveBatchQueryStage::ResultMaterialization, false);
+#endif
 			return;
 		}
 	}
+#if WITH_DEV_AUTOMATION_TESTS
+	EmitBatchQueryStage(ESightWeaveBatchQueryStage::Classification, false);
+	EmitBatchQueryStage(ESightWeaveBatchQueryStage::ResultMaterialization, true);
+#endif
 	FSightWeaveFloorId CachedFloorId;
 	const FSightWeaveFloorDefinition* CachedFloor = nullptr;
 	for (int32 RequestIndex = 0; RequestIndex < Requests.Num(); ++RequestIndex)
@@ -1855,6 +1944,9 @@ void USightWeaveWorldSubsystem::QueryBatch(
 				Request.SampleSet);
 		}
 	}
+#if WITH_DEV_AUTOMATION_TESTS
+	EmitBatchQueryStage(ESightWeaveBatchQueryStage::ResultMaterialization, false);
+#endif
 }
 
 FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
@@ -1892,7 +1984,13 @@ FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 #endif
 	for (const int64 SourceId : DirtyVision)
 	{
+#if WITH_DEV_AUTOMATION_TESTS
+		EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::VisionSolve, true);
+#endif
 		RebuildVisionSnapshotEntry(SourceId);
+#if WITH_DEV_AUTOMATION_TESTS
+		EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::VisionSolve, false);
+#endif
 	}
 #if WITH_DEV_AUTOMATION_TESTS
 	const double IlluminationRebuildStartSeconds = FPlatformTime::Seconds();
@@ -1901,7 +1999,13 @@ FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 #endif
 	for (const int64 SourceId : DirtyIllumination)
 	{
+#if WITH_DEV_AUTOMATION_TESTS
+		EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::IlluminationSolve, true);
+#endif
 		RebuildIlluminationSnapshotEntry(SourceId);
+#if WITH_DEV_AUTOMATION_TESTS
+		EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::IlluminationSolve, false);
+#endif
 	}
 #if WITH_DEV_AUTOMATION_TESTS
 	const double SnapshotMaterializationStartSeconds = FPlatformTime::Seconds();
@@ -1910,6 +2014,9 @@ FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 #endif
 	PendingVisionSnapshotRebuilds.Reset();
 	PendingIlluminationSnapshotRebuilds.Reset();
+#if WITH_DEV_AUTOMATION_TESTS
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::SnapshotMaterialization, true);
+#endif
 
 	TSharedPtr<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> NewSharedSnapshot;
 	if (StandbySnapshot.IsValid() && StandbySnapshot.GetSharedReferenceCount() == 1)
@@ -1991,12 +2098,21 @@ FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 		Entry.Revision = HardSuppressionRevisions.FindRef(SuppressionId);
 	}
 
+#if WITH_DEV_AUTOMATION_TESTS
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::SnapshotMaterialization, false);
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::CompatibilityResolution, true);
+#endif
 	ResolveSnapshotCompatibility(NewSnapshot);
+#if WITH_DEV_AUTOMATION_TESTS
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::CompatibilityResolution, false);
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::ImmutablePublication, true);
+#endif
 	TSharedPtr<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> PreviousSnapshot =
 		MoveTemp(PublishedSnapshot);
 	PublishedSnapshot = MoveTemp(NewSharedSnapshot);
 	StandbySnapshot = MoveTemp(PreviousSnapshot);
 #if WITH_DEV_AUTOMATION_TESTS
+	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::ImmutablePublication, false);
 	LastDynamicUpdateStageMetrics.SnapshotMaterializationMicroseconds =
 		(FPlatformTime::Seconds() - SnapshotMaterializationStartSeconds) * 1000000.0;
 #endif
@@ -2325,6 +2441,9 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		const double StartSeconds = FPlatformTime::Seconds();
 		const FSightWeaveVisionSnapshotEntry* SharedGeometry = nullptr;
 		int64 SharedGeometrySourceId = MAX_int64;
+#if WITH_DEV_AUTOMATION_TESTS
+		EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::CompatibleGeometryReuse, true);
+#endif
 		for (const TPair<int64, FSightWeaveVisionSnapshotEntry>& Pair : CachedVisionSnapshotEntries)
 		{
 			if (Pair.Key < SharedGeometrySourceId
@@ -2334,6 +2453,9 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 				SharedGeometrySourceId = Pair.Key;
 			}
 		}
+#if WITH_DEV_AUTOMATION_TESTS
+		EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::CompatibleGeometryReuse, false);
+#endif
 		TSharedPtr<FSightWeaveOptimizedSolveCache>& PreparedCache =
 			CachedIlluminationPreparedSolves.FindOrAdd(SourceId);
 #if UE_BUILD_SHIPPING
@@ -2348,6 +2470,9 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 			PreparedCache = Acquisition.Cache;
 			if (SharedGeometry)
 			{
+#if WITH_DEV_AUTOMATION_TESTS
+				EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::CompatibleGeometryReuse, true);
+#endif
 				SolveResult.bSucceeded = true;
 				SolveResult.CandidateSegmentCount = SharedGeometry->CandidateSegmentCount;
 				SolveResult.CastRayCount = SharedGeometry->CandidateRayCount;
@@ -2359,6 +2484,9 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 				{
 					PreparedCache.Reset();
 				}
+#if WITH_DEV_AUTOMATION_TESTS
+				EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::CompatibleGeometryReuse, false);
+#endif
 			}
 			else if (PreparedCache.IsValid())
 			{

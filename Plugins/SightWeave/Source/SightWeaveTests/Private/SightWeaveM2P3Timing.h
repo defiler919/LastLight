@@ -46,8 +46,17 @@ namespace SightWeave::M2P3::Timing
 	class FDualClockTimer
 	{
 	public:
+		explicit FDualClockTimer(bool bInCaptureAuxiliaryEvidence = true)
+			: bCaptureAuxiliaryEvidence(bInCaptureAuxiliaryEvidence)
+		{
+		}
+
 		void Start();
 		FTimingSample Stop();
+		void SetCaptureAuxiliaryEvidence(bool bEnabled)
+		{
+			bCaptureAuxiliaryEvidence = bEnabled;
+		}
 
 		struct FPlatformSnapshot
 		{
@@ -69,6 +78,7 @@ namespace SightWeave::M2P3::Timing
 
 	private:
 		FPlatformSnapshot StartSnapshot;
+		bool bCaptureAuxiliaryEvidence = true;
 		bool bStarted = false;
 	};
 

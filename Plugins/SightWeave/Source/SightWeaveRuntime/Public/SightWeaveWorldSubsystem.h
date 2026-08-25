@@ -12,6 +12,41 @@
 #include "SightWeaveWorldSubsystem.generated.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+enum class ESightWeaveDynamicUpdateStage : uint8
+{
+	OccluderNormalization,
+	SpatialIndexPatch,
+	AffectedSourceDiscovery,
+	PreparedIndexInvalidation,
+	VisionSolve,
+	IlluminationSolve,
+	CompatibleGeometryReuse,
+	SnapshotMaterialization,
+	CompatibilityResolution,
+	ImmutablePublication,
+	Count
+};
+
+using FSightWeaveDynamicUpdateStageProbe = void(*)(ESightWeaveDynamicUpdateStage Stage, bool bBegin);
+
+enum class ESightWeaveBatchQueryStage : uint8
+{
+	Classification,
+	ResultMaterialization,
+	Count
+};
+
+using FSightWeaveBatchQueryStageProbe = void(*)(ESightWeaveBatchQueryStage Stage, bool bBegin);
+
+struct FSightWeaveBatchQueryDiagnostics
+{
+	int32 RequestCount = 0;
+	int32 VisionSourceCount = 0;
+	int32 IlluminationSourceCount = 0;
+	bool bFastPath = false;
+	bool bSnapshotAvailable = false;
+};
+
 struct FSightWeaveDynamicUpdateStageMetrics
 {
 	double PrepareAndCompareMicroseconds = 0.0;
@@ -256,8 +291,14 @@ public:
 	{
 		return PublishedSnapshot;
 	}
+	const FSightWeaveBatchQueryDiagnostics& GetLastBatchQueryDiagnostics() const
+	{
+		return LastBatchQueryDiagnostics;
+	}
 
 	bool ConfigurePreparedEventIndexForTesting(int32 MaximumEntries, int64 MaximumBytes);
+	static void SetDynamicUpdateStageProbeForTesting(FSightWeaveDynamicUpdateStageProbe Probe);
+	static void SetBatchQueryStageProbeForTesting(FSightWeaveBatchQueryStageProbe Probe);
 	static bool ExercisePreparedEventIndexConcurrentIsolationForTesting(
 		const FSightWeaveReferenceSolveInput& Input,
 		int32 WorkerCount,
@@ -422,6 +463,7 @@ private:
 
 #if WITH_DEV_AUTOMATION_TESTS
 	FSightWeaveDynamicUpdateStageMetrics LastDynamicUpdateStageMetrics;
+	mutable FSightWeaveBatchQueryDiagnostics LastBatchQueryDiagnostics;
 #endif
 
 	TMap<FSightWeaveFloorId, TWeakObjectPtr<UObject>> FloorOwners;

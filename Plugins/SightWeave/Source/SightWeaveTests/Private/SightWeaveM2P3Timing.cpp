@@ -157,7 +157,8 @@ namespace SightWeave::M2P3::Timing
 
 		void CapturePlatformSnapshot(
 			FDualClockTimer::FPlatformSnapshot& OutSnapshot,
-			const bool bCaptureWallFirst)
+			const bool bCaptureWallFirst,
+			const bool bCaptureAuxiliaryEvidence)
 		{
 			if (bCaptureWallFirst)
 			{
@@ -175,8 +176,10 @@ namespace SightWeave::M2P3::Timing
 			OutSnapshot.ThreadId = FPlatformTLS::GetCurrentThreadId();
 #if PLATFORM_WINDOWS
 			OutSnapshot.bProcessorValid = QueryProcessorIndex(OutSnapshot.ProcessorIndex);
-			OutSnapshot.bPageFaultsValid = QueryPageFaultCount(OutSnapshot.ProcessPageFaultCount);
-			OutSnapshot.bFrequencyValid = OutSnapshot.bProcessorValid
+			OutSnapshot.bPageFaultsValid = bCaptureAuxiliaryEvidence
+				&& QueryPageFaultCount(OutSnapshot.ProcessPageFaultCount);
+			OutSnapshot.bFrequencyValid = bCaptureAuxiliaryEvidence
+				&& OutSnapshot.bProcessorValid
 				&& QueryProcessorFrequency(
 					OutSnapshot.ProcessorIndex,
 					OutSnapshot.CurrentMhz,
@@ -201,7 +204,7 @@ namespace SightWeave::M2P3::Timing
 	void FDualClockTimer::Start()
 	{
 		StartSnapshot = {};
-		CapturePlatformSnapshot(StartSnapshot, false);
+		CapturePlatformSnapshot(StartSnapshot, false, bCaptureAuxiliaryEvidence);
 		bStarted = true;
 	}
 
@@ -209,7 +212,7 @@ namespace SightWeave::M2P3::Timing
 	{
 		FTimingSample Result;
 		FPlatformSnapshot EndSnapshot;
-		CapturePlatformSnapshot(EndSnapshot, true);
+		CapturePlatformSnapshot(EndSnapshot, true, bCaptureAuxiliaryEvidence);
 		if (!bStarted)
 		{
 			Result.bMeasurementAnomaly = true;
@@ -292,7 +295,10 @@ namespace SightWeave::M2P3::Timing
 
 	uint64 FFixedWorkControls::RunCompute() const
 	{
-		uint64 State = 0x9E3779B97F4A7C15ull;
+		// The volatile seed changes after every consumed control result. Work count
+		// remains fixed, but unity/LTCG cannot fold the deterministic loop to a
+		// constant return value in a larger attribution translation unit.
+		uint64 State = GControlResultSink ^ 0x9E3779B97F4A7C15ull;
 		for (uint32 Index = 0; Index < 49152; ++Index)
 		{
 			State ^= State >> 12;

@@ -14,7 +14,7 @@ branch.
 - Baseline branch: `codex/m2p2-sightweave-motion-event-index`
 - Verified baseline SHA: `c1907352441a6053de02726e375d1bf94a903d01`
 - Working branch: `codex/m2p3-sightweave-tail-latency-finalization`
-- Latest safe commit: `056098289299c02cdd3daebfe7a668f69ad77c6d`
+- Latest safe commit: `e040486592e2c87b58d17773b4a166e090822bd1`
 - The company workstation keeps a local-only `Darkwell.uproject`
   `EngineAssociation` GUID. Preserve it and never stage or commit it.
 - Remote M2P.3 branch did not exist when work started.
@@ -90,17 +90,18 @@ nominal 100 ns FILETIME unit is not usable as a 100--250 us per-sample clock.
 It also showed the initial memory control was about 1.01 ms. The control was
 then shortened without dynamic allocation.
 
-The second preserved report passed 1/1 at
-`Saved/SightWeaveM2P3/TimingCalibration2/Report/index.json`:
+The latest preserved report passed 1/1 at
+`Saved/SightWeaveM2P3/TimingCalibration3/Report/index.json` after making the
+compute input volatile-seeded so unity compilation cannot fold its fixed loop:
 
 - empty probe wall median/p99: 0.000/0.100 us;
-- fixed compute wall median/p99: 115.900/189.900 us;
-- fixed memory wall median/p99: 170.200/316.200 us;
-- compute median current-thread cycles: 289,786;
-- per-sample non-zero `GetThreadTimes`: compute 0/101, memory 1/101;
-- aggregate 22.801 ms workload: 15.625 ms FILETIME CPU and 56,193,194
+- fixed compute wall median/p99: 120.400/125.200 us;
+- fixed memory wall median/p99: 175.600/209.100 us;
+- compute median current-thread cycles: 301,267;
+- per-sample non-zero `GetThreadTimes`: compute 0/101, memory 0/101;
+- aggregate 23.825 ms workload: 15.625 ms FILETIME CPU and 58,757,089
   current-thread cycles;
-- 19.210 ms sleep: 0 FILETIME CPU, only 101,089 thread cycles, and an observed
+- 19.612 ms sleep: 0 FILETIME CPU, only 35,692 thread cycles, and an observed
   processor migration from 0 to 2.
 
 Therefore raw current-thread cycles are the high-resolution per-sample
@@ -115,13 +116,53 @@ Windows platform implementation requires administrator rights for that stream.
 This ordinary process was not elevated, and the test reports that limitation
 explicitly instead of claiming per-sample FILETIME authority.
 
+## Attribution implementation checkpoint
+
+`SightWeaveM2P3AttributionTests.cpp` now records every raw Batch and door sample
+with total wall/cycles/coarse kernel-user time, thread/core endpoints, migration,
+processor-frequency evidence, process page-fault delta, adjacent compute and
+memory controls, capacity/prepared-index/revision evidence, and classification.
+Batch stage probes separate uniform classification/prefilter work from all-field
+result materialization. Dynamic probes cover normalization, spatial patch,
+prepared-input invalidation, affected-source discovery, vision and illumination
+solve, compatible-geometry reuse, snapshot materialization, compatibility, and
+the immutable pointer publication. Internal stage probes omit frequency and
+page-fault calls so expensive auxiliary queries do not contaminate nested timed
+regions.
+
+Runtime changes are only callback sites and plain diagnostics under
+`WITH_DEV_AUTOMATION_TESTS`; the callback implementation and every Windows API
+remain in the Editor-only Tests module. Shipping has no probe fields, calls, or
+Windows test-library dependency.
+
+`Scripts/RunSightWeaveM2P3Attribution.ps1` launches a fixed count of independent
+ordinary NullRHI Editor processes without priority or affinity changes, refuses
+to overwrite prior runs, requires exactly two clean tests per process, verifies
+all row/distribution counts, merges every CSV, and emits `summary.json`.
+
+Two preserved one-process runner validations succeeded:
+
+- `Saved/SightWeaveM2P3/Attribution/manual-script-01`;
+- `Saved/SightWeaveM2P3/Attribution/manual-script-02` (final 80-column schema).
+
+The final-schema validation contains exactly 10 Batch distributions/1,010 raw
+Batch samples and 314 door/control samples. Its adjacent control medians remain
+about 115/168 us. Batch wall p50/p95/p99/max was
+95.9/142.6/190.2/515.9 us. Broad 4v2l door wall was
+167.2/309.5/390.4/390.5 us. Current evidence does not justify a host-noise
+conclusion: several broad-door overruns also show materially higher
+current-thread cycles concentrated in the vision-solve stage while adjacent
+controls remain stable. These are provisionally classified as plugin CPU or
+Unknown and require the fixed 10-process dataset before any production change.
+
 ## Checkpoints
 
 - [x] `docs: start SightWeave tail latency attribution` --
   `056098289299c02cdd3daebfe7a668f69ad77c6d`, pushed to origin
 - [x] `test: add SightWeave dual-clock timing evidence` (source and calibration
-  complete; pending checkpoint commit/push)
-- [ ] `test: attribute SightWeave batch and door tails`
+  complete) -- `e040486592e2c87b58d17773b4a166e090822bd1`, pushed to origin
+- [x] `test: attribute SightWeave batch and door tails` (instrumentation and
+  runner complete; pending checkpoint commit/push and fixed 10-process capture)
 - [ ] `perf: eliminate confirmed SightWeave tail costs` (only if evidence proves
   a production hotspot)
 - [ ] `test: add SightWeave frame-level soak coverage`
@@ -146,6 +187,7 @@ git lfs status
 git -c safe.directory=D:/UE_projects/LastLight switch -c codex/m2p3-sightweave-tail-latency-finalization
 .\Scripts\BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8
 D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound "-ExecCmds=Automation RunTests SightWeave.M2P3.Timing.DualClockCalibration" "-TestExit=Automation Test Queue Empty"
+.\Scripts\RunSightWeaveM2P3Attribution.ps1 -RunCount 1 -Label manual-script-02 -EngineRoot D:\UE_5.8
 ```
 
 The baseline resolved exactly to
@@ -157,7 +199,7 @@ the only pre-existing worktree change was `Darkwell.uproject`.
 - ContextSwitch ETW permission and trace completeness.
 - Trace marker/reconstruction analysis that supplies exact running intervals
   when elevated ContextSwitch evidence is available.
-- Per-sample Batch512 evidence from 10 ordinary Editor processes, 10
+- Final per-sample Batch512 evidence from 10 ordinary Editor processes, 10
   distributions per process, and 101 samples per distribution.
 - Per-stage broad dynamic-door evidence from 10 ordinary processes plus
   dedicated door and door-plus-motion controls.
@@ -179,5 +221,11 @@ git -c safe.directory=D:/UE_projects/LastLight rev-parse HEAD
 ```
 
 Then read this file, confirm the local-only `Darkwell.uproject` difference is
-still excluded, and continue with the Batch512/dynamic-door attribution and
-ContextSwitch trace-analysis checkpoint.
+still excluded, then run:
+
+```powershell
+.\Scripts\RunSightWeaveM2P3Attribution.ps1 -RunCount 10 -Label ordinary-10p-final -EngineRoot D:\UE_5.8
+```
+
+Analyze every raw row before deciding whether a production performance change
+or ContextSwitch-only diagnostic is warranted.

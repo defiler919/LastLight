@@ -280,6 +280,8 @@ namespace SightWeave::M2P3::AttributionTests
 
 	struct FStageCollector
 	{
+		static constexpr int32 MaximumInvocationsPerStage = 8;
+
 		FStageCollector()
 		{
 			for (FDualClockTimer& Timer : Timers)
@@ -291,6 +293,7 @@ namespace SightWeave::M2P3::AttributionTests
 		void Reset()
 		{
 			Samples = {};
+			InvocationSamples = {};
 			InvocationCounts = {};
 			Active = {};
 		}
@@ -323,11 +326,23 @@ namespace SightWeave::M2P3::AttributionTests
 			}
 			Active[StageIndex] = false;
 			const FTimingSample Sample = Timers[StageIndex].Stop();
-			AccumulateTiming(Samples[StageIndex], Sample, InvocationCounts[StageIndex]++);
+			const int32 InvocationIndex = InvocationCounts[StageIndex]++;
+			if (InvocationIndex < MaximumInvocationsPerStage)
+			{
+				InvocationSamples[StageIndex][InvocationIndex] = Sample;
+			}
+			else
+			{
+				Samples[StageIndex].bMeasurementAnomaly = true;
+			}
+			AccumulateTiming(Samples[StageIndex], Sample, InvocationIndex);
 		}
 
 		TStaticArray<FDualClockTimer, TotalStageCount> Timers;
 		TStaticArray<FTimingSample, TotalStageCount> Samples;
+		TStaticArray<
+			TStaticArray<FTimingSample, MaximumInvocationsPerStage>,
+			TotalStageCount> InvocationSamples;
 		TStaticArray<int32, TotalStageCount> InvocationCounts;
 		TStaticArray<bool, TotalStageCount> Active;
 	};
@@ -383,6 +398,7 @@ namespace SightWeave::M2P3::AttributionTests
 
 	struct FRawRow
 	{
+		uint64 SampleId = 0;
 		EWorkload Workload = EWorkload::Batch512;
 		EClassification Classification = EClassification::WithinBudget;
 		int32 DistributionIndex = 0;
@@ -391,6 +407,10 @@ namespace SightWeave::M2P3::AttributionTests
 		FTimingSample ComputeControl;
 		FTimingSample MemoryControl;
 		TStaticArray<FTimingSample, TotalStageCount> Stages;
+		TStaticArray<
+			TStaticArray<FTimingSample, FStageCollector::MaximumInvocationsPerStage>,
+			TotalStageCount> StageInvocations;
+		TStaticArray<int32, TotalStageCount> StageInvocationCounts;
 		int32 FastPath = 0;
 		int32 VisionSourceCount = 0;
 		int32 IlluminationSourceCount = 0;
@@ -406,6 +426,16 @@ namespace SightWeave::M2P3::AttributionTests
 		int64 VisionCandidateSegmentCount = 0;
 		int64 VisionCandidateRayCount = 0;
 	};
+
+	uint64 MakeSampleId(
+		const EWorkload Workload,
+		const int32 DistributionIndex,
+		const int32 SampleIndex)
+	{
+		return (static_cast<uint64>(Workload) + 1ull) << 56
+			| (static_cast<uint64>(DistributionIndex) & 0x00ffffffull) << 32
+			| (static_cast<uint64>(SampleIndex) & 0xffffffffull);
+	}
 
 	FTimingSample MeasureControl(const bool bCompute, const FFixedWorkControls& Controls)
 	{
@@ -636,6 +666,69 @@ namespace SightWeave::M2P3::AttributionTests
 		return Csv;
 	}
 
+	void AppendEtwMarker(
+		FString& Csv,
+		const FString& RunLabel,
+		const FRawRow& Row,
+		const TCHAR* Scope,
+		const TCHAR* Stage,
+		const int32 Invocation,
+		const FTimingSample& Timing)
+	{
+		Csv += FString::Printf(
+			TEXT("%s,%s,%d,%d,%llu,%s,%s,%d,%u,%u,%llu,%llu,%llu,%.3f,%llu,%d,%d,%d,%d\n"),
+			*RunLabel,
+			WorkloadName(Row.Workload),
+			Row.DistributionIndex,
+			Row.SampleIndex,
+			Row.SampleId,
+			Scope,
+			Stage,
+			Invocation,
+			Timing.ProcessId,
+			Timing.StartThreadId,
+			Timing.QpcBegin,
+			Timing.QpcEnd,
+			Timing.QpcFrequency,
+			Timing.WallMicroseconds,
+			Timing.ThreadCycles,
+			Timing.StartProcessorIndex,
+			Timing.EndProcessorIndex,
+			Timing.bThreadMigrated,
+			Timing.bMeasurementAnomaly);
+	}
+
+	FString MakeEtwMarkerCsv(const TArray<FRawRow>& Rows, const FString& RunLabel)
+	{
+		FString Csv(TEXT("run,operation,distribution,sample,sample_id,scope,stage,invocation,pid,tid,qpc_begin,qpc_end,qpc_frequency,wall_us,thread_cycles,start_processor,end_processor,migrated,measurement_anomaly\n"));
+		for (const FRawRow& Row : Rows)
+		{
+			AppendEtwMarker(Csv, RunLabel, Row, TEXT("total"), TEXT("total"), 0, Row.Total);
+			AppendEtwMarker(
+				Csv, RunLabel, Row, TEXT("control"), TEXT("fixed_compute"), 0, Row.ComputeControl);
+			AppendEtwMarker(
+				Csv, RunLabel, Row, TEXT("control"), TEXT("fixed_memory"), 0, Row.MemoryControl);
+			for (int32 StageIndex = 0; StageIndex < TotalStageCount; ++StageIndex)
+			{
+				const int32 InvocationCount = FMath::Min(
+					Row.StageInvocationCounts[StageIndex],
+					FStageCollector::MaximumInvocationsPerStage);
+				for (int32 Invocation = 0; Invocation < InvocationCount; ++Invocation)
+				{
+					AppendEtwMarker(
+						Csv,
+						RunLabel,
+						Row,
+						TEXT("stage"),
+						StageNames[StageIndex],
+						Invocation,
+						Row.StageInvocations[StageIndex][Invocation]);
+				}
+			}
+		}
+		return Csv;
+	}
+
 	bool GetCaptureParameters(FString& OutDirectory, FString& OutRunLabel)
 	{
 		if (!FParse::Param(FCommandLine::Get(), TEXT("SightWeaveM2P3AttributionCapture")))
@@ -669,6 +762,31 @@ namespace SightWeave::M2P3::AttributionTests
 			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 		Test.TestTrue(*FString::Printf(TEXT("Raw attribution CSV writes: %s"), *Path), bSaved);
 		Test.AddInfo(FString::Printf(TEXT("M2P3_ATTRIBUTION_REPORT path=%s rows=%d"), *Path, Rows.Num()));
+		return bSaved;
+	}
+
+	bool SaveEtwMarkers(
+		FAutomationTestBase& Test,
+		const TArray<FRawRow>& Rows,
+		const FString& Directory,
+		const FString& RunLabel,
+		const TCHAR* FileName)
+	{
+		if (!FParse::Param(FCommandLine::Get(), TEXT("SightWeaveM2P4EtwMarkers")))
+		{
+			return true;
+		}
+		IFileManager::Get().MakeDirectory(*Directory, true);
+		const FString Path = FPaths::Combine(Directory, FileName);
+		const bool bSaved = FFileHelper::SaveStringToFile(
+			MakeEtwMarkerCsv(Rows, RunLabel),
+			*Path,
+			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+		Test.TestTrue(*FString::Printf(TEXT("M2P.4 ETW marker CSV writes: %s"), *Path), bSaved);
+		Test.AddInfo(FString::Printf(
+			TEXT("M2P4_ETW_MARKERS path=%s samples=%d qpc_domain=QueryPerformanceCounter"),
+			*Path,
+			Rows.Num()));
 		return bSaved;
 	}
 
@@ -857,6 +975,7 @@ bool FSightWeaveM2P3BatchAttributionTest::RunTest(const FString& Parameters)
 			Row.Workload = EWorkload::Batch512;
 			Row.DistributionIndex = DistributionIndex;
 			Row.SampleIndex = SampleIndex;
+			Row.SampleId = MakeSampleId(Row.Workload, DistributionIndex, SampleIndex);
 			Row.ComputeControl = MeasureControl(true, Controls);
 			const uint64 OuterBytesBefore = Results.GetAllocatedSize();
 			const uint64 InnerBytesBefore = QueryResultAllocatedBytes(Results);
@@ -871,6 +990,8 @@ bool FSightWeaveM2P3BatchAttributionTest::RunTest(const FString& Parameters)
 			GActiveStageCollector = nullptr;
 			Row.MemoryControl = MeasureControl(false, Controls);
 			Row.Stages = StageCollector.Samples;
+			Row.StageInvocations = StageCollector.InvocationSamples;
+			Row.StageInvocationCounts = StageCollector.InvocationCounts;
 			const FSightWeaveBatchQueryDiagnostics& Diagnostics =
 				Subsystem->GetLastBatchQueryDiagnostics();
 			Row.FastPath = Diagnostics.bFastPath ? 1 : 0;
@@ -899,6 +1020,7 @@ bool FSightWeaveM2P3BatchAttributionTest::RunTest(const FString& Parameters)
 	ClassifyRows(Rows, EWorkload::Batch512, BatchWallLimitMicroseconds);
 	LogClassificationSummary(*this, Rows, EWorkload::Batch512, BatchWallLimitMicroseconds);
 	SaveRows(*this, Rows, OutputDirectory, RunLabel, TEXT("batch.csv"));
+	SaveEtwMarkers(*this, Rows, OutputDirectory, RunLabel, TEXT("batch-etw-markers.csv"));
 	return true;
 }
 
@@ -965,6 +1087,7 @@ bool FSightWeaveM2P3DoorAttributionTest::RunTest(const FString& Parameters)
 			FRawRow Row;
 			Row.Workload = Workload;
 			Row.SampleIndex = SampleIndex;
+			Row.SampleId = MakeSampleId(Workload, 0, SampleIndex);
 			Row.VisionSourceCount = VisionCount;
 			Row.IlluminationSourceCount = IlluminationCount;
 			Row.ComputeControl = MeasureControl(true, Controls);
@@ -999,6 +1122,8 @@ bool FSightWeaveM2P3DoorAttributionTest::RunTest(const FString& Parameters)
 			HeldSnapshot.Reset();
 			Row.MemoryControl = MeasureControl(false, Controls);
 			Row.Stages = StageCollector.Samples;
+			Row.StageInvocations = StageCollector.InvocationSamples;
+			Row.StageInvocationCounts = StageCollector.InvocationCounts;
 			const FSightWeaveDynamicUpdateStageMetrics& DynamicMetrics =
 				Subsystem->GetLastDynamicUpdateStageMetrics();
 			Row.VisionGeometry = DynamicMetrics.VisionGeometry;
@@ -1047,6 +1172,7 @@ bool FSightWeaveM2P3DoorAttributionTest::RunTest(const FString& Parameters)
 		LogClassificationSummary(*this, Rows, Workload, DoorWallLimitMicroseconds);
 	}
 	SaveRows(*this, Rows, OutputDirectory, RunLabel, TEXT("door.csv"));
+	SaveEtwMarkers(*this, Rows, OutputDirectory, RunLabel, TEXT("door-etw-markers.csv"));
 	return true;
 }
 

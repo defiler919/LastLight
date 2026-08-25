@@ -23,6 +23,7 @@ public class SightWeaveTests : ModuleRules
 		{
 			PublicSystemLibraries.AddRange(new string[]
 			{
+				"Advapi32.lib",
 				"Psapi.lib",
 				"PowrProf.lib"
 			});

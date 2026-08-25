@@ -222,6 +222,11 @@ namespace SightWeave::M2P3::Timing
 
 		Result.StartThreadId = StartSnapshot.ThreadId;
 		Result.EndThreadId = EndSnapshot.ThreadId;
+		Result.QpcBegin = StartSnapshot.WallCycles;
+		Result.QpcEnd = EndSnapshot.WallCycles;
+		Result.QpcFrequency = static_cast<uint64>(FMath::RoundToDouble(
+			1.0 / FPlatformTime::GetSecondsPerCycle64()));
+		Result.ProcessId = FPlatformProcess::GetCurrentProcessId();
 		Result.StartProcessorIndex = StartSnapshot.ProcessorIndex;
 		Result.EndProcessorIndex = EndSnapshot.ProcessorIndex;
 		Result.StartCurrentMhz = StartSnapshot.CurrentMhz;

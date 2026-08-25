@@ -19,6 +19,10 @@ namespace SightWeave::M2P3::Timing
 
 	struct FTimingSample
 	{
+		uint64 QpcBegin = 0;
+		uint64 QpcEnd = 0;
+		uint64 QpcFrequency = 0;
+		uint32 ProcessId = 0;
 		double WallMicroseconds = 0.0;
 		double ThreadCpuMicroseconds = 0.0;
 		double KernelMicroseconds = 0.0;

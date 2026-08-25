@@ -2,10 +2,9 @@
 
 ## Status
 
-`IN_PROGRESS — TOOLCHAIN GATE COMPLETED; RUNTIME VALIDATION RESUMED` (elevated
-ETW authority complete; Batch gate passes and Broad Dynamic Door authorizes the
-exact incremental angular-sector design. Epic Verify/restart is followed by
-six strict bundled-dotnet/UBT build passes.)
+`PARTIAL — TOOLCHAIN COMPLETED; RUNTIME CORRECTNESS/CLEAN-HOST PASS; PERFORMANCE BLOCKED BY NVIDIA SERVICE INSTABILITY`
+
+The UE 5.8.1 bundled .NET/UBT gate is `COMPLETED`: both default and `-NoUBA` groups passed 3/3 with UBT `Succeeded`, outer exit `0`, and no crash popup. M2P.4 production validation was therefore authorized and resumed. Runtime correctness and clean-host packaging pass, but final performance acceptance is blocked because the NVIDIA LocalSystem Container is repeatedly terminating.
 
 M2P.4 is limited to elevated ContextSwitch attribution, evidence-driven CPU
 tail closure, and an exact incremental dynamic-occluder angular-sector update
@@ -18,18 +17,11 @@ GPU masks, post processing, memory textures, DARKWELL gameplay integration,
 - Baseline branch: `codex/m2p3-sightweave-tail-latency-finalization`
 - Verified baseline SHA: `e3e5a833e58ce4571653fcef0f7b44698ae80dae`
 - Working branch: `codex/m2p4-sightweave-etw-dynamic-sector`
-- Latest pushed default-group checkpoint: `e71b8294a9b6d2f991601c77ded2ba4e6077fce3`
+- Latest pushed implementation/clean-host checkpoint: `b7da610b40da44fd2da1578e12772402c0b6a548`
 - The company workstation's local-only `Darkwell.uproject`
   `EngineAssociation` difference is preserved and must never be staged.
 
-The architecture checkpoint is pushed. Four uncommitted Runtime files contain
-an initial, unverified sector implementation and must not be staged or extended
-while the build-host crash pause is active:
-
-- `Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveGeometry.cpp`;
-- `Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveOptimizedSolveCache.h`;
-- `Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveWorldSubsystem.cpp`;
-- `Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveWorldSubsystem.h`.
+The architecture, Runtime implementation, focused authority tests, regression documentation, and clean-host include fix are pushed. The only intentional worktree difference is the local-only `Darkwell.uproject` EngineAssociation change; it remains excluded from every commit.
 
 ## UE bundled dotnet crash diagnostic (2026-08-25)
 
@@ -402,6 +394,39 @@ output. `dumpbin /dependents` for the packaged Runtime DLL lists only
 and VC/CRT libraries. The generated untracked 367-byte
 `Plugins/SightWeave/Config/FilterPlugin.ini` template was inspected and removed;
 it was not staged or committed.
+
+### NVIDIA host instability blocks final performance sampling
+
+The independent NVIDIA fault is active and therefore blocks clean performance
+evidence. It is not attributed to bundled dotnet or UBT:
+
+- Application Error 1000 at `2026-08-25 14:15:21 +08:00` reports
+  `C:\Program Files\NVIDIA Corporation\NvContainer\nvcontainer.exe`, version
+  `1.42.3485.3667`, exception `0xc0000409`, offset `0x94da5`;
+- WER 1001 at `2026-08-25 14:15:28 +08:00` classifies the event as BEX64 and
+  preserves report ID `1bdeb1af-2e31-45b9-b42c-d748f6f5dd21` under
+  `C:\ProgramData\Microsoft\Windows\WER\ReportArchive\AppCrash_nvcontainer.exe_...`;
+- at `17:03:24 +08:00`, `NVDisplay.ContainerLocalSystem` was running, but the
+  automatic `NvContainerLocalSystem` service was stopped;
+- a bounded start/observe attempt produced no new Application 1000/1001 event,
+  but the service immediately entered a recovery loop. System Service Control
+  Manager events 7023/7031 recorded repeated unexpected termination through
+  `17:04:29`; the termination count reached 14 and Win32 service
+  `ExitCode=14109` while the service remained stopped.
+
+Because the host-stability prerequisite is false, no post-change formal ETW
+attribution, allocation proof, 36,000-frame NullRHI soak, 36,000-frame rendered
+D3D12 soak, or final performance-contract verdict was started. Running those
+commands would knowingly contaminate the evidence. The prior calibrated/formal
+ETW artifacts remain valid historical authorization for the design, but cannot
+serve as post-change acceptance evidence.
+
+This block does not reopen the .NET/UBT gate: all post-Verify build, UAT, and
+automation invocations used the UE bundled host without another `0xe0434352`
+crash. Toolchain state is `COMPLETED`; overall M2P.4 validation is `PARTIAL` and
+final performance acceptance is externally `BLOCKED` until the NVIDIA service
+is repaired and stable.
+
 ## Administrator and ETW capability checkpoint
 
 The default command host measured on 2026-08-25 is not elevated:
@@ -522,10 +547,10 @@ unverified edits are preserved under the dotnet crash pause documented above.
    prove loss/cross-process isolation before formal attribution.
 4. [done] Capture and classify the fixed Batch100/Dynamic10 matrix without
    affinity or priority changes.
-5. Implement an exact dynamic angular-sector architecture and production path
+5. [done] Implement an exact dynamic angular-sector architecture and production path
    only if Dynamic on-CPU p99 remains at or above 250 us. Likewise modify Batch
    only if authoritative stage on-CPU evidence proves a >200 us plugin tail.
-6. Re-run both 36,000-frame soaks and the complete validation matrix before
+6. [blocked by NVIDIA host instability] Re-run both 36,000-frame soaks and the complete validation matrix before
    finalization.
 
 ## Checkpoints
@@ -536,7 +561,8 @@ unverified edits are preserved under the dotnet crash pause documented above.
   pushed)
 - [x] dynamic-sector architecture contract (`666c6a9`, pushed before Runtime
   changes)
-- [x] eat: add exact dynamic occluder sector updates (5251d3c, pushed)
+- [x] `feat: add exact dynamic occluder sector updates` (`5251d3c`, pushed)
+- [x] `fix: make SightWeave runtime clean-host portable` (`b7da610`, pushed)
 - [ ] `perf: close confirmed SightWeave intrinsic tails` (only if supported)
 - [x] `test: expand SightWeave incremental authority coverage` (`912323f`, pushed)
 - [ ] `test: finalize SightWeave CPU performance contracts`
@@ -584,6 +610,8 @@ git -c safe.directory=D:/UE_projects/LastLight rev-parse HEAD
 
 Then read this document, `Docs/SIGHTWEAVE_M2P4_ETW_CLASSIFICATION.md`,
 `Docs/SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md`, and
-`Docs/SIGHTWEAVE_M2P3_FINAL_VALIDATION.md`. Do not build, test, or modify
-production source until the UE bundled dotnet crash pause above is explicitly
-cleared. Batch optimization remains forbidden.
+`Docs/SIGHTWEAVE_M2P3_FINAL_VALIDATION.md`. Do not start final ETW, allocation,
+soak, D3D12, or performance-contract sampling until
+`NvContainerLocalSystem` remains stable with no new Application 1000/1001 or
+System 7023/7031 failures. Preserve `Darkwell.uproject`; Batch optimization
+remains forbidden without new authoritative evidence.

@@ -2,8 +2,10 @@
 
 ## Status
 
-`IN_PROGRESS` (elevated ETW authority complete; Batch gate passes and the
-Broad Dynamic Door gate authorizes an exact incremental angular-sector design.)
+`IN_PROGRESS — PRODUCTION EDITS PAUSED` (elevated ETW authority complete;
+Batch gate passes and the Broad Dynamic Door gate authorizes an exact
+incremental angular-sector design. Repeated UE-bundled `dotnet.exe`
+`0xe0434352` failures must be resolved before another build or production edit.)
 
 M2P.4 is limited to elevated ContextSwitch attribution, evidence-driven CPU
 tail closure, and an exact incremental dynamic-occluder angular-sector update
@@ -16,9 +18,131 @@ GPU masks, post processing, memory textures, DARKWELL gameplay integration,
 - Baseline branch: `codex/m2p3-sightweave-tail-latency-finalization`
 - Verified baseline SHA: `e3e5a833e58ce4571653fcef0f7b44698ae80dae`
 - Working branch: `codex/m2p4-sightweave-etw-dynamic-sector`
-- Latest safe SHA: `88937aabb79776f70e3861c162f2ad4e48768358`
+- Latest safe SHA: `666c6a921a97610bc718c858d09f7ec8533b6b1a`
 - The company workstation's local-only `Darkwell.uproject`
   `EngineAssociation` difference is preserved and must never be staged.
+
+The architecture checkpoint is pushed. Four uncommitted Runtime files contain
+an initial, unverified sector implementation and must not be staged or extended
+while the build-host crash pause is active:
+
+- `Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveGeometry.cpp`;
+- `Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveOptimizedSolveCache.h`;
+- `Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveWorldSubsystem.cpp`;
+- `Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveWorldSubsystem.h`.
+
+## UE bundled dotnet crash diagnostic (2026-08-25)
+
+Production work was frozen immediately after the user reported repeated native
+Windows error dialogs. No crashing command was relaunched, and no dialog was
+hidden, dismissed, or automated during this diagnostic.
+
+### Fault identity
+
+The crashing executable is the Unreal Engine 5.8 bundled .NET host, not system
+.NET, Codex, or the M2P.4 ETW analyzer:
+
+- exact executable:
+  `D:\UE_5.8\Engine\Binaries\ThirdParty\DotNet\10.0\win-x64\dotnet.exe`;
+- file version: `10.0.726.21808`; product version: `.NET 10.0.7`;
+- failing signed exit code: `-532462766`, exactly `0xE0434352`;
+- system x64/x86 hosts are both version `9.0.525.21509`, so they do not match;
+- the installed Codex package
+  `C:\Program Files\WindowsApps\OpenAI.Codex_26.818.8289.0_x64__2p2nqsd0c76g0`
+  contains zero `dotnet.exe` files; its live command host is native
+  `codex.exe` plus bundled `pwsh.exe`;
+- the ETW capture scripts invoke `pwsh.exe`, `wpr.exe`, and
+  `UnrealEditor-Cmd.exe`; the analyzer is C++ inside
+  `UnrealEditor-SightWeaveTests.dll`. No M2P.4 script or analyzer invokes or
+  generates a dotnet host.
+
+The direct version match is corroborated by Application/WER record 49201 at
+12:32:42: `RADAR_PRE_LEAK_64`, `P1=dotnet.exe`,
+`P2=10.0.726.21808`, report ID
+`477143e6-19e3-46d5-ad6c-9356623a7f28`. That record is a resource-leak
+diagnostic, not a crash report, but its exact host version matches only UE's
+bundled dotnet on this machine.
+
+### Command line and parent chain
+
+The latest failed wrapper invocation was:
+
+```text
+pwsh.exe -NoProfile -ExecutionPolicy Bypass -File D:\UE_projects\LastLight\Scripts\BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8
+```
+
+`BuildEditor.ps1` invoked:
+
+```text
+D:\UE_5.8\Engine\Build\BatchFiles\Build.bat DarkwellEditor Win64 Development D:\UE_projects\LastLight\Darkwell.uproject -WaitMutex -FromMsBuild
+```
+
+`GetDotnetPath.bat` sets `PATH` and `DOTNET_ROOT` to the UE bundled 10.0
+directory and disables multilevel lookup. `Build.bat` lines 75-80 then execute
+the effective faulting command:
+
+```text
+D:\UE_5.8\Engine\Binaries\ThirdParty\DotNet\10.0\win-x64\dotnet.exe D:\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.dll DarkwellEditor Win64 Development D:\UE_projects\LastLight\Darkwell.uproject -WaitMutex -FromMsBuild
+```
+
+The reconstructed parent chain is:
+
+```text
+C:\Program Files\WindowsApps\OpenAI.Codex_26.818.8289.0_x64__2p2nqsd0c76g0\app\resources\codex.exe
+  -> C:\Users\defiler919\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\powershell\pwsh.exe
+  -> C:\Windows\System32\cmd.exe (Build.bat)
+  -> D:\UE_5.8\Engine\Binaries\ThirdParty\DotNet\10.0\win-x64\dotnet.exe (UnrealBuildTool.dll)
+```
+
+Historical Security 4688 process creation auditing contained no matching
+records, and no Kernel-Process/Sysmon operational log was enabled, so the
+transient PID/parent PID cannot be recovered after exit. The paths, arguments,
+and chain above are reconstructed from the exact Codex invocation, the
+repository wrapper, UE batch files, and UBT's own command log rather than a
+4688 record.
+
+### Windows event evidence
+
+System `Application Popup` event 26 records the repeated failures with the same
+exception address `0x00007FF9C3D2187A`:
+
+| Local time | System record ID |
+|---|---:|
+| 12:23:04 | 3324282 |
+| 12:54:15 | 3324663 |
+| 12:54:56 | 3324672 |
+| 12:56:53 | 3324697 |
+| 13:50:16 | 3325348 |
+| 13:52:30 | 3325377 |
+| 14:48:37 | 3326055 |
+
+Each message is `dotnet.exe - Application Error` / unknown software exception
+`0xe0434352`. The last UBT log started at 14:27:57 with the exact DarkwellEditor
+command above and internally recorded `Result: Succeeded` after 10.23 seconds,
+but the wrapper later returned `-532462766`; therefore the Editor build is not
+accepted as successful evidence. The current Runtime edits were not compiled
+into `UnrealEditor-SightWeaveRuntime.dll` (its timestamp remained 12:40:11).
+
+Application log search from 12:00 through 15:00 produced:
+
+- `.NET Runtime` 1026 matching dotnet/UBT: **0**;
+- `Application Error` 1000 matching dotnet/UBT: **0**;
+- WER 1001 crash matching dotnet/UBT: **0**;
+- WER 1001 `RADAR_PRE_LEAK_64` matching dotnet: **1** (record 49201 above).
+
+No dotnet/UBT report directory exists in WER ReportArchive, ReportQueue, or the
+user WER directory. Thus the requested 1026/1000/1001 crash triplet was not
+emitted; the authoritative crash evidence currently available is System event
+26 plus the exact native exit code. This absence is recorded explicitly rather
+than treating the RADAR report as a crash record.
+
+### Pause boundary
+
+Do not rerun `Scripts/BuildEditor.ps1`, UE `Build.bat`, direct UBT dotnet, ETW
+capture/analyze, automation tests, or packaging while this pause is active. Do
+not make further production changes. Preserve the four uncommitted Runtime
+files for inspection. Resume only after the dotnet host condition has been
+resolved or the user authorizes a bounded non-crashing alternative.
 
 ## Administrator and ETW capability checkpoint
 
@@ -113,8 +237,9 @@ The fixed ten-process matrix `admin-uac-formal01` is complete:
 The production decision is exact: do not rewrite Batch because its aggregate
 intrinsic p99 is <=200 us; design and implement Dynamic angular-sector update
 because Broad Door intrinsic p99 is >=250 us. The required architecture now
-exists at `Docs/SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md`; production
-source is still unchanged at this handoff point.
+exists at `Docs/SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md`. Production
+source was unchanged at the classification/architecture checkpoints; the later
+unverified edits are preserved under the dotnet crash pause documented above.
 
 ## Current tail boundary inherited from M2P.3
 
@@ -151,8 +276,8 @@ source is still unchanged at this handoff point.
 - [x] `test: add SightWeave elevated context-switch attribution` (`b8f19ac`, pushed)
 - [x] `docs: record SightWeave authoritative tail classification` (`88937aa`,
   pushed)
-- [ ] dynamic-sector architecture contract (written before Runtime changes;
-  commit/push next)
+- [x] dynamic-sector architecture contract (`666c6a9`, pushed before Runtime
+  changes)
 - [ ] `feat: add exact dynamic occluder sector updates` (only if authorized by
   ETW evidence)
 - [ ] `perf: close confirmed SightWeave intrinsic tails` (only if supported)
@@ -198,11 +323,10 @@ cd D:\UE_projects\LastLight
 git -c safe.directory=D:/UE_projects/LastLight switch codex/m2p4-sightweave-etw-dynamic-sector
 git -c safe.directory=D:/UE_projects/LastLight status --short --branch
 git -c safe.directory=D:/UE_projects/LastLight rev-parse HEAD
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8
 ```
 
 Then read this document, `Docs/SIGHTWEAVE_M2P4_ETW_CLASSIFICATION.md`,
 `Docs/SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md`, and
-`Docs/SIGHTWEAVE_M2P3_FINAL_VALIDATION.md`. Commit/push the architecture
-checkpoint if still unstaged, then implement only its evidence-backed Dynamic
-vision sector path. Batch optimization remains forbidden.
+`Docs/SIGHTWEAVE_M2P3_FINAL_VALIDATION.md`. Do not build, test, or modify
+production source until the UE bundled dotnet crash pause above is explicitly
+cleared. Batch optimization remains forbidden.

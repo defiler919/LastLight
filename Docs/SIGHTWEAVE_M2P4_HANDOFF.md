@@ -336,6 +336,37 @@ prepared-index capacity miss. This is a focused implementation checkpoint, not
 the final M2P.4 acceptance: the complete M1/M2/M2P/M2P.4 and DARKWELL suites,
 BuildPlugin, clean-host build matrix, soaks, allocation proof, ETW attribution,
 and performance contracts remain pending.
+### Complete automation regression checkpoint
+
+The first post-change regression matrix used separate, serial
+`UnrealEditor-Cmd -NullRHI` processes and retained every report:
+
+- `SightWeave.M1`: 21/21 passed, outer exit `0`, report
+  `Saved/AutomationReports/SightWeaveM2P4_Full_M1_20260825-1650/index.json`;
+- `SightWeave.M2`: 91/91 passed, outer exit `0`, report
+  `Saved/AutomationReports/SightWeaveM2P4_Full_M2_20260825-1651/index.json`;
+- first complete `SightWeave.M2P`: 34 passed / 1 failed, outer process exit
+  `0`; only `SightWeave.M2P2.Performance.Batch512Gate` failed. Distribution 5
+  p99 was 219.3 us and distribution 6 p95/p99 was 215.6/313.8 us. Report:
+  `Saved/AutomationReports/SightWeaveM2P4_Full_M2P_20260825-1652/index.json`;
+- isolated `Batch512Gate` reproduction: 1/1 passed; worst p95/p99
+  152.9/185.5 us, report
+  `Saved/AutomationReports/SightWeaveM2P4_Batch512_Repro_20260825-1654/index.json`;
+- `SightWeave.M2P4`: 7/7 passed, outer exit `0`, report
+  `Saved/AutomationReports/SightWeaveM2P4_Full_M2P4_20260825-1655/index.json`;
+- `Darkwell`: 24/24 passed, outer exit `0`, report
+  `Saved/AutomationReports/SightWeaveM2P4_Full_Darkwell_20260825-1656/index.json`;
+- complete `SightWeave.M2P` retry: again 34 passed / 1 failed, only
+  `Batch512Gate`; distribution 5 p99 was 343.7 us. Report:
+  `Saved/AutomationReports/SightWeaveM2P4_Full_M2P_Retry_20260825-1657/index.json`.
+
+Thus all correctness/differential tests passed, but the complete M2P hierarchy
+is not represented as fully green: its in-process Batch512 tail gate fails
+non-deterministically when run after the broader suite while passing alone.
+The failed reports are preserved. This must be resolved by the existing
+M2P.4 authoritative ETW attribution and host-risk checks; it is not waived or
+converted into a pass by the isolated successful rerun.
+
 ## Administrator and ETW capability checkpoint
 
 The default command host measured on 2026-08-25 is not elevated:
@@ -470,10 +501,9 @@ unverified edits are preserved under the dotnet crash pause documented above.
   pushed)
 - [x] dynamic-sector architecture contract (`666c6a9`, pushed before Runtime
   changes)
-- [ ] `feat: add exact dynamic occluder sector updates` (only if authorized by
-  ETW evidence)
+- [x] eat: add exact dynamic occluder sector updates (5251d3c, pushed)
 - [ ] `perf: close confirmed SightWeave intrinsic tails` (only if supported)
-- [ ] `test: expand SightWeave incremental authority coverage`
+- [x] `test: expand SightWeave incremental authority coverage` (`912323f`, pushed)
 - [ ] `test: finalize SightWeave CPU performance contracts`
 - [ ] `docs: record SightWeave CPU authority finalization`
 

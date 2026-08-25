@@ -2,9 +2,9 @@
 
 ## Status
 
-`PARTIAL — TOOLCHAIN COMPLETED; RUNTIME CORRECTNESS/CLEAN-HOST PASS; PERFORMANCE BLOCKED BY NVIDIA SERVICE INSTABILITY`
+`IN PROGRESS — TOOLCHAIN AND NVIDIA STABILITY GATES COMPLETED; FINAL PERFORMANCE VALIDATION RESUMED`
 
-The UE 5.8.1 bundled .NET/UBT gate is `COMPLETED`: both default and `-NoUBA` groups passed 3/3 with UBT `Succeeded`, outer exit `0`, and no crash popup. M2P.4 production validation was therefore authorized and resumed. Runtime correctness and clean-host packaging pass, but final performance acceptance is blocked because the NVIDIA LocalSystem Container is repeatedly terminating.
+The UE 5.8.1 bundled .NET/UBT gate is `COMPLETED`: both default and `-NoUBA` groups passed 3/3 with UBT `Succeeded`, outer exit `0`, and no crash popup. Runtime correctness and clean-host packaging pass. After a clean NVIDIA Studio Driver 610.88 installation and Windows restart, the required 30-minute NVIDIA stability gate also passed. Final post-change performance validation is therefore authorized and in progress.
 
 M2P.4 is limited to elevated ContextSwitch attribution, evidence-driven CPU
 tail closure, and an exact incremental dynamic-occluder angular-sector update
@@ -17,7 +17,7 @@ GPU masks, post processing, memory textures, DARKWELL gameplay integration,
 - Baseline branch: `codex/m2p3-sightweave-tail-latency-finalization`
 - Verified baseline SHA: `e3e5a833e58ce4571653fcef0f7b44698ae80dae`
 - Working branch: `codex/m2p4-sightweave-etw-dynamic-sector`
-- Latest pushed implementation/clean-host checkpoint: `b7da610b40da44fd2da1578e12772402c0b6a548`
+- Latest pushed reliable checkpoint before resumed validation: `68d19c6fa479f7a64cbbe76e493cc2acbbfffd63`
 - The company workstation's local-only `Darkwell.uproject`
   `EngineAssociation` difference is preserved and must never be staged.
 
@@ -426,6 +426,32 @@ automation invocations used the UE bundled host without another `0xe0434352`
 crash. Toolchain state is `COMPLETED`; overall M2P.4 validation is `PARTIAL` and
 final performance acceptance is externally `BLOCKED` until the NVIDIA service
 is repaired and stable.
+
+### Post-reinstall NVIDIA stability gate (2026-08-25)
+
+The NVIDIA Studio Driver was clean-installed at version 610.88 and Windows was
+restarted at `2026-08-25 17:35:46.500 +08:00`. No final ETW, allocation,
+performance, soak, or D3D12 sampling was started during the required observation
+window. Read-only repository, test-planning, event-log, process, power, storage,
+and Git/LFS audits were used while waiting.
+
+The formal gate snapshot at `2026-08-25 18:06:14 +08:00`, 30.473 minutes after
+boot, passed every required condition:
+
+- `NvContainerLocalSystem` was `Running`, `Auto`, `ExitCode=0`, and still used
+  the restart-baseline PID 5988; that process was created at 17:35:57;
+- NVIDIA/nvcontainer Application 1000/1001 since boot: 0;
+- NVIDIA/nvcontainer System 7023/7031 since boot: 0;
+- new NVIDIA/nvcontainer WER directories since boot: 0;
+- service stop/recovery-loop evidence since boot: 0; the PID never changed from
+  the restart baseline;
+- `nvidia-smi` exited 0 and reported RTX 4060, Studio Driver/KMD 610.88, WDDM,
+  36 C, P8, and 770 MiB used at the snapshot.
+
+This closes the external NVIDIA blocker and authorizes the final serial
+performance matrix. Existing pre-restart crash/WER evidence remains historical
+and is not deleted or relabeled. D3D12 runs still require before/after checks for
+container failure, driver reset, Device Removed, TDR, and new WER evidence.
 
 ## Administrator and ETW capability checkpoint
 

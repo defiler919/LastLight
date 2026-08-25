@@ -245,6 +245,35 @@ were never changed. The rendered maximum accumulated 5,296,013 raw cycles, but
 raw cycles remain unconverted and the two isolated samples remain Unknown in
 the absence of ContextSwitch ETW authority.
 
+## Fail-closed performance contract checkpoint
+
+The evidence does not authorize the task's completed dual-layer contract.
+`GetThreadTimes` sometimes crosses a 15.625 ms accounting quantum inside a
+sub-millisecond sample (60/10,100 Batch rows and 14/1,010 broad-door rows), so
+those non-zero values are not measured running microseconds. Raw cycles remain
+unconvertible, and the ordinary processes did not have ContextSwitch ETW
+running intervals. An authoritative Intrinsic CPU microsecond gate therefore
+does not exist yet.
+
+The existing wall assertions remain unchanged and fail closed. Of the 100
+ordinary Batch distributions, 100 meet the 150 us median limit, 99 meet the
+180 us p95 limit, 86 meet the 200 us p99 limit, and 86 meet all three. The
+broad door misses its 250 us p99 wall target in all 10 processes; the dedicated
+door meets it in all 10. The attribution rows still include 9 Batch plugin-CPU
+and 20 Batch Unknown samples, plus 53 broad-door plugin-CPU and 9 broad-door
+Unknown samples. These are not converted to host-noise passes.
+
+`Scripts/TestSightWeaveM2P3PerformanceContracts.ps1` independently audits the
+preserved attribution and two soak captures. It verifies exact counts,
+unchanged wall limits, classifications, soak hard gates, and rendered D3D12
+identity; it refuses to overwrite evidence and always writes its JSON before
+returning non-zero for a partial contract. The latest preserved audit is
+`Saved/SightWeaveM2P3/Contracts/performance-contract-final02.json`: evidence
+counts pass, the frame-soak layer passes, Intrinsic CPU authority fails,
+plugin/Unknown clearance fails, and the unchanged wall layer fails. The
+rationale and recovery contract are in
+`Docs/SIGHTWEAVE_M2P3_PERFORMANCE_CONTRACTS.md`.
+
 ## Checkpoints
 
 - [x] `docs: start SightWeave tail latency attribution` --
@@ -257,8 +286,10 @@ the absence of ContextSwitch ETW authority.
   prepared-segment rebuild) -- `ed755a276cc8e02e57a65d1efe3e8ba38762c558`,
   pushed to origin
 - [x] `test: add SightWeave frame-level soak coverage` (source, runner, and two
-  final soaks complete; current checkpoint pending commit/push)
-- [ ] `test: stabilize SightWeave performance contracts`
+  final soaks complete) -- `50cc0bb5d8b198b80ce4ecb0aa84a16f9428cea1`,
+  pushed to origin
+- [x] `test: stabilize SightWeave performance contracts` (fail-closed audit and
+  explicit PARTIAL boundary complete; current checkpoint pending commit/push)
 - [ ] `docs: record SightWeave CPU authority final validation`
 
 After each checkpoint: inspect the diff, stage exact paths only, exclude
@@ -291,7 +322,8 @@ the only pre-existing worktree change was `Darkwell.uproject`.
 - ContextSwitch ETW permission and trace completeness.
 - Trace marker/reconstruction analysis that supplies exact running intervals
   when elevated ContextSwitch evidence is available.
-- Intrinsic CPU, wall telemetry, and frame-soak performance contracts.
+- An authoritative Intrinsic CPU microsecond gate and a completed dual-layer
+  contract; current wall and frame-soak layers remain fail-closed/explicit.
 - Full M1/M2/M2P/M2P1/M2P2/M2P3 correctness, performance, allocation,
   packaging, clean-host, Shipping, dependency, Git, and LFS validation matrix.
 

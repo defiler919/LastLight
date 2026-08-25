@@ -14,10 +14,11 @@ branch.
 - Baseline branch: `codex/m2p2-sightweave-motion-event-index`
 - Verified baseline SHA: `c1907352441a6053de02726e375d1bf94a903d01`
 - Working branch: `codex/m2p3-sightweave-tail-latency-finalization`
-- Latest safe commit: `e040486592e2c87b58d17773b4a166e090822bd1`
+- Latest safe commit: `59a3d93f1d37b7d0c75c6e0ab4f4f800661b2b23`
 - The company workstation keeps a local-only `Darkwell.uproject`
   `EngineAssociation` GUID. Preserve it and never stage or commit it.
-- Remote M2P.3 branch did not exist when work started.
+- The remote M2P.3 branch exists and matched the latest safe commit before the
+  current performance checkpoint began.
 
 ## Open tail-latency questions
 
@@ -29,9 +30,10 @@ branch.
    RuntimePipeline observed p99 values near 261/401/244 us. The same slow
    process also raised a normally 30--50 us source transform to about 220 us.
 
-Neither tail is classified yet. An observed wall overrun remains `Unknown`
-until per-sample thread execution evidence and an independent adjacent control
-support a more specific classification.
+Both tails now have complete ordinary-process raw evidence. Some overruns have
+specific plugin, scheduler, or migration/frequency support, but others remain
+`Unknown`; those rows cannot be relabeled as host noise and currently prevent a
+`COMPLETED` result.
 
 ## Planned timing and scheduling evidence
 
@@ -130,7 +132,7 @@ the immutable pointer publication. Internal stage probes omit frequency and
 page-fault calls so expensive auxiliary queries do not contaminate nested timed
 regions.
 
-Runtime changes are only callback sites and plain diagnostics under
+The attribution-only Runtime changes are callback sites and plain diagnostics under
 `WITH_DEV_AUTOMATION_TESTS`; the callback implementation and every Windows API
 remain in the Editor-only Tests module. Shipping has no probe fields, calls, or
 Windows test-library dependency.
@@ -152,8 +154,57 @@ about 115/168 us. Batch wall p50/p95/p99/max was
 167.2/309.5/390.4/390.5 us. Current evidence does not justify a host-noise
 conclusion: several broad-door overruns also show materially higher
 current-thread cycles concentrated in the vision-solve stage while adjacent
-controls remain stable. These are provisionally classified as plugin CPU or
-Unknown and require the fixed 10-process dataset before any production change.
+controls remain stable.
+
+The first fixed ordinary run is preserved at
+`Saved/SightWeaveM2P3/Attribution/ordinary-10p-final`: 10/10 reports, 20/20
+tests, 10,100 Batch rows/100 independent distributions, and 3,140 door rows.
+Batch wall p50/p95/p99/max was 92.4/142.3/180.6/378.2 us. Broad-door wall was
+160.0/282.0/327.6/490.5 us; vision solve was the dominant stage at
+107.3/188.4/210.5/385.6 us. The exact repeated door work was constant (260
+candidate segments, 2,082 rays, and about 1,466 tested segment/ray pairs), so
+the high-cycle tail was not caused by sample selection or changing workload.
+
+## Confirmed hotspot and retained optimization
+
+Development-only detailed probes split vision rebuild into input preparation,
+prepared-index acquisition/commit, geometry solve, and result materialization.
+`deep-vision-02` passed 1/1 with 314/314 rows and showed broad-door geometry as
+the hotspot: geometry total wall p50/p95/p99/max was
+94.1/168.0/176.4/181.0 us. Its candidate-event, event-sort, acceleration,
+ray-cast, and topology medians were 16.9/24.7/7.6/35.2/8.3 us respectively.
+Input preparation, index work, and result materialization were materially
+smaller.
+
+A full-circle cone event-merge prototype passed differential parity 3/3 but was
+rejected and removed: `deep-vision-03-cone-merge` changed geometry median from
+94.1 to 95.5 us because rebuilding the dynamically invalidated absolute event
+cache offset its sort/raycast savings.
+
+The retained production change preserves an exclusive source binding's exact
+prepared-slot keys across an index miss, uses the non-validated cached solver on
+that miss, and recomputes only changed segment slots. It still invalidates and
+rebuilds every derived endpoint/event structure affected by the changed
+segment; no old result, reduced event set, async window, or stale snapshot is
+used. `partial-prepared-differential-01` passed 3/3 and
+`partial-prepared-index-01` passed 7/7. `deep-vision-04-partial-prepared` passed
+1/1 and reduced broad candidate-event p50 16.9 to 12.3 us and geometry
+p50/p95/p99 from 94.1/168.0/176.4 to 91.6/149.8/162.2 us. Dedicated-door
+geometry median fell from 21.7 to 20.3 us.
+
+The post-change ordinary run is preserved at
+`Saved/SightWeaveM2P3/Attribution/ordinary-10p-partial-prepared-02`. It passed
+10/10 reports and 20/20 tests with exact row/distribution counts. No priority or
+affinity was changed. Batch wall p50/p95/p99/max was
+92.6/141.5/177.8/1468.7 us; 62 samples exceeded 200 us: 9 plugin CPU, 4
+scheduler/preemption, 29 core migration/frequency, and 20 Unknown. Broad door
+was 150.0/273.6/384.1/980.7 us; 78 samples exceeded 250 us: 53 plugin CPU, 4
+scheduler/preemption, 12 core migration/frequency, and 9 Unknown. Eight broad
+samples exceeded 400 us (4 plugin CPU and 4 migration/frequency). The maximum
+980.7 us row migrated processors and accumulated only 575,829 total cycles;
+its 894.6 us internal QPC stage value therefore remains wall/preemption
+telemetry, not a claim of equivalent running CPU time. Prepared deltas remained
+exactly 2 hits/4 misses/4 rebuilds/0 evictions for all 1,010 broad samples.
 
 ## Checkpoints
 
@@ -162,9 +213,9 @@ Unknown and require the fixed 10-process dataset before any production change.
 - [x] `test: add SightWeave dual-clock timing evidence` (source and calibration
   complete) -- `e040486592e2c87b58d17773b4a166e090822bd1`, pushed to origin
 - [x] `test: attribute SightWeave batch and door tails` (instrumentation and
-  runner complete; pending checkpoint commit/push and fixed 10-process capture)
-- [ ] `perf: eliminate confirmed SightWeave tail costs` (only if evidence proves
-  a production hotspot)
+  runner complete) -- `59a3d93f1d37b7d0c75c6e0ab4f4f800661b2b23`, pushed to origin
+- [x] `perf: eliminate confirmed SightWeave tail costs` (retained exact partial
+  prepared-segment rebuild; current checkpoint pending commit/push)
 - [ ] `test: add SightWeave frame-level soak coverage`
 - [ ] `test: stabilize SightWeave performance contracts`
 - [ ] `docs: record SightWeave CPU authority final validation`
@@ -199,14 +250,8 @@ the only pre-existing worktree change was `Darkwell.uproject`.
 - ContextSwitch ETW permission and trace completeness.
 - Trace marker/reconstruction analysis that supplies exact running intervals
   when elevated ContextSwitch evidence is available.
-- Final per-sample Batch512 evidence from 10 ordinary Editor processes, 10
-  distributions per process, and 101 samples per distribution.
-- Per-stage broad dynamic-door evidence from 10 ordinary processes plus
-  dedicated door and door-plus-motion controls.
 - NullRHI 10-minute/equivalent-large-update soak and a separate rendered
   Editor/PIE soak.
-- Any production optimization; none is authorized without stage-level plugin
-  CPU evidence.
 - Intrinsic CPU, wall telemetry, and frame-soak performance contracts.
 - Full M1/M2/M2P/M2P1/M2P2/M2P3 correctness, performance, allocation,
   packaging, clean-host, Shipping, dependency, Git, and LFS validation matrix.
@@ -221,11 +266,9 @@ git -c safe.directory=D:/UE_projects/LastLight rev-parse HEAD
 ```
 
 Then read this file, confirm the local-only `Darkwell.uproject` difference is
-still excluded, then run:
+still excluded, and continue with the frame-level soak checkpoint. The latest
+ordinary attribution command was:
 
 ```powershell
-.\Scripts\RunSightWeaveM2P3Attribution.ps1 -RunCount 10 -Label ordinary-10p-final -EngineRoot D:\UE_5.8
+pwsh -NoProfile -File .\Scripts\RunSightWeaveM2P3Attribution.ps1 -RunCount 10 -Label ordinary-10p-partial-prepared-02 -EngineRoot D:\UE_5.8
 ```
-
-Analyze every raw row before deciding whether a production performance change
-or ContextSwitch-only diagnostic is warranted.

@@ -85,6 +85,10 @@ namespace SightWeave::M2P3::AttributionTests
 		TEXT("snapshot_materialization"),
 		TEXT("compatibility_resolution"),
 		TEXT("immutable_publication"),
+		TEXT("vision_input_preparation"),
+		TEXT("vision_prepared_index"),
+		TEXT("vision_geometry_solve"),
+		TEXT("vision_result_materialization"),
 		TEXT("batch_classification"),
 		TEXT("batch_result_materialization")
 	};
@@ -329,10 +333,17 @@ namespace SightWeave::M2P3::AttributionTests
 	};
 
 	thread_local FStageCollector* GActiveStageCollector = nullptr;
+	thread_local bool GDetailedStageCapture = false;
 
 	void DynamicStageProbe(const ESightWeaveDynamicUpdateStage Stage, const bool bBegin)
 	{
 		if (!GActiveStageCollector)
+		{
+			return;
+		}
+		if (!GDetailedStageCapture
+			&& static_cast<int32>(Stage)
+				>= static_cast<int32>(ESightWeaveDynamicUpdateStage::VisionInputPreparation))
 		{
 			return;
 		}
@@ -354,6 +365,9 @@ namespace SightWeave::M2P3::AttributionTests
 	{
 		FProbeRegistration()
 		{
+			GDetailedStageCapture = FParse::Param(
+				FCommandLine::Get(),
+				TEXT("SightWeaveM2P3DetailedStages"));
 			USightWeaveWorldSubsystem::SetDynamicUpdateStageProbeForTesting(&DynamicStageProbe);
 			USightWeaveWorldSubsystem::SetBatchQueryStageProbeForTesting(&BatchStageProbe);
 		}
@@ -361,6 +375,7 @@ namespace SightWeave::M2P3::AttributionTests
 		~FProbeRegistration()
 		{
 			GActiveStageCollector = nullptr;
+			GDetailedStageCapture = false;
 			USightWeaveWorldSubsystem::SetDynamicUpdateStageProbeForTesting(nullptr);
 			USightWeaveWorldSubsystem::SetBatchQueryStageProbeForTesting(nullptr);
 		}
@@ -387,6 +402,9 @@ namespace SightWeave::M2P3::AttributionTests
 		int64 PreparedEvictionDelta = 0;
 		int64 SnapshotRevisionBefore = 0;
 		int64 SnapshotRevisionAfter = 0;
+		FSightWeaveReferenceSolveResult::FStageMetrics VisionGeometry;
+		int64 VisionCandidateSegmentCount = 0;
+		int64 VisionCandidateRayCount = 0;
 	};
 
 	FTimingSample MeasureControl(const bool bCompute, const FFixedWorkControls& Controls)
@@ -462,6 +480,14 @@ namespace SightWeave::M2P3::AttributionTests
 			return Row.MemoryControl.WallMicroseconds
 				/ FMath::Max(1.0, static_cast<double>(Row.MemoryControl.ThreadCycles));
 		});
+		const double MedianComputeCycles = MedianForRows(Rows, Workload, [](const FRawRow& Row)
+		{
+			return static_cast<double>(Row.ComputeControl.ThreadCycles);
+		});
+		const double MedianMemoryCycles = MedianForRows(Rows, Workload, [](const FRawRow& Row)
+		{
+			return static_cast<double>(Row.MemoryControl.ThreadCycles);
+		});
 
 		for (FRawRow& Row : Rows)
 		{
@@ -477,6 +503,9 @@ namespace SightWeave::M2P3::AttributionTests
 				/ FMath::Max(1.0, static_cast<double>(Row.ComputeControl.ThreadCycles));
 			const double MemoryWallPerCycle = Row.MemoryControl.WallMicroseconds
 				/ FMath::Max(1.0, static_cast<double>(Row.MemoryControl.ThreadCycles));
+			const bool bAdjacentControlsCycleStable =
+				static_cast<double>(Row.ComputeControl.ThreadCycles) <= MedianComputeCycles * 1.25
+				&& static_cast<double>(Row.MemoryControl.ThreadCycles) <= MedianMemoryCycles * 1.25;
 			if (Row.Total.bMeasurementAnomaly || !Row.Total.bThreadCycleTimeValid)
 			{
 				Row.Classification = EClassification::MeasurementInstrumentationAnomaly;
@@ -487,7 +516,8 @@ namespace SightWeave::M2P3::AttributionTests
 				Row.Classification = EClassification::CoreMigrationFrequency;
 			}
 			else if (static_cast<double>(Row.Total.ThreadCycles) > MedianCycles * 1.50
-				&& TargetWallPerCycle <= MedianWallPerCycle * 1.25)
+				&& TargetWallPerCycle <= MedianWallPerCycle * 1.25
+				&& bAdjacentControlsCycleStable)
 			{
 				Row.Classification = EClassification::PluginCpuOverrun;
 			}
@@ -517,7 +547,7 @@ namespace SightWeave::M2P3::AttributionTests
 				StageNames[StageIndex],
 				StageNames[StageIndex]);
 		}
-		Header += TEXT(",classification,allocation_proof_status\n");
+		Header += TEXT(",geometry_boundary_us,geometry_candidate_events_us,geometry_sort_us,geometry_acceleration_us,geometry_ray_cast_us,geometry_post_process_us,geometry_topology_us,geometry_total_us,geometry_working_bytes,geometry_traversed_nodes,geometry_tested_segments,geometry_candidate_segments,geometry_candidate_rays,classification,allocation_proof_status\n");
 		return Header;
 	}
 
@@ -579,6 +609,21 @@ namespace SightWeave::M2P3::AttributionTests
 					Stage.ThreadCpuMicroseconds,
 					Stage.ThreadCycles);
 			}
+			Csv += FString::Printf(
+				TEXT(",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%llu,%llu,%llu,%lld,%lld"),
+				Row.VisionGeometry.BoundaryEventMicroseconds,
+				Row.VisionGeometry.CandidateFilterAndEndpointEventMicroseconds,
+				Row.VisionGeometry.EventSortDeduplicateMicroseconds,
+				Row.VisionGeometry.AccelerationBuildMicroseconds,
+				Row.VisionGeometry.RayCastMicroseconds,
+				Row.VisionGeometry.PolygonPostProcessMicroseconds,
+				Row.VisionGeometry.TopologyValidationMicroseconds,
+				Row.VisionGeometry.TotalMicroseconds,
+				Row.VisionGeometry.WorkingSetAllocatedBytes,
+				Row.VisionGeometry.TraversedAccelerationNodes,
+				Row.VisionGeometry.TestedSegments,
+				Row.VisionCandidateSegmentCount,
+				Row.VisionCandidateRayCount);
 			Csv += FString::Printf(
 				TEXT(",%s,%s\n"),
 				ClassificationName(Row.Classification),
@@ -954,6 +999,11 @@ bool FSightWeaveM2P3DoorAttributionTest::RunTest(const FString& Parameters)
 			HeldSnapshot.Reset();
 			Row.MemoryControl = MeasureControl(false, Controls);
 			Row.Stages = StageCollector.Samples;
+			const FSightWeaveDynamicUpdateStageMetrics& DynamicMetrics =
+				Subsystem->GetLastDynamicUpdateStageMetrics();
+			Row.VisionGeometry = DynamicMetrics.VisionGeometry;
+			Row.VisionCandidateSegmentCount = DynamicMetrics.VisionCandidateSegmentCount;
+			Row.VisionCandidateRayCount = DynamicMetrics.VisionCandidateRayCount;
 			const FSightWeavePreparedEventIndexStats PreparedAfter =
 				Subsystem->GetPreparedEventIndexStats();
 			Row.PreparedHitDelta = PreparedAfter.HitCount - PreparedBefore.HitCount;

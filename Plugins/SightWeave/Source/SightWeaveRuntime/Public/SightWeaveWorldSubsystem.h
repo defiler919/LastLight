@@ -24,6 +24,10 @@ enum class ESightWeaveDynamicUpdateStage : uint8
 	SnapshotMaterialization,
 	CompatibilityResolution,
 	ImmutablePublication,
+	VisionInputPreparation,
+	VisionPreparedIndex,
+	VisionGeometrySolve,
+	VisionResultMaterialization,
 	Count
 };
 
@@ -56,6 +60,9 @@ struct FSightWeaveDynamicUpdateStageMetrics
 	double VisionRebuildMicroseconds = 0.0;
 	double IlluminationRebuildMicroseconds = 0.0;
 	double SnapshotMaterializationMicroseconds = 0.0;
+	FSightWeaveReferenceSolveResult::FStageMetrics VisionGeometry;
+	int64 VisionCandidateSegmentCount = 0;
+	int64 VisionCandidateRayCount = 0;
 };
 #endif
 

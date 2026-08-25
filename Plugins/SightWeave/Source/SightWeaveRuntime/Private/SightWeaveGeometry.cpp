@@ -1530,6 +1530,8 @@ namespace SightWeave::Geometry
 		const double CandidateEventStartSeconds = FPlatformTime::Seconds();
 		bool bPreparedForwardChanged = false;
 		bool bPreparedCandidatesMatch = false;
+		bool bPreparedInputInvariantMatches = false;
+		bool bPreparedSlotLayoutMatches = false;
 		if (PreparedCache)
 		{
 			const FSightWeaveGeometryTolerances& Cached = PreparedCache->Tolerances;
@@ -1543,18 +1545,18 @@ namespace SightWeave::Geometry
 				&& Cached.DuplicateVertexEpsilon == Input.Tolerances.DuplicateVertexEpsilon
 				&& Cached.HeightOverlapEpsilon == Input.Tolerances.HeightOverlapEpsilon
 				&& Cached.RadialBoundarySteps == Input.Tolerances.RadialBoundarySteps;
-			const bool bInputInvariantMatches = PreparedCache->bInputInvariantInitialized
+			bPreparedInputInvariantMatches = PreparedCache->bInputInvariantInitialized
 				&& PreparedCache->Origin.X == Origin.X
 				&& PreparedCache->Origin.Y == Origin.Y
 				&& PreparedCache->FloorId == Input.FloorId
 				&& PreparedCache->HeightRange.ZMin == Input.HeightRange.ZMin
 				&& PreparedCache->HeightRange.ZMax == Input.HeightRange.ZMax
 				&& bTolerancesMatch;
-			bPreparedForwardChanged = bInputInvariantMatches
+			bPreparedForwardChanged = bPreparedInputInvariantMatches
 				&& (PreparedCache->Forward.X != Forward.X || PreparedCache->Forward.Y != Forward.Y);
-			const bool bSegmentSlotLayoutMatches = bInputInvariantMatches
+			bPreparedSlotLayoutMatches = bPreparedInputInvariantMatches
 				&& PreparedCache->SegmentSlots.Num() == Input.Segments.Num();
-			if (bSegmentSlotLayoutMatches)
+			if (bPreparedSlotLayoutMatches)
 			{
 				bPreparedCandidatesMatch = bPreparedInputValidated;
 				for (int32 SegmentIndex = 0;
@@ -1571,7 +1573,7 @@ namespace SightWeave::Geometry
 					bPreparedCandidatesMatch = SegmentIndex + 1 == Input.Segments.Num();
 				}
 			}
-			if (!bInputInvariantMatches)
+			if (!bPreparedInputInvariantMatches)
 			{
 				PreparedCache->bInputInvariantInitialized = true;
 				PreparedCache->Origin = Origin;
@@ -1622,6 +1624,8 @@ namespace SightWeave::Geometry
 		{
 			CandidateSegments.Reset();
 			CandidateSegments.Reserve(Input.Segments.Num());
+			bool bPreparedGeometryChanged =
+				PreparedCache && (!bPreparedInputInvariantMatches || !bPreparedSlotLayoutMatches);
 			for (int32 SegmentIndex = 0; SegmentIndex < Input.Segments.Num(); ++SegmentIndex)
 			{
 				const FSightWeaveSegment2D& Segment = Input.Segments[SegmentIndex];
@@ -1631,22 +1635,43 @@ namespace SightWeave::Geometry
 						Segment.HeightRange,
 						Input.HeightRange,
 						Input.Tolerances.HeightOverlapEpsilon);
+				FSightWeaveOptimizedPreparedSegmentSlot* PreparedSlot = nullptr;
+				bool bPreparedSlotMatches = false;
 				if (PreparedCache)
 				{
-					FSightWeaveOptimizedPreparedSegmentSlot& Slot =
-						PreparedCache->SegmentSlots[SegmentIndex];
-					Slot.StoreKey(Segment);
-					Slot.bCandidate = bCandidate;
+					PreparedSlot = &PreparedCache->SegmentSlots[SegmentIndex];
+					bPreparedSlotMatches = bPreparedInputInvariantMatches
+						&& bPreparedSlotLayoutMatches
+						&& PreparedSlot->Matches(Segment)
+						&& PreparedSlot->bCandidate == bCandidate;
+					if (!bPreparedSlotMatches)
+					{
+						PreparedSlot->StoreKey(Segment);
+						PreparedSlot->bCandidate = bCandidate;
+						bPreparedGeometryChanged = true;
+					}
 				}
 				if (!bCandidate)
 				{
+					continue;
+				}
+				if (bPreparedSlotMatches)
+				{
+					if (bPreparedForwardChanged)
+					{
+						PreparedSlot->Prepared.AAngle = NormalizeRadians(
+							PreparedSlot->Prepared.AbsoluteAAngle - ForwardAngle);
+						PreparedSlot->Prepared.BAngle = NormalizeRadians(
+							PreparedSlot->Prepared.AbsoluteBAngle - ForwardAngle);
+					}
+					CandidateSegments.Add(PreparedSlot->Prepared);
 					continue;
 				}
 
 				FSightWeavePreparedSegment* Prepared = nullptr;
 				if (PreparedCache)
 				{
-					Prepared = &PreparedCache->SegmentSlots[SegmentIndex].Prepared;
+					Prepared = &PreparedSlot->Prepared;
 				}
 				else
 				{
@@ -1683,7 +1708,7 @@ namespace SightWeave::Geometry
 					CandidateSegments.Add(*Prepared);
 				}
 			}
-			if (PreparedCache)
+			if (PreparedCache && bPreparedGeometryChanged)
 			{
 				PreparedCache->bAbsoluteEndpointEventsValid = false;
 			}

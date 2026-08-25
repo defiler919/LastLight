@@ -143,8 +143,11 @@ FSightWeavePreparedEventIndex::FAcquireResult FSightWeavePreparedEventIndex::Acq
 	{
 		Selected->Cache = MakeShared<FSightWeaveOptimizedSolveCache>();
 	}
-	Selected->Cache->bInputInvariantInitialized = false;
-	Selected->Cache->bAbsoluteEndpointEventsValid = false;
+	if (!bReusingExclusiveCurrent)
+	{
+		Selected->Cache->bInputInvariantInitialized = false;
+		Selected->Cache->bAbsoluteEndpointEventsValid = false;
+	}
 	Selected->bValid = true;
 	Selected->BindingCount = 1;
 	Selected->LastUsedRevision = Revision;

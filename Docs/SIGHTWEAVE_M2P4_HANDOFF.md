@@ -16,7 +16,7 @@ GPU masks, post processing, memory textures, DARKWELL gameplay integration,
 - Baseline branch: `codex/m2p3-sightweave-tail-latency-finalization`
 - Verified baseline SHA: `e3e5a833e58ce4571653fcef0f7b44698ae80dae`
 - Working branch: `codex/m2p4-sightweave-etw-dynamic-sector`
-- Latest safe SHA: `b8f19ac15e3b23ae660c29a3739a054b0fa75637`
+- Latest safe SHA: `88937aabb79776f70e3861c162f2ad4e48768358`
 - The company workstation's local-only `Darkwell.uproject`
   `EngineAssociation` difference is preserved and must never be staged.
 
@@ -112,8 +112,9 @@ The fixed ten-process matrix `admin-uac-formal01` is complete:
 
 The production decision is exact: do not rewrite Batch because its aggregate
 intrinsic p99 is <=200 us; design and implement Dynamic angular-sector update
-because Broad Door intrinsic p99 is >=250 us. Production source is still
-unchanged at this handoff point.
+because Broad Door intrinsic p99 is >=250 us. The required architecture now
+exists at `Docs/SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md`; production
+source is still unchanged at this handoff point.
 
 ## Current tail boundary inherited from M2P.3
 
@@ -148,8 +149,10 @@ unchanged at this handoff point.
 
 - [x] `docs: start SightWeave elevated tail analysis` (`0fcff72`, pushed)
 - [x] `test: add SightWeave elevated context-switch attribution` (`b8f19ac`, pushed)
-- [ ] `docs: record SightWeave authoritative tail classification` (document,
-  interval timelines, and reusable classifier complete; commit/push next)
+- [x] `docs: record SightWeave authoritative tail classification` (`88937aa`,
+  pushed)
+- [ ] dynamic-sector architecture contract (written before Runtime changes;
+  commit/push next)
 - [ ] `feat: add exact dynamic occluder sector updates` (only if authorized by
   ETW evidence)
 - [ ] `perf: close confirmed SightWeave intrinsic tails` (only if supported)
@@ -198,9 +201,8 @@ git -c safe.directory=D:/UE_projects/LastLight rev-parse HEAD
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8
 ```
 
-Then read this document, `Docs/SIGHTWEAVE_M2P4_ETW_CLASSIFICATION.md`, and
-`Docs/SIGHTWEAVE_M2P3_FINAL_VALIDATION.md`. Commit/push the classification
-checkpoint if still unstaged. Next write
-`Docs/SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md` before changing Runtime
-source. Batch optimization remains forbidden; only the evidence-backed Dynamic
-vision sector path is authorized.
+Then read this document, `Docs/SIGHTWEAVE_M2P4_ETW_CLASSIFICATION.md`,
+`Docs/SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md`, and
+`Docs/SIGHTWEAVE_M2P3_FINAL_VALIDATION.md`. Commit/push the architecture
+checkpoint if still unstaged, then implement only its evidence-backed Dynamic
+vision sector path. Batch optimization remains forbidden.

@@ -2,10 +2,10 @@
 
 ## Status
 
-`IN_PROGRESS — PRODUCTION EDITS PAUSED` (elevated ETW authority complete;
-Batch gate passes and the Broad Dynamic Door gate authorizes an exact
-incremental angular-sector design. Repeated UE-bundled `dotnet.exe`
-`0xe0434352` failures must be resolved before another build or production edit.)
+`IN_PROGRESS — TOOLCHAIN GATE COMPLETED; RUNTIME VALIDATION RESUMED` (elevated
+ETW authority complete; Batch gate passes and Broad Dynamic Door authorizes the
+exact incremental angular-sector design. Epic Verify/restart is followed by
+six strict bundled-dotnet/UBT build passes.)
 
 M2P.4 is limited to elevated ContextSwitch attribution, evidence-driven CPU
 tail closure, and an exact incremental dynamic-occluder angular-sector update
@@ -18,7 +18,7 @@ GPU masks, post processing, memory textures, DARKWELL gameplay integration,
 - Baseline branch: `codex/m2p3-sightweave-tail-latency-finalization`
 - Verified baseline SHA: `e3e5a833e58ce4571653fcef0f7b44698ae80dae`
 - Working branch: `codex/m2p4-sightweave-etw-dynamic-sector`
-- Latest pushed toolchain baseline checkpoint: `25e927f0f51dcdb7be0720f3fef5b2848925306c`
+- Latest pushed default-group checkpoint: `e71b8294a9b6d2f991601c77ded2ba4e6077fce3`
 - The company workstation's local-only `Darkwell.uproject`
   `EngineAssociation` difference is preserved and must never be staged.
 
@@ -233,14 +233,60 @@ warning, not as a generated report. The aggregate evidence is
 Per the strict decision rule, the default path is provisionally recovered 3/3
 after Epic Verify and restart. Production validation remains paused until the
 requested `-NoUBA` comparison group and its checkpoint are complete.
-### Pause boundary
+### `-NoUBA` comparison group B: 3/3 strict passes
 
-The user authorized only the bounded post-Verify bundled-dotnet/UBT recovery
-experiment described above. Production edits, ETW capture/analyze, automation
-tests, packaging, and the full M2P.4 verification matrix remain paused. Preserve
-the four uncommitted Runtime files and the local-only `Darkwell.uproject`
-association. Resume production validation only after the strict toolchain gate
-(`Result: Succeeded`, outer exit `0`, and no exception popup/event) closes.
+Group B used the source-confirmed UE 5.8 command switch and a fresh isolated
+worktree at `e71b8294a9b6d2f991601c77ded2ba4e6077fce3` so its first run also had
+real compile/link work:
+
+```text
+D:\UE_5.8\Engine\Build\BatchFiles\Build.bat DarkwellEditor Win64 Development D:\UE_projects\LastLight\Saved\SightWeaveM2P4\Toolchain\verify-worktree-no-uba\Darkwell.uproject -WaitMutex -FromMsBuild -NoUBA
+```
+
+| Run | Local start - end | Actions | UBT result | Outer exit | Popup / relevant System 26 | Relevant App 1026/1000/1001 | WER / dump | Strict gate |
+|---:|---|---:|---|---:|---|---|---|---|
+| 1 | 16:18:55.585 - 16:19:47.886 | 18 `[NoUba]` | `Succeeded` | `0` | no / 0 | 0 | 0 / 0 | pass |
+| 2 | 16:20:04.841 - 16:20:06.150 | 0 (target up to date) | `Succeeded` | `0` | no / 0 | 0 | 0 / 0 | pass |
+| 3 | 16:20:23.863 - 16:20:25.243 | 0 (target up to date) | `Succeeded` | `0` | no / 0 | 0 | 0 / 0 | pass |
+
+UE still reported `Using Unreal Build Accelerator local executor`, while the
+real actions were explicitly tagged `[NoUba]`. This matches the inspected UE
+5.8 source: `-NoUBA` disables detouring/uses legacy behavior rather than
+removing the executor implementation. Each run retained independent UBT
+`Log.txt`, `Log.json`, and `Trace.uba` copies. Aggregate evidence is
+`Saved/SightWeaveM2P4/Toolchain/epic-verify-20260825/no-uba/group-summary.json`.
+
+### Toolchain gate decision: COMPLETED
+
+The post-Verify default group passed 3/3, and the comparison group passed 3/3.
+Every accepted run satisfies all three mandatory conditions: UBT internal
+`Result: Succeeded`, outer process exit code `0`, and no exception popup or
+related System 26 event. No relevant Application 1026/1000/1001 record, WER
+report, or LocalDump was generated. Therefore:
+
+- the bundled .NET/UBT toolchain is marked recovered after Epic Verify and the
+  Windows restart;
+- UBA is not identified as a suspected trigger because both paths passed;
+- the dump/WinDbg/SOS branch was not activated, so there is no post-Verify CLR
+  exception type, message, InnerException, or managed/native crash stack to
+  report; the pre-Verify `0xE0434352` managed exception remains untyped because
+  no dump existed for those historical failures;
+- the toolchain gate status is `COMPLETED`, and review/build/test validation of
+  the four preserved Runtime files is now permitted;
+- this does not itself validate or authorize committing those Runtime edits.
+
+NVIDIA Container `0xc0000409` remains an independent host fault and possible
+D3D12/performance-measurement contaminant. It is not evidence for the bundled
+dotnet failure and is not treated as its root cause. NVIDIA services must be
+stable before final performance sampling.
+### Production validation boundary after toolchain recovery
+
+The bundled-dotnet/UBT gate is closed. The next authorized step is inspection
+and verification of the four existing, uncommitted Runtime files: audit their
+diff first, then Editor build and the required M1/M2/M2P/M2P.4, DARKWELL,
+BuildPlugin, clean-host, ETW, and performance gates. Do not add unrelated
+production features. Preserve the local-only `Darkwell.uproject` association
+and never stage it.
 
 ## Administrator and ETW capability checkpoint
 

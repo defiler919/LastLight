@@ -2,9 +2,8 @@
 
 ## Status
 
-`IN_PROGRESS` (elevated ETW calibration and one-process end-to-end smoke pass;
-the fixed ten-process decision matrix is still required before production
-algorithm changes are permitted.)
+`IN_PROGRESS` (elevated ETW authority complete; Batch gate passes and the
+Broad Dynamic Door gate authorizes an exact incremental angular-sector design.)
 
 M2P.4 is limited to elevated ContextSwitch attribution, evidence-driven CPU
 tail closure, and an exact incremental dynamic-occluder angular-sector update
@@ -17,7 +16,7 @@ GPU masks, post processing, memory textures, DARKWELL gameplay integration,
 - Baseline branch: `codex/m2p3-sightweave-tail-latency-finalization`
 - Verified baseline SHA: `e3e5a833e58ce4571653fcef0f7b44698ae80dae`
 - Working branch: `codex/m2p4-sightweave-etw-dynamic-sector`
-- Latest safe SHA: `0fcff720308f05a9ed677906e741fc6fd16b419e`
+- Latest safe SHA: `b8f19ac15e3b23ae660c29a3739a054b0fa75637`
 - The company workstation's local-only `Darkwell.uproject`
   `EngineAssociation` difference is preserved and must never be staged.
 
@@ -94,6 +93,28 @@ may open, but no Runtime source may change until all ten independent processes
 complete. Smoke summary:
 `Saved/SightWeaveM2P4/EtwAttribution/admin-uac-smoke01/summary.json`.
 
+The fixed ten-process matrix `admin-uac-formal01` is complete:
+
+- Batch: 100 distributions/10,100 totals; authoritative on-CPU
+  p50/p95/p99/max 93.7/148.4/191.7/787.5 us; intrinsic gate passes;
+- Broad Door: 10 processes/1,010 totals; on-CPU p50/p95/p99/max
+  160.2/277.4/351.1/522.6 us; intrinsic p99 gate fails;
+- all Door workloads: 3,140 totals;
+- total/control/stage markers: 105,120;
+- loss/buffer loss/unclosed/Unknown: 0/0/0/0;
+- Batch final classification: 9,947 within, 81 Plugin CPU, 72 Scheduler;
+- Broad Door: 925 within, 79 Plugin CPU, 6 Scheduler;
+- 69/79 Broad Door Plugin CPU tails have vision solve as the largest
+  stage-growth contributor;
+- formal classification:
+  `Docs/SIGHTWEAVE_M2P4_ETW_CLASSIFICATION.md` and
+  `Saved/SightWeaveM2P4/EtwAttribution/admin-uac-formal01/authority-classification.json`.
+
+The production decision is exact: do not rewrite Batch because its aggregate
+intrinsic p99 is <=200 us; design and implement Dynamic angular-sector update
+because Broad Door intrinsic p99 is >=250 us. Production source is still
+unchanged at this handoff point.
+
 ## Current tail boundary inherited from M2P.3
 
 - Batch512: 100 ordinary distributions/10,100 samples; aggregate wall
@@ -115,9 +136,8 @@ complete. Smoke summary:
 2. [done] Add a fail-closed offline analyzer keyed by PID + TID + QPC interval + ID.
 3. [done] Calibrate empty/compute/memory/sleep/yield/migration/preemption cases and
    prove loss/cross-process isolation before formal attribution.
-4. Capture the fixed Batch100/Dynamic10 matrix without affinity or priority
-   changes by running `RunSightWeaveM2P4EtwAttribution.ps1 -RunCount 10` in a
-   UAC-approved high-integrity child.
+4. [done] Capture and classify the fixed Batch100/Dynamic10 matrix without
+   affinity or priority changes.
 5. Implement an exact dynamic angular-sector architecture and production path
    only if Dynamic on-CPU p99 remains at or above 250 us. Likewise modify Batch
    only if authoritative stage on-CPU evidence proves a >200 us plugin tail.
@@ -127,9 +147,9 @@ complete. Smoke summary:
 ## Checkpoints
 
 - [x] `docs: start SightWeave elevated tail analysis` (`0fcff72`, pushed)
-- [ ] `test: add SightWeave elevated context-switch attribution` (implementation,
-  build, calibration, and one-process smoke complete; commit/push next)
-- [ ] `docs: record SightWeave authoritative tail classification`
+- [x] `test: add SightWeave elevated context-switch attribution` (`b8f19ac`, pushed)
+- [ ] `docs: record SightWeave authoritative tail classification` (document,
+  interval timelines, and reusable classifier complete; commit/push next)
 - [ ] `feat: add exact dynamic occluder sector updates` (only if authorized by
   ETW evidence)
 - [ ] `perf: close confirmed SightWeave intrinsic tails` (only if supported)
@@ -163,6 +183,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\BuildEditor.ps1 -Configu
 # UAC-approved child:
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\RunSightWeaveM2P4EtwCalibration.ps1 -Label admin-uac-final02 -EngineRoot D:\UE_5.8
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\RunSightWeaveM2P4EtwAttribution.ps1 -RunCount 1 -Label admin-uac-smoke01 -EngineRoot D:\UE_5.8
+# UAC-approved child:
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\RunSightWeaveM2P4EtwAttribution.ps1 -RunCount 10 -Label admin-uac-formal01 -EngineRoot D:\UE_5.8
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\SummarizeSightWeaveM2P4EtwClassification.ps1 -RunRoot .\Saved\SightWeaveM2P4\EtwAttribution\admin-uac-formal01 -AttributionPath .\Saved\SightWeaveM2P4\EtwAttribution\admin-uac-formal01\attribution-timeline-all.csv
 ```
 
 ## Exact recovery command
@@ -175,13 +198,9 @@ git -c safe.directory=D:/UE_projects/LastLight rev-parse HEAD
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8
 ```
 
-Then read this document and
-`Docs/SIGHTWEAVE_M2P3_FINAL_VALIDATION.md`. Commit and push the exact ETW test
-checkpoint if it is still unstaged. Then obtain UAC approval and run:
-
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\RunSightWeaveM2P4EtwAttribution.ps1 -RunCount 10 -Label admin-uac-formal01 -EngineRoot D:\UE_5.8
-```
-
-Do not authorize a production algorithm change until that formal summary and
-per-stage evidence have been classified.
+Then read this document, `Docs/SIGHTWEAVE_M2P4_ETW_CLASSIFICATION.md`, and
+`Docs/SIGHTWEAVE_M2P3_FINAL_VALIDATION.md`. Commit/push the classification
+checkpoint if still unstaged. Next write
+`Docs/SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md` before changing Runtime
+source. Batch optimization remains forbidden; only the evidence-backed Dynamic
+vision sector path is authorized.

@@ -25,10 +25,34 @@ namespace SightWeave::M2P4::Etw
 			FSampleAttribution& Result,
 			const EThreadState State,
 			const int32 Core,
-			const uint64 Ticks,
+			const uint64 QpcBegin,
+			const uint64 QpcEnd,
 			const double MicrosecondsPerTick)
 		{
+			const uint64 Ticks = QpcEnd - QpcBegin;
 			const double Microseconds = static_cast<double>(Ticks) * MicrosecondsPerTick;
+			if (Ticks > 0)
+			{
+				FAttributedInterval& Interval = Result.Intervals.AddDefaulted_GetRef();
+				Interval.QpcBegin = QpcBegin;
+				Interval.QpcEnd = QpcEnd;
+				Interval.Core = Core;
+				switch (State)
+				{
+				case EThreadState::Running:
+					Interval.State = EAttributedIntervalState::OnCpu;
+					break;
+				case EThreadState::Ready:
+					Interval.State = EAttributedIntervalState::Ready;
+					break;
+				case EThreadState::Blocked:
+					Interval.State = EAttributedIntervalState::Blocked;
+					break;
+				default:
+					Interval.State = EAttributedIntervalState::Unresolved;
+					break;
+				}
+			}
 			switch (State)
 			{
 			case EThreadState::Running:
@@ -119,7 +143,7 @@ namespace SightWeave::M2P4::Etw
 				Result.bConflictingState = true;
 				continue;
 			}
-			AddTicks(Result, State, CurrentCore, Event.Qpc - Cursor, MicrosecondsPerTick);
+			AddTicks(Result, State, CurrentCore, Cursor, Event.Qpc, MicrosecondsPerTick);
 			Cursor = Event.Qpc;
 
 			if (Event.Type == ESchedulingEventType::ReadyThread)
@@ -170,7 +194,7 @@ namespace SightWeave::M2P4::Etw
 				State = EThreadState::Running;
 			}
 		}
-		AddTicks(Result, State, CurrentCore, Marker.QpcEnd - Cursor, MicrosecondsPerTick);
+		AddTicks(Result, State, CurrentCore, Cursor, Marker.QpcEnd, MicrosecondsPerTick);
 		Result.bEndRunning = State == EThreadState::Running;
 
 		const double Accounted = Result.OnCpuMicroseconds

@@ -45,6 +45,22 @@ namespace SightWeave::M2P4::Etw
 		bool bMeasurementAnomaly = false;
 	};
 
+	enum class EAttributedIntervalState : uint8
+	{
+		OnCpu,
+		Ready,
+		Blocked,
+		Unresolved
+	};
+
+	struct FAttributedInterval
+	{
+		uint64 QpcBegin = 0;
+		uint64 QpcEnd = 0;
+		int32 Core = INDEX_NONE;
+		EAttributedIntervalState State = EAttributedIntervalState::Unresolved;
+	};
+
 	struct FSampleAttribution
 	{
 		double WallMicroseconds = 0.0;
@@ -56,6 +72,7 @@ namespace SightWeave::M2P4::Etw
 		int32 PreemptionCount = 0;
 		int32 MigrationCount = 0;
 		TMap<int32, double> CoreResidencyMicroseconds;
+		TArray<FAttributedInterval, TInlineAllocator<8>> Intervals;
 		bool bBeginRunning = false;
 		bool bEndRunning = false;
 		bool bTimelineClosed = false;

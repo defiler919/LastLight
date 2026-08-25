@@ -135,6 +135,52 @@ namespace SightWeave::M2P4::EtwTests
 		return Result;
 	}
 
+	FString TimelineString(
+		const FSampleMarker& Marker,
+		const FSampleAttribution& Attribution)
+	{
+		const double MicrosecondsPerTick = 1000000.0
+			/ static_cast<double>(Marker.QpcFrequency);
+		FString Result;
+		for (const FAttributedInterval& Interval : Attribution.Intervals)
+		{
+			if (!Result.IsEmpty())
+			{
+				Result += TEXT("|");
+			}
+			const double BeginMicroseconds = static_cast<double>(
+				Interval.QpcBegin - Marker.QpcBegin) * MicrosecondsPerTick;
+			const double EndMicroseconds = static_cast<double>(
+				Interval.QpcEnd - Marker.QpcBegin) * MicrosecondsPerTick;
+			const TCHAR* State = TEXT("unresolved");
+			switch (Interval.State)
+			{
+			case EAttributedIntervalState::OnCpu: State = TEXT("cpu"); break;
+			case EAttributedIntervalState::Ready: State = TEXT("ready"); break;
+			case EAttributedIntervalState::Blocked: State = TEXT("blocked"); break;
+			default: break;
+			}
+			if (Interval.State == EAttributedIntervalState::OnCpu)
+			{
+				Result += FString::Printf(
+					TEXT("%s@%d:%.3f-%.3f"),
+					State,
+					Interval.Core,
+					BeginMicroseconds,
+					EndMicroseconds);
+			}
+			else
+			{
+				Result += FString::Printf(
+					TEXT("%s:%.3f-%.3f"),
+					State,
+					BeginMicroseconds,
+					EndMicroseconds);
+			}
+		}
+		return Result;
+	}
+
 	const TCHAR* ProvisionalClassification(
 		const FSampleMarker& Marker,
 		const FSampleAttribution& Attribution)
@@ -152,7 +198,7 @@ namespace SightWeave::M2P4::EtwTests
 		{
 			Limit = 200.0;
 		}
-		else if (Marker.Operation == TEXT("dynamic_door_broad_4v2l"))
+		else if (Marker.Operation.StartsWith(TEXT("dynamic_door_")))
 		{
 			Limit = 250.0;
 		}
@@ -397,6 +443,9 @@ bool FSightWeaveM2P4EtwSyntheticCorrelationTest::RunTest(const FString& Paramete
 	TestTrue(TEXT("Pure compute closes"), Compute.bTimelineClosed);
 	TestEqual(TEXT("Pure compute on-CPU"), Compute.OnCpuMicroseconds, 100.0);
 	TestEqual(TEXT("Pure compute off-CPU"), Compute.ReadyMicroseconds + Compute.BlockedMicroseconds, 0.0);
+	TestEqual(TEXT("Pure compute interval count"), Compute.Intervals.Num(), 1);
+	TestTrue(TEXT("Pure compute interval is on-CPU"),
+		Compute.Intervals[0].State == EAttributedIntervalState::OnCpu);
 
 	TArray<FSchedulingEvent> SleepEvents;
 	FSchedulingEvent& SleepOut = SleepEvents.AddDefaulted_GetRef();
@@ -420,6 +469,12 @@ bool FSightWeaveM2P4EtwSyntheticCorrelationTest::RunTest(const FString& Paramete
 	TestEqual(TEXT("Sleep on-CPU"), Sleep.OnCpuMicroseconds, 20.0);
 	TestEqual(TEXT("Sleep blocked"), Sleep.BlockedMicroseconds, 70.0);
 	TestEqual(TEXT("Sleep ready"), Sleep.ReadyMicroseconds, 10.0);
+	TestEqual(TEXT("Sleep interval count"), Sleep.Intervals.Num(), 4);
+	TestTrue(TEXT("Sleep interval sequence"),
+		Sleep.Intervals[0].State == EAttributedIntervalState::OnCpu
+		&& Sleep.Intervals[1].State == EAttributedIntervalState::Blocked
+		&& Sleep.Intervals[2].State == EAttributedIntervalState::Ready
+		&& Sleep.Intervals[3].State == EAttributedIntervalState::OnCpu);
 
 	TArray<FSchedulingEvent> YieldEvents;
 	FSchedulingEvent& YieldOut = YieldEvents.AddDefaulted_GetRef();
@@ -650,7 +705,7 @@ bool FSightWeaveM2P4EtwAnalyzeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("CSwitch events are present"), Reader.ContextSwitchEvents > 0);
 	TestTrue(TEXT("ReadyThread events are present"), Reader.ReadyThreadEvents > 0);
 
-	FString Csv(TEXT("run,operation,distribution,sample,sample_id,scope,stage,invocation,pid,tid,qpc_begin,qpc_end,wall_us,marker_wall_us,thread_cycles,start_processor,end_processor,marker_migrated,measurement_anomaly,on_cpu_us,ready_us,blocked_us,unresolved_us,context_switches,preemptions,migrations,core_residency,events_lost,buffers_lost,timeline_closed,classification\n"));
+	FString Csv(TEXT("run,operation,distribution,sample,sample_id,scope,stage,invocation,pid,tid,qpc_begin,qpc_end,wall_us,marker_wall_us,thread_cycles,start_processor,end_processor,marker_migrated,measurement_anomaly,on_cpu_us,ready_us,blocked_us,unresolved_us,context_switches,preemptions,migrations,core_residency,timeline,events_lost,buffers_lost,timeline_closed,classification\n"));
 	int32 UnknownCount = 0;
 	for (const FSampleMarker& Marker : Markers)
 	{
@@ -670,7 +725,7 @@ bool FSightWeaveM2P4EtwAnalyzeTest::RunTest(const FString& Parameters)
 		const TCHAR* Classification = ProvisionalClassification(Marker, Attribution);
 		UnknownCount += FCString::Strcmp(Classification, TEXT("Unknown")) == 0 ? 1 : 0;
 		Csv += FString::Printf(
-			TEXT("%s,%s,%d,%d,%llu,%s,%s,%d,%u,%u,%llu,%llu,%.3f,%.3f,%llu,%d,%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%d,%d,%d,%s,%u,%u,%d,%s\n"),
+			TEXT("%s,%s,%d,%d,%llu,%s,%s,%d,%u,%u,%llu,%llu,%.3f,%.3f,%llu,%d,%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%d,%d,%d,%s,%s,%u,%u,%d,%s\n"),
 			*Marker.Run,
 			*Marker.Operation,
 			Marker.Distribution,
@@ -698,6 +753,7 @@ bool FSightWeaveM2P4EtwAnalyzeTest::RunTest(const FString& Parameters)
 			Attribution.PreemptionCount,
 			Attribution.MigrationCount,
 			*CoreResidencyString(Attribution.CoreResidencyMicroseconds),
+			*TimelineString(Marker, Attribution),
 			Reader.EventsLost,
 			Reader.BuffersLost,
 			Attribution.bTimelineClosed,

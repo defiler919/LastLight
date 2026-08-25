@@ -168,6 +168,13 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveVisionSnapshotEntry
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	double PolarForwardAngleRadians = 0.0;
 
+	/** Immutable nominal-cone accelerator; refreshed with the published source entry. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	FVector2D NominalForward = FVector2D(1.0, 0.0);
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	double NominalMinimumCosine = -1.0;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	bool bPolarBoundaryFullCircle = false;
 
@@ -216,6 +223,12 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveIlluminationSnapshotEntry
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	double PolarForwardAngleRadians = 0.0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	FVector2D NominalForward = FVector2D(1.0, 0.0);
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
+	double NominalMinimumCosine = -1.0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	bool bPolarBoundaryFullCircle = false;

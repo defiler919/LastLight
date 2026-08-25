@@ -306,7 +306,12 @@ private:
 		const FSightWeaveFrameSnapshot& Snapshot,
 		const FSightWeaveFloorDefinition& Floor,
 		const FSightWeaveGeometryTolerances& Tolerances,
-		FSightWeaveVisibilityQueryResult& OutResult) const;
+		FSightWeaveVisibilityQueryResult& OutResult,
+		const FSightWeaveVisionSnapshotEntry* const* PrefilteredVisionEntries = nullptr,
+		int32 PrefilteredVisionEntryCount = 0,
+		uint64 PrefilteredIlluminationEligibilityMask = 0,
+		bool bPrefilteredHeightMismatch = false,
+		bool bUsePrefilteredBatchState = false) const;
 	void InitializeQueryResult(
 		FSightWeaveVisibilityQueryResult& Result,
 		ESightWeaveQueryStatus Status,

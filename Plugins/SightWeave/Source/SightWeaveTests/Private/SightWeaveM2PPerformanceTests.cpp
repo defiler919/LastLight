@@ -678,4 +678,144 @@ bool FSightWeaveM2PRuntimePipelineBaselineTest::RunTest(const FString& Parameter
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P2Batch512GateTest,
+	"SightWeave.M2P2.Performance.Batch512Gate",
+	SightWeave::M2P::PerformanceTests::TestFlags)
+
+bool FSightWeaveM2P2Batch512GateTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P::PerformanceTests;
+	constexpr int32 DistributionCount = 10;
+	constexpr double MedianLimitMicroseconds = 150.0;
+	constexpr double P95LimitMicroseconds = 180.0;
+	constexpr double P99LimitMicroseconds = 200.0;
+	FTestWorld World(TEXT("SightWeaveM2P2Batch512Gate"));
+	USightWeaveWorldSubsystem* Subsystem = World.GetSubsystem();
+	if (!TestNotNull(TEXT("Subsystem exists"), Subsystem)
+		|| !TestTrue(TEXT("Floor registers"), Subsystem->RegisterFloor(Floor(), nullptr)))
+	{
+		return true;
+	}
+
+	TArray<FSightWeaveSegment2D> StaticSegments = MakeSegments(64, 0x51A7E, false);
+	for (FSightWeaveSegment2D& Segment : StaticSegments)
+	{
+		Segment.StableId = 0;
+	}
+	TestTrue(
+		TEXT("Static fixture registers"),
+		Subsystem->RegisterOccluder(StaticSegments, false, true, nullptr).IsValid());
+
+	for (int32 SourceIndex = 0; SourceIndex < 4; ++SourceIndex)
+	{
+		const double Angle = 2.0 * PI * SourceIndex / 4.0;
+		const ESightWeaveSourceShape Shape = SourceIndex % 2 == 0
+			? ESightWeaveSourceShape::Radial
+			: ESightWeaveSourceShape::CameraCone;
+		const ESightWeaveIlluminationPolicy Policy = SourceIndex < 2
+			? ESightWeaveIlluminationPolicy::BypassLegalIllumination
+			: ESightWeaveIlluminationPolicy::RequiresLegalIllumination;
+		TestTrue(
+			*FString::Printf(TEXT("Vision source %d registers"), SourceIndex),
+			Subsystem->RegisterVisionSource(
+				Vision(
+					FVector(FMath::Cos(Angle) * 100.0, FMath::Sin(Angle) * 100.0, 100.0),
+					Shape,
+					Policy),
+				nullptr).IsValid());
+	}
+	TestTrue(
+		TEXT("Visible light registers"),
+		Subsystem->RegisterIlluminationSource(
+			Light(FVector(100.0, 0.0, 100.0), FName(TEXT("Visible"))),
+			nullptr).IsValid());
+	TestTrue(
+		TEXT("Infrared light registers"),
+		Subsystem->RegisterIlluminationSource(
+			Light(FVector(-100.0, 0.0, 100.0), FName(TEXT("Infrared"))),
+			nullptr).IsValid());
+
+	TArray<FSightWeaveQueryRequest> Requests;
+	Requests.Reserve(512);
+	for (int32 RequestIndex = 0; RequestIndex < 512; ++RequestIndex)
+	{
+		const double Angle = 2.0 * PI * RequestIndex / 512.0;
+		FSightWeaveQueryRequest& Request = Requests.AddDefaulted_GetRef();
+		Request.KnowledgeOwnerId = Local;
+		Request.FloorId = Ground;
+		Request.SampleSet.Samples.Add(
+			FVector(FMath::Cos(Angle) * 500.0, FMath::Sin(Angle) * 500.0, 100.0));
+	}
+
+	TArray<FSightWeaveVisibilityQueryResult> Results;
+	Subsystem->QueryBatch(Requests, Results);
+	bool bBatchMatchesPointQueries = true;
+	for (int32 RequestIndex = 0; RequestIndex < Requests.Num(); ++RequestIndex)
+	{
+		const FSightWeaveVisibilityQueryResult PointResult = Subsystem->QueryEffectiveLiveAtLocation(
+			Requests[RequestIndex].KnowledgeOwnerId,
+			Requests[RequestIndex].FloorId,
+			Requests[RequestIndex].SampleSet.Samples[Requests[RequestIndex].SampleSet.AnchorIndex]);
+		if (!FSightWeaveVisibilityQueryResult::StaticStruct()->CompareScriptStruct(
+			&Results[RequestIndex],
+			&PointResult,
+			0))
+		{
+			AddError(FString::Printf(TEXT("Uniform batch result differs from point query at index %d"), RequestIndex));
+			bBatchMatchesPointQueries = false;
+			break;
+		}
+	}
+	TestTrue(TEXT("Uniform batch results match independent point queries"), bBatchMatchesPointQueries);
+	FDistribution Worst;
+	for (int32 DistributionIndex = 0; DistributionIndex < DistributionCount; ++DistributionIndex)
+	{
+		Subsystem->QueryBatch(Requests, Results);
+		const uint64 OuterBytesBefore = Results.GetAllocatedSize();
+		const uint64 InnerBytesBefore = QueryResultAllocatedBytes(Results);
+		const FDistribution Stats = TimeOperation(10, 101, [&](int32)
+		{
+			Subsystem->QueryBatch(Requests, Results);
+		});
+		const uint64 CapacityGrowthBytes =
+			(Results.GetAllocatedSize() - OuterBytesBefore)
+			+ (QueryResultAllocatedBytes(Results) - InnerBytesBefore);
+		AddInfo(FString::Printf(
+			TEXT("M2P2_BATCH_512 distribution=%d median_us=%.3f p95_us=%.3f p99_us=%.3f max_us=%.3f steady_capacity_growth_bytes=%llu"),
+			DistributionIndex,
+			Stats.Median,
+			Stats.P95,
+			Stats.P99,
+			Stats.Max,
+			CapacityGrowthBytes));
+		TestTrue(
+			*FString::Printf(TEXT("Distribution %d median is at most %.0f us"), DistributionIndex, MedianLimitMicroseconds),
+			Stats.Median <= MedianLimitMicroseconds);
+		TestTrue(
+			*FString::Printf(TEXT("Distribution %d p95 is at most %.0f us"), DistributionIndex, P95LimitMicroseconds),
+			Stats.P95 <= P95LimitMicroseconds);
+		TestTrue(
+			*FString::Printf(TEXT("Distribution %d p99 is at most %.0f us"), DistributionIndex, P99LimitMicroseconds),
+			Stats.P99 <= P99LimitMicroseconds);
+		TestEqual(
+			*FString::Printf(TEXT("Distribution %d has zero steady capacity growth"), DistributionIndex),
+			CapacityGrowthBytes,
+			uint64{0});
+		Worst.Median = FMath::Max(Worst.Median, Stats.Median);
+		Worst.P95 = FMath::Max(Worst.P95, Stats.P95);
+		Worst.P99 = FMath::Max(Worst.P99, Stats.P99);
+		Worst.Max = FMath::Max(Worst.Max, Stats.Max);
+	}
+
+	AddInfo(FString::Printf(
+		TEXT("M2P2_BATCH_512 worst_median_us=%.3f worst_p95_us=%.3f worst_p99_us=%.3f worst_max_us=%.3f distributions=%d"),
+		Worst.Median,
+		Worst.P95,
+		Worst.P99,
+		Worst.Max,
+		DistributionCount));
+	return true;
+}
+
 #endif

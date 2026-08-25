@@ -7,8 +7,8 @@
 - Baseline SHA: `69ac8d50019ef7674c2aed58d2c0c931ee8fa874`
 - Working branch: `codex/m2p2-sightweave-motion-event-index`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current phase: warmed transform allocation is eliminated and the bounded exact prepared-origin index is implemented; 512-query headroom and final lifecycle/package matrix are next
-- Latest safe commit: `30898ff5b2cb303e43de148246f072e98ada9c47` (`docs: select SightWeave prepared event index architecture`); the implementation checkpoint described below is tested and pending commit/push
+- Current phase: warmed transform allocation, the bounded exact prepared-origin index, shared origin preparation, and 512-query headroom are implemented; expanded lifecycle/concurrency coverage and the final validation/package matrix are next
+- Latest safe commit: `0ebf849a2e2487c634fbedf38a631a50b76a52ae` (`perf: add bounded SightWeave prepared event index`); the tested 512-query checkpoint described below is pending commit/push
 - Next recovery command: `git switch codex/m2p2-sightweave-motion-event-index; git pull --ff-only origin codex/m2p2-sightweave-motion-event-index; git rev-parse HEAD; git lfs pull; git lfs status`
 
 ## Objective and exclusions
@@ -135,6 +135,46 @@ Current clean automation evidence after index integration:
 - `SightWeave.M2P2.PreparedEventIndex`: 2/2 for exact cross-kind sharing, range/floor-height isolation, held-reader immutability, binding release, hard one-slot capacity fallback, reclaim, deterministic eviction, and byte cap;
 - `SightWeave.M2P2.TransformAPI`: 1/1 for no-change revision preservation, NaN/invalid-handle rejection, valid revision advance, and non-transform metadata preservation.
 
+## 512-query headroom checkpoint
+
+The production query path now retains exact semantics while removing repeated work before final point evaluation:
+
+- immutable polygon bounds reject points before polar `atan2`/LUT refinement;
+- nominal-shape distance uses squared range checks and an equivalent cosine threshold instead of `acos`;
+- each published source entry stores its normalized nominal forward and tolerance-adjusted minimum cosine;
+- directional and camera cones use the invariant that the exact visibility polygon is contained by the nominal cone, so nominal-cone misses skip polar work;
+- uniform batches of 256-512 valid anchor queries on one floor, with no suppressions, at most 16 vision and 64 illumination sources, and one exact shared owner/floor/Z, prefilter the immutable snapshot once into fixed stack storage and reuse that state for every point;
+- mixed-owner/floor/Z, invalid, non-anchor, small, oversized, suppressed, or higher-source-count batches retain the existing exact serial fallback.
+
+The uniform path is serial and therefore does not replace or hide the single-source CPU measurements required by the motion and 4,096/source gates. The performance test first compares all 512 reflected result fields against independent point queries, then measures ten separate warmed distributions of 101 samples each. Every distribution independently hard-gates median/p95/p99 at 150/180/200 us and checks zero result-capacity growth.
+
+The pre-optimization ten-distribution run failed with worst 148.300/225.499/302.698 us median/p95/p99. AABB, cosine, and cone prefiltering reduced the stable serial median to approximately 90-95 us. A subsequent `ParallelFor` prototype passed the latency gate twice, but startup trace `M2P2BatchParallelFinalV2_20260825` proved that every batch incurred exactly 2 allocations / 0 reallocations / 912 allocated bytes (the UE task data and task array). It was rejected rather than weakening the zero-allocation requirement. The final fixed-stack uniform serial path passed twice in independent editor invocations:
+
+| Run | Distribution | median / p95 / p99 / max us |
+|---|---:|---:|
+| `UniformSerial1` | 0 | 89.001 / 127.099 / 142.302 / 144.899 |
+|  | 1 | 90.800 / 122.398 / 174.597 / 201.099 |
+|  | 2 | 89.802 / 120.603 / 128.102 / 134.200 |
+|  | 3 | 93.099 / 96.399 / 106.398 / 270.899 |
+|  | 4 | 95.502 / 143.200 / 150.699 / 162.799 |
+|  | 5 | 93.102 / 131.998 / 141.300 / 175.100 |
+|  | 6 | 89.198 / 92.201 / 95.800 / 138.998 |
+|  | 7 | 89.403 / 137.303 / 153.601 / 182.301 |
+|  | 8 | 89.098 / 129.998 / 161.901 / 173.900 |
+|  | 9 | 89.198 / 93.199 / 100.300 / 152.800 |
+| `UniformSerial2` | 0 | 88.800 / 92.398 / 106.100 / 130.601 |
+|  | 1 | 90.700 / 131.600 / 139.900 / 159.401 |
+|  | 2 | 89.001 / 141.799 / 150.003 / 208.899 |
+|  | 3 | 128.098 / 147.000 / 168.499 / 200.100 |
+|  | 4 | 89.999 / 97.599 / 126.302 / 129.599 |
+|  | 5 | 90.100 / 133.500 / 161.599 / 167.601 |
+|  | 6 | 89.001 / 92.100 / 94.403 / 94.600 |
+|  | 7 | 89.198 / 118.800 / 186.000 / 214.003 |
+|  | 8 | 89.299 / 141.300 / 153.102 / 156.000 |
+|  | 9 | 88.900 / 95.397 / 103.202 / 104.200 |
+
+All 20/20 distributions pass. Worst median/p95/p99 are 128.098/147.000/186.000 us, with zero warmed capacity growth in every distribution. Reports: `Saved/AutomationReports/SightWeaveM2P2_Batch512Gate_UniformSerial1/index.json` and `Saved/AutomationReports/SightWeaveM2P2_Batch512Gate_UniformSerial2/index.json`. Startup trace `Saved/SightWeaveM2P1/AllocationProof/M2P2BatchUniformSerialFinalV3_20260825` passed capture and analysis 1/1; all three batch samples and all 24 strict warmed transform samples are exact 0 allocation calls / 0 reallocation calls / 0 allocated bytes. With the final evaluator refactor, `SightWeave.M2P.Differential` passed 3/3 and `SightWeave.M2.Query` passed 14/14 (`SightWeaveM2PDifferential_UniformSerialFinal`, `SightWeaveM2Query_UniformSerialFinal`).
+
 ## Planned phases
 
 1. Add a reproducible motion trace benchmark covering no-change, radial/cone/camera rotation, 1/5/20 cm and diagonal/wall/endpoint-crossing translation, teleport/floor/profile/range/height changes, dynamic-door combinations, and shared-origin source groups. Record cold/warm cost, allocations, latency distributions, cache/event counters, publication cost, and bounded memory.
@@ -161,11 +201,14 @@ git -c safe.directory=D:/UE_projects/LastLight ls-remote --heads origin codex/m2
 git -c safe.directory=D:/UE_projects/LastLight switch -c codex/m2p2-sightweave-motion-event-index
 .\Scripts\BuildEditor.ps1 -EngineRoot D:\UE_5.8 -Configuration Development
 & D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P2.Performance.MotionTrace' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2P2_MotionBaselineV2' '-AbsLog=D:\UE_projects\LastLight\Saved\Logs\SightWeaveM2P2_MotionBaselineV2.log'
-.\Scripts\RunSightWeaveAllocationProof.ps1 -Label M2P2PreparedIndexGatedFinal_20260825 -EngineRoot D:\UE_5.8
+pwsh -NoProfile -File .\Scripts\RunSightWeaveAllocationProof.ps1 -Label M2P2PreparedIndexGatedFinal_20260825 -EngineRoot D:\UE_5.8
+pwsh -NoProfile -File .\Scripts\RunSightWeaveAllocationProof.ps1 -Label M2P2BatchUniformSerialFinalV3_20260825 -EngineRoot D:\UE_5.8
 & D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P.Differential' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2PDifferential_IndexedValidated' '-AbsLog=D:\UE_projects\LastLight\Saved\Logs\SightWeaveM2PDifferential_IndexedValidated.log'
 & D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P2.Performance.PreparedEventIndex4096' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2P2_Prepared4096_Headroom1' '-AbsLog=D:\UE_projects\LastLight\Saved\Logs\SightWeaveM2P2_Prepared4096_Headroom1.log'
 & D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P2.PreparedEventIndex' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2P2_PreparedIndexCorrectnessFinal' '-AbsLog=D:\UE_projects\LastLight\Saved\Logs\SightWeaveM2P2_PreparedIndexCorrectnessFinal.log'
 & D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P2.TransformAPI' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2P2_TransformAPIFinal' '-AbsLog=D:\UE_projects\LastLight\Saved\Logs\SightWeaveM2P2_TransformAPIFinal.log'
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P2.Performance.Batch512Gate' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2P2_Batch512Gate_UniformSerial1'
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P2.Performance.Batch512Gate' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2P2_Batch512Gate_UniformSerial2'
 ```
 
 The baseline and remote M2P.1 branch were identical at the required SHA. The target branch did not exist locally or remotely. The only pre-existing worktree change is the company-machine `Darkwell.uproject` EngineAssociation GUID; it is preserved locally and must never be staged.
@@ -181,6 +224,6 @@ The corrected benchmark build succeeded in 11.89 seconds. The only build warning
 - Pure-radial rotation reuses origin preparation and canonical endpoint order but still recomputes final source arrays/polygon. A final-polygon shortcut remains deliberately disabled until canonical query-array reordering is proven across the seam.
 - Dynamic changes are exact and synchronous, but dedicated multiple-door locality/counter tests and held-reader coverage across dynamic invalidation/source deletion/eviction are still required.
 - Source/world teardown, restart, multiworld isolation, high-water reclaim under large entries, byte-pressure eviction, and concurrent independent solver/index scratch need broader coverage.
-- The stricter ten-run 512-query batch target has not yet been optimized or rerun. M2P.1 evidence misses the new 0.15/0.18/0.20 ms gate.
+- The 512-query optimized path is a fixed-stack serial fast path for tightly bounded uniform anchor batches. Its exact independent-point parity, 20 performance distributions, and zero-allocation startup trace pass; broader repeated-world teardown and concurrent query/publication stress remain part of the lifecycle matrix.
 - Normal 8x64/4,096-total non-regression, full SightWeave/DARKWELL suites, Lab, BuildPlugin/clean host, Game Development/Shipping, Shipping dependency scan, Git/LFS audit, and final remote verification remain pending.
 - Held-reader publication correctly allocates a fresh immutable frame when both reusable buffers are owned. That permitted path is reported separately and is not part of the strict ordinary warmed-transform 0/0/0 claim.

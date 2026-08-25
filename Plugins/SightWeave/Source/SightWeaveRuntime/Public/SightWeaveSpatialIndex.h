@@ -134,6 +134,8 @@ private:
 	TArray<TArray<int64>> ReusableCellIdArrays;
 	TArray<TArray<int32>> ReusableSourceEdgeIndexArrays;
 	TArray<FIntPoint> UpdateCellsScratch;
+	mutable TArray<FIntPoint> QueryCellsScratch;
+	mutable TArray<int64> QuerySortedIdsScratch;
 
 	mutable int32 LastCandidateCount = 0;
 	int64 StaticBuildCount = 0;

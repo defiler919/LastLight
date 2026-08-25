@@ -145,7 +145,13 @@ void USightWeaveVisionSourceComponent::OnUpdateTransform(
 	Super::OnUpdateTransform(UpdateTransformFlags, Teleport);
 	if (IsRegistered())
 	{
-		RefreshVisionSourceRegistration();
+		USightWeaveWorldSubsystem* Subsystem = GetSightWeaveSubsystem(this);
+		if (!Subsystem
+			|| !Handle.IsValid()
+			|| !Subsystem->UpdateVisionSourceTransform(Handle, GetComponentTransform()))
+		{
+			RefreshVisionSourceRegistration();
+		}
 	}
 }
 
@@ -215,7 +221,13 @@ void USightWeaveIlluminationSourceComponent::OnUpdateTransform(
 	Super::OnUpdateTransform(UpdateTransformFlags, Teleport);
 	if (IsRegistered())
 	{
-		RefreshIlluminationSourceRegistration();
+		USightWeaveWorldSubsystem* Subsystem = GetSightWeaveSubsystem(this);
+		if (!Subsystem
+			|| !Handle.IsValid()
+			|| !Subsystem->UpdateIlluminationSourceTransform(Handle, GetComponentTransform()))
+		{
+			RefreshIlluminationSourceRegistration();
+		}
 	}
 }
 

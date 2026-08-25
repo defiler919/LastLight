@@ -7,6 +7,8 @@ struct FSightWeaveOptimizedPreparedSegment
 	FVector2D OffsetA = FVector2D::ZeroVector;
 	FVector2D Vector = FVector2D::ZeroVector;
 	double RayDistanceNumerator = 0.0;
+	double AbsoluteAAngle = 0.0;
+	double AbsoluteBAngle = 0.0;
 	double AAngle = 0.0;
 	double BAngle = 0.0;
 	double AngularPadding = 0.0;
@@ -65,4 +67,17 @@ struct FSightWeaveOptimizedSolveCache
 	FSightWeaveGeometryTolerances Tolerances;
 	TArray<FSightWeaveOptimizedPreparedSegmentSlot> SegmentSlots;
 	TArray<FSightWeaveOptimizedPreparedSegment> CandidateSegments;
+	TArray<double> SortedAbsoluteEndpointAngles;
+	TArray<double> AbsoluteEndpointAngleSortBuffer;
+	TArray<FVector2D> SortedAbsoluteEndpointDirections;
+	bool bAbsoluteEndpointEventsValid = false;
 };
+
+namespace SightWeave::Geometry
+{
+	/** Internal path used only after the world index has fully compared the exact input key. */
+	void SolveOptimizedPolygonIntoValidatedCache(
+		const FSightWeaveReferenceSolveInput& Input,
+		FSightWeaveReferenceSolveResult& OutResult,
+		FSightWeaveOptimizedSolveCache& Cache);
+}

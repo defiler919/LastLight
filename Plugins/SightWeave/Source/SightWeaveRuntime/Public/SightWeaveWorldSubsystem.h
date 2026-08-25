@@ -5,6 +5,7 @@
 #include "SightWeaveGeometry.h"
 #include "SightWeaveQueries.h"
 #include "SightWeaveSpatialIndex.h"
+#include "SightWeavePreparedEventIndexStats.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "SightWeaveTypes.h"
 
@@ -22,6 +23,8 @@ struct FSightWeaveDynamicUpdateStageMetrics
 	double SnapshotMaterializationMicroseconds = 0.0;
 };
 #endif
+
+class FSightWeavePreparedEventIndex;
 
 UCLASS()
 class SIGHTWEAVERUNTIME_API USightWeaveWorldSubsystem final : public UWorldSubsystem
@@ -59,6 +62,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "SightWeave|Vision")
 	bool UpdateVisionSource(FSightWeaveVisionSourceHandle Handle, const FSightWeaveVisionSourceDescription& Description);
 
+	/** Allocation-free warmed motion path; preserves all non-transform source metadata. */
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Vision")
+	bool UpdateVisionSourceTransform(FSightWeaveVisionSourceHandle Handle, const FTransform& Transform);
+
 	UFUNCTION(BlueprintCallable, Category = "SightWeave|Vision")
 	bool UnregisterVisionSource(FSightWeaveVisionSourceHandle Handle);
 
@@ -70,6 +77,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "SightWeave|Illumination")
 	bool UpdateIlluminationSource(FSightWeaveIlluminationSourceHandle Handle, const FSightWeaveIlluminationSourceDescription& Description);
+
+	/** Allocation-free warmed motion path; preserves all non-transform source metadata. */
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Illumination")
+	bool UpdateIlluminationSourceTransform(FSightWeaveIlluminationSourceHandle Handle, const FTransform& Transform);
 
 	UFUNCTION(BlueprintCallable, Category = "SightWeave|Illumination")
 	bool UnregisterIlluminationSource(FSightWeaveIlluminationSourceHandle Handle);
@@ -231,6 +242,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
 	FSightWeaveSpatialIndexStats GetSpatialIndexStats() const { return SpatialIndex.GetStats(); }
 
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Diagnostics")
+	FSightWeavePreparedEventIndexStats GetPreparedEventIndexStats() const;
+
 #if WITH_DEV_AUTOMATION_TESTS
 	const FSightWeaveDynamicUpdateStageMetrics& GetLastDynamicUpdateStageMetrics() const
 	{
@@ -242,6 +256,8 @@ public:
 	{
 		return PublishedSnapshot;
 	}
+
+	bool ConfigurePreparedEventIndexForTesting(int32 MaximumEntries, int64 MaximumBytes);
 #endif
 
 	void QueryOccluderSegments(
@@ -330,6 +346,29 @@ private:
 		bool bEnabled = true;
 	};
 
+	struct FSourceCandidateQueryKey
+	{
+		FSightWeaveFloorId FloorId;
+		FSightWeaveHeightRange HeightRange;
+		FBox2D Bounds = FBox2D(ForceInit);
+
+		bool Matches(
+			const FSightWeaveFloorId InFloorId,
+			const FSightWeaveHeightRange& InHeightRange,
+			const FBox2D& InBounds) const
+		{
+			return FloorId == InFloorId
+				&& HeightRange.ZMin == InHeightRange.ZMin
+				&& HeightRange.ZMax == InHeightRange.ZMax
+				&& Bounds.bIsValid == InBounds.bIsValid
+				&& (!Bounds.bIsValid
+					|| (Bounds.Min.X == InBounds.Min.X
+						&& Bounds.Min.Y == InBounds.Min.Y
+						&& Bounds.Max.X == InBounds.Max.X
+						&& Bounds.Max.Y == InBounds.Max.Y));
+		}
+	};
+
 	bool bSightWeaveInitialized = false;
 	int64 NextVisionSourceId = 1;
 	int64 NextIlluminationSourceId = 1;
@@ -358,8 +397,11 @@ private:
 	TMap<int64, FSightWeaveIlluminationSnapshotEntry> CachedIlluminationSnapshotEntries;
 	TMap<int64, TArray<FSightWeaveSegment2D>> CachedVisionSolveSegments;
 	TMap<int64, TArray<FSightWeaveSegment2D>> CachedIlluminationSolveSegments;
+	TMap<int64, FSourceCandidateQueryKey> CachedVisionCandidateQueryKeys;
+	TMap<int64, FSourceCandidateQueryKey> CachedIlluminationCandidateQueryKeys;
 	TMap<int64, TSharedPtr<FSightWeaveOptimizedSolveCache>> CachedVisionPreparedSolves;
 	TMap<int64, TSharedPtr<FSightWeaveOptimizedSolveCache>> CachedIlluminationPreparedSolves;
+	TSharedPtr<FSightWeavePreparedEventIndex> PreparedEventIndex;
 	TArray<FSightWeaveSegment2D> DynamicPreparedSegmentsScratch;
 	TArray<int64> PublicationDirtyVisionIds;
 	TArray<int64> PublicationDirtyIlluminationIds;

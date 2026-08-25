@@ -2,12 +2,14 @@
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Containers/StaticArray.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "ProfilingDebugging/MemoryTrace.h"
+#include "ProfilingDebugging/CallstackTrace.h"
 #include "SightWeaveGeometry.h"
 #include "SightWeaveWorldSubsystem.h"
 #include "Trace/Analysis.h"
@@ -45,6 +47,16 @@ namespace SightWeave::M2P1::AllocationTests
 		DynamicDoorUpdate,
 		CleanPublication,
 		NoChangeUpdate,
+		RadialRotation,
+		ConeRotation,
+		Translation1Cm,
+		Translation5Cm,
+		Translation20Cm,
+		Teleport,
+		RangeChange,
+		SharedOriginFourSources,
+		HeldSnapshotTransform,
+		DynamicDoorPlusMotion,
 		Count
 	};
 
@@ -62,6 +74,16 @@ namespace SightWeave::M2P1::AllocationTests
 		case EWorkload::DynamicDoorUpdate: return TEXT("dynamic_door_update");
 		case EWorkload::CleanPublication: return TEXT("clean_publication");
 		case EWorkload::NoChangeUpdate: return TEXT("no_change_update");
+		case EWorkload::RadialRotation: return TEXT("motion_radial_rotation");
+		case EWorkload::ConeRotation: return TEXT("motion_cone_rotation");
+		case EWorkload::Translation1Cm: return TEXT("motion_translation_1cm");
+		case EWorkload::Translation5Cm: return TEXT("motion_translation_5cm");
+		case EWorkload::Translation20Cm: return TEXT("motion_translation_20cm");
+		case EWorkload::Teleport: return TEXT("motion_teleport");
+		case EWorkload::RangeChange: return TEXT("motion_range_change");
+		case EWorkload::SharedOriginFourSources: return TEXT("motion_shared_origin_four_sources");
+		case EWorkload::HeldSnapshotTransform: return TEXT("motion_held_snapshot_transform");
+		case EWorkload::DynamicDoorPlusMotion: return TEXT("motion_dynamic_door_plus_motion");
 		default: return TEXT("unknown");
 		}
 	}
@@ -252,6 +274,25 @@ namespace SightWeave::M2P1::AllocationTests
 		return Result;
 	}
 
+	FSightWeaveIlluminationSourceDescription Illumination(
+		const FVector Location,
+		const ESightWeaveSourceShape Shape,
+		const FName Capability,
+		const float Range)
+	{
+		FSightWeaveIlluminationSourceDescription Result;
+		Result.KnowledgeOwnerId = Local;
+		Result.FloorId = Ground;
+		Result.Transform.SetLocation(Location);
+		Result.Shape = Shape;
+		Result.Range = Range;
+		Result.HalfAngleDegrees = Shape == ESightWeaveSourceShape::Radial ? 180.0f : 55.0f;
+		Result.HeightRange.ZMin = 0.0f;
+		Result.HeightRange.ZMax = 300.0f;
+		Result.EmittedCapabilities.Add(Capability);
+		return Result;
+	}
+
 	void EmitScope(const EWorkload Workload, const uint16 Sample, TFunctionRef<void()> Operation)
 	{
 		FAllocationScope Scope(Workload, Sample);
@@ -271,11 +312,20 @@ namespace SightWeave::M2P1::AllocationTests
 		uint64 CurrentTemporaryBytes = 0;
 		TArray<uint64> AllocationSizes;
 		TArray<uint32> AllocationCallstackIds;
+		TArray<uint64> ReallocationSizes;
+		TArray<uint32> ReallocationCallstackIds;
 		TMap<uint64, uint64> TemporaryAllocations;
 	};
 
 	class FAllocationAnalyzer final : public UE::Trace::IAnalyzer
 	{
+		struct FModuleRange
+		{
+			FString Name;
+			uint64 Base = 0;
+			uint64 Size = 0;
+		};
+
 	public:
 		virtual void OnAnalysisBegin(const FOnAnalysisContext& Context) override
 		{
@@ -290,10 +340,67 @@ namespace SightWeave::M2P1::AllocationTests
 			Builder.RouteEvent(RouteReallocAllocSystem, "Memory", "ReallocAllocSystem");
 			Builder.RouteEvent(RouteReallocFree, "Memory", "ReallocFree");
 			Builder.RouteEvent(RouteReallocFreeSystem, "Memory", "ReallocFreeSystem");
+			Builder.RouteEvent(RouteCallstack, "Memory", "CallstackSpec");
+			Builder.RouteEvent(RouteCallstackXor, "Memory", "CallstackSpecXORAndRLE");
+			Builder.RouteEvent(RouteCallstackDelta7, "Memory", "CallstackSpecDelta7bit");
+			Builder.RouteEvent(RouteCallstackDeltaVarInt, "Memory", "CallstackSpecDeltaVarInt");
+			Builder.RouteEvent(RouteModuleInit, "Diagnostics", "ModuleInit");
+			Builder.RouteEvent(RouteModuleLoad, "Diagnostics", "ModuleLoad");
 		}
 
 		virtual bool OnEvent(uint16 RouteId, EStyle Style, const FOnEventContext& Context) override
 		{
+			if (RouteId == RouteCallstack)
+			{
+				const uint32 CallstackId = Context.EventData.GetValue<uint32>("CallstackId");
+				const TArrayReader<uint64>& Frames = Context.EventData.GetArray<uint64>("Frames");
+				Callstacks.Add(CallstackId, TArray<uint64>(Frames.GetData(), Frames.Num()));
+				return true;
+			}
+			if (RouteId == RouteCallstackXor
+				|| RouteId == RouteCallstackDelta7
+				|| RouteId == RouteCallstackDeltaVarInt)
+			{
+				const uint32 CallstackId = Context.EventData.GetValue<uint32>("CallstackId");
+				const TArrayReader<uint8>& Compressed = Context.EventData.GetArray<uint8>("CompressedFrames");
+				TStaticArray<uint64, 255> Frames;
+				uint32 TotalFrameCount = 0;
+				uint32 FrameCount = 0;
+				const TConstArrayView<uint8> CompressedView(Compressed.GetData(), Compressed.Num());
+				if (RouteId == RouteCallstackXor)
+				{
+					FrameCount = FCallstackXORAndRLE::Uncompress(CompressedView, Frames, TotalFrameCount);
+				}
+				else if (RouteId == RouteCallstackDelta7)
+				{
+					FrameCount = FCallstackDelta7bit::Uncompress(CompressedView, Frames, TotalFrameCount);
+				}
+				else
+				{
+					FrameCount = FCallstackDeltaVarInt::Uncompress(CompressedView, Frames, TotalFrameCount);
+				}
+				Callstacks.Add(CallstackId, TArray<uint64>(Frames.GetData(), FrameCount));
+				return true;
+			}
+			if (RouteId == RouteModuleInit)
+			{
+				ModuleBaseShift = Context.EventData.GetValue<uint8>("ModuleBaseShift", 16);
+				return true;
+			}
+			if (RouteId == RouteModuleLoad)
+			{
+				FStringView Name;
+				if (Context.EventData.GetString("Name", Name))
+				{
+					FModuleRange& Module = Modules.AddDefaulted_GetRef();
+					Module.Name = FPaths::GetCleanFilename(FString(Name));
+					Module.Base = ModuleBaseShift == 0
+						? Context.EventData.GetValue<uint64>("Base")
+						: static_cast<uint64>(Context.EventData.GetValue<uint32>("Base")) << ModuleBaseShift;
+					Module.Size = Context.EventData.GetValue<uint32>("Size");
+				}
+				return true;
+			}
 			if (RouteId == RouteInit)
 			{
 				SizeShift = Context.EventData.GetValue<uint8>("SizeShift", 3);
@@ -348,6 +455,8 @@ namespace SightWeave::M2P1::AllocationTests
 				const uint64 Size = DecodeSize(Context.EventData);
 				++Active->ReallocationCalls;
 				Active->AllocatedBytes += Size;
+				Active->ReallocationSizes.Add(Size);
+				Active->ReallocationCallstackIds.Add(Context.EventData.GetValue<uint32>("CallstackId"));
 				TrackAllocation(*Active, Address, Size);
 				break;
 			}
@@ -373,7 +482,7 @@ namespace SightWeave::M2P1::AllocationTests
 
 		FString MakeCsv() const
 		{
-			FString Csv(TEXT("workload,sample,thread_id,allocation_calls,reallocation_calls,free_calls,allocated_bytes,peak_temporary_bytes,end_temporary_bytes,allocation_details\n"));
+			FString Csv(TEXT("workload,sample,thread_id,allocation_calls,reallocation_calls,free_calls,allocated_bytes,peak_temporary_bytes,end_temporary_bytes,allocation_details,reallocation_details,callstack_frames\n"));
 			for (const FAllocationSample& Sample : Samples)
 			{
 				FString AllocationDetails;
@@ -387,8 +496,36 @@ namespace SightWeave::M2P1::AllocationTests
 							? Sample.AllocationCallstackIds[Index]
 							: 0);
 				}
+				FString ReallocationDetails;
+				for (int32 Index = 0; Index < Sample.ReallocationSizes.Num(); ++Index)
+				{
+					if (Index > 0) ReallocationDetails += TEXT("|");
+					ReallocationDetails += FString::Printf(
+						TEXT("%llu@%u"),
+						Sample.ReallocationSizes[Index],
+						Sample.ReallocationCallstackIds.IsValidIndex(Index)
+							? Sample.ReallocationCallstackIds[Index]
+							: 0);
+				}
+				TSet<uint32> UniqueCallstackIds;
+				for (const uint32 CallstackId : Sample.AllocationCallstackIds)
+				{
+					UniqueCallstackIds.Add(CallstackId);
+				}
+				for (const uint32 CallstackId : Sample.ReallocationCallstackIds)
+				{
+					UniqueCallstackIds.Add(CallstackId);
+				}
+				TArray<uint32> SortedCallstackIds = UniqueCallstackIds.Array();
+				SortedCallstackIds.Sort();
+				FString CallstackFrames;
+				for (const uint32 CallstackId : SortedCallstackIds)
+				{
+					if (!CallstackFrames.IsEmpty()) CallstackFrames += TEXT("|");
+					CallstackFrames += FString::Printf(TEXT("%u@%s"), CallstackId, *DescribeCallstack(CallstackId));
+				}
 				Csv += FString::Printf(
-					TEXT("%s,%u,%u,%llu,%llu,%llu,%llu,%llu,%llu,%s\n"),
+					TEXT("%s,%u,%u,%llu,%llu,%llu,%llu,%llu,%llu,%s,%s,%s\n"),
 					WorkloadName(Sample.Workload),
 					Sample.Sample,
 					Sample.ThreadId,
@@ -398,7 +535,9 @@ namespace SightWeave::M2P1::AllocationTests
 					Sample.AllocatedBytes,
 					Sample.PeakTemporaryBytes,
 					Sample.CurrentTemporaryBytes,
-					*AllocationDetails);
+					*AllocationDetails,
+					*ReallocationDetails,
+					*CallstackFrames);
 			}
 			return Csv;
 		}
@@ -415,8 +554,41 @@ namespace SightWeave::M2P1::AllocationTests
 			RouteReallocAlloc,
 			RouteReallocAllocSystem,
 			RouteReallocFree,
-			RouteReallocFreeSystem
+			RouteReallocFreeSystem,
+			RouteCallstack,
+			RouteCallstackXor,
+			RouteCallstackDelta7,
+			RouteCallstackDeltaVarInt,
+			RouteModuleInit,
+			RouteModuleLoad
 		};
+
+		FString DescribeCallstack(const uint32 CallstackId) const
+		{
+			const TArray<uint64>* Frames = Callstacks.Find(CallstackId);
+			if (!Frames)
+			{
+				return TEXT("unresolved");
+			}
+			FString Result;
+			for (const uint64 Address : *Frames)
+			{
+				if (!Result.IsEmpty()) Result += TEXT(">");
+				const FModuleRange* Module = Modules.FindByPredicate([Address](const FModuleRange& Candidate)
+				{
+					return Address >= Candidate.Base && Address < Candidate.Base + Candidate.Size;
+				});
+				if (Module)
+				{
+					Result += FString::Printf(TEXT("%s+0x%llx"), *Module->Name, Address - Module->Base);
+				}
+				else
+				{
+					Result += FString::Printf(TEXT("0x%llx"), Address);
+				}
+			}
+			return Result;
+		}
 
 		uint64 DecodeSize(const FEventData& EventData) const
 		{
@@ -448,8 +620,11 @@ namespace SightWeave::M2P1::AllocationTests
 		}
 
 		uint8 SizeShift = 3;
+		uint8 ModuleBaseShift = 16;
 		TMap<uint32, FAllocationSample> ActiveScopes;
 		TArray<FAllocationSample> Samples;
+		TMap<uint32, TArray<uint64>> Callstacks;
+		TArray<FModuleRange> Modules;
 	};
 }
 
@@ -561,13 +736,19 @@ bool FSightWeaveM2P1AllocationCaptureTest::RunTest(const FString& Parameters)
 		});
 	}
 
+	for (int32 Warmup = 0; Warmup < 2; ++Warmup)
+	{
+		FSightWeaveVisionSourceDescription& Description = VisionDescriptions[0];
+		Description.Transform.SetLocation(FVector(Warmup % 2 == 0 ? 5.0 : 0.0, 0.0, 100.0));
+		Subsystem->UpdateVisionSourceTransform(VisionHandles[0], Description.Transform);
+	}
 	for (uint16 Sample = 0; Sample < 3; ++Sample)
 	{
 		FSightWeaveVisionSourceDescription& Description = VisionDescriptions[0];
 		Description.Transform.SetLocation(FVector(Sample % 2 == 0 ? 5.0 : 0.0, 0.0, 100.0));
 		EmitScope(EWorkload::SourceTransformUpdate, Sample, [&]
 		{
-			Subsystem->UpdateVisionSource(VisionHandles[0], Description);
+			Subsystem->UpdateVisionSourceTransform(VisionHandles[0], Description.Transform);
 		});
 	}
 
@@ -580,13 +761,173 @@ bool FSightWeaveM2P1AllocationCaptureTest::RunTest(const FString& Parameters)
 	{
 		EmitScope(EWorkload::NoChangeUpdate, Sample, [&]
 		{
+			Subsystem->UpdateVisionSourceTransform(VisionHandles[0], VisionDescriptions[0].Transform);
+		});
+	}
+
+	const auto SetYaw = [](FTransform& Transform, const double YawDegrees)
+	{
+		Transform.SetRotation(FQuat(FVector::UpVector, FMath::DegreesToRadians(YawDegrees)));
+	};
+	for (uint16 Sample = 0; Sample < 3; ++Sample)
+	{
+		SetYaw(VisionDescriptions[0].Transform, Sample % 2 == 0 ? 0.5 : 0.0);
+		EmitScope(EWorkload::RadialRotation, Sample, [&]
+		{
+			Subsystem->UpdateVisionSourceTransform(VisionHandles[0], VisionDescriptions[0].Transform);
+		});
+	}
+	for (int32 Warmup = 0; Warmup < 2; ++Warmup)
+	{
+		SetYaw(VisionDescriptions[1].Transform, Warmup % 2 == 0 ? 0.5 : 0.0);
+		Subsystem->UpdateVisionSourceTransform(VisionHandles[1], VisionDescriptions[1].Transform);
+	}
+	for (uint16 Sample = 0; Sample < 3; ++Sample)
+	{
+		SetYaw(VisionDescriptions[1].Transform, Sample % 2 == 0 ? 0.5 : 0.0);
+		EmitScope(EWorkload::ConeRotation, Sample, [&]
+		{
+			Subsystem->UpdateVisionSourceTransform(VisionHandles[1], VisionDescriptions[1].Transform);
+		});
+	}
+
+	const auto TraceTranslation = [&](const EWorkload Workload, const double Distance)
+	{
+		for (int32 Warmup = 0; Warmup < 2; ++Warmup)
+		{
+			VisionDescriptions[0].Transform.SetLocation(
+				FVector(Warmup % 2 == 0 ? Distance : 0.0, 0.0, 100.0));
+			Subsystem->UpdateVisionSourceTransform(VisionHandles[0], VisionDescriptions[0].Transform);
+		}
+		for (uint16 Sample = 0; Sample < 3; ++Sample)
+		{
+			VisionDescriptions[0].Transform.SetLocation(
+				FVector(Sample % 2 == 0 ? Distance : 0.0, 0.0, 100.0));
+			EmitScope(Workload, Sample, [&]
+			{
+				Subsystem->UpdateVisionSourceTransform(VisionHandles[0], VisionDescriptions[0].Transform);
+			});
+		}
+	};
+	TraceTranslation(EWorkload::Translation1Cm, 1.0);
+	TraceTranslation(EWorkload::Translation5Cm, 5.0);
+	TraceTranslation(EWorkload::Translation20Cm, 20.0);
+
+	for (uint16 Sample = 0; Sample < 3; ++Sample)
+	{
+		VisionDescriptions[0].Transform.SetLocation(
+			FVector(Sample % 2 == 0 ? -6000.0 : 6000.0, 5000.0, 100.0));
+		EmitScope(EWorkload::Teleport, Sample, [&]
+		{
+			Subsystem->UpdateVisionSourceTransform(VisionHandles[0], VisionDescriptions[0].Transform);
+		});
+	}
+	VisionDescriptions[0].Transform.SetLocation(FVector(0.0, 0.0, 100.0));
+	Subsystem->UpdateVisionSourceTransform(VisionHandles[0], VisionDescriptions[0].Transform);
+	for (int32 Warmup = 0; Warmup < 2; ++Warmup)
+	{
+		VisionDescriptions[0].Range = Warmup % 2 == 0 ? 900.0f : 1200.0f;
+		Subsystem->UpdateVisionSource(VisionHandles[0], VisionDescriptions[0]);
+	}
+	for (uint16 Sample = 0; Sample < 3; ++Sample)
+	{
+		VisionDescriptions[0].Range = Sample % 2 == 0 ? 900.0f : 1200.0f;
+		EmitScope(EWorkload::RangeChange, Sample, [&]
+		{
 			Subsystem->UpdateVisionSource(VisionHandles[0], VisionDescriptions[0]);
+		});
+	}
+	VisionDescriptions[0].Range = 1200.0f;
+	Subsystem->UpdateVisionSource(VisionHandles[0], VisionDescriptions[0]);
+
+	FSightWeaveIlluminationSourceDescription Torch = Illumination(
+		FVector(0.0, 0.0, 100.0),
+		ESightWeaveSourceShape::DirectionalCone,
+		FName(TEXT("Visible")),
+		1200.0f);
+	FSightWeaveIlluminationSourceDescription Lantern = Illumination(
+		FVector(0.0, 0.0, 100.0),
+		ESightWeaveSourceShape::Radial,
+		FName(TEXT("Infrared")),
+		650.0f);
+	const FSightWeaveIlluminationSourceHandle TorchHandle =
+		Subsystem->RegisterIlluminationSource(Torch, nullptr);
+	const FSightWeaveIlluminationSourceHandle LanternHandle =
+		Subsystem->RegisterIlluminationSource(Lantern, nullptr);
+	TestTrue(TEXT("Motion allocation illumination sources register"),
+		TorchHandle.IsValid() && LanternHandle.IsValid());
+	for (int32 Warmup = 0; Warmup < 2; ++Warmup)
+	{
+		const FVector Location(Warmup % 2 == 0 ? 5.0 : 0.0, 0.0, 100.0);
+		VisionDescriptions[0].Transform.SetLocation(Location);
+		VisionDescriptions[1].Transform.SetLocation(Location);
+		Torch.Transform.SetLocation(Location);
+		Lantern.Transform.SetLocation(Location);
+		Subsystem->UpdateVisionSourceTransform(VisionHandles[0], VisionDescriptions[0].Transform);
+		Subsystem->UpdateVisionSourceTransform(VisionHandles[1], VisionDescriptions[1].Transform);
+		Subsystem->UpdateIlluminationSourceTransform(TorchHandle, Torch.Transform);
+		Subsystem->UpdateIlluminationSourceTransform(LanternHandle, Lantern.Transform);
+	}
+	for (uint16 Sample = 0; Sample < 3; ++Sample)
+	{
+		const FVector Location(Sample % 2 == 0 ? 5.0 : 0.0, 0.0, 100.0);
+		VisionDescriptions[0].Transform.SetLocation(Location);
+		VisionDescriptions[1].Transform.SetLocation(Location);
+		Torch.Transform.SetLocation(Location);
+		Lantern.Transform.SetLocation(Location);
+		EmitScope(EWorkload::SharedOriginFourSources, Sample, [&]
+		{
+			Subsystem->UpdateVisionSourceTransform(VisionHandles[0], VisionDescriptions[0].Transform);
+			Subsystem->UpdateVisionSourceTransform(VisionHandles[1], VisionDescriptions[1].Transform);
+			Subsystem->UpdateIlluminationSourceTransform(TorchHandle, Torch.Transform);
+			Subsystem->UpdateIlluminationSourceTransform(LanternHandle, Lantern.Transform);
+		});
+	}
+
+	TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> HeldSnapshot =
+		Subsystem->AcquirePublishedSnapshotForTesting();
+	const FSightWeaveRevision HeldRevision = HeldSnapshot->Revision;
+	for (uint16 Sample = 0; Sample < 3; ++Sample)
+	{
+		VisionDescriptions[0].Transform.SetLocation(
+			FVector(Sample % 2 == 0 ? 10.0 : 0.0, 0.0, 100.0));
+		EmitScope(EWorkload::HeldSnapshotTransform, Sample, [&]
+		{
+			Subsystem->UpdateVisionSourceTransform(VisionHandles[0], VisionDescriptions[0].Transform);
+		});
+	}
+	TestEqual(TEXT("Held allocation snapshot remains immutable"), HeldSnapshot->Revision, HeldRevision);
+	HeldSnapshot.Reset();
+
+	for (int32 Warmup = 0; Warmup < 2; ++Warmup)
+	{
+		const double X = Warmup % 2 == 0 ? 250.0 : 850.0;
+		DoorSegments[0].A.X = X;
+		DoorSegments[0].B.X = X;
+		VisionDescriptions[0].Transform.SetLocation(
+			FVector(Warmup % 2 == 0 ? 5.0 : 0.0, 0.0, 100.0));
+		Subsystem->UpdateOccluder(DoorHandle, DoorSegments, true, true);
+		Subsystem->UpdateVisionSourceTransform(VisionHandles[0], VisionDescriptions[0].Transform);
+	}
+	for (uint16 Sample = 0; Sample < 3; ++Sample)
+	{
+		const double X = Sample % 2 == 0 ? 250.0 : 850.0;
+		DoorSegments[0].A.X = X;
+		DoorSegments[0].B.X = X;
+		VisionDescriptions[0].Transform.SetLocation(
+			FVector(Sample % 2 == 0 ? 5.0 : 0.0, 0.0, 100.0));
+		EmitScope(EWorkload::DynamicDoorPlusMotion, Sample, [&]
+		{
+			Subsystem->UpdateOccluder(DoorHandle, DoorSegments, true, true);
+			Subsystem->UpdateVisionSourceTransform(VisionHandles[0], VisionDescriptions[0].Transform);
 		});
 	}
 
 	TestTrue(TEXT("Capture work produced authoritative results"), PointResult.bAuthoritative && BatchResults.Num() == 512);
 	TestTrue(TEXT("Solver results were consumed"), ResultSink > 0);
-	AddInfo(TEXT("M2P1_ALLOCATION_CAPTURE scopes=30 samples_per_workload=3 method=UE_startup_memory_trace_current_thread_scope"));
+	AddInfo(FString::Printf(
+		TEXT("M2P2_ALLOCATION_CAPTURE scopes=%d samples_per_workload=3 method=UE_startup_memory_trace_current_thread_scope"),
+		static_cast<int32>(EWorkload::Count) * 3));
 	return true;
 }
 
@@ -626,13 +967,35 @@ bool FSightWeaveM2P1AllocationAnalyzeTest::RunTest(const FString& Parameters)
 	AnalysisContext.Process(DataStream).Wait();
 
 	const TArray<FAllocationSample>& Samples = Analyzer.GetSamples();
-	TestEqual(TEXT("All expected workload samples were analyzed"), Samples.Num(), 30);
+	TestEqual(
+		TEXT("All expected workload samples were analyzed"),
+		Samples.Num(),
+		static_cast<int32>(EWorkload::Count) * 3);
 	TArray<int32> Counts;
 	Counts.Init(0, static_cast<int32>(EWorkload::Count));
 	for (const FAllocationSample& Sample : Samples)
 	{
 		const int32 Index = static_cast<int32>(Sample.Workload);
 		if (Counts.IsValidIndex(Index)) ++Counts[Index];
+		const bool bStrictWarmZeroWorkload =
+			Sample.Workload == EWorkload::SourceTransformUpdate
+			|| Sample.Workload == EWorkload::RadialRotation
+			|| Sample.Workload == EWorkload::ConeRotation
+			|| Sample.Workload == EWorkload::Translation1Cm
+			|| Sample.Workload == EWorkload::Translation5Cm
+			|| Sample.Workload == EWorkload::Translation20Cm
+			|| Sample.Workload == EWorkload::Teleport
+			|| Sample.Workload == EWorkload::SharedOriginFourSources;
+		if (bStrictWarmZeroWorkload)
+		{
+			const FString Prefix = FString::Printf(
+				TEXT("%s sample %u"),
+				WorkloadName(Sample.Workload),
+				Sample.Sample);
+			TestEqual(*FString::Printf(TEXT("%s allocation calls"), *Prefix), Sample.AllocationCalls, uint64(0));
+			TestEqual(*FString::Printf(TEXT("%s reallocation calls"), *Prefix), Sample.ReallocationCalls, uint64(0));
+			TestEqual(*FString::Printf(TEXT("%s allocated bytes"), *Prefix), Sample.AllocatedBytes, uint64(0));
+		}
 	}
 	for (int32 Index = 0; Index < Counts.Num(); ++Index)
 	{

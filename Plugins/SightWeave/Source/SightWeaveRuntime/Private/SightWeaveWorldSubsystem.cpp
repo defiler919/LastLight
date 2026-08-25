@@ -3,6 +3,7 @@
 #include "Algo/Sort.h"
 #include "HAL/PlatformTime.h"
 #include "SightWeaveOptimizedSolveCache.h"
+#include "SightWeavePreparedEventIndex.h"
 #include "SightWeaveSettings.h"
 
 namespace
@@ -263,7 +264,12 @@ void USightWeaveWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	ResetState();
-	SpatialIndex.SetCellSize(GetDefault<USightWeaveSettings>()->SpatialCellSizeCentimeters);
+	const USightWeaveSettings* Settings = GetDefault<USightWeaveSettings>();
+	SpatialIndex.SetCellSize(Settings->SpatialCellSizeCentimeters);
+	PreparedEventIndex = MakeShared<FSightWeavePreparedEventIndex>();
+	PreparedEventIndex->Initialize(
+		Settings->MaximumPreparedOriginEntries,
+		Settings->MaximumPreparedOriginBytes);
 	bSightWeaveInitialized = true;
 	PublishSnapshot();
 }
@@ -446,12 +452,32 @@ bool USightWeaveWorldSubsystem::UpdateVisionSource(
 		return true;
 	}
 	VisionSources.FindChecked(Handle.GetValue()) = MoveTemp(NormalizedDescription);
-	CachedVisionSolveSegments.Remove(Handle.GetValue());
-	CachedVisionPreparedSolves.Remove(Handle.GetValue());
 	DirtyVisionSources.Add(Handle.GetValue());
 	PendingVisionSnapshotRebuilds.Add(Handle.GetValue());
 	AdvanceRevision();
 	VisionSourceRevisions.Add(Handle.GetValue(), Revision);
+	PublishSnapshot();
+	return true;
+}
+
+bool USightWeaveWorldSubsystem::UpdateVisionSourceTransform(
+	const FSightWeaveVisionSourceHandle Handle,
+	const FTransform& Transform)
+{
+	FSightWeaveVisionSourceDescription* Description = VisionSources.Find(Handle.GetValue());
+	if (!bSightWeaveInitialized || !Description || Transform.ContainsNaN())
+	{
+		return false;
+	}
+	if (Description->Transform.Equals(Transform, 0.0))
+	{
+		return true;
+	}
+	Description->Transform = Transform;
+	DirtyVisionSources.Add(Handle.GetValue());
+	PendingVisionSnapshotRebuilds.Add(Handle.GetValue());
+	AdvanceRevision();
+	VisionSourceRevisions.FindChecked(Handle.GetValue()) = Revision;
 	PublishSnapshot();
 	return true;
 }
@@ -469,6 +495,11 @@ bool USightWeaveWorldSubsystem::UnregisterVisionSource(const FSightWeaveVisionSo
 	VisionSourceRevisions.Remove(Handle.GetValue());
 	CachedVisionSnapshotEntries.Remove(Handle.GetValue());
 	CachedVisionSolveSegments.Remove(Handle.GetValue());
+	CachedVisionCandidateQueryKeys.Remove(Handle.GetValue());
+	if (PreparedEventIndex.IsValid())
+	{
+		PreparedEventIndex->Release(CachedVisionPreparedSolves.FindRef(Handle.GetValue()));
+	}
 	CachedVisionPreparedSolves.Remove(Handle.GetValue());
 	AdvanceRevision();
 	PublishSnapshot();
@@ -526,12 +557,32 @@ bool USightWeaveWorldSubsystem::UpdateIlluminationSource(
 		return true;
 	}
 	IlluminationSources.FindChecked(Handle.GetValue()) = MoveTemp(NormalizedDescription);
-	CachedIlluminationSolveSegments.Remove(Handle.GetValue());
-	CachedIlluminationPreparedSolves.Remove(Handle.GetValue());
 	DirtyIlluminationSources.Add(Handle.GetValue());
 	PendingIlluminationSnapshotRebuilds.Add(Handle.GetValue());
 	AdvanceRevision();
 	IlluminationSourceRevisions.Add(Handle.GetValue(), Revision);
+	PublishSnapshot();
+	return true;
+}
+
+bool USightWeaveWorldSubsystem::UpdateIlluminationSourceTransform(
+	const FSightWeaveIlluminationSourceHandle Handle,
+	const FTransform& Transform)
+{
+	FSightWeaveIlluminationSourceDescription* Description = IlluminationSources.Find(Handle.GetValue());
+	if (!bSightWeaveInitialized || !Description || Transform.ContainsNaN())
+	{
+		return false;
+	}
+	if (Description->Transform.Equals(Transform, 0.0))
+	{
+		return true;
+	}
+	Description->Transform = Transform;
+	DirtyIlluminationSources.Add(Handle.GetValue());
+	PendingIlluminationSnapshotRebuilds.Add(Handle.GetValue());
+	AdvanceRevision();
+	IlluminationSourceRevisions.FindChecked(Handle.GetValue()) = Revision;
 	PublishSnapshot();
 	return true;
 }
@@ -549,6 +600,11 @@ bool USightWeaveWorldSubsystem::UnregisterIlluminationSource(const FSightWeaveIl
 	IlluminationSourceRevisions.Remove(Handle.GetValue());
 	CachedIlluminationSnapshotEntries.Remove(Handle.GetValue());
 	CachedIlluminationSolveSegments.Remove(Handle.GetValue());
+	CachedIlluminationCandidateQueryKeys.Remove(Handle.GetValue());
+	if (PreparedEventIndex.IsValid())
+	{
+		PreparedEventIndex->Release(CachedIlluminationPreparedSolves.FindRef(Handle.GetValue()));
+	}
 	CachedIlluminationPreparedSolves.Remove(Handle.GetValue());
 	AdvanceRevision();
 	PublishSnapshot();
@@ -607,8 +663,14 @@ FSightWeaveOccluderHandle USightWeaveWorldSubsystem::RegisterOccluder(
 	MarkSourcesAffectedByOccluderChange(FSightWeaveFloorId(), FBox2D(ForceInit), FloorId, Stored.Bounds);
 	CachedVisionSolveSegments.Reset();
 	CachedIlluminationSolveSegments.Reset();
+	CachedVisionCandidateQueryKeys.Reset();
+	CachedIlluminationCandidateQueryKeys.Reset();
 	CachedVisionPreparedSolves.Reset();
 	CachedIlluminationPreparedSolves.Reset();
+	if (PreparedEventIndex.IsValid())
+	{
+		PreparedEventIndex->InvalidateAll();
+	}
 	PublishSnapshot();
 	return Handle;
 }
@@ -834,8 +896,14 @@ bool USightWeaveWorldSubsystem::UnregisterOccluder(const FSightWeaveOccluderHand
 	MarkSourcesAffectedByOccluderChange(OldFloor, OldBounds, FSightWeaveFloorId(), FBox2D(ForceInit));
 	CachedVisionSolveSegments.Reset();
 	CachedIlluminationSolveSegments.Reset();
+	CachedVisionCandidateQueryKeys.Reset();
+	CachedIlluminationCandidateQueryKeys.Reset();
 	CachedVisionPreparedSolves.Reset();
 	CachedIlluminationPreparedSolves.Reset();
+	if (PreparedEventIndex.IsValid())
+	{
+		PreparedEventIndex->InvalidateAll();
+	}
 	PublishSnapshot();
 	return true;
 }
@@ -1744,6 +1812,29 @@ FSightWeaveFrameSnapshot USightWeaveWorldSubsystem::GetPublishedSnapshot() const
 	return Snapshot.IsValid() ? *Snapshot : FSightWeaveFrameSnapshot();
 }
 
+FSightWeavePreparedEventIndexStats USightWeaveWorldSubsystem::GetPreparedEventIndexStats() const
+{
+	return PreparedEventIndex.IsValid()
+		? PreparedEventIndex->GetStats()
+		: FSightWeavePreparedEventIndexStats();
+}
+
+#if WITH_DEV_AUTOMATION_TESTS
+bool USightWeaveWorldSubsystem::ConfigurePreparedEventIndexForTesting(
+	const int32 MaximumEntries,
+	const int64 MaximumBytes)
+{
+	if (!PreparedEventIndex.IsValid()
+		|| !VisionSources.IsEmpty()
+		|| !IlluminationSources.IsEmpty())
+	{
+		return false;
+	}
+	PreparedEventIndex->Initialize(MaximumEntries, MaximumBytes);
+	return true;
+}
+#endif
+
 void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 {
 	const FSightWeaveVisionSourceDescription* Description = VisionSources.Find(SourceId);
@@ -1809,33 +1900,60 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		if (!CachedSegments)
 		{
 			CachedSegments = &CachedVisionSolveSegments.Add(SourceId);
+		}
+		FSourceCandidateQueryKey* CachedQueryKey = CachedVisionCandidateQueryKeys.Find(SourceId);
+		if (!CachedQueryKey
+			|| !CachedQueryKey->Matches(Description->FloorId, Description->HeightRange, QueryBounds))
+		{
 			QueryOccluderSegments(
 				Description->FloorId,
 				QueryBounds,
 				Description->HeightRange,
 				*CachedSegments);
+			FSourceCandidateQueryKey& NewQueryKey = CachedVisionCandidateQueryKeys.FindOrAdd(SourceId);
+			NewQueryKey.FloorId = Description->FloorId;
+			NewQueryKey.HeightRange = Description->HeightRange;
+			NewQueryKey.Bounds = QueryBounds;
 		}
 		Input.Segments = MoveTemp(*CachedSegments);
 
 		const double StartSeconds = FPlatformTime::Seconds();
 		TSharedPtr<FSightWeaveOptimizedSolveCache>& PreparedCache =
 			CachedVisionPreparedSolves.FindOrAdd(SourceId);
-		if (!PreparedCache.IsValid())
-		{
-			PreparedCache = MakeShared<FSightWeaveOptimizedSolveCache>();
-		}
 #if UE_BUILD_SHIPPING
-		SightWeave::Geometry::SolveOptimizedPolygonIntoCached(Input, SolveResult, *PreparedCache);
+		const bool bUsePreparedIndex = true;
 #else
-		if (Settings->SolverMode == ESightWeaveSolverMode::Optimized)
+		const bool bUsePreparedIndex = Settings->SolverMode == ESightWeaveSolverMode::Optimized;
+#endif
+		if (bUsePreparedIndex && PreparedEventIndex.IsValid())
 		{
-			SightWeave::Geometry::SolveOptimizedPolygonIntoCached(Input, SolveResult, *PreparedCache);
+			const FSightWeavePreparedEventIndex::FAcquireResult Acquisition =
+				PreparedEventIndex->Acquire(Input, PreparedCache, Revision.GetValue());
+			PreparedCache = Acquisition.Cache;
+			if (PreparedCache.IsValid())
+			{
+				SightWeave::Geometry::SolveOptimizedPolygonIntoValidatedCache(Input, SolveResult, *PreparedCache);
+				if (!PreparedEventIndex->Commit(PreparedCache))
+				{
+					PreparedCache.Reset();
+				}
+			}
+			else
+			{
+				SightWeave::Geometry::SolveOptimizedPolygonInto(Input, SolveResult);
+			}
 		}
 		else
 		{
+			if (PreparedEventIndex.IsValid())
+			{
+				PreparedEventIndex->Release(PreparedCache);
+			}
+			PreparedCache.Reset();
+#if !UE_BUILD_SHIPPING
 			SightWeave::Geometry::SolvePolygonInto(Input, Settings->SolverMode, SolveResult);
-		}
 #endif
+		}
 		*CachedSegments = MoveTemp(Input.Segments);
 		Entry.SolveTimeMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
@@ -1914,33 +2032,60 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		if (!CachedSegments)
 		{
 			CachedSegments = &CachedIlluminationSolveSegments.Add(SourceId);
+		}
+		FSourceCandidateQueryKey* CachedQueryKey = CachedIlluminationCandidateQueryKeys.Find(SourceId);
+		if (!CachedQueryKey
+			|| !CachedQueryKey->Matches(Description->FloorId, Description->HeightRange, QueryBounds))
+		{
 			QueryOccluderSegments(
 				Description->FloorId,
 				QueryBounds,
 				Description->HeightRange,
 				*CachedSegments);
+			FSourceCandidateQueryKey& NewQueryKey = CachedIlluminationCandidateQueryKeys.FindOrAdd(SourceId);
+			NewQueryKey.FloorId = Description->FloorId;
+			NewQueryKey.HeightRange = Description->HeightRange;
+			NewQueryKey.Bounds = QueryBounds;
 		}
 		Input.Segments = MoveTemp(*CachedSegments);
 
 		const double StartSeconds = FPlatformTime::Seconds();
 		TSharedPtr<FSightWeaveOptimizedSolveCache>& PreparedCache =
 			CachedIlluminationPreparedSolves.FindOrAdd(SourceId);
-		if (!PreparedCache.IsValid())
-		{
-			PreparedCache = MakeShared<FSightWeaveOptimizedSolveCache>();
-		}
 #if UE_BUILD_SHIPPING
-		SightWeave::Geometry::SolveOptimizedPolygonIntoCached(Input, SolveResult, *PreparedCache);
+		const bool bUsePreparedIndex = true;
 #else
-		if (Settings->SolverMode == ESightWeaveSolverMode::Optimized)
+		const bool bUsePreparedIndex = Settings->SolverMode == ESightWeaveSolverMode::Optimized;
+#endif
+		if (bUsePreparedIndex && PreparedEventIndex.IsValid())
 		{
-			SightWeave::Geometry::SolveOptimizedPolygonIntoCached(Input, SolveResult, *PreparedCache);
+			const FSightWeavePreparedEventIndex::FAcquireResult Acquisition =
+				PreparedEventIndex->Acquire(Input, PreparedCache, Revision.GetValue());
+			PreparedCache = Acquisition.Cache;
+			if (PreparedCache.IsValid())
+			{
+				SightWeave::Geometry::SolveOptimizedPolygonIntoValidatedCache(Input, SolveResult, *PreparedCache);
+				if (!PreparedEventIndex->Commit(PreparedCache))
+				{
+					PreparedCache.Reset();
+				}
+			}
+			else
+			{
+				SightWeave::Geometry::SolveOptimizedPolygonInto(Input, SolveResult);
+			}
 		}
 		else
 		{
+			if (PreparedEventIndex.IsValid())
+			{
+				PreparedEventIndex->Release(PreparedCache);
+			}
+			PreparedCache.Reset();
+#if !UE_BUILD_SHIPPING
 			SightWeave::Geometry::SolvePolygonInto(Input, Settings->SolverMode, SolveResult);
-		}
 #endif
+		}
 		*CachedSegments = MoveTemp(Input.Segments);
 		Entry.SolveTimeMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Entry.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
@@ -2153,8 +2298,15 @@ void USightWeaveWorldSubsystem::ResetState()
 	CachedIlluminationSnapshotEntries.Reset();
 	CachedVisionSolveSegments.Reset();
 	CachedIlluminationSolveSegments.Reset();
+	CachedVisionCandidateQueryKeys.Reset();
+	CachedIlluminationCandidateQueryKeys.Reset();
 	CachedVisionPreparedSolves.Reset();
 	CachedIlluminationPreparedSolves.Reset();
+	if (PreparedEventIndex.IsValid())
+	{
+		PreparedEventIndex->Reset();
+		PreparedEventIndex.Reset();
+	}
 	DynamicPreparedSegmentsScratch.Reset();
 	PublishedSnapshot.Reset();
 	StandbySnapshot.Reset();

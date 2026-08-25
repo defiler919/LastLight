@@ -240,6 +240,13 @@ namespace SightWeave::M2P2::MotionTests
 		int64 Vertices = 0;
 		int64 CacheHits = 0;
 		int64 CacheMisses = 0;
+		int64 PreparedHits = 0;
+		int64 PreparedMisses = 0;
+		int64 PreparedFullRebuilds = 0;
+		int64 PreparedEvictions = 0;
+		int64 PreparedCapacityFallbacks = 0;
+		int64 PreparedLiveBytes = 0;
+		int64 PreparedHighWaterBytes = 0;
 		uint64 MaximumSnapshotBytes = 0;
 		bool bSucceeded = true;
 	};
@@ -251,6 +258,21 @@ namespace SightWeave::M2P2::MotionTests
 		const FSightWeaveVisionSnapshotEntry* Entry = Snapshot.VisionSources.FindByPredicate(
 			[Handle](const FSightWeaveVisionSnapshotEntry& Candidate) { return Candidate.Handle == Handle; });
 		return Entry ? Entry->SolveTimeMicroseconds : 0.0;
+	}
+
+	void AccumulatePreparedIndexDelta(
+		FMotionSamples& Samples,
+		const FSightWeavePreparedEventIndexStats& Before,
+		const FSightWeavePreparedEventIndexStats& After)
+	{
+		Samples.PreparedHits += After.HitCount - Before.HitCount;
+		Samples.PreparedMisses += After.MissCount - Before.MissCount;
+		Samples.PreparedFullRebuilds += After.FullRebuildCount - Before.FullRebuildCount;
+		Samples.PreparedEvictions += After.EvictionCount - Before.EvictionCount;
+		Samples.PreparedCapacityFallbacks +=
+			After.CapacityFallbackCount - Before.CapacityFallbackCount;
+		Samples.PreparedLiveBytes = After.LiveAllocatedBytes;
+		Samples.PreparedHighWaterBytes = After.HighWaterAllocatedBytes;
 	}
 
 	double SnapshotSolveMicroseconds(const FSightWeaveFrameSnapshot& Snapshot)
@@ -378,7 +400,7 @@ namespace SightWeave::M2P2::MotionTests
 		const FDistribution Solve = Distribution(Samples.SolveMicroseconds);
 		const FDistribution Publication = Distribution(Samples.PublicationEstimateMicroseconds);
 		Test.AddInfo(FString::Printf(
-			TEXT("M2P2_MOTION name=%s strategy=%s repeats=%d total_us=%.3f/%.3f/%.3f/%.3f source_cpu_us=%.3f/%.3f/%.3f/%.3f main_thread_us=%.3f/%.3f/%.3f/%.3f publication_estimate_us=%.3f/%.3f/%.3f/%.3f revision_changes=%lld vision_rebuilds=%lld illumination_rebuilds=%lld cache_hits=%lld cache_misses=%lld reused_events=%lld rebuilt_events=%lld candidates_accumulated=%lld vertices_accumulated=%lld snapshot_bytes_max=%llu allocation_scope=separate_startup_trace"),
+			TEXT("M2P2_MOTION name=%s strategy=%s repeats=%d total_us=%.3f/%.3f/%.3f/%.3f source_cpu_us=%.3f/%.3f/%.3f/%.3f main_thread_us=%.3f/%.3f/%.3f/%.3f publication_estimate_us=%.3f/%.3f/%.3f/%.3f revision_changes=%lld vision_rebuilds=%lld illumination_rebuilds=%lld cache_hits=%lld cache_misses=%lld prepared_hits=%lld prepared_misses=%lld prepared_full_rebuilds=%lld prepared_evictions=%lld prepared_capacity_fallbacks=%lld prepared_live_bytes=%lld prepared_high_water_bytes=%lld reused_events=%lld rebuilt_events=%lld candidates_accumulated=%lld vertices_accumulated=%lld snapshot_bytes_max=%llu allocation_scope=separate_startup_trace"),
 			Name,
 			Strategy,
 			Repeats,
@@ -391,6 +413,13 @@ namespace SightWeave::M2P2::MotionTests
 			Samples.IlluminationRebuilds,
 			Samples.CacheHits,
 			Samples.CacheMisses,
+			Samples.PreparedHits,
+			Samples.PreparedMisses,
+			Samples.PreparedFullRebuilds,
+			Samples.PreparedEvictions,
+			Samples.PreparedCapacityFallbacks,
+			Samples.PreparedLiveBytes,
+			Samples.PreparedHighWaterBytes,
 			Samples.ReusedEvents,
 			Samples.Events,
 			Samples.CandidateSegments,
@@ -405,14 +434,24 @@ namespace SightWeave::M2P2::MotionTests
 		FSightWeaveVisionSourceDescription& Description,
 		const int32 Warmups,
 		const int32 Repeats,
+		const bool bTransformOnly,
 		MutatorType&& Mutator)
 	{
 		for (int32 Index = 0; Index < Warmups; ++Index)
 		{
 			Mutator(Index, Description);
-			Subsystem->UpdateVisionSource(Handle, Description);
+			if (bTransformOnly)
+			{
+				Subsystem->UpdateVisionSourceTransform(Handle, Description.Transform);
+			}
+			else
+			{
+				Subsystem->UpdateVisionSource(Handle, Description);
+			}
 		}
 		FMotionSamples Samples;
+		const FSightWeavePreparedEventIndexStats PreparedBefore =
+			Subsystem->GetPreparedEventIndexStats();
 		Samples.TotalMicroseconds.Reserve(Repeats);
 		Samples.SolveMicroseconds.Reserve(Repeats);
 		Samples.PublicationEstimateMicroseconds.Reserve(Repeats);
@@ -421,7 +460,9 @@ namespace SightWeave::M2P2::MotionTests
 			Mutator(Index, Description);
 			const FSightWeaveRevision Before = Subsystem->GetRevision();
 			const double StartSeconds = FPlatformTime::Seconds();
-			Samples.bSucceeded &= Subsystem->UpdateVisionSource(Handle, Description);
+			Samples.bSucceeded &= bTransformOnly
+				? Subsystem->UpdateVisionSourceTransform(Handle, Description.Transform)
+				: Subsystem->UpdateVisionSource(Handle, Description);
 			const double TotalMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 			Samples.TotalMicroseconds.Add(TotalMicroseconds);
 			const bool bPublished = Subsystem->GetRevision() != Before;
@@ -435,6 +476,10 @@ namespace SightWeave::M2P2::MotionTests
 				bPublished,
 				Handle);
 		}
+		AccumulatePreparedIndexDelta(
+			Samples,
+			PreparedBefore,
+			Subsystem->GetPreparedEventIndexStats());
 		return Samples;
 	}
 
@@ -445,21 +490,33 @@ namespace SightWeave::M2P2::MotionTests
 		FSightWeaveIlluminationSourceDescription& Description,
 		const int32 Warmups,
 		const int32 Repeats,
+		const bool bTransformOnly,
 		MutatorType&& Mutator)
 	{
 		for (int32 Index = 0; Index < Warmups; ++Index)
 		{
 			Mutator(Index, Description);
-			Subsystem->UpdateIlluminationSource(Handle, Description);
+			if (bTransformOnly)
+			{
+				Subsystem->UpdateIlluminationSourceTransform(Handle, Description.Transform);
+			}
+			else
+			{
+				Subsystem->UpdateIlluminationSource(Handle, Description);
+			}
 		}
 		FMotionSamples Samples;
+		const FSightWeavePreparedEventIndexStats PreparedBefore =
+			Subsystem->GetPreparedEventIndexStats();
 		Samples.TotalMicroseconds.Reserve(Repeats);
 		for (int32 Index = 0; Index < Repeats; ++Index)
 		{
 			Mutator(Index, Description);
 			const FSightWeaveRevision Before = Subsystem->GetRevision();
 			const double StartSeconds = FPlatformTime::Seconds();
-			Samples.bSucceeded &= Subsystem->UpdateIlluminationSource(Handle, Description);
+			Samples.bSucceeded &= bTransformOnly
+				? Subsystem->UpdateIlluminationSourceTransform(Handle, Description.Transform)
+				: Subsystem->UpdateIlluminationSource(Handle, Description);
 			const double TotalMicroseconds = (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 			Samples.TotalMicroseconds.Add(TotalMicroseconds);
 			const bool bPublished = Subsystem->GetRevision() != Before;
@@ -480,6 +537,10 @@ namespace SightWeave::M2P2::MotionTests
 				FSightWeaveVisionSourceHandle(),
 				Handle);
 		}
+		AccumulatePreparedIndexDelta(
+			Samples,
+			PreparedBefore,
+			Subsystem->GetPreparedEventIndexStats());
 		return Samples;
 	}
 
@@ -551,7 +612,17 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 		FSightWeaveVisionSourceDescription& Description, auto&& Mutator)
 	{
 		const FMotionSamples Samples = TimeVisionMotion(
-			Subsystem, Handle, Description, Warmups, Repeats, Forward<decltype(Mutator)>(Mutator));
+			Subsystem, Handle, Description, Warmups, Repeats, false, Forward<decltype(Mutator)>(Mutator));
+		TestTrue(*FString::Printf(TEXT("%s updates succeed"), Name), Samples.bSucceeded);
+		LogMotion(*this, Name, Samples, Repeats, Strategy);
+		return Samples;
+	};
+	auto RunVisionTransform = [&](const TCHAR* Name, const TCHAR* Strategy,
+		const FSightWeaveVisionSourceHandle Handle,
+		FSightWeaveVisionSourceDescription& Description, auto&& Mutator)
+	{
+		const FMotionSamples Samples = TimeVisionMotion(
+			Subsystem, Handle, Description, Warmups, Repeats, true, Forward<decltype(Mutator)>(Mutator));
 		TestTrue(*FString::Printf(TEXT("%s updates succeed"), Name), Samples.bSucceeded);
 		LogMotion(*this, Name, Samples, Repeats, Strategy);
 		return Samples;
@@ -561,20 +632,30 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 		FSightWeaveIlluminationSourceDescription& Description, auto&& Mutator)
 	{
 		const FMotionSamples Samples = TimeIlluminationMotion(
-			Subsystem, Handle, Description, Warmups, Repeats, Forward<decltype(Mutator)>(Mutator));
+			Subsystem, Handle, Description, Warmups, Repeats, false, Forward<decltype(Mutator)>(Mutator));
+		TestTrue(*FString::Printf(TEXT("%s updates succeed"), Name), Samples.bSucceeded);
+		LogMotion(*this, Name, Samples, Repeats, Strategy);
+		return Samples;
+	};
+	auto RunLightTransform = [&](const TCHAR* Name, const TCHAR* Strategy,
+		const FSightWeaveIlluminationSourceHandle Handle,
+		FSightWeaveIlluminationSourceDescription& Description, auto&& Mutator)
+	{
+		const FMotionSamples Samples = TimeIlluminationMotion(
+			Subsystem, Handle, Description, Warmups, Repeats, true, Forward<decltype(Mutator)>(Mutator));
 		TestTrue(*FString::Printf(TEXT("%s updates succeed"), Name), Samples.bSucceeded);
 		LogMotion(*this, Name, Samples, Repeats, Strategy);
 		return Samples;
 	};
 
 	const FSightWeaveRevision NoChangeRevision = Subsystem->GetRevision();
-	const FMotionSamples NoChange = RunVision(
+	const FMotionSamples NoChange = RunVisionTransform(
 		TEXT("no_change"), TEXT("cache_hit_no_publish"), BodyHandle, Body,
 		[](int32, FSightWeaveVisionSourceDescription&) {});
 	TestEqual(TEXT("No-change trace preserves revision"), Subsystem->GetRevision(), NoChangeRevision);
 	TestEqual(TEXT("No-change trace reports no revision changes"), NoChange.RevisionChanges, int64(0));
 
-	const FMotionSamples RadialRotation = RunVision(
+	const FMotionSamples RadialRotation = RunVisionTransform(
 		TEXT("radial_rotation_small"), TEXT("rotation_only_radial"), BodyHandle, Body,
 		[](const int32 Index, FSightWeaveVisionSourceDescription& Description)
 		{
@@ -583,32 +664,32 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Radial orientation changes remain public revisions"),
 		RadialRotation.RevisionChanges, int64(Repeats));
 
-	RunVision(TEXT("cone_rotation_small"), TEXT("rotation_only_cone"), PlayerHandle, PlayerCone,
+	RunVisionTransform(TEXT("cone_rotation_small"), TEXT("rotation_only_cone"), PlayerHandle, PlayerCone,
 		[](const int32 Index, FSightWeaveVisionSourceDescription& Description)
 		{
 			SetYaw(Description.Transform, Index % 2 == 0 ? 0.5 : 0.0);
 		});
-	RunVision(TEXT("cone_rotation_large"), TEXT("rotation_only_cone_full_recut"), PlayerHandle, PlayerCone,
+	RunVisionTransform(TEXT("cone_rotation_large"), TEXT("rotation_only_cone_full_recut"), PlayerHandle, PlayerCone,
 		[](const int32 Index, FSightWeaveVisionSourceDescription& Description)
 		{
 			SetYaw(Description.Transform, Index % 2 == 0 ? 135.0 : -135.0);
 		});
-	RunVision(TEXT("cone_rotation_wrap_180_360"), TEXT("rotation_wrap"), PlayerHandle, PlayerCone,
+	RunVisionTransform(TEXT("cone_rotation_wrap_180_360"), TEXT("rotation_wrap"), PlayerHandle, PlayerCone,
 		[](const int32 Index, FSightWeaveVisionSourceDescription& Description)
 		{
 			SetYaw(Description.Transform, Index % 2 == 0 ? 179.75 : -179.75);
 		});
-	RunVision(TEXT("camera_cone_rotation"), TEXT("rotation_only_camera"), CameraHandle, Camera,
+	RunVisionTransform(TEXT("camera_cone_rotation"), TEXT("rotation_only_camera"), CameraHandle, Camera,
 		[](const int32 Index, FSightWeaveVisionSourceDescription& Description)
 		{
 			SetYaw(Description.Transform, Index % 2 == 0 ? 1.0 : 0.0);
 		});
-	RunLight(TEXT("torch_direction"), TEXT("rotation_only_light"), TorchHandle, Torch,
+	RunLightTransform(TEXT("torch_direction"), TEXT("rotation_only_light"), TorchHandle, Torch,
 		[](const int32 Index, FSightWeaveIlluminationSourceDescription& Description)
 		{
 			SetYaw(Description.Transform, Index % 2 == 0 ? 2.0 : 0.0);
 		});
-	RunLight(TEXT("lantern_rotation"), TEXT("rotation_only_radial_light"), LanternHandle, Lantern,
+	RunLightTransform(TEXT("lantern_rotation"), TEXT("rotation_only_radial_light"), LanternHandle, Lantern,
 		[](const int32 Index, FSightWeaveIlluminationSourceDescription& Description)
 		{
 			SetYaw(Description.Transform, Index % 2 == 0 ? 2.0 : 0.0);
@@ -622,32 +703,32 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 			Description.Transform.SetLocation(FVector(StepX * Sign, StepY * Sign, 100.0));
 		};
 	};
-	RunVision(TEXT("translate_1cm"), TEXT("small_translation"), PlayerHandle, PlayerCone, Translation(1.0, 0.0));
-	RunVision(TEXT("translate_5cm"), TEXT("small_translation"), PlayerHandle, PlayerCone, Translation(5.0, 0.0));
-	RunVision(TEXT("translate_20cm"), TEXT("small_translation"), PlayerHandle, PlayerCone, Translation(20.0, 0.0));
-	RunVision(TEXT("translate_diagonal"), TEXT("small_translation"), PlayerHandle, PlayerCone, Translation(5.0, 5.0));
-	RunVision(TEXT("translate_along_wall"), TEXT("small_translation"), PlayerHandle, PlayerCone,
+	RunVisionTransform(TEXT("translate_1cm"), TEXT("small_translation"), PlayerHandle, PlayerCone, Translation(1.0, 0.0));
+	RunVisionTransform(TEXT("translate_5cm"), TEXT("small_translation"), PlayerHandle, PlayerCone, Translation(5.0, 0.0));
+	RunVisionTransform(TEXT("translate_20cm"), TEXT("small_translation"), PlayerHandle, PlayerCone, Translation(20.0, 0.0));
+	RunVisionTransform(TEXT("translate_diagonal"), TEXT("small_translation"), PlayerHandle, PlayerCone, Translation(5.0, 5.0));
+	RunVisionTransform(TEXT("translate_along_wall"), TEXT("small_translation"), PlayerHandle, PlayerCone,
 		[](const int32 Index, FSightWeaveVisionSourceDescription& Description)
 		{
 			Description.Transform.SetLocation(FVector(-50.0, Index % 2 == 0 ? 5.0 : 0.0, 100.0));
 		});
-	RunVision(TEXT("translate_endpoint_order_crossing"), TEXT("small_translation_order_guard"),
+	RunVisionTransform(TEXT("translate_endpoint_order_crossing"), TEXT("small_translation_order_guard"),
 		PlayerHandle, PlayerCone,
 		[](const int32 Index, FSightWeaveVisionSourceDescription& Description)
 		{
 			Description.Transform.SetLocation(FVector(Index % 2 == 0 ? 599.95 : 600.05, 0.0, 100.0));
 		});
-	RunVision(TEXT("translate_room_transition"), TEXT("translation_candidate_change"), PlayerHandle, PlayerCone,
+	RunVisionTransform(TEXT("translate_room_transition"), TEXT("translation_candidate_change"), PlayerHandle, PlayerCone,
 		[](const int32 Index, FSightWeaveVisionSourceDescription& Description)
 		{
 			Description.Transform.SetLocation(FVector(Index % 2 == 0 ? -100.0 : 1500.0, 0.0, 100.0));
 		});
-	RunVision(TEXT("teleport"), TEXT("teleport_full_rebuild"), PlayerHandle, PlayerCone,
+	RunVisionTransform(TEXT("teleport"), TEXT("teleport_full_rebuild"), PlayerHandle, PlayerCone,
 		[](const int32 Index, FSightWeaveVisionSourceDescription& Description)
 		{
 			Description.Transform.SetLocation(FVector(Index % 2 == 0 ? -6000.0 : 6000.0, 5000.0, 100.0));
 		});
-	RunVision(TEXT("camera_switch"), TEXT("teleport_camera"), CameraHandle, Camera,
+	RunVisionTransform(TEXT("camera_switch"), TEXT("teleport_camera"), CameraHandle, Camera,
 		[](const int32 Index, FSightWeaveVisionSourceDescription& Description)
 		{
 			Description.Transform.SetLocation(FVector(Index % 2 == 0 ? -2500.0 : 2500.0, 0.0, 100.0));
@@ -690,6 +771,8 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 		DoorSegments[0].B.X = X;
 		Subsystem->UpdateOccluder(Door, DoorSegments, true, true);
 	}
+	const FSightWeavePreparedEventIndexStats DoorPreparedBefore =
+		Subsystem->GetPreparedEventIndexStats();
 	for (int32 Index = 0; Index < Repeats; ++Index)
 	{
 		const double X = Index % 2 == 0 ? 250.0 : 850.0;
@@ -710,11 +793,17 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 			TotalMicroseconds,
 			bPublished);
 	}
+	AccumulatePreparedIndexDelta(
+		DoorSamples,
+		DoorPreparedBefore,
+		Subsystem->GetPreparedEventIndexStats());
 	TestTrue(TEXT("Dynamic door trace succeeds"), DoorSamples.bSucceeded);
 	LogMotion(*this, TEXT("dynamic_door_toggle"), DoorSamples, Repeats,
 		TEXT("dynamic_overlay_invalidate_snapshot_upper_bound"));
 
 	FMotionSamples DoorAndMove;
+	const FSightWeavePreparedEventIndexStats DoorAndMovePreparedBefore =
+		Subsystem->GetPreparedEventIndexStats();
 	for (int32 Index = 0; Index < Repeats; ++Index)
 	{
 		const double X = Index % 2 == 0 ? 250.0 : 850.0;
@@ -732,7 +821,7 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 		AccumulateSnapshotCounters(DoorAndMove, DoorSnapshot, bDoorPublished);
 
 		const double VisionStartSeconds = FPlatformTime::Seconds();
-		DoorAndMove.bSucceeded &= Subsystem->UpdateVisionSource(PlayerHandle, PlayerCone);
+		DoorAndMove.bSucceeded &= Subsystem->UpdateVisionSourceTransform(PlayerHandle, PlayerCone.Transform);
 		const double VisionMicroseconds = (FPlatformTime::Seconds() - VisionStartSeconds) * 1000000.0;
 		const FSightWeaveFrameSnapshot VisionSnapshot = Subsystem->GetPublishedSnapshot();
 		const bool bVisionPublished = Subsystem->GetRevision() != BeforeVision;
@@ -748,6 +837,10 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 		DoorAndMove.PublicationEstimateMicroseconds.Add(FMath::Max(0.0, TotalMicroseconds - SolveMicroseconds));
 		DoorAndMove.RevisionChanges += Subsystem->GetRevision().GetValue() - Before.GetValue();
 	}
+	AccumulatePreparedIndexDelta(
+		DoorAndMove,
+		DoorAndMovePreparedBefore,
+		Subsystem->GetPreparedEventIndexStats());
 	TestTrue(TEXT("Door plus movement trace succeeds"), DoorAndMove.bSucceeded);
 	LogMotion(*this, TEXT("dynamic_door_plus_motion"), DoorAndMove, Repeats,
 		TEXT("dynamic_snapshot_upper_bound_plus_target_motion"));
@@ -760,11 +853,13 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 		Body.Transform.SetLocation(Location);
 		Torch.Transform.SetLocation(Location);
 		Lantern.Transform.SetLocation(Location);
-		Subsystem->UpdateVisionSource(PlayerHandle, PlayerCone);
-		Subsystem->UpdateVisionSource(BodyHandle, Body);
-		Subsystem->UpdateIlluminationSource(TorchHandle, Torch);
-		Subsystem->UpdateIlluminationSource(LanternHandle, Lantern);
+		Subsystem->UpdateVisionSourceTransform(PlayerHandle, PlayerCone.Transform);
+		Subsystem->UpdateVisionSourceTransform(BodyHandle, Body.Transform);
+		Subsystem->UpdateIlluminationSourceTransform(TorchHandle, Torch.Transform);
+		Subsystem->UpdateIlluminationSourceTransform(LanternHandle, Lantern.Transform);
 	}
+	const FSightWeavePreparedEventIndexStats SharedOriginPreparedBefore =
+		Subsystem->GetPreparedEventIndexStats();
 	for (int32 Index = 0; Index < Repeats; ++Index)
 	{
 		const FVector Location(Index % 2 == 0 ? 5.0 : 0.0, 0.0, 100.0);
@@ -778,7 +873,7 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 
 		FSightWeaveRevision BeforeUpdate = Subsystem->GetRevision();
 		double StartSeconds = FPlatformTime::Seconds();
-		SharedOrigin.bSucceeded &= Subsystem->UpdateVisionSource(PlayerHandle, PlayerCone);
+		SharedOrigin.bSucceeded &= Subsystem->UpdateVisionSourceTransform(PlayerHandle, PlayerCone.Transform);
 		TotalMicroseconds += (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		FSightWeaveFrameSnapshot Snapshot = Subsystem->GetPublishedSnapshot();
 		bool bPublished = Subsystem->GetRevision() != BeforeUpdate;
@@ -787,7 +882,7 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 
 		BeforeUpdate = Subsystem->GetRevision();
 		StartSeconds = FPlatformTime::Seconds();
-		SharedOrigin.bSucceeded &= Subsystem->UpdateVisionSource(BodyHandle, Body);
+		SharedOrigin.bSucceeded &= Subsystem->UpdateVisionSourceTransform(BodyHandle, Body.Transform);
 		TotalMicroseconds += (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Snapshot = Subsystem->GetPublishedSnapshot();
 		bPublished = Subsystem->GetRevision() != BeforeUpdate;
@@ -796,7 +891,7 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 
 		BeforeUpdate = Subsystem->GetRevision();
 		StartSeconds = FPlatformTime::Seconds();
-		SharedOrigin.bSucceeded &= Subsystem->UpdateIlluminationSource(TorchHandle, Torch);
+		SharedOrigin.bSucceeded &= Subsystem->UpdateIlluminationSourceTransform(TorchHandle, Torch.Transform);
 		TotalMicroseconds += (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Snapshot = Subsystem->GetPublishedSnapshot();
 		bPublished = Subsystem->GetRevision() != BeforeUpdate;
@@ -810,7 +905,7 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 
 		BeforeUpdate = Subsystem->GetRevision();
 		StartSeconds = FPlatformTime::Seconds();
-		SharedOrigin.bSucceeded &= Subsystem->UpdateIlluminationSource(LanternHandle, Lantern);
+		SharedOrigin.bSucceeded &= Subsystem->UpdateIlluminationSourceTransform(LanternHandle, Lantern.Transform);
 		TotalMicroseconds += (FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 		Snapshot = Subsystem->GetPublishedSnapshot();
 		bPublished = Subsystem->GetRevision() != BeforeUpdate;
@@ -827,8 +922,12 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 		SharedOrigin.PublicationEstimateMicroseconds.Add(FMath::Max(0.0, TotalMicroseconds - SolveMicroseconds));
 		SharedOrigin.RevisionChanges += Subsystem->GetRevision().GetValue() - Before.GetValue();
 	}
+	AccumulatePreparedIndexDelta(
+		SharedOrigin,
+		SharedOriginPreparedBefore,
+		Subsystem->GetPreparedEventIndexStats());
 	TestTrue(TEXT("Shared-origin trace succeeds"), SharedOrigin.bSucceeded);
-	LogMotion(*this, TEXT("shared_origin_four_sources"), SharedOrigin, Repeats, TEXT("shared_origin_baseline_no_sharing"));
+	LogMotion(*this, TEXT("shared_origin_four_sources"), SharedOrigin, Repeats, TEXT("shared_origin_prepared_event_index"));
 
 	FSightWeaveVisionSourceDescription DifferentHeight = Vision(
 		ESightWeaveSourceShape::Radial,
@@ -845,7 +944,8 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 	const FSightWeaveVisionSourceHandle OwnerHandle = Subsystem->RegisterVisionSource(DifferentOwner, nullptr);
 	const FSightWeaveRevision IsolationBefore = Subsystem->GetRevision();
 	Body.Transform.SetLocation(FVector(12.0, 0.0, 100.0));
-	TestTrue(TEXT("Primary shared source updates"), Subsystem->UpdateVisionSource(BodyHandle, Body));
+	TestTrue(TEXT("Primary shared source updates"),
+		Subsystem->UpdateVisionSourceTransform(BodyHandle, Body.Transform));
 	const FSightWeaveFrameSnapshot IsolationSnapshot = Subsystem->GetPublishedSnapshot();
 	const FSightWeaveVisionSnapshotEntry* HeightEntry = IsolationSnapshot.VisionSources.FindByPredicate(
 		[HeightHandle](const FSightWeaveVisionSnapshotEntry& Entry) { return Entry.Handle == HeightHandle; });
@@ -858,6 +958,8 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Primary update advances revision"), IsolationBefore < Subsystem->GetRevision());
 
 	FMotionSamples Reregister;
+	const FSightWeavePreparedEventIndexStats ReregisterPreparedBefore =
+		Subsystem->GetPreparedEventIndexStats();
 	FSightWeaveVisionSourceHandle ReregisterHandle = CameraHandle;
 	for (int32 Index = 0; Index < 11; ++Index)
 	{
@@ -878,6 +980,10 @@ bool FSightWeaveM2P2MotionTraceBenchmarkTest::RunTest(const FString& Parameters)
 			true,
 			ReregisterHandle);
 	}
+	AccumulatePreparedIndexDelta(
+		Reregister,
+		ReregisterPreparedBefore,
+		Subsystem->GetPreparedEventIndexStats());
 	TestTrue(TEXT("Source re-registration trace succeeds"), Reregister.bSucceeded);
 	LogMotion(*this, TEXT("source_reregister"), Reregister, 11, TEXT("lifecycle_full_rebuild"));
 

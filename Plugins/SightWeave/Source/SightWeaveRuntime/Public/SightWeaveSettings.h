@@ -38,6 +38,21 @@ public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Spatial Index", meta = (ClampMin = "1.0"))
 	double SpatialCellSizeCentimeters = 500.0;
 
+	/** Maximum exact observer-origin preparations retained by one world. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Prepared Event Index", meta = (ClampMin = "1", ClampMax = "1024"))
+	int32 MaximumPreparedOriginEntries = 32;
+
+	/** Hard retained-capacity budget for prepared observer-origin entries. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Prepared Event Index", meta = (ClampMin = "1048576", ClampMax = "1073741824"))
+	int64 MaximumPreparedOriginBytes = 64ll * 1024ll * 1024ll;
+
+	/** Selects an exact kinetic-order attempt only; it never changes correctness semantics. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Prepared Event Index", meta = (ClampMin = "0.0", ClampMax = "10000.0"))
+	double SmallTranslationAttemptCentimeters = 25.0;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Prepared Event Index", meta = (ClampMin = "0", ClampMax = "1048576"))
+	int32 MaximumKineticEndpointSwaps = 16384;
+
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Debug")
 	bool bEnableRuntimeDebug = false;
 };

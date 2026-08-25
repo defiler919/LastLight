@@ -15,6 +15,8 @@ void FSightWeaveFloorSpatialIndex::Reset()
 	ReusableCellIdArrays.Reset();
 	ReusableSourceEdgeIndexArrays.Reset();
 	UpdateCellsScratch.Reset();
+	QueryCellsScratch.Reset();
+	QuerySortedIdsScratch.Reset();
 	LastCandidateCount = 0;
 	StaticBuildCount = 0;
 	DynamicInsertCount = 0;
@@ -248,39 +250,57 @@ void FSightWeaveFloorSpatialIndex::Query(
 	const double HeightEpsilon,
 	TArray<FSightWeaveSegment2D>& OutSegments) const
 {
-	OutSegments.Reset();
 	LastCandidateCount = 0;
 	const FFloorData* Floor = Floors.Find(FloorId);
 	if (!Floor || !Bounds.bIsValid || !HeightRange.IsValid())
 	{
+		OutSegments.Reset();
 		return;
 	}
 
-	TArray<FIntPoint> Cells;
-	GetCellsForBounds(Bounds, Cells);
-	TSet<int64> CandidateIds;
-	for (const FIntPoint& Cell : Cells)
+	QueryCellsScratch.Reset();
+	GetCellsForBounds(Bounds, QueryCellsScratch);
+	QuerySortedIdsScratch.Reset();
+	for (const FIntPoint& Cell : QueryCellsScratch)
 	{
 		if (const TArray<int64>* CellIds = Floor->CellSegmentIds.Find(Cell))
 		{
 			for (const int64 StableId : *CellIds)
 			{
-				CandidateIds.Add(StableId);
+				QuerySortedIdsScratch.Add(StableId);
 			}
 		}
 	}
-	TArray<int64> SortedIds = CandidateIds.Array();
-	SortedIds.Sort();
-	for (const int64 StableId : SortedIds)
+	QuerySortedIdsScratch.Sort();
+	int32 UniqueWriteIndex = 0;
+	for (const int64 StableId : QuerySortedIdsScratch)
+	{
+		if (UniqueWriteIndex == 0 || QuerySortedIdsScratch[UniqueWriteIndex - 1] != StableId)
+		{
+			QuerySortedIdsScratch[UniqueWriteIndex++] = StableId;
+		}
+	}
+	QuerySortedIdsScratch.SetNum(UniqueWriteIndex, EAllowShrinking::No);
+	int32 SegmentWriteIndex = 0;
+	for (const int64 StableId : QuerySortedIdsScratch)
 	{
 		const FSegmentEntry* Entry = Floor->Segments.Find(StableId);
 		if (Entry
 			&& Entry->Segment.GetBounds().Intersect(Bounds)
 			&& SightWeave::Geometry::HeightRangesOverlap(Entry->Segment.HeightRange, HeightRange, HeightEpsilon))
 		{
-			OutSegments.Add(Entry->Segment);
+			if (OutSegments.IsValidIndex(SegmentWriteIndex))
+			{
+				OutSegments[SegmentWriteIndex] = Entry->Segment;
+			}
+			else
+			{
+				OutSegments.Add(Entry->Segment);
+			}
+			++SegmentWriteIndex;
 		}
 	}
+	OutSegments.SetNum(SegmentWriteIndex, EAllowShrinking::No);
 	LastCandidateCount = OutSegments.Num();
 }
 

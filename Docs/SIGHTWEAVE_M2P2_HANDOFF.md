@@ -7,8 +7,8 @@
 - Baseline SHA: `69ac8d50019ef7674c2aed58d2c0c931ee8fa874`
 - Working branch: `codex/m2p2-sightweave-motion-event-index`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current phase: prepared-event-index architecture accepted; source-transform allocation attribution and elimination are next
-- Latest safe commit: `4b3b5c71e91aa42c8cb9ff95cb1945335519ca64` (`test: add SightWeave motion and cache benchmarks`); architecture checkpoint is pending
+- Current phase: warmed transform allocation is eliminated and the bounded exact prepared-origin index is implemented; 512-query headroom and final lifecycle/package matrix are next
+- Latest safe commit: `30898ff5b2cb303e43de148246f072e98ada9c47` (`docs: select SightWeave prepared event index architecture`); the implementation checkpoint described below is tested and pending commit/push
 - Next recovery command: `git switch codex/m2p2-sightweave-motion-event-index; git pull --ff-only origin codex/m2p2-sightweave-motion-event-index; git rev-parse HEAD; git lfs pull; git lfs status`
 
 ## Objective and exclusions
@@ -78,6 +78,63 @@ Selected baseline distributions are median/p95/p99/max microseconds:
 
 The baseline's `strategy` names describe the semantic workload, not an implemented reuse path. Every changed source currently reports a cache miss and rebuilt events. Radial orientation still triggers a full rebuild even though the radial result is orientation-independent. The four-source workload advances four public revisions per iteration and independently rebuilds all four source results, which establishes the shared-origin opportunity without claiming that final output can be shared.
 
+## Implemented transform hot path and prepared index checkpoint
+
+The production implementation now includes:
+
+- transform-only vision and illumination mutation APIs used by both source components, with exact no-change detection, invalid-input rejection, synchronous revision/publication, and preservation of all non-transform metadata;
+- retained candidate-query keys and spatial-query scratch, including in-place segment assignment that preserves nested `SourceEdgeIndices` capacity;
+- source output/snapshot buffers and prepared cache control blocks retained across ordinary updates;
+- absolute endpoint angles, exact forward-independent segment preparation, retained canonical endpoint order/directions, and a validated-cache solver entry point that avoids a duplicate exact-key scan;
+- one world-owned bounded prepared-origin index with 32 entries and 64 MiB defaults, clamped configuration, exact origin/floor/height/tolerance/full-segment-sequence comparison, source binding counts, deterministic unbound LRU/ordinal replacement, hard-cap exact fallback, retained-capacity byte accounting, and teardown/invalidation;
+- sharing of plain origin preparation across vision and illumination sources while final descriptions, polygons, capability/policy fields, handles, source revisions, and attribution remain source-owned;
+- public aggregate diagnostics for hits, misses, full rebuilds, evictions, capacity/oversized fallback, invalidations, live/high-water bytes, entries, and bindings.
+
+The allocation trace first reduced transform work to 65 four-byte allocations. Captured stack `2256283` and symbolized runtime frames proved that `FSightWeaveFloorSpatialIndex::Query` copy-constructed every `FSightWeaveSegment2D::SourceEdgeIndices`. In-place assignment into retained live elements removed that cost. A later failed proof caught one zero-byte `ReallocShrink` on teleport when the retained absolute endpoint direction array was resized to zero; `EAllowShrinking::No` removed it. Both failed traces remain under ignored `Saved/SightWeaveM2P1/AllocationProof` evidence directories.
+
+The final startup memory-trace proof is `Saved/SightWeaveM2P1/AllocationProof/M2P2PreparedIndexGatedFinal_20260825`. Capture and analysis each passed 1/1 with zero warnings/failures/not-run and exactly 60 CSV rows. All 24 strict warmed motion rows are exact **0 allocation calls / 0 reallocation calls / 0 allocated bytes**:
+
+- ordinary source transform;
+- radial rotation;
+- cone rotation;
+- 1, 5, and 20 cm translation;
+- teleport;
+- four-source shared-origin aggregate.
+
+Range growth still reports 3 calls/12 bytes when candidate cardinality grows. Held-reader publication can allocate a new immutable frame buffer, and dynamic-door-plus-motion can allocate four-byte edge attribution when changed geometry introduces new nested content. These are reported separately and are outside the strict ordinary warmed-transform gate; held snapshots are never mutated.
+
+The counter-corrected implementation run is `Saved/AutomationReports/SightWeaveM2P2_PreparedIndexCounters/index.json` and `Saved/Logs/SightWeaveM2P2_PreparedIndexCounters.log`. It passed 1/1 with no warnings/failures/not-run. Selected median/p95/p99/max values in microseconds are:
+
+| Workload | Total update | Prepared hit/miss/full rebuild |
+|---|---:|---:|
+| no change | 0.000 / 0.101 / 0.101 / 0.101 | 0 / 0 / 0; no lookup or publication |
+| radial rotation 0.5 deg | 17.300 / 17.699 / 20.299 / 23.499 | 101 / 0 / 0 |
+| cone rotation 0.5 deg | 11.198 / 11.399 / 11.500 / 11.500 | 101 / 0 / 0 |
+| camera rotation 1 deg | 26.200 / 45.799 / 65.099 / 91.903 | 101 / 0 / 0 |
+| translation 1 cm | 21.301 / 24.099 / 27.999 / 31.799 | 101 / 0 / 0 resident exact origins |
+| translation 5 cm | 21.502 / 25.000 / 32.697 / 35.103 | 101 / 0 / 0 resident exact origins |
+| translation 20 cm | 20.698 / 26.401 / 29.299 / 85.998 | 101 / 0 / 0 resident exact origins |
+| teleport | 5.599 / 6.802 / 7.499 / 9.201 | 0 / 101 / 101 exact empty-scene rebuilds |
+| dynamic door plus motion | 56.498 / 59.601 / 63.803 / 70.300 | 398 / 103 / 103 |
+| four compatible-origin sources | 57.798 / 66.299 / 117.201 / 180.297 aggregate | 303 / 101 / 101: exactly one rebuild then three shared hits per iteration |
+
+The four-source exact target solve median fell from 44.301 to 35.703 us. Aggregate p99 contains publication/scheduler tail and is 117.201 us, or about 29.3 us/source; individual representative transform p99 values remain below 100 us.
+
+The new 4,096-segment production cached sequence runs 101 warmed samples and hard-gates median below 1 ms and p99 below 2 ms. Two independent passing runs were:
+
+- 947.401 / 1,465.101 / 1,564.801 / 1,722.701 us;
+- 921.700 / 1,346.998 / 1,642.700 / 1,876.798 us.
+
+The second run's candidate/event-merge/angular-acceleration medians were 65.699/160.202/92.201 us. Reports: `SightWeaveM2P2_Prepared4096_Initial2` and `SightWeaveM2P2_Prepared4096_Headroom1`.
+
+Current clean automation evidence after index integration:
+
+- full `DarkwellEditor Win64 Development` build passed; only the installed MSVC 14.51 versus preferred 14.50 warning remains;
+- `SightWeave.M2.Runtime`: 9/9;
+- `SightWeave.M2P.Differential`: 3/3 after absolute events, sharing, validated-cache fast path, and seam binary search;
+- `SightWeave.M2P2.PreparedEventIndex`: 2/2 for exact cross-kind sharing, range/floor-height isolation, held-reader immutability, binding release, hard one-slot capacity fallback, reclaim, deterministic eviction, and byte cap;
+- `SightWeave.M2P2.TransformAPI`: 1/1 for no-change revision preservation, NaN/invalid-handle rejection, valid revision advance, and non-transform metadata preservation.
+
 ## Planned phases
 
 1. Add a reproducible motion trace benchmark covering no-change, radial/cone/camera rotation, 1/5/20 cm and diagonal/wall/endpoint-crossing translation, teleport/floor/profile/range/height changes, dynamic-door combinations, and shared-origin source groups. Record cold/warm cost, allocations, latency distributions, cache/event counters, publication cost, and bounded memory.
@@ -104,6 +161,11 @@ git -c safe.directory=D:/UE_projects/LastLight ls-remote --heads origin codex/m2
 git -c safe.directory=D:/UE_projects/LastLight switch -c codex/m2p2-sightweave-motion-event-index
 .\Scripts\BuildEditor.ps1 -EngineRoot D:\UE_5.8 -Configuration Development
 & D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P2.Performance.MotionTrace' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2P2_MotionBaselineV2' '-AbsLog=D:\UE_projects\LastLight\Saved\Logs\SightWeaveM2P2_MotionBaselineV2.log'
+.\Scripts\RunSightWeaveAllocationProof.ps1 -Label M2P2PreparedIndexGatedFinal_20260825 -EngineRoot D:\UE_5.8
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P.Differential' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2PDifferential_IndexedValidated' '-AbsLog=D:\UE_projects\LastLight\Saved\Logs\SightWeaveM2PDifferential_IndexedValidated.log'
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P2.Performance.PreparedEventIndex4096' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2P2_Prepared4096_Headroom1' '-AbsLog=D:\UE_projects\LastLight\Saved\Logs\SightWeaveM2P2_Prepared4096_Headroom1.log'
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P2.PreparedEventIndex' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2P2_PreparedIndexCorrectnessFinal' '-AbsLog=D:\UE_projects\LastLight\Saved\Logs\SightWeaveM2P2_PreparedIndexCorrectnessFinal.log'
+& D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe D:\UE_projects\LastLight\Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound '-ExecCmds=Automation RunTests SightWeave.M2P2.TransformAPI' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\SightWeaveM2P2_TransformAPIFinal' '-AbsLog=D:\UE_projects\LastLight\Saved\Logs\SightWeaveM2P2_TransformAPIFinal.log'
 ```
 
 The baseline and remote M2P.1 branch were identical at the required SHA. The target branch did not exist locally or remotely. The only pre-existing worktree change is the company-machine `Darkwell.uproject` EngineAssociation GUID; it is preserved locally and must never be staged.
@@ -114,10 +176,11 @@ The corrected benchmark build succeeded in 11.89 seconds. The only build warning
 
 ## Unverified items and current risks
 
-- The corrected timing/counter benchmark and architecture comparison are complete, but startup allocation attribution and the production implementation have not run yet.
-- The exact source-transform allocation callstacks and size groups have not yet been extracted from a new M2P.2 startup trace.
-- Rotation-only reuse, translation order-crossing detection, range sharing, dynamic overlay invalidation, and shared-origin memory benefit remain hypotheses.
-- The existing spatial query itself uses temporary cells, sets, and sorted ID arrays, but source-local candidate caching normally bypasses it until source updates currently remove that cache.
-- The existing prepared cache key includes exact origin and forward, so even radial rotation invalidates prepared slots despite radial geometry being orientation-independent.
-- Snapshot double buffering reuses a buffer only when no held reader owns it; arbitrary held-reader duration can force new frame allocation. A zero-allocation source-update design therefore needs bounded immutable structural sharing or a publication slab policy rather than assuming the standby buffer is always reusable.
-- Any small-translation incremental path must detect unsafe exact order changes and fall back visibly; approximate order maintenance is forbidden.
+- The bounded exact-origin lookup is implemented, but the optional kinetic small-translation reorder is not. Continuous unique translations therefore rebuild exact origin preparation; repeated resident exact origins hit. Any future kinetic path must prove full deterministic order or fall back visibly.
+- Absolute endpoint preparation/order is retained. Angular interval arrays are still rebuilt into thread scratch per solve; the current 4,096/source gate passes, but median headroom is only about 52–78 us and must be watched across final independent runs.
+- Pure-radial rotation reuses origin preparation and canonical endpoint order but still recomputes final source arrays/polygon. A final-polygon shortcut remains deliberately disabled until canonical query-array reordering is proven across the seam.
+- Dynamic changes are exact and synchronous, but dedicated multiple-door locality/counter tests and held-reader coverage across dynamic invalidation/source deletion/eviction are still required.
+- Source/world teardown, restart, multiworld isolation, high-water reclaim under large entries, byte-pressure eviction, and concurrent independent solver/index scratch need broader coverage.
+- The stricter ten-run 512-query batch target has not yet been optimized or rerun. M2P.1 evidence misses the new 0.15/0.18/0.20 ms gate.
+- Normal 8x64/4,096-total non-regression, full SightWeave/DARKWELL suites, Lab, BuildPlugin/clean host, Game Development/Shipping, Shipping dependency scan, Git/LFS audit, and final remote verification remain pending.
+- Held-reader publication correctly allocates a fresh immutable frame when both reusable buffers are owned. That permitted path is reported separately and is not part of the strict ordinary warmed-transform 0/0/0 claim.

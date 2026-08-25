@@ -300,6 +300,16 @@ namespace SightWeave::Geometry
 	{
 		/** Test-only validation that nested leases never alias an active scratch frame. */
 		SIGHTWEAVERUNTIME_API bool ExerciseOptimizedSolverScratchReentrancy(int32 Depth);
+
+		/** Measures the production cached solver across exact forward changes without exposing mutable cache state. */
+		SIGHTWEAVERUNTIME_API bool MeasureCachedOptimizedForwardSequence(
+			const FSightWeaveReferenceSolveInput& BaseInput,
+			TConstArrayView<FVector2D> Forwards,
+			TArray<double>& OutTotalMicroseconds,
+			TArray<double>& OutCandidateMicroseconds,
+			TArray<double>& OutSortMicroseconds,
+			TArray<double>& OutAccelerationMicroseconds,
+			FSightWeaveReferenceSolveResult& OutLastResult);
 	}
 #endif
 }

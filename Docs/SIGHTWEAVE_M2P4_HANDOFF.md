@@ -18,7 +18,7 @@ GPU masks, post processing, memory textures, DARKWELL gameplay integration,
 - Baseline branch: `codex/m2p3-sightweave-tail-latency-finalization`
 - Verified baseline SHA: `e3e5a833e58ce4571653fcef0f7b44698ae80dae`
 - Working branch: `codex/m2p4-sightweave-etw-dynamic-sector`
-- Latest safe SHA: `666c6a921a97610bc718c858d09f7ec8533b6b1a`
+- Latest pushed diagnostic SHA before the post-Verify experiment: `bf82be522f7528ccc6646966d52e5427243c0182`
 - The company workstation's local-only `Darkwell.uproject`
   `EngineAssociation` difference is preserved and must never be staged.
 
@@ -136,13 +136,81 @@ emitted; the authoritative crash evidence currently available is System event
 26 plus the exact native exit code. This absence is recorded explicitly rather
 than treating the RADAR report as a crash record.
 
+### Epic Verify and restart recovery baseline (2026-08-25)
+
+Epic Games Launcher Verify completed and Windows was restarted before this
+recovery experiment. No Unreal Editor, Visual Studio compiler, Live Coding,
+UBT, bundled/system dotnet, or UBA process was present at the preflight. Git
+remained on `codex/m2p4-sightweave-etw-dynamic-sector` at
+`bf82be522f7528ccc6646966d52e5427243c0182`, tracking the matching origin
+branch. LFS had no pending object, the five local modifications were unchanged,
+and `Darkwell.uproject` remains excluded from staging.
+
+The preserved Runtime files were readable, contained no conflict markers, and
+had these post-restart SHA-256 values:
+
+| File | Bytes | SHA-256 |
+|---|---:|---|
+| `SightWeaveGeometry.cpp` | 90,118 | `29C7D2E260F6DDF05D02AE0FD2FBD7E92B9D928BE00552142FFAE5AC03430944` |
+| `SightWeaveOptimizedSolveCache.h` | 3,805 | `04E562F2A524A92E69EF775580A5C0785ADDA3CBD56D7EDC62EBEF27F42908DC` |
+| `SightWeaveWorldSubsystem.cpp` | 105,121 | `15FE63959F5B1B7F0CF92E8DC1DE6636499E2654EB2FC439FCC4C1B9A00EA0A9` |
+| `SightWeaveWorldSubsystem.h` | 20,509 | `AE8DB63496B2DDE618616E3CE01C9C84C615BAF8EAFAE9FDBA3D7AB62D04E6F5` |
+
+Post-Verify bundled file fingerprints are saved at
+`Saved/SightWeaveM2P4/Toolchain/epic-verify-20260825/baseline/bundled-file-fingerprints.json`:
+
+| File | Version | Last write | SHA-256 |
+|---|---|---|---|
+| `D:\UE_5.8\Engine\Binaries\ThirdParty\DotNet\10.0\win-x64\dotnet.exe` | `10.0.726.21808` / `10.0.7` | `2026-08-24 10:18:00` | `A8D3105441B568CFD44AC5EAB8C0FC190CDEFB0047E3E84E49CBCE819A197A7A` |
+| `...\host\fxr\10.0.7\hostfxr.dll` | `10.0.726.21808` / `10.0.7` | `2026-08-24 10:18:00` | `D6CB726D200D3468360C85454728884186DEA19BDBD971C9B8BC1E6EB5897749` |
+| `...\shared\Microsoft.NETCore.App\10.0.7\coreclr.dll` | `10.0.726.21808` / `10.0.7` | `2026-08-24 10:18:16` | `8B57354E0D877B210A34384A5A97E1F6BDCEC43E32173173D54A3A9F4262C8BD` |
+| `D:\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.dll` | `5.8.0.0` | `2026-08-24 10:17:52` | `B0931427529B907EEA171F1913ED8A50C5753A3CAE733AC2773BE537F633D1A8` |
+
+Every timestamp predates Verify/restart, so Verify produced no observable
+replacement. The pre-Verify diagnostic did not capture SHA-256 for all four
+files; therefore only the timestamps/versions can be compared for all four,
+and a cryptographic before/after equality claim is deliberately not made.
+No engine file was replaced and system dotnet/workload restore were not used.
+
+The bundled smoke command
+`D:\UE_5.8\Engine\Binaries\ThirdParty\DotNet\10.0\win-x64\dotnet.exe --info`
+ran from `2026-08-25T16:01:25.5376737+08:00` through
+`2026-08-25T16:01:28.7597232+08:00`, exited `0`, and produced zero System 26
+and zero Application 1026/1000/1001 events. It reported SDK `10.0.203`, host
+and runtimes `10.0.7`, RID `win-x64`, no workloads, and bundled-only base/runtime
+paths. Full output and metadata are in the adjacent `dotnet-info.txt` and
+`dotnet-info-summary.json` files under the baseline directory.
+
+UE 5.8 source confirms the correct second experiment switch. In
+`Engine/Source/Programs/UnrealBuildTool/Configuration/BuildConfiguration.cs`,
+`bAllowUBAExecutor` is mapped to `-UBA`/`-NoUBA`; the older
+`bAllowUBALocalExecutor` field is deprecated. In `ExecutorFactory.cs`, UE 5.8
+states that it still uses the UBA executor but disables detouring to mirror
+legacy behavior when this setting is false. Consequently group B uses the
+official `-NoUBA` switch and is described precisely as the no-detour/legacy
+path, not as proof that no UBA process exists.
+
+The existing local-only
+`Saved/UnrealBuildTool/BuildConfiguration.xml` was preserved byte-for-byte
+(length 132, SHA-256
+`1E7CD8512DEDF37D7B103C5592F5600433E7FE97DA23434E69990F8A3370508A`); it
+contains an empty `Configuration` element and is not needed for the command-line
+experiment. The serial experiment harness is
+`Scripts/RunSightWeaveM2P4ToolchainExperiment.ps1`. Builds use an isolated
+detached worktree at the safe diagnostic commit so the four unverified Runtime
+edits and local `Darkwell.uproject` association cannot affect toolchain
+classification. Raw build output, event windows, WER/dump inventories, and UBT
+artifacts are retained under
+`Saved/SightWeaveM2P4/Toolchain/epic-verify-20260825/`.
+
 ### Pause boundary
 
-Do not rerun `Scripts/BuildEditor.ps1`, UE `Build.bat`, direct UBT dotnet, ETW
-capture/analyze, automation tests, or packaging while this pause is active. Do
-not make further production changes. Preserve the four uncommitted Runtime
-files for inspection. Resume only after the dotnet host condition has been
-resolved or the user authorizes a bounded non-crashing alternative.
+The user authorized only the bounded post-Verify bundled-dotnet/UBT recovery
+experiment described above. Production edits, ETW capture/analyze, automation
+tests, packaging, and the full M2P.4 verification matrix remain paused. Preserve
+the four uncommitted Runtime files and the local-only `Darkwell.uproject`
+association. Resume production validation only after the strict toolchain gate
+(`Result: Succeeded`, outer exit `0`, and no exception popup/event) closes.
 
 ## Administrator and ETW capability checkpoint
 

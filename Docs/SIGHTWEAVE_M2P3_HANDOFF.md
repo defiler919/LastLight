@@ -2,7 +2,7 @@
 
 ## Status
 
-`IN_PROGRESS`
+`PARTIAL`
 
 SightWeave M2P.3 is limited to tail-latency attribution and CPU Authority
 finalization. Do not begin M3, GPU mask, post-processing, memory textures, the
@@ -14,11 +14,16 @@ branch.
 - Baseline branch: `codex/m2p2-sightweave-motion-event-index`
 - Verified baseline SHA: `c1907352441a6053de02726e375d1bf94a903d01`
 - Working branch: `codex/m2p3-sightweave-tail-latency-finalization`
-- Latest safe commit: `59a3d93f1d37b7d0c75c6e0ab4f4f800661b2b23`
+- Latest validated code/test commit:
+  `92d6f1fabdd5f366c1a594cadce2a5187623d35c`
 - The company workstation keeps a local-only `Darkwell.uproject`
   `EngineAssociation` GUID. Preserve it and never stage or commit it.
-- The remote M2P.3 branch exists and matched the latest safe commit before the
-  current performance checkpoint began.
+- The remote M2P.3 branch matched the latest validated code/test checkpoint
+  before the final documentation checkpoint began.
+
+The complete final matrix, evidence paths, preserved failures, package audit,
+and recovery boundary are recorded in
+`Docs/SIGHTWEAVE_M2P3_FINAL_VALIDATION.md`.
 
 ## Open tail-latency questions
 
@@ -289,8 +294,10 @@ rationale and recovery contract are in
   final soaks complete) -- `50cc0bb5d8b198b80ce4ecb0aa84a16f9428cea1`,
   pushed to origin
 - [x] `test: stabilize SightWeave performance contracts` (fail-closed audit and
-  explicit PARTIAL boundary complete; current checkpoint pending commit/push)
-- [ ] `docs: record SightWeave CPU authority final validation`
+  explicit PARTIAL boundary complete) --
+  `92d6f1fabdd5f366c1a594cadce2a5187623d35c`, pushed to origin
+- [x] `docs: record SightWeave CPU authority final validation` (this handoff and
+  the final report; resolve the containing commit with `git rev-parse HEAD`)
 
 After each checkpoint: inspect the diff, stage exact paths only, exclude
 `Darkwell.uproject`, run `git diff --cached --check`, commit, push immediately,
@@ -324,8 +331,9 @@ the only pre-existing worktree change was `Darkwell.uproject`.
   when elevated ContextSwitch evidence is available.
 - An authoritative Intrinsic CPU microsecond gate and a completed dual-layer
   contract; current wall and frame-soak layers remain fail-closed/explicit.
-- Full M1/M2/M2P/M2P1/M2P2/M2P3 correctness, performance, allocation,
-  packaging, clean-host, Shipping, dependency, Git, and LFS validation matrix.
+- Elimination of the preserved plugin-CPU and Unknown overruns and passage of
+  every unchanged wall-clock assertion across the required independent
+  processes.
 
 ## Exact recovery command
 
@@ -336,9 +344,10 @@ git -c safe.directory=D:/UE_projects/LastLight status --short --branch
 git -c safe.directory=D:/UE_projects/LastLight rev-parse HEAD
 ```
 
-Then read this file, confirm the local-only `Darkwell.uproject` difference is
-still excluded, and continue with the performance-contract checkpoint. The
-latest soak commands were:
+Then read this file and `Docs/SIGHTWEAVE_M2P3_FINAL_VALIDATION.md`, confirm the
+local-only `Darkwell.uproject` difference is still excluded, and resume only
+the unresolved ContextSwitch/intrinsic-authority and preserved tail work. Do
+not start M3. The latest soak commands were:
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\RunSightWeaveM2P3Soak.ps1 -Mode NullRHI -Frames 36000 -Label nullrhi-36000-final02

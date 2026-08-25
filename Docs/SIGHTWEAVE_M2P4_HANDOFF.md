@@ -18,7 +18,7 @@ GPU masks, post processing, memory textures, DARKWELL gameplay integration,
 - Baseline branch: `codex/m2p3-sightweave-tail-latency-finalization`
 - Verified baseline SHA: `e3e5a833e58ce4571653fcef0f7b44698ae80dae`
 - Working branch: `codex/m2p4-sightweave-etw-dynamic-sector`
-- Latest pushed diagnostic SHA before the post-Verify experiment: `bf82be522f7528ccc6646966d52e5427243c0182`
+- Latest pushed toolchain baseline checkpoint: `25e927f0f51dcdb7be0720f3fef5b2848925306c`
 - The company workstation's local-only `Darkwell.uproject`
   `EngineAssociation` difference is preserved and must never be staged.
 
@@ -203,6 +203,36 @@ classification. Raw build output, event windows, WER/dump inventories, and UBT
 artifacts are retained under
 `Saved/SightWeaveM2P4/Toolchain/epic-verify-20260825/`.
 
+### Default build group A: 3/3 strict passes
+
+All invocations were serialized and used the isolated detached worktree at
+`25e927f0f51dcdb7be0720f3fef5b2848925306c`. The exact command was:
+
+```text
+D:\UE_5.8\Engine\Build\BatchFiles\Build.bat DarkwellEditor Win64 Development D:\UE_projects\LastLight\Saved\SightWeaveM2P4\Toolchain\verify-worktree\Darkwell.uproject -WaitMutex -FromMsBuild
+```
+
+| Run | Local start - end | Actions | UBT result | Outer exit | Popup / relevant System 26 | Relevant App 1026/1000/1001 | WER / dump | Strict gate |
+|---:|---|---:|---|---:|---|---|---|---|
+| 1 | 16:14:18.888 - 16:15:46.768 | 18 | `Succeeded` | `0` | no / 0 | 0 | 0 / 0 | pass |
+| 2 | 16:16:03.624 - 16:16:05.148 | 0 (target up to date) | `Succeeded` | `0` | no / 0 | 0 | 0 / 0 | pass |
+| 3 | 16:16:27.913 - 16:16:29.134 | 0 (target up to date) | `Succeeded` | `0` | no / 0 | 0 | 0 / 0 | pass |
+
+Run 1 compiled and linked the clean worktree target through 18 actions. Runs 2
+and 3 still executed the complete bundled dotnet -> UBT target evaluation and
+process-exit path, which is the exact boundary that previously failed after UBT
+had printed `Result: Succeeded`. All three used the default UBA local executor;
+all wrote independent copies of `Log.txt`, `Log.json`, and `Trace.uba`. The
+machine-wide Application queries also contained zero unrelated 1026/1000/1001
+events during all three windows. Accessible WER roots contained no newly
+written report or dump; one unrelated historical `farcry3.exe` archive subtree
+under ProgramData denied recursive enumeration and is recorded as a collection
+warning, not as a generated report. The aggregate evidence is
+`Saved/SightWeaveM2P4/Toolchain/epic-verify-20260825/default/group-summary.json`.
+
+Per the strict decision rule, the default path is provisionally recovered 3/3
+after Epic Verify and restart. Production validation remains paused until the
+requested `-NoUBA` comparison group and its checkpoint are complete.
 ### Pause boundary
 
 The user authorized only the bounded post-Verify bundled-dotnet/UBT recovery

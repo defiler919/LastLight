@@ -7,8 +7,8 @@
 - Baseline SHA: `69ac8d50019ef7674c2aed58d2c0c931ee8fa874`
 - Working branch: `codex/m2p2-sightweave-motion-event-index`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current phase: corrected motion/cache baseline complete; prepared-event-index architecture comparison is next
-- Latest safe commit: `15a30dfdc3ca3b39f6d52be324cc3e200c654ca3` (`docs: start SightWeave motion hot-path architecture`); benchmark checkpoint is pending
+- Current phase: prepared-event-index architecture accepted; source-transform allocation attribution and elimination are next
+- Latest safe commit: `4b3b5c71e91aa42c8cb9ff95cb1945335519ca64` (`test: add SightWeave motion and cache benchmarks`); architecture checkpoint is pending
 - Next recovery command: `git switch codex/m2p2-sightweave-motion-event-index; git pull --ff-only origin codex/m2p2-sightweave-motion-event-index; git rev-parse HEAD; git lfs pull; git lfs status`
 
 ## Objective and exclusions
@@ -41,15 +41,17 @@ The production call chain is:
 
 This proves the remaining allocations are not one isolated `TArray` growth. Likely sources include description/capability copying and normalization, `TMap` cache removal/recreation plus `TSharedPtr` control blocks, segment candidate re-query internals, entry description/output/LUT materialization, complete-frame entry copies, and compatibility arrays. Startup trace callstack/size evidence must identify the exact retained set before production changes.
 
-## Prepared Event Index hypotheses
+## Prepared Event Index decision
 
-Three candidate families will be benchmarked before selecting a production replacement:
+The full decision and proof obligations are in `Docs/SIGHTWEAVE_M2P2_EVENT_INDEX_ARCHITECTURE.md`. Three candidate families were compared:
 
 1. **Floor/static-scene prepared metadata:** retain stable-ID keyed world segment metadata and static/dynamic revision partitions. This should reduce repeated validation and static extraction but cannot alone reuse observer-relative angles after translation.
 2. **Per-source persistent exact event index:** retain endpoint base events, sorted order, directions, interval acceleration, and output capacity for one source geometry key. Rotation-only can potentially preserve relative event order by changing the frame/orientation cut; translation needs exact endpoint-angle recomputation and order-crossing detection, with deterministic full rebuild fallback.
 3. **Shared observer-origin occlusion preparation:** share only origin/floor/height/occluder-revision compatible geometry preparation across vision and illumination sources. Different cone/range/capability/owner/handle/revision must still produce isolated final results. Range sharing requires exact proof because candidate inclusion and nearest-hit truncation differ.
 
-The initial leading hypothesis is a bounded world-owned observer-origin cache containing immutable/plain prepared geometry plus source-owned exact output/event views, with a small deterministic capacity and revision-keyed invalidation. This is not yet a production decision. Cold cost, translation order changes, dynamic overlay behavior, memory high water, lifecycle, and Reference parity must be measured first.
+The accepted direction is a bounded world-owned hybrid: registered floor/static metadata, a 32-entry/64-MiB initial observer-origin preparation pool with exact keys and deterministic revision/ordinal eviction, and source-owned final views. A hit requires exact origin/floor/height/tolerance/static+dynamic revision/candidate-sequence equality. Source views retain range/cone/forward/owner/capability/policy/handle/revision isolation. Floor metadata alone is rejected because the measured 4,096/source residual is about 1.43 ms/source; retaining candidate preparation, event ordering, and angular acceleration leaves a measured approximately 0.83 ms/source residual. Final-polygon sharing, unbounded caches, and approximate small-motion order retention are rejected.
+
+Pure-radial rotation reuses world geometry while still advancing public metadata/revision. Cone rotation recuts/sweeps exact absolute prepared events. Translation recomputes exact endpoint keys; a bounded kinetic reorder must validate the full deterministic order or fall back to radix rebuild. Teleport/profile/floor changes use exact lookup or full rebuild. Dynamic revisions invalidate intersecting entries synchronously. Capacity pressure falls back to the exact uncached solver instead of growing or returning stale data.
 
 ## Corrected motion/cache baseline
 
@@ -112,7 +114,7 @@ The corrected benchmark build succeeded in 11.89 seconds. The only build warning
 
 ## Unverified items and current risks
 
-- The corrected timing/counter benchmark is complete, but the startup allocation capture, architecture prototype, and production implementation have not run yet.
+- The corrected timing/counter benchmark and architecture comparison are complete, but startup allocation attribution and the production implementation have not run yet.
 - The exact source-transform allocation callstacks and size groups have not yet been extracted from a new M2P.2 startup trace.
 - Rotation-only reuse, translation order-crossing detection, range sharing, dynamic overlay invalidation, and shared-origin memory benefit remain hypotheses.
 - The existing spatial query itself uses temporary cells, sets, and sorted ID arrays, but source-local candidate caching normally bypasses it until source updates currently remove that cache.

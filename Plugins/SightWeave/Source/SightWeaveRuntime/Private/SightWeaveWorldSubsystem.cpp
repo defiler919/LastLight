@@ -1,6 +1,9 @@
 #include "SightWeaveWorldSubsystem.h"
 
 #include "Algo/Sort.h"
+#if WITH_DEV_AUTOMATION_TESTS
+#include "Async/ParallelFor.h"
+#endif
 #include "HAL/PlatformTime.h"
 #include "SightWeaveOptimizedSolveCache.h"
 #include "SightWeavePreparedEventIndex.h"
@@ -2008,6 +2011,72 @@ bool USightWeaveWorldSubsystem::ConfigurePreparedEventIndexForTesting(
 	}
 	PreparedEventIndex->Initialize(MaximumEntries, MaximumBytes);
 	return true;
+}
+
+bool USightWeaveWorldSubsystem::ExercisePreparedEventIndexConcurrentIsolationForTesting(
+	const FSightWeaveReferenceSolveInput& Input,
+	const int32 WorkerCount,
+	const int32 RepeatsPerWorker)
+{
+	if (WorkerCount <= 0 || WorkerCount > 64
+		|| RepeatsPerWorker <= 0 || RepeatsPerWorker > 128)
+	{
+		return false;
+	}
+
+	FSightWeaveReferenceSolveResult Expected;
+	SightWeave::Geometry::SolveOptimizedPolygonInto(Input, Expected);
+	if (!Expected.bSucceeded)
+	{
+		return false;
+	}
+	auto ResultsMatch = [&Expected](const FSightWeaveReferenceSolveResult& Result)
+	{
+		return Result.bSucceeded == Expected.bSucceeded
+			&& Result.CandidateSegmentCount == Expected.CandidateSegmentCount
+			&& Result.CastRayCount == Expected.CastRayCount
+			&& Result.Vertices == Expected.Vertices
+			&& Result.CandidateAnglesRadians == Expected.CandidateAnglesRadians
+			&& Result.CandidateDistances == Expected.CandidateDistances
+			&& Result.CandidateBoundaryPoints == Expected.CandidateBoundaryPoints;
+	};
+
+	TArray<int32> FailureCounts;
+	FailureCounts.Init(0, WorkerCount);
+	ParallelFor(WorkerCount, [&](const int32 WorkerIndex)
+	{
+		FSightWeavePreparedEventIndex Index;
+		Index.Initialize(2, 4ll * 1024ll * 1024ll);
+		TSharedPtr<FSightWeaveOptimizedSolveCache> Binding;
+		FSightWeaveReferenceSolveResult Result;
+		for (int32 Repeat = 0; Repeat < RepeatsPerWorker; ++Repeat)
+		{
+			const FSightWeavePreparedEventIndex::FAcquireResult Acquisition =
+				Index.Acquire(Input, Binding, static_cast<uint64>(Repeat + 1));
+			Binding = Acquisition.Cache;
+			if (!Binding.IsValid())
+			{
+				++FailureCounts[WorkerIndex];
+				continue;
+			}
+			SightWeave::Geometry::SolveOptimizedPolygonIntoValidatedCache(Input, Result, *Binding);
+			if (!Index.Commit(Binding) || !ResultsMatch(Result))
+			{
+				++FailureCounts[WorkerIndex];
+			}
+		}
+		const FSightWeavePreparedEventIndexStats Stats = Index.GetStats();
+		if (Stats.MissCount != 1
+			|| Stats.HitCount != RepeatsPerWorker - 1
+			|| Stats.LiveEntryCount != 1
+			|| Stats.SourceBindingCount != 1
+			|| Stats.LiveAllocatedBytes <= 0
+			|| Stats.LiveAllocatedBytes > 4ll * 1024ll * 1024ll)
+		{
+			++FailureCounts[WorkerIndex];
+		}
+	});
+	return !FailureCounts.ContainsByPredicate([](const int32 Count) { return Count != 0; });
 }
 #endif
 

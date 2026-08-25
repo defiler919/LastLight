@@ -13,7 +13,9 @@ namespace SightWeave::M2P2::PreparedEventIndexTests
 	constexpr EAutomationTestFlags TestFlags =
 		EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 	const FSightWeaveFloorId Ground(FName(TEXT("Ground")));
+	const FSightWeaveFloorId Basement(FName(TEXT("Basement")));
 	const FSightWeaveKnowledgeOwnerId Local(FName(TEXT("Local")));
+	const FSightWeaveKnowledgeOwnerId Remote(FName(TEXT("Remote")));
 
 	class FTestWorld
 	{
@@ -66,6 +68,14 @@ namespace SightWeave::M2P2::PreparedEventIndexTests
 		Result.BoundsMax = FVector2D(5000.0, 5000.0);
 		Result.HeightRange.ZMin = 0.0f;
 		Result.HeightRange.ZMax = 300.0f;
+		return Result;
+	}
+
+	FSightWeaveFloorDefinition InactiveBasementFloor()
+	{
+		FSightWeaveFloorDefinition Result = Floor();
+		Result.FloorId = Basement;
+		Result.bActiveForQueries = false;
 		return Result;
 	}
 
@@ -179,6 +189,29 @@ namespace SightWeave::M2P2::PreparedEventIndexTests
 			Segment.StableId = Index + 1;
 		}
 		return Segments;
+	}
+
+	TArray<FSightWeaveSegment2D> DoorSegments(const double X)
+	{
+		TArray<FSightWeaveSegment2D> Segments;
+		FSightWeaveSegment2D& Segment = Segments.AddDefaulted_GetRef();
+		Segment.A = FVector2D(X, -100.0);
+		Segment.B = FVector2D(X, 100.0);
+		Segment.FloorId = Ground;
+		Segment.HeightRange.ZMin = 0.0f;
+		Segment.HeightRange.ZMax = 300.0f;
+		return Segments;
+	}
+
+	const FSightWeaveVisionSnapshotEntry* FindVisionEntry(
+		const FSightWeaveFrameSnapshot& Snapshot,
+		const FSightWeaveVisionSourceHandle Handle)
+	{
+		return Snapshot.VisionSources.FindByPredicate(
+			[Handle](const FSightWeaveVisionSnapshotEntry& Entry)
+			{
+				return Entry.Handle == Handle;
+			});
 	}
 }
 
@@ -506,6 +539,565 @@ bool FSightWeaveM2P2TransformApiSemanticsTest::RunTest(const FString& Parameters
 			&& IlluminationEntry->Description.KnowledgeOwnerId == Local
 			&& IlluminationEntry->Description.FloorId == Ground
 			&& IlluminationEntry->Description.Range == 800.0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P2PreparedEventIndexDynamicLifecycleTest,
+	"SightWeave.M2P2.PreparedEventIndex.DynamicLifecycle",
+	SightWeave::M2P2::PreparedEventIndexTests::TestFlags)
+
+bool FSightWeaveM2P2PreparedEventIndexDynamicLifecycleTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P2::PreparedEventIndexTests;
+	FTestWorld World(TEXT("SightWeaveM2P2PreparedDynamicLifecycle"));
+	USightWeaveWorldSubsystem* Subsystem = World.GetSubsystem();
+	if (!TestNotNull(TEXT("Subsystem exists"), Subsystem)
+		|| !TestTrue(TEXT("Floor registers"), Subsystem->RegisterFloor(Floor(), nullptr)))
+	{
+		return false;
+	}
+
+	const FSightWeaveOccluderHandle NearDoor =
+		Subsystem->RegisterOccluder(DoorSegments(250.0), true, true, nullptr);
+	const FSightWeaveOccluderHandle FarDoor =
+		Subsystem->RegisterOccluder(DoorSegments(2450.0), true, true, nullptr);
+	if (!TestTrue(TEXT("Near dynamic door registers"), NearDoor.IsValid())
+		|| !TestTrue(TEXT("Far dynamic door registers"), FarDoor.IsValid()))
+	{
+		return false;
+	}
+
+	FSightWeaveVisionSourceDescription NearDescription =
+		VisionSource(FVector(0.0, 0.0, 100.0), 800.0);
+	FSightWeaveVisionSourceDescription FarDescription =
+		VisionSource(FVector(2200.0, 0.0, 100.0), 800.0);
+	const FSightWeaveVisionSourceHandle NearSource =
+		Subsystem->RegisterVisionSource(NearDescription, nullptr);
+	const FSightWeaveVisionSourceHandle FarSource =
+		Subsystem->RegisterVisionSource(FarDescription, nullptr);
+	if (!TestTrue(TEXT("Near source registers"), NearSource.IsValid())
+		|| !TestTrue(TEXT("Far source registers"), FarSource.IsValid()))
+	{
+		return false;
+	}
+
+	const FSightWeavePreparedEventIndexStats InitialStats =
+		Subsystem->GetPreparedEventIndexStats();
+	TestEqual(TEXT("Two local preparations are retained"), InitialStats.LiveEntryCount, 2);
+	TestEqual(TEXT("Two source bindings are retained"), InitialStats.SourceBindingCount, 2);
+	const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Held =
+		Subsystem->AcquirePublishedSnapshotForTesting();
+	if (!TestTrue(TEXT("Held snapshot is acquired"), Held.IsValid()))
+	{
+		return false;
+	}
+	const FSightWeaveVisionSnapshotEntry* HeldNear = FindVisionEntry(*Held, NearSource);
+	const FSightWeaveVisionSnapshotEntry* HeldFar = FindVisionEntry(*Held, FarSource);
+	if (!TestNotNull(TEXT("Held near entry exists"), HeldNear)
+		|| !TestNotNull(TEXT("Held far entry exists"), HeldFar))
+	{
+		return false;
+	}
+	const FSightWeaveRevision HeldRevision = Held->Revision;
+	const FSightWeaveRevision HeldFarSourceRevision = HeldFar->SourceRevision;
+	const TArray<FVector> HeldNearVertices = HeldNear->Polygon.Vertices;
+	const TArray<FVector> HeldFarVertices = HeldFar->Polygon.Vertices;
+
+	int64 ExpectedMisses = InitialStats.MissCount;
+	TestTrue(
+		TEXT("Near door changes synchronously"),
+		Subsystem->UpdateOccluder(NearDoor, DoorSegments(350.0), true, true));
+	++ExpectedMisses;
+	FSightWeavePreparedEventIndexStats Stats = Subsystem->GetPreparedEventIndexStats();
+	TestEqual(TEXT("Near door rebuilds exactly one prepared origin"), Stats.MissCount, ExpectedMisses);
+	TestEqual(TEXT("Local update retains two bounded entries"), Stats.LiveEntryCount, 2);
+	const FSightWeaveFrameSnapshot AfterNearDoor = Subsystem->GetPublishedSnapshot();
+	const FSightWeaveVisionSnapshotEntry* CurrentFar = FindVisionEntry(AfterNearDoor, FarSource);
+	TestTrue(
+		TEXT("Far source is not rebuilt by near-door locality"),
+		CurrentFar
+			&& CurrentFar->SourceRevision == HeldFarSourceRevision
+			&& CurrentFar->Polygon.Vertices == HeldFarVertices);
+
+	for (int32 UpdateIndex = 0; UpdateIndex < 8; ++UpdateIndex)
+	{
+		const double DoorX = UpdateIndex % 2 == 0 ? 300.0 : 350.0;
+		TestTrue(
+			TEXT("Rapid near-door update succeeds"),
+			Subsystem->UpdateOccluder(NearDoor, DoorSegments(DoorX), true, true));
+		++ExpectedMisses;
+		Stats = Subsystem->GetPreparedEventIndexStats();
+		TestEqual(TEXT("Each changed door state rebuilds one origin"), Stats.MissCount, ExpectedMisses);
+		TestEqual(TEXT("Rapid door updates remain bounded"), Stats.LiveEntryCount, 2);
+	}
+
+	const FSightWeaveFrameSnapshot BeforeFarDoor = Subsystem->GetPublishedSnapshot();
+	const FSightWeaveVisionSnapshotEntry* NearBeforeFarDoor =
+		FindVisionEntry(BeforeFarDoor, NearSource);
+	const FSightWeaveRevision NearRevisionBeforeFarDoor = NearBeforeFarDoor
+		? NearBeforeFarDoor->SourceRevision
+		: FSightWeaveRevision();
+	TestTrue(
+		TEXT("Far door changes synchronously"),
+		Subsystem->UpdateOccluder(FarDoor, DoorSegments(2550.0), true, true));
+	++ExpectedMisses;
+	Stats = Subsystem->GetPreparedEventIndexStats();
+	TestEqual(TEXT("Far door rebuilds exactly one prepared origin"), Stats.MissCount, ExpectedMisses);
+	const FSightWeaveVisionSnapshotEntry* NearAfterFarDoor =
+		nullptr;
+	const FSightWeaveFrameSnapshot AfterFarDoorSnapshot = Subsystem->GetPublishedSnapshot();
+	NearAfterFarDoor = FindVisionEntry(AfterFarDoorSnapshot, NearSource);
+	TestTrue(
+		TEXT("Near source is not rebuilt by far-door locality"),
+		NearAfterFarDoor && NearAfterFarDoor->SourceRevision == NearRevisionBeforeFarDoor);
+
+	TestTrue(
+		TEXT("Door changes before simultaneous source motion"),
+		Subsystem->UpdateOccluder(NearDoor, DoorSegments(325.0), true, true));
+	++ExpectedMisses;
+	NearDescription.Transform.SetLocation(FVector(10.0, 0.0, 100.0));
+	TestTrue(
+		TEXT("Source motion publishes immediately after door change"),
+		Subsystem->UpdateVisionSourceTransform(NearSource, NearDescription.Transform));
+	++ExpectedMisses;
+	Stats = Subsystem->GetPreparedEventIndexStats();
+	TestEqual(TEXT("Door plus motion performs two exact rebuilds"), Stats.MissCount, ExpectedMisses);
+	const FSightWeaveFrameSnapshot AfterDoorAndMotion = Subsystem->GetPublishedSnapshot();
+	const FSightWeaveVisionSnapshotEntry* MovedNear =
+		FindVisionEntry(AfterDoorAndMotion, NearSource);
+	TestTrue(
+		TEXT("Latest publication contains moved source"),
+		MovedNear && MovedNear->Description.Transform.Equals(NearDescription.Transform, 0.0));
+
+	TestTrue(TEXT("Near source unregisters"), Subsystem->UnregisterVisionSource(NearSource));
+	TestFalse(TEXT("Deleted source handle is immediately invalid"), Subsystem->IsVisionSourceHandleValid(NearSource));
+	TestEqual(
+		TEXT("Held revision survives source deletion"),
+		Held->Revision,
+		HeldRevision);
+	TestTrue(
+		TEXT("Held source polygon survives source deletion"),
+		FindVisionEntry(*Held, NearSource)
+			&& FindVisionEntry(*Held, NearSource)->Polygon.Vertices == HeldNearVertices);
+
+	const int64 InvalidationsBeforeDelete = Stats.InvalidatedEntryCount;
+	TestTrue(TEXT("Near occluder unregisters"), Subsystem->UnregisterOccluder(NearDoor));
+	Stats = Subsystem->GetPreparedEventIndexStats();
+	TestTrue(
+		TEXT("Occluder deletion invalidates retained prepared entries"),
+		Stats.InvalidatedEntryCount > InvalidationsBeforeDelete);
+	TestEqual(TEXT("Unneeded prepared storage is reclaimed"), Stats.LiveEntryCount, 0);
+	TestEqual(TEXT("Unneeded prepared bytes are reclaimed"), Stats.LiveAllocatedBytes, int64(0));
+
+	FarDescription.Transform.SetRotation(FQuat(FVector::UpVector, FMath::DegreesToRadians(15.0)));
+	TestTrue(
+		TEXT("Remaining source rebuilds safely after global invalidation"),
+		Subsystem->UpdateVisionSourceTransform(FarSource, FarDescription.Transform));
+	TestEqual(
+		TEXT("Remaining source reacquires one prepared entry"),
+		Subsystem->GetPreparedEventIndexStats().LiveEntryCount,
+		1);
+	TestTrue(TEXT("Far occluder unregisters"), Subsystem->UnregisterOccluder(FarDoor));
+	const FSightWeaveFrameSnapshot AfterFarDelete = Subsystem->GetPublishedSnapshot();
+	TestTrue(
+		TEXT("Remaining source stays published after occluder deletion"),
+		FindVisionEntry(AfterFarDelete, FarSource) != nullptr);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P2PreparedEventIndexIsolationDeterminismTest,
+	"SightWeave.M2P2.PreparedEventIndex.IsolationColdWarmDeterminism",
+	SightWeave::M2P2::PreparedEventIndexTests::TestFlags)
+
+bool FSightWeaveM2P2PreparedEventIndexIsolationDeterminismTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P2::PreparedEventIndexTests;
+	FTestWorld World(TEXT("SightWeaveM2P2PreparedIsolation"));
+	USightWeaveWorldSubsystem* Subsystem = World.GetSubsystem();
+	if (!TestNotNull(TEXT("Subsystem exists"), Subsystem)
+		|| !TestTrue(TEXT("Ground registers"), Subsystem->RegisterFloor(Floor(), nullptr))
+		|| !TestTrue(TEXT("Inactive basement registers"), Subsystem->RegisterFloor(InactiveBasementFloor(), nullptr))
+		|| !TestTrue(TEXT("Room registers"), Subsystem->RegisterOccluder(RoomSegments(), false, true, nullptr).IsValid()))
+	{
+		return false;
+	}
+
+	FSightWeaveVisionSourceDescription LocalDescription = VisionSource(FVector(0.0, 0.0, 100.0));
+	const FSightWeaveVisionSourceHandle LocalHandle =
+		Subsystem->RegisterVisionSource(LocalDescription, nullptr);
+	FSightWeaveVisionSourceDescription RemoteDescription = LocalDescription;
+	RemoteDescription.KnowledgeOwnerId = Remote;
+	const FSightWeaveVisionSourceHandle RemoteHandle =
+		Subsystem->RegisterVisionSource(RemoteDescription, nullptr);
+	FSightWeaveVisionSourceDescription HeightDescription = LocalDescription;
+	HeightDescription.HeightRange.ZMin = 50.0f;
+	HeightDescription.HeightRange.ZMax = 250.0f;
+	const FSightWeaveVisionSourceHandle HeightHandle =
+		Subsystem->RegisterVisionSource(HeightDescription, nullptr);
+	FSightWeaveVisionSourceDescription BasementDescription = LocalDescription;
+	BasementDescription.FloorId = Basement;
+	const FSightWeaveVisionSourceHandle BasementHandle =
+		Subsystem->RegisterVisionSource(BasementDescription, nullptr);
+	FSightWeaveVisionSourceDescription RangeDescription =
+		VisionSource(FVector(0.0, 0.0, 100.0), 600.0);
+	const FSightWeaveVisionSourceHandle RangeHandle =
+		Subsystem->RegisterVisionSource(RangeDescription, nullptr);
+	FSightWeaveVisionSourceDescription ConeDescription = LocalDescription;
+	ConeDescription.Shape = ESightWeaveSourceShape::CameraCone;
+	ConeDescription.HalfAngleDegrees = 35.0f;
+	const FSightWeaveVisionSourceHandle ConeHandle =
+		Subsystem->RegisterVisionSource(ConeDescription, nullptr);
+	if (!TestTrue(TEXT("Local source registers"), LocalHandle.IsValid())
+		|| !TestTrue(TEXT("Remote-owner source registers"), RemoteHandle.IsValid())
+		|| !TestTrue(TEXT("Different-height source registers"), HeightHandle.IsValid())
+		|| !TestTrue(TEXT("Different-floor source registers"), BasementHandle.IsValid())
+		|| !TestTrue(TEXT("Different-range source registers"), RangeHandle.IsValid())
+		|| !TestTrue(TEXT("Different-cone source registers"), ConeHandle.IsValid()))
+	{
+		return false;
+	}
+	const FSightWeavePreparedEventIndexStats SharedStats = Subsystem->GetPreparedEventIndexStats();
+	TestTrue(TEXT("Compatible origins share geometry preparation"), SharedStats.HitCount >= 3);
+	TestTrue(TEXT("Height remains an exact cache-key boundary"), SharedStats.MissCount >= 2);
+	FSightWeaveFloorDefinition InactiveGround = Floor();
+	InactiveGround.bActiveForQueries = false;
+	FSightWeaveFloorDefinition ActiveBasement = InactiveBasementFloor();
+	ActiveBasement.bActiveForQueries = true;
+	TestTrue(TEXT("Ground deactivates for floor-key proof"), Subsystem->UpdateFloor(Ground, InactiveGround));
+	const int64 MissesBeforeBasementActivation = Subsystem->GetPreparedEventIndexStats().MissCount;
+	TestTrue(TEXT("Basement activates for floor-key proof"), Subsystem->UpdateFloor(Basement, ActiveBasement));
+	TestEqual(
+		TEXT("Activating another floor builds a distinct prepared key"),
+		Subsystem->GetPreparedEventIndexStats().MissCount,
+		MissesBeforeBasementActivation + 1);
+	TestTrue(TEXT("Basement deactivates after floor-key proof"), Subsystem->UpdateFloor(Basement, InactiveBasementFloor()));
+	TestTrue(TEXT("Ground reactivates after floor-key proof"), Subsystem->UpdateFloor(Ground, Floor()));
+
+	FSightWeaveVisionSourceDescription VisibleVision = LocalDescription;
+	VisibleVision.IlluminationPolicy = ESightWeaveIlluminationPolicy::RequiresLegalIllumination;
+	VisibleVision.Compatibility.AcceptedCapabilities.Add(FName(TEXT("Visible")));
+	const FSightWeaveVisionSourceHandle VisibleVisionHandle =
+		Subsystem->RegisterVisionSource(VisibleVision, nullptr);
+	FSightWeaveVisionSourceDescription InfraredVision = VisibleVision;
+	InfraredVision.Compatibility.AcceptedCapabilities.Reset();
+	InfraredVision.Compatibility.AcceptedCapabilities.Add(FName(TEXT("Infrared")));
+	const FSightWeaveVisionSourceHandle InfraredVisionHandle =
+		Subsystem->RegisterVisionSource(InfraredVision, nullptr);
+	FSightWeaveIlluminationSourceDescription VisibleLight =
+		IlluminationSource(FVector(0.0, 0.0, 100.0));
+	VisibleLight.EmittedCapabilities.Add(FName(TEXT("Visible")));
+	const FSightWeaveIlluminationSourceHandle VisibleLightHandle =
+		Subsystem->RegisterIlluminationSource(VisibleLight, nullptr);
+	FSightWeaveIlluminationSourceDescription InfraredLight = VisibleLight;
+	InfraredLight.EmittedCapabilities.Reset();
+	InfraredLight.EmittedCapabilities.Add(FName(TEXT("Infrared")));
+	const FSightWeaveIlluminationSourceHandle InfraredLightHandle =
+		Subsystem->RegisterIlluminationSource(InfraredLight, nullptr);
+	if (!TestTrue(TEXT("Visible vision registers"), VisibleVisionHandle.IsValid())
+		|| !TestTrue(TEXT("Infrared vision registers"), InfraredVisionHandle.IsValid())
+		|| !TestTrue(TEXT("Visible light registers"), VisibleLightHandle.IsValid())
+		|| !TestTrue(TEXT("Infrared light registers"), InfraredLightHandle.IsValid()))
+	{
+		return false;
+	}
+
+	const FSightWeaveFrameSnapshot CapabilitySnapshot = Subsystem->GetPublishedSnapshot();
+	const FSightWeaveVisionSnapshotEntry* VisibleEntry =
+		FindVisionEntry(CapabilitySnapshot, VisibleVisionHandle);
+	const FSightWeaveVisionSnapshotEntry* InfraredEntry =
+		FindVisionEntry(CapabilitySnapshot, InfraredVisionHandle);
+	TestTrue(
+		TEXT("Visible capability binds only visible light"),
+		VisibleEntry
+			&& VisibleEntry->CompatibleIlluminationSources.Num() == 1
+			&& VisibleEntry->CompatibleIlluminationSources[0] == VisibleLightHandle);
+	TestTrue(
+		TEXT("Infrared capability binds only infrared light"),
+		InfraredEntry
+			&& InfraredEntry->CompatibleIlluminationSources.Num() == 1
+			&& InfraredEntry->CompatibleIlluminationSources[0] == InfraredLightHandle);
+
+	const FSightWeaveVisibilityQueryResult LocalQuery =
+		Subsystem->QueryEffectiveLiveAtLocation(Local, Ground, FVector(0.0, 0.0, 100.0));
+	const FSightWeaveVisibilityQueryResult RemoteQuery =
+		Subsystem->QueryEffectiveLiveAtLocation(Remote, Ground, FVector(0.0, 0.0, 100.0));
+	const FSightWeaveVisibilityQueryResult BasementQuery =
+		Subsystem->QueryEffectiveLiveAtLocation(Local, Basement, FVector(0.0, 0.0, 100.0));
+	TestTrue(
+		TEXT("Local query excludes remote-owner attribution"),
+		LocalQuery.bVisible
+			&& LocalQuery.ContributingVisionSources.Contains(LocalHandle)
+			&& !LocalQuery.ContributingVisionSources.Contains(RemoteHandle));
+	TestTrue(
+		TEXT("Remote query excludes local-owner attribution"),
+		RemoteQuery.bVisible
+			&& RemoteQuery.ContributingVisionSources.Contains(RemoteHandle)
+			&& !RemoteQuery.ContributingVisionSources.Contains(LocalHandle));
+	TestTrue(
+		TEXT("Inactive floor cannot leak ground visibility"),
+		BasementQuery.bAuthoritative && !BasementQuery.bVisible);
+
+	const FSightWeaveFrameSnapshot ColdSnapshot = Subsystem->GetPublishedSnapshot();
+	const FSightWeaveVisionSnapshotEntry* ColdLocal = FindVisionEntry(ColdSnapshot, LocalHandle);
+	if (!TestNotNull(TEXT("Cold local entry exists"), ColdLocal))
+	{
+		return false;
+	}
+	const TArray<FVector> ColdVertices = ColdLocal->Polygon.Vertices;
+	const FSightWeaveRevision ColdSourceRevision = ColdLocal->SourceRevision;
+	const FSightWeaveVisionSnapshotEntry* WarmSharedPeer =
+		FindVisionEntry(ColdSnapshot, RemoteHandle);
+	TestTrue(
+		TEXT("Cold build and same-input shared hit have exact output"),
+		WarmSharedPeer && WarmSharedPeer->Polygon.Vertices == ColdVertices);
+	RangeDescription.Range = 700.0f;
+	TestTrue(TEXT("Range-only update succeeds"), Subsystem->UpdateVisionSource(RangeHandle, RangeDescription));
+	const FSightWeaveFrameSnapshot AfterRangeSnapshot = Subsystem->GetPublishedSnapshot();
+	const FSightWeaveVisionSnapshotEntry* LocalAfterRange =
+		FindVisionEntry(AfterRangeSnapshot, LocalHandle);
+	TestTrue(
+		TEXT("One source range change does not pollute shared peers"),
+		LocalAfterRange
+			&& LocalAfterRange->SourceRevision == ColdSourceRevision
+			&& LocalAfterRange->Polygon.Vertices == ColdVertices);
+
+	TArray<TArray<FVector>> FirstRotationTrace;
+	FirstRotationTrace.Reserve(8);
+	for (int32 RotationIndex = 0; RotationIndex < 8; ++RotationIndex)
+	{
+		LocalDescription.Transform.SetRotation(FQuat(
+			FVector::UpVector,
+			FMath::DegreesToRadians(17.0 * static_cast<double>(RotationIndex + 1))));
+		TestTrue(
+			TEXT("Deterministic radial rotation succeeds"),
+			Subsystem->UpdateVisionSourceTransform(LocalHandle, LocalDescription.Transform));
+		const FSightWeaveFrameSnapshot WarmSnapshot = Subsystem->GetPublishedSnapshot();
+		const FSightWeaveVisionSnapshotEntry* WarmEntry =
+			FindVisionEntry(WarmSnapshot, LocalHandle);
+		TestTrue(
+			TEXT("First deterministic radial trace entry is valid"),
+			WarmEntry && WarmEntry->Polygon.IsValid());
+		FirstRotationTrace.Add(WarmEntry ? WarmEntry->Polygon.Vertices : TArray<FVector>());
+	}
+	for (int32 RotationIndex = 0; RotationIndex < FirstRotationTrace.Num(); ++RotationIndex)
+	{
+		LocalDescription.Transform.SetRotation(FQuat(
+			FVector::UpVector,
+			FMath::DegreesToRadians(17.0 * static_cast<double>(RotationIndex + 1))));
+		TestTrue(
+			TEXT("Repeated deterministic radial rotation succeeds"),
+			Subsystem->UpdateVisionSourceTransform(LocalHandle, LocalDescription.Transform));
+		const FSightWeaveFrameSnapshot RepeatedSnapshot = Subsystem->GetPublishedSnapshot();
+		const FSightWeaveVisionSnapshotEntry* RepeatedEntry =
+			FindVisionEntry(RepeatedSnapshot, LocalHandle);
+		TestTrue(
+			TEXT("Repeated radial trace is bitwise deterministic"),
+			RepeatedEntry && RepeatedEntry->Polygon.Vertices == FirstRotationTrace[RotationIndex]);
+	}
+	LocalDescription.Transform.SetLocation(FVector(25.0, 0.0, 100.0));
+	TestTrue(
+		TEXT("Translation builds another exact origin"),
+		Subsystem->UpdateVisionSourceTransform(LocalHandle, LocalDescription.Transform));
+	LocalDescription.Transform.SetLocation(FVector(0.0, 0.0, 100.0));
+	TestTrue(
+		TEXT("Returning to resident origin succeeds"),
+		Subsystem->UpdateVisionSourceTransform(LocalHandle, LocalDescription.Transform));
+	const FSightWeaveFrameSnapshot ReturnedSnapshot = Subsystem->GetPublishedSnapshot();
+	const FSightWeaveVisionSnapshotEntry* ReturnedEntry =
+		FindVisionEntry(ReturnedSnapshot, LocalHandle);
+	TestTrue(
+		TEXT("Returning to resident origin reproduces the same-rotation warm output"),
+		ReturnedEntry
+			&& !FirstRotationTrace.IsEmpty()
+			&& ReturnedEntry->Polygon.Vertices == FirstRotationTrace.Last());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P2PreparedEventIndexMemoryPressureTest,
+	"SightWeave.M2P2.PreparedEventIndex.MemoryPressureReclamation",
+	SightWeave::M2P2::PreparedEventIndexTests::TestFlags)
+
+bool FSightWeaveM2P2PreparedEventIndexMemoryPressureTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P2::PreparedEventIndexTests;
+	constexpr int64 ByteCap = 1024ll * 1024ll;
+	FTestWorld World(TEXT("SightWeaveM2P2PreparedMemoryPressure"));
+	USightWeaveWorldSubsystem* Subsystem = World.GetSubsystem();
+	if (!TestNotNull(TEXT("Subsystem exists"), Subsystem)
+		|| !TestTrue(TEXT("Floor registers"), Subsystem->RegisterFloor(Floor(), nullptr))
+		|| !TestTrue(
+			TEXT("Byte-pressure configuration applies"),
+			Subsystem->ConfigurePreparedEventIndexForTesting(4, ByteCap))
+		|| !TestTrue(
+			TEXT("Dense occluder registers"),
+			Subsystem->RegisterOccluder(MakeDenseSegments(2048), false, true, nullptr).IsValid()))
+	{
+		return false;
+	}
+
+	FSightWeaveVisionSourceDescription A = VisionSource(FVector(0.0, 0.0, 100.0), 1200.0);
+	FSightWeaveVisionSourceDescription B = VisionSource(FVector(5.0, 0.0, 100.0), 1200.0);
+	const FSightWeaveVisionSourceHandle AHandle = Subsystem->RegisterVisionSource(A, nullptr);
+	if (!TestTrue(TEXT("First dense source registers"), AHandle.IsValid()))
+	{
+		return false;
+	}
+	const FSightWeavePreparedEventIndexStats AfterA = Subsystem->GetPreparedEventIndexStats();
+	TestEqual(TEXT("First dense entry is retained"), AfterA.LiveEntryCount, 1);
+	TestTrue(TEXT("First dense entry has observable bytes"), AfterA.LiveAllocatedBytes > 0);
+	TestTrue(TEXT("First dense entry respects byte cap"), AfterA.LiveAllocatedBytes <= ByteCap);
+
+	const FSightWeaveVisionSourceHandle BHandle = Subsystem->RegisterVisionSource(B, nullptr);
+	if (!TestTrue(TEXT("Second dense source remains exact through fallback"), BHandle.IsValid()))
+	{
+		return false;
+	}
+	const FSightWeavePreparedEventIndexStats AfterPressure =
+		Subsystem->GetPreparedEventIndexStats();
+	TestTrue(
+		TEXT("Bound-entry byte pressure records exact fallback"),
+		AfterPressure.CapacityFallbackCount > AfterA.CapacityFallbackCount);
+	TestTrue(TEXT("Retained bytes remain within cap"), AfterPressure.LiveAllocatedBytes <= ByteCap);
+	TestTrue(
+		TEXT("Attempted pressure is disclosed by high water"),
+		AfterPressure.HighWaterAllocatedBytes > AfterPressure.LiveAllocatedBytes);
+
+	TestTrue(TEXT("First source releases its binding"), Subsystem->UnregisterVisionSource(AHandle));
+	B.Transform.SetLocation(FVector(20.0, 0.0, 100.0));
+	TestTrue(
+		TEXT("Fallback source reacquires after old binding release"),
+		Subsystem->UpdateVisionSourceTransform(BHandle, B.Transform));
+	const FSightWeavePreparedEventIndexStats AfterReclaim =
+		Subsystem->GetPreparedEventIndexStats();
+	TestEqual(TEXT("One dense entry remains after reclaim"), AfterReclaim.LiveEntryCount, 1);
+	TestEqual(TEXT("One dense source is bound after reclaim"), AfterReclaim.SourceBindingCount, 1);
+	TestTrue(TEXT("Reclaim evicts the unbound high-water entry"), AfterReclaim.EvictionCount >= 1);
+	TestTrue(TEXT("Reclaimed live bytes respect cap"), AfterReclaim.LiveAllocatedBytes <= ByteCap);
+
+	TestTrue(
+		TEXT("Additional geometry registers through oversized exact fallback"),
+		Subsystem->RegisterOccluder(MakeDenseSegments(64), false, true, nullptr).IsValid());
+	const FSightWeavePreparedEventIndexStats AfterOversized =
+		Subsystem->GetPreparedEventIndexStats();
+	TestTrue(TEXT("Oversized preparation is diagnosed"), AfterOversized.OversizedEntryCount >= 1);
+	TestEqual(TEXT("Oversized preparation is not retained"), AfterOversized.LiveEntryCount, 0);
+	TestEqual(TEXT("Oversized retained bytes are released"), AfterOversized.LiveAllocatedBytes, int64(0));
+	TestTrue(
+		TEXT("High-water evidence survives reclamation"),
+		AfterOversized.HighWaterAllocatedBytes >= AfterReclaim.HighWaterAllocatedBytes);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P2PreparedEventIndexWorldLifecycleTest,
+	"SightWeave.M2P2.PreparedEventIndex.WorldLifecycleIsolation",
+	SightWeave::M2P2::PreparedEventIndexTests::TestFlags)
+
+bool FSightWeaveM2P2PreparedEventIndexWorldLifecycleTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P2::PreparedEventIndexTests;
+	TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> HeldAcrossTeardown;
+	for (int32 RestartIndex = 0; RestartIndex < 3; ++RestartIndex)
+	{
+		FTestWorld RestartedWorld(TEXT("SightWeaveM2P2PreparedRestart"));
+		USightWeaveWorldSubsystem* RestartedSubsystem = RestartedWorld.GetSubsystem();
+		if (!TestNotNull(TEXT("Restarted subsystem exists"), RestartedSubsystem))
+		{
+			return false;
+		}
+		const FSightWeavePreparedEventIndexStats EmptyStats =
+			RestartedSubsystem->GetPreparedEventIndexStats();
+		TestEqual(TEXT("Restart begins with zero prepared entries"), EmptyStats.LiveEntryCount, 0);
+		TestEqual(TEXT("Restart begins with zero prepared bytes"), EmptyStats.LiveAllocatedBytes, int64(0));
+		TestEqual(TEXT("Restart begins with zero prepared misses"), EmptyStats.MissCount, int64(0));
+		if (!TestTrue(TEXT("Restart floor registers"), RestartedSubsystem->RegisterFloor(Floor(), nullptr))
+			|| !TestTrue(
+				TEXT("Restart room registers"),
+				RestartedSubsystem->RegisterOccluder(RoomSegments(), false, true, nullptr).IsValid())
+			|| !TestTrue(
+				TEXT("Restart source registers"),
+				RestartedSubsystem->RegisterVisionSource(
+					VisionSource(FVector(0.0, 0.0, 100.0)),
+					nullptr).IsValid()))
+		{
+			return false;
+		}
+		const FSightWeavePreparedEventIndexStats PopulatedStats =
+			RestartedSubsystem->GetPreparedEventIndexStats();
+		TestEqual(TEXT("Restart owns one prepared entry"), PopulatedStats.LiveEntryCount, 1);
+		TestEqual(TEXT("Restart owns one prepared binding"), PopulatedStats.SourceBindingCount, 1);
+		if (RestartIndex == 0)
+		{
+			HeldAcrossTeardown = RestartedSubsystem->AcquirePublishedSnapshotForTesting();
+		}
+	}
+	TestTrue(
+		TEXT("Plain-data held snapshot survives repeated world teardown"),
+		HeldAcrossTeardown.IsValid()
+			&& HeldAcrossTeardown->VisionSources.Num() == 1
+			&& HeldAcrossTeardown->VisionSources[0].Polygon.IsValid());
+
+	FTestWorld WorldA(TEXT("SightWeaveM2P2PreparedWorldA"));
+	FTestWorld WorldB(TEXT("SightWeaveM2P2PreparedWorldB"));
+	USightWeaveWorldSubsystem* SubsystemA = WorldA.GetSubsystem();
+	USightWeaveWorldSubsystem* SubsystemB = WorldB.GetSubsystem();
+	if (!TestNotNull(TEXT("World A subsystem exists"), SubsystemA)
+		|| !TestNotNull(TEXT("World B subsystem exists"), SubsystemB)
+		|| !TestTrue(TEXT("World A floor registers"), SubsystemA->RegisterFloor(Floor(), nullptr))
+		|| !TestTrue(TEXT("World B floor registers"), SubsystemB->RegisterFloor(Floor(), nullptr))
+		|| !TestTrue(TEXT("World A config is independent"), SubsystemA->ConfigurePreparedEventIndexForTesting(1, 1024ll * 1024ll))
+		|| !TestTrue(TEXT("World B config is independent"), SubsystemB->ConfigurePreparedEventIndexForTesting(3, 4ll * 1024ll * 1024ll))
+		|| !TestTrue(TEXT("World A room registers"), SubsystemA->RegisterOccluder(RoomSegments(), false, true, nullptr).IsValid())
+		|| !TestTrue(TEXT("World B room registers"), SubsystemB->RegisterOccluder(RoomSegments(), false, true, nullptr).IsValid()))
+	{
+		return false;
+	}
+	FSightWeaveVisionSourceDescription SourceA = VisionSource(FVector(0.0, 0.0, 100.0));
+	const FSightWeaveVisionSourceHandle HandleA = SubsystemA->RegisterVisionSource(SourceA, nullptr);
+	const FSightWeaveVisionSourceHandle HandleB = SubsystemB->RegisterVisionSource(SourceA, nullptr);
+	if (!TestTrue(TEXT("World A source registers"), HandleA.IsValid())
+		|| !TestTrue(TEXT("World B source registers"), HandleB.IsValid()))
+	{
+		return false;
+	}
+	const FSightWeavePreparedEventIndexStats BeforeA = SubsystemA->GetPreparedEventIndexStats();
+	const FSightWeavePreparedEventIndexStats BeforeB = SubsystemB->GetPreparedEventIndexStats();
+	SourceA.Transform.SetRotation(FQuat(FVector::UpVector, FMath::DegreesToRadians(45.0)));
+	TestTrue(
+		TEXT("World A source rotation succeeds"),
+		SubsystemA->UpdateVisionSourceTransform(HandleA, SourceA.Transform));
+	const FSightWeavePreparedEventIndexStats AfterA = SubsystemA->GetPreparedEventIndexStats();
+	const FSightWeavePreparedEventIndexStats AfterB = SubsystemB->GetPreparedEventIndexStats();
+	TestEqual(TEXT("World A records its own cache hit"), AfterA.HitCount, BeforeA.HitCount + 1);
+	TestEqual(TEXT("World B hit counter is isolated"), AfterB.HitCount, BeforeB.HitCount);
+	TestEqual(TEXT("World B miss counter is isolated"), AfterB.MissCount, BeforeB.MissCount);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P2PreparedCacheConcurrentIsolationTest,
+	"SightWeave.M2P2.PreparedEventIndex.ConcurrentScratchIsolation",
+	SightWeave::M2P2::PreparedEventIndexTests::TestFlags)
+
+bool FSightWeaveM2P2PreparedCacheConcurrentIsolationTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P2::PreparedEventIndexTests;
+	FSightWeaveReferenceSolveInput Input;
+	Input.Origin = FVector(37.0, -19.0, 100.0);
+	Input.Forward = FVector2D(1.0, 0.0);
+	Input.Shape = ESightWeaveSourceShape::CameraCone;
+	Input.Range = 1200.0;
+	Input.HalfAngleDegrees = 50.0;
+	Input.FloorId = Ground;
+	Input.HeightRange.ZMin = 0.0f;
+	Input.HeightRange.ZMax = 300.0f;
+	Input.Segments = MakeDenseSegments(1024);
+	TestTrue(
+		TEXT("Eight independent prepared indexes and solver scratch frames remain deterministic"),
+		USightWeaveWorldSubsystem::ExercisePreparedEventIndexConcurrentIsolationForTesting(Input, 8, 8));
 	return true;
 }
 

@@ -46,6 +46,7 @@ void FSightWeavePreparedEventIndex::InvalidateAll()
 			Slot.Cache->bInputInvariantInitialized = false;
 			Slot.Cache->bAbsoluteEndpointEventsValid = false;
 		}
+		Slot.Cache.Reset();
 	}
 	UpdateLiveStats();
 }
@@ -186,6 +187,7 @@ bool FSightWeavePreparedEventIndex::Commit(
 			break;
 		}
 		EvictionCandidate->bValid = false;
+		EvictionCandidate->Cache.Reset();
 		++Stats.EvictionCount;
 		UpdateLiveStats();
 	}
@@ -206,6 +208,7 @@ bool FSightWeavePreparedEventIndex::Commit(
 	Slot->BindingCount = 0;
 	Cache->bInputInvariantInitialized = false;
 	Cache->bAbsoluteEndpointEventsValid = false;
+	Slot->Cache.Reset();
 	UpdateLiveStats();
 	return false;
 }

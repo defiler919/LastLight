@@ -258,6 +258,10 @@ public:
 	}
 
 	bool ConfigurePreparedEventIndexForTesting(int32 MaximumEntries, int64 MaximumBytes);
+	static bool ExercisePreparedEventIndexConcurrentIsolationForTesting(
+		const FSightWeaveReferenceSolveInput& Input,
+		int32 WorkerCount,
+		int32 RepeatsPerWorker);
 #endif
 
 	void QueryOccluderSegments(

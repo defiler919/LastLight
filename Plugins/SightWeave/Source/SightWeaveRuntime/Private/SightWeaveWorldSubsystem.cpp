@@ -860,12 +860,27 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 #endif
 	const double HeightOverlapEpsilon = GetDefault<USightWeaveSettings>()->GeometryTolerances.HeightOverlapEpsilon;
 	auto PatchCachedSegments = [
+		this,
 		&Prepared,
 		&OldSegments = Record->Segments,
 		Handle,
 		bEnabled,
 		HeightOverlapEpsilon](auto& SegmentCaches, const auto& SourceDescriptions)
 	{
+		auto CopySegmentRetainingSourceEdgeCapacity = [](
+			FSightWeaveSegment2D& Destination,
+			const FSightWeaveSegment2D& Source)
+		{
+			Destination.A = Source.A;
+			Destination.B = Source.B;
+			Destination.FloorId = Source.FloorId;
+			Destination.HeightRange = Source.HeightRange;
+			Destination.OccluderHandle = Source.OccluderHandle;
+			Destination.bDynamic = Source.bDynamic;
+			Destination.StableId = Source.StableId;
+			Destination.SourceEdgeIndices.Reset();
+			Destination.SourceEdgeIndices.Append(Source.SourceEdgeIndices);
+		};
 		for (auto& CachePair : SegmentCaches)
 		{
 			const auto* Description = SourceDescriptions.Find(CachePair.Key);
@@ -926,10 +941,14 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 					});
 				if (Replacement)
 				{
-					CachedSegments[CachedIndex] = *Replacement;
+					CopySegmentRetainingSourceEdgeCapacity(
+						CachedSegments[CachedIndex],
+						*Replacement);
 				}
 				else
 				{
+					ReusableCachedSegmentSourceEdgeIndexArrays.Add(
+						MoveTemp(CachedSegments[CachedIndex].SourceEdgeIndices));
 					CachedSegments.RemoveAt(CachedIndex, 1, EAllowShrinking::No);
 				}
 			}
@@ -943,7 +962,15 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 				if (!CachedSegments.IsValidIndex(CachedIndex)
 					|| CachedSegments[CachedIndex].StableId != Segment.StableId)
 				{
-					CachedSegments.Insert(Segment, CachedIndex);
+					FSightWeaveSegment2D CachedSegment;
+					if (!ReusableCachedSegmentSourceEdgeIndexArrays.IsEmpty())
+					{
+						CachedSegment.SourceEdgeIndices = MoveTemp(
+							ReusableCachedSegmentSourceEdgeIndexArrays.Last());
+						ReusableCachedSegmentSourceEdgeIndexArrays.Pop(EAllowShrinking::No);
+					}
+					CopySegmentRetainingSourceEdgeCapacity(CachedSegment, Segment);
+					CachedSegments.Insert(MoveTemp(CachedSegment), CachedIndex);
 				}
 			}
 		}

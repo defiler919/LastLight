@@ -480,6 +480,7 @@ private:
 	TMap<int64, FSightWeaveIlluminationSnapshotEntry> CachedIlluminationSnapshotEntries;
 	TMap<int64, TArray<FSightWeaveSegment2D>> CachedVisionSolveSegments;
 	TMap<int64, TArray<FSightWeaveSegment2D>> CachedIlluminationSolveSegments;
+	TArray<TArray<int32>> ReusableCachedSegmentSourceEdgeIndexArrays;
 	TMap<int64, FSourceCandidateQueryKey> CachedVisionCandidateQueryKeys;
 	TMap<int64, FSourceCandidateQueryKey> CachedIlluminationCandidateQueryKeys;
 	TMap<int64, TSharedPtr<FSightWeaveOptimizedSolveCache>> CachedVisionPreparedSolves;

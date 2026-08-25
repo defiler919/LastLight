@@ -39,12 +39,15 @@ namespace SightWeave::M2P1::AllocationTests
 	{
 		Solver2x64,
 		Solver8x64,
+		Solver8x256,
+		Solver8x1024,
 		Solver4096Total,
 		Solver4096PerSource,
 		PointQuery,
 		Batch512,
 		SourceTransformUpdate,
 		DynamicDoorUpdate,
+		DynamicDoorBroadUpdate,
 		CleanPublication,
 		NoChangeUpdate,
 		RadialRotation,
@@ -66,12 +69,15 @@ namespace SightWeave::M2P1::AllocationTests
 		{
 		case EWorkload::Solver2x64: return TEXT("solver_2x64");
 		case EWorkload::Solver8x64: return TEXT("solver_8x64");
+		case EWorkload::Solver8x256: return TEXT("solver_8x256");
+		case EWorkload::Solver8x1024: return TEXT("solver_8x1024");
 		case EWorkload::Solver4096Total: return TEXT("solver_4096_total");
 		case EWorkload::Solver4096PerSource: return TEXT("solver_4096_per_source");
 		case EWorkload::PointQuery: return TEXT("point_query");
 		case EWorkload::Batch512: return TEXT("batch_512");
 		case EWorkload::SourceTransformUpdate: return TEXT("source_transform_update");
 		case EWorkload::DynamicDoorUpdate: return TEXT("dynamic_door_update");
+		case EWorkload::DynamicDoorBroadUpdate: return TEXT("dynamic_door_broad_4v2l_update");
 		case EWorkload::CleanPublication: return TEXT("clean_publication");
 		case EWorkload::NoChangeUpdate: return TEXT("no_change_update");
 		case EWorkload::RadialRotation: return TEXT("motion_radial_rotation");
@@ -651,6 +657,8 @@ bool FSightWeaveM2P1AllocationCaptureTest::RunTest(const FString& Parameters)
 	int64 ResultSink = 0;
 	TraceSolverWorkload(EWorkload::Solver2x64, 2, 64, false, ResultSink);
 	TraceSolverWorkload(EWorkload::Solver8x64, 8, 64, false, ResultSink);
+	TraceSolverWorkload(EWorkload::Solver8x256, 8, 256, true, ResultSink);
+	TraceSolverWorkload(EWorkload::Solver8x1024, 8, 1024, true, ResultSink);
 	TraceSolverWorkload(EWorkload::Solver4096Total, 8, 512, true, ResultSink);
 	TraceSolverWorkload(EWorkload::Solver4096PerSource, 8, 4096, true, ResultSink);
 
@@ -858,6 +866,23 @@ bool FSightWeaveM2P1AllocationCaptureTest::RunTest(const FString& Parameters)
 		TorchHandle.IsValid() && LanternHandle.IsValid());
 	for (int32 Warmup = 0; Warmup < 2; ++Warmup)
 	{
+		const double X = Warmup % 2 == 0 ? 250.0 : 850.0;
+		DoorSegments[0].A.X = X;
+		DoorSegments[0].B.X = X;
+		Subsystem->UpdateOccluder(DoorHandle, DoorSegments, true, true);
+	}
+	for (uint16 Sample = 0; Sample < 3; ++Sample)
+	{
+		const double X = Sample % 2 == 0 ? 250.0 : 850.0;
+		DoorSegments[0].A.X = X;
+		DoorSegments[0].B.X = X;
+		EmitScope(EWorkload::DynamicDoorBroadUpdate, Sample, [&]
+		{
+			Subsystem->UpdateOccluder(DoorHandle, DoorSegments, true, true);
+		});
+	}
+	for (int32 Warmup = 0; Warmup < 2; ++Warmup)
+	{
 		const FVector Location(Warmup % 2 == 0 ? 5.0 : 0.0, 0.0, 100.0);
 		VisionDescriptions[0].Transform.SetLocation(Location);
 		VisionDescriptions[1].Transform.SetLocation(Location);
@@ -978,7 +1003,19 @@ bool FSightWeaveM2P1AllocationAnalyzeTest::RunTest(const FString& Parameters)
 		const int32 Index = static_cast<int32>(Sample.Workload);
 		if (Counts.IsValidIndex(Index)) ++Counts[Index];
 		const bool bStrictWarmZeroWorkload =
-			Sample.Workload == EWorkload::SourceTransformUpdate
+			Sample.Workload == EWorkload::Solver2x64
+			|| Sample.Workload == EWorkload::Solver8x64
+			|| Sample.Workload == EWorkload::Solver8x256
+			|| Sample.Workload == EWorkload::Solver8x1024
+			|| Sample.Workload == EWorkload::Solver4096Total
+			|| Sample.Workload == EWorkload::Solver4096PerSource
+			|| Sample.Workload == EWorkload::PointQuery
+			|| Sample.Workload == EWorkload::Batch512
+			|| Sample.Workload == EWorkload::SourceTransformUpdate
+			|| Sample.Workload == EWorkload::DynamicDoorUpdate
+			|| Sample.Workload == EWorkload::DynamicDoorBroadUpdate
+			|| Sample.Workload == EWorkload::CleanPublication
+			|| Sample.Workload == EWorkload::NoChangeUpdate
 			|| Sample.Workload == EWorkload::RadialRotation
 			|| Sample.Workload == EWorkload::ConeRotation
 			|| Sample.Workload == EWorkload::Translation1Cm

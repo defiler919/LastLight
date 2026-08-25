@@ -206,6 +206,45 @@ its 894.6 us internal QPC stage value therefore remains wall/preemption
 telemetry, not a claim of equivalent running CPU time. Prepared deltas remained
 exactly 2 hits/4 misses/4 rebuilds/0 evictions for all 1,010 broad samples.
 
+## Frame-level soak checkpoint
+
+`SightWeaveM2P3SoakTests.cpp` adds an explicit-capture, transient-world soak
+that executes at least 36,000 frames (600 simulated seconds at 60 Hz). Each
+frame ticks the world, continuously translates and rotates a camera cone,
+exercises a close radial bypass and intermittent remote query, changes one
+dynamic door every 30 frames, moves a torch, retains a second light and guard
+camera, and runs a 512-point Batch query against 25 rooms/100 static occluder
+segments.
+Every measured frame exports total/camera/door/Batch wall and raw current-thread
+cycles, processor/migration/frequency/page-fault evidence, adjacent fixed
+controls, prepared-index deltas, revisions, warmed result capacity, and the
+same non-masking attribution class. The report includes p50/p95/p99/p99.9/max,
+tail streaks, capacity, correctness, and exact prepared-index counts.
+
+The first preserved NullRHI run at `nullrhi-36000-final01` completed all frames
+but failed intentionally because a 600-frame warmup did not cover the full
+continuous query trajectory and later result-array capacity grew by 256 bytes.
+The gate was not relaxed. Warmup was extended to 2,400 frames, which covers the
+combined motion periods, and the two final, separately launched runs passed:
+
+- `nullrhi-36000-final02`: exactly 1/1 clean test, 36,000 CSV rows, 600.000
+  simulated seconds, 0 correctness failures, 0 post-warmup capacity growth,
+  and no frame above 1 ms. Wall p50/p95/p99/p99.9/max was
+  100.2/239.6/353.7/532.3/882.8 us; the longest p99 streak was 4 frames.
+- `rendered-36000-final01`: exactly 1/1 clean test, 36,000 CSV rows, 600.000
+  simulated seconds, 0 correctness failures, and 0 post-warmup capacity
+  growth. Wall p50/p95/p99/p99.9/max was
+  159.2/256.8/408.0/511.9/2124.8 us. Two isolated >1 ms samples remained
+  `Unknown`; the longest >1 ms streak was one frame. The automation report and
+  log independently identify `D3D12 (SM6)`, chosen adapter 0, NVIDIA GeForce
+  RTX 4060, so this was not a NullRHI relabel.
+
+Both final runs recorded exactly 60 prepared hits, 51,600 misses/rebuilds, zero
+evictions, and revisions 3,096 through 49,416. Process priority and affinity
+were never changed. The rendered maximum accumulated 5,296,013 raw cycles, but
+raw cycles remain unconverted and the two isolated samples remain Unknown in
+the absence of ContextSwitch ETW authority.
+
 ## Checkpoints
 
 - [x] `docs: start SightWeave tail latency attribution` --
@@ -215,8 +254,10 @@ exactly 2 hits/4 misses/4 rebuilds/0 evictions for all 1,010 broad samples.
 - [x] `test: attribute SightWeave batch and door tails` (instrumentation and
   runner complete) -- `59a3d93f1d37b7d0c75c6e0ab4f4f800661b2b23`, pushed to origin
 - [x] `perf: eliminate confirmed SightWeave tail costs` (retained exact partial
-  prepared-segment rebuild; current checkpoint pending commit/push)
-- [ ] `test: add SightWeave frame-level soak coverage`
+  prepared-segment rebuild) -- `ed755a276cc8e02e57a65d1efe3e8ba38762c558`,
+  pushed to origin
+- [x] `test: add SightWeave frame-level soak coverage` (source, runner, and two
+  final soaks complete; current checkpoint pending commit/push)
 - [ ] `test: stabilize SightWeave performance contracts`
 - [ ] `docs: record SightWeave CPU authority final validation`
 
@@ -250,8 +291,6 @@ the only pre-existing worktree change was `Darkwell.uproject`.
 - ContextSwitch ETW permission and trace completeness.
 - Trace marker/reconstruction analysis that supplies exact running intervals
   when elevated ContextSwitch evidence is available.
-- NullRHI 10-minute/equivalent-large-update soak and a separate rendered
-  Editor/PIE soak.
 - Intrinsic CPU, wall telemetry, and frame-soak performance contracts.
 - Full M1/M2/M2P/M2P1/M2P2/M2P3 correctness, performance, allocation,
   packaging, clean-host, Shipping, dependency, Git, and LFS validation matrix.
@@ -266,9 +305,10 @@ git -c safe.directory=D:/UE_projects/LastLight rev-parse HEAD
 ```
 
 Then read this file, confirm the local-only `Darkwell.uproject` difference is
-still excluded, and continue with the frame-level soak checkpoint. The latest
-ordinary attribution command was:
+still excluded, and continue with the performance-contract checkpoint. The
+latest soak commands were:
 
 ```powershell
-pwsh -NoProfile -File .\Scripts\RunSightWeaveM2P3Attribution.ps1 -RunCount 10 -Label ordinary-10p-partial-prepared-02 -EngineRoot D:\UE_5.8
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\RunSightWeaveM2P3Soak.ps1 -Mode NullRHI -Frames 36000 -Label nullrhi-36000-final02
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\Scripts\RunSightWeaveM2P3Soak.ps1 -Mode Rendered -Frames 36000 -Label rendered-36000-final01
 ```

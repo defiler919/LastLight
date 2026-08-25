@@ -367,6 +367,41 @@ The failed reports are preserved. This must be resolved by the existing
 M2P.4 authoritative ETW attribution and host-risk checks; it is not waived or
 converted into a pass by the isolated successful rerun.
 
+### BuildPlugin and clean-host isolation checkpoint
+
+The first post-change BuildPlugin run is preserved at
+`C:\Users\defiler919\AppData\Local\Temp\SightWeaveM2P4-20260825-1700`.
+It started at `2026-08-25T16:55:06.5821948+08:00` and ended at
+`2026-08-25T16:56:54.6602150+08:00`. Clean-host UnrealEditor Development
+passed, but UnrealGame Development correctly failed with AutomationTool/UBT
+exit `6`: standalone `SightWeaveGeometry.cpp` could not resolve
+`TStaticArray`, and the reported `Swap` errors were cascades. This was a
+Runtime include-closure defect, not a CLR crash.
+
+The correction is the single explicit Core include
+`Containers/StaticArray.h`; it removes reliance on the UnrealEditor shared PCH.
+After that correction:
+
+- local `DarkwellEditor Win64 Development`: 4 actions, UBT `Succeeded`, outer
+  exit `0`, 10.55 seconds;
+- fresh BuildPlugin package
+  `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM2P4-20260825-1701`:
+  started `2026-08-25T16:58:16.4031330+08:00`, ended
+  `2026-08-25T17:00:18.6702608+08:00`, `BUILD SUCCESSFUL`, AutomationTool exit
+  `0`;
+- clean-host UnrealEditor Win64 Development: passed;
+- clean-host UnrealGame Win64 Development: passed;
+- clean-host UnrealGame Win64 Shipping: passed.
+
+Isolation audit of the successful package found no Runtime reference to
+`Darkwell`, `UnrealEd`, `SightWeaveEditor`, `SightWeaveTests`,
+`AutomationTest`, or direct Windows diagnostic libraries. Development and
+Shipping each contain 13 Runtime object/precompiled files and no Game Tests
+output. `dumpbin /dependents` for the packaged Runtime DLL lists only
+`UnrealEditor-Core`, `CoreUObject`, `Engine`, `DeveloperSettings`, `KERNEL32`,
+and VC/CRT libraries. The generated untracked 367-byte
+`Plugins/SightWeave/Config/FilterPlugin.ini` template was inspected and removed;
+it was not staged or committed.
 ## Administrator and ETW capability checkpoint
 
 The default command host measured on 2026-08-25 is not elevated:

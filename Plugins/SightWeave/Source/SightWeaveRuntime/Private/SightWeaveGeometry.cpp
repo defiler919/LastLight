@@ -3,6 +3,7 @@
 #include "SightWeaveOptimizedSolveCache.h"
 
 #include "Algo/Unique.h"
+#include "Containers/StaticArray.h"
 #include "HAL/PlatformTime.h"
 #include "HAL/ThreadSingleton.h"
 #include "Templates/Sorting.h"

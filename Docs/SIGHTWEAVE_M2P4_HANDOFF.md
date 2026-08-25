@@ -288,6 +288,54 @@ BuildPlugin, clean-host, ETW, and performance gates. Do not add unrelated
 production features. Preserve the local-only `Darkwell.uproject` association
 and never stage it.
 
+## M2P.4 Runtime audit and focused validation after toolchain recovery
+
+Production validation resumed only after the bundled-dotnet/UBT gate reached
+`COMPLETED`. The preserved Runtime diff was audited against
+`SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md`; `Darkwell.uproject` remained
+local-only and was neither edited by this phase nor staged.
+
+The audit found and corrected three specification gaps without adding unrelated
+features:
+
+- an incremental attempt is now permitted only when the source still owns the
+  same prepared-cache binding used by its prior result; a missing or replaced
+  binding executes the established full solve and records
+  `PreparedIndexMissing` or `PreparedIndexReplaced`;
+- seam validation now checks the cyclic neighbor across `-PI/+PI`, in addition
+  to the linear neighbors around every dirty sector;
+- diagnostics now expose last, accumulated, and maximum dirty radians and a
+  typed public fallback reason, while retaining rebuilt/reused-ray and timing
+  counters.
+
+Validation executed strictly serially with no Unreal Editor, Visual Studio,
+Live Coding, or other UBT instance active:
+
+- post-gate pre-audit Editor build: 7 actions, UBT `Result: Succeeded`, outer
+  exit `0`;
+- first audit compile correctly failed with outer exit `6` at C2014 because a
+  generated text replacement joined `}` and `#if`; no CLR failure was involved;
+- the immediate retry correctly failed with outer exit `6` at C1070 because the
+  same replacement left one duplicated automation `#if`; no CLR failure was
+  involved;
+- after fixing those two source-only defects, Editor build: 5 actions, UBT
+  `Result: Succeeded`, outer exit `0`, 10.03 seconds;
+- UE 5.8.1 documented `-gather` rebuild, required to discover the new test
+  translation unit: 4 actions, UBT `Result: Succeeded`, outer exit `0`, 11.11
+  seconds;
+- focused `SightWeave.M2P4.DynamicSector`: 4/4 passed, outer exit `0`, report
+  `Saved/AutomationReports/SightWeaveM2P4_DynamicSector_20260825-164523/index.json`;
+- existing `SightWeave.M2P.Differential.Runtime.AuthorityAndUpdates`: 1/1
+  passed, outer exit `0`, report
+  `Saved/AutomationReports/SightWeaveM2P4_PostAudit_RuntimeDifferential_20260825-164601/index.json`.
+
+The new focused coverage proves exact equality with a fresh full Optimized solve
+for a normal single-edge move and a move spanning the cyclic angular seam. It
+also proves exact full-solve fallback for a two-edge change and for a
+prepared-index capacity miss. This is a focused implementation checkpoint, not
+the final M2P.4 acceptance: the complete M1/M2/M2P/M2P.4 and DARKWELL suites,
+BuildPlugin, clean-host build matrix, soaks, allocation proof, ETW attribution,
+and performance contracts remain pending.
 ## Administrator and ETW capability checkpoint
 
 The default command host measured on 2026-08-25 is not elevated:

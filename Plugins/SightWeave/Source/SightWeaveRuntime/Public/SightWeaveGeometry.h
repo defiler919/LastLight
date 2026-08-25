@@ -198,6 +198,23 @@ enum class ESightWeaveSolverMode : uint8
 	Verify UMETA(DisplayName = "Verify And Fallback (Development Only)")
 };
 
+/** Stable diagnostic reason emitted when an exact dynamic-sector attempt falls back. */
+enum class ESightWeaveIncrementalSectorFallbackReason : uint8
+{
+	None,
+	InvalidRequest,
+	CacheRevisionMismatch,
+	PreviousResultMissing,
+	MultipleChangedSegments,
+	SourceNearChangedSegment,
+	DirtySectorTooLarge,
+	SeamValidationFailed,
+	TopologyValidationFailed,
+	PreparedIndexMissing,
+	PreparedIndexReplaced,
+	IncrementalSolveFailed
+};
+
 struct SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult
 {
 	struct FStageMetrics

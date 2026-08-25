@@ -73,6 +73,25 @@ struct FSightWeaveOptimizedSolveCache
 	bool bAbsoluteEndpointEventsValid = false;
 };
 
+struct FSightWeaveIncrementalSectorRequest
+{
+	TConstArrayView<FSightWeaveSegment2D> OldSegments;
+	TConstArrayView<FSightWeaveSegment2D> NewSegments;
+};
+
+struct FSightWeaveIncrementalSectorDiagnostics
+{
+	bool bAttempted = false;
+	bool bSucceeded = false;
+	ESightWeaveIncrementalSectorFallbackReason FallbackReason =
+		ESightWeaveIncrementalSectorFallbackReason::None;
+	double DirtyRadians = 0.0;
+	double IncrementalMicroseconds = 0.0;
+	double FullFallbackMicroseconds = 0.0;
+	int32 RebuiltRayCount = 0;
+	int32 ReusedRayCount = 0;
+};
+
 namespace SightWeave::Geometry
 {
 	/** Internal path used only after the world index has fully compared the exact input key. */
@@ -80,4 +99,15 @@ namespace SightWeave::Geometry
 		const FSightWeaveReferenceSolveInput& Input,
 		FSightWeaveReferenceSolveResult& OutResult,
 		FSightWeaveOptimizedSolveCache& Cache);
+
+	/**
+	 * Exact single-segment dynamic update. On any proof failure this function
+	 * synchronously executes the established full Optimized cached solve.
+	 */
+	void SolveOptimizedPolygonIntoIncrementalDynamicSector(
+		const FSightWeaveReferenceSolveInput& Input,
+		FSightWeaveReferenceSolveResult& OutResult,
+		FSightWeaveOptimizedSolveCache& Cache,
+		const FSightWeaveIncrementalSectorRequest& Request,
+		FSightWeaveIncrementalSectorDiagnostics& OutDiagnostics);
 }

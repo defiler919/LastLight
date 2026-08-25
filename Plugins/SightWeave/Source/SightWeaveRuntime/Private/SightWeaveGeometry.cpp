@@ -288,6 +288,10 @@ namespace
 		TArray<FVector2D> EndpointDirections;
 		TArray<FVector2D> CandidateDirections;
 		TArray<double> BoundaryAngles;
+		TArray<double> PreviousCandidateAngles;
+		TArray<double> PreviousCandidateDistances;
+		TArray<FVector2D> PreviousCandidateBoundaryPoints;
+		TArray<uint8> IncrementalReusedRays;
 
 		void Reset()
 		{
@@ -301,6 +305,10 @@ namespace
 			EndpointDirections.Reset();
 			CandidateDirections.Reset();
 			BoundaryAngles.Reset();
+			PreviousCandidateAngles.Reset();
+			PreviousCandidateDistances.Reset();
+			PreviousCandidateBoundaryPoints.Reset();
+			IncrementalReusedRays.Reset();
 		}
 
 		void TrimAbnormalHighWater()
@@ -315,7 +323,11 @@ namespace
 				+ EndpointAngleSortBuffer.GetAllocatedSize()
 				+ EndpointDirections.GetAllocatedSize()
 				+ CandidateDirections.GetAllocatedSize()
-				+ BoundaryAngles.GetAllocatedSize();
+				+ BoundaryAngles.GetAllocatedSize()
+				+ PreviousCandidateAngles.GetAllocatedSize()
+				+ PreviousCandidateDistances.GetAllocatedSize()
+				+ PreviousCandidateBoundaryPoints.GetAllocatedSize()
+				+ IncrementalReusedRays.GetAllocatedSize();
 			if (RetainedBytes > MaximumRetainedBytes)
 			{
 				CandidateSegments.Empty();
@@ -328,6 +340,10 @@ namespace
 				EndpointDirections.Empty();
 				CandidateDirections.Empty();
 				BoundaryAngles.Empty();
+				PreviousCandidateAngles.Empty();
+				PreviousCandidateDistances.Empty();
+				PreviousCandidateBoundaryPoints.Empty();
+				IncrementalReusedRays.Empty();
 			}
 		}
 	};
@@ -511,6 +527,378 @@ namespace
 			}
 			RunStart = RunEnd;
 		}
+	}
+
+	struct FSightWeaveDirtyAngularSector
+	{
+		double StartAngle = 0.0;
+		double EndAngle = 0.0;
+	};
+
+	struct FSightWeaveIncrementalSolveContext
+	{
+		TStaticArray<FSightWeaveDirtyAngularSector, 4> DirtySectors;
+		int32 DirtySectorCount = 0;
+		FSightWeaveIncrementalSectorDiagnostics* Diagnostics = nullptr;
+	};
+
+	bool TolerancesExactlyMatch(
+		const FSightWeaveGeometryTolerances& A,
+		const FSightWeaveGeometryTolerances& B)
+	{
+		return A.AuthoringWeldEpsilon == B.AuthoringWeldEpsilon
+			&& A.ZeroLengthEpsilon == B.ZeroLengthEpsilon
+			&& A.RayParallelEpsilon == B.RayParallelEpsilon
+			&& A.EndpointAngularEpsilonDegrees == B.EndpointAngularEpsilonDegrees
+			&& A.PointOnEdgeEpsilon == B.PointOnEdgeEpsilon
+			&& A.PointInPolygonEpsilon == B.PointInPolygonEpsilon
+			&& A.DuplicateVertexEpsilon == B.DuplicateVertexEpsilon
+			&& A.HeightOverlapEpsilon == B.HeightOverlapEpsilon
+			&& A.RadialBoundarySteps == B.RadialBoundarySteps;
+	}
+
+	bool SegmentPreparedKeyMatches(
+		const FSightWeaveSegment2D& A,
+		const FSightWeaveSegment2D& B)
+	{
+		return A.A.X == B.A.X
+			&& A.A.Y == B.A.Y
+			&& A.B.X == B.B.X
+			&& A.B.Y == B.B.Y
+			&& A.FloorId == B.FloorId
+			&& A.HeightRange.ZMin == B.HeightRange.ZMin
+			&& A.HeightRange.ZMax == B.HeightRange.ZMax
+			&& A.StableId == B.StableId;
+	}
+
+	FSightWeavePreparedSegment PrepareIncrementalSegment(
+		const FSightWeaveSegment2D& Segment,
+		const FVector2D& Origin,
+		const double ForwardAngle,
+		const FSightWeaveGeometryTolerances& Tolerances)
+	{
+		FSightWeavePreparedSegment Prepared;
+		Prepared.OffsetA = Segment.A - Origin;
+		Prepared.Vector = Segment.B - Segment.A;
+		const FVector2D OffsetB = Prepared.OffsetA + Prepared.Vector;
+		Prepared.RayDistanceNumerator = Cross2D(Prepared.OffsetA, Prepared.Vector);
+		Prepared.AbsoluteAAngle = FMath::Atan2(Prepared.OffsetA.Y, Prepared.OffsetA.X);
+		Prepared.AbsoluteBAngle = FMath::Atan2(OffsetB.Y, OffsetB.X);
+		Prepared.AAngle = NormalizeRadians(Prepared.AbsoluteAAngle - ForwardAngle);
+		Prepared.BAngle = NormalizeRadians(Prepared.AbsoluteBAngle - ForwardAngle);
+		const double MinimumEndpointDistance = FMath::Sqrt(FMath::Min(
+			Prepared.OffsetA.SizeSquared(),
+			OffsetB.SizeSquared()));
+		Prepared.AngularPadding = FMath::Max(
+			FMath::Max(1.0e-12, Tolerances.RayParallelEpsilon),
+			FMath::Atan2(
+				Tolerances.PointOnEdgeEpsilon,
+				FMath::Max(MinimumEndpointDistance, Tolerances.PointOnEdgeEpsilon)));
+		Prepared.FractionEpsilon =
+			Tolerances.PointOnEdgeEpsilon / FMath::Max(Prepared.Vector.Size(), 1.0);
+		Prepared.StableId = Segment.StableId;
+		Prepared.OriginDistanceSquared = DistanceSquaredToSegment(
+			FVector2D::ZeroVector,
+			Prepared.OffsetA,
+			OffsetB);
+		Prepared.bOriginOnSegment = Prepared.OriginDistanceSquared
+			<= FMath::Square(Tolerances.PointOnEdgeEpsilon);
+		return Prepared;
+	}
+
+	bool AddDirtyProjection(
+		const FSightWeavePreparedSegment& Segment,
+		const double EndpointEpsilon,
+		FSightWeaveIncrementalSolveContext& Context)
+	{
+		const double SignedSpan = NormalizeRadians(Segment.BAngle - Segment.AAngle);
+		const double Padding = Segment.AngularPadding + EndpointEpsilon + 1.0e-12;
+		const double Start =
+			(SignedSpan >= 0.0 ? Segment.AAngle : Segment.BAngle) - Padding;
+		const double End = Start + FMath::Abs(SignedSpan) + 2.0 * Padding;
+		for (int32 Wrap = -1; Wrap <= 1; ++Wrap)
+		{
+			const double Offset = static_cast<double>(Wrap) * SightWeaveTwoPi;
+			const double ClippedStart = FMath::Max(-PI, Start + Offset);
+			const double ClippedEnd = FMath::Min(PI, End + Offset);
+			if (ClippedStart <= ClippedEnd)
+			{
+				if (Context.DirtySectorCount >= Context.DirtySectors.Num())
+				{
+					return false;
+				}
+				Context.DirtySectors[Context.DirtySectorCount++] = {
+					ClippedStart,
+					ClippedEnd };
+			}
+		}
+		return true;
+	}
+
+	void SortAndMergeDirtySectors(FSightWeaveIncrementalSolveContext& Context)
+	{
+		for (int32 Index = 1; Index < Context.DirtySectorCount; ++Index)
+		{
+			int32 InsertIndex = Index;
+			while (InsertIndex > 0
+				&& Context.DirtySectors[InsertIndex].StartAngle
+					< Context.DirtySectors[InsertIndex - 1].StartAngle)
+			{
+				Swap(Context.DirtySectors[InsertIndex], Context.DirtySectors[InsertIndex - 1]);
+				--InsertIndex;
+			}
+		}
+
+		int32 WriteIndex = 0;
+		for (int32 ReadIndex = 0; ReadIndex < Context.DirtySectorCount; ++ReadIndex)
+		{
+			if (WriteIndex > 0
+				&& Context.DirtySectors[ReadIndex].StartAngle
+					<= Context.DirtySectors[WriteIndex - 1].EndAngle + 1.0e-12)
+			{
+				Context.DirtySectors[WriteIndex - 1].EndAngle = FMath::Max(
+					Context.DirtySectors[WriteIndex - 1].EndAngle,
+					Context.DirtySectors[ReadIndex].EndAngle);
+			}
+			else
+			{
+				Context.DirtySectors[WriteIndex++] = Context.DirtySectors[ReadIndex];
+			}
+		}
+		Context.DirtySectorCount = WriteIndex;
+	}
+
+	bool IsAngleInDirtySector(
+		const double Angle,
+		const FSightWeaveIncrementalSolveContext& Context)
+	{
+		for (int32 Index = 0; Index < Context.DirtySectorCount; ++Index)
+		{
+			if (Angle >= Context.DirtySectors[Index].StartAngle - 1.0e-12
+				&& Angle <= Context.DirtySectors[Index].EndAngle + 1.0e-12)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool ValidateIncrementalSeamGuards(
+		const TArray<double>& CandidateAngles,
+		const TArray<uint8>& ReusedRays,
+		const FSightWeaveIncrementalSolveContext& Context)
+	{
+		check(CandidateAngles.Num() == ReusedRays.Num());
+		for (int32 SectorIndex = 0; SectorIndex < Context.DirtySectorCount; ++SectorIndex)
+		{
+			const FSightWeaveDirtyAngularSector& Sector = Context.DirtySectors[SectorIndex];
+			int32 Lower = 0;
+			while (Lower < CandidateAngles.Num() && CandidateAngles[Lower] < Sector.StartAngle)
+			{
+				++Lower;
+			}
+			if (Lower > 0
+				&& !IsAngleInDirtySector(CandidateAngles[Lower - 1], Context)
+				&& ReusedRays[Lower - 1] == 0)
+			{
+				return false;
+			}
+
+			int32 Upper = Lower;
+			while (Upper < CandidateAngles.Num() && CandidateAngles[Upper] <= Sector.EndAngle)
+			{
+				++Upper;
+			}
+			if (Upper < CandidateAngles.Num()
+				&& !IsAngleInDirtySector(CandidateAngles[Upper], Context)
+				&& ReusedRays[Upper] == 0)
+			{
+				return false;
+			}
+		}
+
+		if (Context.DirtySectorCount > 0 && CandidateAngles.IsEmpty())
+		{
+			return false;
+		}
+
+		for (int32 SectorIndex = 0; SectorIndex < Context.DirtySectorCount; ++SectorIndex)
+		{
+			const FSightWeaveDirtyAngularSector& Sector = Context.DirtySectors[SectorIndex];
+			if (Sector.StartAngle <= -PI + 1.0e-12)
+			{
+				const int32 CyclicLower = CandidateAngles.Num() - 1;
+				if (!IsAngleInDirtySector(CandidateAngles[CyclicLower], Context)
+					&& ReusedRays[CyclicLower] == 0)
+				{
+					return false;
+				}
+			}
+			if (Sector.EndAngle >= PI - 1.0e-12)
+			{
+				if (!IsAngleInDirtySector(CandidateAngles[0], Context)
+					&& ReusedRays[0] == 0)
+				{
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	bool PrepareIncrementalSolveContext(
+		const FSightWeaveReferenceSolveInput& Input,
+		const FSightWeaveReferenceSolveResult& PreviousResult,
+		const FSightWeaveOptimizedSolveCache& Cache,
+		const FSightWeaveIncrementalSectorRequest& Request,
+		FSightWeaveIncrementalSolveContext& OutContext,
+		FSightWeaveIncrementalSectorDiagnostics& OutDiagnostics)
+	{
+		OutContext.Diagnostics = &OutDiagnostics;
+		if (Request.OldSegments.IsEmpty()
+			|| Request.NewSegments.IsEmpty()
+			|| Request.OldSegments.Num() != Request.NewSegments.Num())
+		{
+			OutDiagnostics.FallbackReason =
+				ESightWeaveIncrementalSectorFallbackReason::InvalidRequest;
+			return false;
+		}
+		if (PreviousResult.CandidateAnglesRadians.IsEmpty()
+			|| PreviousResult.CandidateAnglesRadians.Num() != PreviousResult.CandidateDistances.Num()
+			|| PreviousResult.CandidateAnglesRadians.Num()
+				!= PreviousResult.CandidateBoundaryPoints.Num())
+		{
+			OutDiagnostics.FallbackReason =
+				ESightWeaveIncrementalSectorFallbackReason::PreviousResultMissing;
+			return false;
+		}
+
+		const FVector2D Origin(Input.Origin.X, Input.Origin.Y);
+		const FVector2D Forward = Input.Forward.GetSafeNormal();
+		if (!Cache.bInputInvariantInitialized
+			|| Cache.Origin.X != Origin.X
+			|| Cache.Origin.Y != Origin.Y
+			|| Cache.Forward.X != Forward.X
+			|| Cache.Forward.Y != Forward.Y
+			|| Cache.FloorId != Input.FloorId
+			|| Cache.HeightRange.ZMin != Input.HeightRange.ZMin
+			|| Cache.HeightRange.ZMax != Input.HeightRange.ZMax
+			|| !TolerancesExactlyMatch(Cache.Tolerances, Input.Tolerances)
+			|| Cache.SegmentSlots.Num() != Input.Segments.Num())
+		{
+			OutDiagnostics.FallbackReason =
+				ESightWeaveIncrementalSectorFallbackReason::CacheRevisionMismatch;
+			return false;
+		}
+
+		const FSightWeaveSegment2D* ChangedOld = nullptr;
+		const FSightWeaveSegment2D* ChangedNew = nullptr;
+		for (const FSightWeaveSegment2D& OldSegment : Request.OldSegments)
+		{
+			const FSightWeaveSegment2D* NewSegment = nullptr;
+			for (const FSightWeaveSegment2D& Candidate : Request.NewSegments)
+			{
+				if (Candidate.StableId == OldSegment.StableId)
+				{
+					NewSegment = &Candidate;
+					break;
+				}
+			}
+			if (!NewSegment)
+			{
+				OutDiagnostics.FallbackReason =
+					ESightWeaveIncrementalSectorFallbackReason::MultipleChangedSegments;
+				return false;
+			}
+			if (!SegmentPreparedKeyMatches(OldSegment, *NewSegment))
+			{
+				if (ChangedOld)
+				{
+					OutDiagnostics.FallbackReason =
+						ESightWeaveIncrementalSectorFallbackReason::MultipleChangedSegments;
+					return false;
+				}
+				ChangedOld = &OldSegment;
+				ChangedNew = NewSegment;
+			}
+		}
+		if (!ChangedOld || !ChangedNew
+			|| ChangedOld->StableId <= 0
+			|| ChangedOld->StableId != ChangedNew->StableId
+			|| ChangedOld->FloorId != ChangedNew->FloorId
+			|| ChangedOld->HeightRange.ZMin != ChangedNew->HeightRange.ZMin
+			|| ChangedOld->HeightRange.ZMax != ChangedNew->HeightRange.ZMax)
+		{
+			OutDiagnostics.FallbackReason =
+				ESightWeaveIncrementalSectorFallbackReason::InvalidRequest;
+			return false;
+		}
+
+		int32 ChangedSlotIndex = INDEX_NONE;
+		int32 ChangedSlotCount = 0;
+		for (int32 SegmentIndex = 0; SegmentIndex < Input.Segments.Num(); ++SegmentIndex)
+		{
+			const FSightWeaveOptimizedPreparedSegmentSlot& Slot = Cache.SegmentSlots[SegmentIndex];
+			if (!Slot.Matches(Input.Segments[SegmentIndex]))
+			{
+				++ChangedSlotCount;
+				ChangedSlotIndex = SegmentIndex;
+			}
+		}
+		if (ChangedSlotCount != 1
+			|| !Input.Segments.IsValidIndex(ChangedSlotIndex)
+			|| Input.Segments[ChangedSlotIndex].StableId != ChangedNew->StableId
+			|| !Cache.SegmentSlots[ChangedSlotIndex].Matches(*ChangedOld)
+			|| !SegmentPreparedKeyMatches(Input.Segments[ChangedSlotIndex], *ChangedNew))
+		{
+			OutDiagnostics.FallbackReason = ChangedSlotCount > 1
+				? ESightWeaveIncrementalSectorFallbackReason::MultipleChangedSegments
+				: ESightWeaveIncrementalSectorFallbackReason::CacheRevisionMismatch;
+			return false;
+		}
+
+		const FSightWeavePreparedSegment& OldPrepared =
+			Cache.SegmentSlots[ChangedSlotIndex].Prepared;
+		const FSightWeavePreparedSegment NewPrepared = PrepareIncrementalSegment(
+			*ChangedNew,
+			Origin,
+			FMath::Atan2(Forward.Y, Forward.X),
+			Input.Tolerances);
+		const double NearDistance = FMath::Max(
+			Input.Tolerances.PointOnEdgeEpsilon,
+			Input.Tolerances.DuplicateVertexEpsilon) * 4.0;
+		if (OldPrepared.bOriginOnSegment
+			|| NewPrepared.bOriginOnSegment
+			|| OldPrepared.OriginDistanceSquared <= FMath::Square(NearDistance)
+			|| NewPrepared.OriginDistanceSquared <= FMath::Square(NearDistance))
+		{
+			OutDiagnostics.FallbackReason =
+				ESightWeaveIncrementalSectorFallbackReason::SourceNearChangedSegment;
+			return false;
+		}
+
+		const double EndpointEpsilon =
+			FMath::DegreesToRadians(Input.Tolerances.EndpointAngularEpsilonDegrees);
+		if (!AddDirtyProjection(OldPrepared, EndpointEpsilon, OutContext)
+			|| !AddDirtyProjection(NewPrepared, EndpointEpsilon, OutContext))
+		{
+			OutDiagnostics.FallbackReason =
+				ESightWeaveIncrementalSectorFallbackReason::MultipleChangedSegments;
+			return false;
+		}
+		SortAndMergeDirtySectors(OutContext);
+		for (int32 Index = 0; Index < OutContext.DirtySectorCount; ++Index)
+		{
+			OutDiagnostics.DirtyRadians +=
+				OutContext.DirtySectors[Index].EndAngle - OutContext.DirtySectors[Index].StartAngle;
+		}
+		if (OutContext.DirtySectorCount == 0 || OutDiagnostics.DirtyRadians > PI)
+		{
+			OutDiagnostics.FallbackReason =
+				ESightWeaveIncrementalSectorFallbackReason::DirtySectorTooLarge;
+			return false;
+		}
+		return true;
 	}
 
 	bool IntersectTrustedRaySegment(
@@ -1440,8 +1828,17 @@ namespace SightWeave::Geometry
 		const FSightWeaveReferenceSolveInput& Input,
 		FSightWeaveReferenceSolveResult& Result,
 		FSightWeaveOptimizedSolveCache* PreparedCache,
-		const bool bPreparedInputValidated = false)
+		const bool bPreparedInputValidated = false,
+		FSightWeaveIncrementalSolveContext* IncrementalContext = nullptr)
 	{
+		FSightWeaveSolverFrameLease FrameLease;
+		FSightWeaveSolverFrame& SolverFrame = FrameLease.Get();
+		if (IncrementalContext)
+		{
+			Swap(Result.CandidateAnglesRadians, SolverFrame.PreviousCandidateAngles);
+			Swap(Result.CandidateDistances, SolverFrame.PreviousCandidateDistances);
+			Swap(Result.CandidateBoundaryPoints, SolverFrame.PreviousCandidateBoundaryPoints);
+		}
 		ResetOptimizedSolveResult(Result);
 		const double TotalStartSeconds = FPlatformTime::Seconds();
 		if (!IsFiniteVector(Input.Origin)
@@ -1463,8 +1860,6 @@ namespace SightWeave::Geometry
 			return;
 		}
 
-		FSightWeaveSolverFrameLease FrameLease;
-		FSightWeaveSolverFrame& SolverFrame = FrameLease.Get();
 		TArray<FSightWeavePreparedSegment>& CandidateSegments = PreparedCache
 			? PreparedCache->CandidateSegments
 			: SolverFrame.CandidateSegments;
@@ -1477,6 +1872,11 @@ namespace SightWeave::Geometry
 		TArray<FVector2D>& EndpointDirections = SolverFrame.EndpointDirections;
 		TArray<FVector2D>& CandidateDirections = SolverFrame.CandidateDirections;
 		TArray<double>& BoundaryAngles = SolverFrame.BoundaryAngles;
+		TArray<double>& PreviousCandidateAngles = SolverFrame.PreviousCandidateAngles;
+		TArray<double>& PreviousCandidateDistances = SolverFrame.PreviousCandidateDistances;
+		TArray<FVector2D>& PreviousCandidateBoundaryPoints =
+			SolverFrame.PreviousCandidateBoundaryPoints;
+		TArray<uint8>& IncrementalReusedRays = SolverFrame.IncrementalReusedRays;
 
 		const FVector2D Origin(Input.Origin.X, Input.Origin.Y);
 		const FVector2D Forward = Input.Forward.GetSafeNormal();
@@ -1845,6 +2245,10 @@ namespace SightWeave::Geometry
 		Result.Vertices.SetNumUninitialized(CandidateRayCount + (bFullCircle ? 0 : 1));
 		Result.CandidateDistances.SetNumUninitialized(CandidateRayCount);
 		Result.CandidateBoundaryPoints.SetNumUninitialized(CandidateRayCount);
+		if (IncrementalContext)
+		{
+			IncrementalReusedRays.SetNumZeroed(CandidateRayCount, EAllowShrinking::No);
+		}
 		Result.StageMetrics.EventSortDeduplicateMicroseconds =
 			(FPlatformTime::Seconds() - EventSortStartSeconds) * 1000000.0;
 
@@ -1861,6 +2265,7 @@ namespace SightWeave::Geometry
 
 		const double RayCastStartSeconds = FPlatformTime::Seconds();
 		int32 NextIntervalIndex = 0;
+		int32 PreviousRayIndex = 0;
 		int32 VertexWriteIndex = 0;
 		if (!bFullCircle)
 		{
@@ -1931,42 +2336,74 @@ namespace SightWeave::Geometry
 				: FVector2D(
 					FMath::Cos(ForwardAngle + RelativeAngle),
 					FMath::Sin(ForwardAngle + RelativeAngle));
-			double ClosestDistance = MaximumDistance;
-			int64 ClosestStableId = MAX_int64;
-			for (const FSightWeaveActiveInterval& ActiveInterval : ActiveIntervals)
+
+			while (IncrementalContext
+				&& PreviousRayIndex < PreviousCandidateAngles.Num()
+				&& PreviousCandidateAngles[PreviousRayIndex] < RelativeAngle)
 			{
-				if (ActiveInterval.OriginDistanceSquared > FMath::Square(
-						ClosestDistance + Input.Tolerances.DuplicateVertexEpsilon))
+				++PreviousRayIndex;
+			}
+			const bool bCanReusePrevious = IncrementalContext
+				&& PreviousCandidateAngles.IsValidIndex(PreviousRayIndex)
+				&& PreviousCandidateAngles[PreviousRayIndex] == RelativeAngle
+				&& PreviousCandidateDistances.IsValidIndex(PreviousRayIndex)
+				&& PreviousCandidateBoundaryPoints.IsValidIndex(PreviousRayIndex)
+				&& !IsAngleInDirtySector(RelativeAngle, *IncrementalContext)
+				&& FMath::IsFinite(PreviousCandidateDistances[PreviousRayIndex])
+				&& IsFiniteVector(PreviousCandidateBoundaryPoints[PreviousRayIndex]);
+
+			double ClosestDistance = MaximumDistance;
+			FVector2D Vertex2D = FVector2D::ZeroVector;
+			if (bCanReusePrevious)
+			{
+				ClosestDistance = PreviousCandidateDistances[PreviousRayIndex];
+				Vertex2D = PreviousCandidateBoundaryPoints[PreviousRayIndex];
+				IncrementalReusedRays[RayIndex] = 1;
+				++IncrementalContext->Diagnostics->ReusedRayCount;
+			}
+			else
+			{
+				int64 ClosestStableId = MAX_int64;
+				for (const FSightWeaveActiveInterval& ActiveInterval : ActiveIntervals)
 				{
-					break;
+					if (ActiveInterval.OriginDistanceSquared > FMath::Square(
+							ClosestDistance + Input.Tolerances.DuplicateVertexEpsilon))
+					{
+						break;
+					}
+					const FSightWeavePreparedSegment& Segment =
+						CandidateSegments[ActiveInterval.SegmentIndex];
+					++Result.StageMetrics.TestedSegments;
+					double HitDistance = 0.0;
+					if (!IntersectTrustedRaySegment(
+							Direction,
+							Segment,
+							Input.Tolerances,
+							HitDistance)
+						|| HitDistance <= Input.Tolerances.PointOnEdgeEpsilon
+						|| HitDistance > MaximumDistance + Input.Tolerances.PointOnEdgeEpsilon)
+					{
+						continue;
+					}
+					const bool bCloser = HitDistance
+						< ClosestDistance - Input.Tolerances.DuplicateVertexEpsilon;
+					const bool bStableTie = FMath::Abs(HitDistance - ClosestDistance)
+							<= Input.Tolerances.DuplicateVertexEpsilon
+						&& Segment.StableId < ClosestStableId;
+					if (bCloser || bStableTie)
+					{
+						ClosestDistance = HitDistance;
+						ClosestStableId = Segment.StableId;
+					}
 				}
-				const FSightWeavePreparedSegment& Segment = CandidateSegments[ActiveInterval.SegmentIndex];
-				++Result.StageMetrics.TestedSegments;
-				double HitDistance = 0.0;
-				if (!IntersectTrustedRaySegment(
-						Direction,
-						Segment,
-						Input.Tolerances,
-						HitDistance)
-					|| HitDistance <= Input.Tolerances.PointOnEdgeEpsilon
-					|| HitDistance > MaximumDistance + Input.Tolerances.PointOnEdgeEpsilon)
+				Vertex2D = Origin + Direction * ClosestDistance;
+				if (IncrementalContext)
 				{
-					continue;
-				}
-				const bool bCloser =
-					HitDistance < ClosestDistance - Input.Tolerances.DuplicateVertexEpsilon;
-				const bool bStableTie =
-					FMath::Abs(HitDistance - ClosestDistance) <= Input.Tolerances.DuplicateVertexEpsilon
-					&& Segment.StableId < ClosestStableId;
-				if (bCloser || bStableTie)
-				{
-					ClosestDistance = HitDistance;
-					ClosestStableId = Segment.StableId;
+					++IncrementalContext->Diagnostics->RebuiltRayCount;
 				}
 			}
 
 			Result.CandidateDistances[RayIndex] = ClosestDistance;
-			const FVector2D Vertex2D = Origin + Direction * ClosestDistance;
 			Result.CandidateBoundaryPoints[RayIndex] = Vertex2D;
 			const FVector Vertex(Vertex2D.X, Vertex2D.Y, Input.Origin.Z);
 			if (VertexWriteIndex == 0
@@ -1980,6 +2417,19 @@ namespace SightWeave::Geometry
 		Result.Vertices.SetNum(VertexWriteIndex, EAllowShrinking::No);
 		Result.StageMetrics.RayCastMicroseconds =
 			(FPlatformTime::Seconds() - RayCastStartSeconds) * 1000000.0;
+		if (IncrementalContext
+			&& !ValidateIncrementalSeamGuards(
+				Result.CandidateAnglesRadians,
+				IncrementalReusedRays,
+				*IncrementalContext))
+		{
+			IncrementalContext->Diagnostics->FallbackReason =
+				ESightWeaveIncrementalSectorFallbackReason::SeamValidationFailed;
+			Result.Error = TEXT("Incremental solve could not validate dirty-sector seam guards");
+			Result.StageMetrics.TotalMicroseconds =
+				(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
+			return;
+		}
 
 		const double PostProcessStartSeconds = FPlatformTime::Seconds();
 		if (Result.Vertices.Num() >= 2
@@ -2002,6 +2452,11 @@ namespace SightWeave::Geometry
 		const double TopologyStartSeconds = FPlatformTime::Seconds();
 		if (HasLocalVisibilityTopologyDegeneracy(Result.Vertices, Input.Tolerances))
 		{
+			if (IncrementalContext)
+			{
+				IncrementalContext->Diagnostics->FallbackReason =
+					ESightWeaveIncrementalSectorFallbackReason::TopologyValidationFailed;
+			}
 			Result.Error = TEXT("Optimized solve emitted a local topology degeneracy");
 			Result.StageMetrics.TopologyValidationMicroseconds =
 				(FPlatformTime::Seconds() - TopologyStartSeconds) * 1000000.0;
@@ -2025,7 +2480,11 @@ namespace SightWeave::Geometry
 			+ EndpointAngleSortBuffer.GetAllocatedSize()
 			+ EndpointDirections.GetAllocatedSize()
 			+ CandidateDirections.GetAllocatedSize()
-			+ BoundaryAngles.GetAllocatedSize();
+			+ BoundaryAngles.GetAllocatedSize()
+			+ PreviousCandidateAngles.GetAllocatedSize()
+			+ PreviousCandidateDistances.GetAllocatedSize()
+			+ PreviousCandidateBoundaryPoints.GetAllocatedSize()
+			+ IncrementalReusedRays.GetAllocatedSize();
 		Result.bSucceeded = true;
 		Result.StageMetrics.TotalMicroseconds =
 			(FPlatformTime::Seconds() - TotalStartSeconds) * 1000000.0;
@@ -2052,6 +2511,53 @@ namespace SightWeave::Geometry
 		FSightWeaveOptimizedSolveCache& Cache)
 	{
 		SolveOptimizedPolygonIntoInternal(Input, Result, &Cache, true);
+	}
+
+	void SolveOptimizedPolygonIntoIncrementalDynamicSector(
+		const FSightWeaveReferenceSolveInput& Input,
+		FSightWeaveReferenceSolveResult& Result,
+		FSightWeaveOptimizedSolveCache& Cache,
+		const FSightWeaveIncrementalSectorRequest& Request,
+		FSightWeaveIncrementalSectorDiagnostics& OutDiagnostics)
+	{
+		OutDiagnostics = {};
+		OutDiagnostics.bAttempted = true;
+		const double IncrementalStartSeconds = FPlatformTime::Seconds();
+		FSightWeaveIncrementalSolveContext IncrementalContext;
+		const bool bContextPrepared = PrepareIncrementalSolveContext(
+			Input,
+			Result,
+			Cache,
+			Request,
+			IncrementalContext,
+			OutDiagnostics);
+		if (bContextPrepared)
+		{
+			SolveOptimizedPolygonIntoInternal(
+				Input,
+				Result,
+				&Cache,
+				false,
+				&IncrementalContext);
+		}
+		OutDiagnostics.IncrementalMicroseconds =
+			(FPlatformTime::Seconds() - IncrementalStartSeconds) * 1000000.0;
+		if (bContextPrepared && Result.bSucceeded)
+		{
+			OutDiagnostics.bSucceeded = true;
+			return;
+		}
+
+		if (OutDiagnostics.FallbackReason
+			== ESightWeaveIncrementalSectorFallbackReason::None)
+		{
+			OutDiagnostics.FallbackReason =
+				ESightWeaveIncrementalSectorFallbackReason::IncrementalSolveFailed;
+		}
+		const double FallbackStartSeconds = FPlatformTime::Seconds();
+		SolveOptimizedPolygonIntoInternal(Input, Result, &Cache);
+		OutDiagnostics.FullFallbackMicroseconds =
+			(FPlatformTime::Seconds() - FallbackStartSeconds) * 1000000.0;
 	}
 
 	FSightWeaveReferenceSolveResult SolveOptimizedPolygon(const FSightWeaveReferenceSolveInput& Input)

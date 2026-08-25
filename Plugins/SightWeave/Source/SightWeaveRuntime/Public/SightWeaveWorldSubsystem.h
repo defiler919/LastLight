@@ -63,6 +63,18 @@ struct FSightWeaveDynamicUpdateStageMetrics
 	FSightWeaveReferenceSolveResult::FStageMetrics VisionGeometry;
 	int64 VisionCandidateSegmentCount = 0;
 	int64 VisionCandidateRayCount = 0;
+	int64 VisionIncrementalAttemptCount = 0;
+	int64 VisionIncrementalSuccessCount = 0;
+	int64 VisionIncrementalFallbackCount = 0;
+	int64 VisionIncrementalRebuiltRayCount = 0;
+	int64 VisionIncrementalReusedRayCount = 0;
+	double VisionIncrementalLastDirtyRadians = 0.0;
+	double VisionIncrementalAccumulatedDirtyRadians = 0.0;
+	double VisionIncrementalMaximumDirtyRadians = 0.0;
+	double VisionIncrementalMicroseconds = 0.0;
+	double VisionIncrementalFallbackMicroseconds = 0.0;
+	ESightWeaveIncrementalSectorFallbackReason VisionIncrementalLastFallbackReason =
+		ESightWeaveIncrementalSectorFallbackReason::None;
 };
 #endif
 
@@ -426,6 +438,20 @@ private:
 		}
 	};
 
+	struct FActiveDynamicSectorChange
+	{
+		const TArray<FSightWeaveSegment2D>* OldSegments = nullptr;
+		const TArray<FSightWeaveSegment2D>* NewSegments = nullptr;
+		FSightWeaveRevision PriorOccluderRevision;
+		FSightWeaveRevision PublishedOccluderRevision;
+
+		bool IsValid() const
+		{
+			return OldSegments && NewSegments
+				&& !OldSegments->IsEmpty() && !NewSegments->IsEmpty();
+		}
+	};
+
 	bool bSightWeaveInitialized = false;
 	int64 NextVisionSourceId = 1;
 	int64 NextIlluminationSourceId = 1;
@@ -460,6 +486,7 @@ private:
 	TMap<int64, TSharedPtr<FSightWeaveOptimizedSolveCache>> CachedIlluminationPreparedSolves;
 	TSharedPtr<FSightWeavePreparedEventIndex> PreparedEventIndex;
 	TArray<FSightWeaveSegment2D> DynamicPreparedSegmentsScratch;
+	FActiveDynamicSectorChange ActiveDynamicSectorChange;
 	TArray<int64> PublicationDirtyVisionIds;
 	TArray<int64> PublicationDirtyIlluminationIds;
 	TArray<int64> PublicationVisionIds;

@@ -757,6 +757,9 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 	{
 		return false;
 	}
+	const bool bWasDynamic = Record->bDynamic;
+	const bool bWasEnabled = Record->bEnabled;
+	const FSightWeaveRevision PriorOccluderRevision = LastOccluderRevision;
 #if WITH_DEV_AUTOMATION_TESTS
 	LastDynamicUpdateStageMetrics = {};
 	const double PrepareStartSeconds = FPlatformTime::Seconds();
@@ -963,6 +966,13 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 	LastOccluderRevision = Revision;
 	Record->GeometryRevision = Revision;
 	MarkSourcesAffectedByOccluderChange(OldFloor, OldBounds, NewFloor, NewBounds);
+	if (bWasDynamic && bDynamic && bWasEnabled && bEnabled)
+	{
+		ActiveDynamicSectorChange.OldSegments = &Prepared;
+		ActiveDynamicSectorChange.NewSegments = &Record->Segments;
+		ActiveDynamicSectorChange.PriorOccluderRevision = PriorOccluderRevision;
+		ActiveDynamicSectorChange.PublishedOccluderRevision = LastOccluderRevision;
+	}
 #if WITH_DEV_AUTOMATION_TESTS
 	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::AffectedSourceDiscovery, false);
 	const double PublicationStartSeconds = FPlatformTime::Seconds();
@@ -970,6 +980,7 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 		(PublicationStartSeconds - DirtyStartSeconds) * 1000000.0;
 #endif
 	PublishSnapshot();
+	ActiveDynamicSectorChange = {};
 #if WITH_DEV_AUTOMATION_TESTS
 	LastDynamicUpdateStageMetrics.PublicationMicroseconds =
 		(FPlatformTime::Seconds() - PublicationStartSeconds) * 1000000.0;
@@ -2224,6 +2235,8 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 	}
 
 	FSightWeaveVisionSnapshotEntry& Entry = CachedVisionSnapshotEntries.FindOrAdd(SourceId);
+	const FSightWeaveRevision PreviousSourceRevision = Entry.SourceRevision;
+	const FSightWeaveRevision PreviousOccluderRevision = Entry.Polygon.OccluderRevision;
 	FSightWeaveReferenceSolveResult SolveResult;
 	SolveResult.Vertices = MoveTemp(Entry.Polygon.Vertices);
 	SolveResult.CandidateAnglesRadians = MoveTemp(Entry.CandidateAnglesRadians);
@@ -2311,11 +2324,17 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		const double StartSeconds = FPlatformTime::Seconds();
 		TSharedPtr<FSightWeaveOptimizedSolveCache>& PreparedCache =
 			CachedVisionPreparedSolves.FindOrAdd(SourceId);
+		const TSharedPtr<FSightWeaveOptimizedSolveCache> PreviousPreparedCache = PreparedCache;
 #if UE_BUILD_SHIPPING
 		const bool bUsePreparedIndex = true;
 #else
 		const bool bUsePreparedIndex = Settings->SolverMode == ESightWeaveSolverMode::Optimized;
 #endif
+		const bool bIncrementalRevisionMatches = ActiveDynamicSectorChange.IsValid()
+			&& PreviousSourceRevision == Entry.SourceRevision
+			&& PreviousOccluderRevision == ActiveDynamicSectorChange.PriorOccluderRevision
+			&& LastOccluderRevision == ActiveDynamicSectorChange.PublishedOccluderRevision;
+		FSightWeaveIncrementalSectorDiagnostics IncrementalDiagnostics;
 		if (bUsePreparedIndex && PreparedEventIndex.IsValid())
 		{
 			const FSightWeavePreparedEventIndex::FAcquireResult Acquisition =
@@ -2327,13 +2346,45 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 #endif
 			if (PreparedCache.IsValid())
 			{
-				if (Acquisition.bHit)
+				if (bIncrementalRevisionMatches
+					&& PreviousPreparedCache.IsValid()
+					&& PreviousPreparedCache == PreparedCache)
 				{
-					SightWeave::Geometry::SolveOptimizedPolygonIntoValidatedCache(Input, SolveResult, *PreparedCache);
+					FSightWeaveIncrementalSectorRequest IncrementalRequest;
+					IncrementalRequest.OldSegments = *ActiveDynamicSectorChange.OldSegments;
+					IncrementalRequest.NewSegments = *ActiveDynamicSectorChange.NewSegments;
+					SightWeave::Geometry::SolveOptimizedPolygonIntoIncrementalDynamicSector(
+						Input,
+						SolveResult,
+						*PreparedCache,
+						IncrementalRequest,
+						IncrementalDiagnostics);
 				}
 				else
 				{
-					SightWeave::Geometry::SolveOptimizedPolygonIntoCached(Input, SolveResult, *PreparedCache);
+					const double FullSolveStartSeconds = FPlatformTime::Seconds();
+					if (bIncrementalRevisionMatches)
+					{
+						IncrementalDiagnostics.bAttempted = true;
+						IncrementalDiagnostics.FallbackReason = PreviousPreparedCache.IsValid()
+							? ESightWeaveIncrementalSectorFallbackReason::PreparedIndexReplaced
+							: ESightWeaveIncrementalSectorFallbackReason::PreparedIndexMissing;
+					}
+					if (Acquisition.bHit)
+					{
+						SightWeave::Geometry::SolveOptimizedPolygonIntoValidatedCache(
+							Input, SolveResult, *PreparedCache);
+					}
+					else
+					{
+						SightWeave::Geometry::SolveOptimizedPolygonIntoCached(
+							Input, SolveResult, *PreparedCache);
+					}
+					if (IncrementalDiagnostics.bAttempted)
+					{
+						IncrementalDiagnostics.FullFallbackMicroseconds =
+							(FPlatformTime::Seconds() - FullSolveStartSeconds) * 1000000.0;
+					}
 				}
 #if WITH_DEV_AUTOMATION_TESTS
 				EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::VisionGeometrySolve, false);
@@ -2349,7 +2400,19 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 			}
 			else
 			{
+				if (bIncrementalRevisionMatches)
+				{
+					IncrementalDiagnostics.bAttempted = true;
+					IncrementalDiagnostics.FallbackReason =
+						ESightWeaveIncrementalSectorFallbackReason::PreparedIndexMissing;
+				}
+				const double FullSolveStartSeconds = FPlatformTime::Seconds();
 				SightWeave::Geometry::SolveOptimizedPolygonInto(Input, SolveResult);
+				if (IncrementalDiagnostics.bAttempted)
+				{
+					IncrementalDiagnostics.FullFallbackMicroseconds =
+						(FPlatformTime::Seconds() - FullSolveStartSeconds) * 1000000.0;
+				}
 #if WITH_DEV_AUTOMATION_TESTS
 				EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::VisionGeometrySolve, false);
 #endif
@@ -2366,14 +2429,51 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 				PreparedEventIndex->Release(PreparedCache);
 			}
 			PreparedCache.Reset();
+			if (bUsePreparedIndex && bIncrementalRevisionMatches)
+			{
+				IncrementalDiagnostics.bAttempted = true;
+				IncrementalDiagnostics.FallbackReason =
+					ESightWeaveIncrementalSectorFallbackReason::PreparedIndexMissing;
+			}
+			const double FullSolveStartSeconds = FPlatformTime::Seconds();
 #if !UE_BUILD_SHIPPING
 			SightWeave::Geometry::SolvePolygonInto(Input, Settings->SolverMode, SolveResult);
 #endif
+			if (IncrementalDiagnostics.bAttempted)
+			{
+				IncrementalDiagnostics.FullFallbackMicroseconds =
+					(FPlatformTime::Seconds() - FullSolveStartSeconds) * 1000000.0;
+			}
 #if WITH_DEV_AUTOMATION_TESTS
 			EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::VisionGeometrySolve, false);
 #endif
 		}
 #if WITH_DEV_AUTOMATION_TESTS
+		if (IncrementalDiagnostics.bAttempted)
+		{
+			++LastDynamicUpdateStageMetrics.VisionIncrementalAttemptCount;
+			LastDynamicUpdateStageMetrics.VisionIncrementalSuccessCount +=
+				IncrementalDiagnostics.bSucceeded ? 1 : 0;
+			LastDynamicUpdateStageMetrics.VisionIncrementalFallbackCount +=
+				IncrementalDiagnostics.bSucceeded ? 0 : 1;
+			LastDynamicUpdateStageMetrics.VisionIncrementalRebuiltRayCount +=
+				IncrementalDiagnostics.RebuiltRayCount;
+			LastDynamicUpdateStageMetrics.VisionIncrementalReusedRayCount +=
+				IncrementalDiagnostics.ReusedRayCount;
+			LastDynamicUpdateStageMetrics.VisionIncrementalLastDirtyRadians =
+				IncrementalDiagnostics.DirtyRadians;
+			LastDynamicUpdateStageMetrics.VisionIncrementalAccumulatedDirtyRadians +=
+				IncrementalDiagnostics.DirtyRadians;
+			LastDynamicUpdateStageMetrics.VisionIncrementalMaximumDirtyRadians = FMath::Max(
+				LastDynamicUpdateStageMetrics.VisionIncrementalMaximumDirtyRadians,
+				IncrementalDiagnostics.DirtyRadians);
+			LastDynamicUpdateStageMetrics.VisionIncrementalMicroseconds +=
+				IncrementalDiagnostics.IncrementalMicroseconds;
+			LastDynamicUpdateStageMetrics.VisionIncrementalFallbackMicroseconds +=
+				IncrementalDiagnostics.FullFallbackMicroseconds;
+			LastDynamicUpdateStageMetrics.VisionIncrementalLastFallbackReason =
+				IncrementalDiagnostics.FallbackReason;
+		}
 		FSightWeaveReferenceSolveResult::FStageMetrics& Geometry =
 			LastDynamicUpdateStageMetrics.VisionGeometry;
 		Geometry.BoundaryEventMicroseconds += SolveResult.StageMetrics.BoundaryEventMicroseconds;

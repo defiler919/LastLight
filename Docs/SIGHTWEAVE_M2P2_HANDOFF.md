@@ -2,13 +2,13 @@
 
 ## Status
 
-- State: **IN_PROGRESS**
+- State: **PARTIAL**
 - Baseline branch: `codex/m2p1-sightweave-final-performance-gate`
 - Baseline SHA: `69ac8d50019ef7674c2aed58d2c0c931ee8fa874`
 - Working branch: `codex/m2p2-sightweave-motion-event-index`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Current phase: warmed transform allocation, bounded/shared prepared-origin indexing, 512-query headroom, and expanded lifecycle/concurrency coverage are implemented; final performance repetition and the validation/package matrix are next
-- Latest safe commit: `15ec06db8ade7ce4d85be5e9c8d5720555b5a459` (`test: harden SightWeave prepared index lifecycle`); the tested final-performance hardening checkpoint described below is pending commit/push
+- Current phase: implementation and the complete validation/package matrix are finished; exact results and the two unclosed performance tails are recorded in `Docs/SIGHTWEAVE_M2P2_FINAL_VALIDATION.md`
+- Latest safe implementation commit: `56cecde5417dcb17c679ab9a604eff89f5bd6966` (`perf: reuse exact SightWeave cross-kind geometry`); the final documentation commit contains the authoritative status
 - Next recovery command: `git switch codex/m2p2-sightweave-motion-event-index; git pull --ff-only origin codex/m2p2-sightweave-motion-event-index; git rev-parse HEAD; git lfs pull; git lfs status`
 
 ## Objective and exclusions
@@ -191,15 +191,15 @@ Dynamic profiling also exposed an exact duplicate final-geometry case: radial vi
 
 The broader 4-vision/2-illumination RuntimePipeline remains sensitive to ordinary Windows scheduling. Its optimized median improved from 149-164 us to 134-140 us, but the three latest p99 values are 261.299/400.800/244.100 us, so only one of three is below the inherited 250 us tail target. Earlier failing reports are retained. The same slow second process pushed an otherwise approximately 30 us source-transform row to 219.699 us p99, while the dedicated final motion trace passed every pure transform row. This host-tail evidence is not discarded or relabeled; final completion status must account for it.
 
-## Planned phases
+## Completed phases
 
-1. Add a reproducible motion trace benchmark covering no-change, radial/cone/camera rotation, 1/5/20 cm and diagonal/wall/endpoint-crossing translation, teleport/floor/profile/range/height changes, dynamic-door combinations, and shared-origin source groups. Record cold/warm cost, allocations, latency distributions, cache/event counters, publication cost, and bounded memory.
-2. Write `Docs/SIGHTWEAVE_M2P2_EVENT_INDEX_ARCHITECTURE.md`, compare the three candidate families with prototype evidence, and retain rejected designs and failure reasons.
-3. Use startup allocation tracing to attribute every source-transform allocation, then eliminate warmed allocation/reallocation/bytes without mutating held snapshots or suppressing valid revisions.
-4. Implement the chosen bounded prepared-event index, exact invalidation/fallback, stats/debug visibility, lifecycle/high-water reclamation, and Shipping isolation.
-5. Add safe shared-observer-origin preparation and prove owner/floor/height/capability/range/cone/bypass isolation.
-6. Increase 512-batch headroom and add motion/cache/parity/lifecycle/concurrency coverage.
-7. Run the complete Editor, Automation, performance, allocation, Lab, BuildPlugin/clean-host, Game Development/Shipping, dependency, Git, and LFS matrix; record the honest final status.
+1. Added the reproducible motion trace benchmark and recorded corrected cold/warm, allocation, latency, event, publication, and memory attribution.
+2. Wrote `Docs/SIGHTWEAVE_M2P2_EVENT_INDEX_ARCHITECTURE.md`, compared three candidate families, and retained rejected designs and failure reasons.
+3. Used startup allocation tracing to attribute and eliminate every ordinary warmed source-transform allocation/reallocation/byte without mutating held snapshots or suppressing valid revisions.
+4. Implemented the exact bounded prepared-event index, deterministic invalidation/fallback, diagnostics, lifecycle/high-water reclamation, and Shipping isolation.
+5. Added compatible observer-origin and exact radial cross-kind geometry reuse with owner/floor/height/capability/range/cone/bypass isolation.
+6. Added fixed-stack 512-batch headroom and motion/cache/parity/lifecycle/concurrency coverage; later full/focused repetitions retained timing-tail failures.
+7. Ran the complete Editor, Automation, performance, allocation, Lab, BuildPlugin/clean-host, Game Development/Shipping, dependency, Git, and LFS matrix and recorded `PARTIAL` in the final validation document.
 
 ## Commands executed
 
@@ -241,5 +241,5 @@ The corrected benchmark build succeeded in 11.89 seconds. The only build warning
 - Dynamic locality, held readers, source/occluder deletion, repeated teardown/restart, multiworld counters, byte-pressure reclamation, and concurrent independent index/scratch are covered. Concurrent mutation/publication of one world subsystem is intentionally unsupported because the mutable registry/index contract is game-thread-only; concurrent readers consume immutable plain-data snapshots.
 - The 512-query optimized path is a fixed-stack serial fast path for tightly bounded uniform anchor batches. Its exact independent-point parity, 20 performance distributions, and zero-allocation startup trace pass.
 - The broad RuntimePipeline dynamic-door p99 has normal-environment scheduling failures as recorded above; the dedicated motion dynamic-door and door-plus-motion rows pass.
-- Full SightWeave/DARKWELL suites, Lab, BuildPlugin/clean host, Game Development/Shipping, Shipping dependency scan, Git/LFS audit, and final remote verification remain pending.
+- Full validation is complete: SightWeave is 100 passed/1 failed solely on the retained Batch512Gate tail; DARKWELL is 24/24; Lab, BuildPlugin clean-host Editor/Game Development/Game Shipping, Shipping dependency isolation, Git, and LFS pass. Final remote verification follows the documentation checkpoint push.
 - Held-reader publication correctly allocates a fresh immutable frame when both reusable buffers are owned. That permitted path is reported separately and is not part of the strict ordinary warmed-transform 0/0/0 claim.

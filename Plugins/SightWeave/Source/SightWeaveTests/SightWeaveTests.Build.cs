@@ -18,5 +18,14 @@ public class SightWeaveTests : ModuleRules
 			"TraceLog",
 			"SightWeaveRuntime"
 		});
+
+		if (Target.Platform == UnrealTargetPlatform.Win64)
+		{
+			PublicSystemLibraries.AddRange(new string[]
+			{
+				"Psapi.lib",
+				"PowrProf.lib"
+			});
+		}
 	}
 }

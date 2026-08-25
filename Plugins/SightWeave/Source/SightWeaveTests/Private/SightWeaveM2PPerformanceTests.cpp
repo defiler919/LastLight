@@ -590,7 +590,10 @@ bool FSightWeaveM2PRuntimePipelineBaselineTest::RunTest(const FString& Parameter
 	Door.FloorId = Ground;
 	Door.HeightRange.ZMin = 0.0f;
 	Door.HeightRange.ZMax = 300.0f;
-	const FSightWeaveOccluderHandle DoorHandle = Subsystem->RegisterOccluder({ Door }, true, true, nullptr);
+	TArray<FSightWeaveSegment2D> DoorSegments;
+	DoorSegments.Add(Door);
+	const FSightWeaveOccluderHandle DoorHandle =
+		Subsystem->RegisterOccluder(DoorSegments, true, true, nullptr);
 	TArray<double> DoorPrepareSamples;
 	TArray<double> DoorSpatialSamples;
 	TArray<double> DoorDirtySamples;
@@ -601,9 +604,9 @@ bool FSightWeaveM2PRuntimePipelineBaselineTest::RunTest(const FString& Parameter
 	for (int32 Warmup = 0; Warmup < 10; ++Warmup)
 	{
 		const double X = Warmup % 2 == 0 ? 250.0 : 850.0;
-		Door.A.X = X;
-		Door.B.X = X;
-		Subsystem->UpdateOccluder(DoorHandle, { Door }, true, true);
+		DoorSegments[0].A.X = X;
+		DoorSegments[0].B.X = X;
+		Subsystem->UpdateOccluder(DoorHandle, DoorSegments, true, true);
 	}
 	TArray<double> DoorTotalSamples;
 	DoorTotalSamples.Reserve(101);
@@ -617,10 +620,10 @@ bool FSightWeaveM2PRuntimePipelineBaselineTest::RunTest(const FString& Parameter
 	for (int32 SampleIndex = 0; SampleIndex < 101; ++SampleIndex)
 	{
 		const double X = SampleIndex % 2 == 0 ? 250.0 : 850.0;
-		Door.A.X = X;
-		Door.B.X = X;
+		DoorSegments[0].A.X = X;
+		DoorSegments[0].B.X = X;
 		const double DoorStartSeconds = FPlatformTime::Seconds();
-		Subsystem->UpdateOccluder(DoorHandle, { Door }, true, true);
+		Subsystem->UpdateOccluder(DoorHandle, DoorSegments, true, true);
 		DoorTotalSamples.Add((FPlatformTime::Seconds() - DoorStartSeconds) * 1000000.0);
 		const FSightWeaveDynamicUpdateStageMetrics& Stages = Subsystem->GetLastDynamicUpdateStageMetrics();
 		DoorPrepareSamples.Add(Stages.PrepareAndCompareMicroseconds);

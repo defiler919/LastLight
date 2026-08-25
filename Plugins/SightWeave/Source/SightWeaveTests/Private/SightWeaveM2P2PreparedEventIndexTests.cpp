@@ -213,6 +213,17 @@ namespace SightWeave::M2P2::PreparedEventIndexTests
 				return Entry.Handle == Handle;
 			});
 	}
+
+	const FSightWeaveIlluminationSnapshotEntry* FindIlluminationEntry(
+		const FSightWeaveFrameSnapshot& Snapshot,
+		const FSightWeaveIlluminationSourceHandle Handle)
+	{
+		return Snapshot.IlluminationSources.FindByPredicate(
+			[Handle](const FSightWeaveIlluminationSnapshotEntry& Entry)
+			{
+				return Entry.Handle == Handle;
+			});
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -307,6 +318,7 @@ bool FSightWeaveM2P2PreparedEventIndexSharingLifecycleTest::RunTest(const FStrin
 	}
 
 	FSightWeaveVisionSourceDescription Vision = VisionSource(FVector(0.0, 0.0, 100.0));
+	Vision.HalfAngleDegrees = 55.0f;
 	const FSightWeaveVisionSourceHandle VisionHandle =
 		Subsystem->RegisterVisionSource(Vision, nullptr);
 	TestTrue(TEXT("Vision registers"), VisionHandle.IsValid());
@@ -326,6 +338,24 @@ bool FSightWeaveM2P2PreparedEventIndexSharingLifecycleTest::RunTest(const FStrin
 	TestEqual(TEXT("Compatible origin preparation is shared"), AfterIllumination.HitCount, int64(1));
 	TestEqual(TEXT("Sharing retains one entry"), AfterIllumination.LiveEntryCount, 1);
 	TestEqual(TEXT("Sharing records two source bindings"), AfterIllumination.SourceBindingCount, 2);
+	const FSightWeaveFrameSnapshot CrossKindSnapshot = Subsystem->GetPublishedSnapshot();
+	const FSightWeaveVisionSnapshotEntry* CrossKindVision =
+		FindVisionEntry(CrossKindSnapshot, VisionHandle);
+	const FSightWeaveIlluminationSnapshotEntry* CrossKindIllumination =
+		FindIlluminationEntry(CrossKindSnapshot, IlluminationHandle);
+	TestTrue(
+		TEXT("Exact cross-kind geometry reuse preserves identical owned vertices"),
+		CrossKindVision
+			&& CrossKindIllumination
+			&& CrossKindVision->Polygon.Vertices == CrossKindIllumination->Polygon.Vertices);
+	TestTrue(
+		TEXT("Cross-kind final polygon metadata remains source-owned"),
+		CrossKindVision
+			&& CrossKindIllumination
+			&& CrossKindVision->Polygon.SourceHandle == VisionHandle
+			&& CrossKindIllumination->Polygon.SourceHandle == IlluminationHandle
+			&& CrossKindVision->Polygon.SourceRevision == CrossKindVision->SourceRevision
+			&& CrossKindIllumination->Polygon.SourceRevision == CrossKindIllumination->SourceRevision);
 
 	const FSightWeaveVisionSourceHandle ShortRangeHandle =
 		Subsystem->RegisterVisionSource(VisionSource(FVector(0.0, 0.0, 100.0), 600.0), nullptr);

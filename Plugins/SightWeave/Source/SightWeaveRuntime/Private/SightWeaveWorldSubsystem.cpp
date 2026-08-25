@@ -59,6 +59,23 @@ namespace
 			[&Profile](const FName Capability) { return Profile.Accepts(Capability); });
 	}
 
+	bool HasIdenticalVisionAndIlluminationGeometry(
+		const FSightWeaveVisionSnapshotEntry& Vision,
+		const FSightWeaveIlluminationSourceDescription& Illumination)
+	{
+		return Vision.Description.bActive
+			&& Vision.Polygon.IsValid()
+			&& Vision.Description.Transform.Equals(Illumination.Transform, 0.0)
+			&& Vision.Description.FloorId == Illumination.FloorId
+			&& Vision.Description.HeightRange.ZMin == Illumination.HeightRange.ZMin
+			&& Vision.Description.HeightRange.ZMax == Illumination.HeightRange.ZMax
+			&& Vision.Description.Shape == Illumination.Shape
+			&& Vision.Description.Range == Illumination.Range
+			&& (Vision.Description.Shape == ESightWeaveSourceShape::Radial
+				|| Vision.Description.HalfAngleDegrees == Illumination.HalfAngleDegrees)
+			&& Vision.Description.NearAwarenessRadius == 0.0f;
+	}
+
 	void SetPolygonBounds(TConstArrayView<FVector> Vertices, FVector2D& OutMin, FVector2D& OutMax)
 	{
 		FBox2D Bounds(ForceInit);
@@ -465,6 +482,7 @@ bool USightWeaveWorldSubsystem::UpdateVisionSource(
 	{
 		return true;
 	}
+
 	VisionSources.FindChecked(Handle.GetValue()) = MoveTemp(NormalizedDescription);
 	DirtyVisionSources.Add(Handle.GetValue());
 	PendingVisionSnapshotRebuilds.Add(Handle.GetValue());
@@ -2305,6 +2323,17 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		Input.Segments = MoveTemp(*CachedSegments);
 
 		const double StartSeconds = FPlatformTime::Seconds();
+		const FSightWeaveVisionSnapshotEntry* SharedGeometry = nullptr;
+		int64 SharedGeometrySourceId = MAX_int64;
+		for (const TPair<int64, FSightWeaveVisionSnapshotEntry>& Pair : CachedVisionSnapshotEntries)
+		{
+			if (Pair.Key < SharedGeometrySourceId
+				&& HasIdenticalVisionAndIlluminationGeometry(Pair.Value, *Description))
+			{
+				SharedGeometry = &Pair.Value;
+				SharedGeometrySourceId = Pair.Key;
+			}
+		}
 		TSharedPtr<FSightWeaveOptimizedSolveCache>& PreparedCache =
 			CachedIlluminationPreparedSolves.FindOrAdd(SourceId);
 #if UE_BUILD_SHIPPING
@@ -2317,7 +2346,21 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 			const FSightWeavePreparedEventIndex::FAcquireResult Acquisition =
 				PreparedEventIndex->Acquire(Input, PreparedCache, Revision.GetValue());
 			PreparedCache = Acquisition.Cache;
-			if (PreparedCache.IsValid())
+			if (SharedGeometry)
+			{
+				SolveResult.bSucceeded = true;
+				SolveResult.CandidateSegmentCount = SharedGeometry->CandidateSegmentCount;
+				SolveResult.CastRayCount = SharedGeometry->CandidateRayCount;
+				SolveResult.Vertices = SharedGeometry->Polygon.Vertices;
+				SolveResult.CandidateAnglesRadians = SharedGeometry->CandidateAnglesRadians;
+				SolveResult.CandidateDistances = SharedGeometry->CandidateDistances;
+				SolveResult.CandidateBoundaryPoints = SharedGeometry->CandidateBoundaryPoints;
+				if (PreparedCache.IsValid() && !PreparedEventIndex->Commit(PreparedCache))
+				{
+					PreparedCache.Reset();
+				}
+			}
+			else if (PreparedCache.IsValid())
 			{
 				SightWeave::Geometry::SolveOptimizedPolygonIntoValidatedCache(Input, SolveResult, *PreparedCache);
 				if (!PreparedEventIndex->Commit(PreparedCache))

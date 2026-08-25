@@ -2,9 +2,18 @@
 
 ## Status
 
-`IN PROGRESS — TOOLCHAIN AND NVIDIA STABILITY GATES COMPLETED; FINAL PERFORMANCE VALIDATION RESUMED`
+`BLOCKED — FINAL POST-CHANGE ELEVATED CONTEXT-SWITCH ETW NOT ACQUIRED`
 
-The UE 5.8.1 bundled .NET/UBT gate is `COMPLETED`: both default and `-NoUBA` groups passed 3/3 with UBT `Succeeded`, outer exit `0`, and no crash popup. Runtime correctness and clean-host packaging pass. After a clean NVIDIA Studio Driver 610.88 installation and Windows restart, the required 30-minute NVIDIA stability gate also passed. Final post-change performance validation is therefore authorized and in progress.
+The UE 5.8.1 bundled .NET/UBT gate and the 30-minute NVIDIA Studio Driver
+610.88 stability gate passed. Runtime correctness, three-run allocation proof,
+ordinary-process attribution, 36,000-frame NullRHI and D3D12 soaks, final
+regression, Editor build, BuildPlugin clean-host matrix, Shipping isolation,
+and Lab smokes are complete. The required post-change administrator
+ContextSwitch/CSwitch acceptance remains blocked because Windows canceled all
+three visible UAC elevation attempts before the child collector started. Wall
+time and cycles are not presented as intrinsic CPU time. Full final evidence,
+retained failures, hashes, recovery commands, and remaining risk are in
+`Docs/SIGHTWEAVE_M2P4_FINAL_VALIDATION.md`.
 
 M2P.4 is limited to elevated ContextSwitch attribution, evidence-driven CPU
 tail closure, and an exact incremental dynamic-occluder angular-sector update
@@ -17,7 +26,11 @@ GPU masks, post processing, memory textures, DARKWELL gameplay integration,
 - Baseline branch: `codex/m2p3-sightweave-tail-latency-finalization`
 - Verified baseline SHA: `e3e5a833e58ce4571653fcef0f7b44698ae80dae`
 - Working branch: `codex/m2p4-sightweave-etw-dynamic-sector`
-- Latest pushed reliable checkpoint before resumed validation: `68d19c6fa479f7a64cbbe76e493cc2acbbfffd63`
+- Resumed-validation baseline: `68d19c6fa479f7a64cbbe76e493cc2acbbfffd63`
+- NVIDIA stability checkpoint: `28943d7613afa7fb87c7659d5885a33a7e4cabdd`
+- Allocation-supported production optimization: `2e50de8dbff5d606126bce2aa344b048b1394ae8`
+- Final validation checkpoint: the commit containing
+  `Docs/SIGHTWEAVE_M2P4_FINAL_VALIDATION.md` and this updated handoff
 - The company workstation's local-only `Darkwell.uproject`
   `EngineAssociation` difference is preserved and must never be staged.
 

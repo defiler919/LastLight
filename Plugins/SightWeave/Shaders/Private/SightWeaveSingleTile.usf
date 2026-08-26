@@ -7,18 +7,58 @@ StructuredBuffer<uint> TriangleIndices;
 uint FirstIndex;
 float InvPhysicalWorldSpan;
 
-void SightWeaveSmokeVS(
-	uint VertexId : SV_VertexID,
-	out float4 OutPosition : SV_POSITION)
+struct FSightWeaveRasterInterpolants
 {
-	const float2 Local = TriangleVertices[TriangleIndices[FirstIndex + VertexId]];
-	const float2 Uv = Local * InvPhysicalWorldSpan;
+	float4 Position : SV_POSITION;
+	nointerpolation float2 TriangleA : TEXCOORD0;
+	nointerpolation float2 TriangleB : TEXCOORD1;
+	nointerpolation float2 TriangleC : TEXCOORD2;
+};
+
+FSightWeaveRasterInterpolants SightWeaveSmokeVS(uint VertexId : SV_VertexID)
+{
+	const uint TriangleIndex = VertexId / 6;
+	const uint QuadVertex = VertexId % 6;
+	const uint CornerIndices[6] = { 0, 1, 2, 0, 2, 3 };
+	const float2 A = TriangleVertices[TriangleIndices[FirstIndex + TriangleIndex * 3 + 0]];
+	const float2 B = TriangleVertices[TriangleIndices[FirstIndex + TriangleIndex * 3 + 1]];
+	const float2 C = TriangleVertices[TriangleIndices[FirstIndex + TriangleIndex * 3 + 2]];
+	const float2 BoundsMin = min(A, min(B, C));
+	const float2 BoundsMax = max(A, max(B, C));
+	const float2 Corners[4] =
+	{
+		float2(BoundsMin.x, BoundsMin.y),
+		float2(BoundsMax.x, BoundsMin.y),
+		float2(BoundsMax.x, BoundsMax.y),
+		float2(BoundsMin.x, BoundsMax.y)
+	};
+	const float2 Uv = Corners[CornerIndices[QuadVertex]] * InvPhysicalWorldSpan;
+	FSightWeaveRasterInterpolants Output;
 	// Texture row zero maps to the physical tile's minimum world Y.
-	OutPosition = float4(Uv.x * 2.0f - 1.0f, 1.0f - Uv.y * 2.0f, 0.0f, 1.0f);
+	Output.Position = float4(Uv.x * 2.0f - 1.0f, 1.0f - Uv.y * 2.0f, 0.0f, 1.0f);
+	Output.TriangleA = A;
+	Output.TriangleB = B;
+	Output.TriangleC = C;
+	return Output;
 }
 
-float SightWeaveSmokePS() : SV_Target0
+float SightWeaveSmokePS(FSightWeaveRasterInterpolants Input) : SV_Target0
 {
+	const float2 Point = Input.Position.xy * 10.0f;
+	const float2 AB = Input.TriangleB - Input.TriangleA;
+	const float2 BC = Input.TriangleC - Input.TriangleB;
+	const float2 CA = Input.TriangleA - Input.TriangleC;
+	const float Area = AB.x * (Input.TriangleC.y - Input.TriangleA.y)
+		- AB.y * (Input.TriangleC.x - Input.TriangleA.x);
+	const float Orientation = Area >= 0.0f ? 1.0f : -1.0f;
+	const float E0 = Orientation * (AB.x * (Point.y - Input.TriangleA.y) - AB.y * (Point.x - Input.TriangleA.x));
+	const float E1 = Orientation * (BC.x * (Point.y - Input.TriangleB.y) - BC.y * (Point.x - Input.TriangleB.x));
+	const float E2 = Orientation * (CA.x * (Point.y - Input.TriangleC.y) - CA.y * (Point.x - Input.TriangleC.x));
+	// Inclusive center-sample raster: epsilon is far below one world-space texel.
+	if (E0 < -0.001f || E1 < -0.001f || E2 < -0.001f)
+	{
+		discard;
+	}
 	return 1.0f;
 }
 

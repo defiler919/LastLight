@@ -14,19 +14,20 @@ public:
 
 	void SubmitPacket_RenderThread(
 		const TSharedPtr<const FSightWeaveRenderPacket, ESPMode::ThreadSafe>& Packet);
-	void ProcessPending_RenderThread(FRDGBuilder& GraphBuilder);
+	FRDGTextureRef ProcessPending_RenderThread(FRDGBuilder& GraphBuilder);
 	void Release_RenderThread(FSightWeaveRenderWorldIdentity ExpectedWorldIdentity);
 
 	ESightWeaveRenderAvailability GetAvailability_RenderThread() const { return Availability; }
 	uint64 GetDesiredRevision_RenderThread() const { return DesiredRevision; }
 	uint64 GetAppliedRevision_RenderThread() const { return AppliedRevision; }
 	uint64 GetRasterDispatchCount_RenderThread() const { return RasterDispatchCount; }
+	uint64 GetResourceGeneration_RenderThread() const { return ResourceGeneration; }
 
 private:
 	bool CheckCapabilities_RenderThread();
 	bool EnsurePersistentTexture_RenderThread();
-	void AddBlackClearPass_RenderThread(FRDGBuilder& GraphBuilder);
-	void AddRasterPasses_RenderThread(
+	FRDGTextureRef AddBlackClearPass_RenderThread(FRDGBuilder& GraphBuilder);
+	FRDGTextureRef AddRasterPasses_RenderThread(
 		FRDGBuilder& GraphBuilder,
 		const FSightWeaveRenderPacket& Packet);
 

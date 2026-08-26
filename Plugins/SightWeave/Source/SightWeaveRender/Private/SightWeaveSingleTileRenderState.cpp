@@ -80,7 +80,6 @@ namespace
 				GraphicsPSOInit.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
 				GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
 				GraphicsPSOInit.PrimitiveType = PT_TriangleList;
-				GraphicsPSOInit.ConservativeRasterization = EConservativeRasterization::Overestimated;
 				GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI =
 					GEmptyVertexDeclaration.VertexDeclarationRHI;
 				GraphicsPSOInit.BoundShaderState.VertexShaderRHI = VertexShader.GetVertexShader();
@@ -92,7 +91,7 @@ namespace
 					VertexShader.GetVertexShader(),
 					PassParameters->VertexShader);
 				RHICmdList.SetStreamSource(0, nullptr, 0);
-				RHICmdList.DrawPrimitive(0, IndexCount / 3, 1);
+				RHICmdList.DrawPrimitive(0, (IndexCount / 3) * 2, 1);
 			});
 	}
 }
@@ -139,12 +138,12 @@ void FSightWeaveSingleTileRenderState::SubmitPacket_RenderThread(
 	bPendingForceBlack = false;
 }
 
-void FSightWeaveSingleTileRenderState::ProcessPending_RenderThread(FRDGBuilder& GraphBuilder)
+FRDGTextureRef FSightWeaveSingleTileRenderState::ProcessPending_RenderThread(FRDGBuilder& GraphBuilder)
 {
 	check(IsInRenderingThread());
 	if (bReleased || !PendingPacket.IsValid())
 	{
-		return;
+		return nullptr;
 	}
 	const TSharedPtr<const FSightWeaveRenderPacket, ESPMode::ThreadSafe> Packet = MoveTemp(PendingPacket);
 	const bool bForceBlack = bPendingForceBlack;
@@ -156,25 +155,35 @@ void FSightWeaveSingleTileRenderState::ProcessPending_RenderThread(FRDGBuilder& 
 		Availability = ESightWeaveRenderAvailability::InvalidPacket;
 		if (CheckCapabilities_RenderThread() && EnsurePersistentTexture_RenderThread())
 		{
-			AddBlackClearPass_RenderThread(GraphBuilder);
+			FRDGTextureRef BlackTexture = AddBlackClearPass_RenderThread(GraphBuilder);
 			AppliedRevision = Packet->GetPacketRevision();
+			return BlackTexture;
 		}
 		else
 		{
 			EffectiveLiveTexture.SafeRelease();
 			AppliedRevision = 0;
 		}
-		return;
+		return nullptr;
 	}
 	if (!CheckCapabilities_RenderThread() || !EnsurePersistentTexture_RenderThread())
 	{
 		EffectiveLiveTexture.SafeRelease();
 		AppliedRevision = 0;
-		return;
+		return nullptr;
 	}
-	AddRasterPasses_RenderThread(GraphBuilder, *Packet);
+	if (Packet->GetIndices().IsEmpty())
+	{
+		FRDGTextureRef BlackTexture = AddBlackClearPass_RenderThread(GraphBuilder);
+		AppliedRevision = Packet->GetPacketRevision();
+		++RasterDispatchCount;
+		Availability = ESightWeaveRenderAvailability::Available;
+		return BlackTexture;
+	}
+	FRDGTextureRef EffectiveLive = AddRasterPasses_RenderThread(GraphBuilder, *Packet);
 	AppliedRevision = Packet->GetPacketRevision();
 	Availability = ESightWeaveRenderAvailability::Available;
+	return EffectiveLive;
 }
 
 void FSightWeaveSingleTileRenderState::Release_RenderThread(
@@ -220,11 +229,6 @@ bool FSightWeaveSingleTileRenderState::CheckCapabilities_RenderThread()
 		Availability = ESightWeaveRenderAvailability::UnsupportedPixelFormat;
 		return false;
 	}
-	if (!GRHISupportsConservativeRasterization)
-	{
-		Availability = ESightWeaveRenderAvailability::ConservativeRasterUnavailable;
-		return false;
-	}
 	return true;
 }
 
@@ -235,10 +239,11 @@ bool FSightWeaveSingleTileRenderState::EnsurePersistentTexture_RenderThread()
 	{
 		return true;
 	}
-	if (!AllocatePooledTexture(
+	AllocatePooledTexture(
 		MakeMaskTextureDesc(),
 		EffectiveLiveTexture,
-		TEXT("SightWeave.EffectiveLive.SingleTile")))
+		TEXT("SightWeave.EffectiveLive.SingleTile"));
+	if (!EffectiveLiveTexture.IsValid())
 	{
 		Availability = ESightWeaveRenderAvailability::ResourceAllocationFailed;
 		return false;
@@ -247,16 +252,17 @@ bool FSightWeaveSingleTileRenderState::EnsurePersistentTexture_RenderThread()
 	return true;
 }
 
-void FSightWeaveSingleTileRenderState::AddBlackClearPass_RenderThread(FRDGBuilder& GraphBuilder)
+FRDGTextureRef FSightWeaveSingleTileRenderState::AddBlackClearPass_RenderThread(FRDGBuilder& GraphBuilder)
 {
 	FRDGTextureRef EffectiveLive = GraphBuilder.RegisterExternalTexture(
 		EffectiveLiveTexture,
 		TEXT("SightWeave.EffectiveLive.SingleTile"));
 	RDG_EVENT_SCOPE(GraphBuilder, "SightWeave.ClearTile");
 	AddClearRenderTargetPass(GraphBuilder, EffectiveLive, FLinearColor::Black);
+	return EffectiveLive;
 }
 
-void FSightWeaveSingleTileRenderState::AddRasterPasses_RenderThread(
+FRDGTextureRef FSightWeaveSingleTileRenderState::AddRasterPasses_RenderThread(
 	FRDGBuilder& GraphBuilder,
 	const FSightWeaveRenderPacket& Packet)
 {
@@ -343,4 +349,5 @@ void FSightWeaveSingleTileRenderState::AddRasterPasses_RenderThread(
 			RHICmdList.DrawPrimitive(0, 1, 1);
 		});
 	++RasterDispatchCount;
+	return EffectiveLive;
 }

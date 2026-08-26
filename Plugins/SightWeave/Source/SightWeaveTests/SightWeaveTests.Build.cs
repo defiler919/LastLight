@@ -14,9 +14,11 @@ public class SightWeaveTests : ModuleRules
 			"UnrealEd",
 			"AssetRegistry",
 			"Projects",
+			"RHI",
 			"TraceAnalysis",
 			"TraceLog",
-			"SightWeaveRuntime"
+			"SightWeaveRuntime",
+			"SightWeaveRender"
 		});
 
 		if (Target.Platform == UnrealTargetPlatform.Win64)

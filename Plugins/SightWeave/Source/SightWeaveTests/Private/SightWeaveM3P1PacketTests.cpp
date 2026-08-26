@@ -201,7 +201,12 @@ bool FSightWeaveM3P1RevisionLifecycleTest::RunTest(const FString& Parameters)
 		FSightWeaveRenderPacketBuilder::Build(MakeInput(1, 41));
 	const FSightWeaveRenderPacketBuildResult OtherWorld =
 		FSightWeaveRenderPacketBuilder::Build(MakeInput(3, 42));
-	if (!Revision2.Succeeded() || !Revision1.Succeeded() || !OtherWorld.Succeeded())
+	FSightWeaveRenderPacketBuildInput ConflictInput = MakeInput(2, 41);
+	ConflictInput.DirtyReason = ESightWeaveRenderDirtyReason::ExplicitClear;
+	const FSightWeaveRenderPacketBuildResult Conflict =
+		FSightWeaveRenderPacketBuilder::Build(ConflictInput);
+	if (!Revision2.Succeeded() || !Revision1.Succeeded() || !OtherWorld.Succeeded()
+		|| !Conflict.Succeeded())
 	{
 		AddError(TEXT("Revision test setup packet failed"));
 		return false;
@@ -212,6 +217,9 @@ bool FSightWeaveM3P1RevisionLifecycleTest::RunTest(const FString& Parameters)
 		ESightWeaveRenderPacketDisposition::Accepted);
 	TestEqual(TEXT("Same packet is duplicate"), Gate.ClassifyAndCommit(*Revision2.Packet),
 		ESightWeaveRenderPacketDisposition::Duplicate);
+	TestEqual(TEXT("Same revision with different immutable content is a conflict"),
+		Gate.ClassifyAndCommit(*Conflict.Packet),
+		ESightWeaveRenderPacketDisposition::RevisionConflict);
 	TestEqual(TEXT("Older packet is stale"), Gate.ClassifyAndCommit(*Revision1.Packet),
 		ESightWeaveRenderPacketDisposition::Stale);
 	TestEqual(TEXT("Other world is isolated"), Gate.ClassifyAndCommit(*OtherWorld.Packet),

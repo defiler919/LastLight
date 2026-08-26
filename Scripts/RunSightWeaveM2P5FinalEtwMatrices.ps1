@@ -15,6 +15,52 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+if (-not ('SightWeaveConsoleMode' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class SightWeaveConsoleMode
+{
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr GetStdHandle(int nStdHandle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+}
+'@
+}
+
+$consoleInputModeBefore = $null
+$consoleInputModeAfter = $null
+$quickEditDisabled = $false
+$stdInputHandle = [SightWeaveConsoleMode]::GetStdHandle(-10)
+$mode = [uint32]0
+if ($stdInputHandle -ne [IntPtr]::Zero -and
+    [SightWeaveConsoleMode]::GetConsoleMode($stdInputHandle, [ref]$mode)) {
+    $consoleInputModeBefore = $mode
+    $modeWithoutQuickEdit = [uint32](($mode -bor 0x0080) -band (-bnot 0x0040))
+    if ($modeWithoutQuickEdit -ne $mode) {
+        if (-not [SightWeaveConsoleMode]::SetConsoleMode($stdInputHandle, $modeWithoutQuickEdit)) {
+            throw "Failed to disable QuickEdit for the M2P.5 elevated console. Win32=$([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
+        }
+        $quickEditDisabled = $true
+    }
+    $verifiedMode = [uint32]0
+    if (-not [SightWeaveConsoleMode]::GetConsoleMode($stdInputHandle, [ref]$verifiedMode)) {
+        throw "Failed to verify the M2P.5 elevated console mode. Win32=$([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
+    }
+    $consoleInputModeAfter = $verifiedMode
+    if (($verifiedMode -band 0x0040) -ne 0) {
+        throw 'M2P.5 elevated console still has QuickEdit enabled; refusing a selection-pausable ETW orchestration.'
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($EngineRoot)) {
     $EngineRoot = $env:DARKWELL_UE_ROOT
 }
@@ -65,6 +111,9 @@ $capability = [ordered]@{
     fltmc_output = $fltmcText
     wpr = (Get-Command wpr.exe -ErrorAction SilentlyContinue).Source
     wpaexporter = (Get-Command wpaexporter.exe -ErrorAction SilentlyContinue).Source
+    console_input_mode_before = $consoleInputModeBefore
+    console_input_mode_after = $consoleInputModeAfter
+    quick_edit_disabled = $quickEditDisabled
     required_kernel_events = @(
         'Process',
         'Thread',

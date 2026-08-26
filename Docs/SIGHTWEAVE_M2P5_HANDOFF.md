@@ -1,134 +1,169 @@
 # SightWeave M2P.5 Handoff
 
-Status: **IN PROGRESS — SAFE VALIDATION COMPLETE; ELEVATED FINAL MATRICES PENDING**
+Status: **COMPLETED**
 
 Last updated: 2026-08-26 (Asia/Shanghai)
 
-## Objective
+## Objective and result
 
-Close the intrinsic CPU tail of the authoritative broad dynamic-door workload without changing its inputs, sampling contract, correctness semantics, or production scope.
+M2P.5 closes the intrinsic CPU tail of the unchanged authoritative broad
+dynamic-door workload. The hard gate is administrator ContextSwitch/CSwitch
+ETW on-CPU p99 `<250 us`; the engineering target is `<225 us` and the ideal
+target is `<200 us`.
 
-The formal hard gate remains broad dynamic-door aggregate administrator ETW on-CPU p99 `< 250 us`. The engineering target is `< 225 us`, and the ideal target is `< 200 us`.
+Both final independent ten-process matrices pass all three thresholds:
 
-## Branch and immutable baseline
+| Matrix | broad on-CPU p50/p95/p99/max (us) | Samples | Plugin / Scheduler / Unknown | Result |
+|---|---:|---:|---:|---|
+| A | 65.5/127.6/169.6/245.4 | 1,010 | 0/3/0 | PASS `<200` |
+| B | 65.8/128.7/170.9/247.7 | 1,010 | 0/3/0 | PASS `<200` |
 
-- Branch: `codex/m2p5-sightweave-vision-solve-tail-closure`
+Batch512 also passes unchanged gates in both matrices at on-CPU p99
+`189.0 us` and `183.3 us`. Each matrix contains 10 independent PIDs, 105,120
+markers, zero event/buffer loss, valid PID/TID/QPC ownership, fully closed
+timelines, and zero ETW Unknown. M2P.5 is therefore **COMPLETED**.
+
+## Branch, baseline, and checkpoints
+
+- Working branch: `codex/m2p5-sightweave-vision-solve-tail-closure`
 - Baseline branch: `codex/m2p4-sightweave-etw-dynamic-sector`
-- Baseline SHA: `c3a3323edadb648058fd33c4c1e57806eeac8536`
-- M2P.4 runtime optimization SHA: `1462afa65dbb3c338d6d21166bcb26144e5f26c6`
+- Immutable baseline: `c3a3323edadb648058fd33c4c1e57806eeac8536`
+- Exact-result production commit: `9a2daa0`
+- Warmed allocation-test commit: `5855af9dee04e1fd686694c631ebc8e10bbe0c20`
+- QuickEdit-safe elevated wrapper commit:
+  `23cabf30548938ea9adc1297aeedb4e00f9496cf`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
 
-At task start, local baseline branch HEAD, its upstream, and `git ls-remote` all resolved to the required baseline SHA. Git LFS status was clean and `git lfs fsck` passed. The new M2P.5 branch was created directly from that SHA.
+The local-only `Darkwell.uproject` EngineAssociation difference remains
+unstaged and was excluded from every commit. No main merge/rebase/force-push,
+M3, DARKWELL gameplay, GPU mask, post-processing, memory-layer, or map change
+was made.
 
-`Darkwell.uproject` contains a local-only `EngineAssociation` difference. It is intentionally retained, unstaged, and excluded from every M2P.5 commit.
+## Authority chain
 
-## Scope locks
+M2P.4 started with broad on-CPU p99 `300.2 us`; 42 of 43 Plugin CPU slow
+samples were in `vision_solve`.
 
-- Do not enter M3 or merge, rebase, or force-push `main`.
-- Do not modify DARKWELL gameplay, GPU masks, post-processing, memory textures, or `/Game/Maps/L_Prototype`.
-- Do not change production Runtime before the first fail-closed, ten-independent-process, fine-grained broad-door administrator ETW classification is complete.
-- Do not represent wall time or raw cycle deltas as intrinsic CPU time.
-- Do not change workload sizes, warmups, nearest-rank statistics, thresholds, affinity, priority, Defender, or other security services.
+M2P.5 Phase 1 authority:
 
-## Starting authority
+`Saved\SightWeaveM2P5\VisionTailAttribution\preproduction-detailed-formal-20260826`
 
-M2P.4 final administrator ContextSwitch/CSwitch ETW is preserved at:
+It recorded broad on-CPU `154.3/272.5/305.3/388.8 us`, 10 PIDs, 1,010 samples,
+65,650 source/stage rows, zero loss/conflict/unclosed/Unknown, and identified:
 
-`D:\UE_projects\LastLight\Saved\SightWeaveM2P4\EtwAttribution\post-ray-reuse-formal-20260826`
+1. alternating exact Prepared states rejected as `prepared_index_replaced`;
+2. active-set advancement performed for reused rays.
 
-| Workload | Samples | on-CPU p50 / p95 / p99 / max (us) | ready p99 (us) | blocked p99 (us) | Classification | Verdict |
-|---|---:|---:|---:|---:|---|---|
-| Batch512 | 10,100 | 92.1 / 135.8 / 160.9 / 437.3 | 18.6 | 0 | 11 Plugin, 53 Scheduler, 0 GPU, 0 Unknown | PASS |
-| broad dynamic door | 1,010 | 153.7 / 235.7 / 300.2 / 427.2 | 22.1 | 0 | 43 Plugin, 4 Scheduler, 0 GPU, 0 Unknown | FAIL |
+The authorized Prepared-cache and reused-ray changes were correct but did not
+close the aggregate tail. A second detailed administrator trace at
+`Saved\SightWeaveM2P5\VisionTailAttribution\postchange-detailed-formal-20260826-1215`
+recorded broad on-CPU p99 `309.8 us` and proved broad amplification across every
+exact solve stage rather than one fixable microstage.
 
-The authority has ten independent PIDs, 105,120 markers, zero event loss, zero buffer loss, zero ownership conflicts, zero unclosed timelines, and zero Unknown samples. Of 43 broad-door Plugin CPU slow samples, 42 were attributed to `vision_solve`.
+This opened the final bounded optimization: exact successful vision-result
+memoization inside the already capped Prepared Event Index. The full exact key
+includes source geometry/profile/tolerance and exact prepared segment identity;
+reuse and storage fail closed; result bytes count against hard memory bounds;
+bounded resident unbound states support alternating broad-door states; caller
+snapshots own their arrays. Illumination and Shipping dependencies are
+unchanged.
 
-Supporting preserved evidence:
+## Final ETW evidence
 
-- calibration: `D:\UE_projects\LastLight\Saved\SightWeaveM2P4\EtwCalibration\post-ray-reuse-final-20260826`
-- elevated orchestration: `D:\UE_projects\LastLight\Saved\SightWeaveM2P4\Final\post-ray-reuse-final-elevated-20260826`
-- allocation: `D:\UE_projects\LastLight\Saved\SightWeaveM2P1\AllocationProof\M2P4PostRayReuseElevatedFinal_20260826`
+Successful high-integrity root:
 
-## Phase 1 diagnostic contract
+`D:\UE_projects\LastLight\Saved\SightWeaveM2P5\Final\post-exact-result-final-20260826-1308-r4`
 
-M2P.5 will first add non-Shipping/test-only diagnostics with stable machine-readable names and no new Shipping dependency. The diagnostics must associate every sample with PID, TID, sample ID, source ID, source counts, candidate/dirty/event/ray/active-set/polygon counts, revision, reuse/fallback metadata, wall/cycle measurements, and fail-closed ETW on-CPU attribution.
+It proves Administrator `true`, High Mandatory Level, `fltmc` exit 0, WPR and
+WPAExporter present, and current-console QuickEdit mode `503 -> 439`.
 
-The existing solve has two measurement shapes:
+- calibration:
+  `Saved\SightWeaveM2P5\EtwCalibration\post-exact-result-final-20260826-1308-r4-calibration`
+- Matrix A:
+  `Saved\SightWeaveM2P5\EtwAttribution\post-exact-result-final-20260826-1308-r4-matrix-a`
+- Matrix B:
+  `Saved\SightWeaveM2P5\EtwAttribution\post-exact-result-final-20260826-1308-r4-matrix-b`
 
-1. Contiguous macro stages, suitable for begin/end ETW markers: source dirty discovery, candidate collection and event preparation, dirty-sector determination, event sorting or local merge, topology validation, fallback detection, and publication preparation.
-2. Repeated micro stages interleaved inside the ordered ray loop: active-set update, reuse lookup, reused-ray validation, changed-ray intersection, stable-ID tie-break, and vertex emission.
+Calibration has 188/188 closed markers, loss 0/0, Unknown 0, QPC authority,
+and stage-probe on-CPU p99 `4.4 us`. The wrapper completed calibration and both
+10-process matrices in one administrator child without affinity or priority
+changes.
 
-The diagnostic design must retain exact ordering and semantics while avoiding enough per-ray markers to manufacture the tail being measured. It will therefore preserve the existing authoritative total/stage marker schema, add sample/source detail keyed by stable identifiers, accumulate micro-stage wall/cycles in test-only state, and expose only calibrated ETW marker granularity whose overhead remains below the recorded calibration bound. Any micro-stage lacking defensible ETW on-CPU attribution will remain explicitly unproven rather than inferred from wall/cycles.
+| Matrix / workload | on-CPU p50/p95/p99/max (us) | ready p99/max | blocked p99/max | CS / preemptions / migrations | Classification |
+|---|---:|---:|---:|---:|---|
+| A Batch512 | 95.9/150.2/189.0/437.3 | 29.4/406.3 | 0/3.8 | 434/433/338 | 9,953 Within, 67 Plugin, 80 Scheduler |
+| A broad | 65.5/127.6/169.6/245.4 | 10.3/161.5 | 0/0 | 30/30/22 | 1,007 Within, 0 Plugin, 3 Scheduler |
+| B Batch512 | 95.6/150.0/183.3/476.2 | 20.4/450.9 | 0/2.6 | 362/360/286 | 9,979 Within, 39 Plugin, 82 Scheduler |
+| B broad | 65.8/128.7/170.9/247.7 | 4.4/76.2 | 0/0 | 24/24/20 | 1,007 Within, 0 Plugin, 3 Scheduler |
 
-Before any production algorithm change, the diagnostic path must be built and tested, its marker overhead calibrated, and at least ten independent elevated broad-door processes captured and analyzed with zero loss, ownership conflict, unclosed timeline, or Unknown classification.
+Raw ordinary wall/cycle classifications are retained but do not replace ETW
+authority. No diagnostic overhead was subtracted.
 
-## Phase 2 and final acceptance
+## Retained orchestration failures
 
-Only a hotspot proven by Phase 1 authority may justify a production change. Any such change triggers the full correctness, differential, allocation, 36,000-frame NullRHI and D3D12 soak, regression, BuildPlugin, clean-host, dependency, Shipping, NVIDIA stability, and two-independent-formal-matrix requirements in the M2P.5 task contract.
+The initial UAC cancellation created no child or performance artifact. Later
+failed roots remain present:
 
-M2P.5 can be marked **COMPLETED** only when both independent final ten-process matrices preserve all fail-closed requirements, keep Batch512 within its existing gates, and independently report broad dynamic-door aggregate authoritative on-CPU p99 `< 250 us`.
+- the base label used Windows PowerShell 5.1 and failed before ETW because
+  `utf8NoBOM` requires PowerShell Core;
+- r1 passed capability/calibration but the visible console entered QuickEdit
+  selection mode during Matrix A run 3 and paused WPR stop; both stalled ETLs
+  were preserved and hashed;
+- r2/r3 correctly failed WPR start while the interrupted elevated profile
+  remained internally active;
+- r4 ran elevated `wpr -cancel` exit 0, verified not recording, disabled and
+  verified QuickEdit for its own console, and completed exit 0.
 
-## Phase 2 result and safe validation checkpoint
+These are orchestration failures, not performance samples. No UAC was hidden,
+automated, or bypassed.
 
-The two Phase 1-authorized production changes are implemented and pushed:
+## Validation closure
 
-1. old-state incremental validation uses the previous Prepared cache while the
-   exact target solve uses the selected target Prepared cache;
-2. reused rays bypass angular active-set advancement, while rebuilt rays
-   advance directly to their ordered angle.
+- Exact-key/fallback/differential/lifecycle coverage: final M2P.5 5/5,
+  M2P4 7/7, M2P2 11/11, M2 96/96, Darkwell 24/24.
+- Full post-exact serial root retains 116/117 due one Batch wall-only failure.
+- A later full retry retains 115/117 due Batch wall p99 `247.501 us` and
+  Prepared4096 wall median `1011.100 us`. These were not relaxed or deleted;
+  the final ETW matrices adjudicate Batch intrinsic CPU separately and pass.
+- Corrected allocation proof:
+  `Saved\SightWeaveM2P1\AllocationProof\M2P5PostExactResultFinalR1_20260826`;
+  all 20 warmed formal workloads are zero allocation/reallocation/bytes; CSV
+  SHA-256 `F29A0C43CBF6A943DD9F8E33D44CD6B653423775433912D16938A37E7ADAD30B`.
+- The first allocation failure without teleport warmup remains preserved.
+- Final NullRHI 36k:
+  `m2p5-post-exact-result-nullrhi-36000-r2-20260826`, 36,000 Within,
+  correctness/capacity/Unknown `0/0/0`.
+- Final D3D12 36k:
+  `m2p5-post-exact-result-d3d12-36000-r1-20260826`, 35,999 Within + 1
+  migration, correctness/capacity/Unknown `0/0/0`.
+- Two earlier NullRHI Unknown runs and the first D3D12 4-Unknown run remain
+  preserved and unguessed.
+- Fresh BuildPlugin:
+  `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM2P5PostExact-20260826-1340`,
+  UAT `BUILD SUCCESSFUL`.
+- Source-only clean host:
+  `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM2P5CleanHost-20260826-1341`;
+  Editor Development, Game Development, and Game Shipping all succeeded.
+- Runtime dependencies remain exactly Core/CoreUObject/Engine/DeveloperSettings;
+  Game targets contain only Runtime; source, COFF symbols, and import table
+  contain no Darkwell/Editor/Tests/Automation/ETW dependency.
+- Final Editor build succeeded. NullRHI and D3D12 Lab smokes exited 0 and
+  reported authoritative/live/vision/bypass with snapshot 58.
+- Final severe scan: zero ensure/assert/fatal/critical/unhandled/device-removed/
+  DXGI/GPU-crash hits.
+- NVIDIA final gate: NvContainerLocalSystem Running/Auto, PID 5584 unchanged;
+  RTX 4060 Studio 610.88; relevant service/application/TDR/DXGI/WER counts 0.
 
-All stale binding, revision, dirty-sector, seam, topology, and capacity cases
-remain synchronous and fail-closed. The final code checkpoint before this
-handoff update is `c8971a4ac1781b4a945e7a7bb3a4c415837027e9`.
+Full paths, metrics, hashes, failed-run detail, and warning classification are
+in `Docs/SIGHTWEAVE_M2P5_FINAL_VALIDATION.md`.
 
-Post-include focused M2P.5 is 4/4, full SightWeave is 116/116, and Darkwell is
-24/24. The final strict allocation proof has 20 warmed workloads with three
-samples each and all allocation/reallocation/byte counts at zero. Fresh
-36,000-frame NullRHI and D3D12/SM6 soaks have zero correctness failures,
-capacity growth, and Unknown. Final BuildPlugin plus clean-host Editor
-Development, Game Development, and Game Shipping all pass. Runtime/Shipping
-dependency isolation and both Lab smokes pass.
+## Handoff state and next work
 
-Two narrower serial scopes retain Batch512 wall p99 failures; the later full
-scope and three independent extended performance processes pass. These wall
-failures remain recorded and are not relabeled as intrinsic CPU. Exact paths,
-metrics, hashes, warning audit, and package evidence are recorded in
-`Docs/SIGHTWEAVE_M2P5_FINAL_VALIDATION.md`.
+There is no remaining M2P.5 Runtime action and no unverified M2P.5 contract
+item. Do not reopen Runtime optimization from ordinary wall/cycle noise unless
+a new fail-closed administrator ETW proves a regression. M3 and optional human
+visual/PIE inspection remain separate, explicitly out-of-scope work.
 
-`Scripts/RunSightWeaveM2P5FinalEtwMatrices.ps1` is a parse-checked thin wrapper
-over the existing M2P.4 calibration/attribution workflow. It will run one
-calibration and two independent ten-process formal matrices inside one
-high-integrity PowerShell child without changing samples, thresholds, or
-analysis.
-
-## Phase 1 result
-
-The production-change boundary is now open based on the fail-closed ten-process authority recorded in:
-
-`D:\UE_projects\LastLight\Saved\SightWeaveM2P5\VisionTailAttribution\preproduction-detailed-formal-20260826`
-
-Aggregate broad-door authoritative on-CPU was `154.3 / 272.5 / 305.3 / 388.8 us` at p50/p95/p99/max. Event loss, buffer loss, ownership conflicts, unclosed timelines, and Unknown were all zero. Marker calibration used five independent control/detailed process pairs and detected no positive p50/p95/p99 perturbation; no subtraction was applied.
-
-Source-exact attribution found two focused redundant paths:
-
-1. The vision source sharing Prepared geometry with compatible illumination reported `prepared_index_replaced` in 1,010/1,010 samples and executed a full ray solve while alternating between two already-exact Prepared cache states.
-2. The other three sources rebuilt only 38/49/52 dirty rays but advanced the angular active set for all 518/523 candidate rays before testing reuse.
-
-The complete classification and authorized Phase 2 changes are in `Docs/SIGHTWEAVE_M2P5_VISION_TAIL_CLASSIFICATION.md`.
-
-## Exact resume point
-
-The user is away. No UAC or elevated ETW was attempted after the explicit pause
-instruction, and the absence of a run is not a performance failure. Wait until
-the user replies `我回来了`. Then verify the branch and worktree, explicitly say
-`现在请点击UAC的是`, and launch one visible elevated child for the prepared final
-matrix wrapper:
-
-```powershell
-Set-Location -LiteralPath 'D:\UE_projects\LastLight'
-git switch codex/m2p5-sightweave-vision-solve-tail-closure
-git status --short --branch
-```
-
-Do not stage `Darkwell.uproject`. Do not modify Runtime unless the two
-authoritative post-change matrices prove a remaining fixable Plugin CPU tail.
+For a future task, first fetch the branch, verify HEAD/upstream/remote and LFS,
+and preserve the local `Darkwell.uproject` EngineAssociation difference. Do not
+merge main, rebase, or force-push as part of this completed handoff.

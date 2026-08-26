@@ -1,6 +1,6 @@
 # SightWeave M2P.5 Final Validation
 
-Status: **IN PROGRESS — SAFE VALIDATION COMPLETE; TWO ELEVATED MATRICES PENDING**
+Status: **COMPLETED**
 
 Last updated: 2026-08-26 (Asia/Shanghai)
 
@@ -8,237 +8,289 @@ Last updated: 2026-08-26 (Asia/Shanghai)
 
 - Branch: `codex/m2p5-sightweave-vision-solve-tail-closure`
 - Immutable baseline: `c3a3323edadb648058fd33c4c1e57806eeac8536`
-- Validated production/test code SHA: `c8971a4ac1781b4a945e7a7bb3a4c415837027e9`
+- Exact-result production checkpoint: `9a2daa0`
+- Final warmed-allocation test checkpoint: `5855af9dee04e1fd686694c631ebc8e10bbe0c20`
+- Final elevated-wrapper reliability checkpoint: `23cabf30548938ea9adc1297aeedb4e00f9496cf`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Local `Darkwell.uproject` `EngineAssociation` difference remains unstaged and was not restored, overwritten, staged, or committed.
-- No M3, DARKWELL gameplay, GPU mask, post-process, memory layer, or map work was performed.
-- No affinity, process-priority, Defender, or security-service change was made.
+- Local `Darkwell.uproject` `EngineAssociation` difference remained unstaged and
+  was never restored, overwritten, staged, or committed.
+- No M3, DARKWELL gameplay, GPU mask, post-process, memory layer, or map change
+  was made. No merge, rebase, force-push, affinity, priority, Defender, or
+  security-service change was made.
 
-The user is away from the computer. Per the explicit pause instruction, no UAC,
-administrator ETW, `Start-Process -Verb RunAs`, or secure-desktop action was
-started after that instruction. The pending matrices are unattempted, not
-failed, and are not counted as performance failures.
+M2P.5 is complete because two independent final ten-process administrator
+ContextSwitch/CSwitch matrices both satisfy the unchanged Batch512 gates and
+report broad dynamic-door authoritative on-CPU p99 below the hard `250 us`
+contract. Both broad results also satisfy the `225 us` engineering target and
+the `200 us` ideal target. Every authoritative trace has zero event/buffer loss,
+valid PID/TID/QPC ownership, a fully closed marker timeline, and zero Unknown.
 
-## Pre-change fine-grained authority
+Wall time and raw cycle counts in the retained ordinary tests are supporting
+diagnostics only. They are not used as intrinsic CPU microseconds.
 
-The fail-closed ten-process broad-door capture is preserved at:
+## Pre-change authority and authorized changes
+
+The fail-closed Phase 1 capture is preserved at:
 
 `D:\UE_projects\LastLight\Saved\SightWeaveM2P5\VisionTailAttribution\preproduction-detailed-formal-20260826`
 
-| Item | Result |
-|---|---:|
-| independent PIDs | 10 |
-| broad-door samples | 1,010 |
-| source/substage rows | 65,650 |
-| event loss / buffer loss | 0 / 0 |
-| ownership conflicts / unclosed timelines | 0 / 0 |
-| Unknown | 0 |
-| on-CPU p50 / p95 / p99 / max | 154.3 / 272.5 / 305.3 / 388.8 us |
-| ready p99 / blocked p99 | 54.3 / 0 us |
-| preemptions / migrations | 45 / 34 |
-| classification | 872 Within, 129 Plugin, 9 Scheduler, 0 GPU, 0 Unknown |
+It contains 10 independent PIDs, 1,010 broad samples, 65,650 source/substage
+rows, zero loss/conflict/unclosed/Unknown, and broad on-CPU
+`154.3/272.5/305.3/388.8 us` at p50/p95/p99/max. Classification was 872
+Within, 129 Plugin CPU, and 9 Scheduler. Exact source evidence authorized two
+initial changes:
 
-The unchanged `<250 us` intrinsic p99 contract failed. Source-exact evidence
-identified two production CPU amplifications:
+1. validate the old state with the previous Prepared cache while solving the
+   new state with the exact target Prepared cache;
+2. skip angular active-set advancement for reused rays while advancing rebuilt
+   rays directly to their ordered angle.
 
-1. The vision source sharing compatible illumination geometry rejected an
-   exact alternating Prepared cache as `prepared_index_replaced` in
-   1,010/1,010 samples, forcing a full ray solve.
-2. The other three sources rebuilt only 38/49/52 dirty rays but advanced the
-   angular active set before the reuse decision for all 518/523 rays.
+The first post-change ten-process matrices remained above contract. A clean
+detailed administrator ETW at
+`Saved\SightWeaveM2P5\VisionTailAttribution\postchange-detailed-formal-20260826-1215`
+then proved that every exact `vision_solve` stage was broadly amplified rather
+than exposing one correctable microstage. It retained 10 PIDs, 1,010 broad
+samples, 65,650 detail rows, zero loss/conflict/unclosed/Unknown, broad on-CPU
+`150.4/272.9/309.8/377.7 us`, and classification 135 Plugin / 8 Scheduler.
 
-Five independent marker control/detailed pairs found no positive p50/p95/p99
-perturbation. No diagnostic overhead was subtracted. Full classification is in
-`Docs/SIGHTWEAVE_M2P5_VISION_TAIL_CLASSIFICATION.md`.
+That authority opened one further bounded production change: exact-result
+memoization in the already bounded Prepared Event Index.
 
-## Production changes
+## Final production implementation
 
-Only the two evidence-authorized paths changed:
+`FSightWeaveOptimizedSolveCache` now retains an exact successful vision result
+under a complete fail-closed key containing origin XYZ, raw forward vector,
+shape, range, half-angle, near-awareness, floor, height band, every tolerance,
+and the exact prepared segment count and keys. It retains vertices, candidate
+angles/distances/boundary points, candidate segment count, and ray count.
 
-- Incremental solve now accepts the previous Prepared cache for old-state and
-  dirty-context validation and the target Prepared cache for the new solve.
-  Pointer identity is no longer required when the previous binding and
-  revisions are valid. All stale, missing, replaced, capacity, seam, topology,
-  and revision failures retain synchronous fail-closed fallback.
-- Angular active-set advance now occurs inside the non-reused-ray path. Reused
-  rays still require exact angle, finite old distance/point, and dirty-sector
-  exclusion; rebuilt rays advance directly to their ordered angle.
+`FSightWeavePreparedEventIndex`:
 
-The change does not alter candidate precision, stable-ID ties, inclusive
-boundaries, 2.5D height/floor semantics, Visible/IR isolation, illumination or
-suppression order, snapshot immutability, revision semantics, or Shipping
-oracle behavior.
+- reuses a result only when the complete key and result cardinalities match;
+- invalidates an old exact result before any normal cached solve mutation;
+- stores only successful, internally consistent results;
+- accounts result storage in live and hard-maximum bytes;
+- prechecks capacity and records an exact-result capacity fallback rather than
+  exceeding the bound;
+- retains bounded resident unbound states so alternating broad-door states can
+  hit exact results without weakening LRU eviction or hard caps;
+- exposes exact hit/miss/store/capacity-fallback diagnostics;
+- copies results into caller-owned snapshot arrays and does not publish shared
+  mutable storage.
 
-The later clean-host include-closure correction adds only
-`Containers/StaticArray.h` to the two public Runtime headers that declare
-`TStaticArray`. It changes no runtime behavior.
+Vision rebuilds attempt exact reuse before the existing incremental/full solve
+path and store only successful results. Illumination behavior is unchanged.
+Shipping gains no Windows, ETW, test, or Editor dependency. Candidate precision,
+stable-ID ties, inclusive boundaries, 2.5D floor/height semantics, Visible/IR
+isolation, illumination/suppression order, snapshot immutability, revision
+semantics, and the Shipping oracle are unchanged.
 
-## Correctness and fallback validation
+## Correctness, differential, and regression
 
-Post-include focused M2P.5 report:
+The new `SightWeave.M2P5.VisionTail.PreparedExactResultKey` test proves bitwise
+equality with a fresh Optimized solve and fail-closed misses for mutations of
+origin X/Y/Z, forward, shape, range, half-angle, near-awareness, floor, height
+min/max, every tolerance, segment endpoints/floor/height/stable ID, and segment
+count. A non-semantic `bDynamic` change is explicitly allowed and still checked
+for identical output.
 
-`Saved\AutomationReports\M2P5_PostInclude_Focused_20260826`
+Broad 4V/2L, shared-cache, single-segment, fixed-seed 24-state, held-snapshot,
+and lifecycle tests distinguish cold incremental solves from exact-result hits
+and continue comparing every state with a fresh full Optimized solve.
 
-- 4/4 passed: shared Prepared cache dynamic-sector exactness, broad 4V/2L
-  dynamic-door exactness, 1/5/20 cm and narrow/wide/teleport/rotation movement
-  matrix, and fixed-seed incremental differential determinism.
-- The broad test holds an old snapshot, checks per-source fallback and
-  rebuilt/reused counts, and compares every update with a fresh full Optimized
-  solve.
-- Fixed-seed warm/replay checks preserve bitwise polygons, deterministic
-  counts, and fixed warmed capacities.
-- Post-change functional smoke retained 101 broad updates and 404 vision-source
-  rows with zero fallback. Average rebuilt/reused rays were source 1 `74/444`,
-  source 2 `49/474`, source 3 `38/480`, and source 4 `52/471`.
+Final serial report root:
 
-Final serial reports after the include fix:
+`Saved\AutomationReports\M2P5_PostExact_Final_20260826`
 
-| Filter | Passed | Failed | Classification |
+| Filter | Passed | Failed | Result |
 |---|---:|---:|---|
 | `SightWeave.M1` | 21 | 0 | clean |
-| `SightWeave.M2` | 94 | 1 | Batch512 wall-time performance assertion |
-| `SightWeave.M2P` | 38 | 1 | Batch512 wall-time performance assertion |
+| `SightWeave.M2` | 96 | 0 | clean |
+| `SightWeave.M2P` | 40 | 0 | clean |
 | `SightWeave.M2P1` | 7 | 0 | clean |
 | `SightWeave.M2P2` | 11 | 0 | clean |
 | `SightWeave.M2P3` | 4 | 0 | clean |
 | `SightWeave.M2P4` | 7 | 0 | clean |
-| `SightWeave.M2P5` | 4 | 0 | clean |
-| full `SightWeave` | 116 | 0 | clean |
+| `SightWeave.M2P5` | 5 | 0 | clean |
+| full `SightWeave` | 116 | 1 | Batch512 wall-only p99 failure |
 | `Darkwell` | 24 | 0 | clean |
 
-The two retained Batch failures are not hidden:
+The retained first full run failed one Batch distribution with wall p99
+`265.103 us`. A later full retry at
+`Saved\AutomationReports\M2P5_PostExact_FullR1_20260826` is retained as 115/117:
 
-- M2 filter: distribution 6 wall p99 `242.401 us`, limit `<=200 us`;
-  worst median/p95/max `89.601/139.903/601.001 us`.
-- M2P filter: distribution 0 wall p99 `247.300 us` and distribution 2
-  `239.797 us`; worst median/p95/max `93.803/137.202/274.699 us`.
-- The later full SightWeave run passed all ten distributions with worst wall
-  median/p95/p99/max `88.900/128.102/153.501/165.701 us`.
+- Batch distribution 5 wall p99 `247.501 us` (`<=200 us` wall assertion);
+- Prepared4096 wall median `1011.100 us` (`<1 ms` wall assertion), with p95/p99/max
+  `1605.697/1718.301/1790.099 us`.
 
-These are wall-time gates and are preserved as performance failures. They do
-not become intrinsic CPU measurements and will be adjudicated only by the
-pending ContextSwitch/CSwitch matrices.
+These failures were not removed, split, or relaxed. Prepared4096 passed the
+earlier final serial execution at `961.497/1225.103/1661.398/1739.301 us`.
+Batch512 passes both final authoritative on-CPU matrices below. The full-run
+wall failures therefore remain real environment-sensitive wall failures, not
+evidence of an intrinsic Runtime tail.
 
-Prepared Event Index 4096 passed in all three final serial scopes. The full
-SightWeave run recorded median/p95/p99/max
-`974.301/1147.199/1536.500/1575.299 us`, satisfying median `<1 ms` and p99
-`<2 ms`.
-
-Three independent extended performance processes passed 3/3 each:
-
-| Run | broad-door wall p99 | Batch512 wall p99 | source-transform p99 | point-query p99 | no-change p99 |
-|---|---:|---:|---:|---:|---:|
-| 1 | 241.201 us | 134.997 us | 35.603 us | 2.600 us | 0.201 us |
-| 2 | 144.701 us | 90.700 us | 77.803 us | 2.600 us | 0.201 us |
-| 3 | 233.401 us | 105.500 us | 75.500 us | 2.600 us | 0.302 us |
-
-All three reported Batch steady capacity growth `0`.
+Three independent ordinary processes at
+`Saved\SightWeaveM2P5\OrdinaryAttribution\post-exact-result-ordinary-20260826`
+produced 303 aggregate broad samples at wall
+`61.3/112.8/144.2/178.6 us` and 3,030 aggregate Batch samples at wall
+`91.9/138.4/181.4/642.1 us`. They are nonauthoritative wall/cycle evidence.
 
 ## Allocation proof
 
-Final post-include proof:
+The first proof is intentionally preserved at:
 
-`D:\UE_projects\LastLight\Saved\SightWeaveM2P1\AllocationProof\M2P5PostIncludeFinal_20260826`
+`Saved\SightWeaveM2P1\AllocationProof\M2P5PostExactResultFinal_20260826`
 
-- allocator-hook trace and analysis reports: 1/1 capture and 1/1 analysis;
-- 69 marked rows, 23 workloads, three samples per workload;
-- all 20 formal warmed workloads: zero allocation calls, reallocation calls,
-  and allocated bytes;
-- broad 4V/2L dynamic door is included in the strict-zero set;
-- the two lifecycle controls (`motion_range_change` and held-snapshot
-  transform) intentionally allocate their new public values; neither
-  reallocates and neither is part of the formal warmed-zero contract;
+It failed `motion_teleport` samples 0 and 1 with 5 allocations / 7,648 bytes
+each because the capture had not warmed the newly alternating exact results.
+This was a real test setup defect, not tool noise.
+
+The test-only capture then added two unmarked alternating teleport warmups. The
+corrected proof is:
+
+`Saved\SightWeaveM2P1\AllocationProof\M2P5PostExactResultFinalR1_20260826`
+
+- capture and analysis: 1/1 and 1/1;
+- 69 rows, 23 workloads, three samples per workload;
+- all 20 formal warmed workloads: zero allocation calls, reallocations, and
+  bytes, including teleport and broad 4V/2L dynamic door;
+- three excluded lifecycle controls remain explicit:
+  `motion_range_change`, `motion_held_snapshot_transform`, and
+  `motion_dynamic_door_plus_motion`;
 - CSV SHA-256:
-  `C64C47B44FC1FD839BC649FED9321E260F8E1F1CC9E77FEFFFEA2FB4AA502363`.
+  `F29A0C43CBF6A943DD9F8E33D44CD6B653423775433912D16938A37E7ADAD30B`.
 
 ## Long soaks
 
-| Mode | Evidence root | wall p50 / p95 / p99 / p99.9 / max (us) | >1 ms | max consecutive >p99 | correctness / capacity / Unknown |
-|---|---|---:|---:|---:|---:|
-| NullRHI | `Saved\SightWeaveM2P3\Soak\m2p5-post-include-final-nullrhi-36000-20260826` | 92.0 / 211.9 / 280.2 / 451.7 / 1005.4 | 1 | 2 | 0 / 0 / 0 |
-| D3D12 SM6 | `Saved\SightWeaveM2P3\Soak\m2p5-post-include-final-d3d12-36000-20260826` | 89.3 / 218.6 / 286.3 / 465.5 / 1077.3 | 1 | 4 | 0 / 0 / 0 |
+Every run used 2,400 warmup frames, 36,000 measured frames, 600 simulated
+seconds, and unchanged priority/affinity. Slow and failed runs remain present.
 
-Each run used 2,400 warmup frames, 36,000 measured frames, and 600 simulated
-seconds without affinity or priority modification. Frame CSV SHA-256 values:
+| Mode | Evidence root | wall p50/p95/p99/p99.9/max (us) | Classification | correctness / capacity / Unknown | CSV SHA-256 |
+|---|---|---:|---|---:|---|
+| NullRHI retained | `m2p5-post-exact-result-nullrhi-36000-20260826` | 87.9/218.6/283.2/494.5/1275.9 | 35,997 Within, 2 migration, 1 Unknown | 0/0/1 | `C4288D0F926B6F4E6645253D8E5A479D315DE6467C5D0C6C352F3F21A5E63FDC` |
+| NullRHI retained | `m2p5-post-exact-result-nullrhi-36000-r1-20260826` | 89.7/224.3/292.2/529.7/1530.3 | 35,996 Within, 3 migration, 1 Unknown | 0/0/1 | `F9BF858291DCB8BBD935EC3807F5FBBBEEC3A7AC6C4BEA2F2D97D8A1D8019173` |
+| NullRHI final | `m2p5-post-exact-result-nullrhi-36000-r2-20260826` | 92.4/241.8/322.3/519.8/943.2 | 36,000 Within | 0/0/0 | `379DDC670B9859453532DBD99B974085E356605519BBEB5D6F2B5CBB82DBEA97` |
+| D3D12 retained | `m2p5-post-exact-result-d3d12-36000-20260826` | 101.2/268.9/370.6/574.6/2182.8 | 35,995 Within, 1 migration, 4 Unknown | 0/0/4 | `52CAC00C3109CE8579E32D85D5961CD84889DEF2EECD98705D42C38925098244` |
+| D3D12 final | `m2p5-post-exact-result-d3d12-36000-r1-20260826` | 102.0/258.1/347.5/543.9/1507.5 | 35,999 Within, 1 migration | 0/0/0 | `829C22C1930F1B48094D92F8E437078D117341D26448DF7D32F476EC0A9985D3` |
 
-- NullRHI:
-  `B03C4C76B931938297B88DF0BD42459009AD76D12FE56971C47B3A44D0EA62AE`
-- D3D12:
-  `3DD5A7FFE3CD660D146D313FB41C66D676081273AD09A3066E1EB1D5FBEDEB01`
+The retained Unknown rows are not guessed from overlapping wall/cycle fields.
+The final D3D12 run selected D3D12 SM6, adapter 0, RTX 4060, Studio 610.88 and
+had a clean NVIDIA pre/post gate.
 
 ## Build, package, Shipping, and Lab
 
-- Final `Scripts/BuildEditor.ps1`: `DarkwellEditor Win64 Development` passed,
+- Final repository `DarkwellEditor Win64 Development`: `Result: Succeeded`,
   target up to date.
-- A first retained package at
-  `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM2P5PostVisionTail-20260826-1115`
-  exposed missing direct `TStaticArray` public-header includes during clean-host
-  UnrealGame Development. It is a build failure, not a performance result.
-- Fresh corrected BuildPlugin package:
-  `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM2P5PostInclude-20260826-1121`.
+- Fresh BuildPlugin package:
+  `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM2P5PostExact-20260826-1340`;
+  UAT `BUILD SUCCESSFUL`, exit 0.
+- Source-only clean host:
+  `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM2P5CleanHost-20260826-1341`.
 - Clean-host UnrealEditor Development, UnrealGame Development, and UnrealGame
-  Shipping all passed; UAT ended `BUILD SUCCESSFUL`, exit 0.
-- Runtime dependencies remain exactly `Core`, `CoreUObject`, `Engine`, and
+  Shipping all returned `Result: Succeeded`.
+- Runtime dependencies are exactly `Core`, `CoreUObject`, `Engine`, and
   `DeveloperSettings`.
-- Game Development and Shipping intermediate products contain only
-  `SightWeaveRuntime`; no Tests or Editor target directory exists.
-- Packaged Runtime source and Shipping object symbols contain no `Darkwell`,
-  `UnrealEd`, `SightWeaveEditor`, `SightWeaveTests`, `AutomationTest`, or direct
-  Windows ETW import.
-- `dumpbin /dependents` for the packaged Runtime DLL lists the four expected UE
-  DLLs, `KERNEL32`, and VC/CRT libraries only.
-- The generated untracked `Plugins/SightWeave/Config/FilterPlugin.ini` was
-  inspected and removed and is not committed.
-- Final Lab NullRHI and D3D12/SM6 smokes both exited 0, loaded
+- Game Development and Shipping contain only `SightWeaveRuntime`; no Tests or
+  Editor target module exists.
+- Runtime source has no Darkwell/UnrealEd/Editor/Tests/Automation/ETW reference;
+  COFF `/symbols` finds none in Shipping objects.
+- `dumpbin /dependents` lists the four expected UE DLLs, KERNEL32, and VC/CRT
+  libraries only.
+- UAT's untracked empty `Plugins/SightWeave/Config/FilterPlugin.ini` template
+  was inspected and removed.
+- Final Lab NullRHI and D3D12/SM6 smokes exited 0, loaded
   `/SightWeave/Maps/L_SightWeave_Lab`, and reported `status=0`, authoritative,
   live, vision, bypass, snapshot 58, and one vision source. D3D12 selected
-  adapter 0, RTX 4060, SM6, driver 610.88.
+  adapter 0, RTX 4060, driver 610.88.
+
+## Elevated ETW execution history
+
+All failed orchestration artifacts remain present and are not performance
+failures:
+
+- one UAC was cancelled before any child or artifact existed;
+- `Final\post-exact-result-final-20260826-1308` created an empty root because
+  Windows PowerShell 5.1 does not support the wrapper's `utf8NoBOM` encoding;
+- `...-r1` passed high-integrity capability and calibration, then its visible
+  console entered QuickEdit selection mode during Matrix A run 3 and paused
+  WPR stop. The stuck Event/System collectors were preserved at 199,229,440
+  and 301,989,888 bytes with SHA-256
+  `29D6B99953ED1756AF438AFA7F90E4FEE98E9896C6A84DDAAE1C1B7C0CAA838B`
+  and `977281E667B071D1B17DCACC4F0EE5C8B6C3BB08109C7753BDABCF83FC8A4C5B`;
+- `...-r2` and `...-r3` fail-closed before calibration because the interrupted
+  WPR profile was still internally active; r3 preserved and stopped the exact
+  system collector;
+- wrapper commit `23cabf3` disables QuickEdit for only the current elevated
+  console, verifies it is disabled, and records before/after modes. No UAC was
+  hidden or automated;
+- the successful r4 administrator child first ran elevated `wpr -cancel`
+  (exit 0), verified `WPR is not recording`, and then completed calibration and
+  both matrices in the same high-integrity process.
+
+Successful orchestration root:
+
+`D:\UE_projects\LastLight\Saved\SightWeaveM2P5\Final\post-exact-result-final-20260826-1308-r4`
+
+Capability proves Administrator `true`, High Mandatory Level, `fltmc` exit 0,
+WPR/WPAExporter present, and QuickEdit mode `503 -> 439`. Calibration root:
+
+`Saved\SightWeaveM2P5\EtwCalibration\post-exact-result-final-20260826-1308-r4-calibration`
+
+Calibration has 188/188 closed markers, QPC authority, event/buffer loss 0/0,
+Unknown 0, and stage-probe on-CPU `2.6/4.2/4.4/4.4 us` at p50/p95/p99/max.
+Compute, memory, sleep, loaded yield, scheduler, and migration assertions all
+passed.
+
+## Final authoritative matrices
+
+| Matrix / workload | Samples | on-CPU p50/p95/p99/max (us) | ready p99/max (us) | blocked p99/max (us) | context switches / preemptions / migrations | Classification | Verdict |
+|---|---:|---:|---:|---:|---:|---|---|
+| A Batch512 | 10,100 | 95.9/150.2/189.0/437.3 | 29.4/406.3 | 0/3.8 | 434/433/338 | 9,953 Within, 67 Plugin, 80 Scheduler | PASS |
+| A broad door | 1,010 | 65.5/127.6/169.6/245.4 | 10.3/161.5 | 0/0 | 30/30/22 | 1,007 Within, 0 Plugin, 3 Scheduler | PASS `<200` |
+| B Batch512 | 10,100 | 95.6/150.0/183.3/476.2 | 20.4/450.9 | 0/2.6 | 362/360/286 | 9,979 Within, 39 Plugin, 82 Scheduler | PASS |
+| B broad door | 1,010 | 65.8/128.7/170.9/247.7 | 4.4/76.2 | 0/0 | 24/24/20 | 1,007 Within, 0 Plugin, 3 Scheduler | PASS `<200` |
+
+Each matrix has 10 independent PIDs and 105,120 marker rows. Every one of the
+20 run manifests closes 10,512/10,512 markers, records event/buffer loss 0/0,
+and passes PID/TID/QPC lifecycle ownership without conflict. ETW Unknown is 0
+in both aggregate summaries. Raw ordinary-capture Unknown classifications are
+retained but are superseded only for authority by the successful ETW
+correlation, not by wall/cycle inference.
+
+The broad `vision_solve` stage itself records 4,040 invocations per matrix and
+on-CPU p50/p95/p99/max of `3.3/7.4/12.0/41.9 us` in A and
+`3.3/7.6/11.8/30.9 us` in B.
+
+Summary SHA-256:
+
+- final capability: `C5813772779725293529E6D882271B7DC8D3027B20DA8D22656C957A6663BE06`;
+- final completion: `97733D61D4A535EDD3D2827C7E8F96BC95F99D73D3C5E7AB6F76C58F6C4DC84C`;
+- calibration: `819BC2567D79E3C157E442869D909CA00025907E792163CCBB76F8E3C163AE5C`;
+- Matrix A: `47AB49C9F4312B17F4C9B71E77E45395047A6C5EB353C3CF1AF07FC498728603`;
+- Matrix B: `CBED03D66BD801761334136F178AB6A667F2DA106DA1369158237900E7972E68`.
 
 ## NVIDIA and severe-log audit
 
-Post-validation read-only gate on the current boot:
+Final gate on boot `2026-08-26T08:33:41.5000000+08:00`:
 
-- boot: `2026-08-26T08:33:41.5000000+08:00`;
-- `NvContainerLocalSystem`: Running, Auto, PID 5584, exit 0; the PID matches the
-  earlier post-soak gate;
-- Application NVIDIA/nvcontainer 1000/1001: 0;
-- System NVIDIA/nvcontainer 7023/7031: 0;
-- System Display/nvlddmkm/TDR: 0;
-- Application Device Removed/DXGI/GPU-crash/TDR: 0;
-- new NVIDIA/nvcontainer/LiveKernelEvent/DXGI/GPU WER directories: 0;
-- `nvidia-smi`: NVIDIA GeForce RTX 4060, Studio/KMD 610.88, WDDM, P8.
+- `NvContainerLocalSystem`: Running, Auto, PID 5584; created 08:33:52 and
+  unchanged through all sampling;
+- `nvidia-smi`: NVIDIA GeForce RTX 4060, Studio/KMD 610.88, WDDM;
+- relevant Application 1000/1001, System 7023/7031, Display/nvlddmkm/TDR,
+  Device Removed/DXGI/GPU crash, and new WER/LiveKernel directories: all 0.
 
-Across final automation, extended performance, allocation, soak, and Lab logs,
-the severe scan found zero ensure failures, assertions, fatals, critical errors,
-unhandled exceptions, device removals, DXGI errors, or GPU crashes. UE 5.8
-emits 13 pre-discovery `LogAutomationTest: Error: Condition failed` UnifiedError
-self-diagnostics per process. The only other final controller errors are the
-retained Batch wall-time failures listed above. Build warnings are the installed
-MSVC 14.51 versus preferred 14.50 notice and UE-header C4996 deprecations.
+The unified post-exact severe scan found zero ensures, assertions, fatals,
+critical errors, unhandled exceptions, device removals, DXGI errors, or GPU
+crashes. UE 5.8's 13 pre-discovery `LogAutomationTest: Error: Condition failed`
+self-diagnostics are present in the full process. The only controller failures
+are the two retained wall-only assertions described above. Build warnings are
+the installed MSVC 14.51 versus preferred 14.50 warning and UE-header C4996
+deprecations.
 
-## Pending elevated acceptance gate
+## Final verdict and remaining scope
 
-The thin orchestration wrapper is:
-
-`Scripts\RunSightWeaveM2P5FinalEtwMatrices.ps1`
-
-It has passed PowerShell AST parsing but has deliberately not been executed.
-It performs one calibration followed by matrix A and matrix B in the same
-elevated PowerShell process. Each matrix calls the existing M2P.4 fail-closed
-workflow unchanged with ten independent processes, retaining Batch512 10,100
-and broad-door 1,010 samples and its existing warmup, nearest-rank, and
-threshold rules.
-
-After the user replies `我回来了`, announce `现在请点击UAC的是`, launch exactly
-one visible UAC request, and wait for the elevated child. Required capability
-evidence is Administrator role `true`, `High Mandatory Level`, `fltmc` exit 0,
-and present WPR/WPAExporter. Do not proceed from a failed capability gate.
-
-M2P.5 may become **COMPLETED** only if both matrices have zero event/buffer
-loss, ownership conflicts, unclosed timelines, and Unknown; Batch retains its
-existing gates; and broad-door authoritative on-CPU p99 is independently
-`<250 us` in both. Report `<225 us` engineering-headroom status separately.
-
-Until those results exist, ready/blocked/preemption/migration and final slow
-sample classifications are unverified post-change. No wall/cycle result in
-this document substitutes for them.
+M2P.5 is **COMPLETED**. There is no authoritative remaining fixable production
+Plugin CPU tail, so no further Runtime change is justified. No M2P.5 contract
+item remains unverified. Optional human visual/PIE inspection and all M3 work
+remain outside this milestone and require a separate task. The computer was
+left on for user inspection.

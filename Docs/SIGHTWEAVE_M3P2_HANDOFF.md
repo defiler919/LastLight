@@ -1,6 +1,6 @@
 # SightWeave M3.2 sparse-atlas handoff
 
-Status: **PARTIAL**
+Status: **COMPLETED**
 
 Branch: `codex/m3p2-sightweave-sparse-atlas-residency`
 
@@ -88,8 +88,9 @@ M3.2 does not implement final post-process composition, feathering, memory/Last-
 5. `perf: measure warmed SightWeave atlas updates`
 6. `test: validate SightWeave packaging boundaries`
 7. `docs: record SightWeave M3P2 validation`
+8. `docs: close SightWeave M3P2 remote validation`
 
-Checkpoint 1 is present on the configured upstream. Checkpoints 2-7 remain local pending explicit authorization to push to the configured external `origin`. No merge, rebase, force-push, gameplay change, ordinary-filesystem asset operation, or `Darkwell.uproject` staging occurred.
+After explicit authorization, checkpoints 1-7 were present on the configured upstream and local HEAD, upstream, and `git ls-remote` matched at `2716f2e2e6cd89b3e6b6df058ee76d6ea9672e6d`. Checkpoint 8 records the terminal state and is pushed and reverified as the final branch state. No merge, rebase, force-push, gameplay change, ordinary-filesystem asset operation, or `Darkwell.uproject` staging occurred.
 
 ## Final local disposition
 
@@ -107,7 +108,7 @@ All local M3.2 technical gates are complete:
 - DARKWELL 24/24 and both Lab RHI-mode checks passed with clean teardown;
 - severe-log scans found no unexplained correctness, lifecycle, RHI, shader, or teardown failure.
 
-The complete evidence, timings, retained warnings, package hashes, and recovery command are recorded in `Docs/SIGHTWEAVE_M3P2_FINAL_VALIDATION.md`.
+The complete evidence, timings, retained warnings, package hashes, and remote-closure evidence are recorded in `Docs/SIGHTWEAVE_M3P2_FINAL_VALIDATION.md`.
 
 ## Retained evidence and limits
 
@@ -118,4 +119,4 @@ The complete evidence, timings, retained warnings, package hashes, and recovery 
 
 ## Handoff verdict
 
-**PARTIAL** — M3.2 is locally implemented and technically accepted. Only remote Git durability remains pending explicit push authorization; the computer remains on.
+**COMPLETED** — M3.2 is implemented, technically accepted, committed, pushed, and remotely verified; the computer remains on.

@@ -1,6 +1,6 @@
 # SightWeave M3.2 final validation
 
-Status: **PARTIAL**
+Status: **COMPLETED**
 
 Branch: `codex/m3p2-sightweave-sparse-atlas-residency`
 
@@ -14,7 +14,7 @@ Primary home evidence: Windows D3D12 SM6, `PCD3D_SM6`, NVIDIA GeForce RTX 2070 S
 
 ## Disposition
 
-The M3.2 implementation, functional verification, performance gate, BuildPlugin, independent clean-host builds, clean-host D3D12/SM6 execution, and Shipping isolation all pass. The status is `PARTIAL` only because remote Git closure is intentionally paused: the local branch contains reliable checkpoints after the already-pushed documentation start, but those later commits have not been pushed pending explicit approval for the configured `origin`. No correctness, lifecycle, M3.2 performance, packaging, or Shipping failure remains unexplained.
+The M3.2 implementation, functional verification, performance gate, BuildPlugin, independent clean-host builds, clean-host D3D12/SM6 execution, Shipping isolation, and Git/LFS closure all pass. After explicit authorization, the previously pending checkpoints were pushed to the configured `origin`; local HEAD, upstream, and `git ls-remote` matched at `2716f2e2e6cd89b3e6b6df058ee76d6ea9672e6d` before this terminal status update. No correctness, lifecycle, M3.2 performance, packaging, Shipping, or remote-durability failure remains unexplained.
 
 M3.2 preserves the frozen authority flow:
 
@@ -220,7 +220,7 @@ No threshold was lowered and no retained failure was deleted.
 
 ## Git checkpoints and closure status
 
-Local checkpoints after the frozen baseline are:
+Checkpoints after the frozen baseline are:
 
 1. `b1ed646` — `docs: start SightWeave M3P2 sparse atlas work`
 2. `3cdc06a` — `feat: add persistent SightWeave atlas residency`
@@ -228,29 +228,29 @@ Local checkpoints after the frozen baseline are:
 4. `456e747` — `test: validate SightWeave multi-tile GPU parity`
 5. `4635dc4` — `perf: measure warmed SightWeave atlas updates`
 6. `c35fb54` — `test: validate SightWeave packaging boundaries`
-7. `docs: record SightWeave M3P2 validation` — this documentation checkpoint
+7. `2716f2e` — `docs: record SightWeave M3P2 validation`
+8. `docs: close SightWeave M3P2 remote validation` — terminal status checkpoint
 
-Checkpoint 1 is present on the configured upstream. Checkpoints 2-7 remain local pending explicit authorization to push to the configured external `origin`; therefore Git/remote closure is the only reason for `PARTIAL`. `Darkwell.uproject`, generated build/test data, temporary packages, DDC, reports, and binary assets are not part of the commits.
+Checkpoints 1-7 were pushed after explicit authorization. Before the terminal status checkpoint, local HEAD, upstream, and the remote branch independently reported `2716f2e2e6cd89b3e6b6df058ee76d6ea9672e6d`; the terminal checkpoint is pushed and reverified as the final branch state. `Darkwell.uproject`, generated build/test data, temporary packages, DDC, reports, and binary assets are not part of the commits.
 
 ## Unvalidated scope and remaining risks
 
 - RTX 4060 final repetition remains outstanding; Turing data does not replace it.
 - D3D11, Vulkan, final post-process composition, point-sampled consumer material, feathering, memory/Last-Seen, damage reveal, SceneCapture, gameplay integration, and Fab final packaging remain outside M3.2.
 - The GPU timestamps are Development automation samples, not a full-frame shipping workload.
-- Remote durability is pending the explicit push approval described above.
 
-## Recovery command
+## Remote closure evidence
 
-After explicit approval for the configured `origin`, resume with:
+The authorized pre-closure push and independent remote query produced:
 
 ```powershell
-git status --short --branch
-git log -7 --oneline --decorate
-git push origin codex/m3p2-sightweave-sparse-atlas-residency
+local HEAD  = 2716f2e2e6cd89b3e6b6df058ee76d6ea9672e6d
+upstream    = 2716f2e2e6cd89b3e6b6df058ee76d6ea9672e6d
+git ls-remote = 2716f2e2e6cd89b3e6b6df058ee76d6ea9672e6d
 ```
 
-Then verify local HEAD, upstream, and `git ls-remote` match and change this document from `PARTIAL` to `COMPLETED`. Do not merge, rebase, force-push, modify `Darkwell.uproject`, or shut down the computer.
+The terminal documentation commit is then pushed and subjected to the same three-way SHA check. No merge, rebase, force-push, `Darkwell.uproject` modification, binary-asset operation, or computer shutdown occurred.
 
 ## Final verdict
 
-**PARTIAL** — every local technical acceptance gate passes; only explicitly authorized remote Git closure remains.
+**COMPLETED** — every scoped technical acceptance gate and Git/LFS remote-closure gate passes.

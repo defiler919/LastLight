@@ -79,9 +79,13 @@ void USightWeaveRenderWorldSubsystem::Initialize(FSubsystemCollectionBase& Colle
 	Collection.InitializeDependency<USightWeaveWorldSubsystem>();
 
 	WorldIdentity.Serial = static_cast<uint64>(GNextSightWeaveRenderWorldSerial.Increment());
+	PresentationSelection = FSightWeaveViewPresentationSelection::Disabled(
+		WorldIdentity,
+		NextPresentationRevision++);
 	SceneViewExtension = FSceneViewExtensions::NewExtension<FSightWeaveSceneViewExtension>(
 		GetWorld(),
 		WorldIdentity);
+	PublishPresentationSelection();
 
 	if (USightWeaveWorldSubsystem* Runtime = GetWorld()->GetSubsystem<USightWeaveWorldSubsystem>())
 	{
@@ -108,6 +112,7 @@ void USightWeaveRenderWorldSubsystem::Deinitialize()
 		SceneViewExtension.Reset();
 	}
 	LastPacket.Reset();
+	PresentationSelection = FSightWeaveViewPresentationSelection();
 	WorldIdentity = FSightWeaveRenderWorldIdentity();
 	Super::Deinitialize();
 }
@@ -126,6 +131,7 @@ void USightWeaveRenderWorldSubsystem::BuildAndSubmitPacket(
 	{
 		return;
 	}
+	UpdateDefaultPresentationSelection(*Snapshot);
 
 	const uint64 SnapshotRevision = static_cast<uint64>(Snapshot->Revision.GetValue());
 	FSightWeaveSparseRenderPacketBuildInput Input;
@@ -250,6 +256,7 @@ void USightWeaveRenderWorldSubsystem::BuildAndSubmitPacket(
 	}
 	if (Input.Scopes.IsEmpty() && !LastPacket.IsValid())
 	{
+		PublishPresentationSelection();
 		return;
 	}
 
@@ -313,5 +320,132 @@ void USightWeaveRenderWorldSubsystem::SubmitPacket(
 	Diagnostics.SubmittedDirtyTileCount += static_cast<uint64>(Packet->GetDirtyTileIndices().Num());
 	Diagnostics.SubmittedRemovedTileCount += static_cast<uint64>(Packet->GetRemovedTiles().Num());
 	LastPacket = Packet;
+	PublishPresentationSelection();
 	SceneViewExtension->SubmitPacket(MoveTemp(Packet));
+}
+
+bool USightWeaveRenderWorldSubsystem::SetPresentationScope(
+	const FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+	const FSightWeaveFloorId FloorId,
+	const ESightWeaveRenderPrecisionTier PrecisionTier)
+{
+	check(IsInGameThread());
+	if (!WorldIdentity.IsValid()
+		|| !KnowledgeOwnerId.IsValid()
+		|| !FloorId.IsValid()
+		|| SightWeaveCentimetersPerTexel(PrecisionTier) <= 0.0f)
+	{
+		return false;
+	}
+	bHasExplicitPresentationScope = true;
+	ExplicitPresentationOwner = KnowledgeOwnerId;
+	ExplicitPresentationFloor = FloorId;
+	ExplicitPresentationPrecision = PrecisionTier;
+	PresentationSelection = FSightWeaveViewPresentationSelection::Enabled(
+		WorldIdentity,
+		KnowledgeOwnerId,
+		FloorId,
+		PrecisionTier,
+		NextPresentationRevision++);
+	PublishPresentationSelection();
+	return true;
+}
+
+void USightWeaveRenderWorldSubsystem::ClearPresentationScope()
+{
+	check(IsInGameThread());
+	bHasExplicitPresentationScope = false;
+	ExplicitPresentationOwner = FSightWeaveKnowledgeOwnerId();
+	ExplicitPresentationFloor = FSightWeaveFloorId();
+	ExplicitPresentationPrecision = ESightWeaveRenderPrecisionTier::Standard;
+	if (UWorld* World = GetWorld())
+	{
+		if (USightWeaveWorldSubsystem* Runtime = World->GetSubsystem<USightWeaveWorldSubsystem>())
+		{
+			const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot =
+				Runtime->AcquirePublishedSnapshot();
+			if (Snapshot.IsValid() && Snapshot->bPublished)
+			{
+				UpdateDefaultPresentationSelection(*Snapshot);
+				return;
+			}
+		}
+	}
+	PresentationSelection = FSightWeaveViewPresentationSelection::Disabled(
+		WorldIdentity,
+		NextPresentationRevision++);
+	PublishPresentationSelection();
+}
+
+void USightWeaveRenderWorldSubsystem::UpdateDefaultPresentationSelection(
+	const FSightWeaveFrameSnapshot& Snapshot)
+{
+	check(IsInGameThread());
+	FSightWeaveKnowledgeOwnerId DesiredOwner;
+	FSightWeaveFloorId DesiredFloor;
+	ESightWeaveRenderPrecisionTier DesiredPrecision = ESightWeaveRenderPrecisionTier::Standard;
+	bool bDesiredEnabled = false;
+	if (bHasExplicitPresentationScope)
+	{
+		DesiredOwner = ExplicitPresentationOwner;
+		DesiredFloor = ExplicitPresentationFloor;
+		DesiredPrecision = ExplicitPresentationPrecision;
+		bDesiredEnabled = true;
+	}
+	else
+	{
+		const FSightWeaveFloorDefinition* ActiveFloor = nullptr;
+		for (const FSightWeaveFloorDefinition& Floor : Snapshot.Floors)
+		{
+			if (!Floor.IsValid() || !Floor.bEnabled || !Floor.bActiveForQueries)
+			{
+				continue;
+			}
+			if (ActiveFloor)
+			{
+				ActiveFloor = nullptr;
+				break;
+			}
+			ActiveFloor = &Floor;
+		}
+		if (ActiveFloor)
+		{
+			DesiredOwner = FSightWeaveKnowledgeOwnerId(FName(TEXT("Local")));
+			DesiredFloor = ActiveFloor->FloorId;
+			bDesiredEnabled = true;
+		}
+	}
+
+	const bool bUnchanged = PresentationSelection.IsValid()
+		&& PresentationSelection.IsEnabled() == bDesiredEnabled
+		&& (!bDesiredEnabled
+			|| (PresentationSelection.GetKnowledgeOwnerId() == DesiredOwner
+				&& PresentationSelection.GetFloorId() == DesiredFloor
+				&& PresentationSelection.GetPrecisionTier() == DesiredPrecision));
+	if (bUnchanged)
+	{
+		return;
+	}
+	PresentationSelection = bDesiredEnabled
+		? FSightWeaveViewPresentationSelection::Enabled(
+			WorldIdentity,
+			DesiredOwner,
+			DesiredFloor,
+			DesiredPrecision,
+			NextPresentationRevision++)
+		: FSightWeaveViewPresentationSelection::Disabled(
+			WorldIdentity,
+			NextPresentationRevision++);
+	PublishPresentationSelection();
+}
+
+void USightWeaveRenderWorldSubsystem::PublishPresentationSelection()
+{
+	check(IsInGameThread());
+	Diagnostics.PresentationSelectionRevision = PresentationSelection.GetPresentationRevision();
+	Diagnostics.bPresentationEnabled = PresentationSelection.IsEnabled();
+	if (SceneViewExtension.IsValid() && PresentationSelection.IsValid())
+	{
+		SceneViewExtension->SubmitPresentationSelection(PresentationSelection);
+	}
 }

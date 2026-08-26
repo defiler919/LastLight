@@ -321,6 +321,23 @@ void FSightWeaveSparseAtlasRenderState::SubmitPacket_RenderThread(
 #endif
 }
 
+void FSightWeaveSparseAtlasRenderState::SubmitPresentationSelection_RenderThread(
+	const FSightWeaveViewPresentationSelection& Selection)
+{
+	check(IsInRenderingThread());
+	if (bReleased || !Selection.IsValid() || Selection.GetWorldIdentity() != WorldIdentity)
+	{
+		PresentationSelection = FSightWeaveViewPresentationSelection();
+		PresentationBinding.Reset();
+		PresentationBindingFailure = bReleased
+			? ESightWeavePresentationBindingFailure::WorldTeardown
+			: ESightWeavePresentationBindingFailure::InvalidSelection;
+		return;
+	}
+	PresentationSelection = Selection;
+	RefreshPresentationBinding_RenderThread();
+}
+
 bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder& GraphBuilder)
 {
 	check(IsInRenderingThread());
@@ -343,12 +360,18 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 		|| FSightWeaveSparseRenderPacketBuilder::Validate(*Packet) != ESightWeaveSparsePacketFailure::None)
 	{
 		FailAllScopes_RenderThread(ESightWeaveRenderAvailability::InvalidPacket);
+		AppliedPacket.Reset();
+		PresentationBinding.Reset();
+		PresentationBindingFailure = ESightWeavePresentationBindingFailure::InvalidPacket;
 		AppliedRevision = Packet->GetPacketRevision();
 		return false;
 	}
 	if (!CheckCapabilities_RenderThread())
 	{
 		FailAllScopes_RenderThread(Availability);
+		AppliedPacket.Reset();
+		PresentationBinding.Reset();
+		PresentationBindingFailure = ESightWeavePresentationBindingFailure::ScopeUnavailable;
 		AppliedRevision = 0;
 		return false;
 	}
@@ -386,6 +409,7 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 				FailScope_RenderThread(*Scope, ESightWeaveRenderAvailability::InvalidPacket);
 				break;
 			}
+			++ResidencyGeneration;
 		}
 	}
 #if WITH_DEV_AUTOMATION_TESTS
@@ -410,6 +434,11 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 		{
 			FailScope_RenderThread(*Scope, ESightWeaveRenderAvailability::ResourceAllocationFailed);
 			continue;
+		}
+		if (ResidencyResult.Disposition == ESightWeaveSparseResidencyDisposition::Allocated
+			|| ResidencyResult.Disposition == ESightWeaveSparseResidencyDisposition::Reused)
+		{
+			++ResidencyGeneration;
 		}
 		FRDGTextureRef Page = nullptr;
 		bool bColdCreated = false;
@@ -463,6 +492,8 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 	}
 	AppliedRevision = Packet->GetPacketRevision();
 	Availability = ESightWeaveRenderAvailability::Available;
+	AppliedPacket = Packet;
+	RefreshPresentationBinding_RenderThread();
 #if WITH_DEV_AUTOMATION_TESTS
 	LastTimings.PublicationMicroseconds =
 		(FPlatformTime::Seconds() - PublicationStartSeconds) * 1000000.0;
@@ -482,6 +513,10 @@ void FSightWeaveSparseAtlasRenderState::Release_RenderThread(
 	}
 	bReleased = true;
 	PendingPacket.Reset();
+	AppliedPacket.Reset();
+	PresentationBinding.Reset();
+	PresentationSelection = FSightWeaveViewPresentationSelection();
+	PresentationBindingFailure = ESightWeavePresentationBindingFailure::WorldTeardown;
 	Scopes.Reset();
 	VisionScratch.SafeRelease();
 	IlluminationScratch.SafeRelease();
@@ -490,6 +525,7 @@ void FSightWeaveSparseAtlasRenderState::Release_RenderThread(
 	DesiredHash = 0;
 	AppliedRevision = 0;
 	++ResourceGeneration;
+	++ResidencyGeneration;
 	Availability = ESightWeaveRenderAvailability::WorldTeardown;
 }
 
@@ -715,6 +751,7 @@ FSightWeaveSparseAtlasRenderState::FindOrAddScope_RenderThread(
 			Existing->Capacity = Scope.MaximumActiveTiles;
 			Existing->Residency = FSightWeaveSparseAtlasResidency(Scope.MaximumActiveTiles);
 			++ResourceGeneration;
+			++ResidencyGeneration;
 		}
 		return *Existing;
 	}
@@ -732,6 +769,7 @@ void FSightWeaveSparseAtlasRenderState::FailScope_RenderThread(
 	Scope.AppliedRevision = 0;
 	Scope.Availability = Failure;
 	++ResourceGeneration;
+	++ResidencyGeneration;
 }
 
 void FSightWeaveSparseAtlasRenderState::FailAllScopes_RenderThread(
@@ -752,6 +790,80 @@ void FSightWeaveSparseAtlasRenderState::RemoveAbsentScopes_RenderThread(
 		return !PacketContainsScope(Packet, Scope->ScopeKey);
 	});
 	ResourceGeneration += static_cast<uint64>(Removed);
+	ResidencyGeneration += static_cast<uint64>(Removed);
+}
+
+bool FSightWeaveSparseAtlasRenderState::HasCompletePresentationResidency_RenderThread(
+	const FSightWeaveSparseRenderPacket& Packet,
+	const FSightWeaveSparseScopeKey& ScopeKey) const
+{
+	const FScopeState* Scope = FindScope_RenderThread(ScopeKey);
+	if (!Scope
+		|| Scope->Availability != ESightWeaveRenderAvailability::Available
+		|| Scope->AppliedRevision != Packet.GetPacketRevision())
+	{
+		return false;
+	}
+	for (const FSightWeaveSparseRenderTile& Tile : Packet.GetTiles())
+	{
+		if (!Tile.Identity.TileKey.Scope.IsEquivalentTo(ScopeKey))
+		{
+			continue;
+		}
+		const FSightWeaveSparseResidencySlot* Slot = Scope->Residency.Find(Tile.Identity);
+		if (!Slot
+			|| Slot->AppliedRevision != Packet.GetPacketRevision()
+			|| !Scope->Pages.IsValidIndex(Slot->Address.PageIndex)
+			|| !Scope->Pages[Slot->Address.PageIndex].IsValid())
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+void FSightWeaveSparseAtlasRenderState::RefreshPresentationBinding_RenderThread()
+{
+	check(IsInRenderingThread());
+	PresentationBinding.Reset();
+	if (bReleased)
+	{
+		PresentationBindingFailure = ESightWeavePresentationBindingFailure::WorldTeardown;
+		return;
+	}
+	if (!PresentationSelection.IsValid())
+	{
+		PresentationBindingFailure = ESightWeavePresentationBindingFailure::InvalidSelection;
+		return;
+	}
+	if (!PresentationSelection.IsEnabled())
+	{
+		PresentationBindingFailure = ESightWeavePresentationBindingFailure::Disabled;
+		return;
+	}
+	if (!AppliedPacket.IsValid())
+	{
+		PresentationBindingFailure = ESightWeavePresentationBindingFailure::InvalidPacket;
+		return;
+	}
+	const FSightWeavePresentationBindingBuildResult Built =
+		FSightWeavePresentationBindingBuilder::Build(
+			*AppliedPacket,
+			PresentationSelection,
+			ResourceGeneration,
+			ResidencyGeneration);
+	if (!Built.Succeeded())
+	{
+		PresentationBindingFailure = Built.Failure;
+		return;
+	}
+	if (!HasCompletePresentationResidency_RenderThread(*AppliedPacket, Built.Binding->GetScopeKey()))
+	{
+		PresentationBindingFailure = ESightWeavePresentationBindingFailure::ResidencyIncomplete;
+		return;
+	}
+	PresentationBinding = Built.Binding;
+	PresentationBindingFailure = ESightWeavePresentationBindingFailure::None;
 }
 
 uint64 FSightWeaveSparseAtlasRenderState::GetEvictionCount_RenderThread() const

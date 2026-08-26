@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RenderGraphResources.h"
+#include "SightWeavePresentation.h"
 #include "SightWeaveRenderWorldSubsystem.h"
 #include "SightWeaveSparseAtlas.h"
 
@@ -28,6 +29,8 @@ public:
 
 	void SubmitPacket_RenderThread(
 		const TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe>& Packet);
+	void SubmitPresentationSelection_RenderThread(
+		const FSightWeaveViewPresentationSelection& Selection);
 	bool ProcessPending_RenderThread(FRDGBuilder& GraphBuilder);
 	void Release_RenderThread(FSightWeaveRenderWorldIdentity ExpectedWorldIdentity);
 
@@ -44,6 +47,17 @@ public:
 	uint64 GetEvictionCount_RenderThread() const;
 	int32 GetResidentTileCount_RenderThread() const;
 	int32 GetAllocatedPageCount_RenderThread() const;
+	uint64 GetResidencyGeneration_RenderThread() const { return ResidencyGeneration; }
+	bool IsPresentationEnabled_RenderThread() const
+	{
+		return PresentationSelection.IsEnabled() && !bReleased;
+	}
+	TSharedPtr<const FSightWeaveViewPresentationBinding, ESPMode::ThreadSafe>
+		GetPresentationBinding_RenderThread() const { return PresentationBinding; }
+	ESightWeavePresentationBindingFailure GetPresentationBindingFailure_RenderThread() const
+	{
+		return PresentationBindingFailure;
+	}
 
 #if WITH_DEV_AUTOMATION_TESTS
 	const FSightWeaveSparseRenderTimings& GetLastTimings_RenderThread() const { return LastTimings; }
@@ -80,9 +94,18 @@ private:
 	void FailScope_RenderThread(FScopeState& Scope, ESightWeaveRenderAvailability Failure);
 	void FailAllScopes_RenderThread(ESightWeaveRenderAvailability Failure);
 	void RemoveAbsentScopes_RenderThread(const FSightWeaveSparseRenderPacket& Packet);
+	void RefreshPresentationBinding_RenderThread();
+	bool HasCompletePresentationResidency_RenderThread(
+		const FSightWeaveSparseRenderPacket& Packet,
+		const FSightWeaveSparseScopeKey& ScopeKey) const;
 
 	FSightWeaveRenderWorldIdentity WorldIdentity;
 	TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> PendingPacket;
+	TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> AppliedPacket;
+	FSightWeaveViewPresentationSelection PresentationSelection;
+	TSharedPtr<const FSightWeaveViewPresentationBinding, ESPMode::ThreadSafe> PresentationBinding;
+	ESightWeavePresentationBindingFailure PresentationBindingFailure =
+		ESightWeavePresentationBindingFailure::Disabled;
 	TArray<TUniquePtr<FScopeState>> Scopes;
 	TRefCountPtr<IPooledRenderTarget> VisionScratch;
 	TRefCountPtr<IPooledRenderTarget> IlluminationScratch;
@@ -92,6 +115,7 @@ private:
 	uint64 AppliedRevision = 0;
 	uint64 DirtyTileDispatchCount = 0;
 	uint64 ResourceGeneration = 0;
+	uint64 ResidencyGeneration = 1;
 	uint64 PageAllocationCount = 0;
 	uint64 ScratchAllocationCount = 0;
 	uint64 DuplicatePacketCount = 0;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SceneViewExtension.h"
+#include "SightWeavePresentation.h"
 #include "SightWeaveSparseAtlas.h"
 
 class FSightWeaveSparseAtlasRenderState;
@@ -14,6 +15,7 @@ public:
 		FSightWeaveRenderWorldIdentity WorldIdentity);
 
 	void SubmitPacket(TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet);
+	void SubmitPresentationSelection(const FSightWeaveViewPresentationSelection& Selection);
 	void Shutdown(FSightWeaveRenderWorldIdentity ExpectedWorldIdentity);
 
 	virtual void PreRenderViewFamily_RenderThread(

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "SightWeavePresentation.h"
 #include "SightWeaveSparseAtlas.h"
 #include "Subsystems/WorldSubsystem.h"
 
@@ -31,6 +32,8 @@ struct SIGHTWEAVERENDER_API FSightWeaveRenderWorldDiagnostics
 	uint64 LastSubmittedSnapshotRevision = 0;
 	uint64 SubmittedDirtyTileCount = 0;
 	uint64 SubmittedRemovedTileCount = 0;
+	uint64 PresentationSelectionRevision = 0;
+	bool bPresentationEnabled = false;
 	ESightWeaveSparsePacketFailure LastBuildFailure = ESightWeaveSparsePacketFailure::None;
 };
 
@@ -50,6 +53,15 @@ public:
 	FSightWeaveRenderWorldIdentity GetWorldIdentity() const { return WorldIdentity; }
 	const FSightWeaveRenderWorldDiagnostics& GetDiagnostics() const { return Diagnostics; }
 	bool HasSceneViewExtension() const { return SceneViewExtension.IsValid(); }
+	const FSightWeaveViewPresentationSelection& GetPresentationSelection() const
+	{
+		return PresentationSelection;
+	}
+	bool SetPresentationScope(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		ESightWeaveRenderPrecisionTier PrecisionTier = ESightWeaveRenderPrecisionTier::Standard);
+	void ClearPresentationScope();
 
 private:
 	void HandleSnapshotPublished(
@@ -58,10 +70,19 @@ private:
 		const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe>& Snapshot);
 	void SubmitFailClosedClear(uint64 SnapshotRevision, ESightWeaveSparsePacketFailure Failure);
 	void SubmitPacket(TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet);
+	void UpdateDefaultPresentationSelection(const FSightWeaveFrameSnapshot& Snapshot);
+	void PublishPresentationSelection();
 
 	FSightWeaveRenderWorldIdentity WorldIdentity;
 	uint64 NextPacketRevision = 1;
+	uint64 NextPresentationRevision = 1;
 	TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> LastPacket;
+	FSightWeaveViewPresentationSelection PresentationSelection;
+	FSightWeaveKnowledgeOwnerId ExplicitPresentationOwner;
+	FSightWeaveFloorId ExplicitPresentationFloor;
+	ESightWeaveRenderPrecisionTier ExplicitPresentationPrecision =
+		ESightWeaveRenderPrecisionTier::Standard;
+	bool bHasExplicitPresentationScope = false;
 	FDelegateHandle SnapshotPublishedHandle;
 	TSharedPtr<FSightWeaveSceneViewExtension, ESPMode::ThreadSafe> SceneViewExtension;
 	FSightWeaveRenderWorldDiagnostics Diagnostics;

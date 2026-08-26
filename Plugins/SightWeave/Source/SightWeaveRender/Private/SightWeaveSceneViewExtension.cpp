@@ -29,6 +29,22 @@ void FSightWeaveSceneViewExtension::SubmitPacket(
 		});
 }
 
+void FSightWeaveSceneViewExtension::SubmitPresentationSelection(
+	const FSightWeaveViewPresentationSelection& Selection)
+{
+	check(IsInGameThread());
+	if (bShutdown || !Selection.IsValid() || Selection.GetWorldIdentity() != WorldIdentity)
+	{
+		return;
+	}
+	const TSharedRef<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe> State = RenderState;
+	ENQUEUE_RENDER_COMMAND(SightWeaveSubmitPresentationSelection)(
+		[State, Selection](FRHICommandListImmediate& RHICmdList)
+		{
+			State->SubmitPresentationSelection_RenderThread(Selection);
+		});
+}
+
 void FSightWeaveSceneViewExtension::Shutdown(
 	const FSightWeaveRenderWorldIdentity ExpectedWorldIdentity)
 {

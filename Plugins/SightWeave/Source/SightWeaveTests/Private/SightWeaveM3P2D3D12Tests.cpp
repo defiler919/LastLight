@@ -35,6 +35,10 @@ namespace SightWeave::M3P2::D3D12Tests
 		int32 ExpectedFinalResidents = INDEX_NONE;
 		bool bExpectAllBlack = false;
 		bool bExpectDiscardedStale = false;
+		bool bReportWarmedDistribution = false;
+		int32 ExpectedWarmedSampleCount = 0;
+		int32 ExpectedWarmedDirtyTileCount = INDEX_NONE;
+		double WarmedRDGP95BudgetMicroseconds = 0.0;
 	};
 
 	struct FCaseContext
@@ -43,6 +47,37 @@ namespace SightWeave::M3P2::D3D12Tests
 		double StartSeconds = FPlatformTime::Seconds();
 		TArray<FExpectedReadback> Readbacks;
 	};
+
+	struct FTimingDistribution
+	{
+		double P50 = 0.0;
+		double P95 = 0.0;
+		double P99 = 0.0;
+		double Maximum = 0.0;
+	};
+
+	FTimingDistribution Distribution(TArray<double> Samples)
+	{
+		FTimingDistribution Result;
+		if (Samples.IsEmpty())
+		{
+			return Result;
+		}
+		Samples.Sort();
+		auto AtPercentile = [&Samples](const double Percentile)
+		{
+			const int32 Index = FMath::Clamp(
+				FMath::CeilToInt32(Percentile * Samples.Num()) - 1,
+				0,
+				Samples.Num() - 1);
+			return Samples[Index];
+		};
+		Result.P50 = AtPercentile(0.50);
+		Result.P95 = AtPercentile(0.95);
+		Result.P99 = AtPercentile(0.99);
+		Result.Maximum = Samples.Last();
+		return Result;
+	}
 
 	FSightWeaveRenderProfileIdentity Profile(std::initializer_list<const TCHAR*> Capabilities)
 	{
@@ -411,6 +446,76 @@ namespace SightWeave::M3P2::D3D12Tests
 		{
 			Check(Result.WhiteTexelCount == 0, TEXT("slot reuse retained stale white texels"));
 		}
+		if (Expected.bReportWarmedDistribution)
+		{
+			Check(
+				Result.Updates.Num() == Expected.ExpectedWarmedSampleCount + 1,
+				TEXT("unexpected warmed timing sample count"));
+			TArray<double> ConsumeSamples;
+			TArray<double> DirtySamples;
+			TArray<double> RDGSamples;
+			TArray<double> ClearSamples;
+			TArray<double> RasterSamples;
+			TArray<double> PublicationSamples;
+			for (int32 Index = 1; Index < Result.Updates.Num(); ++Index)
+			{
+				const FSightWeaveSparseUpdateSample& Sample = Result.Updates[Index];
+				Check(
+					Sample.RequestedDirtyTileCount == Expected.ExpectedWarmedDirtyTileCount,
+					FString::Printf(TEXT("warmed update %d dirty count mismatch"), Index));
+				Check(Sample.bProducedMaskWork, TEXT("warmed update unexpectedly produced no mask work"));
+				Check(
+					Sample.DirtyTileDispatchDelta
+						== static_cast<uint64>(Expected.ExpectedWarmedDirtyTileCount),
+					TEXT("warmed update dispatch count mismatch"));
+				Check(
+					Sample.PageAllocationCount == Result.Updates[0].PageAllocationCount
+						&& Sample.ScratchAllocationCount == Result.Updates[0].ScratchAllocationCount
+						&& Sample.ResourceGeneration == Result.Updates[0].ResourceGeneration,
+					TEXT("warmed update allocated or regenerated persistent resources"));
+				ConsumeSamples.Add(Sample.RenderThreadPacketConsumeMicroseconds);
+				DirtySamples.Add(Sample.RenderThreadDirtySchedulingMicroseconds);
+				RDGSamples.Add(Sample.RenderThreadRDGSetupMicroseconds);
+				ClearSamples.Add(Sample.TileClearSetupMicroseconds);
+				RasterSamples.Add(Sample.RasterSetupMicroseconds);
+				PublicationSamples.Add(Sample.PublicationMicroseconds);
+			}
+			auto Report = [&](const TCHAR* Metric, TArray<double> Samples)
+			{
+				const FTimingDistribution Stats = Distribution(MoveTemp(Samples));
+				Test->AddInfo(FString::Printf(
+					TEXT("M3P2_RT_WARMED case=%s dirty_tiles=%d samples=%d metric=%s p50_us=%.3f p95_us=%.3f p99_us=%.3f max_us=%.3f"),
+					*CaseName,
+					Expected.ExpectedWarmedDirtyTileCount,
+					Expected.ExpectedWarmedSampleCount,
+					Metric,
+					Stats.P50,
+					Stats.P95,
+					Stats.P99,
+					Stats.Maximum));
+				return Stats;
+			};
+			Report(TEXT("packet_consume"), MoveTemp(ConsumeSamples));
+			Report(TEXT("dirty_schedule"), MoveTemp(DirtySamples));
+			const FTimingDistribution RDGStats = Report(TEXT("rdg_setup"), MoveTemp(RDGSamples));
+			Report(TEXT("tile_clear"), MoveTemp(ClearSamples));
+			Report(TEXT("raster"), MoveTemp(RasterSamples));
+			Report(TEXT("publication"), MoveTemp(PublicationSamples));
+			if (Expected.WarmedRDGP95BudgetMicroseconds > 0.0)
+			{
+				Check(
+					RDGStats.P95 < Expected.WarmedRDGP95BudgetMicroseconds,
+					FString::Printf(
+						TEXT("warmed one-dirty-tile RT RDG p95 %.3f us exceeds %.3f us budget"),
+						RDGStats.P95,
+						Expected.WarmedRDGP95BudgetMicroseconds));
+			}
+			Test->AddInfo(FString::Printf(
+				TEXT("M3P2_GPU_WARMED case=%s dirty_tiles=%d final_update_gpu_us=%.3f"),
+				*CaseName,
+				Expected.ExpectedWarmedDirtyTileCount,
+				Result.GPUWorkMicroseconds));
+		}
 		Test->AddInfo(FString::Printf(
 			TEXT("M3P2_GPU_PARITY case=%s tile=(%d,%d) page=%d slot=%d black=%d white=%d non_binary=%d boundary_class=%d gpu_us=%.3f readback_us=%.3f"),
 			*CaseName,
@@ -426,6 +531,12 @@ namespace SightWeave::M3P2::D3D12Tests
 			Result.ReadbackEndToEndMicroseconds));
 		for (int32 Index = 0; Index < Result.Updates.Num(); ++Index)
 		{
+			if (Expected.bReportWarmedDistribution
+				&& Index != 0
+				&& Index != Result.Updates.Num() - 1)
+			{
+				continue;
+			}
 			const FSightWeaveSparseUpdateSample& Sample = Result.Updates[Index];
 			Test->AddInfo(FString::Printf(
 				TEXT("M3P2_UPDATE case=%s sample=%d revision=%llu dirty=%d work=%s dispatch=%llu pages=%d residents=%d resource_generation=%llu page_allocations=%llu scratch_allocations=%llu gt_submit_us=%.3f rt_consume_us=%.3f rt_dirty_us=%.3f rt_rdg_us=%.3f clear_us=%.3f raster_us=%.3f publication_us=%.3f"),
@@ -547,6 +658,68 @@ namespace SightWeave::M3P2::D3D12Tests
 			{
 				Context->Readbacks[0].ExpectedFinalPages = 1;
 				Context->Readbacks[0].ExpectedFinalResidents = 1;
+			}
+		}
+		else if (Name == TEXT("WarmedOneDirtyDistribution"))
+		{
+			constexpr int32 WarmedSampleCount = 64;
+			TArray<TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe>> Packets;
+			Packets.Reserve(WarmedSampleCount + 1);
+			TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Previous;
+			for (uint64 Revision = 1; Revision <= WarmedSampleCount + 1; ++Revision)
+			{
+				const double Offset = Revision % 2 == 0 ? 50.0 : 0.0;
+				Geometry = {
+					Polygon(
+						ESightWeaveRenderMaskLayer::Bypass,
+						1,
+						Common,
+						Rectangle(200.0 + Offset, 200.0, 900.0 + Offset, 900.0))
+				};
+				Previous = BuildPacket(Test, Revision, 4113, Geometry, 128, Previous);
+				Packets.Add(Previous);
+			}
+			AddReadback(Test, *Context, MoveTemp(Packets), FIntPoint(0, 0), Geometry);
+			if (!Context->Readbacks.IsEmpty())
+			{
+				FExpectedReadback& Expected = Context->Readbacks[0];
+				Expected.bReportWarmedDistribution = true;
+				Expected.ExpectedWarmedSampleCount = WarmedSampleCount;
+				Expected.ExpectedWarmedDirtyTileCount = 1;
+				Expected.WarmedRDGP95BudgetMicroseconds = 200.0;
+				Expected.ExpectedFinalPages = 1;
+				Expected.ExpectedFinalResidents = 1;
+			}
+		}
+		else if (Name == TEXT("WarmedEightDirtyDistribution"))
+		{
+			constexpr int32 WarmedSampleCount = 64;
+			constexpr double TileSpanCentimeters = 2480.0;
+			TArray<TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe>> Packets;
+			Packets.Reserve(WarmedSampleCount + 1);
+			TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Previous;
+			for (uint64 Revision = 1; Revision <= WarmedSampleCount + 1; ++Revision)
+			{
+				const double MaximumY = Revision % 2 == 0 ? 130.0 : 100.0;
+				Geometry = {
+					Polygon(
+						ESightWeaveRenderMaskLayer::Bypass,
+						1,
+						Common,
+						Rectangle(1.0, 1.0, 8.0 * TileSpanCentimeters - 1.0, MaximumY))
+				};
+				Previous = BuildPacket(Test, Revision, 4114, Geometry, 128, Previous);
+				Packets.Add(Previous);
+			}
+			AddReadback(Test, *Context, MoveTemp(Packets), FIntPoint(7, 0), Geometry);
+			if (!Context->Readbacks.IsEmpty())
+			{
+				FExpectedReadback& Expected = Context->Readbacks[0];
+				Expected.bReportWarmedDistribution = true;
+				Expected.ExpectedWarmedSampleCount = WarmedSampleCount;
+				Expected.ExpectedWarmedDirtyTileCount = 8;
+				Expected.ExpectedFinalPages = 1;
+				Expected.ExpectedFinalResidents = 8;
 			}
 		}
 		else if (Name == TEXT("SlotReuseClearsBlack"))
@@ -715,6 +888,8 @@ void FSightWeaveM3P2D3D12ReadbackTest::GetTests(
 		TEXT("ProfilesBypassSuppression"),
 		TEXT("NegativeCoordinates"),
 		TEXT("PersistentNoChangeOneDirty"),
+		TEXT("WarmedOneDirtyDistribution"),
+		TEXT("WarmedEightDirtyDistribution"),
 		TEXT("SlotReuseClearsBlack"),
 		TEXT("StaleDuplicateNoWork"),
 		TEXT("AsyncReadbackStaleRejection"),

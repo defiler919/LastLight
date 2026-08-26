@@ -72,6 +72,48 @@ FSightWeaveSparseAtlasTestReadback::FSightWeaveSparseAtlasTestReadback(
 {
 }
 
+TArray<double> FSightWeaveSparseAtlasTestReadback::BenchmarkGameThreadSubmitMicroseconds(
+	TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet,
+	const int32 WarmupCount,
+	const int32 SampleCount)
+{
+	check(IsInGameThread());
+	TArray<double> Samples;
+	if (!Packet.IsValid() || WarmupCount < 0 || SampleCount <= 0)
+	{
+		return Samples;
+	}
+	auto Enqueue = [&Packet]()
+	{
+		ENQUEUE_RENDER_COMMAND(SightWeaveBenchmarkSparseSubmit)(
+			[OwnedPacket = Packet](FRHICommandListImmediate& RHICmdList)
+			{
+				if (!OwnedPacket.IsValid())
+				{
+					return;
+				}
+			});
+	};
+	for (int32 Index = 0; Index < WarmupCount; ++Index)
+	{
+		Enqueue();
+	}
+	FlushRenderingCommands();
+	Samples.Reserve(SampleCount);
+	for (int32 Index = 0; Index < SampleCount; ++Index)
+	{
+		const double StartSeconds = FPlatformTime::Seconds();
+		Enqueue();
+		Samples.Add((FPlatformTime::Seconds() - StartSeconds) * 1000000.0);
+		if ((Index + 1) % 256 == 0)
+		{
+			FlushRenderingCommands();
+		}
+	}
+	FlushRenderingCommands();
+	return Samples;
+}
+
 TSharedRef<FSightWeaveSparseAtlasTestReadback, ESPMode::ThreadSafe>
 FSightWeaveSparseAtlasTestReadback::StartSequence(
 	TArray<TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe>> Packets,

@@ -71,6 +71,11 @@ class SIGHTWEAVERENDER_API FSightWeaveSparseAtlasTestReadback final
 	: public TSharedFromThis<FSightWeaveSparseAtlasTestReadback, ESPMode::ThreadSafe>
 {
 public:
+	/** Measures GT ownership capture/enqueue only; commands are no-op and flushed outside samples. */
+	static TArray<double> BenchmarkGameThreadSubmitMicroseconds(
+		TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet,
+		int32 WarmupCount,
+		int32 SampleCount);
 	static TSharedRef<FSightWeaveSparseAtlasTestReadback, ESPMode::ThreadSafe> StartSequence(
 		TArray<TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe>> Packets,
 		FSightWeaveSparseTileIdentity SelectedTile);

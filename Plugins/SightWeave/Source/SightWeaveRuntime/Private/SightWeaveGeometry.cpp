@@ -2267,6 +2267,7 @@ namespace SightWeave::Geometry
 		const double RayCastStartSeconds = FPlatformTime::Seconds();
 		int32 NextIntervalIndex = 0;
 		int32 PreviousRayIndex = 0;
+		int32 DirtySectorIndex = 0;
 		int32 VertexWriteIndex = 0;
 		if (!bFullCircle)
 		{
@@ -2329,31 +2330,39 @@ namespace SightWeave::Geometry
 				}
 			}
 
-			const double MaximumDistance = bPureRadial
-				? Input.Range
-				: SourceRadiusAtRelativeAngle(Input, RelativeAngle);
-			const FVector2D Direction = bPureRadial
-				? CandidateDirections[RayIndex]
-				: FVector2D(
-					FMath::Cos(ForwardAngle + RelativeAngle),
-					FMath::Sin(ForwardAngle + RelativeAngle));
-
 			while (IncrementalContext
 				&& PreviousRayIndex < PreviousCandidateAngles.Num()
 				&& PreviousCandidateAngles[PreviousRayIndex] < RelativeAngle)
 			{
 				++PreviousRayIndex;
 			}
+			bool bAngleInDirtySector = false;
+			if (IncrementalContext)
+			{
+				while (DirtySectorIndex < IncrementalContext->DirtySectorCount
+					&& RelativeAngle
+						> IncrementalContext->DirtySectors[DirtySectorIndex].EndAngle + 1.0e-12)
+				{
+					++DirtySectorIndex;
+				}
+				if (DirtySectorIndex < IncrementalContext->DirtySectorCount)
+				{
+					const FSightWeaveDirtyAngularSector& DirtySector =
+						IncrementalContext->DirtySectors[DirtySectorIndex];
+					bAngleInDirtySector = RelativeAngle >= DirtySector.StartAngle - 1.0e-12
+						&& RelativeAngle <= DirtySector.EndAngle + 1.0e-12;
+				}
+			}
 			const bool bCanReusePrevious = IncrementalContext
 				&& PreviousCandidateAngles.IsValidIndex(PreviousRayIndex)
 				&& PreviousCandidateAngles[PreviousRayIndex] == RelativeAngle
 				&& PreviousCandidateDistances.IsValidIndex(PreviousRayIndex)
 				&& PreviousCandidateBoundaryPoints.IsValidIndex(PreviousRayIndex)
-				&& !IsAngleInDirtySector(RelativeAngle, *IncrementalContext)
+				&& !bAngleInDirtySector
 				&& FMath::IsFinite(PreviousCandidateDistances[PreviousRayIndex])
 				&& IsFiniteVector(PreviousCandidateBoundaryPoints[PreviousRayIndex]);
 
-			double ClosestDistance = MaximumDistance;
+			double ClosestDistance = 0.0;
 			FVector2D Vertex2D = FVector2D::ZeroVector;
 			if (bCanReusePrevious)
 			{
@@ -2364,11 +2373,21 @@ namespace SightWeave::Geometry
 			}
 			else
 			{
+				const double MaximumDistance = bPureRadial
+					? Input.Range
+					: SourceRadiusAtRelativeAngle(Input, RelativeAngle);
+				const FVector2D Direction = bPureRadial
+					? CandidateDirections[RayIndex]
+					: FVector2D(
+						FMath::Cos(ForwardAngle + RelativeAngle),
+						FMath::Sin(ForwardAngle + RelativeAngle));
+				ClosestDistance = MaximumDistance;
 				int64 ClosestStableId = MAX_int64;
+				double MaximumOriginDistanceSquared = FMath::Square(
+					ClosestDistance + Input.Tolerances.DuplicateVertexEpsilon);
 				for (const FSightWeaveActiveInterval& ActiveInterval : ActiveIntervals)
 				{
-					if (ActiveInterval.OriginDistanceSquared > FMath::Square(
-							ClosestDistance + Input.Tolerances.DuplicateVertexEpsilon))
+					if (ActiveInterval.OriginDistanceSquared > MaximumOriginDistanceSquared)
 					{
 						break;
 					}
@@ -2395,6 +2414,8 @@ namespace SightWeave::Geometry
 					{
 						ClosestDistance = HitDistance;
 						ClosestStableId = Segment.StableId;
+						MaximumOriginDistanceSquared = FMath::Square(
+							ClosestDistance + Input.Tolerances.DuplicateVertexEpsilon);
 					}
 				}
 				Vertex2D = Origin + Direction * ClosestDistance;

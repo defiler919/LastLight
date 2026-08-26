@@ -6,6 +6,10 @@
 #include "SightWeaveSparseAtlas.h"
 
 class FRDGBuilder;
+class FSceneView;
+struct FPostProcessMaterialInputs;
+struct FScreenPassTexture;
+class FRDGPooledBuffer;
 struct IPooledRenderTarget;
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -32,6 +36,11 @@ public:
 	void SubmitPresentationSelection_RenderThread(
 		const FSightWeaveViewPresentationSelection& Selection);
 	bool ProcessPending_RenderThread(FRDGBuilder& GraphBuilder);
+	void PreparePresentationResources_RenderThread(FRDGBuilder& GraphBuilder);
+	FScreenPassTexture AddHardMaskComposite_RenderThread(
+		FRDGBuilder& GraphBuilder,
+		const FSceneView& View,
+		const FPostProcessMaterialInputs& Inputs);
 	void Release_RenderThread(FSightWeaveRenderWorldIdentity ExpectedWorldIdentity);
 
 	ESightWeaveRenderAvailability GetAvailability_RenderThread() const { return Availability; }
@@ -48,6 +57,7 @@ public:
 	int32 GetResidentTileCount_RenderThread() const;
 	int32 GetAllocatedPageCount_RenderThread() const;
 	uint64 GetResidencyGeneration_RenderThread() const { return ResidencyGeneration; }
+	uint64 GetPageTableUploadCount_RenderThread() const { return PageTableUploadCount; }
 	bool IsPresentationEnabled_RenderThread() const
 	{
 		return PresentationSelection.IsEnabled() && !bReleased;
@@ -98,6 +108,7 @@ private:
 	bool HasCompletePresentationResidency_RenderThread(
 		const FSightWeaveSparseRenderPacket& Packet,
 		const FSightWeaveSparseScopeKey& ScopeKey) const;
+	bool PrepareScopePageTable_RenderThread(FRDGBuilder& GraphBuilder, FScopeState& Scope);
 
 	FSightWeaveRenderWorldIdentity WorldIdentity;
 	TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> PendingPacket;
@@ -116,6 +127,7 @@ private:
 	uint64 DirtyTileDispatchCount = 0;
 	uint64 ResourceGeneration = 0;
 	uint64 ResidencyGeneration = 1;
+	uint64 PageTableUploadCount = 0;
 	uint64 PageAllocationCount = 0;
 	uint64 ScratchAllocationCount = 0;
 	uint64 DuplicatePacketCount = 0;

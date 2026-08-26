@@ -1,6 +1,7 @@
 #include "SightWeaveSceneViewExtension.h"
 
 #include "RenderingThread.h"
+#include "ScreenPass.h"
 #include "SightWeaveSparseAtlasRenderState.h"
 
 FSightWeaveSceneViewExtension::FSightWeaveSceneViewExtension(
@@ -67,4 +68,28 @@ void FSightWeaveSceneViewExtension::PreRenderViewFamily_RenderThread(
 	FSceneViewFamily& ViewFamily)
 {
 	RenderState->ProcessPending_RenderThread(GraphBuilder);
+	RenderState->PreparePresentationResources_RenderThread(GraphBuilder);
+}
+
+void FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass(
+	const EPostProcessingPass PassId,
+	const FSceneView& View,
+	FAfterPassCallbackDelegateArray& InOutPassCallbacks,
+	const bool bIsPassEnabled)
+{
+	if (PassId == EPostProcessingPass::Tonemap
+		&& RenderState->IsPresentationEnabled_RenderThread())
+	{
+		InOutPassCallbacks.Add(FAfterPassCallbackDelegate::CreateRaw(
+			this,
+			&FSightWeaveSceneViewExtension::PostProcessPassAfterTonemap_RenderThread));
+	}
+}
+
+FScreenPassTexture FSightWeaveSceneViewExtension::PostProcessPassAfterTonemap_RenderThread(
+	FRDGBuilder& GraphBuilder,
+	const FSceneView& View,
+	const FPostProcessMaterialInputs& Inputs)
+{
+	return RenderState->AddHardMaskComposite_RenderThread(GraphBuilder, View, Inputs);
 }

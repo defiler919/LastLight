@@ -1,5 +1,6 @@
 #include "SightWeaveSparseAtlasRenderState.h"
 
+#include "Algo/Sort.h"
 #include "CommonRenderResources.h"
 #include "GlobalShader.h"
 #include "HAL/PlatformTime.h"
@@ -9,7 +10,10 @@
 #include "RHI.h"
 #include "RHIGlobals.h"
 #include "RHIStaticStates.h"
+#include "PostProcess/PostProcessMaterialInputs.h"
+#include "ScreenPass.h"
 #include "SightWeaveTileShaders.h"
+#include "SystemTextures.h"
 
 namespace SightWeaveSparseAtlasRenderPrivate
 {
@@ -251,6 +255,11 @@ struct FSightWeaveSparseAtlasRenderState::FScopeState final
 	int32 Capacity = 0;
 	FSightWeaveSparseAtlasResidency Residency;
 	TArray<TRefCountPtr<IPooledRenderTarget>> Pages;
+	TRefCountPtr<FRDGPooledBuffer> PageTable;
+	FRDGBufferRef CurrentPageTable = nullptr;
+	uint64 PageTableResidencyGeneration = 0;
+	uint64 PageTablePacketRevision = 0;
+	int32 PageTableEntryCount = 0;
 	uint64 DesiredRevision = 0;
 	uint64 AppliedRevision = 0;
 	ESightWeaveRenderAvailability Availability = ESightWeaveRenderAvailability::Unknown;
@@ -503,6 +512,181 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 	return bAnyMaskWork;
 }
 
+void FSightWeaveSparseAtlasRenderState::PreparePresentationResources_RenderThread(
+	FRDGBuilder& GraphBuilder)
+{
+	check(IsInRenderingThread());
+	for (TUniquePtr<FScopeState>& Scope : Scopes)
+	{
+		Scope->CurrentPageTable = nullptr;
+		if (Scope->Availability == ESightWeaveRenderAvailability::Available)
+		{
+			PrepareScopePageTable_RenderThread(GraphBuilder, *Scope);
+		}
+	}
+}
+
+bool FSightWeaveSparseAtlasRenderState::PrepareScopePageTable_RenderThread(
+	FRDGBuilder& GraphBuilder,
+	FScopeState& Scope)
+{
+	check(IsInRenderingThread());
+	if (Scope.PageTable.IsValid()
+		&& Scope.PageTableResidencyGeneration == ResidencyGeneration
+		&& Scope.PageTablePacketRevision == Scope.AppliedRevision)
+	{
+		Scope.CurrentPageTable = GraphBuilder.RegisterExternalBuffer(
+			Scope.PageTable,
+			TEXT("SightWeave.Presentation.PageTable"));
+		return Scope.CurrentPageTable != nullptr;
+	}
+
+	TArray<FIntVector4> Entries;
+	Entries.Reserve(Scope.Residency.GetResidentCount());
+	for (const FSightWeaveSparseResidencySlot& Slot : Scope.Residency.GetSlots())
+	{
+		if (!Slot.bOccupied || Slot.AppliedRevision != Scope.AppliedRevision)
+		{
+			continue;
+		}
+		Entries.Emplace(
+			Slot.Identity.TileKey.LogicalCoordinate.X,
+			Slot.Identity.TileKey.LogicalCoordinate.Y,
+			Slot.Address.PageIndex,
+			Slot.Address.SlotIndex);
+	}
+	Algo::Sort(Entries, [](const FIntVector4& A, const FIntVector4& B)
+	{
+		return A.X < B.X || (A.X == B.X && A.Y < B.Y);
+	});
+	Scope.PageTableEntryCount = Entries.Num();
+	if (Entries.IsEmpty())
+	{
+		Entries.Emplace(0, 0, INDEX_NONE, INDEX_NONE);
+	}
+
+	Scope.CurrentPageTable = CreateStructuredBuffer(
+		GraphBuilder,
+		TEXT("SightWeave.Presentation.PageTable"),
+		MoveTemp(Entries));
+	GraphBuilder.QueueBufferExtraction(Scope.CurrentPageTable, &Scope.PageTable);
+	Scope.PageTableResidencyGeneration = ResidencyGeneration;
+	Scope.PageTablePacketRevision = Scope.AppliedRevision;
+	++PageTableUploadCount;
+	return true;
+}
+
+FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_RenderThread(
+	FRDGBuilder& GraphBuilder,
+	const FSceneView& View,
+	const FPostProcessMaterialInputs& Inputs)
+{
+	check(IsInRenderingThread());
+	const FScreenPassTexture SceneColor = FScreenPassTexture::CopyFromSlice(
+		GraphBuilder,
+		Inputs.GetInput(EPostProcessMaterialInput::SceneColor));
+	check(SceneColor.IsValid());
+
+	FScreenPassRenderTarget Output = Inputs.OverrideOutput;
+	if (!Output.IsValid())
+	{
+		Output = FScreenPassRenderTarget::CreateFromInput(
+			GraphBuilder,
+			SceneColor,
+			View.GetOverwriteLoadAction(),
+			TEXT("SightWeave.HardMask.Output"));
+	}
+	auto FailBlack = [&GraphBuilder, &Output]() -> FScreenPassTexture
+	{
+		AddClearRenderTargetPass(GraphBuilder, Output.Texture, FLinearColor::Black, Output.ViewRect);
+		return MoveTemp(Output);
+	};
+
+	const TSharedPtr<const FSightWeaveViewPresentationBinding, ESPMode::ThreadSafe> Binding =
+		PresentationBinding;
+	if (!Binding.IsValid()
+		|| !Binding->IsValid()
+		|| Binding->GetResourceGeneration() != ResourceGeneration
+		|| Binding->GetResidencyGeneration() != ResidencyGeneration
+		|| Binding->GetPacketRevision() != AppliedRevision)
+	{
+		return FailBlack();
+	}
+	FScopeState* Scope = FindScope_RenderThread(Binding->GetScopeKey());
+	if (!Scope
+		|| Scope->Availability != ESightWeaveRenderAvailability::Available
+		|| Scope->AppliedRevision != Binding->GetPacketRevision()
+		|| Scope->PageTableResidencyGeneration != Binding->GetResidencyGeneration()
+		|| Scope->PageTablePacketRevision != Binding->GetPacketRevision()
+		|| !Scope->CurrentPageTable)
+	{
+		return FailBlack();
+	}
+	for (const FSightWeaveSparseResidencySlot& Slot : Scope->Residency.GetSlots())
+	{
+		if (Slot.bOccupied && Slot.Address.PageIndex >= 4)
+		{
+			return FailBlack();
+		}
+	}
+	if (!Inputs.SceneTextures.SceneTextures)
+	{
+		return FailBlack();
+	}
+	FRDGTextureRef SceneDepth =
+		Inputs.SceneTextures.SceneTextures->GetParameters()->SceneDepthTexture;
+	if (!SceneDepth)
+	{
+		return FailBlack();
+	}
+
+	TShaderMapRef<FSightWeaveHardMaskCompositePixelShader> PixelShader(
+		GetGlobalShaderMap(View.GetFeatureLevel()));
+	FSightWeaveHardMaskCompositePixelShader::FParameters* Parameters =
+		GraphBuilder.AllocParameters<FSightWeaveHardMaskCompositePixelShader::FParameters>();
+	Parameters->View = View.ViewUniformBuffer;
+	Parameters->SceneColorTexture = SceneColor.Texture;
+	Parameters->SceneDepthTexture = SceneDepth;
+	Parameters->PageTable = GraphBuilder.CreateSRV(Scope->CurrentPageTable);
+	FRDGTextureRef DummyPage = GSystemTextures.GetBlackDummy(GraphBuilder);
+	FRDGTextureRef AtlasPages[4] = { DummyPage, DummyPage, DummyPage, DummyPage };
+	for (int32 PageIndex = 0; PageIndex < Scope->Pages.Num() && PageIndex < 4; ++PageIndex)
+	{
+		if (Scope->Pages[PageIndex].IsValid())
+		{
+			AtlasPages[PageIndex] = GraphBuilder.RegisterExternalTexture(
+				Scope->Pages[PageIndex],
+				TEXT("SightWeave.Presentation.AtlasPage"));
+		}
+	}
+	Parameters->AtlasPage0 = AtlasPages[0];
+	Parameters->AtlasPage1 = AtlasPages[1];
+	Parameters->AtlasPage2 = AtlasPages[2];
+	Parameters->AtlasPage3 = AtlasPages[3];
+	Parameters->OutputRectMin = Output.ViewRect.Min;
+	Parameters->OutputRectSize = Output.ViewRect.Size();
+	Parameters->SceneColorRectMin = SceneColor.ViewRect.Min;
+	Parameters->SceneColorRectSize = SceneColor.ViewRect.Size();
+	const FVector PreViewTranslation = View.ViewMatrices.GetPreViewTranslation();
+	const FVector2D TranslatedFloorOrigin = Binding->GetScopeKey().FloorOrigin
+		+ FVector2D(PreViewTranslation.X, PreViewTranslation.Y);
+	Parameters->TranslatedFloorOrigin = FVector2f(TranslatedFloorOrigin);
+	Parameters->CentimetersPerTexel = SightWeaveCentimetersPerTexel(
+		Binding->GetScopeKey().PrecisionTier);
+	Parameters->PageTableCount = static_cast<uint32>(Scope->PageTableEntryCount);
+	Parameters->RenderTargets[0] = Output.GetRenderTargetBinding();
+
+	AddDrawScreenPass(
+		GraphBuilder,
+		RDG_EVENT_NAME("SightWeave.HardMaskComposite"),
+		View,
+		FScreenPassTextureViewport(Output),
+		FScreenPassTextureViewport(SceneColor),
+		PixelShader,
+		Parameters);
+	return MoveTemp(Output);
+}
+
 void FSightWeaveSparseAtlasRenderState::Release_RenderThread(
 	const FSightWeaveRenderWorldIdentity ExpectedWorldIdentity)
 {
@@ -748,6 +932,11 @@ FSightWeaveSparseAtlasRenderState::FindOrAddScope_RenderThread(
 		if (Existing->Capacity != Scope.MaximumActiveTiles)
 		{
 			Existing->Pages.Reset();
+			Existing->PageTable.SafeRelease();
+			Existing->CurrentPageTable = nullptr;
+			Existing->PageTableEntryCount = 0;
+			Existing->PageTableResidencyGeneration = 0;
+			Existing->PageTablePacketRevision = 0;
 			Existing->Capacity = Scope.MaximumActiveTiles;
 			Existing->Residency = FSightWeaveSparseAtlasResidency(Scope.MaximumActiveTiles);
 			++ResourceGeneration;
@@ -765,6 +954,11 @@ void FSightWeaveSparseAtlasRenderState::FailScope_RenderThread(
 	const ESightWeaveRenderAvailability Failure)
 {
 	Scope.Pages.Reset();
+	Scope.PageTable.SafeRelease();
+	Scope.CurrentPageTable = nullptr;
+	Scope.PageTableEntryCount = 0;
+	Scope.PageTableResidencyGeneration = 0;
+	Scope.PageTablePacketRevision = 0;
 	Scope.Residency.Reset();
 	Scope.AppliedRevision = 0;
 	Scope.Availability = Failure;

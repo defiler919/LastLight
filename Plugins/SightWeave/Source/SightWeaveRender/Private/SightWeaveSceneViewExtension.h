@@ -21,8 +21,18 @@ public:
 	virtual void PreRenderViewFamily_RenderThread(
 		FRDGBuilder& GraphBuilder,
 		FSceneViewFamily& ViewFamily) override;
+	virtual void SubscribeToPostProcessingPass(
+		EPostProcessingPass PassId,
+		const FSceneView& View,
+		FAfterPassCallbackDelegateArray& InOutPassCallbacks,
+		bool bIsPassEnabled) override;
 
 private:
+	FScreenPassTexture PostProcessPassAfterTonemap_RenderThread(
+		FRDGBuilder& GraphBuilder,
+		const FSceneView& View,
+		const FPostProcessMaterialInputs& Inputs);
+
 	FSightWeaveRenderWorldIdentity WorldIdentity;
 	TSharedRef<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe> RenderState;
 	bool bShutdown = false;

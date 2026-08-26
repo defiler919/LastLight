@@ -35,3 +35,9 @@ IMPLEMENT_GLOBAL_SHADER(
 	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
 	"SightWeaveAtlasSuppressionPS",
 	SF_Pixel);
+
+IMPLEMENT_GLOBAL_SHADER(
+	FSightWeaveHardMaskCompositePixelShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeaveHardMaskCompositePS",
+	SF_Pixel);

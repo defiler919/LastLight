@@ -2,7 +2,7 @@
 
 namespace SightWeavePresentationPrivate
 {
-	bool ProfileLess(
+	bool SightWeavePresentationProfileLess(
 		const FSightWeaveRenderProfileIdentity& A,
 		const FSightWeaveRenderProfileIdentity& B)
 	{
@@ -193,7 +193,7 @@ FSightWeavePresentationBindingBuildResult FSightWeavePresentationBindingBuilder:
 			}
 		}
 	}
-	Binding->CanonicalProfiles.Sort(ProfileLess);
+	Binding->CanonicalProfiles.Sort(SightWeavePresentationProfileLess);
 	Binding->bValid = true;
 	Binding->Failure = ESightWeavePresentationBindingFailure::None;
 	const ESightWeavePresentationBindingFailure Validation = Validate(*Binding);

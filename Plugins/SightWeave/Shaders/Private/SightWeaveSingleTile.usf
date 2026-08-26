@@ -1,6 +1,7 @@
 // SightWeave M3.1 formal shader path: Windows D3D12 SM6.
 
 #include "/Engine/Public/Platform.ush"
+#include "/Engine/Private/Common.ush"
 
 StructuredBuffer<float2> TriangleVertices;
 StructuredBuffer<uint> TriangleIndices;
@@ -114,4 +115,101 @@ float SightWeaveAtlasSuppressionPS(float4 Position : SV_POSITION) : SV_Target0
 		discard;
 	}
 	return 0.0f;
+}
+
+Texture2D<float4> SceneColorTexture;
+Texture2D<float> SceneDepthTexture;
+StructuredBuffer<int4> PageTable;
+Texture2D<float> AtlasPage0;
+Texture2D<float> AtlasPage1;
+Texture2D<float> AtlasPage2;
+Texture2D<float> AtlasPage3;
+int2 OutputRectMin;
+int2 OutputRectSize;
+int2 SceneColorRectMin;
+int2 SceneColorRectSize;
+float2 TranslatedFloorOrigin;
+float CentimetersPerTexel;
+uint PageTableCount;
+
+bool SightWeaveCoordinateLess(int2 A, int2 B)
+{
+	return A.x < B.x || (A.x == B.x && A.y < B.y);
+}
+
+int SightWeaveFindPageTableEntry(int2 LogicalCoordinate)
+{
+	int Low = 0;
+	int High = int(PageTableCount) - 1;
+	while (Low <= High)
+	{
+		const int Middle = Low + (High - Low) / 2;
+		const int2 Candidate = PageTable[Middle].xy;
+		if (all(Candidate == LogicalCoordinate))
+		{
+			return Middle;
+		}
+		if (SightWeaveCoordinateLess(Candidate, LogicalCoordinate))
+		{
+			Low = Middle + 1;
+		}
+		else
+		{
+			High = Middle - 1;
+		}
+	}
+	return -1;
+}
+
+float SightWeaveLoadAtlasMask(int PageIndex, int2 Texel)
+{
+	switch (PageIndex)
+	{
+	case 0: return AtlasPage0.Load(int3(Texel, 0));
+	case 1: return AtlasPage1.Load(int3(Texel, 0));
+	case 2: return AtlasPage2.Load(int3(Texel, 0));
+	case 3: return AtlasPage3.Load(int3(Texel, 0));
+	default: return 0.0f;
+	}
+}
+
+float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const int2 OutputPixel = int2(Position.xy);
+	const float2 ViewUv = saturate(
+		(float2(OutputPixel - OutputRectMin) + 0.5f) / float2(OutputRectSize));
+	const int2 SceneColorPixel = clamp(
+		SceneColorRectMin + int2(ViewUv * float2(SceneColorRectSize)),
+		SceneColorRectMin,
+		SceneColorRectMin + SceneColorRectSize - 1);
+	const int2 DepthRectMin = int2(View.ViewRectMinAndSize.xy);
+	const int2 DepthRectSize = int2(View.ViewRectMinAndSize.zw);
+	const int2 DepthPixel = clamp(
+		DepthRectMin + int2(ViewUv * float2(DepthRectSize)),
+		DepthRectMin,
+		DepthRectMin + DepthRectSize - 1);
+	const float DeviceZ = SceneDepthTexture.Load(int3(DepthPixel, 0));
+	const float3 TranslatedWorld = SvPositionToTranslatedWorld(
+		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
+	const float2 LocalPosition = TranslatedWorld.xy - TranslatedFloorOrigin;
+	const float InteriorSpan = 248.0f * CentimetersPerTexel;
+	const int2 LogicalCoordinate = int2(floor(LocalPosition / InteriorSpan));
+	const int EntryIndex = SightWeaveFindPageTableEntry(LogicalCoordinate);
+	if (EntryIndex < 0)
+	{
+		return 0.0f;
+	}
+
+	const int4 Entry = PageTable[EntryIndex];
+	const int PageIndex = Entry.z;
+	const int SlotIndex = Entry.w;
+	const int2 SlotOrigin = int2(SlotIndex & 7, SlotIndex >> 3) * 256;
+	const float2 TileLocal = LocalPosition - float2(LogicalCoordinate) * InteriorSpan;
+	const int2 InteriorTexel = clamp(
+		int2(floor(TileLocal / CentimetersPerTexel)),
+		int2(0, 0),
+		int2(247, 247));
+	const int2 AtlasTexel = SlotOrigin + int2(4, 4) + InteriorTexel;
+	const bool bVisible = SightWeaveLoadAtlasMask(PageIndex, AtlasTexel) >= 0.5f;
+	return bVisible ? SceneColorTexture.Load(int3(SceneColorPixel, 0)) : 0.0f;
 }

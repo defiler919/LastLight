@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GlobalShader.h"
+#include "SceneView.h"
 #include "ShaderParameterStruct.h"
 
 /** M3.1 D3D12 SM6 shader registration smoke; parameters are extended by the raster checkpoint. */
@@ -104,6 +105,38 @@ public:
 		SHADER_PARAMETER(float, RasterCentimetersPerTexel)
 		SHADER_PARAMETER(uint32, RasterTargetOriginX)
 		SHADER_PARAMETER(uint32, RasterTargetOriginY)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return Parameters.Platform == SP_PCD3D_SM6;
+	}
+};
+
+/** After-tonemap hard mask composite. The sparse atlas is sampled with integer texel loads. */
+class FSightWeaveHardMaskCompositePixelShader final : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSightWeaveHardMaskCompositePixelShader);
+	SHADER_USE_PARAMETER_STRUCT(FSightWeaveHardMaskCompositePixelShader, FGlobalShader);
+
+public:
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneColorTexture)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneDepthTexture)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, PageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage1)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage2)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage3)
+		SHADER_PARAMETER(FIntPoint, OutputRectMin)
+		SHADER_PARAMETER(FIntPoint, OutputRectSize)
+		SHADER_PARAMETER(FIntPoint, SceneColorRectMin)
+		SHADER_PARAMETER(FIntPoint, SceneColorRectSize)
+		SHADER_PARAMETER(FVector2f, TranslatedFloorOrigin)
+		SHADER_PARAMETER(float, CentimetersPerTexel)
+		SHADER_PARAMETER(uint32, PageTableCount)
+		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)

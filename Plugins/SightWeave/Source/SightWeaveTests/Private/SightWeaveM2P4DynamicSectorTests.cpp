@@ -96,6 +96,16 @@ namespace SightWeave::M2P4::DynamicSectorTests
 		return { Segment(FVector2D(X, -100.0), FVector2D(X, 100.0)) };
 	}
 
+	TArray<FSightWeaveSegment2D> DoorSpan(const double X, const double HalfHeight)
+	{
+		return { Segment(FVector2D(X, -HalfHeight), FVector2D(X, HalfHeight)) };
+	}
+
+	TArray<FSightWeaveSegment2D> DoorEndpoints(const FVector2D A, const FVector2D B)
+	{
+		return { Segment(A, B) };
+	}
+
 	TArray<FSightWeaveSegment2D> SplitDoor(const double X)
 	{
 		return {
@@ -103,15 +113,18 @@ namespace SightWeave::M2P4::DynamicSectorTests
 			Segment(FVector2D(X, 20.0), FVector2D(X, 160.0)) };
 	}
 
-	FSightWeaveVisionSourceDescription Vision(const FVector Location = FVector(0.0, 0.0, 100.0))
+	FSightWeaveVisionSourceDescription Vision(
+		const FVector Location = FVector(0.0, 0.0, 100.0),
+		const ESightWeaveSourceShape Shape = ESightWeaveSourceShape::Radial)
 	{
 		FSightWeaveVisionSourceDescription Result;
 		Result.KnowledgeOwnerId = Local;
 		Result.FloorId = Ground;
 		Result.Transform = FTransform(FQuat::Identity, Location);
-		Result.Shape = ESightWeaveSourceShape::Radial;
+		Result.Shape = Shape;
 		Result.Range = 1200.0f;
-		Result.HalfAngleDegrees = 180.0f;
+		Result.HalfAngleDegrees = Shape == ESightWeaveSourceShape::Radial ? 180.0f : 55.0f;
+		Result.NearAwarenessRadius = Shape == ESightWeaveSourceShape::Radial ? 0.0f : 75.0f;
 		Result.HeightRange.ZMin = 0.0f;
 		Result.HeightRange.ZMax = 300.0f;
 		return Result;
@@ -341,6 +354,280 @@ bool FSightWeaveM2P5SharedPreparedCacheDynamicSectorTest::RunTest(const FString&
 			Metrics.VisionIncrementalRebuiltRayCount > 0);
 		SnapshotMatchesFreshFullSolve(*this, *Subsystem, VisionHandle, *Prefix);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P5BroadDynamicDoorExactTest,
+	"SightWeave.M2P5.VisionTail.Broad4V2LDynamicDoorExact",
+	SightWeave::M2P4::DynamicSectorTests::TestFlags)
+
+bool FSightWeaveM2P5BroadDynamicDoorExactTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P4::DynamicSectorTests;
+	USightWeaveSettings* Settings = GetMutableDefault<USightWeaveSettings>();
+	TGuardValue<ESightWeaveSolverMode> ModeGuard(Settings->SolverMode, ESightWeaveSolverMode::Optimized);
+	FTestWorld World(TEXT("SightWeaveM2P5Broad4V2L"));
+	USightWeaveWorldSubsystem* Subsystem = World.GetSubsystem();
+	if (!TestNotNull(TEXT("Subsystem exists"), Subsystem)
+		|| !TestTrue(TEXT("Ground floor registers"), Subsystem->RegisterFloor(Floor(), nullptr))
+		|| !TestTrue(TEXT("Static room registers"),
+			Subsystem->RegisterOccluder(RoomSegments(), false, true, nullptr).IsValid()))
+	{
+		return true;
+	}
+	const FSightWeaveOccluderHandle DoorHandle =
+		Subsystem->RegisterOccluder(Door(250.0), true, true, nullptr);
+	TArray<FSightWeaveVisionSourceHandle> VisionHandles;
+	for (int32 SourceIndex = 0; SourceIndex < 4; ++SourceIndex)
+	{
+		const double Angle = 2.0 * PI * SourceIndex / 4.0;
+		const ESightWeaveSourceShape Shape = SourceIndex % 2 == 0
+			? ESightWeaveSourceShape::Radial
+			: ESightWeaveSourceShape::CameraCone;
+		VisionHandles.Add(Subsystem->RegisterVisionSource(
+			Vision(
+				FVector(FMath::Cos(Angle) * 100.0, FMath::Sin(Angle) * 100.0, 100.0),
+				Shape),
+			nullptr));
+		TestTrue(
+			*FString::Printf(TEXT("Broad vision source %d registers"), SourceIndex + 1),
+			VisionHandles.Last().IsValid());
+	}
+	const FSightWeaveIlluminationSourceHandle Visible =
+		Subsystem->RegisterIlluminationSource(
+			Illumination(FVector(100.0, 0.0, 100.0)), nullptr);
+	const FSightWeaveIlluminationSourceHandle Infrared =
+		Subsystem->RegisterIlluminationSource(
+			Illumination(FVector(-100.0, 0.0, 100.0)), nullptr);
+	if (!TestTrue(TEXT("Broad dynamic door registers"), DoorHandle.IsValid())
+		|| !TestTrue(TEXT("Visible illumination registers"), Visible.IsValid())
+		|| !TestTrue(TEXT("Infrared illumination registers"), Infrared.IsValid())
+		|| VisionHandles.ContainsByPredicate([](const FSightWeaveVisionSourceHandle Handle)
+			{ return !Handle.IsValid(); }))
+	{
+		return true;
+	}
+
+	const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> HeldSnapshot =
+		Subsystem->AcquirePublishedSnapshotForTesting();
+	const int64 HeldRevision = HeldSnapshot.IsValid() ? HeldSnapshot->Revision.GetValue() : 0;
+	const TArray<FVector> HeldVertices = HeldSnapshot.IsValid()
+		? FindVisionEntry(*HeldSnapshot, VisionHandles[0])->Polygon.Vertices
+		: TArray<FVector>();
+	TestTrue(TEXT("Broad test acquires immutable reader"), HeldSnapshot.IsValid());
+
+	for (int32 UpdateIndex = 0; UpdateIndex < 8; ++UpdateIndex)
+	{
+		const double DoorX = UpdateIndex % 2 == 0 ? 850.0 : 250.0;
+		const FString Prefix = FString::Printf(TEXT("broad update %d"), UpdateIndex + 1);
+		TestTrue(*FString::Printf(TEXT("%s publishes"), *Prefix),
+			Subsystem->UpdateOccluder(DoorHandle, Door(DoorX), true, true));
+		const FSightWeaveDynamicUpdateStageMetrics& Metrics =
+			Subsystem->GetLastDynamicUpdateStageMetrics();
+		TestEqual(*FString::Printf(TEXT("%s attempts four sources"), *Prefix),
+			Metrics.VisionIncrementalAttemptCount, int64(4));
+		TestEqual(*FString::Printf(TEXT("%s succeeds for four sources"), *Prefix),
+			Metrics.VisionIncrementalSuccessCount, int64(4));
+		TestEqual(*FString::Printf(TEXT("%s has no fallback"), *Prefix),
+			Metrics.VisionIncrementalFallbackCount, int64(0));
+		TestEqual(*FString::Printf(TEXT("%s records four source diagnostics"), *Prefix),
+			Metrics.VisionSourceDiagnosticCount, 4);
+		TestEqual(*FString::Printf(TEXT("%s has no diagnostic overflow"), *Prefix),
+			Metrics.VisionSourceDiagnosticOverflowCount, 0);
+		TestTrue(*FString::Printf(TEXT("%s reuses unchanged rays"), *Prefix),
+			Metrics.VisionIncrementalReusedRayCount > 0);
+		TestTrue(*FString::Printf(TEXT("%s rebuilds dirty rays"), *Prefix),
+			Metrics.VisionIncrementalRebuiltRayCount > 0);
+		int64 PreviousSourceId = 0;
+		for (int32 SourceIndex = 0; SourceIndex < Metrics.VisionSourceDiagnosticCount; ++SourceIndex)
+		{
+			const FSightWeaveVisionSourceSolveDiagnostics& Diagnostic =
+				Metrics.VisionSourceDiagnostics[SourceIndex];
+			TestTrue(*FString::Printf(TEXT("%s source IDs are ordered"), *Prefix),
+				Diagnostic.SourceId > PreviousSourceId);
+			TestTrue(*FString::Printf(TEXT("%s source has no fallback reason"), *Prefix),
+				Diagnostic.FallbackReason == ESightWeaveIncrementalSectorFallbackReason::None);
+			TestTrue(*FString::Printf(TEXT("%s source reuses rays"), *Prefix),
+				Diagnostic.ReusedRayCount > 0);
+			TestTrue(*FString::Printf(TEXT("%s source rebuilds rays"), *Prefix),
+				Diagnostic.RebuiltRayCount > 0);
+			PreviousSourceId = Diagnostic.SourceId;
+		}
+		for (int32 SourceIndex = 0; SourceIndex < VisionHandles.Num(); ++SourceIndex)
+		{
+			SnapshotMatchesFreshFullSolve(
+				*this,
+				*Subsystem,
+				VisionHandles[SourceIndex],
+				*FString::Printf(TEXT("%s source %d"), *Prefix, SourceIndex + 1));
+		}
+	}
+	TestEqual(TEXT("Held reader revision remains immutable"),
+		HeldSnapshot->Revision.GetValue(), HeldRevision);
+	const FSightWeaveVisionSnapshotEntry* HeldVision =
+		FindVisionEntry(*HeldSnapshot, VisionHandles[0]);
+	TestTrue(TEXT("Held reader retains original polygon"),
+		HeldVision && HeldVision->Polygon.Vertices == HeldVertices);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P5DynamicDoorMovementMatrixTest,
+	"SightWeave.M2P5.VisionTail.DynamicDoorMovementMatrixExact",
+	SightWeave::M2P4::DynamicSectorTests::TestFlags)
+
+bool FSightWeaveM2P5DynamicDoorMovementMatrixTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P4::DynamicSectorTests;
+	USightWeaveSettings* Settings = GetMutableDefault<USightWeaveSettings>();
+	TGuardValue<ESightWeaveSolverMode> ModeGuard(Settings->SolverMode, ESightWeaveSolverMode::Optimized);
+	struct FMovementCase
+	{
+		const TCHAR* Label;
+		TArray<FSightWeaveSegment2D> Initial;
+		TArray<FSightWeaveSegment2D> Updated;
+	};
+	const TArray<FMovementCase> Cases = {
+		{ TEXT("one_centimeter"), Door(250.0), Door(251.0) },
+		{ TEXT("five_centimeters"), Door(250.0), Door(255.0) },
+		{ TEXT("twenty_centimeters"), Door(250.0), Door(270.0) },
+		{ TEXT("narrow_door"), DoorSpan(250.0, 100.0), DoorSpan(250.0, 20.0) },
+		{ TEXT("wide_door"), DoorSpan(250.0, 100.0), DoorSpan(250.0, 300.0) },
+		{ TEXT("teleport"), Door(250.0), Door(850.0) },
+		{ TEXT("rotation"), Door(250.0),
+			DoorEndpoints(FVector2D(200.0, -100.0), FVector2D(300.0, 100.0)) } };
+	for (const FMovementCase& Movement : Cases)
+	{
+		FTestWorld World(*FString::Printf(TEXT("SightWeaveM2P5Movement_%s"), Movement.Label));
+		USightWeaveWorldSubsystem* Subsystem = World.GetSubsystem();
+		FSightWeaveOccluderHandle DoorHandle;
+		FSightWeaveVisionSourceHandle VisionHandle;
+		if (!RegisterCommonScene(
+				*this, Subsystem, Movement.Initial, DoorHandle, VisionHandle)
+			|| !TestTrue(
+				*FString::Printf(TEXT("%s shared illumination registers"), Movement.Label),
+				Subsystem->RegisterIlluminationSource(Illumination(), nullptr).IsValid()))
+		{
+			continue;
+		}
+		TestTrue(*FString::Printf(TEXT("%s publishes"), Movement.Label),
+			Subsystem->UpdateOccluder(DoorHandle, Movement.Updated, true, true));
+		const FSightWeaveDynamicUpdateStageMetrics& Metrics =
+			Subsystem->GetLastDynamicUpdateStageMetrics();
+		TestEqual(*FString::Printf(TEXT("%s attempts incremental solve"), Movement.Label),
+			Metrics.VisionIncrementalAttemptCount, int64(1));
+		TestEqual(*FString::Printf(TEXT("%s succeeds incrementally"), Movement.Label),
+			Metrics.VisionIncrementalSuccessCount, int64(1));
+		TestEqual(*FString::Printf(TEXT("%s avoids fallback"), Movement.Label),
+			Metrics.VisionIncrementalFallbackCount, int64(0));
+		TestTrue(*FString::Printf(TEXT("%s has no fallback reason"), Movement.Label),
+			Metrics.VisionIncrementalLastFallbackReason
+				== ESightWeaveIncrementalSectorFallbackReason::None);
+		TestTrue(*FString::Printf(TEXT("%s reuses rays"), Movement.Label),
+			Metrics.VisionIncrementalReusedRayCount > 0);
+		TestTrue(*FString::Printf(TEXT("%s rebuilds rays"), Movement.Label),
+			Metrics.VisionIncrementalRebuiltRayCount > 0);
+		SnapshotMatchesFreshFullSolve(*this, *Subsystem, VisionHandle, Movement.Label);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P5FixedSeedIncrementalDifferentialTest,
+	"SightWeave.M2P5.VisionTail.FixedSeedIncrementalDifferential",
+	SightWeave::M2P4::DynamicSectorTests::TestFlags)
+
+bool FSightWeaveM2P5FixedSeedIncrementalDifferentialTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P4::DynamicSectorTests;
+	USightWeaveSettings* Settings = GetMutableDefault<USightWeaveSettings>();
+	TGuardValue<ESightWeaveSolverMode> ModeGuard(Settings->SolverMode, ESightWeaveSolverMode::Optimized);
+	FRandomStream Random(0x5A17E5);
+	TArray<TArray<FSightWeaveSegment2D>> States;
+	States.Reserve(24);
+	for (int32 StateIndex = 0; StateIndex < 24; ++StateIndex)
+	{
+		const double X = Random.FRandRange(220.0f, 850.0f);
+		const double HalfHeight = Random.FRandRange(20.0f, 300.0f);
+		const double Shear = Random.FRandRange(-50.0f, 50.0f);
+		States.Add(DoorEndpoints(
+			FVector2D(X - Shear, -HalfHeight),
+			FVector2D(X + Shear, HalfHeight)));
+	}
+
+	FTestWorld World(TEXT("SightWeaveM2P5FixedSeedIncremental"));
+	USightWeaveWorldSubsystem* Subsystem = World.GetSubsystem();
+	FSightWeaveOccluderHandle DoorHandle;
+	FSightWeaveVisionSourceHandle VisionHandle;
+	if (!RegisterCommonScene(*this, Subsystem, States[0], DoorHandle, VisionHandle)
+		|| !TestTrue(TEXT("Fixed-seed shared illumination registers"),
+			Subsystem->RegisterIlluminationSource(Illumination(), nullptr).IsValid()))
+	{
+		return true;
+	}
+
+	TArray<int64> WarmRebuilt;
+	TArray<int64> WarmReused;
+	TArray<TArray<FVector>> WarmVertices;
+	for (int32 Step = 1; Step <= States.Num(); ++Step)
+	{
+		const int32 StateIndex = Step % States.Num();
+		TestTrue(TEXT("Fixed-seed warm publication succeeds"),
+			Subsystem->UpdateOccluder(DoorHandle, States[StateIndex], true, true));
+		const FSightWeaveDynamicUpdateStageMetrics& Metrics =
+			Subsystem->GetLastDynamicUpdateStageMetrics();
+		TestEqual(TEXT("Fixed-seed warm path succeeds incrementally"),
+			Metrics.VisionIncrementalSuccessCount, int64(1));
+		TestEqual(TEXT("Fixed-seed warm path has no fallback"),
+			Metrics.VisionIncrementalFallbackCount, int64(0));
+		WarmRebuilt.Add(Metrics.VisionIncrementalRebuiltRayCount);
+		WarmReused.Add(Metrics.VisionIncrementalReusedRayCount);
+		const FSightWeaveFrameSnapshot Snapshot = Subsystem->GetPublishedSnapshot();
+		const FSightWeaveVisionSnapshotEntry* Entry =
+			FindVisionEntry(Snapshot, VisionHandle);
+		WarmVertices.Add(Entry ? Entry->Polygon.Vertices : TArray<FVector>());
+		SnapshotMatchesFreshFullSolve(
+			*this,
+			*Subsystem,
+			VisionHandle,
+			*FString::Printf(TEXT("fixed-seed warm state %d"), StateIndex));
+	}
+	const FSightWeavePreparedEventIndexStats WarmPrepared =
+		Subsystem->GetPreparedEventIndexStats();
+
+	for (int32 Step = 1; Step <= States.Num(); ++Step)
+	{
+		const int32 StateIndex = Step % States.Num();
+		TestTrue(TEXT("Fixed-seed replay publication succeeds"),
+			Subsystem->UpdateOccluder(DoorHandle, States[StateIndex], true, true));
+		const FSightWeaveDynamicUpdateStageMetrics& Metrics =
+			Subsystem->GetLastDynamicUpdateStageMetrics();
+		TestEqual(TEXT("Fixed-seed replay path succeeds incrementally"),
+			Metrics.VisionIncrementalSuccessCount, int64(1));
+		TestEqual(TEXT("Fixed-seed replay path has no fallback"),
+			Metrics.VisionIncrementalFallbackCount, int64(0));
+		TestEqual(TEXT("Fixed-seed rebuilt-ray count is deterministic"),
+			Metrics.VisionIncrementalRebuiltRayCount, WarmRebuilt[Step - 1]);
+		TestEqual(TEXT("Fixed-seed reused-ray count is deterministic"),
+			Metrics.VisionIncrementalReusedRayCount, WarmReused[Step - 1]);
+		const FSightWeaveFrameSnapshot Snapshot = Subsystem->GetPublishedSnapshot();
+		const FSightWeaveVisionSnapshotEntry* Entry =
+			FindVisionEntry(Snapshot, VisionHandle);
+		TestTrue(TEXT("Fixed-seed polygon is bitwise deterministic"),
+			Entry && Entry->Polygon.Vertices == WarmVertices[Step - 1]);
+		SnapshotMatchesFreshFullSolve(
+			*this,
+			*Subsystem,
+			VisionHandle,
+			*FString::Printf(TEXT("fixed-seed replay state %d"), StateIndex));
+	}
+	const FSightWeavePreparedEventIndexStats ReplayPrepared =
+		Subsystem->GetPreparedEventIndexStats();
+	TestEqual(TEXT("Prepared entries do not rebuild after fixed-seed warmup"),
+		ReplayPrepared.FullRebuildCount, WarmPrepared.FullRebuildCount);
+	TestEqual(TEXT("Prepared high-water bytes do not grow after fixed-seed warmup"),
+		ReplayPrepared.HighWaterAllocatedBytes, WarmPrepared.HighWaterAllocatedBytes);
 	return true;
 }
 

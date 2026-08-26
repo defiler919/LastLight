@@ -132,7 +132,7 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 
 ### Work
 
-- choose atlas versus texture-array path using a focused UE 5.8.1 spike;
+- implement the M3.0-selected sparse/tiled floor-local R8 atlas in a separate `SightWeaveRender` Runtime module, using transient compatibility-profile scratch and the immutable revisioned contract in `SIGHTWEAVE_M3_GPU_MASK_CONTRACT.md`;
 - within each Knowledge Owner/floor scope, group only sources with semantically identical complete compatibility configurations `p`, rasterizing `VisionMask[p]` and `CompatibleIlluminationMask[p]` into paired stable world-space resources while keeping illumination-bypass polygons separate;
 - derive `EffectiveLiveMask = Union over p (VisionMask[p] INTERSECT CompatibleIlluminationMask[p]) UNION BypassVisionMask`, then apply live suppression, using the same registration data and immutable revision as CPU authority;
 - permit grouped textures, array layers, bitmasks, or multiple passes only when they preserve the complete compatibility relation; never merge incompatible channels into a single global pair;
@@ -219,7 +219,7 @@ The plugin is disabled or unused by `/Game/Maps/L_Prototype`. No DARKWELL charac
 - create neutral example actors/maps and user documentation;
 - verify clean-project installation and removal;
 - verify UE 5.8.1 DX12/SM6, Editor, and packaged Development;
-- test fallback mask path if the chosen texture-array/RDG path is not universal;
+- test the selected RDG external-pooled atlas path on declared RHIs and fail closed where required capabilities are unavailable; texture arrays/clipmaps remain separately approved fallbacks, never silent authority changes;
 - collect performance on the approved minimum hardware and declared workloads;
 - enforce visible warnings/counters for caps, solve latency, memory growth, and unsupported content;
 - audit public headers/names for game leakage and future binary/API stability.

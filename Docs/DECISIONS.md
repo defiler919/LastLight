@@ -46,6 +46,7 @@
 | Ammunition | Scarce; shells crafted at workbenches |
 | First milestone | Greybox gameplay prototype before a polished vertical slice |
 | Independent vision plugin identity | `SightWeave`; modules `SightWeaveRuntime`, `SightWeaveEditor`, and `SightWeaveTests`; public C++ types use the `SightWeave` prefix |
+| SightWeave GPU live mask | M3.0 freezes CPU-triangulated polygons -> GPU dirty-tile rasterization in a new `SightWeaveRender` Runtime module; a stable floor-local sparse R8 atlas is partitioned by Knowledge Owner/floor, compatibility intermediates are transient, and GPU failure is black/fail-closed without changing CPU authority |
 
 ## Deferred decisions
 

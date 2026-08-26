@@ -377,10 +377,7 @@ The plugin does not read a blurred GPU mask—or a rendered-light buffer—back 
 
 ## World-space mask design
 
-Use floor-local, stable XY-to-UV mapping. Two implementation candidates must be spiked after approval:
-
-1. sparse/tiled `UTextureRenderTarget2D` atlas managed per active knowledge owner/floor;
-2. `UTextureRenderTarget2DArray` or render-graph pooled texture layers where UE 5.8.1 platform support and material sampling are reliable.
+Use floor-local, stable XY-to-UV mapping. M3.0 selected a sparse/tiled R8 atlas of render-graph external pooled targets, partitioned by active Knowledge Owner/floor. Compatibility-profile resources are transient dirty-tile scratch; only the derived effective-live atlas is persistent. Texture arrays and clipmaps remain later scale/fallback candidates, not the v1 baseline. The immutable handoff, page/tile layout, precision tiers, resource lifecycle, and fail-closed semantics are frozen in `SIGHTWEAVE_M3_GPU_MASK_CONTRACT.md` and `SIGHTWEAVE_M3_GPU_MASK_ARCHITECTURE.md`.
 
 The CPU memory store uses packed bits at a configurable world resolution. No default is selected yet: the same reference scenes and motion paths must compare 2.5 cm, 5 cm, 10 cm, and 25 cm for boundary fidelity, CPU update time, GPU dirty-upload cost, runtime bytes, and compressed save bytes before a shipping value is chosen. GPU memory tiles use R8 for filterable presentation. Vision and illumination masks may use a separately measured finer active-window resolution because they are not saved. Tile borders include a one/filter-radius gutter to avoid seams. World origin and tile indices, not camera position, determine UVs.
 
@@ -702,7 +699,7 @@ The largest technical risk is not polygon computation itself; it is preserving c
 ## Alternatives and fallback decisions
 
 1. **If optimized angular sweep proves fragile**, ship the tested endpoint-ray reference solver for v1 with authoring/source-count limits; optimize only after profile evidence.
-2. **If texture-array support complicates UE 5.8.1 material/RHI compatibility**, use a floor/tile atlas with explicit UV metadata. Authority remains unchanged.
+2. **If the selected atlas cannot meet a later approved scale workload**, evaluate texture arrays or a world-stable clipmap behind the same M3 packet and mask semantics. Do not fall back to screen-space or Scene Capture authority.
 3. **If automatic subject proxies are unreliable**, narrow v1 to immutable environment, visible-only/never-remember subjects, and adapter-provided snapshot proxies. Do not show current dynamic state as memory.
 4. **If GBuffer memory styling misses required materials**, provide opaque memory-proxy materials first. Evaluate curated Scene Capture only as optional presentation after cost/feature tests.
 5. **If a post-v1 map requires simultaneous stacked-floor sight**, evaluate explicit portal/layer composition as a separately approved extension; do not weaken the v1 one-active-floor rule or jump to full voxel fog without evidence.

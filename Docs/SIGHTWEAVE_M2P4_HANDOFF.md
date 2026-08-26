@@ -2,23 +2,25 @@
 
 ## Status
 
-`BLOCKED — FINAL POST-CHANGE ELEVATED CONTEXT-SWITCH ETW NOT ACQUIRED`
+`PARTIAL — FINAL BROAD-DYNAMIC-DOOR INTRINSIC P99 IS 300.2 US`
 
-The UE 5.8.1 bundled .NET/UBT gate and the 30-minute NVIDIA Studio Driver
-610.88 stability gate passed. Runtime correctness, three-run allocation proof,
-ordinary-process attribution, 36,000-frame NullRHI and D3D12 soaks, final
-regression, Editor build, BuildPlugin clean-host matrix, Shipping isolation,
-and Lab smokes are complete. The required post-change administrator
-ContextSwitch/CSwitch acceptance remains blocked because Windows canceled all
-three visible UAC elevation attempts before the child collector started. Wall
-time and cycles are not presented as intrinsic CPU time. Full final evidence,
-retained failures, hashes, recovery commands, and remaining risk are in
+The fresh-boot 30-minute NVIDIA Studio Driver 610.88 stability gate passed, and
+the final post-change administrator ContextSwitch/CSwitch workflow completed in
+one high-integrity child. Batch512 passes its authoritative intrinsic gate at
+on-CPU p50/p95/p99 `92.1/135.8/160.9 us`. Broad dynamic door does not: its
+on-CPU p50/p95/p99/max is `153.7/235.7/300.2/427.2 us` against the unchanged
+`p99 <250 us` contract. Classification closed with 43 Plugin CPU, 4 Scheduler,
+0 GPU/driver, and 0 Unknown broad samples. Allocation proof, replacement
+36,000-frame NullRHI and D3D12 soaks, regression, Editor build, BuildPlugin,
+clean-host matrix, and Shipping isolation are also complete. Wall time and raw
+cycles are not presented as intrinsic CPU time. Full evidence, retained
+failures, hashes, and remaining risk are in
 `Docs/SIGHTWEAVE_M2P4_FINAL_VALIDATION.md`.
 
-M2P.4 is limited to elevated ContextSwitch attribution, evidence-driven CPU
-tail closure, and an exact incremental dynamic-occluder angular-sector update
-only if authoritative on-CPU evidence proves it is required. Do not start M3,
-GPU masks, post processing, memory textures, DARKWELL gameplay integration,
+Any continuation of M2P.4 is limited to the authority-proven broad-door CPU
+tail and the required replacement validation. The dynamic-sector path and
+final ContextSwitch attribution now exist. Do not start M3, GPU masks, post
+processing, memory textures, DARKWELL gameplay integration,
 `/Game/Maps/L_Prototype`, a `main` merge, or unrelated work.
 
 ## Git state
@@ -27,8 +29,11 @@ GPU masks, post processing, memory textures, DARKWELL gameplay integration,
 - Verified baseline SHA: `e3e5a833e58ce4571653fcef0f7b44698ae80dae`
 - Working branch: `codex/m2p4-sightweave-etw-dynamic-sector`
 - Resumed-validation baseline: `68d19c6fa479f7a64cbbe76e493cc2acbbfffd63`
+- Final-ETW resumed baseline: `0c6eb93186e8dd3c1f640d06eb741f4b054b4185`
 - NVIDIA stability checkpoint: `28943d7613afa7fb87c7659d5885a33a7e4cabdd`
 - Allocation-supported production optimization: `2e50de8dbff5d606126bce2aa344b048b1394ae8`
+- ETW-supported reused-ray optimization:
+  `1462afa65dbb3c338d6d21166bcb26144e5f26c6`
 - Final validation checkpoint: the commit containing
   `Docs/SIGHTWEAVE_M2P4_FINAL_VALIDATION.md` and this updated handoff
 - The company workstation's local-only `Darkwell.uproject`
@@ -408,10 +413,11 @@ and VC/CRT libraries. The generated untracked 367-byte
 `Plugins/SightWeave/Config/FilterPlugin.ini` template was inspected and removed;
 it was not staged or committed.
 
-### NVIDIA host instability blocks final performance sampling
+### Historical NVIDIA host instability (resolved before final sampling)
 
-The independent NVIDIA fault is active and therefore blocks clean performance
-evidence. It is not attributed to bundled dotnet or UBT:
+The independent NVIDIA fault was active at this checkpoint and therefore
+blocked clean performance evidence at that time. It was not attributed to
+bundled dotnet or UBT:
 
 - Application Error 1000 at `2026-08-25 14:15:21 +08:00` reports
   `C:\Program Files\NVIDIA Corporation\NvContainer\nvcontainer.exe`, version
@@ -427,18 +433,19 @@ evidence. It is not attributed to bundled dotnet or UBT:
   `17:04:29`; the termination count reached 14 and Win32 service
   `ExitCode=14109` while the service remained stopped.
 
-Because the host-stability prerequisite is false, no post-change formal ETW
+Because the host-stability prerequisite was false, no post-change formal ETW
 attribution, allocation proof, 36,000-frame NullRHI soak, 36,000-frame rendered
 D3D12 soak, or final performance-contract verdict was started. Running those
 commands would knowingly contaminate the evidence. The prior calibrated/formal
 ETW artifacts remain valid historical authorization for the design, but cannot
 serve as post-change acceptance evidence.
 
-This block does not reopen the .NET/UBT gate: all post-Verify build, UAT, and
+That historical block did not reopen the .NET/UBT gate: all post-Verify build, UAT, and
 automation invocations used the UE bundled host without another `0xe0434352`
-crash. Toolchain state is `COMPLETED`; overall M2P.4 validation is `PARTIAL` and
-final performance acceptance is externally `BLOCKED` until the NVIDIA service
-is repaired and stable.
+crash. Toolchain state was `COMPLETED`; overall M2P.4 validation was `PARTIAL`
+and final performance acceptance was externally `BLOCKED` until the NVIDIA
+service was repaired and stable. The following stability gate and final
+2026-08-26 workflow closed that external block.
 
 ### Post-reinstall NVIDIA stability gate (2026-08-25)
 
@@ -561,9 +568,64 @@ intrinsic p99 is <=200 us; design and implement Dynamic angular-sector update
 because Broad Door intrinsic p99 is >=250 us. The required architecture now
 exists at `Docs/SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md`. Production
 source was unchanged at the classification/architecture checkpoints; the later
-unverified edits are preserved under the dotnet crash pause documented above.
+then-unverified edits were preserved under the dotnet crash pause documented
+above and were subsequently covered by the replacement evidence below.
 
-## Current tail boundary inherited from M2P.3
+### Final post-change elevated ETW and replacement validation (2026-08-26)
+
+The final resumed baseline was
+`0c6eb93186e8dd3c1f640d06eb741f4b054b4185`. A fresh Windows boot at
+08:33:41.500 established NVIDIA PID 5584. The 09:04:04 formal gate, after
+30.378 minutes, and the 09:49:58 post-run gate, after 76.287 minutes, both
+proved Running/Automatic, unchanged PID, zero required Application/System/GPU/
+WER fault counts, and RTX 4060 Studio Driver 610.88 through `nvidia-smi`.
+
+The first post-dynamic/capacity ten-process formal set is preserved at
+`Saved/SightWeaveM2P4/EtwAttribution/post-change-formal-20260826`. It failed
+closed with broad on-CPU p99 294.4 us and 13 Unknown combined-motion samples.
+That evidence authorized one bounded Runtime change: dynamic rays now use a
+monotonic dirty-sector cursor, defer source radius/trigonometry until an actual
+rebuild, and cache active-interval maximum origin distance. It does not change
+sector boundaries, fallbacks, topology, or output. Commit:
+`1462afa65dbb3c338d6d21166bcb26144e5f26c6`.
+
+Because production code changed, all affected evidence was replaced:
+
+- Editor Development build, DynamicSector 4/4, and RuntimeAuthority
+  differential 1/1 passed;
+- final allocation capture/analyze passed with all 20 formal workloads at exact
+  zero under `M2P4PostRayReuseElevatedFinal_20260826`;
+- replacement NullRHI and D3D12 soaks each completed 36,000 frames/600 seconds
+  with zero correctness/capacity failures;
+- serial regression, BuildPlugin, clean-host Editor Development, Game
+  Development, and Game Shipping completed; all retained performance failures
+  remain in the reports;
+- final high-integrity child proved Administrator role true, High Mandatory
+  Level `S-1-16-12288`, `fltmc` exit 0, and working WPR kernel permissions.
+
+Final calibration root:
+`Saved/SightWeaveM2P4/EtwCalibration/post-ray-reuse-final-20260826`. It closed
+188/188 timelines with zero event loss, buffer loss, or Unknown and passed all
+compute/memory/sleep/yield/preemption/migration assertions.
+
+Final authority root:
+`Saved/SightWeaveM2P4/EtwAttribution/post-ray-reuse-formal-20260826`. Ten unique
+PIDs produced 10,100 Batch, 3,140 Door, and 105,120 marker rows. PID/TID/QPC
+ownership mismatch, unclosed timeline, event loss, buffer loss, and analyzer
+Unknown are all zero.
+
+| Workload | Samples | on-CPU p50 / p95 / p99 / max us | ready p99 / blocked p99 us | switches / preemptions / migrations | Classification | Contract |
+|---|---:|---:|---:|---:|---|---|
+| Batch512 | 10,100 | 92.1 / 135.8 / 160.9 / 437.3 | 18.6 / 0.0 | 291 / 291 / 208 | 10,036 within; 11 Plugin CPU; 53 Scheduler; 0 GPU/driver; 0 Unknown | pass |
+| broad dynamic door 4v2l | 1,010 | 153.7 / 235.7 / 300.2 / 427.2 | 22.1 / 0.0 | 43 / 43 / 27 | 963 within; 43 Plugin CPU; 4 Scheduler; 0 GPU/driver; 0 Unknown | **fail** |
+
+Forty-two of the 43 broad Plugin CPU tails are led by `vision_solve`; one is
+led by `illumination_solve`. M2P.4 is therefore `PARTIAL`: final acquisition is
+no longer blocked, Batch is closed, but the unchanged broad intrinsic contract
+is not. No M3, gameplay, GPU-mask, post-process, or memory-layer work is
+authorized by this result.
+
+## Historical tail boundary inherited from M2P.3
 
 - Batch512: 100 ordinary distributions/10,100 samples; aggregate wall
   p50/p95/p99/max 92.6/141.5/177.8/1468.7 us. Of 62 samples above 200 us, the
@@ -589,8 +651,12 @@ unverified edits are preserved under the dotnet crash pause documented above.
 5. [done] Implement an exact dynamic angular-sector architecture and production path
    only if Dynamic on-CPU p99 remains at or above 250 us. Likewise modify Batch
    only if authoritative stage on-CPU evidence proves a >200 us plugin tail.
-6. [blocked by NVIDIA host instability] Re-run both 36,000-frame soaks and the complete validation matrix before
-   finalization.
+6. [done] Re-run both 36,000-frame soaks and the complete validation matrix after
+   the reused-ray production change.
+7. [done] Acquire and fail-closed classify the final ten-process administrator
+   ContextSwitch/CSwitch matrix.
+8. [open] Keep M2P.4 `PARTIAL` while broad dynamic-door intrinsic p99 remains
+   above 250 us. Do not loosen or split the contract.
 
 ## Checkpoints
 
@@ -602,10 +668,14 @@ unverified edits are preserved under the dotnet crash pause documented above.
   changes)
 - [x] `feat: add exact dynamic occluder sector updates` (`5251d3c`, pushed)
 - [x] `fix: make SightWeave runtime clean-host portable` (`b7da610`, pushed)
-- [ ] `perf: close confirmed SightWeave intrinsic tails` (only if supported)
+- [x] `perf: skip work for reused dynamic-sector rays` (`1462afa`, pushed)
 - [x] `test: expand SightWeave incremental authority coverage` (`912323f`, pushed)
-- [ ] `test: finalize SightWeave CPU performance contracts`
-- [ ] `docs: record SightWeave CPU authority finalization`
+- [x] replacement differential/allocation/soak/regression/package/clean-host
+  validation completed and preserved
+- [x] final elevated ETW acquired and classified fail-closed
+- [ ] broad dynamic-door intrinsic p99 `<250 us`
+- [x] `docs: record SightWeave CPU authority finalization` (this final
+  documentation checkpoint)
 
 After every checkpoint, inspect the diff, stage exact paths only, exclude
 `Darkwell.uproject`, run `git diff --cached --check`, commit, push immediately,
@@ -647,10 +717,11 @@ git -c safe.directory=D:/UE_projects/LastLight status --short --branch
 git -c safe.directory=D:/UE_projects/LastLight rev-parse HEAD
 ```
 
-Then read this document, `Docs/SIGHTWEAVE_M2P4_ETW_CLASSIFICATION.md`,
-`Docs/SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md`, and
-`Docs/SIGHTWEAVE_M2P3_FINAL_VALIDATION.md`. Do not start final ETW, allocation,
-soak, D3D12, or performance-contract sampling until
-`NvContainerLocalSystem` remains stable with no new Application 1000/1001 or
-System 7023/7031 failures. Preserve `Darkwell.uproject`; Batch optimization
-remains forbidden without new authoritative evidence.
+Then read this document, `Docs/SIGHTWEAVE_M2P4_FINAL_VALIDATION.md`,
+`Docs/SIGHTWEAVE_M2P4_ETW_CLASSIFICATION.md`, and
+`Docs/SIGHTWEAVE_M2P4_DYNAMIC_SECTOR_ARCHITECTURE.md`. Final ETW and all
+post-reused-ray replacement evidence are already preserved; do not substitute
+older wall-time matrices for it. Preserve `Darkwell.uproject`, do not enter M3,
+and do not change Batch. If work resumes, stay within M2P.4 and target only the
+authority-proven broad-door `vision_solve` tail, then replace every affected
+validation artifact again.

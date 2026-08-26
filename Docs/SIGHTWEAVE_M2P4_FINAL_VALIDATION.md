@@ -2,30 +2,34 @@
 
 ## Verdict
 
-**Status: `BLOCKED`**
+**Status: `PARTIAL`**
 
-The production optimization, correctness coverage, allocation proof, clean
-NVIDIA gate, three-process performance sampling, 36,000-frame NullRHI and
-D3D12 soaks, full regression, Editor build, clean-host package matrix, Lab
-smokes, dependency audit, and remote-ready Git state are complete. The final
-acceptance cannot be labelled `COMPLETED` because the required post-change
-administrator ContextSwitch/CSwitch trace was not acquired. Three explicit
-`Start-Process -Verb RunAs` attempts returned the Windows "operation canceled"
-result at the UAC boundary. No elevation bypass was attempted and no partial
-trace was treated as evidence.
+The final post-change administrator ContextSwitch/CSwitch workflow is now
+complete, including calibration, ten independent attribution processes,
+allocation proof, classification, and post-run NVIDIA checks in one elevated
+child. Batch512 passes its authoritative intrinsic gate. M2P.4 cannot be
+labelled `COMPLETED`, however, because broad dynamic door on-CPU p99 is
+300.2 us against the unchanged `<250 us` contract. The failure is intrinsic:
+43 broad samples are Plugin CPU, 4 are Scheduler/Preemption, and 0 are
+GPU/driver or Unknown. All slow samples and both failed pre-fix/post-fix formal
+matrices remain preserved.
 
-Consequently, this report keeps wall time and thread-cycle evidence separate
-and does **not** relabel either as intrinsic running CPU microseconds. The
-post-change intrinsic CPU verdict, exact running/wait/preemption intervals, and
-authoritative classification of the remaining slow samples are unverified.
+Wall time and thread cycles remain auxiliary evidence only. The verdict below
+uses reconstructed running intervals from kernel CSwitch/ReadyThread data;
+wall time and raw cycles are not relabelled as intrinsic CPU microseconds.
 
 ## Scope and checkpoints
 
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`.
 - Branch: `codex/m2p4-sightweave-etw-dynamic-sector`.
-- Resumed-validation baseline: `68d19c6fa479f7a64cbbe76e493cc2acbbfffd63`.
+- Original resumed-validation baseline:
+  `68d19c6fa479f7a64cbbe76e493cc2acbbfffd63`.
+- Final-ETW resumed baseline:
+  `0c6eb93186e8dd3c1f640d06eb741f4b054b4185`.
 - NVIDIA stability checkpoint: `28943d7613afa7fb87c7659d5885a33a7e4cabdd`.
 - Evidence-driven capacity fix: `2e50de8dbff5d606126bce2aa344b048b1394ae8`.
+- Evidence-driven reused-ray fix:
+  `1462afa65dbb3c338d6d21166bcb26144e5f26c6`.
 - This document and the final handoff are committed as the final branch
   checkpoint; its exact SHA is the final local/upstream/`ls-remote` SHA.
 - The local `Darkwell.uproject` `EngineAssociation` GUID difference was never
@@ -54,20 +58,58 @@ NVIDIA Application events, zero `nvlddmkm`/Display System events, zero NVIDIA
 WER reports, and no `Device Removed`, DXGI, GPU crash, or TDR failure in the
 Unreal logs.
 
-## Elevated ETW acceptance blocker
+The final resumed run used a fresh Windows boot at
+`2026-08-26 08:33:41.500 +08:00`. Its 30-minute gate passed at
+`09:04:04 +08:00`, after 30.378 minutes. `NvContainerLocalSystem` remained
+Running/Automatic with startup PID 5584 and process creation time 08:33:52.
+Application 1000/1001, System NVIDIA 7023/7031, nvlddmkm/Display, GPU fault,
+NVIDIA/LiveKernelEvent WER, TDR, Device Removed, DXGI, and GPU crash counts were
+all zero. `nvidia-smi` and the NVIDIA App installation record independently
+confirmed RTX 4060, Studio Driver 610.88. The same conditions still passed at
+09:49:58 after 76.287 minutes of uptime and all final captures; PID remained
+5584.
 
-The required final ETW workflow was prepared to run the calibration, ten
-ordinary attribution processes, and allocation proof in one elevated child.
-Windows canceled all three visible UAC attempts before the child started. No
-post-change ETL, context-switch timeline, or elevated run log was created.
+## Final elevated ETW acceptance
 
-The older administrator ETW set under
-`Saved/SightWeaveM2P4/EtwAttribution/admin-uac-formal01` predates the dynamic
-sector implementation and the capacity-retention fix. It remains useful
-historical evidence but is not substituted for post-change acceptance. The
-ordinary-process timing sampler also showed that Windows `GetThreadTimes` has
-insufficient resolution at these microsecond intervals; its zero-valued fields
-are not used as CPU time.
+The final child proved `Administrator=true`, High Mandatory Level
+`S-1-16-12288`, `fltmc` exit 0, and effective WPR kernel permissions. The final
+calibration at `Saved/SightWeaveM2P4/EtwCalibration/post-ray-reuse-final-20260826`
+closed 188/188 timelines with 0 event loss, 0 buffer loss, and 0 Unknown. Its
+compute, memory, sleep, loaded-yield, preemption, and migration assertions all
+passed. The calibration ETL is 348,127,232 bytes, SHA-256
+`308541315CAAC52D52719A185768A9F4004F9E68312601D657B66B88CB298B40`.
+
+The authority root is
+`Saved/SightWeaveM2P4/EtwAttribution/post-ray-reuse-formal-20260826`:
+
+- 10 independent processes and 10 distinct captured PIDs;
+- 100 Batch distributions, 10,100 Batch totals, and 3,140 Door totals;
+- 105,120 total/control/stage markers;
+- 10 ETLs totalling 3,438,280,704 bytes;
+- invalid PID/TID, invalid QPC, run/PID ownership mismatch, unclosed timeline,
+  event loss, buffer loss, and analyzer Unknown: all 0;
+- combined attribution SHA-256:
+  `8203F301864EBE653E0B0869AE3ACEA7A564737A4BB3E3DBA78E924279F696B8`;
+- authority classification SHA-256:
+  `3746F3BFE98BA13901449AAFEE4B8F81EE7664F1EFBAD85F5D0BF16B6045AE07`.
+
+| Workload | Samples | on-CPU p50 / p95 / p99 / max us | ready p99 / blocked p99 us | context switches / preemptions / migrations | Classification | Gate |
+|---|---:|---:|---:|---:|---|---|
+| Batch512 | 10,100 | 92.1 / 135.8 / 160.9 / 437.3 | 18.6 / 0.0 | 291 / 291 / 208 | 10,036 within; 11 Plugin CPU; 53 Scheduler; 0 GPU/driver; 0 Unknown | pass: p50<=150, p95<=180, p99<=200 |
+| broad dynamic door 4v2l | 1,010 | 153.7 / 235.7 / 300.2 / 427.2 | 22.1 / 0.0 | 43 / 43 / 27 | 963 within; 43 Plugin CPU; 4 Scheduler; 0 GPU/driver; 0 Unknown | **fail:** p50<250, p99>=250 |
+
+Forty-two of the 43 broad Plugin CPU tails have `vision_solve` as their largest
+stage-growth contributor; one is `illumination_solve`. GPU/driver is zero
+because the host/event/WER/log gates stayed clean, not because wall time or
+cycles were converted into GPU evidence. Migration/Frequency was not promoted
+as an independent class; migrated off-CPU intervals remain explicit scheduler
+evidence.
+
+The first post-dynamic/capacity formal set at
+`Saved/SightWeaveM2P4/EtwAttribution/post-change-formal-20260826` is also
+preserved. It failed closed with broad on-CPU p99 294.4 us and 13 Unknown
+combined-motion classifications. That evidence authorized the minimal
+reused-ray production fix; it is not substituted for the final matrix above.
 
 ## Allocation proof and the retained-capacity fix
 
@@ -109,13 +151,26 @@ zero set. The final proof files are:
 
 The raw trace and CSV remain ignored and are not committed.
 
+After the reused-ray change, the final proof ran in the same elevated child as
+the final ETW workflow. Capture and analysis both passed at
+`Saved/SightWeaveM2P1/AllocationProof/M2P4PostRayReuseElevatedFinal_20260826`.
+All 20 formal workloads remained exactly zero allocation calls, zero
+reallocation calls, and zero allocated bytes. The 433,372,779-byte `.utrace`
+SHA-256 is
+`FD382AE16F0900D327468300229DB98CC9AF4DE48D6AD75CF995068EBD01E7C7`;
+the analyzed CSV SHA-256 is
+`88CAF6F666F92E7D9E687BCD8075435851F2FCD8B6BDD4C5D4E77D01C9550689`.
+The six nonzero evidence-only motion range/held/teleport rows remain present
+and are not represented as formal warmed-path results.
+
 ## Ordinary-process attribution
 
 `final-post-nvidia-wall-20260825` ran ten serial ordinary processes without
 affinity or priority changes. Every CSV sample records process/run, automation
 thread ID, start/end processor, migration, frequency, page faults, thread
-cycles, wall time, and SightWeave stage metrics. These classifications are
-diagnostic only because CSwitch ETW is missing.
+cycles, wall time, and SightWeave stage metrics. These historical
+classifications were diagnostic only; the final administrator CSwitch matrix
+above now supersedes them for intrinsic acceptance.
 
 | Workload | Processes / samples | wall p50 / p95 / p99 / p99.9 / max us | Provisional slow classification |
 |---|---:|---:|---|
@@ -224,10 +279,10 @@ pollution. Code review also found no leaked worker: the preceding scratch
 
 The ordinary 10-process matrix independently produced 98/100 passing
 distributions, with the two failures entirely composed of core-migration
-samples as described above. This narrows the cause but cannot replace the
-missing ContextSwitch proof. Batch final acceptance is therefore `BLOCKED`,
-not waived and not converted into a production rewrite without authoritative
-on-CPU evidence.
+samples as described above. It did not replace ContextSwitch proof. The final
+administrator matrix now closes Batch intrinsic acceptance at on-CPU
+p50/p95/p99 `92.1/135.8/160.9 us`; all earlier wall-time failures remain
+retained as auxiliary evidence.
 
 ## Soaks
 
@@ -250,6 +305,18 @@ The rendered log proves Default RHI D3D12, SM6, NVIDIA adapter 0, feature level
 |---|---:|---|
 | `Saved/SightWeaveM2P3/Soak/m2p4-final-nullrhi-36000-20260825/Raw/frames.csv` | 5,504,231 | `689F5FD6298523E6FF20997A70C99B47BF2956EBD039111613B254EACA2441FA` |
 | `Saved/SightWeaveM2P3/Soak/m2p4-final-d3d12-36000-20260825/Raw/frames.csv` | 5,522,491 | `BE559285F49211BB32CE6499544790411BE95D26B1B3A68F6B6DBEA0E2FEF165` |
+
+The reused-ray production change triggered complete replacement soaks rather
+than reuse of pre-change evidence:
+
+| Mode | Root | wall p50 / p95 / p99 / max us | Correctness / capacity | Raw frames SHA-256 |
+|---|---|---:|---|---|
+| NullRHI | `Saved/SightWeaveM2P3/Soak/m2p4-post-ray-reuse-nullrhi-36000-20260826` | 83.4 / 208.0 / 283.0 / 2522.3 | 0 / 0 | `21A3719AC7B4F8798D06A4BE35A448CFFFD3D1633ECF65630CF428353B8A994E` |
+| D3D12 SM6, RTX 4060 | `Saved/SightWeaveM2P3/Soak/m2p4-post-ray-reuse-d3d12-36000-20260826` | 91.3 / 225.8 / 297.5 / 936.6 | 0 / 0 | `D9BCFCBA7154984BF9666FA425673C98DCE6D2613093D99A53C84F66FE650BA4` |
+
+Each replacement run measured 36,000 frames over the same 600-second simulated
+interval. NVIDIA event, WER, TDR, Device Removed, DXGI, and GPU-crash checks
+remained clean after the rendered run.
 
 ## Correctness and regression
 
@@ -279,6 +346,15 @@ Final serial regression reports:
 
 The full-suite pass does not erase the retained performance failures.
 
+The post-reused-ray serial replacement matrix is preserved at
+`Saved/SightWeaveM2P4/Final/post-ray-reuse-regression-20260826`: M1 21/21,
+M2 90/91, M2P 35/35, M2P1 7/7, M2P2 11/11, M2P3 4/4, M2P4 7/7, full
+SightWeave 111/112, and Darkwell 24/24. The two retained failures are the M2
+Prepared Event Index 4096 median gate and full-SightWeave Batch distribution 4
+p99 gate. They are performance assertions, not correctness failures. The
+summary wrapper's final `Measure-Object` formatting error occurred only after
+all reports were written and does not replace their individual results.
+
 ## Builds, package, Shipping isolation, and Lab
 
 - Final `Scripts/BuildEditor.ps1`: `DarkwellEditor Win64 Development`
@@ -304,6 +380,16 @@ The full-suite pass does not erase the retained performance failures.
   `authoritative=1`, `live=1`, `vision=1`, `bypass=1`, snapshot 58, and one
   vision source.
 
+After the reused-ray change, `Scripts/BuildEditor.ps1 -Configuration
+Development -EngineRoot D:\UE_5.8` rebuilt `DarkwellEditor Win64 Development`
+successfully. Focused DynamicSector 4/4 and RuntimeAuthority differential 1/1
+passed. A fresh `BuildPlugin` package at
+`C:\Users\defiler919\AppData\Local\Temp\SightWeaveM2P4PostRayReuse-20260826-0934`
+completed successfully; its clean-host UnrealEditor Development, UnrealGame
+Development, and UnrealGame Shipping builds all passed. The final package kept
+the same Runtime-only game products, four Runtime module dependencies, source
+isolation, and `dumpbin` dependency closure described above.
+
 ## Warning and severe-error audit
 
 - No ensure failure, assertion failure, fatal/critical error, unhandled
@@ -319,22 +405,28 @@ The full-suite pass does not erase the retained performance failures.
 - Other nonfatal engine/host warnings are ordinary headless scalability,
   navigation, stylus-driver, and editor-data messages.
 
-## Unverified items and remaining risk
+## Remaining risk and next step
 
-1. Post-change elevated ContextSwitch/CSwitch capture and intrinsic running CPU
-   distributions are not available.
-2. Exact ETW-backed running/wait/preemption, GPU/driver, and Unknown labels for
-   remaining Batch/broad-door tails are not closed.
-3. Batch has retained failures both in full-suite and expanded isolated
-   sampling; its strict final performance gate is not green.
-4. Broad-door ordinary wall p95/p99 exceed 250 us in the aggregate, but no
-   intrinsic verdict is made without ETW.
-5. The 36k soaks record capacity but not per-frame allocator calls; strict
-   allocation calls are proven in the separate marked Insights workload set.
+1. The final broad dynamic-door contract is not green: authoritative on-CPU
+   p99 is 300.2 us against the unchanged `<250 us` threshold. Forty-three
+   samples are Plugin CPU and 42 of those are led by `vision_solve`; this is the
+   only remaining production intrinsic acceptance gap.
+2. The final Batch intrinsic gate is closed and green. Retained ordinary and
+   automation wall-time failures are still recorded, but they do not override
+   the fail-closed CSwitch result or become intrinsic CPU microseconds.
+3. The marked Insights proof closes exact warmed formal allocation behavior;
+   the 36k soaks record correctness/capacity, not an inline allocator trace for
+   every frame.
+4. GPU/driver and Unknown counts are zero in the final classification. The
+   clean host gates support that result, but do not constitute a general waiver
+   for future driver or scheduler changes.
 
-These gaps are why the outcome is `BLOCKED`, even though the NVIDIA, runtime,
-correctness, allocation, soak, build, package, dependency, Lab, and Git work is
-otherwise complete.
+M2P.4 therefore remains `PARTIAL`, not `COMPLETED` and no longer externally
+`BLOCKED`. Do not enter M3. If work continues, it should stay within M2P.4 and
+target only the evidenced broad-door `vision_solve` intrinsic tail, followed by
+the same affected differential, allocation, soak, regression, package,
+clean-host, and elevated ten-process ETW replacement matrix. No threshold may
+be loosened or failed/slow evidence deleted.
 
 ## Exact recovery commands
 

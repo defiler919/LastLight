@@ -1,0 +1,21 @@
+// SightWeave M3.1 formal shader path: Windows D3D12 SM6.
+
+#include "/Engine/Public/Platform.ush"
+
+void SightWeaveSmokeVS(
+	uint VertexId : SV_VertexID,
+	out float4 OutPosition : SV_POSITION)
+{
+	const float2 Positions[3] =
+	{
+		float2(-1.0f, -1.0f),
+		float2(-1.0f, 3.0f),
+		float2(3.0f, -1.0f)
+	};
+	OutPosition = float4(Positions[VertexId], 0.0f, 1.0f);
+}
+
+float SightWeaveSmokePS() : SV_Target0
+{
+	return 0.0f;
+}

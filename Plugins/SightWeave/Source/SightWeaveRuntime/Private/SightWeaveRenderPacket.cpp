@@ -34,7 +34,7 @@ namespace
 		return Area;
 	}
 
-	bool LexicalPointLess(const FVector2D& A, const FVector2D& B)
+	bool PacketLexicalPointLess(const FVector2D& A, const FVector2D& B)
 	{
 		return A.X < B.X || (A.X == B.X && A.Y < B.Y);
 	}
@@ -44,7 +44,7 @@ namespace
 		int32 BestIndex = 0;
 		for (int32 Index = 1; Index < Vertices.Num(); ++Index)
 		{
-			if (LexicalPointLess(Vertices[Index], Vertices[BestIndex]))
+			if (PacketLexicalPointLess(Vertices[Index], Vertices[BestIndex]))
 			{
 				BestIndex = Index;
 			}

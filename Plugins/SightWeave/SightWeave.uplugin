@@ -11,6 +11,11 @@
 	"Installed": false,
 	"Modules": [
 		{
+			"Name": "SightWeaveRender",
+			"Type": "Runtime",
+			"LoadingPhase": "PostConfigInit"
+		},
+		{
 			"Name": "SightWeaveRuntime",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"

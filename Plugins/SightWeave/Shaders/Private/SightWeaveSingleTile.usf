@@ -400,6 +400,22 @@ float4 SightWeavePresentationTestPS(float4 Position : SV_POSITION) : SV_Target0
 		: 0.0f;
 }
 
+float4 SightWeaveFeatherPresentationTestPS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const uint SampleIndex = uint(Position.x);
+	if (SampleIndex >= TestSampleCount)
+	{
+		return 0.0f;
+	}
+	const float2 TranslatedWorld = TestTranslatedWorldPositions[SampleIndex];
+	if (!SightWeaveIsHardLive(TranslatedWorld))
+	{
+		return 0.0f;
+	}
+	const float Weight = SightWeaveSampleVisualFeather(TranslatedWorld - TranslatedFloorOrigin);
+	return TestSceneColors[SampleIndex] * Weight;
+}
+
 float2 TestWorldMin;
 float2 TestWorldStep;
 int2 TestOutputExtent;
@@ -411,4 +427,17 @@ float4 SightWeavePresentationBenchmarkPS(float4 Position : SV_POSITION) : SV_Tar
 	const float2 Gradient = (float2(Pixel) + 0.5f) / float2(TestOutputExtent);
 	const float4 SceneColor = float4(Gradient.x, Gradient.y, 0.5f, 1.0f);
 	return SightWeaveIsHardLive(TranslatedWorld) ? SceneColor : 0.0f;
+}
+
+float4 SightWeaveFeatherPresentationBenchmarkPS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const int2 Pixel = clamp(int2(Position.xy), int2(0, 0), TestOutputExtent - 1);
+	const float2 TranslatedWorld = TestWorldMin + (float2(Pixel) + 0.5f) * TestWorldStep;
+	if (!SightWeaveIsHardLive(TranslatedWorld))
+	{
+		return 0.0f;
+	}
+	const float2 Gradient = (float2(Pixel) + 0.5f) / float2(TestOutputExtent);
+	const float4 SceneColor = float4(Gradient.x, Gradient.y, 0.5f, 1.0f);
+	return SceneColor * SightWeaveSampleVisualFeather(TranslatedWorld - TranslatedFloorOrigin);
 }

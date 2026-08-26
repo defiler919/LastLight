@@ -152,6 +152,7 @@ FSightWeavePresentationBenchmark::Start(
 			const double ColdSetupStart = FPlatformTime::Seconds();
 			NewState->RenderState->ProcessPending_RenderThread(ColdGraph);
 			NewState->RenderState->PreparePresentationResources_RenderThread(ColdGraph);
+			NewState->RenderState->ProcessVisualFeather_RenderThread(ColdGraph);
 			FRDGTextureRef ColdOutput = NewState->RenderState->AddPresentationBenchmarkComposite_RenderThread(
 				ColdGraph, NewState->OutputExtent, NewState->WorldMin, NewState->WorldStep);
 			Result.ColdRenderThreadSetupMicroseconds =
@@ -173,8 +174,12 @@ FSightWeavePresentationBenchmark::Start(
 			Result.InitialPageAllocationCount = NewState->RenderState->GetPageAllocationCount_RenderThread();
 			Result.InitialScratchAllocationCount = NewState->RenderState->GetScratchAllocationCount_RenderThread();
 			Result.InitialResourceGeneration = NewState->RenderState->GetResourceGeneration_RenderThread();
+			Result.InitialFeatherTileDispatchCount =
+				NewState->RenderState->GetFeatherTileDispatchCount_RenderThread();
 			Result.ResidentTileCount = NewState->RenderState->GetResidentTileCount_RenderThread();
 			Result.AllocatedPageCount = NewState->RenderState->GetAllocatedPageCount_RenderThread();
+			Result.AllocatedFeatherPageCount =
+				NewState->RenderState->GetAllocatedFeatherPageCount_RenderThread();
 
 			NewState->WarmQueries.SetNum(NewState->WarmSampleCount);
 			Result.WarmRenderThreadViewSetupMicroseconds.Reserve(NewState->WarmSampleCount);
@@ -212,8 +217,21 @@ FSightWeavePresentationBenchmark::Start(
 			Result.FinalPageAllocationCount = NewState->RenderState->GetPageAllocationCount_RenderThread();
 			Result.FinalScratchAllocationCount = NewState->RenderState->GetScratchAllocationCount_RenderThread();
 			Result.FinalResourceGeneration = NewState->RenderState->GetResourceGeneration_RenderThread();
+			Result.FinalFeatherTileDispatchCount =
+				NewState->RenderState->GetFeatherTileDispatchCount_RenderThread();
+			Result.FeatherPageAllocationCount =
+				NewState->RenderState->GetFeatherPageAllocationCount_RenderThread();
+			Result.FeatherScratchAllocationCount =
+				NewState->RenderState->GetFeatherScratchAllocationCount_RenderThread();
+			Result.FeatherResourceGeneration =
+				NewState->RenderState->GetFeatherResourceGeneration_RenderThread();
 			Result.PersistentGPUBytes = static_cast<uint64>(Result.AllocatedPageCount) * 2048ull * 2048ull
+				+ static_cast<uint64>(Result.AllocatedFeatherPageCount) * 2048ull * 2048ull
 				+ 3ull * 256ull * 256ull
+				+ (Result.FeatherScratchAllocationCount > 0
+					? 2ull * SightWeave::VisualFeather::TransformWorkSize
+						* SightWeave::VisualFeather::TransformWorkSize * 8ull
+					: 0ull)
 				+ static_cast<uint64>(Result.ResidentTileCount) * sizeof(FIntVector4);
 			Result.TransientOutputBytes = static_cast<uint64>(NewState->OutputExtent.X)
 				* static_cast<uint64>(NewState->OutputExtent.Y) * 4ull;

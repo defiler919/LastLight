@@ -123,8 +123,17 @@ FSightWeavePresentationTestReadback::Start(
 				return;
 			}
 			NewState->RenderState->PreparePresentationResources_RenderThread(GraphBuilder);
+			NewState->RenderState->ProcessVisualFeather_RenderThread(GraphBuilder);
 			Failure.InitialPageTableUploadCount =
 				NewState->RenderState->GetPageTableUploadCount_RenderThread();
+			Failure.FeatherPageAllocationCount =
+				NewState->RenderState->GetFeatherPageAllocationCount_RenderThread();
+			Failure.FeatherScratchAllocationCount =
+				NewState->RenderState->GetFeatherScratchAllocationCount_RenderThread();
+			Failure.FeatherTileDispatchCount =
+				NewState->RenderState->GetFeatherTileDispatchCount_RenderThread();
+			Failure.FeatherResourceGeneration =
+				NewState->RenderState->GetFeatherResourceGeneration_RenderThread();
 
 			if (GSupportsTimestampRenderQueries)
 			{

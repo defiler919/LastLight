@@ -60,9 +60,21 @@ namespace SightWeaveSparseAtlasRenderPrivate
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
+	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeaveFeatherPresentationTestPassParameters, )
+		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveFullscreenVertexShader::FParameters, VertexShader)
+		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveFeatherPresentationTestPixelShader::FParameters, PixelShader)
+		RENDER_TARGET_BINDING_SLOTS()
+	END_SHADER_PARAMETER_STRUCT()
+
 	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeavePresentationBenchmarkPassParameters, )
 		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveFullscreenVertexShader::FParameters, VertexShader)
 		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeavePresentationBenchmarkPixelShader::FParameters, PixelShader)
+		RENDER_TARGET_BINDING_SLOTS()
+	END_SHADER_PARAMETER_STRUCT()
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeaveFeatherPresentationBenchmarkPassParameters, )
+		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveFullscreenVertexShader::FParameters, VertexShader)
+		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveFeatherPresentationBenchmarkPixelShader::FParameters, PixelShader)
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 #endif
@@ -1685,6 +1697,19 @@ int32 FSightWeaveSparseAtlasRenderState::GetAllocatedPageCount_RenderThread() co
 	return Count;
 }
 
+int32 FSightWeaveSparseAtlasRenderState::GetAllocatedFeatherPageCount_RenderThread() const
+{
+	int32 Count = 0;
+	for (const TUniquePtr<FScopeState>& Scope : Scopes)
+	{
+		for (const TRefCountPtr<IPooledRenderTarget>& Page : Scope->FeatherPages)
+		{
+			Count += Page.IsValid() ? 1 : 0;
+		}
+	}
+	return Count;
+}
+
 #if WITH_DEV_AUTOMATION_TESTS
 FRDGTextureRef FSightWeaveSparseAtlasRenderState::AddPresentationTestComposite_RenderThread(
 	FRDGBuilder& GraphBuilder,
@@ -1742,7 +1767,84 @@ FRDGTextureRef FSightWeaveSparseAtlasRenderState::AddPresentationTestComposite_R
 		GraphBuilder,
 		TEXT("SightWeave.Presentation.TestColors"),
 		MoveTemp(OwnedColors));
-
+	if (Binding->GetVisualFeather().IsEnabled())
+	{
+		if (bFeatherUpdateIncomplete
+			|| Binding->GetFeatherResourceGeneration() != Scope->FeatherResourceGeneration
+			|| Binding->GetFeatherAppliedRevision() != AppliedRevision)
+		{
+			AddClearRenderTargetPass(GraphBuilder, Output, FLinearColor::Black);
+			return Output;
+		}
+		FRDGTextureRef Dummy = GSystemTextures.GetBlackDummy(GraphBuilder);
+		FRDGTextureRef HardPages[4] = { Dummy, Dummy, Dummy, Dummy };
+		FRDGTextureRef FeatherPages[4] = { Dummy, Dummy, Dummy, Dummy };
+		for (int32 PageIndex = 0; PageIndex < Scope->Pages.Num() && PageIndex < 4; ++PageIndex)
+		{
+			if (Scope->Pages[PageIndex].IsValid())
+			{
+				if (!Scope->FeatherPages.IsValidIndex(PageIndex)
+					|| !Scope->FeatherPages[PageIndex].IsValid())
+				{
+					AddClearRenderTargetPass(GraphBuilder, Output, FLinearColor::Black);
+					return Output;
+				}
+				HardPages[PageIndex] = GraphBuilder.RegisterExternalTexture(
+					Scope->Pages[PageIndex], TEXT("SightWeave.FeatherTest.HardPage"));
+				FeatherPages[PageIndex] = GraphBuilder.RegisterExternalTexture(
+					Scope->FeatherPages[PageIndex], TEXT("SightWeave.FeatherTest.FeatherPage"));
+			}
+		}
+		TShaderMapRef<FSightWeaveFullscreenVertexShader> FeatherVertexShader(
+			GetGlobalShaderMap(GMaxRHIFeatureLevel));
+		TShaderMapRef<FSightWeaveFeatherPresentationTestPixelShader> FeatherPixelShader(
+			GetGlobalShaderMap(GMaxRHIFeatureLevel));
+		FSightWeaveFeatherPresentationTestPassParameters* FeatherParameters =
+			GraphBuilder.AllocParameters<FSightWeaveFeatherPresentationTestPassParameters>();
+		FeatherParameters->PixelShader.TestTranslatedWorldPositions = GraphBuilder.CreateSRV(PositionBuffer);
+		FeatherParameters->PixelShader.TestSceneColors = GraphBuilder.CreateSRV(ColorBuffer);
+		FeatherParameters->PixelShader.PageTable = GraphBuilder.CreateSRV(Scope->CurrentPageTable);
+		FeatherParameters->PixelShader.AtlasPage0 = HardPages[0];
+		FeatherParameters->PixelShader.AtlasPage1 = HardPages[1];
+		FeatherParameters->PixelShader.AtlasPage2 = HardPages[2];
+		FeatherParameters->PixelShader.AtlasPage3 = HardPages[3];
+		FeatherParameters->PixelShader.FeatherPage0 = FeatherPages[0];
+		FeatherParameters->PixelShader.FeatherPage1 = FeatherPages[1];
+		FeatherParameters->PixelShader.FeatherPage2 = FeatherPages[2];
+		FeatherParameters->PixelShader.FeatherPage3 = FeatherPages[3];
+		FeatherParameters->PixelShader.TranslatedFloorOrigin = FVector2f(Binding->GetScopeKey().FloorOrigin);
+		FeatherParameters->PixelShader.CentimetersPerTexel = SightWeaveCentimetersPerTexel(
+			Binding->GetScopeKey().PrecisionTier);
+		FeatherParameters->PixelShader.FeatherWidthCentimeters =
+			Binding->GetVisualFeather().WidthCentimeters;
+		FeatherParameters->PixelShader.PageTableCount = static_cast<uint32>(Scope->PageTableEntryCount);
+		FeatherParameters->PixelShader.TestSampleCount = static_cast<uint32>(TranslatedWorldPositions.Num());
+		FeatherParameters->RenderTargets[0] = FRenderTargetBinding(Output, ERenderTargetLoadAction::EClear);
+		const FIntRect FeatherViewport(FIntPoint::ZeroValue, OutputDesc.Extent);
+		GraphBuilder.AddPass(
+			RDG_EVENT_NAME("SightWeave.Feather.TestComposite"),
+			FeatherParameters,
+			ERDGPassFlags::Raster,
+			[FeatherParameters, FeatherVertexShader, FeatherPixelShader, FeatherViewport](FRDGAsyncTask, FRHICommandList& RHICmdList)
+			{
+				ConfigureViewport(RHICmdList, FeatherViewport);
+				FGraphicsPipelineStateInitializer PSO;
+				RHICmdList.ApplyCachedRenderTargets(PSO);
+				PSO.BlendState = TStaticBlendState<CW_RGBA>::GetRHI();
+				PSO.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
+				PSO.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
+				PSO.PrimitiveType = PT_TriangleList;
+				PSO.BoundShaderState.VertexDeclarationRHI = GEmptyVertexDeclaration.VertexDeclarationRHI;
+				PSO.BoundShaderState.VertexShaderRHI = FeatherVertexShader.GetVertexShader();
+				PSO.BoundShaderState.PixelShaderRHI = FeatherPixelShader.GetPixelShader();
+				SetGraphicsPipelineState(RHICmdList, PSO, 0);
+				SetShaderParameters(RHICmdList, FeatherVertexShader, FeatherVertexShader.GetVertexShader(), FeatherParameters->VertexShader);
+				SetShaderParameters(RHICmdList, FeatherPixelShader, FeatherPixelShader.GetPixelShader(), FeatherParameters->PixelShader);
+				RHICmdList.SetStreamSource(0, nullptr, 0);
+				RHICmdList.DrawPrimitive(0, 1, 1);
+			});
+		return Output;
+	}
 	TShaderMapRef<FSightWeaveFullscreenVertexShader> VertexShader(
 		GetGlobalShaderMap(GMaxRHIFeatureLevel));
 	TShaderMapRef<FSightWeavePresentationTestPixelShader> PixelShader(
@@ -1844,6 +1946,84 @@ FRDGTextureRef FSightWeaveSparseAtlasRenderState::AddPresentationBenchmarkCompos
 		|| !Scope->CurrentPageTable)
 	{
 		AddClearRenderTargetPass(GraphBuilder, Output, FLinearColor::Black);
+		return Output;
+	}
+	if (Binding->GetVisualFeather().IsEnabled())
+	{
+		if (bFeatherUpdateIncomplete
+			|| Binding->GetFeatherResourceGeneration() != Scope->FeatherResourceGeneration
+			|| Binding->GetFeatherAppliedRevision() != AppliedRevision)
+		{
+			AddClearRenderTargetPass(GraphBuilder, Output, FLinearColor::Black);
+			return Output;
+		}
+		FRDGTextureRef Dummy = GSystemTextures.GetBlackDummy(GraphBuilder);
+		FRDGTextureRef HardPages[4] = { Dummy, Dummy, Dummy, Dummy };
+		FRDGTextureRef FeatherPages[4] = { Dummy, Dummy, Dummy, Dummy };
+		for (int32 PageIndex = 0; PageIndex < Scope->Pages.Num() && PageIndex < 4; ++PageIndex)
+		{
+			if (Scope->Pages[PageIndex].IsValid())
+			{
+				if (!Scope->FeatherPages.IsValidIndex(PageIndex)
+					|| !Scope->FeatherPages[PageIndex].IsValid())
+				{
+					AddClearRenderTargetPass(GraphBuilder, Output, FLinearColor::Black);
+					return Output;
+				}
+				HardPages[PageIndex] = GraphBuilder.RegisterExternalTexture(
+					Scope->Pages[PageIndex], TEXT("SightWeave.FeatherBenchmark.HardPage"));
+				FeatherPages[PageIndex] = GraphBuilder.RegisterExternalTexture(
+					Scope->FeatherPages[PageIndex], TEXT("SightWeave.FeatherBenchmark.FeatherPage"));
+			}
+		}
+		TShaderMapRef<FSightWeaveFullscreenVertexShader> FeatherVertexShader(
+			GetGlobalShaderMap(GMaxRHIFeatureLevel));
+		TShaderMapRef<FSightWeaveFeatherPresentationBenchmarkPixelShader> FeatherPixelShader(
+			GetGlobalShaderMap(GMaxRHIFeatureLevel));
+		FSightWeaveFeatherPresentationBenchmarkPassParameters* FeatherParameters =
+			GraphBuilder.AllocParameters<FSightWeaveFeatherPresentationBenchmarkPassParameters>();
+		FeatherParameters->PixelShader.PageTable = GraphBuilder.CreateSRV(Scope->CurrentPageTable);
+		FeatherParameters->PixelShader.AtlasPage0 = HardPages[0];
+		FeatherParameters->PixelShader.AtlasPage1 = HardPages[1];
+		FeatherParameters->PixelShader.AtlasPage2 = HardPages[2];
+		FeatherParameters->PixelShader.AtlasPage3 = HardPages[3];
+		FeatherParameters->PixelShader.FeatherPage0 = FeatherPages[0];
+		FeatherParameters->PixelShader.FeatherPage1 = FeatherPages[1];
+		FeatherParameters->PixelShader.FeatherPage2 = FeatherPages[2];
+		FeatherParameters->PixelShader.FeatherPage3 = FeatherPages[3];
+		FeatherParameters->PixelShader.TranslatedFloorOrigin = FVector2f(Binding->GetScopeKey().FloorOrigin);
+		FeatherParameters->PixelShader.CentimetersPerTexel = SightWeaveCentimetersPerTexel(
+			Binding->GetScopeKey().PrecisionTier);
+		FeatherParameters->PixelShader.FeatherWidthCentimeters =
+			Binding->GetVisualFeather().WidthCentimeters;
+		FeatherParameters->PixelShader.PageTableCount = static_cast<uint32>(Scope->PageTableEntryCount);
+		FeatherParameters->PixelShader.TestWorldMin = TestWorldMin;
+		FeatherParameters->PixelShader.TestWorldStep = TestWorldStep;
+		FeatherParameters->PixelShader.TestOutputExtent = OutputExtent;
+		FeatherParameters->RenderTargets[0] = FRenderTargetBinding(Output, ERenderTargetLoadAction::EClear);
+		const FIntRect FeatherViewport(FIntPoint::ZeroValue, OutputExtent);
+		GraphBuilder.AddPass(
+			RDG_EVENT_NAME("SightWeave.Feather.BenchmarkComposite"),
+			FeatherParameters,
+			ERDGPassFlags::Raster,
+			[FeatherParameters, FeatherVertexShader, FeatherPixelShader, FeatherViewport](FRDGAsyncTask, FRHICommandList& RHICmdList)
+			{
+				ConfigureViewport(RHICmdList, FeatherViewport);
+				FGraphicsPipelineStateInitializer PSO;
+				RHICmdList.ApplyCachedRenderTargets(PSO);
+				PSO.BlendState = TStaticBlendState<CW_RGBA>::GetRHI();
+				PSO.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
+				PSO.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
+				PSO.PrimitiveType = PT_TriangleList;
+				PSO.BoundShaderState.VertexDeclarationRHI = GEmptyVertexDeclaration.VertexDeclarationRHI;
+				PSO.BoundShaderState.VertexShaderRHI = FeatherVertexShader.GetVertexShader();
+				PSO.BoundShaderState.PixelShaderRHI = FeatherPixelShader.GetPixelShader();
+				SetGraphicsPipelineState(RHICmdList, PSO, 0);
+				SetShaderParameters(RHICmdList, FeatherVertexShader, FeatherVertexShader.GetVertexShader(), FeatherParameters->VertexShader);
+				SetShaderParameters(RHICmdList, FeatherPixelShader, FeatherPixelShader.GetPixelShader(), FeatherParameters->PixelShader);
+				RHICmdList.SetStreamSource(0, nullptr, 0);
+				RHICmdList.DrawPrimitive(0, 1, 1);
+			});
 		return Output;
 	}
 

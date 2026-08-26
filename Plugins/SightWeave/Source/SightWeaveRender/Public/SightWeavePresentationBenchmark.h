@@ -27,8 +27,14 @@ struct SIGHTWEAVERENDER_API FSightWeavePresentationBenchmarkResult
 	uint64 FinalScratchAllocationCount = 0;
 	uint64 InitialResourceGeneration = 0;
 	uint64 FinalResourceGeneration = 0;
+	uint64 InitialFeatherTileDispatchCount = 0;
+	uint64 FinalFeatherTileDispatchCount = 0;
+	uint64 FeatherPageAllocationCount = 0;
+	uint64 FeatherScratchAllocationCount = 0;
+	uint64 FeatherResourceGeneration = 0;
 	int32 ResidentTileCount = 0;
 	int32 AllocatedPageCount = 0;
+	int32 AllocatedFeatherPageCount = 0;
 	uint64 PersistentGPUBytes = 0;
 	uint64 TransientOutputBytes = 0;
 };

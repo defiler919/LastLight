@@ -57,6 +57,7 @@ public:
 	uint64 GetEvictionCount_RenderThread() const;
 	int32 GetResidentTileCount_RenderThread() const;
 	int32 GetAllocatedPageCount_RenderThread() const;
+	int32 GetAllocatedFeatherPageCount_RenderThread() const;
 	uint64 GetResidencyGeneration_RenderThread() const { return ResidencyGeneration; }
 	uint64 GetPageTableUploadCount_RenderThread() const { return PageTableUploadCount; }
 	uint64 GetFeatherResourceGeneration_RenderThread() const { return FeatherResourceGeneration; }

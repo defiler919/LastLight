@@ -20,6 +20,10 @@ struct SIGHTWEAVERENDER_API FSightWeavePresentationReadbackResult
 	TArray<FColor> Pixels;
 	uint64 InitialPageTableUploadCount = 0;
 	uint64 FinalPageTableUploadCount = 0;
+	uint64 FeatherPageAllocationCount = 0;
+	uint64 FeatherScratchAllocationCount = 0;
+	uint64 FeatherTileDispatchCount = 0;
+	uint64 FeatherResourceGeneration = 0;
 	double RenderThreadCompositeSetupMicroseconds = 0.0;
 	double ReadbackEndToEndMicroseconds = 0.0;
 	bool bGPUTimestampAvailable = false;

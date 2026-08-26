@@ -107,7 +107,7 @@ bool FSightWeaveM3P3PackagingBoundariesTest::RunTest(const FString& Parameters)
 		ShaderSource.Contains(
 			TEXT("return bVisible ? SceneColorTexture.Load(int3(SceneColorPixel, 0)) : 0.0f;")));
 	for (const TCHAR* Forbidden : {
-		TEXT("TemporalHistory"), TEXT("LastSeen"), TEXT("SceneCapture"), TEXT("FeatherWidth") })
+		TEXT("TemporalHistory"), TEXT("LastSeen"), TEXT("SceneCapture") })
 	{
 		Excludes(*this, TEXT("Hard-mask shader"), ShaderSource, Forbidden);
 	}

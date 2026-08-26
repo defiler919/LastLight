@@ -388,10 +388,7 @@ FSightWeaveRenderProfileIdentity FSightWeaveRenderProfileIdentity::FromProfile(
 	Result.CanonicalCapabilities.SetNum(
 		Algo::Unique(Result.CanonicalCapabilities),
 		EAllowShrinking::No);
-	if (!Result.CanonicalCapabilities.IsEmpty())
-	{
-		Result.StableHash = ComputeProfileHash(Result.CanonicalCapabilities);
-	}
+	Result.StableHash = ComputeProfileHash(Result.CanonicalCapabilities);
 	return Result;
 }
 
@@ -517,7 +514,7 @@ FSightWeaveRenderPacketBuildResult FSightWeaveRenderPacketBuilder::Build(
 		{
 			return Fail(ESightWeaveRenderPacketFailure::ScopeMismatch);
 		}
-		if (Polygon.CompatibilityProfileHash != Input.CompatibilityProfile.StableHash)
+		if (!Polygon.CompatibilityProfile.IsEquivalentTo(Input.CompatibilityProfile))
 		{
 			return Fail(ESightWeaveRenderPacketFailure::ProfileMismatch);
 		}

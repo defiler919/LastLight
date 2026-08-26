@@ -86,7 +86,7 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveRenderProfileIdentity
 
 	static FSightWeaveRenderProfileIdentity FromProfile(
 		const FSightWeaveIlluminationCompatibilityProfile& Profile);
-	bool IsValid() const { return StableHash != 0 && !CanonicalCapabilities.IsEmpty(); }
+	bool IsValid() const { return StableHash != 0; }
 	bool IsEquivalentTo(const FSightWeaveRenderProfileIdentity& Other) const;
 };
 
@@ -108,7 +108,7 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveRenderPolygonInput
 	ESightWeaveRenderMaskLayer Layer = ESightWeaveRenderMaskLayer::Vision;
 	FSightWeaveKnowledgeOwnerId KnowledgeOwnerId;
 	FSightWeaveFloorId FloorId;
-	uint64 CompatibilityProfileHash = 0;
+	FSightWeaveRenderProfileIdentity CompatibilityProfile;
 	TArray<FVector2D> WorldVertices;
 };
 

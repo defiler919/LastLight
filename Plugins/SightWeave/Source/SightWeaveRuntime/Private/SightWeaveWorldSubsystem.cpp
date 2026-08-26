@@ -2159,6 +2159,7 @@ FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 		MoveTemp(PublishedSnapshot);
 	PublishedSnapshot = MoveTemp(NewSharedSnapshot);
 	StandbySnapshot = MoveTemp(PreviousSnapshot);
+	SnapshotPublishedDelegate.Broadcast(PublishedSnapshot);
 #if WITH_DEV_AUTOMATION_TESTS
 	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::ImmutablePublication, false);
 	LastDynamicUpdateStageMetrics.SnapshotMaterializationMicroseconds =

@@ -12,6 +12,12 @@
 
 #include "SightWeaveWorldSubsystem.generated.h"
 
+using FSightWeaveImmutableSnapshotPtr =
+	TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe>;
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FSightWeaveSnapshotPublishedDelegate,
+	FSightWeaveImmutableSnapshotPtr);
+
 #if WITH_DEV_AUTOMATION_TESTS
 enum class ESightWeaveDynamicUpdateStage : uint8
 {
@@ -284,6 +290,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Snapshot")
 	FSightWeaveFrameSnapshot GetPublishedSnapshot() const;
 
+	/** Renderer-neutral immutable acquisition; callers cannot mutate the CPU authority snapshot. */
+	FSightWeaveImmutableSnapshotPtr AcquirePublishedSnapshot() const { return PublishedSnapshot; }
+	FSightWeaveSnapshotPublishedDelegate& OnSnapshotPublished() { return SnapshotPublishedDelegate; }
+
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Debug")
 	FSightWeaveDebugData BuildDebugData() const;
 
@@ -522,6 +532,7 @@ private:
 	TArray<int64> PublicationIlluminationIds;
 	TArray<int64> PublicationSuppressionIds;
 	TSharedPtr<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> PublishedSnapshot;
+	FSightWeaveSnapshotPublishedDelegate SnapshotPublishedDelegate;
 	TSharedPtr<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> StandbySnapshot;
 
 #if WITH_DEV_AUTOMATION_TESTS

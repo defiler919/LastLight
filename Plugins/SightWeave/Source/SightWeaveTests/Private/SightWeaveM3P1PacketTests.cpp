@@ -38,7 +38,7 @@ namespace SightWeave::M3P1::PacketTests
 		Polygon.Layer = Layer;
 		Polygon.KnowledgeOwnerId = Input.KnowledgeOwnerId;
 		Polygon.FloorId = Input.FloorId;
-		Polygon.CompatibilityProfileHash = Input.CompatibilityProfile.StableHash;
+		Polygon.CompatibilityProfile = Input.CompatibilityProfile;
 		for (const FVector2D& Vertex : Vertices)
 		{
 			Polygon.WorldVertices.Add(Vertex);
@@ -181,7 +181,7 @@ bool FSightWeaveM3P1TileAndScopeTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Owner mismatch fails closed"), FSightWeaveRenderPacketBuilder::Build(WrongOwner).Failure,
 		ESightWeaveRenderPacketFailure::ScopeMismatch);
 	WrongOwner.Polygons[0].KnowledgeOwnerId = WrongOwner.KnowledgeOwnerId;
-	WrongOwner.Polygons[0].CompatibilityProfileHash ^= 1;
+	WrongOwner.Polygons[0].CompatibilityProfile.StableHash ^= 1;
 	TestEqual(TEXT("Profile mismatch fails closed"), FSightWeaveRenderPacketBuilder::Build(WrongOwner).Failure,
 		ESightWeaveRenderPacketFailure::ProfileMismatch);
 	return true;

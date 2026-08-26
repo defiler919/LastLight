@@ -16,7 +16,37 @@ enum class ESightWeavePresentationBindingFailure : uint8
 	ResourceGenerationMismatch,
 	ResidencyGenerationMismatch,
 	ResidencyIncomplete,
+	FeatherResourceGenerationMismatch,
+	FeatherRevisionMismatch,
+	FeatherUnavailable,
 	WorldTeardown
+};
+
+namespace SightWeave::VisualFeather
+{
+	inline constexpr float MaximumWidthCentimeters = 100.0f;
+	inline constexpr float DevelopmentDefaultWidthCentimeters = 50.0f;
+	inline constexpr int32 MaximumRadiusTexels = 40;
+	inline constexpr int32 TransformWorkSize = SightWeave::SparseAtlas::InteriorTileSize
+		+ MaximumRadiusTexels * 2;
+}
+
+/** Presentation-only setting. It never participates in CPU visibility authority. */
+struct SIGHTWEAVERUNTIME_API FSightWeaveVisualFeatherSettings
+{
+	float WidthCentimeters = 0.0f;
+
+	bool IsValid() const
+	{
+		return FMath::IsFinite(WidthCentimeters)
+			&& WidthCentimeters >= 0.0f
+			&& WidthCentimeters <= SightWeave::VisualFeather::MaximumWidthCentimeters;
+	}
+	bool IsEnabled() const { return IsValid() && WidthCentimeters > 0.0f; }
+	bool IsEquivalentTo(const FSightWeaveVisualFeatherSettings& Other) const
+	{
+		return WidthCentimeters == Other.WidthCentimeters;
+	}
 };
 
 /** Immutable GT selection. Enabled selections fail black until a matching RT binding is complete. */
@@ -31,7 +61,8 @@ public:
 		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
 		FSightWeaveFloorId FloorId,
 		ESightWeaveRenderPrecisionTier PrecisionTier,
-		uint64 PresentationRevision);
+		uint64 PresentationRevision,
+		FSightWeaveVisualFeatherSettings VisualFeather = FSightWeaveVisualFeatherSettings());
 
 	bool IsEnabled() const { return bEnabled; }
 	bool IsValid() const;
@@ -40,6 +71,7 @@ public:
 	FSightWeaveFloorId GetFloorId() const { return FloorId; }
 	ESightWeaveRenderPrecisionTier GetPrecisionTier() const { return PrecisionTier; }
 	uint64 GetPresentationRevision() const { return PresentationRevision; }
+	const FSightWeaveVisualFeatherSettings& GetVisualFeather() const { return VisualFeather; }
 	bool IsEquivalentTo(const FSightWeaveViewPresentationSelection& Other) const;
 
 private:
@@ -48,6 +80,7 @@ private:
 	FSightWeaveFloorId FloorId;
 	ESightWeaveRenderPrecisionTier PrecisionTier = ESightWeaveRenderPrecisionTier::Standard;
 	uint64 PresentationRevision = 0;
+	FSightWeaveVisualFeatherSettings VisualFeather;
 	bool bEnabled = false;
 };
 
@@ -72,6 +105,10 @@ public:
 	uint64 GetRegistryRevision() const { return RegistryRevision; }
 	uint64 GetPublishedSnapshotRevision() const { return PublishedSnapshotRevision; }
 	uint64 GetPresentationRevision() const { return PresentationRevision; }
+	const FSightWeaveVisualFeatherSettings& GetVisualFeather() const { return VisualFeather; }
+	uint64 GetFeatherResourceGeneration() const { return FeatherResourceGeneration; }
+	uint64 GetFeatherAppliedRevision() const { return FeatherAppliedRevision; }
+	uint64 GetFeatherSettingsRevision() const { return FeatherSettingsRevision; }
 	bool IsEffectiveUnionScope() const { return bEffectiveUnionScope; }
 	bool IsEquivalentTo(const FSightWeaveViewPresentationBinding& Other) const;
 
@@ -89,6 +126,10 @@ private:
 	uint64 RegistryRevision = 0;
 	uint64 PublishedSnapshotRevision = 0;
 	uint64 PresentationRevision = 0;
+	FSightWeaveVisualFeatherSettings VisualFeather;
+	uint64 FeatherResourceGeneration = 0;
+	uint64 FeatherAppliedRevision = 0;
+	uint64 FeatherSettingsRevision = 0;
 };
 
 struct SIGHTWEAVERUNTIME_API FSightWeavePresentationBindingBuildResult
@@ -107,7 +148,10 @@ public:
 		const FSightWeaveSparseRenderPacket& Packet,
 		const FSightWeaveViewPresentationSelection& Selection,
 		uint64 ResourceGeneration,
-		uint64 ResidencyGeneration);
+		uint64 ResidencyGeneration,
+		uint64 FeatherResourceGeneration = 0,
+		uint64 FeatherAppliedRevision = 0,
+		uint64 FeatherSettingsRevision = 0);
 	static ESightWeavePresentationBindingFailure Validate(
 		const FSightWeaveViewPresentationBinding& Binding);
 };

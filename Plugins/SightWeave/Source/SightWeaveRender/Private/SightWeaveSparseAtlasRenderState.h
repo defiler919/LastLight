@@ -36,6 +36,7 @@ public:
 	void SubmitPresentationSelection_RenderThread(
 		const FSightWeaveViewPresentationSelection& Selection);
 	bool ProcessPending_RenderThread(FRDGBuilder& GraphBuilder);
+	bool ProcessVisualFeather_RenderThread(FRDGBuilder& GraphBuilder);
 	void PreparePresentationResources_RenderThread(FRDGBuilder& GraphBuilder);
 	FScreenPassTexture AddHardMaskComposite_RenderThread(
 		FRDGBuilder& GraphBuilder,
@@ -58,6 +59,10 @@ public:
 	int32 GetAllocatedPageCount_RenderThread() const;
 	uint64 GetResidencyGeneration_RenderThread() const { return ResidencyGeneration; }
 	uint64 GetPageTableUploadCount_RenderThread() const { return PageTableUploadCount; }
+	uint64 GetFeatherResourceGeneration_RenderThread() const { return FeatherResourceGeneration; }
+	uint64 GetFeatherPageAllocationCount_RenderThread() const { return FeatherPageAllocationCount; }
+	uint64 GetFeatherScratchAllocationCount_RenderThread() const { return FeatherScratchAllocationCount; }
+	uint64 GetFeatherTileDispatchCount_RenderThread() const { return FeatherTileDispatchCount; }
 	bool IsPresentationEnabled_RenderThread() const
 	{
 		return PresentationSelection.IsEnabled() && !bReleased;
@@ -96,7 +101,14 @@ private:
 
 	bool CheckCapabilities_RenderThread();
 	bool EnsureScratchTextures_RenderThread();
+	bool EnsureFeatherScratchTextures_RenderThread();
 	bool EnsurePage_RenderThread(
+		FRDGBuilder& GraphBuilder,
+		FScopeState& Scope,
+		int32 PageIndex,
+		FRDGTextureRef& OutPage,
+		bool& bOutColdCreated);
+	bool EnsureFeatherPage_RenderThread(
 		FRDGBuilder& GraphBuilder,
 		FScopeState& Scope,
 		int32 PageIndex,
@@ -107,6 +119,14 @@ private:
 		FRDGTextureRef Page,
 		const FIntRect& SlotRect,
 		const FSightWeaveSparseRenderTile& Tile);
+	bool AddFeatherTilePasses_RenderThread(
+		FRDGBuilder& GraphBuilder,
+		FScopeState& Scope,
+		const FSightWeaveSparseRenderTile& Tile,
+		const FSightWeaveSparsePhysicalAddress& Address);
+	void MarkFeatherDirtyAround_RenderThread(const FSightWeaveSparseTileKey& TileKey);
+	void ReleaseFeatherResources_RenderThread();
+	void InvalidateFeather_RenderThread(ESightWeavePresentationBindingFailure Failure);
 	FScopeState* FindScope_RenderThread(const FSightWeaveSparseScopeKey& ScopeKey);
 	const FScopeState* FindScope_RenderThread(const FSightWeaveSparseScopeKey& ScopeKey) const;
 	FScopeState& FindOrAddScope_RenderThread(const FSightWeaveSparseRenderScope& Scope);
@@ -130,6 +150,9 @@ private:
 	TRefCountPtr<IPooledRenderTarget> VisionScratch;
 	TRefCountPtr<IPooledRenderTarget> IlluminationScratch;
 	TRefCountPtr<IPooledRenderTarget> SuppressionScratch;
+	TRefCountPtr<IPooledRenderTarget> FeatherScratchA;
+	TRefCountPtr<IPooledRenderTarget> FeatherScratchB;
+	TArray<FSightWeaveSparseTileKey> FeatherDirtyCenters;
 	uint64 DesiredRevision = 0;
 	uint64 DesiredHash = 0;
 	uint64 AppliedRevision = 0;
@@ -139,11 +162,17 @@ private:
 	uint64 PageTableUploadCount = 0;
 	uint64 PageAllocationCount = 0;
 	uint64 ScratchAllocationCount = 0;
+	uint64 FeatherResourceGeneration = 1;
+	uint64 FeatherPageAllocationCount = 0;
+	uint64 FeatherScratchAllocationCount = 0;
+	uint64 FeatherTileDispatchCount = 0;
 	uint64 DuplicatePacketCount = 0;
 	uint64 StalePacketCount = 0;
 	uint64 RejectedPacketCount = 0;
 	ESightWeaveRenderAvailability Availability = ESightWeaveRenderAvailability::Unknown;
 	bool bPendingForceBlack = false;
+	bool bFeatherFullRebuildPending = false;
+	bool bFeatherUpdateIncomplete = false;
 	bool bReleased = false;
 #if WITH_DEV_AUTOMATION_TESTS
 	FSightWeaveSparseRenderTimings LastTimings;

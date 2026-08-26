@@ -145,6 +145,114 @@ public:
 	}
 };
 
+class FSightWeaveFeatherSeedPixelShader final : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSightWeaveFeatherSeedPixelShader);
+	SHADER_USE_PARAMETER_STRUCT(FSightWeaveFeatherSeedPixelShader, FGlobalShader);
+
+public:
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, PageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage1)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage2)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage3)
+		SHADER_PARAMETER(FIntPoint, FeatherWorkOrigin)
+		SHADER_PARAMETER(uint32, FeatherWorkSize)
+		SHADER_PARAMETER(uint32, PageTableCount)
+		RENDER_TARGET_BINDING_SLOTS()
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return Parameters.Platform == SP_PCD3D_SM6;
+	}
+};
+
+class FSightWeaveFeatherJumpPixelShader final : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSightWeaveFeatherJumpPixelShader);
+	SHADER_USE_PARAMETER_STRUCT(FSightWeaveFeatherJumpPixelShader, FGlobalShader);
+
+public:
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FeatherSeedTexture)
+		SHADER_PARAMETER(FIntPoint, FeatherWorkOrigin)
+		SHADER_PARAMETER(int32, FeatherJumpStep)
+		SHADER_PARAMETER(uint32, FeatherWorkSize)
+		RENDER_TARGET_BINDING_SLOTS()
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return Parameters.Platform == SP_PCD3D_SM6;
+	}
+};
+
+class FSightWeaveFeatherFinalizePixelShader final : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSightWeaveFeatherFinalizePixelShader);
+	SHADER_USE_PARAMETER_STRUCT(FSightWeaveFeatherFinalizePixelShader, FGlobalShader);
+
+public:
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, PageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage1)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage2)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage3)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FeatherSeedTexture)
+		SHADER_PARAMETER(FIntPoint, FeatherLogicalTile)
+		SHADER_PARAMETER(float, FeatherWidthCentimeters)
+		SHADER_PARAMETER(float, CentimetersPerTexel)
+		SHADER_PARAMETER(uint32, PageTableCount)
+		SHADER_PARAMETER(uint32, DestinationOriginX)
+		SHADER_PARAMETER(uint32, DestinationOriginY)
+		RENDER_TARGET_BINDING_SLOTS()
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return Parameters.Platform == SP_PCD3D_SM6;
+	}
+};
+
+class FSightWeaveInwardFeatherCompositePixelShader final : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSightWeaveInwardFeatherCompositePixelShader);
+	SHADER_USE_PARAMETER_STRUCT(FSightWeaveInwardFeatherCompositePixelShader, FGlobalShader);
+
+public:
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneColorTexture)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneDepthTexture)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, PageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage1)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage2)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage3)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FeatherPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FeatherPage1)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FeatherPage2)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FeatherPage3)
+		SHADER_PARAMETER(FIntPoint, OutputRectMin)
+		SHADER_PARAMETER(FIntPoint, OutputRectSize)
+		SHADER_PARAMETER(FIntPoint, SceneColorRectMin)
+		SHADER_PARAMETER(FIntPoint, SceneColorRectSize)
+		SHADER_PARAMETER(FVector2f, TranslatedFloorOrigin)
+		SHADER_PARAMETER(float, CentimetersPerTexel)
+		SHADER_PARAMETER(float, FeatherWidthCentimeters)
+		SHADER_PARAMETER(uint32, PageTableCount)
+		RENDER_TARGET_BINDING_SLOTS()
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return Parameters.Platform == SP_PCD3D_SM6;
+	}
+};
+
 #if WITH_DEV_AUTOMATION_TESTS
 class FSightWeavePresentationTestPixelShader final : public FGlobalShader
 {

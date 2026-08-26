@@ -69,6 +69,7 @@ void FSightWeaveSceneViewExtension::PreRenderViewFamily_RenderThread(
 {
 	RenderState->ProcessPending_RenderThread(GraphBuilder);
 	RenderState->PreparePresentationResources_RenderThread(GraphBuilder);
+	RenderState->ProcessVisualFeather_RenderThread(GraphBuilder);
 }
 
 void FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass(

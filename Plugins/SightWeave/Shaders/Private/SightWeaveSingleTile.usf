@@ -173,6 +173,33 @@ float SightWeaveLoadAtlasMask(int PageIndex, int2 Texel)
 	}
 }
 
+int SightWeaveFloorDiv(int Value, int Divisor)
+{
+	int Quotient = Value / Divisor;
+	const int Remainder = Value % Divisor;
+	if (Remainder < 0)
+	{
+		--Quotient;
+	}
+	return Quotient;
+}
+
+bool SightWeaveIsHardLiveLogicalTexel(int2 LogicalTexel)
+{
+	const int2 LogicalCoordinate = int2(
+		SightWeaveFloorDiv(LogicalTexel.x, 248),
+		SightWeaveFloorDiv(LogicalTexel.y, 248));
+	const int EntryIndex = SightWeaveFindPageTableEntry(LogicalCoordinate);
+	if (EntryIndex < 0)
+	{
+		return false;
+	}
+	const int4 Entry = PageTable[EntryIndex];
+	const int2 InteriorTexel = LogicalTexel - LogicalCoordinate * 248;
+	const int2 SlotOrigin = int2(Entry.w & 7, Entry.w >> 3) * 256;
+	return SightWeaveLoadAtlasMask(Entry.z, SlotOrigin + int2(4, 4) + InteriorTexel) >= 0.5f;
+}
+
 bool SightWeaveIsHardLive(float2 TranslatedWorld)
 {
 	const float2 LocalPosition = TranslatedWorld - TranslatedFloorOrigin;
@@ -217,6 +244,144 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
 	const bool bVisible = SightWeaveIsHardLive(TranslatedWorld.xy);
 	return bVisible ? SceneColorTexture.Load(int3(SceneColorPixel, 0)) : 0.0f;
+}
+
+Texture2D<float> FeatherPage0;
+Texture2D<float> FeatherPage1;
+Texture2D<float> FeatherPage2;
+Texture2D<float> FeatherPage3;
+Texture2D<float2> FeatherSeedTexture;
+int2 FeatherWorkOrigin;
+int2 FeatherLogicalTile;
+int FeatherJumpStep;
+uint FeatherWorkSize;
+float FeatherWidthCentimeters;
+
+float SightWeaveLoadFeatherAtlas(int PageIndex, int2 Texel)
+{
+	switch (PageIndex)
+	{
+	case 0: return FeatherPage0.Load(int3(Texel, 0));
+	case 1: return FeatherPage1.Load(int3(Texel, 0));
+	case 2: return FeatherPage2.Load(int3(Texel, 0));
+	case 3: return FeatherPage3.Load(int3(Texel, 0));
+	default: return 0.0f;
+	}
+}
+
+float SightWeaveLoadFeatherLogicalTexel(int2 LogicalTexel)
+{
+	const int2 LogicalCoordinate = int2(
+		SightWeaveFloorDiv(LogicalTexel.x, 248),
+		SightWeaveFloorDiv(LogicalTexel.y, 248));
+	const int EntryIndex = SightWeaveFindPageTableEntry(LogicalCoordinate);
+	if (EntryIndex < 0)
+	{
+		return 0.0f;
+	}
+	const int4 Entry = PageTable[EntryIndex];
+	const int2 InteriorTexel = LogicalTexel - LogicalCoordinate * 248;
+	const int2 SlotOrigin = int2(Entry.w & 7, Entry.w >> 3) * 256;
+	return SightWeaveLoadFeatherAtlas(
+		Entry.z,
+		SlotOrigin + int2(4, 4) + InteriorTexel);
+}
+
+float SightWeaveSampleVisualFeather(float2 LocalPosition)
+{
+	const float2 CenterGrid = LocalPosition / CentimetersPerTexel - 0.5f;
+	const int2 Base = int2(floor(CenterGrid));
+	const float2 Fraction = frac(CenterGrid);
+	const float W00 = SightWeaveLoadFeatherLogicalTexel(Base);
+	const float W10 = SightWeaveLoadFeatherLogicalTexel(Base + int2(1, 0));
+	const float W01 = SightWeaveLoadFeatherLogicalTexel(Base + int2(0, 1));
+	const float W11 = SightWeaveLoadFeatherLogicalTexel(Base + int2(1, 1));
+	return saturate(lerp(lerp(W00, W10, Fraction.x), lerp(W01, W11, Fraction.x), Fraction.y));
+}
+
+float2 SightWeaveFeatherSeedPS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const int2 WorkTexel = clamp(int2(Position.xy), int2(0, 0), int(FeatherWorkSize) - 1);
+	const int2 LogicalTexel = FeatherWorkOrigin + WorkTexel;
+	return SightWeaveIsHardLiveLogicalTexel(LogicalTexel)
+		? float2(1.0e20f, 1.0e20f)
+		: float2(LogicalTexel);
+}
+
+float2 SightWeaveFeatherJumpPS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const int2 WorkTexel = clamp(int2(Position.xy), int2(0, 0), int(FeatherWorkSize) - 1);
+	const float2 LogicalTexel = float2(FeatherWorkOrigin + WorkTexel);
+	float2 BestSeed = FeatherSeedTexture.Load(int3(WorkTexel, 0));
+	float BestDistanceSquared = dot(BestSeed - LogicalTexel, BestSeed - LogicalTexel);
+	[unroll]
+	for (int OffsetY = -1; OffsetY <= 1; ++OffsetY)
+	{
+		[unroll]
+		for (int OffsetX = -1; OffsetX <= 1; ++OffsetX)
+		{
+			const int2 CandidateTexel = clamp(
+				WorkTexel + int2(OffsetX, OffsetY) * FeatherJumpStep,
+				int2(0, 0),
+				int(FeatherWorkSize) - 1);
+			const float2 Candidate = FeatherSeedTexture.Load(int3(CandidateTexel, 0));
+			const float CandidateDistanceSquared = dot(
+				Candidate - LogicalTexel,
+				Candidate - LogicalTexel);
+			if (CandidateDistanceSquared < BestDistanceSquared)
+			{
+				BestSeed = Candidate;
+				BestDistanceSquared = CandidateDistanceSquared;
+			}
+		}
+	}
+	return BestSeed;
+}
+
+float SightWeaveFeatherFinalizePS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const int2 DestinationOrigin = int2(DestinationOriginX, DestinationOriginY) + int2(4, 4);
+	const int2 InteriorTexel = clamp(int2(Position.xy) - DestinationOrigin, int2(0, 0), int2(247, 247));
+	const int2 LogicalTexel = FeatherLogicalTile * 248 + InteriorTexel;
+	if (!SightWeaveIsHardLiveLogicalTexel(LogicalTexel))
+	{
+		return 0.0f;
+	}
+	const int2 WorkTexel = InteriorTexel + int2(40, 40);
+	const float2 Seed = FeatherSeedTexture.Load(int3(WorkTexel, 0));
+	if (Seed.x > 1.0e10f || Seed.y > 1.0e10f)
+	{
+		return 1.0f;
+	}
+	const float DistanceCentimeters = length(Seed - float2(LogicalTexel)) * CentimetersPerTexel;
+	return saturate(DistanceCentimeters / max(FeatherWidthCentimeters, 0.0001f));
+}
+
+float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const int2 OutputPixel = int2(Position.xy);
+	const float2 ViewUv = saturate(
+		(float2(OutputPixel - OutputRectMin) + 0.5f) / float2(OutputRectSize));
+	const int2 SceneColorPixel = clamp(
+		SceneColorRectMin + int2(ViewUv * float2(SceneColorRectSize)),
+		SceneColorRectMin,
+		SceneColorRectMin + SceneColorRectSize - 1);
+	const int2 DepthRectMin = int2(View.ViewRectMinAndSize.xy);
+	const int2 DepthRectSize = int2(View.ViewRectMinAndSize.zw);
+	const int2 DepthPixel = clamp(
+		DepthRectMin + int2(ViewUv * float2(DepthRectSize)),
+		DepthRectMin,
+		DepthRectMin + DepthRectSize - 1);
+	const float DeviceZ = SceneDepthTexture.Load(int3(DepthPixel, 0));
+	const float3 TranslatedWorld = SvPositionToTranslatedWorld(
+		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
+	if (!SightWeaveIsHardLive(TranslatedWorld.xy))
+	{
+		return 0.0f;
+	}
+	const float VisualFeatherWeight = SightWeaveSampleVisualFeather(
+		TranslatedWorld.xy - TranslatedFloorOrigin);
+	return SceneColorTexture.Load(int3(SceneColorPixel, 0)) * VisualFeatherWeight;
 }
 
 StructuredBuffer<float2> TestTranslatedWorldPositions;

@@ -56,7 +56,8 @@ FSightWeaveViewPresentationSelection FSightWeaveViewPresentationSelection::Enabl
 	const FSightWeaveKnowledgeOwnerId InKnowledgeOwnerId,
 	const FSightWeaveFloorId InFloorId,
 	const ESightWeaveRenderPrecisionTier InPrecisionTier,
-	const uint64 InPresentationRevision)
+	const uint64 InPresentationRevision,
+	const FSightWeaveVisualFeatherSettings InVisualFeather)
 {
 	FSightWeaveViewPresentationSelection Result;
 	Result.WorldIdentity = InWorldIdentity;
@@ -64,6 +65,7 @@ FSightWeaveViewPresentationSelection FSightWeaveViewPresentationSelection::Enabl
 	Result.FloorId = InFloorId;
 	Result.PrecisionTier = InPrecisionTier;
 	Result.PresentationRevision = InPresentationRevision;
+	Result.VisualFeather = InVisualFeather;
 	Result.bEnabled = true;
 	return Result;
 }
@@ -72,6 +74,7 @@ bool FSightWeaveViewPresentationSelection::IsValid() const
 {
 	return WorldIdentity.IsValid()
 		&& PresentationRevision != 0
+		&& VisualFeather.IsValid()
 		&& (!bEnabled
 			|| (KnowledgeOwnerId.IsValid()
 				&& FloorId.IsValid()
@@ -86,7 +89,8 @@ bool FSightWeaveViewPresentationSelection::IsEquivalentTo(
 		&& KnowledgeOwnerId == Other.KnowledgeOwnerId
 		&& FloorId == Other.FloorId
 		&& PrecisionTier == Other.PrecisionTier
-		&& PresentationRevision == Other.PresentationRevision;
+		&& PresentationRevision == Other.PresentationRevision
+		&& VisualFeather.IsEquivalentTo(Other.VisualFeather);
 }
 
 bool FSightWeaveViewPresentationBinding::IsEquivalentTo(
@@ -102,14 +106,21 @@ bool FSightWeaveViewPresentationBinding::IsEquivalentTo(
 		&& PacketRevision == Other.PacketRevision
 		&& RegistryRevision == Other.RegistryRevision
 		&& PublishedSnapshotRevision == Other.PublishedSnapshotRevision
-		&& PresentationRevision == Other.PresentationRevision;
+		&& PresentationRevision == Other.PresentationRevision
+		&& VisualFeather.IsEquivalentTo(Other.VisualFeather)
+		&& FeatherResourceGeneration == Other.FeatherResourceGeneration
+		&& FeatherAppliedRevision == Other.FeatherAppliedRevision
+		&& FeatherSettingsRevision == Other.FeatherSettingsRevision;
 }
 
 FSightWeavePresentationBindingBuildResult FSightWeavePresentationBindingBuilder::Build(
 	const FSightWeaveSparseRenderPacket& Packet,
 	const FSightWeaveViewPresentationSelection& Selection,
 	const uint64 ResourceGeneration,
-	const uint64 ResidencyGeneration)
+	const uint64 ResidencyGeneration,
+	const uint64 FeatherResourceGeneration,
+	const uint64 FeatherAppliedRevision,
+	const uint64 FeatherSettingsRevision)
 {
 	FSightWeavePresentationBindingBuildResult Result;
 	TSharedRef<FSightWeaveViewPresentationBinding, ESPMode::ThreadSafe> Binding =
@@ -175,6 +186,22 @@ FSightWeavePresentationBindingBuildResult FSightWeavePresentationBindingBuilder:
 	Binding->RegistryRevision = Packet.GetRegistryRevision();
 	Binding->PublishedSnapshotRevision = Packet.GetPublishedSnapshotRevision();
 	Binding->PresentationRevision = Selection.GetPresentationRevision();
+	Binding->VisualFeather = Selection.GetVisualFeather();
+	Binding->FeatherResourceGeneration = FeatherResourceGeneration;
+	Binding->FeatherAppliedRevision = FeatherAppliedRevision;
+	Binding->FeatherSettingsRevision = FeatherSettingsRevision;
+	if (Binding->VisualFeather.IsEnabled())
+	{
+		if (FeatherResourceGeneration == 0)
+		{
+			return Fail(ESightWeavePresentationBindingFailure::FeatherResourceGenerationMismatch);
+		}
+		if (FeatherAppliedRevision != Packet.GetPacketRevision()
+			|| FeatherSettingsRevision != Selection.GetPresentationRevision())
+		{
+			return Fail(ESightWeavePresentationBindingFailure::FeatherRevisionMismatch);
+		}
+	}
 	for (const FSightWeaveSparseRenderTile& Tile : Packet.GetTiles())
 	{
 		if (!Tile.Identity.TileKey.Scope.IsEquivalentTo(Scope->ScopeKey))
@@ -232,6 +259,17 @@ ESightWeavePresentationBindingFailure FSightWeavePresentationBindingBuilder::Val
 		|| Binding.PresentationRevision == 0)
 	{
 		return ESightWeavePresentationBindingFailure::RevisionMismatch;
+	}
+	if (!Binding.VisualFeather.IsValid())
+	{
+		return ESightWeavePresentationBindingFailure::InvalidSelection;
+	}
+	if (Binding.VisualFeather.IsEnabled()
+		&& (Binding.FeatherResourceGeneration == 0
+			|| Binding.FeatherAppliedRevision != Binding.PacketRevision
+			|| Binding.FeatherSettingsRevision != Binding.PresentationRevision))
+	{
+		return ESightWeavePresentationBindingFailure::FeatherRevisionMismatch;
 	}
 	for (const FSightWeaveRenderProfileIdentity& Profile : Binding.CanonicalProfiles)
 	{

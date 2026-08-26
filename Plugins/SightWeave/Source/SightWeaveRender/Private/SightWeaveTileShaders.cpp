@@ -42,6 +42,30 @@ IMPLEMENT_GLOBAL_SHADER(
 	"SightWeaveHardMaskCompositePS",
 	SF_Pixel);
 
+IMPLEMENT_GLOBAL_SHADER(
+	FSightWeaveFeatherSeedPixelShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeaveFeatherSeedPS",
+	SF_Pixel);
+
+IMPLEMENT_GLOBAL_SHADER(
+	FSightWeaveFeatherJumpPixelShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeaveFeatherJumpPS",
+	SF_Pixel);
+
+IMPLEMENT_GLOBAL_SHADER(
+	FSightWeaveFeatherFinalizePixelShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeaveFeatherFinalizePS",
+	SF_Pixel);
+
+IMPLEMENT_GLOBAL_SHADER(
+	FSightWeaveInwardFeatherCompositePixelShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeaveInwardFeatherCompositePS",
+	SF_Pixel);
+
 #if WITH_DEV_AUTOMATION_TESTS
 IMPLEMENT_GLOBAL_SHADER(
 	FSightWeavePresentationTestPixelShader,

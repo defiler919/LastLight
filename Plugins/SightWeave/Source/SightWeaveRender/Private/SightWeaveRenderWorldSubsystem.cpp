@@ -43,6 +43,16 @@ namespace
 		});
 	}
 
+	FSightWeaveVisualFeatherSettings GetConfiguredVisualFeather()
+	{
+		FSightWeaveVisualFeatherSettings Result;
+		Result.WidthCentimeters = FMath::Clamp(
+			GetDefault<USightWeaveSettings>()->VisualFeatherWidthCentimeters,
+			0.0f,
+			SightWeave::VisualFeather::MaximumWidthCentimeters);
+		return Result;
+	}
+
 	FSightWeaveSparsePolygonInput& AddPolygon(
 		FSightWeaveSparseScopeBuildInput& Scope,
 		const int64 StableSourceId,
@@ -346,7 +356,8 @@ bool USightWeaveRenderWorldSubsystem::SetPresentationScope(
 		KnowledgeOwnerId,
 		FloorId,
 		PrecisionTier,
-		NextPresentationRevision++);
+		NextPresentationRevision++,
+		GetConfiguredVisualFeather());
 	PublishPresentationSelection();
 	return true;
 }
@@ -432,7 +443,8 @@ void USightWeaveRenderWorldSubsystem::UpdateDefaultPresentationSelection(
 			DesiredOwner,
 			DesiredFloor,
 			DesiredPrecision,
-			NextPresentationRevision++)
+			NextPresentationRevision++,
+			GetConfiguredVisualFeather())
 		: FSightWeaveViewPresentationSelection::Disabled(
 			WorldIdentity,
 			NextPresentationRevision++);

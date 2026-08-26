@@ -53,6 +53,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Prepared Event Index", meta = (ClampMin = "0", ClampMax = "1048576"))
 	int32 MaximumKineticEndpointSwaps = 16384;
 
+	/** Presentation-only inward feather width. HardLive remains the sole eligibility gate. */
+	UPROPERTY(Config, EditAnywhere, Category = "Visual Presentation", meta = (ClampMin = "0.0", ClampMax = "100.0", Units = "cm"))
+	float VisualFeatherWidthCentimeters = 50.0f;
+
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Debug")
 	bool bEnableRuntimeDebug = false;
 };

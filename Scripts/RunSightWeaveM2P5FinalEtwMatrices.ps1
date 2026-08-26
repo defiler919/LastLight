@@ -95,7 +95,7 @@ try {
         -Label $calibrationLabel `
         -EngineRoot $EngineRoot `
         -OutputRoot $CalibrationOutputRoot *>&1 |
-        Tee-Object -LiteralPath $logPath -Append
+        Tee-Object -FilePath $logPath -Append
 
     & $attributionScript `
         -RunCount 10 `
@@ -103,7 +103,7 @@ try {
         -TraceProfile GeneralProfile `
         -EngineRoot $EngineRoot `
         -OutputRoot $AttributionOutputRoot *>&1 |
-        Tee-Object -LiteralPath $logPath -Append
+        Tee-Object -FilePath $logPath -Append
 
     & $attributionScript `
         -RunCount 10 `
@@ -111,7 +111,7 @@ try {
         -TraceProfile GeneralProfile `
         -EngineRoot $EngineRoot `
         -OutputRoot $AttributionOutputRoot *>&1 |
-        Tee-Object -LiteralPath $logPath -Append
+        Tee-Object -FilePath $logPath -Append
 }
 catch {
     $_ | Out-String | Add-Content -LiteralPath $logPath -Encoding utf8NoBOM

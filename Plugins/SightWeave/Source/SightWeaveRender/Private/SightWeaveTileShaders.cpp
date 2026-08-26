@@ -11,3 +11,15 @@ IMPLEMENT_GLOBAL_SHADER(
 	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
 	"SightWeaveSmokePS",
 	SF_Pixel);
+
+IMPLEMENT_GLOBAL_SHADER(
+	FSightWeaveFullscreenVertexShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeaveFullscreenVS",
+	SF_Vertex);
+
+IMPLEMENT_GLOBAL_SHADER(
+	FSightWeaveCombinePixelShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeaveCombinePS",
+	SF_Pixel);

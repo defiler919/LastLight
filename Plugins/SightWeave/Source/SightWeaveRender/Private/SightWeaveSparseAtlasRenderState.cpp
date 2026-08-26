@@ -41,6 +41,12 @@ namespace SightWeaveSparseAtlasRenderPrivate
 		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeavePresentationTestPixelShader::FParameters, PixelShader)
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeavePresentationBenchmarkPassParameters, )
+		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveFullscreenVertexShader::FParameters, VertexShader)
+		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeavePresentationBenchmarkPixelShader::FParameters, PixelShader)
+		RENDER_TARGET_BINDING_SLOTS()
+	END_SHADER_PARAMETER_STRUCT()
 #endif
 
 	FRDGTextureDesc MakeMaskTextureDesc(const int32 Size)
@@ -1219,6 +1225,101 @@ FRDGTextureRef FSightWeaveSparseAtlasRenderState::AddPresentationTestComposite_R
 				PixelShader,
 				PixelShader.GetPixelShader(),
 				Parameters->PixelShader);
+			RHICmdList.SetStreamSource(0, nullptr, 0);
+			RHICmdList.DrawPrimitive(0, 1, 1);
+		});
+	return Output;
+}
+
+FRDGTextureRef FSightWeaveSparseAtlasRenderState::AddPresentationBenchmarkComposite_RenderThread(
+	FRDGBuilder& GraphBuilder,
+	const FIntPoint OutputExtent,
+	const FVector2f TestWorldMin,
+	const FVector2f TestWorldStep)
+{
+	check(IsInRenderingThread());
+	if (OutputExtent.X <= 0 || OutputExtent.Y <= 0)
+	{
+		return nullptr;
+	}
+	const FRDGTextureDesc OutputDesc = FRDGTextureDesc::Create2D(
+		OutputExtent,
+		PF_R8G8B8A8,
+		FClearValueBinding::Black,
+		TexCreate_RenderTargetable | TexCreate_ShaderResource);
+	FRDGTextureRef Output = GraphBuilder.CreateTexture(
+		OutputDesc,
+		TEXT("SightWeave.Presentation.BenchmarkOutput"));
+
+	const TSharedPtr<const FSightWeaveViewPresentationBinding, ESPMode::ThreadSafe> Binding =
+		PresentationBinding;
+	FScopeState* Scope = Binding.IsValid() ? FindScope_RenderThread(Binding->GetScopeKey()) : nullptr;
+	if (!Binding.IsValid()
+		|| !Binding->IsValid()
+		|| Binding->GetResourceGeneration() != ResourceGeneration
+		|| Binding->GetResidencyGeneration() != ResidencyGeneration
+		|| Binding->GetPacketRevision() != AppliedRevision
+		|| !Scope
+		|| Scope->Availability != ESightWeaveRenderAvailability::Available
+		|| Scope->PageTableResidencyGeneration != ResidencyGeneration
+		|| Scope->PageTablePacketRevision != AppliedRevision
+		|| !Scope->CurrentPageTable)
+	{
+		AddClearRenderTargetPass(GraphBuilder, Output, FLinearColor::Black);
+		return Output;
+	}
+
+	TShaderMapRef<FSightWeaveFullscreenVertexShader> VertexShader(
+		GetGlobalShaderMap(GMaxRHIFeatureLevel));
+	TShaderMapRef<FSightWeavePresentationBenchmarkPixelShader> PixelShader(
+		GetGlobalShaderMap(GMaxRHIFeatureLevel));
+	FSightWeavePresentationBenchmarkPassParameters* Parameters =
+		GraphBuilder.AllocParameters<FSightWeavePresentationBenchmarkPassParameters>();
+	Parameters->PixelShader.PageTable = GraphBuilder.CreateSRV(Scope->CurrentPageTable);
+	FRDGTextureRef DummyPage = GSystemTextures.GetBlackDummy(GraphBuilder);
+	FRDGTextureRef AtlasPages[4] = { DummyPage, DummyPage, DummyPage, DummyPage };
+	for (int32 PageIndex = 0; PageIndex < Scope->Pages.Num() && PageIndex < 4; ++PageIndex)
+	{
+		if (Scope->Pages[PageIndex].IsValid())
+		{
+			AtlasPages[PageIndex] = GraphBuilder.RegisterExternalTexture(
+				Scope->Pages[PageIndex],
+				TEXT("SightWeave.Presentation.BenchmarkAtlasPage"));
+		}
+	}
+	Parameters->PixelShader.AtlasPage0 = AtlasPages[0];
+	Parameters->PixelShader.AtlasPage1 = AtlasPages[1];
+	Parameters->PixelShader.AtlasPage2 = AtlasPages[2];
+	Parameters->PixelShader.AtlasPage3 = AtlasPages[3];
+	Parameters->PixelShader.TranslatedFloorOrigin = FVector2f(Binding->GetScopeKey().FloorOrigin);
+	Parameters->PixelShader.CentimetersPerTexel = SightWeaveCentimetersPerTexel(
+		Binding->GetScopeKey().PrecisionTier);
+	Parameters->PixelShader.PageTableCount = static_cast<uint32>(Scope->PageTableEntryCount);
+	Parameters->PixelShader.TestWorldMin = TestWorldMin;
+	Parameters->PixelShader.TestWorldStep = TestWorldStep;
+	Parameters->PixelShader.TestOutputExtent = OutputExtent;
+	Parameters->RenderTargets[0] = FRenderTargetBinding(Output, ERenderTargetLoadAction::EClear);
+	const FIntRect Viewport(FIntPoint::ZeroValue, OutputExtent);
+	GraphBuilder.AddPass(
+		RDG_EVENT_NAME("SightWeave.Presentation.BenchmarkComposite"),
+		Parameters,
+		ERDGPassFlags::Raster,
+		[Parameters, VertexShader, PixelShader, Viewport](FRDGAsyncTask, FRHICommandList& RHICmdList)
+		{
+			ConfigureViewport(RHICmdList, Viewport);
+			FGraphicsPipelineStateInitializer GraphicsPSOInit;
+			RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
+			GraphicsPSOInit.BlendState = TStaticBlendState<CW_RGBA>::GetRHI();
+			GraphicsPSOInit.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
+			GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
+			GraphicsPSOInit.PrimitiveType = PT_TriangleList;
+			GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI =
+				GEmptyVertexDeclaration.VertexDeclarationRHI;
+			GraphicsPSOInit.BoundShaderState.VertexShaderRHI = VertexShader.GetVertexShader();
+			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = PixelShader.GetPixelShader();
+			SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit, 0);
+			SetShaderParameters(RHICmdList, VertexShader, VertexShader.GetVertexShader(), Parameters->VertexShader);
+			SetShaderParameters(RHICmdList, PixelShader, PixelShader.GetPixelShader(), Parameters->PixelShader);
 			RHICmdList.SetStreamSource(0, nullptr, 0);
 			RHICmdList.DrawPrimitive(0, 1, 1);
 		});

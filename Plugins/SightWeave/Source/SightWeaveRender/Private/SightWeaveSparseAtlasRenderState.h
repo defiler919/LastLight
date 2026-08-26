@@ -75,6 +75,11 @@ public:
 		FRDGBuilder& GraphBuilder,
 		TConstArrayView<FVector2f> TranslatedWorldPositions,
 		TConstArrayView<FVector4f> SceneColors);
+	FRDGTextureRef AddPresentationBenchmarkComposite_RenderThread(
+		FRDGBuilder& GraphBuilder,
+		FIntPoint OutputExtent,
+		FVector2f TestWorldMin,
+		FVector2f TestWorldStep);
 	FRDGTextureRef RegisterResidentPageForReadback_RenderThread(
 		FRDGBuilder& GraphBuilder,
 		const FSightWeaveSparseTileIdentity& Identity,

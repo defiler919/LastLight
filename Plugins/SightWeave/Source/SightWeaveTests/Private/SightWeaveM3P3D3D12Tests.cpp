@@ -2,6 +2,7 @@
 
 #include "HAL/PlatformTime.h"
 #include "Misc/AutomationTest.h"
+#include "SightWeavePresentationBenchmark.h"
 #include "SightWeavePresentationTestReadback.h"
 
 namespace SightWeave::M3P3::D3D12Tests
@@ -306,6 +307,223 @@ namespace SightWeave::M3P3::D3D12Tests
 		TSharedPtr<FCaseContext> Context;
 		FAutomationTestBase* Test = nullptr;
 	};
+
+	struct FBenchmarkContext
+	{
+		FString Name;
+		double StartSeconds = FPlatformTime::Seconds();
+		int32 SourceCount = 0;
+		int32 ResidentTileCount = 0;
+		FIntPoint Extent = FIntPoint::ZeroValue;
+		TSharedPtr<FSightWeavePresentationBenchmark, ESPMode::ThreadSafe> Request;
+	};
+
+	double Percentile95(TArray<double> Samples)
+	{
+		Samples.Sort();
+		return Samples.IsEmpty()
+			? 0.0
+			: Samples[FMath::Clamp(FMath::CeilToInt(Samples.Num() * 0.95) - 1, 0, Samples.Num() - 1)];
+	}
+
+	TSharedPtr<FBenchmarkContext> BuildBenchmarkCase(
+		FAutomationTestBase* Test,
+		const FString& Name)
+	{
+		const TSharedPtr<FBenchmarkContext> Context = MakeShared<FBenchmarkContext>();
+		Context->Name = Name;
+		const bool b1440 = Name.StartsWith(TEXT("1440p"));
+		Context->Extent = b1440 ? FIntPoint(2560, 1440) : FIntPoint(1920, 1080);
+		if (Name.EndsWith(TEXT("Tiles1Sources2")))
+		{
+			Context->ResidentTileCount = 1;
+			Context->SourceCount = 2;
+		}
+		else if (Name.EndsWith(TEXT("Tiles8Sources8")))
+		{
+			Context->ResidentTileCount = 8;
+			Context->SourceCount = 8;
+		}
+		else if (Name.EndsWith(TEXT("Tiles128Sources32")))
+		{
+			Context->ResidentTileCount = 128;
+			Context->SourceCount = 32;
+		}
+		else
+		{
+			Test->AddError(TEXT("Unknown M3.3 benchmark case: ") + Name);
+			return Context;
+		}
+
+		constexpr double Span = 2480.0;
+		TArray<FPolygon> Polygons;
+		for (int32 SourceIndex = 0; SourceIndex < Context->SourceCount; ++SourceIndex)
+		{
+			const int32 TilesPerSource = FMath::Max(
+				1,
+				Context->ResidentTileCount / Context->SourceCount);
+			const int32 FirstTile = Context->ResidentTileCount < Context->SourceCount
+				? SourceIndex % Context->ResidentTileCount
+				: SourceIndex * TilesPerSource;
+			const int32 LastTileExclusive = FMath::Min(
+				Context->ResidentTileCount,
+				FirstTile + TilesPerSource);
+			FPolygon& Bypass = Polygons.AddDefaulted_GetRef();
+			Bypass.Layer = ESightWeaveRenderMaskLayer::Bypass;
+			Bypass.StableId = 1000 + SourceIndex;
+			Bypass.Vertices = Rectangle(
+				FirstTile * Span + 100.0,
+				100.0,
+				LastTileExclusive * Span - 100.0,
+				600.0);
+		}
+		const uint64 WorldSerial = 3400
+			+ static_cast<uint64>(b1440 ? 100 : 0)
+			+ static_cast<uint64>(Context->ResidentTileCount);
+		const TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet =
+			BuildPacket(Test, WorldSerial, Polygons, 128);
+		if (!Packet.IsValid())
+		{
+			return Context;
+		}
+
+		TArray<double> BindingSamples;
+		BindingSamples.Reserve(2048);
+		for (int32 Index = 0; Index < 2048; ++Index)
+		{
+			const double Start = FPlatformTime::Seconds();
+			const FSightWeaveViewPresentationSelection Sample =
+				FSightWeaveViewPresentationSelection::Enabled(
+					Packet->GetWorldIdentity(),
+					FSightWeaveKnowledgeOwnerId(FName(TEXT("PresentationOwner"))),
+					FSightWeaveFloorId(FName(TEXT("PresentationFloor"))),
+					ESightWeaveRenderPrecisionTier::Standard,
+					static_cast<uint64>(Index + 1));
+			BindingSamples.Add((FPlatformTime::Seconds() - Start) * 1000000.0);
+			if (!Sample.IsValid())
+			{
+				Test->AddError(TEXT("Benchmark selection construction failed"));
+				break;
+			}
+		}
+		const double BindingP95 = Percentile95(MoveTemp(BindingSamples));
+		Test->TestTrue(TEXT("GT presentation selection p95 remains below 0.25 ms"), BindingP95 < 250.0);
+		UE_LOG(LogTemp, Display,
+			TEXT("M3P3_GT_BINDING case=%s samples=2048 p95_us=%.3f"),
+			*Name,
+			BindingP95);
+
+		const FSightWeaveViewPresentationSelection Selection =
+			FSightWeaveViewPresentationSelection::Enabled(
+				Packet->GetWorldIdentity(),
+				FSightWeaveKnowledgeOwnerId(FName(TEXT("PresentationOwner"))),
+				FSightWeaveFloorId(FName(TEXT("PresentationFloor"))),
+				ESightWeaveRenderPrecisionTier::Standard,
+				1);
+		const FVector2f WorldStep(
+			static_cast<float>(Context->ResidentTileCount * Span / Context->Extent.X),
+			1000.0f / static_cast<float>(Context->Extent.Y));
+		Context->Request = FSightWeavePresentationBenchmark::Start(
+			Packet,
+			Selection,
+			Context->Extent,
+			FVector2f::ZeroVector,
+			WorldStep,
+			64);
+		return Context;
+	}
+
+	class FWaitForPresentationBenchmark final : public IAutomationLatentCommand
+	{
+	public:
+		FWaitForPresentationBenchmark(
+			TSharedPtr<FBenchmarkContext> InContext,
+			FAutomationTestBase* InTest)
+			: Context(MoveTemp(InContext)), Test(InTest)
+		{
+		}
+
+		virtual bool Update() override
+		{
+			if (!Context.IsValid() || !Context->Request.IsValid())
+			{
+				Test->AddError(TEXT("M3.3 presentation benchmark context is invalid"));
+				return true;
+			}
+			Context->Request->Poll();
+			if (!Context->Request->IsFinished())
+			{
+				if (FPlatformTime::Seconds() - Context->StartSeconds > 90.0)
+				{
+					Test->AddError(Context->Name + TEXT(": presentation benchmark timed out"));
+					return true;
+				}
+				return false;
+			}
+
+			FSightWeavePresentationBenchmarkResult Result;
+			if (!Context->Request->TryTakeResult(Result)
+				|| !Test->TestEqual(TEXT("Benchmark completes"), Result.Status,
+					ESightWeavePresentationReadbackStatus::Complete))
+			{
+				Test->AddError(Result.Failure);
+				return true;
+			}
+			const double ViewSetupP95 = Percentile95(Result.WarmRenderThreadViewSetupMicroseconds);
+			const double CompositeSetupP95 = Percentile95(Result.WarmRenderThreadCompositeSetupMicroseconds);
+			const double GPUP95 = Percentile95(Result.WarmGPUCompositeMicroseconds);
+			const double ResolutionBudget = Context->Extent.Y == 1080 ? 1000.0 : 1500.0;
+			const double PressureBudget = Context->Extent.Y == 1080 ? 2000.0 : 3000.0;
+			Test->TestEqual(TEXT("Expected resident tile count"), Result.ResidentTileCount,
+				Context->ResidentTileCount);
+			Test->TestEqual(TEXT("Camera/view-only setup does not re-upload page table"),
+				Result.FinalPageTableUploadCount, Result.InitialPageTableUploadCount);
+			Test->TestEqual(TEXT("Warmed composite does not allocate atlas pages"),
+				Result.FinalPageAllocationCount, Result.InitialPageAllocationCount);
+			Test->TestEqual(TEXT("Warmed composite does not allocate scratch textures"),
+				Result.FinalScratchAllocationCount, Result.InitialScratchAllocationCount);
+			Test->TestEqual(TEXT("Warmed composite does not regenerate persistent resources"),
+				Result.FinalResourceGeneration, Result.InitialResourceGeneration);
+			Test->TestTrue(TEXT("GT submit remains below 0.25 ms"),
+				Result.GameThreadSubmitMicroseconds < 250.0);
+			Test->TestTrue(TEXT("RT warmed composite setup remains below 0.20 ms"),
+				CompositeSetupP95 < 200.0);
+			Test->TestTrue(TEXT("Warmed composite meets resolution budget"), GPUP95 < ResolutionBudget);
+			if (Context->SourceCount == 32)
+			{
+				Test->TestTrue(TEXT("32-source pressure meets advised budget"), GPUP95 < PressureBudget);
+			}
+			Test->TestTrue(TEXT("Persistent live-mask allocation stays below 32 MiB"),
+				Result.PersistentGPUBytes <= 32ull * 1024ull * 1024ull);
+			UE_LOG(LogTemp, Display,
+				TEXT("M3P3_PERF case=%s resolution=%dx%d sources=%d residents=%d warm_samples=%d gt_submit_us=%.3f rt_bind_submit_us=%.3f cold_rt_setup_us=%.3f cold_gpu_total_us=%.3f warm_view_setup_p95_us=%.3f warm_composite_setup_p95_us=%.3f warm_gpu_composite_p95_us=%.3f pages=%d persistent_bytes=%llu transient_output_bytes=%llu page_uploads=%llu allocations=%llu/%llu resource_generation=%llu"),
+				*Context->Name,
+				Context->Extent.X,
+				Context->Extent.Y,
+				Context->SourceCount,
+				Result.ResidentTileCount,
+				Result.WarmGPUCompositeMicroseconds.Num(),
+				Result.GameThreadSubmitMicroseconds,
+				Result.RenderThreadBindingSubmitMicroseconds,
+				Result.ColdRenderThreadSetupMicroseconds,
+				Result.ColdGPUTotalMicroseconds,
+				ViewSetupP95,
+				CompositeSetupP95,
+				GPUP95,
+				Result.AllocatedPageCount,
+				Result.PersistentGPUBytes,
+				Result.TransientOutputBytes,
+				Result.FinalPageTableUploadCount,
+				Result.FinalPageAllocationCount,
+				Result.FinalScratchAllocationCount,
+				Result.FinalResourceGeneration);
+			return true;
+		}
+
+	private:
+		TSharedPtr<FBenchmarkContext> Context;
+		FAutomationTestBase* Test = nullptr;
+	};
 }
 
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
@@ -337,6 +555,38 @@ bool FSightWeaveM3P3D3D12PresentationReadbackTest::RunTest(const FString& Parame
 	using namespace SightWeave::M3P3::D3D12Tests;
 	const TSharedPtr<FCaseContext> Context = BuildCase(this, Parameters);
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPresentationReadback(Context, this));
+	return true;
+}
+
+IMPLEMENT_COMPLEX_AUTOMATION_TEST(
+	FSightWeaveM3P3D3D12PresentationPerformanceTest,
+	"SightWeave.M3P3.D3D12.PresentationPerformance",
+	SightWeave::M3P3::D3D12Tests::TestFlags)
+
+void FSightWeaveM3P3D3D12PresentationPerformanceTest::GetTests(
+	TArray<FString>& OutBeautifiedNames,
+	TArray<FString>& OutTestCommands) const
+{
+	static const TCHAR* Cases[] = {
+		TEXT("1080p.Tiles1Sources2"),
+		TEXT("1080p.Tiles8Sources8"),
+		TEXT("1080p.Tiles128Sources32"),
+		TEXT("1440p.Tiles1Sources2"),
+		TEXT("1440p.Tiles8Sources8"),
+		TEXT("1440p.Tiles128Sources32")
+	};
+	for (const TCHAR* Case : Cases)
+	{
+		OutBeautifiedNames.Add(Case);
+		OutTestCommands.Add(Case);
+	}
+}
+
+bool FSightWeaveM3P3D3D12PresentationPerformanceTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M3P3::D3D12Tests;
+	const TSharedPtr<FBenchmarkContext> Context = BuildBenchmarkCase(this, Parameters);
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPresentationBenchmark(Context, this));
 	return true;
 }
 

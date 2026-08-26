@@ -171,4 +171,30 @@ public:
 		return Parameters.Platform == SP_PCD3D_SM6;
 	}
 };
+
+class FSightWeavePresentationBenchmarkPixelShader final : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSightWeavePresentationBenchmarkPixelShader);
+	SHADER_USE_PARAMETER_STRUCT(FSightWeavePresentationBenchmarkPixelShader, FGlobalShader);
+
+public:
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, PageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage1)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage2)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage3)
+		SHADER_PARAMETER(FVector2f, TranslatedFloorOrigin)
+		SHADER_PARAMETER(float, CentimetersPerTexel)
+		SHADER_PARAMETER(uint32, PageTableCount)
+		SHADER_PARAMETER(FVector2f, TestWorldMin)
+		SHADER_PARAMETER(FVector2f, TestWorldStep)
+		SHADER_PARAMETER(FIntPoint, TestOutputExtent)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return Parameters.Platform == SP_PCD3D_SM6;
+	}
+};
 #endif

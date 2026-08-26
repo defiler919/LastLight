@@ -48,4 +48,10 @@ IMPLEMENT_GLOBAL_SHADER(
 	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
 	"SightWeavePresentationTestPS",
 	SF_Pixel);
+
+IMPLEMENT_GLOBAL_SHADER(
+	FSightWeavePresentationBenchmarkPixelShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeavePresentationBenchmarkPS",
+	SF_Pixel);
 #endif

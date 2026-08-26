@@ -1,6 +1,6 @@
 # SightWeave M2P.5 Handoff
 
-Status: **IN PROGRESS — PHASE 1 AUTHORITY COMPLETE**
+Status: **IN PROGRESS — SAFE VALIDATION COMPLETE; ELEVATED FINAL MATRICES PENDING**
 
 Last updated: 2026-08-26 (Asia/Shanghai)
 
@@ -68,6 +68,39 @@ Only a hotspot proven by Phase 1 authority may justify a production change. Any 
 
 M2P.5 can be marked **COMPLETED** only when both independent final ten-process matrices preserve all fail-closed requirements, keep Batch512 within its existing gates, and independently report broad dynamic-door aggregate authoritative on-CPU p99 `< 250 us`.
 
+## Phase 2 result and safe validation checkpoint
+
+The two Phase 1-authorized production changes are implemented and pushed:
+
+1. old-state incremental validation uses the previous Prepared cache while the
+   exact target solve uses the selected target Prepared cache;
+2. reused rays bypass angular active-set advancement, while rebuilt rays
+   advance directly to their ordered angle.
+
+All stale binding, revision, dirty-sector, seam, topology, and capacity cases
+remain synchronous and fail-closed. The final code checkpoint before this
+handoff update is `c8971a4ac1781b4a945e7a7bb3a4c415837027e9`.
+
+Post-include focused M2P.5 is 4/4, full SightWeave is 116/116, and Darkwell is
+24/24. The final strict allocation proof has 20 warmed workloads with three
+samples each and all allocation/reallocation/byte counts at zero. Fresh
+36,000-frame NullRHI and D3D12/SM6 soaks have zero correctness failures,
+capacity growth, and Unknown. Final BuildPlugin plus clean-host Editor
+Development, Game Development, and Game Shipping all pass. Runtime/Shipping
+dependency isolation and both Lab smokes pass.
+
+Two narrower serial scopes retain Batch512 wall p99 failures; the later full
+scope and three independent extended performance processes pass. These wall
+failures remain recorded and are not relabeled as intrinsic CPU. Exact paths,
+metrics, hashes, warning audit, and package evidence are recorded in
+`Docs/SIGHTWEAVE_M2P5_FINAL_VALIDATION.md`.
+
+`Scripts/RunSightWeaveM2P5FinalEtwMatrices.ps1` is a parse-checked thin wrapper
+over the existing M2P.4 calibration/attribution workflow. It will run one
+calibration and two independent ten-process formal matrices inside one
+high-integrity PowerShell child without changing samples, thresholds, or
+analysis.
+
 ## Phase 1 result
 
 The production-change boundary is now open based on the fail-closed ten-process authority recorded in:
@@ -85,7 +118,11 @@ The complete classification and authorized Phase 2 changes are in `Docs/SIGHTWEA
 
 ## Exact resume point
 
-Continue on this branch with the two evidence-authorized Phase 2 changes only:
+The user is away. No UAC or elevated ETW was attempted after the explicit pause
+instruction, and the absence of a run is not a performance failure. Wait until
+the user replies `我回来了`. Then verify the branch and worktree, explicitly say
+`现在请点击UAC的是`, and launch one visible elevated child for the prepared final
+matrix wrapper:
 
 ```powershell
 Set-Location -LiteralPath 'D:\UE_projects\LastLight'
@@ -93,4 +130,5 @@ git switch codex/m2p5-sightweave-vision-solve-tail-closure
 git status --short --branch
 ```
 
-Do not stage `Darkwell.uproject`.
+Do not stage `Darkwell.uproject`. Do not modify Runtime unless the two
+authoritative post-change matrices prove a remaining fixable Plugin CPU tail.

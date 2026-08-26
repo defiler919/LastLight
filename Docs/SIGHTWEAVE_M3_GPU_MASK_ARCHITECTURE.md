@@ -27,6 +27,20 @@ This is a stable world-space tiled system. It is neither screen-space fog nor GP
 | CPU triangulation -> GPU rasterization | deterministic CPU truth, modest packet size, natural RDG work | CPU packet cost and GPU tile cost are independently measurable | **selected** |
 | GPU visibility solve | could move angular work to GPU but creates a second authority, readback/debug complexity, and platform exposure | reopens closed M2 solver work | rejected |
 
+The decision also covers every requested operational axis:
+
+| Route | Correctness / world and edge stability | Floor / owner / profile / dynamic door | Upload, GPU, and VRAM | UE 5.8.1 / Fab / Shipping / testing / recovery |
+| --- | --- | --- | --- | --- |
+| fixed world RT | correct only inside a frozen bound; camera-stable, but bound/precision changes invalidate all pixels | requires full resource per owner/floor and profile scratch; door can be local but empty map area remains allocated | simple upload/raster; worst VRAM follows maximum map rectangle | common API, but host map bounds become plugin configuration; allocation failure still needs black fallback; easy readback |
+| selected tiled atlas | CPU oracle plus stable integer tile keys/gutters; camera and resolution independent | explicit owner/floor scopes; transient complete-profile scratch; door dirties old/new overlap only | bounded pages and local uploads; final VRAM does not multiply by source/profile | RDG external pooled targets and plugin global shaders have local 5.8.1 precedents; clean-host/readback/rebuild are directly testable; page failure is isolated and black |
+| clipmap | world-stable only with carefully validated level/origin transitions; edge blend adds another error surface | owner/floor multiply level sets; moving camera can churn unrelated remote/door coverage | bounded but continuous camera uploads; several levels/history-like state | implementable but substantially harder to explain/test for Fab maps; rollover failure recovery is complex |
+| per-floor / per-owner alone | required semantic isolation but not a spatial allocation strategy | correctly isolates; multiplies whichever physical representation it wraps | exact multiplier is resident scopes | selected as atlas partition keys; caps and black overflow make recovery testable |
+| persistent per-source/profile | semantically direct when never merged, but stale deletion is resource-heavy | door/profile/source churn creates many long-lived targets/passes | VRAM and pass count grow with sources/profiles x owner/floor | easy individual debug, poor Shipping/Fab scalability; allocation failures invite forbidden silent dropping |
+| screen-space | cannot be the hard world oracle; camera/resolution/temporal sampling moves edges | off-screen source/floor/owner work is incomplete; doors redraw with view | bounded texture but full-screen rebuild every frame | easy prototype and packaging, but fails core tests and has no valid recovery to world truth |
+| Scene Capture | rendered depth/bias differs from CPU geometry and can leak current scene state | captures multiply by source/floor/owner/profile; dynamic doors force recapture | high CPU submission, GPU passes, and persistent capture memory | content-sensitive in arbitrary Fab hosts and Shipping; diagnostic recovery cannot restore CPU equivalence |
+| CPU triangles -> GPU raster | same CPU registry/revision/polygons; stable world samples with explicit boundary oracle | profile/bypass/suppression order is packet-defined; door sends changed polygons | change-only packet upload and GPU raster; bounded scratch | selected; global shader/RDG/readback/black fallback all have explicit tests |
+| GPU visibility solve | creates a second algorithm/registry unless CPU is replaced, which is forbidden | synchronization and attribution across all partitions become harder | may reduce triangle upload but adds geometry buffers/compute/readback diagnosis | larger RHI/driver surface and weak clean-host observability; failure cannot safely answer gameplay |
+
 ## Module boundary
 
 ### Planned plugin modules
@@ -118,6 +132,8 @@ Packet construction happens only for a new relevant revision, not every view or 
 
 The post-tonemap choice is frozen for strict black/live-mask presentation because it is independent of viewport resolution and preserves pure black after tone mapping. Neutral-gray remembered-environment composition is deliberately outside M3.0; if it later requires pre-tonemap material attributes, it may add an earlier pass without changing live-mask authority, identity, or atlas generation.
 
+The future compositor interface reserves separate, explicitly named inputs for effective live mask, CPU-owned memory-mask mirror, supported remembered-environment data, and subject reveal/proxy primitives. Those inputs do not belong to `FSightWeaveRenderPacket` in M3.1 and cannot be synthesized from current Scene Color/GBuffer. This keeps a clear extension seam for last-seen proxies without implementing or coupling them to the live atlas now.
+
 ## RDG and RHI resource model
 
 Persistent atlas pages are Render Thread-owned `TRefCountPtr<IPooledRenderTarget>` objects or the equivalent UE 5.8.1 external pooled target. Each graph registers them using `FRDGBuilder::RegisterExternalTexture`; transient tile scratch and upload buffers use `CreateTexture`/RDG buffers. `ConvertToExternalTexture` is not the default because UE documents it as increasing memory pressure and primarily easing legacy ports.
@@ -182,6 +198,8 @@ ceil(MaxActiveTiles / 64) * 2048 * 2048 * 1 byte
 
 There is no full-atlas double buffer and no persistent profile multiplier. RDG ordering lets a revision update before its later composite; if an update must span frames, that scope is sampled as black until completion rather than exposing partial/stale contents.
 
+No history texture is required for the live mask. Presentation lag is revision state, not temporal image history. A later CPU-owned memory mirror is a separate resource family and cannot reuse stale live pixels as history.
+
 ### Proposed residency and safety caps
 
 | Limit | Proposed default | Safety behavior |
@@ -223,7 +241,7 @@ Dynamic doors have no render-specific semantic. A door segment change causes the
 | source deactivation/delete | old-overlap tiles |
 | polygon transform/shape | union of old/new overlap tiles |
 | compatibility change | old/new profile dependencies and overlap tiles |
-| illumination change | dependent profiles in overlapping tiles |
+| illumination activation, durability exhaustion, move, or capability change | dependent profiles in old/new overlapping tiles |
 | bypass change | bypass overlap only |
 | suppression change | affected effective tiles after union |
 | camera motion/turn/FOV/resolution | no world mask update; full-screen sample only |
@@ -243,6 +261,7 @@ The composite must preserve ViewRect, stereo/slice semantics, `OverrideOutput`, 
 ## Shipping, Fab, and NullRHI behavior
 
 - `SightWeaveRender` is a normal Runtime module and shaders reside under the plugin `Shaders` directory so BuildPlugin packages them.
+- Plugin `Config` defaults, if M3.1 adds them, live under `Plugins/SightWeave/Config` and are audited in the packaged plugin; host-project config is an override, not a required file. `CanContainContent` remains true for future neutral examples, but M3.1 requires no content asset and Shipping cannot depend on Editor/Test content.
 - No shader source depends on project paths, DARKWELL defines, Editor-only modules, Engine private headers, or uncooked assets.
 - Shipping keeps fail-closed status/counters needed for support but excludes pixel readback and expensive debug visualization.
 - Development/Editor may expose RDG captures, selected-tile readback, atlas/profile debug views, and validation console commands.

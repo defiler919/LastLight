@@ -79,10 +79,13 @@ Run every row at 25, 10, 5, and 2.5 cm/texel and at logical tiles around `(0,0)`
 | straight wall | no coverage behind wall; vertices stay on CPU line within tier tolerance |
 | diagonal wall | no stair-step leak beyond allowed boundary texel |
 | inside/outside corner | no crack or bridge at shared endpoint |
+| L/T junctions | no endpoint crack, false wedge, or branch-side leakage |
 | closed/opening/open door | old pixels removed, new opening appears only at applied revision |
+| cone around `-PI/+PI` | ordered polygon/raster is continuous across the angular seam |
 | overlapping polygons | boolean union is idempotent and independent of source ordering |
 | thin wedge/sliver/collinear/duplicate inputs | either valid bounded coverage or explicit CPU packet rejection; never undefined pixels |
 | tile seam and four-tile corner | interior and gutter comparison is continuous under camera motion |
+| height-band exclusion | polygons/sources rejected by CPU floor/height rules produce no GPU contribution |
 | floor origin/rebase | old generation not sampled; rebuilt mask maps identically in rebased local coordinates |
 
 ### Compatibility matrix
@@ -96,11 +99,14 @@ Use overlapping polygons and explicit sample bands:
 | A+B overlap | 2 complete profiles | Infrared only | only B contribution appears |
 | C multi-capability | Source C `{Infrared, Visible}` | either one independently | C appears for either accepted type |
 | unrelated channel | C as above | Ultraviolet only | C remains black |
+| illumination only | no vision source | any legal illumination | no live pixels |
+| gated vision without compatible light | gated source | none or incompatible only | no live pixels |
 | emitted multi-capability | A and B | one light emits both | both matching profiles appear |
 | same set, different order/duplicates | equivalent C sources | either accepted light | one canonical profile, identical result |
 | forced fingerprint collision | two unequal canonical sets | matching one only | no cross-talk; sequence comparison separates them |
 | bypass body circle | no profiles | no illumination | bypass coverage live, still wall/floor/suppression constrained |
 | suppression overlap | any live case | matching light | suppression is applied last and removes hard coverage |
+| Subject Reveal Override | any ordinary hard state | independent moving subject reveal | world mask is byte-identical and no environment pixel is added |
 
 Run active complete-profile counts `1`, `4`, and `8`, with the same source polygons shuffled across at least three deterministic registration orders. Run `32` as the proposed hard ceiling and `33` as fail-closed overflow; the 32-profile case is a capacity stress, not the reference performance workload.
 
@@ -135,6 +141,7 @@ For each case capture accepted/applied revision, dirty logical tiles, rasterized
 | broad 4V/2L 24-state door sequence | every state agrees with full CPU reference; no stale state or cumulative painting |
 | no semantic `bDynamic`-only change | no changed hard pixels; only explicitly documented metadata work |
 | precision/origin/layout change | full-scope rebuild and new generation |
+| floor/map bounds change | full-scope rebuild; pixels outside new legal bounds are unavailable/black |
 | more dirty tiles than one scratch batch | multiple batches in one graph or black across frames; never partial visible result |
 | new revision while prior is pending | newest self-contained packet wins; prior cannot later overwrite it |
 
@@ -145,6 +152,7 @@ A parallel full-redraw reference path is required in Development automation. Eve
 | Event | Required behavior |
 | --- | --- |
 | renderer disabled/module unavailable | CPU queries pass; presentation status unavailable/black |
+| plugin disable/re-enable in a supported Editor flow | old SVE/resources/world serial are gone; re-enable starts black and rebuilds from a new valid packet |
 | NullRHI | no GPU resource work/readback; CPU suites pass; black/Unavailable status |
 | unsupported feature level or R8 required flags | explicit unsupported reason; black; no white/fallback authority |
 | shader compile/permutation unavailable | explicit shader reason; black |
@@ -173,6 +181,23 @@ Capture hard point-sampled mask and final feathered output separately. The hard 
 
 M3.0 validates strict black versus hard live presentation only. Neutral-gray memory, subject proxies, materials, and DARKWELL GPU-mask integration are later M3 work and cannot be declared covered by these captures.
 
+### Lab test-region plan
+
+A later implementation task may extend `/SightWeave/Maps/L_SightWeave_Lab` only through Unreal Editor or Editor Python APIs. Planned labeled, spatially separated regions are:
+
+1. hard polygon basics: empty/triangle/radial/cone, edge and vertex probes;
+2. straight/diagonal walls plus L/T/corner and `-PI/+PI` seam paths;
+3. narrow/rotating/broad dynamic-door lanes with deterministic 24-state control;
+4. Visible/Infrared/multi-capability/incompatible illumination lanes;
+5. bypass and suppression ordering lane;
+6. negative-coordinate, tile seam/page seam, origin/rebase, and bounds lane;
+7. overlapping XY floor/height-band isolation lane;
+8. Knowledge Owner isolation and PIE multi-world lifecycle lane;
+9. camera/resolution/screen-percentage stability path;
+10. failure/capacity/debug-readback controls that default to black.
+
+Subject Reveal Override receives a separate subject-only lane proving no world-mask delta. Neutral-gray memory and last-seen proxy regions are not created by M3.1.
+
 ## Layer 6: performance and memory
 
 ### Metric categories
@@ -181,8 +206,14 @@ M3.0 validates strict black versus hard live presentation only. Neutral-gray mem
 | --- | --- | --- |
 | M2 Batch512 authoritative intrinsic CPU | **closed formal contract** | on-CPU p50 `<=150 us`, p95 `<=180 us`, p99 `<=200 us`; unchanged |
 | M2 broad 4V/2L dynamic door intrinsic CPU | **closed formal contract** | on-CPU p99 `<250 us`; engineering `<225 us`, ideal `<200 us`; unchanged |
+| M2 Prepared 4096/source | **closed formal contract** | warmed p50 `<1 ms`, p99 `<2 ms`; unchanged |
 | M2 warmed hot-path allocation/correctness | **closed formal contract** | zero asserted allocator activity/capacity failures and exact parity for declared workloads; unchanged |
 | M3 GT render-packet build/dispatch | **proposed engineering target** | p95 `<0.25 ms` at reference workload; no unchanged-frame packet build |
+| M3 RT packet accept/RDG setup, dirty reference update | **proposed engineering target** | p95 `<0.20 ms`; unchanged p95 `<0.05 ms` with zero raster/upload passes |
+| M3 packet upload + tile clear/raster/gutter | **proposed engineering share** | p95 `<0.45 ms` for the reference dirty-door workload, independent of screen resolution |
+| M3 profile intersection | **proposed engineering share** | p95 `<0.15 ms` at 8 complete profiles in the reference dirty-door workload |
+| M3 bypass + suppression merge | **proposed engineering share** | combined p95 `<0.10 ms` in the reference dirty-door workload |
+| M3 composite only | **proposed engineering share** | p95 `<0.30 ms` at 1080p and `<0.50 ms` at 1440p |
 | M3 raster + final composite at 1080p | **provisional requirement target** | proposed acceptance interpretation: p95 `<1.0 ms`, report p99/max |
 | M3 raster + final composite at 1440p | **provisional requirement target** | proposed acceptance interpretation: p95 `<1.5 ms`, report p99/max |
 | M3 live-mask GPU budget | **proposed architecture limit** | `32 MiB` including 2 MiB scratch, plus report measured driver/RDG allocation |
@@ -191,11 +222,13 @@ M3.0 validates strict black versus hard live presentation only. Neutral-gray mem
 | per-tier atlas bytes | **arithmetic estimate** | 4/8/12/16 MiB per scope for proposed 64/128/192/256 tile caps |
 | actual GPU p50/p95/p99/max | **later measurement** | no evidence exists until implementation runs on declared hardware |
 
-The provisional GPU targets cannot become formal acceptance contracts until the user approves minimum hardware, map/floor extents, simultaneous owners, resident floors, source/profile workload, screen percentage/upscaler, and build/RHI settings. Until then a run may meet or miss an engineering target, but M3.0 must not state that product performance passed.
+The per-pass shares are diagnostic guardrails, not independent excuses to waive the total. They apply to the reference dirty-door workload, not a full-cap rebuild. The provisional GPU targets cannot become formal acceptance contracts until the user approves minimum hardware, map/floor extents, simultaneous owners, resident floors, source/profile workload, screen percentage/upscaler, and build/RHI settings. Until then a run may meet or miss an engineering target, but M3.0 must not state that product performance passed.
 
 ### Timing workload matrix
 
 Use D3D12/SM6 Development with VSync/frame-rate smoothing disabled and record clocks/power mode/background conditions. Each row has a warmup, at least 10,000 measured frames or enough repetitions for stable p99, and at least three fresh processes. The soak uses 2,400 warmup frames and 36,000 measured frames to remain comparable with M2 evidence.
+
+The office RTX 4060 is the primary development measurement GPU, not an approved minimum specification. The home Turing 8 GB GPU remains recorded only as an unidentified `RTX 2070 ...`-truncated device until its full model is verified; it MUST NOT be relabeled as an RTX 2060 Super or used as a formal minimum by assumption.
 
 | Workload | Profiles | Dirty tiles/frame | Sources | Resolutions | Purpose |
 | --- | ---: | ---: | ---: | --- | --- |
@@ -207,10 +240,14 @@ Use D3D12/SM6 Development with VSync/frame-rate smoothing disabled and record cl
 | full active scope rebuild | 1/4/8 | tier cap | reference sources | 1080p/1440p | spike/failure behavior; not expected per-frame |
 | camera-only motion | 8 | 0 | 8V/8L | 1080p/1440p | world stability and composite scaling |
 | tier sweep | 1/4/8 | same world mutation | 8V/8L | 1080p/1440p | 25/10/5/2.5 cm fidelity/cost/bytes |
+| source-count sweep | 1/4/8 | 0/1/8 plus door set | 2/8/32 total, plus 8V/8L reference | 1080p/1440p | scaling; 32-source stress is reported separately |
+| owner/floor residency stress | 1/4/8 | controlled | 8V/8L per scope | 1080p/1440p | one active scope, attempted second scope, cap/byte-budget failure and isolation |
 
 GPU events MUST separate `PacketUpload`, `TileClear`, `VisionRaster`, `IlluminationRaster`, `ProfileCombine`, `Bypass`, `Suppression`, `Gutter`, and `Composite`, plus a total SightWeave event. Use UE 5.8 `RDG_EVENT_SCOPE_STAT` and RHI breadcrumbs. Do not use deprecated no-op `RDG_GPU_STAT_SCOPE` as evidence.
 
 Record CPU GT/RT time separately using Unreal Insights named CPU scopes and thread identity. If CPU tail attribution becomes necessary, collect scheduler-aware ETW with the same fail-closed ownership/loss rules used by M2P.5; GPU duration still remains a separate metric.
+
+The 2-source and 8-source sweeps plus the 8V/8L reference are expected to meet the provisional total targets. The 32-total-source row is a scale stress with all percentiles reported; **proposed scale ceiling**, pending workload/hardware approval, is p95 `<2.0 ms` at 1080p and `<3.0 ms` at 1440p. Missing that scale ceiling cannot be hidden by reducing sources or profiles.
 
 ### Memory/allocation evidence
 

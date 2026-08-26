@@ -29,6 +29,9 @@ The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative. Labels 
 4. Legal illumination is explicit registered geometry, not rendered light, Scene Color, GBuffer luminance, exposure, shadows, emissive output, or a `ULightComponent` sample.
 5. The permanent body-circle bypass source remains occluded, floor-bound, and suppression-bound, but never enters an illumination compatibility group.
 6. M2P.5 CPU contracts and evidence remain unchanged. M3 work MUST NOT rename a CPU timing result, substitute wall time for intrinsic CPU time, or reopen closed CPU gates without new CPU production changes.
+7. Subject Reveal Overrides, including the DARKWELL damage-source reveal, are subject-only presentation permissions. They never enter this world mask, illuminate environment pixels, or write memory.
+8. Remembered environment and last-seen subject proxies are later, separate inputs. The live-mask packet contains no current GBuffer/material/door/decor state and cannot reconstruct gray memory.
+9. The approved black/gray/live knowledge states are unchanged. Enemies outside authoritative CPU hard live vision remain hidden regardless of GPU pixels; the GPU cannot grant or revoke HUD, interaction, lock-on, AI perception, Last-Seen refresh, or memory-write permission.
 
 For one Knowledge Owner `o`, floor `f`, and immutable revision `r`, the hard presentation reference is:
 
@@ -62,7 +65,10 @@ The render packet is conceptually:
 ```text
 FSightWeaveRenderPacket
   SchemaVersion
-  SnapshotRevision
+  PublishedRevision
+  RegistryRevision
+  PacketSerial
+  SourceFrameNumber
   WorldInstanceSerial
   ActivePresentedFloorId
   Scopes[]
@@ -70,6 +76,7 @@ FSightWeaveRenderPacket
 FSightWeaveRenderScopePacket
   KnowledgeOwnerId
   FloorId
+  FloorZMin / FloorZMax
   FloorOriginXY
   FloorBoundsXY
   PrecisionTier
@@ -93,11 +100,14 @@ The exact C++ layout may pack arrays differently, but it MUST preserve the field
 | Field | Required semantics |
 | --- | --- |
 | `SchemaVersion` | Reject an unknown packet schema; never reinterpret it heuristically. |
-| `SnapshotRevision` | Exact CPU snapshot revision from which every item in the packet was derived. |
+| `PublishedRevision` | Exact CPU `FSightWeaveFrameSnapshot::Revision` from which every item in the packet was derived; this orders render application. |
+| `RegistryRevision` | Revision of the registered source/profile/floor inputs consumed. It equals the unified published revision in current M2 Runtime but stays explicit for provenance if registries are later versioned separately. |
+| `PacketSerial`, `SourceFrameNumber` | Monotonic bridge/debug provenance. Neither changes authority or permits a lower published revision to win. |
 | `WorldInstanceSerial` | Monotonic identity that prevents a packet from an old PIE/world lifetime entering a replacement world. Pointer value alone is insufficient. |
 | `KnowledgeOwnerId`, `FloorId` | Required on every scope; sources cannot migrate between scopes implicitly. |
+| `FloorZMin/FloorZMax`, source height band | Finite CPU floor/source height provenance. CPU has already decided inclusion; renderer validates the active floor band and cannot reassign geometry by screen depth. |
 | `ActivePresentedFloorId` | Exactly one active/presented floor per local view in v1. Inactive floors may remain resident but cannot be composited. |
-| `SourceId` | Stable generation-aware vision, illumination, bypass, or suppression source identity; source type is explicit. |
+| `SourceId`, `SourceType` | Stable generation-aware identity plus explicit gated-vision, illumination, bypass, or suppression enum. |
 | `SourceRevision` | CPU revision for content comparison and diagnostics; it does not replace packet revision ordering. |
 | `ProfileIndex` | Packet-local index into a canonical full accepted-capability sequence. Bypass uses no profile. |
 | `PolygonId` | Stable within source generation and packet schema; carries source type and source identity. |
@@ -149,7 +159,7 @@ Proposed implementation limits are not semantic shortcuts. If the active profile
 
 ## Revision, coalescing, and stale rejection
 
-Render state tracks per world and scope:
+Render state tracks per world and scope (where `Revision` below means `PublishedRevision`):
 
 ```text
 LastAcceptedRevision

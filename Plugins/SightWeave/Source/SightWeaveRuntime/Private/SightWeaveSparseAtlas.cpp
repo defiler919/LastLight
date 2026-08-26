@@ -5,60 +5,60 @@
 
 namespace SightWeaveSparseAtlasPrivate
 {
-	constexpr uint64 FnvOffset = 14695981039346656037ull;
-	constexpr uint64 FnvPrime = 1099511628211ull;
+	constexpr uint64 SparseFnvOffset = 14695981039346656037ull;
+	constexpr uint64 SparseFnvPrime = 1099511628211ull;
 	constexpr double TileBoundaryBias = 1.0e-6;
 
-	bool IsFinite(const FVector2D& Point)
+	bool SparseIsFinite(const FVector2D& Point)
 	{
 		return FMath::IsFinite(Point.X) && FMath::IsFinite(Point.Y);
 	}
 
-	void HashBytes(uint64& Hash, const void* Data, const int32 NumBytes)
+	void SparseHashBytes(uint64& Hash, const void* Data, const int32 NumBytes)
 	{
 		const uint8* Bytes = static_cast<const uint8*>(Data);
 		for (int32 Index = 0; Index < NumBytes; ++Index)
 		{
 			Hash ^= Bytes[Index];
-			Hash *= FnvPrime;
+			Hash *= SparseFnvPrime;
 		}
 	}
 
 	template <typename ValueType>
-	void HashValue(uint64& Hash, const ValueType& Value)
+	void SparseHashValue(uint64& Hash, const ValueType& Value)
 	{
-		HashBytes(Hash, &Value, sizeof(ValueType));
+		SparseHashBytes(Hash, &Value, sizeof(ValueType));
 	}
 
-	void HashName(uint64& Hash, const FName Name)
+	void SparseHashName(uint64& Hash, const FName Name)
 	{
 		const FString Lower = Name.ToString().ToLower();
 		const FTCHARToUTF8 Utf8(*Lower);
-		HashBytes(Hash, Utf8.Get(), Utf8.Length());
+		SparseHashBytes(Hash, Utf8.Get(), Utf8.Length());
 		const uint8 Terminator = 0;
-		HashValue(Hash, Terminator);
+		SparseHashValue(Hash, Terminator);
 	}
 
 	void HashProfile(uint64& Hash, const FSightWeaveRenderProfileIdentity& Profile)
 	{
-		HashValue(Hash, Profile.StableHash);
+		SparseHashValue(Hash, Profile.StableHash);
 		const uint32 Count = static_cast<uint32>(Profile.CanonicalCapabilities.Num());
-		HashValue(Hash, Count);
+		SparseHashValue(Hash, Count);
 		for (const FName Capability : Profile.CanonicalCapabilities)
 		{
-			HashName(Hash, Capability);
+			SparseHashName(Hash, Capability);
 		}
 	}
 
 	void HashScope(uint64& Hash, const FSightWeaveSparseScopeKey& Scope)
 	{
-		HashValue(Hash, Scope.WorldIdentity.Serial);
-		HashName(Hash, Scope.KnowledgeOwnerId.GetValue());
-		HashName(Hash, Scope.FloorId.GetValue());
+		SparseHashValue(Hash, Scope.WorldIdentity.Serial);
+		SparseHashName(Hash, Scope.KnowledgeOwnerId.GetValue());
+		SparseHashName(Hash, Scope.FloorId.GetValue());
 		const uint8 Tier = static_cast<uint8>(Scope.PrecisionTier);
-		HashValue(Hash, Tier);
-		HashValue(Hash, Scope.FloorOrigin.X);
-		HashValue(Hash, Scope.FloorOrigin.Y);
+		SparseHashValue(Hash, Tier);
+		SparseHashValue(Hash, Scope.FloorOrigin.X);
+		SparseHashValue(Hash, Scope.FloorOrigin.Y);
 	}
 
 	bool ProfileLess(
@@ -123,7 +123,7 @@ namespace SightWeaveSparseAtlasPrivate
 		}
 		for (const FVector2D& Vertex : Polygon.WorldVertices)
 		{
-			if (!IsFinite(Vertex))
+			if (!SparseIsFinite(Vertex))
 			{
 				return false;
 			}
@@ -220,10 +220,10 @@ namespace SightWeaveSparseAtlasPrivate
 
 	uint64 ComputeTileHash(const FSightWeaveSparseRenderTile& Tile)
 	{
-		uint64 Hash = FnvOffset;
+		uint64 Hash = SparseFnvOffset;
 		HashScope(Hash, Tile.Identity.TileKey.Scope);
-		HashValue(Hash, Tile.Identity.TileKey.LogicalCoordinate.X);
-		HashValue(Hash, Tile.Identity.TileKey.LogicalCoordinate.Y);
+		SparseHashValue(Hash, Tile.Identity.TileKey.LogicalCoordinate.X);
+		SparseHashValue(Hash, Tile.Identity.TileKey.LogicalCoordinate.Y);
 		for (const FSightWeaveRenderProfileIdentity& Profile : Tile.Identity.CanonicalProfiles)
 		{
 			HashProfile(Hash, Profile);
@@ -231,35 +231,35 @@ namespace SightWeaveSparseAtlasPrivate
 		for (const FSightWeaveSparseProfileGeometry& Profile : Tile.Profiles)
 		{
 			HashProfile(Hash, Profile.Identity);
-			HashValue(Hash, Profile.VisionRange.FirstVertex);
-			HashValue(Hash, Profile.VisionRange.VertexCount);
-			HashValue(Hash, Profile.VisionRange.FirstIndex);
-			HashValue(Hash, Profile.VisionRange.IndexCount);
-			HashValue(Hash, Profile.IlluminationRange.FirstVertex);
-			HashValue(Hash, Profile.IlluminationRange.VertexCount);
-			HashValue(Hash, Profile.IlluminationRange.FirstIndex);
-			HashValue(Hash, Profile.IlluminationRange.IndexCount);
+			SparseHashValue(Hash, Profile.VisionRange.FirstVertex);
+			SparseHashValue(Hash, Profile.VisionRange.VertexCount);
+			SparseHashValue(Hash, Profile.VisionRange.FirstIndex);
+			SparseHashValue(Hash, Profile.VisionRange.IndexCount);
+			SparseHashValue(Hash, Profile.IlluminationRange.FirstVertex);
+			SparseHashValue(Hash, Profile.IlluminationRange.VertexCount);
+			SparseHashValue(Hash, Profile.IlluminationRange.FirstIndex);
+			SparseHashValue(Hash, Profile.IlluminationRange.IndexCount);
 		}
-		HashValue(Hash, Tile.BypassRange.FirstVertex);
-		HashValue(Hash, Tile.BypassRange.VertexCount);
-		HashValue(Hash, Tile.BypassRange.FirstIndex);
-		HashValue(Hash, Tile.BypassRange.IndexCount);
-		HashValue(Hash, Tile.SuppressionRange.FirstVertex);
-		HashValue(Hash, Tile.SuppressionRange.VertexCount);
-		HashValue(Hash, Tile.SuppressionRange.FirstIndex);
-		HashValue(Hash, Tile.SuppressionRange.IndexCount);
+		SparseHashValue(Hash, Tile.BypassRange.FirstVertex);
+		SparseHashValue(Hash, Tile.BypassRange.VertexCount);
+		SparseHashValue(Hash, Tile.BypassRange.FirstIndex);
+		SparseHashValue(Hash, Tile.BypassRange.IndexCount);
+		SparseHashValue(Hash, Tile.SuppressionRange.FirstVertex);
+		SparseHashValue(Hash, Tile.SuppressionRange.VertexCount);
+		SparseHashValue(Hash, Tile.SuppressionRange.FirstIndex);
+		SparseHashValue(Hash, Tile.SuppressionRange.IndexCount);
 		for (const FVector2f& Vertex : Tile.Vertices)
 		{
 			uint32 XBits = 0;
 			uint32 YBits = 0;
 			FMemory::Memcpy(&XBits, &Vertex.X, sizeof(XBits));
 			FMemory::Memcpy(&YBits, &Vertex.Y, sizeof(YBits));
-			HashValue(Hash, XBits);
-			HashValue(Hash, YBits);
+			SparseHashValue(Hash, XBits);
+			SparseHashValue(Hash, YBits);
 		}
 		for (const uint32 Index : Tile.Indices)
 		{
-			HashValue(Hash, Index);
+			SparseHashValue(Hash, Index);
 		}
 		return Hash == 0 ? 1 : Hash;
 	}
@@ -316,7 +316,7 @@ bool FSightWeaveSparseScopeKey::IsValid() const
 	return WorldIdentity.IsValid()
 		&& KnowledgeOwnerId.IsValid()
 		&& FloorId.IsValid()
-		&& IsFinite(FloorOrigin)
+		&& SparseIsFinite(FloorOrigin)
 		&& SightWeaveCentimetersPerTexel(PrecisionTier) > 0.0f;
 }
 
@@ -616,7 +616,7 @@ FIntPoint FSightWeaveSparseRenderPacketBuilder::WorldToLogicalTile(
 {
 	const double InteriorWorldSpan = static_cast<double>(SightWeave::SparseAtlas::InteriorTileSize)
 		* SightWeaveCentimetersPerTexel(PrecisionTier);
-	if (!IsFinite(WorldPoint) || !IsFinite(FloorOrigin) || InteriorWorldSpan <= 0.0)
+	if (!SparseIsFinite(WorldPoint) || !SparseIsFinite(FloorOrigin) || InteriorWorldSpan <= 0.0)
 	{
 		return FIntPoint::ZeroValue;
 	}
@@ -952,20 +952,20 @@ FSightWeaveSparseRenderPacketBuildResult FSightWeaveSparseRenderPacketBuilder::B
 	{
 		return FailHeader(ValidationFailure);
 	}
-	uint64 PacketHash = FnvOffset;
-	HashValue(PacketHash, Packet->WorldIdentity.Serial);
-	HashValue(PacketHash, Packet->PacketRevision);
-	HashValue(PacketHash, Packet->RegistryRevision);
-	HashValue(PacketHash, Packet->PublishedSnapshotRevision);
+	uint64 PacketHash = SparseFnvOffset;
+	SparseHashValue(PacketHash, Packet->WorldIdentity.Serial);
+	SparseHashValue(PacketHash, Packet->PacketRevision);
+	SparseHashValue(PacketHash, Packet->RegistryRevision);
+	SparseHashValue(PacketHash, Packet->PublishedSnapshotRevision);
 	for (const FSightWeaveSparseRenderTile& Tile : Packet->Tiles)
 	{
-		HashValue(PacketHash, Tile.ContentHash);
+		SparseHashValue(PacketHash, Tile.ContentHash);
 	}
 	for (const FSightWeaveSparseTileIdentity& Removed : Packet->RemovedTiles)
 	{
 		HashScope(PacketHash, Removed.TileKey.Scope);
-		HashValue(PacketHash, Removed.TileKey.LogicalCoordinate.X);
-		HashValue(PacketHash, Removed.TileKey.LogicalCoordinate.Y);
+		SparseHashValue(PacketHash, Removed.TileKey.LogicalCoordinate.X);
+		SparseHashValue(PacketHash, Removed.TileKey.LogicalCoordinate.Y);
 	}
 	Packet->ContentHash = PacketHash == 0 ? 1 : PacketHash;
 	Result.Failure = ESightWeaveSparsePacketFailure::None;
@@ -998,8 +998,8 @@ ESightWeaveSparsePacketFailure FSightWeaveSparseRenderPacketBuilder::Validate(
 	{
 		if (!Tile.Identity.IsValid()
 			|| !Tile.PhysicalWorldBounds.bIsValid
-			|| !IsFinite(Tile.PhysicalWorldBounds.Min)
-			|| !IsFinite(Tile.PhysicalWorldBounds.Max)
+			|| !SparseIsFinite(Tile.PhysicalWorldBounds.Min)
+			|| !SparseIsFinite(Tile.PhysicalWorldBounds.Max)
 			|| Tile.ContentHash == 0
 			|| Tile.Indices.Num() % 3 != 0)
 		{

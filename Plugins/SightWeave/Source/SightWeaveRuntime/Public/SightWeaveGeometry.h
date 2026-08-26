@@ -215,6 +215,57 @@ enum class ESightWeaveIncrementalSectorFallbackReason : uint8
 	IncrementalSolveFailed
 };
 
+#if WITH_DEV_AUTOMATION_TESTS
+/** Stable, machine-readable M2P.5 diagnostic stages. Never compiled into Shipping. */
+enum class ESightWeaveVisionSolveSubstage : uint8
+{
+	SourceDirtyDiscovery,
+	CandidateSegmentCollection,
+	CandidateEventNormalization,
+	AngularEventPreparation,
+	DirtySectorDetermination,
+	EventSortOrLocalMerge,
+	ActiveSegmentInitialization,
+	RaySweep,
+	ActiveSegmentUpdate,
+	RayReuseLookup,
+	ReusedRayValidation,
+	ChangedRayIntersection,
+	StableIdTieBreak,
+	PolygonVertexEmission,
+	TopologyDegeneracyValidation,
+	FallbackDetection,
+	SnapshotResultPublicationPreparation,
+	Count
+};
+
+struct FSightWeaveVisionSolveSubstageMetrics
+{
+	double WallMicroseconds = 0.0;
+	uint64 PlatformCycles = 0;
+	int64 InvocationCount = 0;
+};
+
+struct FSightWeaveVisionSolveDiagnostics
+{
+	TStaticArray<
+		FSightWeaveVisionSolveSubstageMetrics,
+		static_cast<int32>(ESightWeaveVisionSolveSubstage::Count)> Substages;
+	int32 DirtySegmentCount = 0;
+	int32 DirtySectorCount = 0;
+	int32 EventCount = 0;
+	int32 MaximumActiveSetCount = 0;
+	int32 ReuseValidationCount = 0;
+	int32 StableIdTieBreakCount = 0;
+	int32 PolygonVertexCount = 0;
+};
+
+using FSightWeaveVisionSolveSubstageProbe = void(*)(
+	ESightWeaveVisionSolveSubstage Stage,
+	int64 SourceId,
+	bool bBegin);
+#endif
+
 struct SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult
 {
 	struct FStageMetrics
@@ -245,6 +296,9 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveReferenceSolveResult
 	bool bVerificationMatched = false;
 	bool bUsedReferenceFallback = false;
 	FStageMetrics StageMetrics;
+#if WITH_DEV_AUTOMATION_TESTS
+	FSightWeaveVisionSolveDiagnostics VisionSolveDiagnostics;
+#endif
 	FString VerificationError;
 	FString Error;
 };
@@ -315,6 +369,19 @@ namespace SightWeave::Geometry
 #if WITH_DEV_AUTOMATION_TESTS
 	namespace Testing
 	{
+		/** Registers the test-only M2P.5 substage probe; nullptr removes all diagnostic timing. */
+		SIGHTWEAVERUNTIME_API void SetVisionSolveSubstageProbe(
+			FSightWeaveVisionSolveSubstageProbe Probe,
+			bool bEnableMicroTiming);
+
+		/** Associates subsequent substage markers with one deterministic source rebuild. */
+		SIGHTWEAVERUNTIME_API void SetVisionSolveDiagnosticSource(int64 SourceId);
+
+		/** Emits a world/subsystem-owned stage through the same M2P.5 probe. */
+		SIGHTWEAVERUNTIME_API void EmitVisionSolveSubstage(
+			ESightWeaveVisionSolveSubstage Stage,
+			bool bBegin);
+
 		/** Test-only validation that nested leases never alias an active scratch frame. */
 		SIGHTWEAVERUNTIME_API bool ExerciseOptimizedSolverScratchReentrancy(int32 Depth);
 

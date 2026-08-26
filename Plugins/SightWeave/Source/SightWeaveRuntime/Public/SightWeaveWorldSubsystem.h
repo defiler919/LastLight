@@ -51,8 +51,24 @@ struct FSightWeaveBatchQueryDiagnostics
 	bool bSnapshotAvailable = false;
 };
 
+struct FSightWeaveVisionSourceSolveDiagnostics
+{
+	int64 SourceId = 0;
+	int64 Revision = 0;
+	int32 CandidateSegmentCount = 0;
+	int32 TotalRayCount = 0;
+	int32 RebuiltRayCount = 0;
+	int32 ReusedRayCount = 0;
+	double DirtyRadians = 0.0;
+	ESightWeaveIncrementalSectorFallbackReason FallbackReason =
+		ESightWeaveIncrementalSectorFallbackReason::None;
+	FSightWeaveVisionSolveDiagnostics Detail;
+};
+
 struct FSightWeaveDynamicUpdateStageMetrics
 {
+	static constexpr int32 MaximumVisionSourceDiagnostics = 16;
+
 	double PrepareAndCompareMicroseconds = 0.0;
 	double SpatialIndexMicroseconds = 0.0;
 	double DirtyDiscoveryMicroseconds = 0.0;
@@ -75,6 +91,11 @@ struct FSightWeaveDynamicUpdateStageMetrics
 	double VisionIncrementalFallbackMicroseconds = 0.0;
 	ESightWeaveIncrementalSectorFallbackReason VisionIncrementalLastFallbackReason =
 		ESightWeaveIncrementalSectorFallbackReason::None;
+	TStaticArray<
+		FSightWeaveVisionSourceSolveDiagnostics,
+		MaximumVisionSourceDiagnostics> VisionSourceDiagnostics;
+	int32 VisionSourceDiagnosticCount = 0;
+	int32 VisionSourceDiagnosticOverflowCount = 0;
 };
 #endif
 

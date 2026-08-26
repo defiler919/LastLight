@@ -4,6 +4,9 @@
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "HAL/PlatformProcess.h"
+#include "HAL/PlatformTime.h"
+#include "HAL/PlatformTLS.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
@@ -21,7 +24,9 @@ namespace SightWeave::M2P3::AttributionTests
 		EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 	constexpr int32 DynamicStageCount = static_cast<int32>(ESightWeaveDynamicUpdateStage::Count);
 	constexpr int32 BatchStageCount = static_cast<int32>(ESightWeaveBatchQueryStage::Count);
-	constexpr int32 TotalStageCount = DynamicStageCount + BatchStageCount;
+	constexpr int32 VisionStageCount = static_cast<int32>(ESightWeaveVisionSolveSubstage::Count);
+	constexpr int32 VisionStageOffset = DynamicStageCount + BatchStageCount;
+	constexpr int32 TotalStageCount = VisionStageOffset + VisionStageCount;
 	constexpr double BatchWallLimitMicroseconds = 200.0;
 	constexpr double DoorWallLimitMicroseconds = 250.0;
 	const FSightWeaveFloorId Ground(FName(TEXT("Ground")));
@@ -73,6 +78,27 @@ namespace SightWeave::M2P3::AttributionTests
 		}
 	}
 
+	const TCHAR* IncrementalFallbackReasonName(
+		const ESightWeaveIncrementalSectorFallbackReason Reason)
+	{
+		switch (Reason)
+		{
+		case ESightWeaveIncrementalSectorFallbackReason::None: return TEXT("none");
+		case ESightWeaveIncrementalSectorFallbackReason::InvalidRequest: return TEXT("invalid_request");
+		case ESightWeaveIncrementalSectorFallbackReason::CacheRevisionMismatch: return TEXT("cache_revision_mismatch");
+		case ESightWeaveIncrementalSectorFallbackReason::PreviousResultMissing: return TEXT("previous_result_missing");
+		case ESightWeaveIncrementalSectorFallbackReason::MultipleChangedSegments: return TEXT("multiple_changed_segments");
+		case ESightWeaveIncrementalSectorFallbackReason::SourceNearChangedSegment: return TEXT("source_near_changed_segment");
+		case ESightWeaveIncrementalSectorFallbackReason::DirtySectorTooLarge: return TEXT("dirty_sector_too_large");
+		case ESightWeaveIncrementalSectorFallbackReason::SeamValidationFailed: return TEXT("seam_validation_failed");
+		case ESightWeaveIncrementalSectorFallbackReason::TopologyValidationFailed: return TEXT("topology_validation_failed");
+		case ESightWeaveIncrementalSectorFallbackReason::PreparedIndexMissing: return TEXT("prepared_index_missing");
+		case ESightWeaveIncrementalSectorFallbackReason::PreparedIndexReplaced: return TEXT("prepared_index_replaced");
+		case ESightWeaveIncrementalSectorFallbackReason::IncrementalSolveFailed: return TEXT("incremental_solve_failed");
+		default: return TEXT("unknown");
+		}
+	}
+
 	const TCHAR* const StageNames[TotalStageCount] =
 	{
 		TEXT("occluder_normalization"),
@@ -90,7 +116,24 @@ namespace SightWeave::M2P3::AttributionTests
 		TEXT("vision_geometry_solve"),
 		TEXT("vision_result_materialization"),
 		TEXT("batch_classification"),
-		TEXT("batch_result_materialization")
+		TEXT("batch_result_materialization"),
+		TEXT("source_dirty_discovery"),
+		TEXT("candidate_segment_collection"),
+		TEXT("candidate_event_normalization"),
+		TEXT("angular_event_preparation"),
+		TEXT("dirty_sector_determination"),
+		TEXT("event_sort_or_local_merge"),
+		TEXT("active_segment_initialization"),
+		TEXT("ray_sweep"),
+		TEXT("active_segment_update"),
+		TEXT("ray_reuse_lookup"),
+		TEXT("reused_ray_validation"),
+		TEXT("changed_ray_intersection"),
+		TEXT("stable_id_tie_break"),
+		TEXT("polygon_vertex_emission"),
+		TEXT("topology_degeneracy_validation"),
+		TEXT("fallback_detection"),
+		TEXT("snapshot_result_publication_preparation")
 	};
 
 	class FTestWorld
@@ -278,11 +321,64 @@ namespace SightWeave::M2P3::AttributionTests
 		Destination.bMeasurementAnomaly |= Source.bMeasurementAnomaly;
 	}
 
+	class FLightweightStageTimer
+	{
+	public:
+		void Start()
+		{
+			QpcBegin = FPlatformTime::Cycles64();
+			ThreadId = FPlatformTLS::GetCurrentThreadId();
+			ProcessorIndex = static_cast<int32>(FPlatformProcess::GetCurrentCoreNumber());
+			bStarted = true;
+		}
+
+		FTimingSample Stop()
+		{
+			FTimingSample Result;
+			const uint64 QpcEnd = FPlatformTime::Cycles64();
+			const uint32 EndThreadId = FPlatformTLS::GetCurrentThreadId();
+			const int32 EndProcessorIndex =
+				static_cast<int32>(FPlatformProcess::GetCurrentCoreNumber());
+			if (!bStarted)
+			{
+				Result.bMeasurementAnomaly = true;
+				return Result;
+			}
+			bStarted = false;
+			Result.QpcBegin = QpcBegin;
+			Result.QpcEnd = QpcEnd;
+			Result.QpcFrequency = static_cast<uint64>(FMath::RoundToDouble(
+				1.0 / FPlatformTime::GetSecondsPerCycle64()));
+			Result.ProcessId = FPlatformProcess::GetCurrentProcessId();
+			Result.StartThreadId = ThreadId;
+			Result.EndThreadId = EndThreadId;
+			Result.StartProcessorIndex = ProcessorIndex;
+			Result.EndProcessorIndex = EndProcessorIndex;
+			Result.bProcessorNumberValid = ProcessorIndex >= 0 && EndProcessorIndex >= 0;
+			Result.bThreadMigrated = Result.bProcessorNumberValid
+				&& ProcessorIndex != EndProcessorIndex;
+			Result.WallMicroseconds = QpcEnd >= QpcBegin
+				? FPlatformTime::ToSeconds64(QpcEnd - QpcBegin) * 1000000.0
+				: 0.0;
+			Result.bMeasurementAnomaly = QpcEnd < QpcBegin || ThreadId != EndThreadId;
+			return Result;
+		}
+
+	private:
+		uint64 QpcBegin = 0;
+		uint32 ThreadId = 0;
+		int32 ProcessorIndex = INDEX_NONE;
+		bool bStarted = false;
+	};
+
 	struct FStageCollector
 	{
 		static constexpr int32 MaximumInvocationsPerStage = 8;
 
 		FStageCollector()
+			: bUseLightweightTimers(FParse::Param(
+				FCommandLine::Get(),
+				TEXT("SightWeaveM2P5LightweightStageTimers")))
 		{
 			for (FDualClockTimer& Timer : Timers)
 			{
@@ -295,10 +391,12 @@ namespace SightWeave::M2P3::AttributionTests
 			Samples = {};
 			InvocationSamples = {};
 			InvocationCounts = {};
+			InvocationSourceIds = {};
 			Active = {};
+			ActiveSourceIds = {};
 		}
 
-		void Begin(const int32 StageIndex)
+		void Begin(const int32 StageIndex, const int64 SourceId = 0)
 		{
 			const bool bValidStage = StageIndex >= 0 && StageIndex < TotalStageCount;
 			if (!bValidStage || Active[StageIndex])
@@ -310,10 +408,18 @@ namespace SightWeave::M2P3::AttributionTests
 				return;
 			}
 			Active[StageIndex] = true;
-			Timers[StageIndex].Start();
+			ActiveSourceIds[StageIndex] = SourceId;
+			if (bUseLightweightTimers)
+			{
+				LightweightTimers[StageIndex].Start();
+			}
+			else
+			{
+				Timers[StageIndex].Start();
+			}
 		}
 
-		void End(const int32 StageIndex)
+		void End(const int32 StageIndex, const int64 SourceId = 0)
 		{
 			const bool bValidStage = StageIndex >= 0 && StageIndex < TotalStageCount;
 			if (!bValidStage || !Active[StageIndex])
@@ -325,11 +431,18 @@ namespace SightWeave::M2P3::AttributionTests
 				return;
 			}
 			Active[StageIndex] = false;
-			const FTimingSample Sample = Timers[StageIndex].Stop();
+			if (ActiveSourceIds[StageIndex] != SourceId)
+			{
+				Samples[StageIndex].bMeasurementAnomaly = true;
+			}
+			const FTimingSample Sample = bUseLightweightTimers
+				? LightweightTimers[StageIndex].Stop()
+				: Timers[StageIndex].Stop();
 			const int32 InvocationIndex = InvocationCounts[StageIndex]++;
 			if (InvocationIndex < MaximumInvocationsPerStage)
 			{
 				InvocationSamples[StageIndex][InvocationIndex] = Sample;
+				InvocationSourceIds[StageIndex][InvocationIndex] = SourceId;
 			}
 			else
 			{
@@ -339,16 +452,23 @@ namespace SightWeave::M2P3::AttributionTests
 		}
 
 		TStaticArray<FDualClockTimer, TotalStageCount> Timers;
+		TStaticArray<FLightweightStageTimer, TotalStageCount> LightweightTimers;
 		TStaticArray<FTimingSample, TotalStageCount> Samples;
 		TStaticArray<
 			TStaticArray<FTimingSample, MaximumInvocationsPerStage>,
 			TotalStageCount> InvocationSamples;
 		TStaticArray<int32, TotalStageCount> InvocationCounts;
+		TStaticArray<
+			TStaticArray<int64, MaximumInvocationsPerStage>,
+			TotalStageCount> InvocationSourceIds;
 		TStaticArray<bool, TotalStageCount> Active;
+		TStaticArray<int64, TotalStageCount> ActiveSourceIds;
+		bool bUseLightweightTimers = false;
 	};
 
 	thread_local FStageCollector* GActiveStageCollector = nullptr;
 	thread_local bool GDetailedStageCapture = false;
+	thread_local bool GDetailedVisionStageCapture = false;
 
 	void DynamicStageProbe(const ESightWeaveDynamicUpdateStage Stage, const bool bBegin)
 	{
@@ -376,6 +496,21 @@ namespace SightWeave::M2P3::AttributionTests
 		bBegin ? GActiveStageCollector->Begin(StageIndex) : GActiveStageCollector->End(StageIndex);
 	}
 
+	void VisionSolveSubstageProbe(
+		const ESightWeaveVisionSolveSubstage Stage,
+		const int64 SourceId,
+		const bool bBegin)
+	{
+		if (!GActiveStageCollector || !GDetailedVisionStageCapture)
+		{
+			return;
+		}
+		const int32 StageIndex = VisionStageOffset + static_cast<int32>(Stage);
+		bBegin
+			? GActiveStageCollector->Begin(StageIndex, SourceId)
+			: GActiveStageCollector->End(StageIndex, SourceId);
+	}
+
 	struct FProbeRegistration
 	{
 		FProbeRegistration()
@@ -383,16 +518,27 @@ namespace SightWeave::M2P3::AttributionTests
 			GDetailedStageCapture = FParse::Param(
 				FCommandLine::Get(),
 				TEXT("SightWeaveM2P3DetailedStages"));
+			GDetailedVisionStageCapture = FParse::Param(
+				FCommandLine::Get(),
+				TEXT("SightWeaveM2P5DetailedVisionStages"));
 			USightWeaveWorldSubsystem::SetDynamicUpdateStageProbeForTesting(&DynamicStageProbe);
 			USightWeaveWorldSubsystem::SetBatchQueryStageProbeForTesting(&BatchStageProbe);
+			if (GDetailedVisionStageCapture)
+			{
+				SightWeave::Geometry::Testing::SetVisionSolveSubstageProbe(
+					&VisionSolveSubstageProbe,
+					FParse::Param(FCommandLine::Get(), TEXT("SightWeaveM2P5MicroStages")));
+			}
 		}
 
 		~FProbeRegistration()
 		{
 			GActiveStageCollector = nullptr;
 			GDetailedStageCapture = false;
+			GDetailedVisionStageCapture = false;
 			USightWeaveWorldSubsystem::SetDynamicUpdateStageProbeForTesting(nullptr);
 			USightWeaveWorldSubsystem::SetBatchQueryStageProbeForTesting(nullptr);
+			SightWeave::Geometry::Testing::SetVisionSolveSubstageProbe(nullptr, false);
 		}
 	};
 
@@ -411,6 +557,9 @@ namespace SightWeave::M2P3::AttributionTests
 			TStaticArray<FTimingSample, FStageCollector::MaximumInvocationsPerStage>,
 			TotalStageCount> StageInvocations;
 		TStaticArray<int32, TotalStageCount> StageInvocationCounts;
+		TStaticArray<
+			TStaticArray<int64, FStageCollector::MaximumInvocationsPerStage>,
+			TotalStageCount> StageInvocationSourceIds;
 		int32 FastPath = 0;
 		int32 VisionSourceCount = 0;
 		int32 IlluminationSourceCount = 0;
@@ -425,6 +574,12 @@ namespace SightWeave::M2P3::AttributionTests
 		FSightWeaveReferenceSolveResult::FStageMetrics VisionGeometry;
 		int64 VisionCandidateSegmentCount = 0;
 		int64 VisionCandidateRayCount = 0;
+		TStaticArray<
+			FSightWeaveVisionSourceSolveDiagnostics,
+			FSightWeaveDynamicUpdateStageMetrics::MaximumVisionSourceDiagnostics>
+			VisionSourceDiagnostics;
+		int32 VisionSourceDiagnosticCount = 0;
+		int32 VisionSourceDiagnosticOverflowCount = 0;
 	};
 
 	uint64 MakeSampleId(
@@ -729,6 +884,145 @@ namespace SightWeave::M2P3::AttributionTests
 		return Csv;
 	}
 
+	bool FindVisionStageInvocation(
+		const FRawRow& Row,
+		const int32 VisionStageIndex,
+		const int64 SourceId,
+		int32& OutInvocation,
+		FTimingSample& OutTiming)
+	{
+		const int32 StageIndex = VisionStageOffset + VisionStageIndex;
+		const int32 InvocationCount = FMath::Min(
+			Row.StageInvocationCounts[StageIndex],
+			FStageCollector::MaximumInvocationsPerStage);
+		for (int32 Invocation = 0; Invocation < InvocationCount; ++Invocation)
+		{
+			if (Row.StageInvocationSourceIds[StageIndex][Invocation] == SourceId)
+			{
+				OutInvocation = Invocation;
+				OutTiming = Row.StageInvocations[StageIndex][Invocation];
+				return true;
+			}
+		}
+		OutInvocation = INDEX_NONE;
+		OutTiming = {};
+		return false;
+	}
+
+	void AppendVisionDetailRow(
+		FString& Csv,
+		const FString& RunLabel,
+		const FRawRow& Row,
+		const int64 SourceId,
+		const FSightWeaveVisionSourceSolveDiagnostics* Source,
+		const int32 VisionStageIndex)
+	{
+		int32 MarkerInvocation = INDEX_NONE;
+		FTimingSample MarkerTiming;
+		const bool bMarkerAvailable = FindVisionStageInvocation(
+			Row,
+			VisionStageIndex,
+			SourceId,
+			MarkerInvocation,
+			MarkerTiming);
+		const FSightWeaveVisionSolveSubstageMetrics EmptyMetrics;
+		const FSightWeaveVisionSolveSubstageMetrics& Metrics = Source
+			? Source->Detail.Substages[VisionStageIndex]
+			: EmptyMetrics;
+		const double WallMicroseconds = bMarkerAvailable
+			? MarkerTiming.WallMicroseconds
+			: Metrics.WallMicroseconds;
+		const bool bMarkerHasThreadCycles = bMarkerAvailable
+			&& MarkerTiming.bThreadCycleTimeValid;
+		const uint64 RawCycles = bMarkerHasThreadCycles
+			? MarkerTiming.ThreadCycles
+			: bMarkerAvailable
+				? MarkerTiming.QpcEnd - MarkerTiming.QpcBegin
+			: Metrics.PlatformCycles;
+		const int64 InvocationCount = Metrics.InvocationCount > 0
+			? Metrics.InvocationCount
+			: (bMarkerAvailable ? 1 : 0);
+		Csv += FString::Printf(
+			TEXT("%s,%s,%d,%d,%llu,%u,%u,%lld,%d,%d,%d,%d,%.9f,%d,%d,%d,%d,%d,%s,%d,%d,%d,%lld,%d,%s,%.3f,%llu,%lld,%s,%d,%d,%s\n"),
+			*RunLabel,
+			WorkloadName(Row.Workload),
+			Row.DistributionIndex,
+			Row.SampleIndex,
+			Row.SampleId,
+			Row.Total.ProcessId,
+			Row.Total.StartThreadId,
+			SourceId,
+			Row.VisionSourceCount,
+			Row.IlluminationSourceCount,
+			Source ? Source->CandidateSegmentCount : 0,
+			Source ? Source->Detail.DirtySegmentCount : 0,
+			Source ? Source->DirtyRadians : 0.0,
+			Source ? Source->Detail.DirtySectorCount : 0,
+			Source ? Source->TotalRayCount : 0,
+			Source ? Source->RebuiltRayCount : 0,
+			Source ? Source->ReusedRayCount : 0,
+			Source ? Source->Detail.ReuseValidationCount : 0,
+			IncrementalFallbackReasonName(
+				Source ? Source->FallbackReason : ESightWeaveIncrementalSectorFallbackReason::None),
+			Source ? Source->Detail.EventCount : 0,
+			Source ? Source->Detail.MaximumActiveSetCount : 0,
+			Source ? Source->Detail.PolygonVertexCount : 0,
+			Source ? Source->Revision : Row.SnapshotRevisionAfter,
+			Row.VisionSourceDiagnosticOverflowCount,
+			StageNames[VisionStageOffset + VisionStageIndex],
+			WallMicroseconds,
+			RawCycles,
+			InvocationCount,
+			bMarkerHasThreadCycles ? TEXT("thread_cycle_time") : TEXT("platform_time_cycles"),
+			bMarkerAvailable ? 1 : 0,
+			MarkerInvocation,
+			bMarkerAvailable ? TEXT("pending_fail_closed_etw") : TEXT("parent_stage_etw_required"));
+	}
+
+	FString MakeVisionDetailCsv(const TArray<FRawRow>& Rows, const FString& RunLabel)
+	{
+		FString Csv(TEXT("run,operation,distribution,sample,sample_id,pid,tid,source_id,vision_source_count,illumination_source_count,candidate_segment_count,dirty_segment_count,dirty_angular_radians,dirty_sector_count,total_rays,rebuilt_rays,reused_rays,reuse_validation_count,fallback_reason,event_count,maximum_active_set_count,polygon_vertex_count,revision,source_diagnostic_overflow_count,stage,wall_us,raw_cycles,stage_invocations,cycle_domain,etw_marker_available,etw_marker_invocation,etw_on_cpu_status\n"));
+		for (const FRawRow& Row : Rows)
+		{
+			if (Row.Workload != EWorkload::BroadDoor4V2L)
+			{
+				continue;
+			}
+			AppendVisionDetailRow(
+				Csv,
+				RunLabel,
+				Row,
+				0,
+				nullptr,
+				static_cast<int32>(ESightWeaveVisionSolveSubstage::SourceDirtyDiscovery));
+			for (int32 SourceIndex = 0;
+				SourceIndex < Row.VisionSourceDiagnosticCount;
+				++SourceIndex)
+			{
+				const FSightWeaveVisionSourceSolveDiagnostics& Source =
+					Row.VisionSourceDiagnostics[SourceIndex];
+				for (int32 VisionStageIndex = 0;
+					VisionStageIndex < VisionStageCount;
+					++VisionStageIndex)
+				{
+					if (VisionStageIndex
+						== static_cast<int32>(ESightWeaveVisionSolveSubstage::SourceDirtyDiscovery))
+					{
+						continue;
+					}
+					AppendVisionDetailRow(
+						Csv,
+						RunLabel,
+						Row,
+						Source.SourceId,
+						&Source,
+						VisionStageIndex);
+				}
+			}
+		}
+		return Csv;
+	}
+
 	bool GetCaptureParameters(FString& OutDirectory, FString& OutRunLabel)
 	{
 		if (!FParse::Param(FCommandLine::Get(), TEXT("SightWeaveM2P3AttributionCapture")))
@@ -787,6 +1081,31 @@ namespace SightWeave::M2P3::AttributionTests
 			TEXT("M2P4_ETW_MARKERS path=%s samples=%d qpc_domain=QueryPerformanceCounter"),
 			*Path,
 			Rows.Num()));
+		return bSaved;
+	}
+
+	bool SaveVisionDetails(
+		FAutomationTestBase& Test,
+		const TArray<FRawRow>& Rows,
+		const FString& Directory,
+		const FString& RunLabel)
+	{
+		if (!FParse::Param(FCommandLine::Get(), TEXT("SightWeaveM2P5DetailedVisionStages")))
+		{
+			return true;
+		}
+		IFileManager::Get().MakeDirectory(*Directory, true);
+		const FString Path = FPaths::Combine(Directory, TEXT("door-vision-detail.csv"));
+		const bool bSaved = FFileHelper::SaveStringToFile(
+			MakeVisionDetailCsv(Rows, RunLabel),
+			*Path,
+			FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+		Test.TestTrue(*FString::Printf(TEXT("M2P.5 vision detail CSV writes: %s"), *Path), bSaved);
+		Test.AddInfo(FString::Printf(
+			TEXT("M2P5_VISION_DETAIL path=%s broad_samples=%d stages=%d"),
+			*Path,
+			101,
+			VisionStageCount));
 		return bSaved;
 	}
 
@@ -992,6 +1311,7 @@ bool FSightWeaveM2P3BatchAttributionTest::RunTest(const FString& Parameters)
 			Row.Stages = StageCollector.Samples;
 			Row.StageInvocations = StageCollector.InvocationSamples;
 			Row.StageInvocationCounts = StageCollector.InvocationCounts;
+			Row.StageInvocationSourceIds = StageCollector.InvocationSourceIds;
 			const FSightWeaveBatchQueryDiagnostics& Diagnostics =
 				Subsystem->GetLastBatchQueryDiagnostics();
 			Row.FastPath = Diagnostics.bFastPath ? 1 : 0;
@@ -1124,11 +1444,57 @@ bool FSightWeaveM2P3DoorAttributionTest::RunTest(const FString& Parameters)
 			Row.Stages = StageCollector.Samples;
 			Row.StageInvocations = StageCollector.InvocationSamples;
 			Row.StageInvocationCounts = StageCollector.InvocationCounts;
+			Row.StageInvocationSourceIds = StageCollector.InvocationSourceIds;
 			const FSightWeaveDynamicUpdateStageMetrics& DynamicMetrics =
 				Subsystem->GetLastDynamicUpdateStageMetrics();
+			if (GDetailedVisionStageCapture)
+			{
+				if (DynamicMetrics.VisionSourceDiagnosticCount != VisionCount
+					|| DynamicMetrics.VisionSourceDiagnosticOverflowCount != 0)
+				{
+					AddError(FString::Printf(
+						TEXT("Vision detail cardinality mismatch workload=%s sample=%d expected=%d actual=%d overflow=%d"),
+						WorkloadName(Workload),
+						SampleIndex,
+						VisionCount,
+						DynamicMetrics.VisionSourceDiagnosticCount,
+						DynamicMetrics.VisionSourceDiagnosticOverflowCount));
+					return false;
+				}
+				int64 PreviousSourceId = 0;
+				for (int32 SourceIndex = 0;
+					SourceIndex < DynamicMetrics.VisionSourceDiagnosticCount;
+					++SourceIndex)
+				{
+					const FSightWeaveVisionSourceSolveDiagnostics& Source =
+						DynamicMetrics.VisionSourceDiagnostics[SourceIndex];
+					if (Source.SourceId <= PreviousSourceId
+						|| Source.CandidateSegmentCount <= 0
+						|| Source.TotalRayCount <= 0
+						|| Source.Revision != Subsystem->GetRevision().GetValue())
+					{
+						AddError(FString::Printf(
+							TEXT("Vision detail metadata invalid workload=%s sample=%d source_index=%d source_id=%lld candidates=%d rays=%d revision=%lld expected_revision=%lld"),
+							WorkloadName(Workload),
+							SampleIndex,
+							SourceIndex,
+							Source.SourceId,
+							Source.CandidateSegmentCount,
+							Source.TotalRayCount,
+							Source.Revision,
+							Subsystem->GetRevision().GetValue()));
+						return false;
+					}
+					PreviousSourceId = Source.SourceId;
+				}
+			}
 			Row.VisionGeometry = DynamicMetrics.VisionGeometry;
 			Row.VisionCandidateSegmentCount = DynamicMetrics.VisionCandidateSegmentCount;
 			Row.VisionCandidateRayCount = DynamicMetrics.VisionCandidateRayCount;
+			Row.VisionSourceDiagnostics = DynamicMetrics.VisionSourceDiagnostics;
+			Row.VisionSourceDiagnosticCount = DynamicMetrics.VisionSourceDiagnosticCount;
+			Row.VisionSourceDiagnosticOverflowCount =
+				DynamicMetrics.VisionSourceDiagnosticOverflowCount;
 			const FSightWeavePreparedEventIndexStats PreparedAfter =
 				Subsystem->GetPreparedEventIndexStats();
 			Row.PreparedHitDelta = PreparedAfter.HitCount - PreparedBefore.HitCount;
@@ -1154,25 +1520,33 @@ bool FSightWeaveM2P3DoorAttributionTest::RunTest(const FString& Parameters)
 		ConsumeControlResult(Controls.RunCompute());
 		ConsumeControlResult(Controls.RunMemory());
 	}
+	const bool bBroadDoorOnly = FParse::Param(
+		FCommandLine::Get(),
+		TEXT("SightWeaveM2P5BroadDoorOnly"));
 	if (!RunScenario(EWorkload::BroadDoor4V2L, 4, 2, 101, false, false)
-		|| !RunScenario(EWorkload::DedicatedDoor, 1, 0, 101, false, false)
-		|| !RunScenario(EWorkload::DoorPlusMotion, 4, 2, 101, true, false)
-		|| !RunScenario(EWorkload::HeldReaderDoor, 4, 2, 11, false, true))
+		|| (!bBroadDoorOnly
+			&& (!RunScenario(EWorkload::DedicatedDoor, 1, 0, 101, false, false)
+				|| !RunScenario(EWorkload::DoorPlusMotion, 4, 2, 101, true, false)
+				|| !RunScenario(EWorkload::HeldReaderDoor, 4, 2, 11, false, true))))
 	{
 		return false;
 	}
 
-	for (const EWorkload Workload :
-		{ EWorkload::BroadDoor4V2L,
+	const TArray<EWorkload> Workloads = bBroadDoorOnly
+		? TArray<EWorkload>{ EWorkload::BroadDoor4V2L }
+		: TArray<EWorkload>{
+			EWorkload::BroadDoor4V2L,
 			EWorkload::DedicatedDoor,
 			EWorkload::DoorPlusMotion,
-			EWorkload::HeldReaderDoor })
+			EWorkload::HeldReaderDoor };
+	for (const EWorkload Workload : Workloads)
 	{
 		ClassifyRows(Rows, Workload, DoorWallLimitMicroseconds);
 		LogClassificationSummary(*this, Rows, Workload, DoorWallLimitMicroseconds);
 	}
 	SaveRows(*this, Rows, OutputDirectory, RunLabel, TEXT("door.csv"));
 	SaveEtwMarkers(*this, Rows, OutputDirectory, RunLabel, TEXT("door-etw-markers.csv"));
+	SaveVisionDetails(*this, Rows, OutputDirectory, RunLabel);
 	return true;
 }
 

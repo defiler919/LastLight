@@ -992,7 +992,17 @@ bool USightWeaveWorldSubsystem::UpdateOccluder(
 	AdvanceRevision();
 	LastOccluderRevision = Revision;
 	Record->GeometryRevision = Revision;
+#if WITH_DEV_AUTOMATION_TESTS
+	SightWeave::Geometry::Testing::EmitVisionSolveSubstage(
+		ESightWeaveVisionSolveSubstage::SourceDirtyDiscovery,
+		true);
+#endif
 	MarkSourcesAffectedByOccluderChange(OldFloor, OldBounds, NewFloor, NewBounds);
+#if WITH_DEV_AUTOMATION_TESTS
+	SightWeave::Geometry::Testing::EmitVisionSolveSubstage(
+		ESightWeaveVisionSolveSubstage::SourceDirtyDiscovery,
+		false);
+#endif
 	if (bWasDynamic && bDynamic && bWasEnabled && bEnabled)
 	{
 		ActiveDynamicSectorChange.OldSegments = &Prepared;
@@ -2260,6 +2270,9 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		CachedVisionSnapshotEntries.Remove(SourceId);
 		return;
 	}
+#if WITH_DEV_AUTOMATION_TESTS
+	SightWeave::Geometry::Testing::SetVisionSolveDiagnosticSource(SourceId);
+#endif
 
 	FSightWeaveVisionSnapshotEntry& Entry = CachedVisionSnapshotEntries.FindOrAdd(SourceId);
 	const FSightWeaveRevision PreviousSourceRevision = Entry.SourceRevision;
@@ -2517,6 +2530,29 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		Geometry.TestedSegments += SolveResult.StageMetrics.TestedSegments;
 		LastDynamicUpdateStageMetrics.VisionCandidateSegmentCount += SolveResult.CandidateSegmentCount;
 		LastDynamicUpdateStageMetrics.VisionCandidateRayCount += SolveResult.CastRayCount;
+		if (LastDynamicUpdateStageMetrics.VisionSourceDiagnosticCount
+			< FSightWeaveDynamicUpdateStageMetrics::MaximumVisionSourceDiagnostics)
+		{
+			FSightWeaveVisionSourceSolveDiagnostics& SourceDiagnostics =
+				LastDynamicUpdateStageMetrics.VisionSourceDiagnostics[
+					LastDynamicUpdateStageMetrics.VisionSourceDiagnosticCount++];
+			SourceDiagnostics.SourceId = SourceId;
+			SourceDiagnostics.Revision = Revision.GetValue();
+			SourceDiagnostics.CandidateSegmentCount = SolveResult.CandidateSegmentCount;
+			SourceDiagnostics.TotalRayCount = SolveResult.CastRayCount;
+			SourceDiagnostics.RebuiltRayCount = IncrementalDiagnostics.RebuiltRayCount;
+			SourceDiagnostics.ReusedRayCount = IncrementalDiagnostics.ReusedRayCount;
+			SourceDiagnostics.DirtyRadians = IncrementalDiagnostics.DirtyRadians;
+			SourceDiagnostics.FallbackReason = IncrementalDiagnostics.FallbackReason;
+			SourceDiagnostics.Detail = SolveResult.VisionSolveDiagnostics;
+		}
+		else
+		{
+			++LastDynamicUpdateStageMetrics.VisionSourceDiagnosticOverflowCount;
+		}
+		SightWeave::Geometry::Testing::EmitVisionSolveSubstage(
+			ESightWeaveVisionSolveSubstage::SnapshotResultPublicationPreparation,
+			true);
 		EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::VisionResultMaterialization, true);
 #endif
 		*CachedSegments = MoveTemp(Input.Segments);
@@ -2534,8 +2570,14 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		}
 #if WITH_DEV_AUTOMATION_TESTS
 		EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::VisionResultMaterialization, false);
+		SightWeave::Geometry::Testing::EmitVisionSolveSubstage(
+			ESightWeaveVisionSolveSubstage::SnapshotResultPublicationPreparation,
+			false);
 #endif
 	}
+#if WITH_DEV_AUTOMATION_TESTS
+	SightWeave::Geometry::Testing::SetVisionSolveDiagnosticSource(0);
+#endif
 }
 
 void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 SourceId)

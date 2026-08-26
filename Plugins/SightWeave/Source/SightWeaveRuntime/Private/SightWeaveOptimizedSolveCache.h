@@ -88,6 +88,10 @@ struct FSightWeaveIncrementalSectorDiagnostics
 	double DirtyRadians = 0.0;
 	double IncrementalMicroseconds = 0.0;
 	double FullFallbackMicroseconds = 0.0;
+#if WITH_DEV_AUTOMATION_TESTS
+	int32 DirtySegmentCount = 0;
+	int32 DirtySectorCount = 0;
+#endif
 	int32 RebuiltRayCount = 0;
 	int32 ReusedRayCount = 0;
 };

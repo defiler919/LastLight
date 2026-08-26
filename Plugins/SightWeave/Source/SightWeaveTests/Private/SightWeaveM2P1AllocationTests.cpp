@@ -821,6 +821,14 @@ bool FSightWeaveM2P1AllocationCaptureTest::RunTest(const FString& Parameters)
 	TraceTranslation(EWorkload::Translation5Cm, 5.0);
 	TraceTranslation(EWorkload::Translation20Cm, 20.0);
 
+	for (int32 Warmup = 0; Warmup < 2; ++Warmup)
+	{
+		VisionDescriptions[0].Transform.SetLocation(
+			FVector(Warmup % 2 == 0 ? -6000.0 : 6000.0, 5000.0, 100.0));
+		Subsystem->UpdateVisionSourceTransform(
+			VisionHandles[0],
+			VisionDescriptions[0].Transform);
+	}
 	for (uint16 Sample = 0; Sample < 3; ++Sample)
 	{
 		VisionDescriptions[0].Transform.SetLocation(

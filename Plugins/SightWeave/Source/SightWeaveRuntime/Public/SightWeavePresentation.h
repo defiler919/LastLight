@@ -49,6 +49,13 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveVisualFeatherSettings
 	}
 };
 
+class SIGHTWEAVERUNTIME_API FSightWeaveVisualFeatherMath final
+{
+public:
+	/** CPU oracle for the presentation-only hard re-gate. Non-finite input fails black. */
+	static float ComposeWeight(bool bHardLivePointSample, float VisualFeatherWeight);
+};
+
 /** Immutable GT selection. Enabled selections fail black until a matching RT binding is complete. */
 class SIGHTWEAVERUNTIME_API FSightWeaveViewPresentationSelection final
 {

@@ -41,6 +41,15 @@ namespace SightWeavePresentationPrivate
 
 using namespace SightWeavePresentationPrivate;
 
+float FSightWeaveVisualFeatherMath::ComposeWeight(
+	const bool bHardLivePointSample,
+	const float VisualFeatherWeight)
+{
+	return bHardLivePointSample && FMath::IsFinite(VisualFeatherWeight)
+		? FMath::Clamp(VisualFeatherWeight, 0.0f, 1.0f)
+		: 0.0f;
+}
+
 FSightWeaveViewPresentationSelection FSightWeaveViewPresentationSelection::Disabled(
 	const FSightWeaveRenderWorldIdentity InWorldIdentity,
 	const uint64 InPresentationRevision)

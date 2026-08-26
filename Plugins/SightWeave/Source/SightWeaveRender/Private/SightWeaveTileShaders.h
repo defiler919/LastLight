@@ -160,7 +160,6 @@ public:
 		SHADER_PARAMETER(FIntPoint, FeatherWorkOrigin)
 		SHADER_PARAMETER(uint32, FeatherWorkSize)
 		SHADER_PARAMETER(uint32, PageTableCount)
-		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -180,7 +179,6 @@ public:
 		SHADER_PARAMETER(FIntPoint, FeatherWorkOrigin)
 		SHADER_PARAMETER(int32, FeatherJumpStep)
 		SHADER_PARAMETER(uint32, FeatherWorkSize)
-		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -208,7 +206,6 @@ public:
 		SHADER_PARAMETER(uint32, PageTableCount)
 		SHADER_PARAMETER(uint32, DestinationOriginX)
 		SHADER_PARAMETER(uint32, DestinationOriginY)
-		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)

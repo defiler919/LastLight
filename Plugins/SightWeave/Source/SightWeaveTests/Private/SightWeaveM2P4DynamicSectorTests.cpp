@@ -250,6 +250,7 @@ bool FSightWeaveM2P4DynamicSectorSingleSegmentTest::RunTest(const FString& Param
 	TestEqual(TEXT("One incremental attempt"), Outward.VisionIncrementalAttemptCount, int64(1));
 	TestEqual(TEXT("Incremental solve succeeds"), Outward.VisionIncrementalSuccessCount, int64(1));
 	TestEqual(TEXT("No full fallback"), Outward.VisionIncrementalFallbackCount, int64(0));
+	TestEqual(TEXT("Cold target has no exact-result reuse"), Outward.VisionExactResultReuseCount, int64(0));
 	TestTrue(TEXT("Dirty sector is measured"), Outward.VisionIncrementalLastDirtyRadians > 0.0);
 	TestTrue(TEXT("Maximum dirty sector is measured"), Outward.VisionIncrementalMaximumDirtyRadians > 0.0);
 	TestTrue(TEXT("Unchanged rays are reused"), Outward.VisionIncrementalReusedRayCount > 0);
@@ -260,7 +261,8 @@ bool FSightWeaveM2P4DynamicSectorSingleSegmentTest::RunTest(const FString& Param
 
 	TestTrue(TEXT("Door translates inward"), Subsystem->UpdateOccluder(DoorHandle, Door(250.0), true, true));
 	const FSightWeaveDynamicUpdateStageMetrics& Inward = Subsystem->GetLastDynamicUpdateStageMetrics();
-	TestEqual(TEXT("Return incremental solve succeeds"), Inward.VisionIncrementalSuccessCount, int64(1));
+	TestEqual(TEXT("Resident return skips incremental solve"), Inward.VisionIncrementalAttemptCount, int64(0));
+	TestEqual(TEXT("Resident return reuses one exact result"), Inward.VisionExactResultReuseCount, int64(1));
 	TestEqual(TEXT("Return has no full fallback"), Inward.VisionIncrementalFallbackCount, int64(0));
 	SnapshotMatchesFreshFullSolve(*this, *Subsystem, VisionHandle, TEXT("inward"));
 	return true;
@@ -330,14 +332,19 @@ bool FSightWeaveM2P5SharedPreparedCacheDynamicSectorTest::RunTest(const FString&
 			Subsystem->UpdateOccluder(DoorHandle, Door(DoorX), true, true));
 		const FSightWeaveDynamicUpdateStageMetrics& Metrics =
 			Subsystem->GetLastDynamicUpdateStageMetrics();
+		const bool bColdTarget = UpdateIndex == 0;
 		TestEqual(
-			*FString::Printf(TEXT("%s attempts one vision incremental solve"), *Prefix),
+			*FString::Printf(TEXT("%s records the expected incremental attempts"), *Prefix),
 			Metrics.VisionIncrementalAttemptCount,
-			int64(1));
+			bColdTarget ? int64(1) : int64(0));
 		TestEqual(
-			*FString::Printf(TEXT("%s succeeds incrementally"), *Prefix),
+			*FString::Printf(TEXT("%s records the expected incremental successes"), *Prefix),
 			Metrics.VisionIncrementalSuccessCount,
-			int64(1));
+			bColdTarget ? int64(1) : int64(0));
+		TestEqual(
+			*FString::Printf(TEXT("%s records the expected exact-result reuse"), *Prefix),
+			Metrics.VisionExactResultReuseCount,
+			bColdTarget ? int64(0) : int64(1));
 		TestEqual(
 			*FString::Printf(TEXT("%s avoids full fallback"), *Prefix),
 			Metrics.VisionIncrementalFallbackCount,
@@ -346,12 +353,15 @@ bool FSightWeaveM2P5SharedPreparedCacheDynamicSectorTest::RunTest(const FString&
 			*FString::Printf(TEXT("%s has no fallback reason"), *Prefix),
 			Metrics.VisionIncrementalLastFallbackReason
 				== ESightWeaveIncrementalSectorFallbackReason::None);
-		TestTrue(
-			*FString::Printf(TEXT("%s reuses unchanged rays"), *Prefix),
-			Metrics.VisionIncrementalReusedRayCount > 0);
-		TestTrue(
-			*FString::Printf(TEXT("%s rebuilds dirty rays"), *Prefix),
-			Metrics.VisionIncrementalRebuiltRayCount > 0);
+		if (bColdTarget)
+		{
+			TestTrue(
+				*FString::Printf(TEXT("%s reuses unchanged rays"), *Prefix),
+				Metrics.VisionIncrementalReusedRayCount > 0);
+			TestTrue(
+				*FString::Printf(TEXT("%s rebuilds dirty rays"), *Prefix),
+				Metrics.VisionIncrementalRebuiltRayCount > 0);
+		}
 		SnapshotMatchesFreshFullSolve(*this, *Subsystem, VisionHandle, *Prefix);
 	}
 	return true;
@@ -425,20 +435,26 @@ bool FSightWeaveM2P5BroadDynamicDoorExactTest::RunTest(const FString& Parameters
 			Subsystem->UpdateOccluder(DoorHandle, Door(DoorX), true, true));
 		const FSightWeaveDynamicUpdateStageMetrics& Metrics =
 			Subsystem->GetLastDynamicUpdateStageMetrics();
-		TestEqual(*FString::Printf(TEXT("%s attempts four sources"), *Prefix),
-			Metrics.VisionIncrementalAttemptCount, int64(4));
-		TestEqual(*FString::Printf(TEXT("%s succeeds for four sources"), *Prefix),
-			Metrics.VisionIncrementalSuccessCount, int64(4));
+		const bool bColdTarget = UpdateIndex == 0;
+		TestEqual(*FString::Printf(TEXT("%s records expected incremental attempts"), *Prefix),
+			Metrics.VisionIncrementalAttemptCount, bColdTarget ? int64(4) : int64(0));
+		TestEqual(*FString::Printf(TEXT("%s records expected incremental successes"), *Prefix),
+			Metrics.VisionIncrementalSuccessCount, bColdTarget ? int64(4) : int64(0));
+		TestEqual(*FString::Printf(TEXT("%s records expected exact-result reuse"), *Prefix),
+			Metrics.VisionExactResultReuseCount, bColdTarget ? int64(0) : int64(4));
 		TestEqual(*FString::Printf(TEXT("%s has no fallback"), *Prefix),
 			Metrics.VisionIncrementalFallbackCount, int64(0));
 		TestEqual(*FString::Printf(TEXT("%s records four source diagnostics"), *Prefix),
 			Metrics.VisionSourceDiagnosticCount, 4);
 		TestEqual(*FString::Printf(TEXT("%s has no diagnostic overflow"), *Prefix),
 			Metrics.VisionSourceDiagnosticOverflowCount, 0);
-		TestTrue(*FString::Printf(TEXT("%s reuses unchanged rays"), *Prefix),
-			Metrics.VisionIncrementalReusedRayCount > 0);
-		TestTrue(*FString::Printf(TEXT("%s rebuilds dirty rays"), *Prefix),
-			Metrics.VisionIncrementalRebuiltRayCount > 0);
+		if (bColdTarget)
+		{
+			TestTrue(*FString::Printf(TEXT("%s reuses unchanged rays"), *Prefix),
+				Metrics.VisionIncrementalReusedRayCount > 0);
+			TestTrue(*FString::Printf(TEXT("%s rebuilds dirty rays"), *Prefix),
+				Metrics.VisionIncrementalRebuiltRayCount > 0);
+		}
 		int64 PreviousSourceId = 0;
 		for (int32 SourceIndex = 0; SourceIndex < Metrics.VisionSourceDiagnosticCount; ++SourceIndex)
 		{
@@ -448,10 +464,15 @@ bool FSightWeaveM2P5BroadDynamicDoorExactTest::RunTest(const FString& Parameters
 				Diagnostic.SourceId > PreviousSourceId);
 			TestTrue(*FString::Printf(TEXT("%s source has no fallback reason"), *Prefix),
 				Diagnostic.FallbackReason == ESightWeaveIncrementalSectorFallbackReason::None);
-			TestTrue(*FString::Printf(TEXT("%s source reuses rays"), *Prefix),
-				Diagnostic.ReusedRayCount > 0);
-			TestTrue(*FString::Printf(TEXT("%s source rebuilds rays"), *Prefix),
-				Diagnostic.RebuiltRayCount > 0);
+			TestEqual(*FString::Printf(TEXT("%s source exact-result state is explicit"), *Prefix),
+				Diagnostic.bExactResultReused, !bColdTarget);
+			if (bColdTarget)
+			{
+				TestTrue(*FString::Printf(TEXT("%s source reuses rays"), *Prefix),
+					Diagnostic.ReusedRayCount > 0);
+				TestTrue(*FString::Printf(TEXT("%s source rebuilds rays"), *Prefix),
+					Diagnostic.RebuiltRayCount > 0);
+			}
 			PreviousSourceId = Diagnostic.SourceId;
 		}
 		for (int32 SourceIndex = 0; SourceIndex < VisionHandles.Num(); ++SourceIndex)
@@ -567,26 +588,30 @@ bool FSightWeaveM2P5FixedSeedIncrementalDifferentialTest::RunTest(const FString&
 		return true;
 	}
 
-	TArray<int64> WarmRebuilt;
-	TArray<int64> WarmReused;
 	TArray<TArray<FVector>> WarmVertices;
-	for (int32 Step = 1; Step <= States.Num(); ++Step)
+	WarmVertices.SetNum(States.Num());
 	{
-		const int32 StateIndex = Step % States.Num();
+		const FSightWeaveFrameSnapshot InitialSnapshot = Subsystem->GetPublishedSnapshot();
+		const FSightWeaveVisionSnapshotEntry* InitialEntry =
+			FindVisionEntry(InitialSnapshot, VisionHandle);
+		WarmVertices[0] = InitialEntry ? InitialEntry->Polygon.Vertices : TArray<FVector>();
+	}
+	for (int32 StateIndex = 1; StateIndex < States.Num(); ++StateIndex)
+	{
 		TestTrue(TEXT("Fixed-seed warm publication succeeds"),
 			Subsystem->UpdateOccluder(DoorHandle, States[StateIndex], true, true));
 		const FSightWeaveDynamicUpdateStageMetrics& Metrics =
 			Subsystem->GetLastDynamicUpdateStageMetrics();
 		TestEqual(TEXT("Fixed-seed warm path succeeds incrementally"),
 			Metrics.VisionIncrementalSuccessCount, int64(1));
+		TestEqual(TEXT("Fixed-seed cold target does not reuse an exact result"),
+			Metrics.VisionExactResultReuseCount, int64(0));
 		TestEqual(TEXT("Fixed-seed warm path has no fallback"),
 			Metrics.VisionIncrementalFallbackCount, int64(0));
-		WarmRebuilt.Add(Metrics.VisionIncrementalRebuiltRayCount);
-		WarmReused.Add(Metrics.VisionIncrementalReusedRayCount);
 		const FSightWeaveFrameSnapshot Snapshot = Subsystem->GetPublishedSnapshot();
 		const FSightWeaveVisionSnapshotEntry* Entry =
 			FindVisionEntry(Snapshot, VisionHandle);
-		WarmVertices.Add(Entry ? Entry->Polygon.Vertices : TArray<FVector>());
+		WarmVertices[StateIndex] = Entry ? Entry->Polygon.Vertices : TArray<FVector>();
 		SnapshotMatchesFreshFullSolve(
 			*this,
 			*Subsystem,
@@ -596,26 +621,23 @@ bool FSightWeaveM2P5FixedSeedIncrementalDifferentialTest::RunTest(const FString&
 	const FSightWeavePreparedEventIndexStats WarmPrepared =
 		Subsystem->GetPreparedEventIndexStats();
 
-	for (int32 Step = 1; Step <= States.Num(); ++Step)
+	for (int32 StateIndex = 0; StateIndex < States.Num(); ++StateIndex)
 	{
-		const int32 StateIndex = Step % States.Num();
 		TestTrue(TEXT("Fixed-seed replay publication succeeds"),
 			Subsystem->UpdateOccluder(DoorHandle, States[StateIndex], true, true));
 		const FSightWeaveDynamicUpdateStageMetrics& Metrics =
 			Subsystem->GetLastDynamicUpdateStageMetrics();
-		TestEqual(TEXT("Fixed-seed replay path succeeds incrementally"),
-			Metrics.VisionIncrementalSuccessCount, int64(1));
+		TestEqual(TEXT("Fixed-seed replay skips incremental solve"),
+			Metrics.VisionIncrementalAttemptCount, int64(0));
+		TestEqual(TEXT("Fixed-seed replay reuses one exact result"),
+			Metrics.VisionExactResultReuseCount, int64(1));
 		TestEqual(TEXT("Fixed-seed replay path has no fallback"),
 			Metrics.VisionIncrementalFallbackCount, int64(0));
-		TestEqual(TEXT("Fixed-seed rebuilt-ray count is deterministic"),
-			Metrics.VisionIncrementalRebuiltRayCount, WarmRebuilt[Step - 1]);
-		TestEqual(TEXT("Fixed-seed reused-ray count is deterministic"),
-			Metrics.VisionIncrementalReusedRayCount, WarmReused[Step - 1]);
 		const FSightWeaveFrameSnapshot Snapshot = Subsystem->GetPublishedSnapshot();
 		const FSightWeaveVisionSnapshotEntry* Entry =
 			FindVisionEntry(Snapshot, VisionHandle);
 		TestTrue(TEXT("Fixed-seed polygon is bitwise deterministic"),
-			Entry && Entry->Polygon.Vertices == WarmVertices[Step - 1]);
+			Entry && Entry->Polygon.Vertices == WarmVertices[StateIndex]);
 		SnapshotMatchesFreshFullSolve(
 			*this,
 			*Subsystem,
@@ -626,6 +648,9 @@ bool FSightWeaveM2P5FixedSeedIncrementalDifferentialTest::RunTest(const FString&
 		Subsystem->GetPreparedEventIndexStats();
 	TestEqual(TEXT("Prepared entries do not rebuild after fixed-seed warmup"),
 		ReplayPrepared.FullRebuildCount, WarmPrepared.FullRebuildCount);
+	TestEqual(TEXT("Every fixed-seed replay is an exact-result hit"),
+		ReplayPrepared.ExactResultHitCount,
+		WarmPrepared.ExactResultHitCount + States.Num());
 	TestEqual(TEXT("Prepared high-water bytes do not grow after fixed-seed warmup"),
 		ReplayPrepared.HighWaterAllocatedBytes, WarmPrepared.HighWaterAllocatedBytes);
 	return true;

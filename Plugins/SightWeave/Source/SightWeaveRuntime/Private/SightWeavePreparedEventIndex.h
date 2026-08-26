@@ -26,8 +26,16 @@ public:
 		const FSightWeaveReferenceSolveInput& Input,
 		const TSharedPtr<FSightWeaveOptimizedSolveCache>& CurrentBinding,
 		uint64 Revision);
+	bool TryReuseExactResult(
+		const FSightWeaveReferenceSolveInput& Input,
+		const TSharedPtr<FSightWeaveOptimizedSolveCache>& Cache,
+		FSightWeaveReferenceSolveResult& OutResult);
+	bool StoreExactResult(
+		const FSightWeaveReferenceSolveInput& Input,
+		const FSightWeaveReferenceSolveResult& Result,
+		const TSharedPtr<FSightWeaveOptimizedSolveCache>& Cache);
 
-	/** Returns false when the exact result is kept but its oversized preparation is not retained. */
+	/** Returns false when the bounded index cannot retain this preparation. */
 	bool Commit(const TSharedPtr<FSightWeaveOptimizedSolveCache>& Cache);
 	void Release(const TSharedPtr<FSightWeaveOptimizedSolveCache>& Cache);
 
@@ -46,6 +54,11 @@ private:
 	static bool MatchesInput(
 		const FSightWeaveOptimizedSolveCache& Cache,
 		const FSightWeaveReferenceSolveInput& Input);
+	static bool MatchesExactResultInput(
+		const FSightWeaveOptimizedSolveCache& Cache,
+		const FSightWeaveReferenceSolveInput& Input);
+	static int64 GetPreparationAllocatedBytes(const FSightWeaveOptimizedSolveCache& Cache);
+	static int64 GetExactResultAllocatedBytes(const FSightWeaveOptimizedSolveCache& Cache);
 	static int64 GetAllocatedBytes(const FSightWeaveOptimizedSolveCache& Cache);
 	static int64 EstimateAllocatedBytes(const FSightWeaveReferenceSolveInput& Input);
 	FSlot* FindSlot(const TSharedPtr<FSightWeaveOptimizedSolveCache>& Cache);

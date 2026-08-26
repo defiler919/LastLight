@@ -1932,6 +1932,10 @@ namespace SightWeave::Geometry
 			Result.Error = TEXT("Invalid optimized solve input");
 			return;
 		}
+		if (PreparedCache)
+		{
+			PreparedCache->InvalidateExactResult();
+		}
 
 		TArray<FSightWeavePreparedSegment>& CandidateSegments = PreparedCache
 			? PreparedCache->CandidateSegments

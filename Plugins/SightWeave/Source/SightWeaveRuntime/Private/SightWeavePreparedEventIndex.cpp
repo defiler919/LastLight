@@ -2,6 +2,21 @@
 
 namespace
 {
+	template <typename ElementType>
+	void CopyArrayWithoutShrinking(
+		TArray<ElementType>& Destination,
+		const TArray<ElementType>& Source)
+	{
+		Destination.SetNumUninitialized(Source.Num(), EAllowShrinking::No);
+		if (!Source.IsEmpty())
+		{
+			FMemory::Memcpy(
+				Destination.GetData(),
+				Source.GetData(),
+				static_cast<SIZE_T>(Source.Num()) * sizeof(ElementType));
+		}
+	}
+
 	bool TolerancesEqual(
 		const FSightWeaveGeometryTolerances& A,
 		const FSightWeaveGeometryTolerances& B)
@@ -15,6 +30,18 @@ namespace
 			&& A.DuplicateVertexEpsilon == B.DuplicateVertexEpsilon
 			&& A.HeightOverlapEpsilon == B.HeightOverlapEpsilon
 			&& A.RadialBoundarySteps == B.RadialBoundarySteps;
+	}
+
+	bool ExactResultDataIsValid(const FSightWeaveOptimizedSolveCache& Cache)
+	{
+		return Cache.ExactResultVertices.Num() >= 3
+			&& Cache.ExactResultCandidateAnglesRadians.Num()
+				== Cache.ExactResultCandidateDistances.Num()
+			&& Cache.ExactResultCandidateAnglesRadians.Num()
+				== Cache.ExactResultCandidateBoundaryPoints.Num()
+			&& Cache.ExactResultCastRayCount
+				== Cache.ExactResultCandidateAnglesRadians.Num()
+			&& Cache.ExactResultCandidateSegmentCount >= 0;
 	}
 }
 
@@ -45,6 +72,7 @@ void FSightWeavePreparedEventIndex::InvalidateAll()
 		{
 			Slot.Cache->bInputInvariantInitialized = false;
 			Slot.Cache->bAbsoluteEndpointEventsValid = false;
+			Slot.Cache->InvalidateExactResult();
 		}
 		Slot.Cache.Reset();
 	}
@@ -97,32 +125,27 @@ FSightWeavePreparedEventIndex::FAcquireResult FSightWeavePreparedEventIndex::Acq
 		return Result;
 	}
 
-	FSlot* Selected = FindSlot(CurrentBinding);
-	const bool bReusingExclusiveCurrent = Selected && Selected->BindingCount == 1;
-	if (!Selected || Selected->BindingCount != 1)
+	Release(CurrentBinding);
+	FSlot* Selected = nullptr;
+	for (FSlot& Slot : Slots)
 	{
-		Release(CurrentBinding);
-		Selected = nullptr;
+		if (!Slot.bValid)
+		{
+			Selected = &Slot;
+			break;
+		}
+	}
+	if (!Selected)
+	{
 		for (FSlot& Slot : Slots)
 		{
-			if (!Slot.bValid)
+			if (Slot.BindingCount == 0
+				&& (!Selected
+					|| Slot.LastUsedRevision < Selected->LastUsedRevision
+					|| (Slot.LastUsedRevision == Selected->LastUsedRevision
+						&& Slot.Generation < Selected->Generation)))
 			{
 				Selected = &Slot;
-				break;
-			}
-		}
-		if (!Selected)
-		{
-			for (FSlot& Slot : Slots)
-			{
-				if (Slot.BindingCount == 0
-					&& (!Selected
-						|| Slot.LastUsedRevision < Selected->LastUsedRevision
-						|| (Slot.LastUsedRevision == Selected->LastUsedRevision
-							&& Slot.Generation < Selected->Generation)))
-				{
-					Selected = &Slot;
-				}
 			}
 		}
 	}
@@ -135,7 +158,8 @@ FSightWeavePreparedEventIndex::FAcquireResult FSightWeavePreparedEventIndex::Acq
 		return Result;
 	}
 
-	if (Selected->bValid && !bReusingExclusiveCurrent)
+	const bool bReusingCurrent = Selected->Cache == CurrentBinding;
+	if (Selected->bValid && !bReusingCurrent)
 	{
 		++Stats.EvictionCount;
 	}
@@ -143,11 +167,12 @@ FSightWeavePreparedEventIndex::FAcquireResult FSightWeavePreparedEventIndex::Acq
 	{
 		Selected->Cache = MakeShared<FSightWeaveOptimizedSolveCache>();
 	}
-	if (!bReusingExclusiveCurrent)
+	if (!bReusingCurrent)
 	{
 		Selected->Cache->bInputInvariantInitialized = false;
 		Selected->Cache->bAbsoluteEndpointEventsValid = false;
 	}
+	Selected->Cache->InvalidateExactResult();
 	Selected->bValid = true;
 	Selected->BindingCount = 1;
 	Selected->LastUsedRevision = Revision;
@@ -155,6 +180,126 @@ FSightWeavePreparedEventIndex::FAcquireResult FSightWeavePreparedEventIndex::Acq
 	Result.Cache = Selected->Cache;
 	UpdateLiveStats();
 	return Result;
+}
+
+bool FSightWeavePreparedEventIndex::TryReuseExactResult(
+	const FSightWeaveReferenceSolveInput& Input,
+	const TSharedPtr<FSightWeaveOptimizedSolveCache>& Cache,
+	FSightWeaveReferenceSolveResult& OutResult)
+{
+	const FSlot* Slot = FindSlot(Cache);
+	if (!Slot
+		|| !Slot->bValid
+		|| !MatchesExactResultInput(*Cache, Input)
+		|| !ExactResultDataIsValid(*Cache))
+	{
+		++Stats.ExactResultMissCount;
+		return false;
+	}
+
+	const double StartSeconds = FPlatformTime::Seconds();
+	OutResult.bSucceeded = false;
+	CopyArrayWithoutShrinking(OutResult.Vertices, Cache->ExactResultVertices);
+	CopyArrayWithoutShrinking(
+		OutResult.CandidateAnglesRadians,
+		Cache->ExactResultCandidateAnglesRadians);
+	CopyArrayWithoutShrinking(
+		OutResult.CandidateDistances,
+		Cache->ExactResultCandidateDistances);
+	CopyArrayWithoutShrinking(
+		OutResult.CandidateBoundaryPoints,
+		Cache->ExactResultCandidateBoundaryPoints);
+	OutResult.CandidateSegmentCount = Cache->ExactResultCandidateSegmentCount;
+	OutResult.CastRayCount = Cache->ExactResultCastRayCount;
+	OutResult.SolverModeUsed = ESightWeaveSolverMode::Optimized;
+	OutResult.bVerificationMatched = false;
+	OutResult.bUsedReferenceFallback = false;
+	OutResult.StageMetrics = {};
+#if WITH_DEV_AUTOMATION_TESTS
+	OutResult.VisionSolveDiagnostics = {};
+#endif
+	OutResult.VerificationError.Reset();
+	OutResult.Error.Reset();
+	OutResult.bSucceeded = true;
+	OutResult.StageMetrics.WorkingSetAllocatedBytes =
+		OutResult.Vertices.GetAllocatedSize()
+		+ OutResult.CandidateAnglesRadians.GetAllocatedSize()
+		+ OutResult.CandidateDistances.GetAllocatedSize()
+		+ OutResult.CandidateBoundaryPoints.GetAllocatedSize();
+	OutResult.StageMetrics.TotalMicroseconds =
+		(FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
+	++Stats.ExactResultHitCount;
+	return true;
+}
+
+bool FSightWeavePreparedEventIndex::StoreExactResult(
+	const FSightWeaveReferenceSolveInput& Input,
+	const FSightWeaveReferenceSolveResult& Result,
+	const TSharedPtr<FSightWeaveOptimizedSolveCache>& Cache)
+{
+	FSlot* Slot = FindSlot(Cache);
+	if (!Slot || !Slot->bValid)
+	{
+		return false;
+	}
+	if (!Result.bSucceeded
+		|| Result.Vertices.Num() < 3
+		|| Result.CandidateAnglesRadians.Num() != Result.CandidateDistances.Num()
+		|| Result.CandidateAnglesRadians.Num() != Result.CandidateBoundaryPoints.Num()
+		|| Result.CastRayCount != Result.CandidateAnglesRadians.Num()
+		|| Result.CandidateSegmentCount < 0
+		|| !MatchesInput(*Cache, Input))
+	{
+		Cache->InvalidateExactResult();
+		return false;
+	}
+
+	const int64 RequiredExactBytes =
+		FMath::Max<int64>(
+			Cache->ExactResultVertices.GetAllocatedSize(),
+			static_cast<int64>(Result.Vertices.Num()) * sizeof(FVector))
+		+ FMath::Max<int64>(
+			Cache->ExactResultCandidateAnglesRadians.GetAllocatedSize(),
+			static_cast<int64>(Result.CandidateAnglesRadians.Num()) * sizeof(double))
+		+ FMath::Max<int64>(
+			Cache->ExactResultCandidateDistances.GetAllocatedSize(),
+			static_cast<int64>(Result.CandidateDistances.Num()) * sizeof(double))
+		+ FMath::Max<int64>(
+			Cache->ExactResultCandidateBoundaryPoints.GetAllocatedSize(),
+			static_cast<int64>(Result.CandidateBoundaryPoints.Num()) * sizeof(FVector2D));
+	if (GetPreparationAllocatedBytes(*Cache) + RequiredExactBytes > MaximumBytes)
+	{
+		Cache->InvalidateExactResult();
+		++Stats.ExactResultCapacityFallbackCount;
+		return false;
+	}
+
+	Cache->InvalidateExactResult();
+	Cache->ExactResultOrigin = Input.Origin;
+	Cache->ExactResultForward = Input.Forward;
+	Cache->ExactResultShape = Input.Shape;
+	Cache->ExactResultRange = Input.Range;
+	Cache->ExactResultHalfAngleDegrees = Input.HalfAngleDegrees;
+	Cache->ExactResultNearAwarenessRadius = Input.NearAwarenessRadius;
+	Cache->ExactResultFloorId = Input.FloorId;
+	Cache->ExactResultHeightRange = Input.HeightRange;
+	Cache->ExactResultTolerances = Input.Tolerances;
+	CopyArrayWithoutShrinking(Cache->ExactResultVertices, Result.Vertices);
+	CopyArrayWithoutShrinking(
+		Cache->ExactResultCandidateAnglesRadians,
+		Result.CandidateAnglesRadians);
+	CopyArrayWithoutShrinking(
+		Cache->ExactResultCandidateDistances,
+		Result.CandidateDistances);
+	CopyArrayWithoutShrinking(
+		Cache->ExactResultCandidateBoundaryPoints,
+		Result.CandidateBoundaryPoints);
+	Cache->ExactResultCandidateSegmentCount = Result.CandidateSegmentCount;
+	Cache->ExactResultCastRayCount = Result.CastRayCount;
+	Cache->bExactResultValid = true;
+	++Stats.ExactResultStoreCount;
+	UpdateLiveStats();
+	return true;
 }
 
 bool FSightWeavePreparedEventIndex::Commit(
@@ -211,6 +356,7 @@ bool FSightWeavePreparedEventIndex::Commit(
 	Slot->BindingCount = 0;
 	Cache->bInputInvariantInitialized = false;
 	Cache->bAbsoluteEndpointEventsValid = false;
+	Cache->InvalidateExactResult();
 	Slot->Cache.Reset();
 	UpdateLiveStats();
 	return false;
@@ -252,7 +398,28 @@ bool FSightWeavePreparedEventIndex::MatchesInput(
 	return true;
 }
 
-int64 FSightWeavePreparedEventIndex::GetAllocatedBytes(
+bool FSightWeavePreparedEventIndex::MatchesExactResultInput(
+	const FSightWeaveOptimizedSolveCache& Cache,
+	const FSightWeaveReferenceSolveInput& Input)
+{
+	return Cache.bExactResultValid
+		&& Cache.ExactResultOrigin.X == Input.Origin.X
+		&& Cache.ExactResultOrigin.Y == Input.Origin.Y
+		&& Cache.ExactResultOrigin.Z == Input.Origin.Z
+		&& Cache.ExactResultForward.X == Input.Forward.X
+		&& Cache.ExactResultForward.Y == Input.Forward.Y
+		&& Cache.ExactResultShape == Input.Shape
+		&& Cache.ExactResultRange == Input.Range
+		&& Cache.ExactResultHalfAngleDegrees == Input.HalfAngleDegrees
+		&& Cache.ExactResultNearAwarenessRadius == Input.NearAwarenessRadius
+		&& Cache.ExactResultFloorId == Input.FloorId
+		&& Cache.ExactResultHeightRange.ZMin == Input.HeightRange.ZMin
+		&& Cache.ExactResultHeightRange.ZMax == Input.HeightRange.ZMax
+		&& TolerancesEqual(Cache.ExactResultTolerances, Input.Tolerances)
+		&& MatchesInput(Cache, Input);
+}
+
+int64 FSightWeavePreparedEventIndex::GetPreparationAllocatedBytes(
 	const FSightWeaveOptimizedSolveCache& Cache)
 {
 	return static_cast<int64>(Cache.SegmentSlots.GetAllocatedSize())
@@ -260,6 +427,21 @@ int64 FSightWeavePreparedEventIndex::GetAllocatedBytes(
 		+ static_cast<int64>(Cache.SortedAbsoluteEndpointAngles.GetAllocatedSize())
 		+ static_cast<int64>(Cache.AbsoluteEndpointAngleSortBuffer.GetAllocatedSize())
 		+ static_cast<int64>(Cache.SortedAbsoluteEndpointDirections.GetAllocatedSize());
+}
+
+int64 FSightWeavePreparedEventIndex::GetExactResultAllocatedBytes(
+	const FSightWeaveOptimizedSolveCache& Cache)
+{
+	return static_cast<int64>(Cache.ExactResultVertices.GetAllocatedSize())
+		+ static_cast<int64>(Cache.ExactResultCandidateAnglesRadians.GetAllocatedSize())
+		+ static_cast<int64>(Cache.ExactResultCandidateDistances.GetAllocatedSize())
+		+ static_cast<int64>(Cache.ExactResultCandidateBoundaryPoints.GetAllocatedSize());
+}
+
+int64 FSightWeavePreparedEventIndex::GetAllocatedBytes(
+	const FSightWeaveOptimizedSolveCache& Cache)
+{
+	return GetPreparationAllocatedBytes(Cache) + GetExactResultAllocatedBytes(Cache);
 }
 
 int64 FSightWeavePreparedEventIndex::EstimateAllocatedBytes(

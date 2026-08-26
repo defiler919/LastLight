@@ -2260,6 +2260,62 @@ bool USightWeaveWorldSubsystem::ExercisePreparedEventIndexConcurrentIsolationFor
 	});
 	return !FailureCounts.ContainsByPredicate([](const int32 Count) { return Count != 0; });
 }
+
+bool USightWeaveWorldSubsystem::ExercisePreparedEventIndexExactResultReuseForTesting(
+	const FSightWeaveReferenceSolveInput& BaselineInput,
+	const FSightWeaveReferenceSolveInput& CandidateInput,
+	const bool bExpectedReuse)
+{
+	FSightWeavePreparedEventIndex Index;
+	Index.Initialize(2, 4ll * 1024ll * 1024ll);
+	TSharedPtr<FSightWeaveOptimizedSolveCache> Binding;
+	const FSightWeavePreparedEventIndex::FAcquireResult BaselineAcquisition =
+		Index.Acquire(BaselineInput, Binding, 1);
+	Binding = BaselineAcquisition.Cache;
+	if (!Binding.IsValid() || BaselineAcquisition.bHit)
+	{
+		return false;
+	}
+
+	FSightWeaveReferenceSolveResult BaselineResult;
+	SightWeave::Geometry::SolveOptimizedPolygonIntoCached(
+		BaselineInput,
+		BaselineResult,
+		*Binding);
+	if (!BaselineResult.bSucceeded
+		|| !Index.StoreExactResult(BaselineInput, BaselineResult, Binding)
+		|| !Index.Commit(Binding))
+	{
+		return false;
+	}
+
+	const FSightWeavePreparedEventIndex::FAcquireResult CandidateAcquisition =
+		Index.Acquire(CandidateInput, Binding, 2);
+	Binding = CandidateAcquisition.Cache;
+	FSightWeaveReferenceSolveResult ReusedResult;
+	const bool bReused = CandidateAcquisition.bHit
+		&& Binding.IsValid()
+		&& Index.TryReuseExactResult(CandidateInput, Binding, ReusedResult);
+	if (bReused != bExpectedReuse)
+	{
+		return false;
+	}
+	if (!bExpectedReuse)
+	{
+		return true;
+	}
+
+	FSightWeaveReferenceSolveResult FreshResult;
+	SightWeave::Geometry::SolveOptimizedPolygonInto(CandidateInput, FreshResult);
+	return FreshResult.bSucceeded
+		&& ReusedResult.bSucceeded
+		&& ReusedResult.CandidateSegmentCount == FreshResult.CandidateSegmentCount
+		&& ReusedResult.CastRayCount == FreshResult.CastRayCount
+		&& ReusedResult.Vertices == FreshResult.Vertices
+		&& ReusedResult.CandidateAnglesRadians == FreshResult.CandidateAnglesRadians
+		&& ReusedResult.CandidateDistances == FreshResult.CandidateDistances
+		&& ReusedResult.CandidateBoundaryPoints == FreshResult.CandidateBoundaryPoints;
+}
 #endif
 
 void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
@@ -2375,6 +2431,7 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 			&& PreviousOccluderRevision == ActiveDynamicSectorChange.PriorOccluderRevision
 			&& LastOccluderRevision == ActiveDynamicSectorChange.PublishedOccluderRevision;
 		FSightWeaveIncrementalSectorDiagnostics IncrementalDiagnostics;
+		bool bExactResultCacheHit = false;
 		if (bUsePreparedIndex && PreparedEventIndex.IsValid())
 		{
 			const FSightWeavePreparedEventIndex::FAcquireResult Acquisition =
@@ -2386,7 +2443,13 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 #endif
 			if (PreparedCache.IsValid())
 			{
-				if (bIncrementalRevisionMatches
+				bExactResultCacheHit = Acquisition.bHit
+					&& PreparedEventIndex->TryReuseExactResult(
+						Input,
+						PreparedCache,
+						SolveResult);
+				if (!bExactResultCacheHit
+					&& bIncrementalRevisionMatches
 					&& PreviousPreparedCache.IsValid())
 				{
 					FSightWeaveIncrementalSectorRequest IncrementalRequest;
@@ -2400,7 +2463,7 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 						IncrementalRequest,
 						IncrementalDiagnostics);
 				}
-				else
+				else if (!bExactResultCacheHit)
 				{
 					const double FullSolveStartSeconds = FPlatformTime::Seconds();
 					if (bIncrementalRevisionMatches)
@@ -2425,6 +2488,10 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 						IncrementalDiagnostics.FullFallbackMicroseconds =
 							(FPlatformTime::Seconds() - FullSolveStartSeconds) * 1000000.0;
 					}
+				}
+				if (!bExactResultCacheHit)
+				{
+					PreparedEventIndex->StoreExactResult(Input, SolveResult, PreparedCache);
 				}
 #if WITH_DEV_AUTOMATION_TESTS
 				EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::VisionGeometrySolve, false);
@@ -2489,6 +2556,8 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 #endif
 		}
 #if WITH_DEV_AUTOMATION_TESTS
+		LastDynamicUpdateStageMetrics.VisionExactResultReuseCount +=
+			bExactResultCacheHit ? 1 : 0;
 		if (IncrementalDiagnostics.bAttempted)
 		{
 			++LastDynamicUpdateStageMetrics.VisionIncrementalAttemptCount;
@@ -2542,6 +2611,7 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 			SourceDiagnostics.TotalRayCount = SolveResult.CastRayCount;
 			SourceDiagnostics.RebuiltRayCount = IncrementalDiagnostics.RebuiltRayCount;
 			SourceDiagnostics.ReusedRayCount = IncrementalDiagnostics.ReusedRayCount;
+			SourceDiagnostics.bExactResultReused = bExactResultCacheHit;
 			SourceDiagnostics.DirtyRadians = IncrementalDiagnostics.DirtyRadians;
 			SourceDiagnostics.FallbackReason = IncrementalDiagnostics.FallbackReason;
 			SourceDiagnostics.Detail = SolveResult.VisionSolveDiagnostics;

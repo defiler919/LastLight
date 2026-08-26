@@ -296,6 +296,85 @@ bool FSightWeaveM2P2PreparedEventIndex4096Test::RunTest(const FString& Parameter
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P5PreparedExactResultKeyTest,
+	"SightWeave.M2P5.VisionTail.PreparedExactResultKey",
+	SightWeave::M2P2::PreparedEventIndexTests::TestFlags)
+
+bool FSightWeaveM2P5PreparedExactResultKeyTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P2::PreparedEventIndexTests;
+	FSightWeaveReferenceSolveInput Baseline;
+	Baseline.Origin = FVector(25.0, -10.0, 125.0);
+	Baseline.Forward = FVector2D(0.8, 0.6);
+	Baseline.Shape = ESightWeaveSourceShape::CameraCone;
+	Baseline.Range = 900.0;
+	Baseline.HalfAngleDegrees = 55.0;
+	Baseline.NearAwarenessRadius = 25.0;
+	Baseline.FloorId = Ground;
+	Baseline.HeightRange.ZMin = 0.0f;
+	Baseline.HeightRange.ZMax = 300.0f;
+	Baseline.Segments = MakeDenseSegments(32);
+
+	TestTrue(
+		TEXT("Complete exact result key reuses a bitwise-identical solve"),
+		USightWeaveWorldSubsystem::ExercisePreparedEventIndexExactResultReuseForTesting(
+			Baseline,
+			Baseline,
+			true));
+
+	auto ExactKeyRejects = [this, &Baseline](
+		const TCHAR* Label,
+		TFunctionRef<void(FSightWeaveReferenceSolveInput&)> Mutate)
+	{
+		FSightWeaveReferenceSolveInput Candidate = Baseline;
+		Mutate(Candidate);
+		TestTrue(
+			Label,
+			USightWeaveWorldSubsystem::ExercisePreparedEventIndexExactResultReuseForTesting(
+				Baseline,
+				Candidate,
+				false));
+	};
+
+	ExactKeyRejects(TEXT("Origin X mismatch fails closed"), [](auto& Input) { Input.Origin.X += 1.0; });
+	ExactKeyRejects(TEXT("Origin Y mismatch fails closed"), [](auto& Input) { Input.Origin.Y += 1.0; });
+	ExactKeyRejects(TEXT("Origin Z mismatch fails closed"), [](auto& Input) { Input.Origin.Z += 1.0; });
+	ExactKeyRejects(TEXT("Forward mismatch fails closed"), [](auto& Input) { Input.Forward *= 0.5; });
+	ExactKeyRejects(TEXT("Shape mismatch fails closed"), [](auto& Input) { Input.Shape = ESightWeaveSourceShape::Radial; });
+	ExactKeyRejects(TEXT("Range mismatch fails closed"), [](auto& Input) { Input.Range += 1.0; });
+	ExactKeyRejects(TEXT("Half angle mismatch fails closed"), [](auto& Input) { Input.HalfAngleDegrees += 1.0; });
+	ExactKeyRejects(TEXT("Near awareness mismatch fails closed"), [](auto& Input) { Input.NearAwarenessRadius += 1.0; });
+	ExactKeyRejects(TEXT("Floor mismatch fails closed"), [](auto& Input) { Input.FloorId = Basement; });
+	ExactKeyRejects(TEXT("Height minimum mismatch fails closed"), [](auto& Input) { Input.HeightRange.ZMin += 1.0f; });
+	ExactKeyRejects(TEXT("Height maximum mismatch fails closed"), [](auto& Input) { Input.HeightRange.ZMax -= 1.0f; });
+	ExactKeyRejects(TEXT("Weld tolerance mismatch fails closed"), [](auto& Input) { Input.Tolerances.AuthoringWeldEpsilon += 0.01; });
+	ExactKeyRejects(TEXT("Zero-length tolerance mismatch fails closed"), [](auto& Input) { Input.Tolerances.ZeroLengthEpsilon += 0.0001; });
+	ExactKeyRejects(TEXT("Parallel tolerance mismatch fails closed"), [](auto& Input) { Input.Tolerances.RayParallelEpsilon *= 2.0; });
+	ExactKeyRejects(TEXT("Angular tolerance mismatch fails closed"), [](auto& Input) { Input.Tolerances.EndpointAngularEpsilonDegrees += 0.0001; });
+	ExactKeyRejects(TEXT("Point-on-edge tolerance mismatch fails closed"), [](auto& Input) { Input.Tolerances.PointOnEdgeEpsilon += 0.01; });
+	ExactKeyRejects(TEXT("Point-in-polygon tolerance mismatch fails closed"), [](auto& Input) { Input.Tolerances.PointInPolygonEpsilon += 0.01; });
+	ExactKeyRejects(TEXT("Duplicate-vertex tolerance mismatch fails closed"), [](auto& Input) { Input.Tolerances.DuplicateVertexEpsilon += 0.001; });
+	ExactKeyRejects(TEXT("Height overlap tolerance mismatch fails closed"), [](auto& Input) { Input.Tolerances.HeightOverlapEpsilon += 0.001; });
+	ExactKeyRejects(TEXT("Radial-step mismatch fails closed"), [](auto& Input) { Input.Tolerances.RadialBoundarySteps += 8; });
+	ExactKeyRejects(TEXT("Segment A mismatch fails closed"), [](auto& Input) { Input.Segments[0].A.X += 1.0; });
+	ExactKeyRejects(TEXT("Segment B mismatch fails closed"), [](auto& Input) { Input.Segments[0].B.Y += 1.0; });
+	ExactKeyRejects(TEXT("Segment floor mismatch fails closed"), [](auto& Input) { Input.Segments[0].FloorId = Basement; });
+	ExactKeyRejects(TEXT("Segment height mismatch fails closed"), [](auto& Input) { Input.Segments[0].HeightRange.ZMax -= 1.0f; });
+	ExactKeyRejects(TEXT("Segment stable ID mismatch fails closed"), [](auto& Input) { ++Input.Segments[0].StableId; });
+	ExactKeyRejects(TEXT("Segment count mismatch fails closed"), [](auto& Input) { Input.Segments.Pop(); });
+
+	FSightWeaveReferenceSolveInput NonSemanticMetadata = Baseline;
+	NonSemanticMetadata.Segments[0].bDynamic = !NonSemanticMetadata.Segments[0].bDynamic;
+	TestTrue(
+		TEXT("Non-solver dynamic metadata does not fragment exact results"),
+		USightWeaveWorldSubsystem::ExercisePreparedEventIndexExactResultReuseForTesting(
+			Baseline,
+			NonSemanticMetadata,
+			true));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FSightWeaveM2P2PreparedEventIndexSharingLifecycleTest,
 	"SightWeave.M2P2.PreparedEventIndex.SharingLifecycle",
 	SightWeave::M2P2::PreparedEventIndexTests::TestFlags)
@@ -641,7 +720,7 @@ bool FSightWeaveM2P2PreparedEventIndexDynamicLifecycleTest::RunTest(const FStrin
 	++ExpectedMisses;
 	FSightWeavePreparedEventIndexStats Stats = Subsystem->GetPreparedEventIndexStats();
 	TestEqual(TEXT("Near door rebuilds exactly one prepared origin"), Stats.MissCount, ExpectedMisses);
-	TestEqual(TEXT("Local update retains two bounded entries"), Stats.LiveEntryCount, 2);
+	TestEqual(TEXT("Local update retains the prior and new exact states"), Stats.LiveEntryCount, 3);
 	const FSightWeaveFrameSnapshot AfterNearDoor = Subsystem->GetPublishedSnapshot();
 	const FSightWeaveVisionSnapshotEntry* CurrentFar = FindVisionEntry(AfterNearDoor, FarSource);
 	TestTrue(
@@ -650,16 +729,27 @@ bool FSightWeaveM2P2PreparedEventIndexDynamicLifecycleTest::RunTest(const FStrin
 			&& CurrentFar->SourceRevision == HeldFarSourceRevision
 			&& CurrentFar->Polygon.Vertices == HeldFarVertices);
 
+	int64 ExpectedExactResultHits = Stats.ExactResultHitCount;
 	for (int32 UpdateIndex = 0; UpdateIndex < 8; ++UpdateIndex)
 	{
 		const double DoorX = UpdateIndex % 2 == 0 ? 300.0 : 350.0;
 		TestTrue(
 			TEXT("Rapid near-door update succeeds"),
 			Subsystem->UpdateOccluder(NearDoor, DoorSegments(DoorX), true, true));
-		++ExpectedMisses;
+		if (UpdateIndex == 0)
+		{
+			++ExpectedMisses;
+		}
+		else
+		{
+			++ExpectedExactResultHits;
+		}
 		Stats = Subsystem->GetPreparedEventIndexStats();
-		TestEqual(TEXT("Each changed door state rebuilds one origin"), Stats.MissCount, ExpectedMisses);
-		TestEqual(TEXT("Rapid door updates remain bounded"), Stats.LiveEntryCount, 2);
+		TestEqual(TEXT("Only the first unseen door state rebuilds one origin"), Stats.MissCount, ExpectedMisses);
+		TestEqual(TEXT("Resident two-state replay records exact-result hits"),
+			Stats.ExactResultHitCount, ExpectedExactResultHits);
+		TestEqual(TEXT("Rapid door states remain resident within the hard index bound"),
+			Stats.LiveEntryCount, 4);
 	}
 
 	const FSightWeaveFrameSnapshot BeforeFarDoor = Subsystem->GetPublishedSnapshot();

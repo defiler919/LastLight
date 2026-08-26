@@ -25,6 +25,18 @@ struct SIGHTWEAVERUNTIME_API FSightWeavePreparedEventIndexStats
 	int64 FullRebuildCount = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Prepared Event Index")
+	int64 ExactResultHitCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Prepared Event Index")
+	int64 ExactResultMissCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Prepared Event Index")
+	int64 ExactResultStoreCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Prepared Event Index")
+	int64 ExactResultCapacityFallbackCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Prepared Event Index")
 	int64 EvictionCount = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Prepared Event Index")

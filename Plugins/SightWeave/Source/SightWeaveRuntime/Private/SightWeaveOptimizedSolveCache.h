@@ -71,6 +71,31 @@ struct FSightWeaveOptimizedSolveCache
 	TArray<double> AbsoluteEndpointAngleSortBuffer;
 	TArray<FVector2D> SortedAbsoluteEndpointDirections;
 	bool bAbsoluteEndpointEventsValid = false;
+
+	// A successful full solve may be reused only when the complete solve key
+	// below and every prepared segment key match exactly. This is deliberately
+	// separate from the broader 2D preparation key used by the event index.
+	bool bExactResultValid = false;
+	FVector ExactResultOrigin = FVector::ZeroVector;
+	FVector2D ExactResultForward = FVector2D(1.0, 0.0);
+	ESightWeaveSourceShape ExactResultShape = ESightWeaveSourceShape::Radial;
+	double ExactResultRange = 0.0;
+	double ExactResultHalfAngleDegrees = 0.0;
+	double ExactResultNearAwarenessRadius = 0.0;
+	FSightWeaveFloorId ExactResultFloorId;
+	FSightWeaveHeightRange ExactResultHeightRange;
+	FSightWeaveGeometryTolerances ExactResultTolerances;
+	TArray<FVector> ExactResultVertices;
+	TArray<double> ExactResultCandidateAnglesRadians;
+	TArray<double> ExactResultCandidateDistances;
+	TArray<FVector2D> ExactResultCandidateBoundaryPoints;
+	int32 ExactResultCandidateSegmentCount = 0;
+	int32 ExactResultCastRayCount = 0;
+
+	void InvalidateExactResult()
+	{
+		bExactResultValid = false;
+	}
 };
 
 struct FSightWeaveIncrementalSectorRequest

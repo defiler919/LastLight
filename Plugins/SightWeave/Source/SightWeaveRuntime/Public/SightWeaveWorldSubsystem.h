@@ -60,6 +60,7 @@ struct FSightWeaveVisionSourceSolveDiagnostics
 	int32 TotalRayCount = 0;
 	int32 RebuiltRayCount = 0;
 	int32 ReusedRayCount = 0;
+	bool bExactResultReused = false;
 	double DirtyRadians = 0.0;
 	ESightWeaveIncrementalSectorFallbackReason FallbackReason =
 		ESightWeaveIncrementalSectorFallbackReason::None;
@@ -85,6 +86,7 @@ struct FSightWeaveDynamicUpdateStageMetrics
 	int64 VisionIncrementalFallbackCount = 0;
 	int64 VisionIncrementalRebuiltRayCount = 0;
 	int64 VisionIncrementalReusedRayCount = 0;
+	int64 VisionExactResultReuseCount = 0;
 	double VisionIncrementalLastDirtyRadians = 0.0;
 	double VisionIncrementalAccumulatedDirtyRadians = 0.0;
 	double VisionIncrementalMaximumDirtyRadians = 0.0;
@@ -344,6 +346,10 @@ public:
 		const FSightWeaveReferenceSolveInput& Input,
 		int32 WorkerCount,
 		int32 RepeatsPerWorker);
+	static bool ExercisePreparedEventIndexExactResultReuseForTesting(
+		const FSightWeaveReferenceSolveInput& BaselineInput,
+		const FSightWeaveReferenceSolveInput& CandidateInput,
+		bool bExpectedReuse);
 #endif
 
 	void QueryOccluderSegments(

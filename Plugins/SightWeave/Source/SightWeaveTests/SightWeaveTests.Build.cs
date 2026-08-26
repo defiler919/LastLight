@@ -15,6 +15,7 @@ public class SightWeaveTests : ModuleRules
 			"AssetRegistry",
 			"Projects",
 			"RHI",
+			"RenderCore",
 			"TraceAnalysis",
 			"TraceLog",
 			"SightWeaveRuntime",

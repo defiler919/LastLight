@@ -41,3 +41,11 @@ IMPLEMENT_GLOBAL_SHADER(
 	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
 	"SightWeaveHardMaskCompositePS",
 	SF_Pixel);
+
+#if WITH_DEV_AUTOMATION_TESTS
+IMPLEMENT_GLOBAL_SHADER(
+	FSightWeavePresentationTestPixelShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeavePresentationTestPS",
+	SF_Pixel);
+#endif

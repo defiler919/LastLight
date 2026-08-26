@@ -111,3 +111,21 @@ public:
 	static ESightWeavePresentationBindingFailure Validate(
 		const FSightWeaveViewPresentationBinding& Binding);
 };
+
+struct SIGHTWEAVERUNTIME_API FSightWeavePresentationAtlasLookup
+{
+	FIntPoint LogicalCoordinate = FIntPoint::ZeroValue;
+	FIntPoint InteriorTexel = FIntPoint::ZeroValue;
+	FIntPoint AtlasTexel = FIntPoint::ZeroValue;
+	bool bValid = false;
+};
+
+/** CPU reference for the exact floor-relative mapping implemented by the hard-mask shader. */
+class SIGHTWEAVERUNTIME_API FSightWeavePresentationMapping final
+{
+public:
+	static FSightWeavePresentationAtlasLookup MapWorldPosition(
+		const FSightWeaveSparseScopeKey& ScopeKey,
+		const FSightWeaveSparsePhysicalAddress& Address,
+		const FVector2D& WorldPosition);
+};

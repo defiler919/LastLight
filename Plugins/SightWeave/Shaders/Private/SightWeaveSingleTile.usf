@@ -173,6 +173,30 @@ float SightWeaveLoadAtlasMask(int PageIndex, int2 Texel)
 	}
 }
 
+bool SightWeaveIsHardLive(float2 TranslatedWorld)
+{
+	const float2 LocalPosition = TranslatedWorld - TranslatedFloorOrigin;
+	const float InteriorSpan = 248.0f * CentimetersPerTexel;
+	const int2 LogicalCoordinate = int2(floor(LocalPosition / InteriorSpan));
+	const int EntryIndex = SightWeaveFindPageTableEntry(LogicalCoordinate);
+	if (EntryIndex < 0)
+	{
+		return false;
+	}
+
+	const int4 Entry = PageTable[EntryIndex];
+	const int PageIndex = Entry.z;
+	const int SlotIndex = Entry.w;
+	const int2 SlotOrigin = int2(SlotIndex & 7, SlotIndex >> 3) * 256;
+	const float2 TileLocal = LocalPosition - float2(LogicalCoordinate) * InteriorSpan;
+	const int2 InteriorTexel = clamp(
+		int2(floor(TileLocal / CentimetersPerTexel)),
+		int2(0, 0),
+		int2(247, 247));
+	const int2 AtlasTexel = SlotOrigin + int2(4, 4) + InteriorTexel;
+	return SightWeaveLoadAtlasMask(PageIndex, AtlasTexel) >= 0.5f;
+}
+
 float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 {
 	const int2 OutputPixel = int2(Position.xy);
@@ -191,25 +215,22 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 	const float DeviceZ = SceneDepthTexture.Load(int3(DepthPixel, 0));
 	const float3 TranslatedWorld = SvPositionToTranslatedWorld(
 		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
-	const float2 LocalPosition = TranslatedWorld.xy - TranslatedFloorOrigin;
-	const float InteriorSpan = 248.0f * CentimetersPerTexel;
-	const int2 LogicalCoordinate = int2(floor(LocalPosition / InteriorSpan));
-	const int EntryIndex = SightWeaveFindPageTableEntry(LogicalCoordinate);
-	if (EntryIndex < 0)
+	const bool bVisible = SightWeaveIsHardLive(TranslatedWorld.xy);
+	return bVisible ? SceneColorTexture.Load(int3(SceneColorPixel, 0)) : 0.0f;
+}
+
+StructuredBuffer<float2> TestTranslatedWorldPositions;
+StructuredBuffer<float4> TestSceneColors;
+uint TestSampleCount;
+
+float4 SightWeavePresentationTestPS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const uint SampleIndex = uint(Position.x);
+	if (SampleIndex >= TestSampleCount)
 	{
 		return 0.0f;
 	}
-
-	const int4 Entry = PageTable[EntryIndex];
-	const int PageIndex = Entry.z;
-	const int SlotIndex = Entry.w;
-	const int2 SlotOrigin = int2(SlotIndex & 7, SlotIndex >> 3) * 256;
-	const float2 TileLocal = LocalPosition - float2(LogicalCoordinate) * InteriorSpan;
-	const int2 InteriorTexel = clamp(
-		int2(floor(TileLocal / CentimetersPerTexel)),
-		int2(0, 0),
-		int2(247, 247));
-	const int2 AtlasTexel = SlotOrigin + int2(4, 4) + InteriorTexel;
-	const bool bVisible = SightWeaveLoadAtlasMask(PageIndex, AtlasTexel) >= 0.5f;
-	return bVisible ? SceneColorTexture.Load(int3(SceneColorPixel, 0)) : 0.0f;
+	return SightWeaveIsHardLive(TestTranslatedWorldPositions[SampleIndex])
+		? TestSceneColors[SampleIndex]
+		: 0.0f;
 }

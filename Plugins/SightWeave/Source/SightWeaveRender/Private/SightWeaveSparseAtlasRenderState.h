@@ -71,6 +71,10 @@ public:
 
 #if WITH_DEV_AUTOMATION_TESTS
 	const FSightWeaveSparseRenderTimings& GetLastTimings_RenderThread() const { return LastTimings; }
+	FRDGTextureRef AddPresentationTestComposite_RenderThread(
+		FRDGBuilder& GraphBuilder,
+		TConstArrayView<FVector2f> TranslatedWorldPositions,
+		TConstArrayView<FVector4f> SceneColors);
 	FRDGTextureRef RegisterResidentPageForReadback_RenderThread(
 		FRDGBuilder& GraphBuilder,
 		const FSightWeaveSparseTileIdentity& Identity,

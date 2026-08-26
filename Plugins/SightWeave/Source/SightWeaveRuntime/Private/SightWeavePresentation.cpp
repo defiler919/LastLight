@@ -242,3 +242,49 @@ ESightWeavePresentationBindingFailure FSightWeavePresentationBindingBuilder::Val
 	}
 	return ESightWeavePresentationBindingFailure::None;
 }
+
+FSightWeavePresentationAtlasLookup FSightWeavePresentationMapping::MapWorldPosition(
+	const FSightWeaveSparseScopeKey& ScopeKey,
+	const FSightWeaveSparsePhysicalAddress& Address,
+	const FVector2D& WorldPosition)
+{
+	FSightWeavePresentationAtlasLookup Result;
+	const float CentimetersPerTexel = SightWeaveCentimetersPerTexel(ScopeKey.PrecisionTier);
+	if (!ScopeKey.IsValid()
+		|| !Address.IsValid()
+		|| !FMath::IsFinite(WorldPosition.X)
+		|| !FMath::IsFinite(WorldPosition.Y)
+		|| CentimetersPerTexel <= 0.0f)
+	{
+		return Result;
+	}
+	const double InteriorSpan =
+		static_cast<double>(SightWeave::SparseAtlas::InteriorTileSize) * CentimetersPerTexel;
+	const FVector2D LocalPosition = WorldPosition - ScopeKey.FloorOrigin;
+	const double LogicalX = FMath::FloorToDouble(LocalPosition.X / InteriorSpan);
+	const double LogicalY = FMath::FloorToDouble(LocalPosition.Y / InteriorSpan);
+	if (LogicalX < TNumericLimits<int32>::Min()
+		|| LogicalX > TNumericLimits<int32>::Max()
+		|| LogicalY < TNumericLimits<int32>::Min()
+		|| LogicalY > TNumericLimits<int32>::Max())
+	{
+		return Result;
+	}
+	Result.LogicalCoordinate = FIntPoint(
+		static_cast<int32>(LogicalX),
+		static_cast<int32>(LogicalY));
+	const FVector2D TileLocal = LocalPosition
+		- FVector2D(Result.LogicalCoordinate) * InteriorSpan;
+	Result.InteriorTexel = FIntPoint(
+		FMath::Clamp(FMath::FloorToInt(TileLocal.X / CentimetersPerTexel), 0,
+			SightWeave::SparseAtlas::InteriorTileSize - 1),
+		FMath::Clamp(FMath::FloorToInt(TileLocal.Y / CentimetersPerTexel), 0,
+			SightWeave::SparseAtlas::InteriorTileSize - 1));
+	Result.AtlasTexel = Address.GetSlotOrigin()
+		+ FIntPoint(
+			SightWeave::SparseAtlas::GutterTexels,
+			SightWeave::SparseAtlas::GutterTexels)
+		+ Result.InteriorTexel;
+	Result.bValid = true;
+	return Result;
+}

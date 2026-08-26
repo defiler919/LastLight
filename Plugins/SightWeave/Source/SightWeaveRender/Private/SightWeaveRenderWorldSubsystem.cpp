@@ -23,35 +23,6 @@ namespace
 		});
 	}
 
-	FIntPoint CalculateLogicalTile(
-		const FVector2D& WorldPoint,
-		const FVector2D& FloorOrigin)
-	{
-		const double InteriorWorldSpan =
-			static_cast<double>(SightWeave::RenderPacket::InteriorTileSize)
-			* SightWeave::RenderPacket::StandardCentimetersPerTexel;
-		return FIntPoint(
-			FMath::FloorToInt((WorldPoint.X - FloorOrigin.X) / InteriorWorldSpan),
-			FMath::FloorToInt((WorldPoint.Y - FloorOrigin.Y) / InteriorWorldSpan));
-	}
-
-	FBox2D CalculatePhysicalBounds(
-		const FIntPoint TileCoordinate,
-		const FVector2D& FloorOrigin)
-	{
-		const double CentimetersPerTexel = SightWeave::RenderPacket::StandardCentimetersPerTexel;
-		const double InteriorWorldSpan =
-			static_cast<double>(SightWeave::RenderPacket::InteriorTileSize) * CentimetersPerTexel;
-		const double GutterWorldSpan =
-			static_cast<double>(SightWeave::RenderPacket::GutterTexels) * CentimetersPerTexel;
-		const FVector2D PhysicalMin(
-			FloorOrigin.X + static_cast<double>(TileCoordinate.X) * InteriorWorldSpan - GutterWorldSpan,
-			FloorOrigin.Y + static_cast<double>(TileCoordinate.Y) * InteriorWorldSpan - GutterWorldSpan);
-		const double PhysicalWorldSpan =
-			static_cast<double>(SightWeave::RenderPacket::PhysicalTileSize) * CentimetersPerTexel;
-		return FBox2D(PhysicalMin, PhysicalMin + FVector2D(PhysicalWorldSpan, PhysicalWorldSpan));
-	}
-
 	void CopyPolygonVertices(TConstArrayView<FVector> Vertices, TArray<FVector2D>& OutVertices)
 	{
 		OutVertices.Reset(Vertices.Num());
@@ -61,18 +32,44 @@ namespace
 		}
 	}
 
-	FSightWeaveRenderPolygonInput& AddPolygon(
-		FSightWeaveRenderPacketBuildInput& Input,
-		const int64 StableSourceId,
-		const ESightWeaveRenderMaskLayer Layer)
+	FSightWeaveSparseScopeBuildInput* FindScope(
+		TArray<FSightWeaveSparseScopeBuildInput>& Scopes,
+		const FSightWeaveKnowledgeOwnerId OwnerId,
+		const FSightWeaveFloorId FloorId)
 	{
-		FSightWeaveRenderPolygonInput& Polygon = Input.Polygons.AddDefaulted_GetRef();
+		return Scopes.FindByPredicate([OwnerId, FloorId](const FSightWeaveSparseScopeBuildInput& Scope)
+		{
+			return Scope.KnowledgeOwnerId == OwnerId && Scope.FloorId == FloorId;
+		});
+	}
+
+	FSightWeaveSparsePolygonInput& AddPolygon(
+		FSightWeaveSparseScopeBuildInput& Scope,
+		const int64 StableSourceId,
+		const uint64 SourceRevision,
+		const ESightWeaveRenderMaskLayer Layer,
+		const FSightWeaveRenderProfileIdentity& Profile)
+	{
+		FSightWeaveSparsePolygonInput& Polygon = Scope.Polygons.AddDefaulted_GetRef();
 		Polygon.StableSourceId = StableSourceId;
+		Polygon.SourceRevision = SourceRevision;
 		Polygon.Layer = Layer;
-		Polygon.KnowledgeOwnerId = Input.KnowledgeOwnerId;
-		Polygon.FloorId = Input.FloorId;
-		Polygon.CompatibilityProfile = Input.CompatibilityProfile;
+		Polygon.CompatibilityProfile = Profile;
 		return Polygon;
+	}
+
+	bool ContainsIlluminationForProfile(
+		const FSightWeaveSparseScopeBuildInput& Scope,
+		const int64 StableSourceId,
+		const FSightWeaveRenderProfileIdentity& Profile)
+	{
+		return Scope.Polygons.ContainsByPredicate(
+			[StableSourceId, &Profile](const FSightWeaveSparsePolygonInput& Polygon)
+			{
+				return Polygon.Layer == ESightWeaveRenderMaskLayer::Illumination
+					&& Polygon.StableSourceId == StableSourceId
+					&& Polygon.CompatibilityProfile.IsEquivalentTo(Profile);
+			});
 	}
 }
 
@@ -110,11 +107,8 @@ void USightWeaveRenderWorldSubsystem::Deinitialize()
 		SceneViewExtension->Shutdown(WorldIdentity);
 		SceneViewExtension.Reset();
 	}
+	LastPacket.Reset();
 	WorldIdentity = FSightWeaveRenderWorldIdentity();
-	LastKnowledgeOwnerId = FSightWeaveKnowledgeOwnerId();
-	LastFloorId = FSightWeaveFloorId();
-	LastProfile = FSightWeaveRenderProfileIdentity();
-	LastPhysicalWorldBounds = FBox2D(ForceInit);
 	Super::Deinitialize();
 }
 
@@ -134,203 +128,172 @@ void USightWeaveRenderWorldSubsystem::BuildAndSubmitPacket(
 	}
 
 	const uint64 SnapshotRevision = static_cast<uint64>(Snapshot->Revision.GetValue());
-	const FSightWeaveVisionSnapshotEntry* FirstActiveVision = nullptr;
-	for (const FSightWeaveVisionSnapshotEntry& Vision : Snapshot->VisionSources)
-	{
-		if (Vision.Description.bActive)
-		{
-			FirstActiveVision = &Vision;
-			break;
-		}
-	}
-	if (!FirstActiveVision)
-	{
-		if (LastKnowledgeOwnerId.IsValid() && LastFloorId.IsValid() && LastProfile.IsValid())
-		{
-			SubmitFailClosedClear(SnapshotRevision, ESightWeaveRenderPacketFailure::None);
-		}
-		return;
-	}
-
-	const FSightWeaveKnowledgeOwnerId TargetOwner = FirstActiveVision->Description.KnowledgeOwnerId;
-	const FSightWeaveFloorId TargetFloor = FirstActiveVision->Description.FloorId;
-	if (!TargetOwner.IsValid() || !TargetFloor.IsValid())
-	{
-		SubmitFailClosedClear(SnapshotRevision, ESightWeaveRenderPacketFailure::InvalidScope);
-		return;
-	}
-	for (const FSightWeaveVisionSnapshotEntry& Vision : Snapshot->VisionSources)
-	{
-		if (Vision.Description.bActive
-			&& (Vision.Description.KnowledgeOwnerId != TargetOwner || Vision.Description.FloorId != TargetFloor))
-		{
-			SubmitFailClosedClear(SnapshotRevision, ESightWeaveRenderPacketFailure::ScopeMismatch);
-			return;
-		}
-	}
-
-	FSightWeaveRenderProfileIdentity TargetProfile;
-	bool bProfileSelected = false;
-	for (const FSightWeaveVisionSnapshotEntry& Vision : Snapshot->VisionSources)
-	{
-		if (!Vision.Description.bActive
-			|| Vision.Description.IlluminationPolicy == ESightWeaveIlluminationPolicy::BypassLegalIllumination)
-		{
-			continue;
-		}
-		const FSightWeaveRenderProfileIdentity Candidate =
-			FSightWeaveRenderProfileIdentity::FromProfile(Vision.Description.Compatibility);
-		if (!Candidate.IsValid() || (bProfileSelected && !TargetProfile.IsEquivalentTo(Candidate)))
-		{
-			SubmitFailClosedClear(SnapshotRevision, ESightWeaveRenderPacketFailure::ProfileMismatch);
-			return;
-		}
-		TargetProfile = Candidate;
-		bProfileSelected = true;
-	}
-	if (!bProfileSelected)
-	{
-		TargetProfile = FSightWeaveRenderProfileIdentity::FromProfile(
-			FSightWeaveIlluminationCompatibilityProfile());
-	}
-
-	const FSightWeaveFloorDefinition* Floor = FindFloor(*Snapshot, TargetFloor);
-	if (!Floor || !Floor->IsValid() || !Floor->bEnabled || !Floor->bActiveForQueries)
-	{
-		SubmitFailClosedClear(SnapshotRevision, ESightWeaveRenderPacketFailure::InvalidScope);
-		return;
-	}
-	const FVector FirstLocation = FirstActiveVision->Description.Transform.GetLocation();
-	const FIntPoint TileCoordinate = CalculateLogicalTile(
-		FVector2D(FirstLocation.X, FirstLocation.Y),
-		Floor->BoundsMin);
-	const FBox2D PhysicalWorldBounds = CalculatePhysicalBounds(TileCoordinate, Floor->BoundsMin);
-
-	FSightWeaveRenderPacketBuildInput Input;
+	FSightWeaveSparseRenderPacketBuildInput Input;
 	Input.WorldIdentity = WorldIdentity;
-	Input.KnowledgeOwnerId = TargetOwner;
-	Input.FloorId = TargetFloor;
-	Input.CompatibilityProfile = TargetProfile;
 	Input.PacketRevision = NextPacketRevision++;
 	Input.RegistryRevision = SnapshotRevision;
 	Input.PublishedSnapshotRevision = SnapshotRevision;
-	Input.TileCoordinate = TileCoordinate;
-	Input.PhysicalWorldBounds = PhysicalWorldBounds;
-	Input.DirtyReason = ESightWeaveRenderDirtyReason::SourceChanged
-		| ESightWeaveRenderDirtyReason::RegistryChanged;
-	Input.bFullTile = true;
+	Input.PreviousPacket = LastPacket;
 
-	TSet<int32> CompatibleIlluminationIndices;
 	for (const FSightWeaveVisionSnapshotEntry& Vision : Snapshot->VisionSources)
 	{
 		if (!Vision.Description.bActive)
 		{
 			continue;
 		}
-		const ESightWeaveRenderMaskLayer Layer =
-			Vision.Description.IlluminationPolicy == ESightWeaveIlluminationPolicy::BypassLegalIllumination
-			? ESightWeaveRenderMaskLayer::Bypass
-			: ESightWeaveRenderMaskLayer::Vision;
-		FSightWeaveRenderPolygonInput& Polygon = AddPolygon(Input, Vision.Handle.GetValue(), Layer);
-		CopyPolygonVertices(Vision.Polygon.Vertices, Polygon.WorldVertices);
-		if (Layer == ESightWeaveRenderMaskLayer::Vision)
+		const FSightWeaveKnowledgeOwnerId OwnerId = Vision.Description.KnowledgeOwnerId;
+		const FSightWeaveFloorId FloorId = Vision.Description.FloorId;
+		const FSightWeaveFloorDefinition* Floor = FindFloor(*Snapshot, FloorId);
+		if (!OwnerId.IsValid()
+			|| !FloorId.IsValid()
+			|| !Floor
+			|| !Floor->IsValid()
+			|| !Floor->bEnabled
+			|| !Floor->bActiveForQueries)
 		{
-			for (const int32 IlluminationIndex : Vision.CompatibleIlluminationSourceIndices)
-			{
-				if (!Snapshot->IlluminationSources.IsValidIndex(IlluminationIndex))
-				{
-					SubmitFailClosedClear(SnapshotRevision, ESightWeaveRenderPacketFailure::InvalidIndexData);
-					return;
-				}
-				CompatibleIlluminationIndices.Add(IlluminationIndex);
-			}
-		}
-	}
-
-	TArray<int32> SortedIlluminationIndices = CompatibleIlluminationIndices.Array();
-	SortedIlluminationIndices.Sort();
-	for (const int32 IlluminationIndex : SortedIlluminationIndices)
-	{
-		const FSightWeaveIlluminationSnapshotEntry& Illumination = Snapshot->IlluminationSources[IlluminationIndex];
-		if (!Illumination.Description.bActive
-			|| Illumination.Description.KnowledgeOwnerId != TargetOwner
-			|| Illumination.Description.FloorId != TargetFloor)
-		{
-			SubmitFailClosedClear(SnapshotRevision, ESightWeaveRenderPacketFailure::ScopeMismatch);
+			SubmitFailClosedClear(SnapshotRevision, ESightWeaveSparsePacketFailure::InvalidScope);
 			return;
 		}
-		FSightWeaveRenderPolygonInput& Polygon = AddPolygon(
-			Input,
-			Illumination.Handle.GetValue(),
-			ESightWeaveRenderMaskLayer::Illumination);
-		CopyPolygonVertices(Illumination.Polygon.Vertices, Polygon.WorldVertices);
+
+		FSightWeaveSparseScopeBuildInput* Scope = FindScope(Input.Scopes, OwnerId, FloorId);
+		if (!Scope)
+		{
+			FSightWeaveSparseScopeBuildInput& Added = Input.Scopes.AddDefaulted_GetRef();
+			Added.KnowledgeOwnerId = OwnerId;
+			Added.FloorId = FloorId;
+			Added.FloorOrigin = Floor->BoundsMin;
+			Added.PrecisionTier = ESightWeaveRenderPrecisionTier::Standard;
+			Added.MaximumActiveTiles = SightWeave::SparseAtlas::StandardActiveTileCapacity;
+			Scope = &Added;
+		}
+
+		const bool bBypass = Vision.Description.IlluminationPolicy
+			== ESightWeaveIlluminationPolicy::BypassLegalIllumination;
+		const FSightWeaveRenderProfileIdentity Profile =
+			FSightWeaveRenderProfileIdentity::FromProfile(Vision.Description.Compatibility);
+		if (!Profile.IsValid())
+		{
+			SubmitFailClosedClear(SnapshotRevision, ESightWeaveSparsePacketFailure::InvalidProfile);
+			return;
+		}
+		FSightWeaveSparsePolygonInput& VisionPolygon = AddPolygon(
+			*Scope,
+			Vision.Handle.GetValue(),
+			static_cast<uint64>(Vision.SourceRevision.GetValue()),
+			bBypass ? ESightWeaveRenderMaskLayer::Bypass : ESightWeaveRenderMaskLayer::Vision,
+			Profile);
+		CopyPolygonVertices(Vision.Polygon.Vertices, VisionPolygon.WorldVertices);
+
+		if (bBypass)
+		{
+			continue;
+		}
+		for (const int32 IlluminationIndex : Vision.CompatibleIlluminationSourceIndices)
+		{
+			if (!Snapshot->IlluminationSources.IsValidIndex(IlluminationIndex))
+			{
+				SubmitFailClosedClear(SnapshotRevision, ESightWeaveSparsePacketFailure::InvalidPolygon);
+				return;
+			}
+			const FSightWeaveIlluminationSnapshotEntry& Illumination =
+				Snapshot->IlluminationSources[IlluminationIndex];
+			if (!Illumination.Description.bActive
+				|| Illumination.Description.KnowledgeOwnerId != OwnerId
+				|| Illumination.Description.FloorId != FloorId)
+			{
+				SubmitFailClosedClear(SnapshotRevision, ESightWeaveSparsePacketFailure::InvalidScope);
+				return;
+			}
+			const int64 IlluminationId = Illumination.Handle.GetValue();
+			if (ContainsIlluminationForProfile(*Scope, IlluminationId, Profile))
+			{
+				continue;
+			}
+			FSightWeaveSparsePolygonInput& IlluminationPolygon = AddPolygon(
+				*Scope,
+				IlluminationId,
+				static_cast<uint64>(Illumination.SourceRevision.GetValue()),
+				ESightWeaveRenderMaskLayer::Illumination,
+				Profile);
+			CopyPolygonVertices(Illumination.Polygon.Vertices, IlluminationPolygon.WorldVertices);
+		}
 	}
 
 	const int32 RadialSteps = FMath::Max(
 		8,
 		GetDefault<USightWeaveSettings>()->GeometryTolerances.RadialBoundarySteps);
-	for (const FSightWeaveHardSuppressionSnapshotEntry& Suppression : Snapshot->HardSuppressions)
+	const FSightWeaveRenderProfileIdentity CommonProfile =
+		FSightWeaveRenderProfileIdentity::FromProfile(FSightWeaveIlluminationCompatibilityProfile());
+	for (FSightWeaveSparseScopeBuildInput& Scope : Input.Scopes)
 	{
-		if (!Suppression.Description.bEnabled || Suppression.Description.FloorId != TargetFloor)
+		for (const FSightWeaveHardSuppressionSnapshotEntry& Suppression : Snapshot->HardSuppressions)
 		{
-			continue;
-		}
-		FSightWeaveRenderPolygonInput& Polygon = AddPolygon(
-			Input,
-			Suppression.Handle.GetValue(),
-			ESightWeaveRenderMaskLayer::Suppression);
-		Polygon.WorldVertices.Reserve(RadialSteps);
-		for (int32 Step = 0; Step < RadialSteps; ++Step)
-		{
-			const double Angle = 2.0 * PI * static_cast<double>(Step) / static_cast<double>(RadialSteps);
-			Polygon.WorldVertices.Add(Suppression.Description.Center + FVector2D(
-				FMath::Cos(Angle) * Suppression.Description.Radius,
-				FMath::Sin(Angle) * Suppression.Description.Radius));
+			if (!Suppression.Description.bEnabled || Suppression.Description.FloorId != Scope.FloorId)
+			{
+				continue;
+			}
+			FSightWeaveSparsePolygonInput& Polygon = AddPolygon(
+				Scope,
+				Suppression.Handle.GetValue(),
+				static_cast<uint64>(Suppression.Revision.GetValue()),
+				ESightWeaveRenderMaskLayer::Suppression,
+				CommonProfile);
+			Polygon.WorldVertices.Reserve(RadialSteps);
+			for (int32 Step = 0; Step < RadialSteps; ++Step)
+			{
+				const double Angle = 2.0 * PI * static_cast<double>(Step) / static_cast<double>(RadialSteps);
+				Polygon.WorldVertices.Add(Suppression.Description.Center + FVector2D(
+					FMath::Cos(Angle) * Suppression.Description.Radius,
+					FMath::Sin(Angle) * Suppression.Description.Radius));
+			}
 		}
 	}
+	if (Input.Scopes.IsEmpty() && !LastPacket.IsValid())
+	{
+		return;
+	}
 
-	const FSightWeaveRenderPacketBuildResult BuildResult = FSightWeaveRenderPacketBuilder::Build(Input);
+	const FSightWeaveSparseRenderPacketBuildResult BuildResult =
+		FSightWeaveSparseRenderPacketBuilder::Build(Input);
 	if (!BuildResult.Succeeded())
 	{
 		SubmitFailClosedClear(SnapshotRevision, BuildResult.Failure);
 		return;
 	}
-	LastKnowledgeOwnerId = TargetOwner;
-	LastFloorId = TargetFloor;
-	LastProfile = TargetProfile;
-	LastTileCoordinate = TileCoordinate;
-	LastPhysicalWorldBounds = PhysicalWorldBounds;
-	Diagnostics.LastBuildFailure = ESightWeaveRenderPacketFailure::None;
+	Diagnostics.LastBuildFailure = ESightWeaveSparsePacketFailure::None;
+	Diagnostics.FailClosedClearCount += static_cast<uint64>(BuildResult.FailedScopeCount);
+	if (BuildResult.FailedScopeCount > 0)
+	{
+		for (const FSightWeaveSparseRenderScope& Scope : BuildResult.Packet->GetScopes())
+		{
+			if (!Scope.IsValid())
+			{
+				Diagnostics.LastBuildFailure = Scope.Failure;
+				break;
+			}
+		}
+	}
 	SubmitPacket(BuildResult.Packet);
 }
 
 void USightWeaveRenderWorldSubsystem::SubmitFailClosedClear(
 	const uint64 SnapshotRevision,
-	const ESightWeaveRenderPacketFailure Failure)
+	const ESightWeaveSparsePacketFailure Failure)
 {
 	Diagnostics.LastBuildFailure = Failure;
 	++Diagnostics.FailClosedClearCount;
-	if (!LastKnowledgeOwnerId.IsValid()
-		|| !LastFloorId.IsValid()
-		|| !LastProfile.IsValid()
-		|| !LastPhysicalWorldBounds.bIsValid)
+	if (!LastPacket.IsValid())
 	{
 		return;
 	}
-
-	FSightWeaveRenderPacketBuildInput ClearInput;
+	FSightWeaveSparseRenderPacketBuildInput ClearInput;
 	ClearInput.WorldIdentity = WorldIdentity;
-	ClearInput.KnowledgeOwnerId = LastKnowledgeOwnerId;
-	ClearInput.FloorId = LastFloorId;
-	ClearInput.CompatibilityProfile = LastProfile;
 	ClearInput.PacketRevision = NextPacketRevision++;
 	ClearInput.RegistryRevision = SnapshotRevision;
 	ClearInput.PublishedSnapshotRevision = SnapshotRevision;
-	ClearInput.TileCoordinate = LastTileCoordinate;
-	ClearInput.PhysicalWorldBounds = LastPhysicalWorldBounds;
-	ClearInput.DirtyReason = ESightWeaveRenderDirtyReason::ExplicitClear;
-	ClearInput.bFullTile = true;
-	const FSightWeaveRenderPacketBuildResult Clear = FSightWeaveRenderPacketBuilder::Build(ClearInput);
+	ClearInput.PreviousPacket = LastPacket;
+	const FSightWeaveSparseRenderPacketBuildResult Clear =
+		FSightWeaveSparseRenderPacketBuilder::Build(ClearInput);
 	if (Clear.Succeeded())
 	{
 		SubmitPacket(Clear.Packet);
@@ -338,7 +301,7 @@ void USightWeaveRenderWorldSubsystem::SubmitFailClosedClear(
 }
 
 void USightWeaveRenderWorldSubsystem::SubmitPacket(
-	TSharedPtr<const FSightWeaveRenderPacket, ESPMode::ThreadSafe> Packet)
+	TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet)
 {
 	if (!Packet.IsValid() || !SceneViewExtension.IsValid())
 	{
@@ -347,5 +310,8 @@ void USightWeaveRenderWorldSubsystem::SubmitPacket(
 	++Diagnostics.PublishedPacketCount;
 	Diagnostics.LastSubmittedPacketRevision = Packet->GetPacketRevision();
 	Diagnostics.LastSubmittedSnapshotRevision = Packet->GetPublishedSnapshotRevision();
+	Diagnostics.SubmittedDirtyTileCount += static_cast<uint64>(Packet->GetDirtyTileIndices().Num());
+	Diagnostics.SubmittedRemovedTileCount += static_cast<uint64>(Packet->GetRemovedTiles().Num());
+	LastPacket = Packet;
 	SceneViewExtension->SubmitPacket(MoveTemp(Packet));
 }

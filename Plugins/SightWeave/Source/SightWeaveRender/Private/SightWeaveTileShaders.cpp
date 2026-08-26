@@ -23,3 +23,15 @@ IMPLEMENT_GLOBAL_SHADER(
 	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
 	"SightWeaveCombinePS",
 	SF_Pixel);
+
+IMPLEMENT_GLOBAL_SHADER(
+	FSightWeaveAtlasProfileCombinePixelShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeaveAtlasProfileCombinePS",
+	SF_Pixel);
+
+IMPLEMENT_GLOBAL_SHADER(
+	FSightWeaveAtlasSuppressionPixelShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeaveAtlasSuppressionPS",
+	SF_Pixel);

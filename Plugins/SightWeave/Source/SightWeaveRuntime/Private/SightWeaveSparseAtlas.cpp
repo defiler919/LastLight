@@ -3,7 +3,7 @@
 #include "Algo/Sort.h"
 #include "Containers/StringConv.h"
 
-namespace
+namespace SightWeaveSparseAtlasPrivate
 {
 	constexpr uint64 FnvOffset = 14695981039346656037ull;
 	constexpr uint64 FnvPrime = 1099511628211ull;
@@ -284,6 +284,8 @@ namespace
 		});
 	}
 }
+
+using namespace SightWeaveSparseAtlasPrivate;
 
 float SightWeaveCentimetersPerTexel(const ESightWeaveRenderPrecisionTier Tier)
 {

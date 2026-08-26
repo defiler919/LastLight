@@ -1,9 +1,9 @@
 #pragma once
 
 #include "SceneViewExtension.h"
-#include "SightWeaveRenderPacket.h"
+#include "SightWeaveSparseAtlas.h"
 
-class FSightWeaveSingleTileRenderState;
+class FSightWeaveSparseAtlasRenderState;
 
 class FSightWeaveSceneViewExtension final : public FWorldSceneViewExtension
 {
@@ -13,7 +13,7 @@ public:
 		UWorld* World,
 		FSightWeaveRenderWorldIdentity WorldIdentity);
 
-	void SubmitPacket(TSharedPtr<const FSightWeaveRenderPacket, ESPMode::ThreadSafe> Packet);
+	void SubmitPacket(TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet);
 	void Shutdown(FSightWeaveRenderWorldIdentity ExpectedWorldIdentity);
 
 	virtual void PreRenderViewFamily_RenderThread(
@@ -22,6 +22,6 @@ public:
 
 private:
 	FSightWeaveRenderWorldIdentity WorldIdentity;
-	TSharedRef<FSightWeaveSingleTileRenderState, ESPMode::ThreadSafe> RenderState;
+	TSharedRef<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe> RenderState;
 	bool bShutdown = false;
 };

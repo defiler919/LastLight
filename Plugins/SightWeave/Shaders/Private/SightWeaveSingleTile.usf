@@ -6,6 +6,9 @@ StructuredBuffer<float2> TriangleVertices;
 StructuredBuffer<uint> TriangleIndices;
 uint FirstIndex;
 float InvPhysicalWorldSpan;
+float RasterCentimetersPerTexel;
+uint RasterTargetOriginX;
+uint RasterTargetOriginY;
 
 struct FSightWeaveRasterInterpolants
 {
@@ -44,7 +47,8 @@ FSightWeaveRasterInterpolants SightWeaveSmokeVS(uint VertexId : SV_VertexID)
 
 float SightWeaveSmokePS(FSightWeaveRasterInterpolants Input) : SV_Target0
 {
-	const float2 Point = Input.Position.xy * 10.0f;
+	const float2 TargetOrigin = float2(RasterTargetOriginX, RasterTargetOriginY);
+	const float2 Point = (Input.Position.xy - TargetOrigin) * RasterCentimetersPerTexel;
 	const float2 AB = Input.TriangleB - Input.TriangleA;
 	const float2 BC = Input.TriangleC - Input.TriangleB;
 	const float2 CA = Input.TriangleA - Input.TriangleC;
@@ -79,6 +83,8 @@ Texture2D<float> VisionTexture;
 Texture2D<float> IlluminationTexture;
 Texture2D<float> BypassTexture;
 Texture2D<float> SuppressionTexture;
+uint DestinationOriginX;
+uint DestinationOriginY;
 
 float SightWeaveCombinePS(float4 Position : SV_POSITION) : SV_Target0
 {
@@ -88,4 +94,24 @@ float SightWeaveCombinePS(float4 Position : SV_POSITION) : SV_Target0
 	const bool Effective = Gated || BypassTexture.Load(Texel) > 0.5f;
 	const bool Suppressed = SuppressionTexture.Load(Texel) > 0.5f;
 	return Effective && !Suppressed ? 1.0f : 0.0f;
+}
+
+float SightWeaveAtlasProfileCombinePS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const int2 DestinationOrigin = int2(DestinationOriginX, DestinationOriginY);
+	const int3 Texel = int3(int2(Position.xy) - DestinationOrigin, 0);
+	return VisionTexture.Load(Texel) > 0.5f && IlluminationTexture.Load(Texel) > 0.5f
+		? 1.0f
+		: 0.0f;
+}
+
+float SightWeaveAtlasSuppressionPS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const int2 DestinationOrigin = int2(DestinationOriginX, DestinationOriginY);
+	const int3 Texel = int3(int2(Position.xy) - DestinationOrigin, 0);
+	if (SuppressionTexture.Load(Texel) <= 0.5f)
+	{
+		discard;
+	}
+	return 0.0f;
 }

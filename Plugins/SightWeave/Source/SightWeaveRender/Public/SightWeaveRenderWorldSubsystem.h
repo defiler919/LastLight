@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "SightWeaveRenderPacket.h"
+#include "SightWeaveSparseAtlas.h"
 #include "Subsystems/WorldSubsystem.h"
 
 #include "SightWeaveRenderWorldSubsystem.generated.h"
@@ -29,7 +29,9 @@ struct SIGHTWEAVERENDER_API FSightWeaveRenderWorldDiagnostics
 	uint64 FailClosedClearCount = 0;
 	uint64 LastSubmittedPacketRevision = 0;
 	uint64 LastSubmittedSnapshotRevision = 0;
-	ESightWeaveRenderPacketFailure LastBuildFailure = ESightWeaveRenderPacketFailure::None;
+	uint64 SubmittedDirtyTileCount = 0;
+	uint64 SubmittedRemovedTileCount = 0;
+	ESightWeaveSparsePacketFailure LastBuildFailure = ESightWeaveSparsePacketFailure::None;
 };
 
 /**
@@ -54,16 +56,12 @@ private:
 		TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot);
 	void BuildAndSubmitPacket(
 		const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe>& Snapshot);
-	void SubmitFailClosedClear(uint64 SnapshotRevision, ESightWeaveRenderPacketFailure Failure);
-	void SubmitPacket(TSharedPtr<const FSightWeaveRenderPacket, ESPMode::ThreadSafe> Packet);
+	void SubmitFailClosedClear(uint64 SnapshotRevision, ESightWeaveSparsePacketFailure Failure);
+	void SubmitPacket(TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet);
 
 	FSightWeaveRenderWorldIdentity WorldIdentity;
 	uint64 NextPacketRevision = 1;
-	FSightWeaveKnowledgeOwnerId LastKnowledgeOwnerId;
-	FSightWeaveFloorId LastFloorId;
-	FSightWeaveRenderProfileIdentity LastProfile;
-	FIntPoint LastTileCoordinate = FIntPoint::ZeroValue;
-	FBox2D LastPhysicalWorldBounds = FBox2D(ForceInit);
+	TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> LastPacket;
 	FDelegateHandle SnapshotPublishedHandle;
 	TSharedPtr<FSightWeaveSceneViewExtension, ESPMode::ThreadSafe> SceneViewExtension;
 	FSightWeaveRenderWorldDiagnostics Diagnostics;

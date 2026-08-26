@@ -1,7 +1,7 @@
 #include "SightWeaveSceneViewExtension.h"
 
 #include "RenderingThread.h"
-#include "SightWeaveSingleTileRenderState.h"
+#include "SightWeaveSparseAtlasRenderState.h"
 
 FSightWeaveSceneViewExtension::FSightWeaveSceneViewExtension(
 	const FAutoRegister& AutoRegister,
@@ -9,19 +9,19 @@ FSightWeaveSceneViewExtension::FSightWeaveSceneViewExtension(
 	const FSightWeaveRenderWorldIdentity InWorldIdentity)
 	: FWorldSceneViewExtension(AutoRegister, World)
 	, WorldIdentity(InWorldIdentity)
-	, RenderState(MakeShared<FSightWeaveSingleTileRenderState, ESPMode::ThreadSafe>(InWorldIdentity))
+	, RenderState(MakeShared<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe>(InWorldIdentity))
 {
 }
 
 void FSightWeaveSceneViewExtension::SubmitPacket(
-	TSharedPtr<const FSightWeaveRenderPacket, ESPMode::ThreadSafe> Packet)
+	TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet)
 {
 	check(IsInGameThread());
 	if (bShutdown || !Packet.IsValid() || Packet->GetWorldIdentity() != WorldIdentity)
 	{
 		return;
 	}
-	const TSharedRef<FSightWeaveSingleTileRenderState, ESPMode::ThreadSafe> State = RenderState;
+	const TSharedRef<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe> State = RenderState;
 	ENQUEUE_RENDER_COMMAND(SightWeaveSubmitPacket)(
 		[State, Packet = MoveTemp(Packet)](FRHICommandListImmediate& RHICmdList)
 		{
@@ -38,7 +38,7 @@ void FSightWeaveSceneViewExtension::Shutdown(
 		return;
 	}
 	bShutdown = true;
-	const TSharedRef<FSightWeaveSingleTileRenderState, ESPMode::ThreadSafe> State = RenderState;
+	const TSharedRef<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe> State = RenderState;
 	ENQUEUE_RENDER_COMMAND(SightWeaveReleaseWorld)(
 		[State, ExpectedWorldIdentity](FRHICommandListImmediate& RHICmdList)
 		{

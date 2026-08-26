@@ -57,6 +57,43 @@ public:
 	}
 };
 
+class FSightWeaveAtlasProfileCombinePixelShader final : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSightWeaveAtlasProfileCombinePixelShader);
+	SHADER_USE_PARAMETER_STRUCT(FSightWeaveAtlasProfileCombinePixelShader, FGlobalShader);
+
+public:
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, VisionTexture)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, IlluminationTexture)
+		SHADER_PARAMETER(uint32, DestinationOriginX)
+		SHADER_PARAMETER(uint32, DestinationOriginY)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return Parameters.Platform == SP_PCD3D_SM6;
+	}
+};
+
+class FSightWeaveAtlasSuppressionPixelShader final : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSightWeaveAtlasSuppressionPixelShader);
+	SHADER_USE_PARAMETER_STRUCT(FSightWeaveAtlasSuppressionPixelShader, FGlobalShader);
+
+public:
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SuppressionTexture)
+		SHADER_PARAMETER(uint32, DestinationOriginX)
+		SHADER_PARAMETER(uint32, DestinationOriginY)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return Parameters.Platform == SP_PCD3D_SM6;
+	}
+};
+
 class FSightWeaveTilePixelShader final : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FSightWeaveTilePixelShader);
@@ -64,6 +101,9 @@ class FSightWeaveTilePixelShader final : public FGlobalShader
 
 public:
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER(float, RasterCentimetersPerTexel)
+		SHADER_PARAMETER(uint32, RasterTargetOriginX)
+		SHADER_PARAMETER(uint32, RasterTargetOriginY)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)

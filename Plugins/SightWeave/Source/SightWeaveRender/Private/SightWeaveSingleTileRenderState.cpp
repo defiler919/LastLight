@@ -16,6 +16,7 @@ namespace
 {
 	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeaveRasterPassParameters, )
 		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveTileVertexShader::FParameters, VertexShader)
+		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveTilePixelShader::FParameters, PixelShader)
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -58,6 +59,10 @@ namespace
 		PassParameters->VertexShader.InvPhysicalWorldSpan =
 			1.0f / (SightWeave::RenderPacket::PhysicalTileSize
 				* SightWeave::RenderPacket::StandardCentimetersPerTexel);
+		PassParameters->PixelShader.RasterCentimetersPerTexel =
+			SightWeave::RenderPacket::StandardCentimetersPerTexel;
+		PassParameters->PixelShader.RasterTargetOriginX = 0;
+		PassParameters->PixelShader.RasterTargetOriginY = 0;
 		PassParameters->RenderTargets[0] = FRenderTargetBinding(Target, ERenderTargetLoadAction::ELoad);
 
 		GraphBuilder.AddPass(
@@ -91,6 +96,11 @@ namespace
 					VertexShader,
 					VertexShader.GetVertexShader(),
 					PassParameters->VertexShader);
+				SetShaderParameters(
+					RHICmdList,
+					PixelShader,
+					PixelShader.GetPixelShader(),
+					PassParameters->PixelShader);
 				RHICmdList.SetStreamSource(0, nullptr, 0);
 				RHICmdList.DrawPrimitive(0, (IndexCount / 3) * 2, 1);
 			});

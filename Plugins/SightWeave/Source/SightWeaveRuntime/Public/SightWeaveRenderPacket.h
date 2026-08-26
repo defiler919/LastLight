@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/StaticArray.h"
 #include "SightWeaveTypes.h"
 
 /** M3.1 owns one physical tile only. These values are part of the frozen packet contract. */

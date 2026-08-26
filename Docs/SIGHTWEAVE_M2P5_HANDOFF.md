@@ -1,6 +1,6 @@
 # SightWeave M2P.5 Handoff
 
-Status: **IN PROGRESS**
+Status: **IN PROGRESS — PHASE 1 AUTHORITY COMPLETE**
 
 Last updated: 2026-08-26 (Asia/Shanghai)
 
@@ -68,9 +68,24 @@ Only a hotspot proven by Phase 1 authority may justify a production change. Any 
 
 M2P.5 can be marked **COMPLETED** only when both independent final ten-process matrices preserve all fail-closed requirements, keep Batch512 within its existing gates, and independently report broad dynamic-door aggregate authoritative on-CPU p99 `< 250 us`.
 
+## Phase 1 result
+
+The production-change boundary is now open based on the fail-closed ten-process authority recorded in:
+
+`D:\UE_projects\LastLight\Saved\SightWeaveM2P5\VisionTailAttribution\preproduction-detailed-formal-20260826`
+
+Aggregate broad-door authoritative on-CPU was `154.3 / 272.5 / 305.3 / 388.8 us` at p50/p95/p99/max. Event loss, buffer loss, ownership conflicts, unclosed timelines, and Unknown were all zero. Marker calibration used five independent control/detailed process pairs and detected no positive p50/p95/p99 perturbation; no subtraction was applied.
+
+Source-exact attribution found two focused redundant paths:
+
+1. The vision source sharing Prepared geometry with compatible illumination reported `prepared_index_replaced` in 1,010/1,010 samples and executed a full ray solve while alternating between two already-exact Prepared cache states.
+2. The other three sources rebuilt only 38/49/52 dirty rays but advanced the angular active set for all 518/523 candidate rays before testing reuse.
+
+The complete classification and authorized Phase 2 changes are in `Docs/SIGHTWEAVE_M2P5_VISION_TAIL_CLASSIFICATION.md`.
+
 ## Exact resume point
 
-Continue on this branch with Phase 1 only:
+Continue on this branch with the two evidence-authorized Phase 2 changes only:
 
 ```powershell
 Set-Location -LiteralPath 'D:\UE_projects\LastLight'

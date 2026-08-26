@@ -2387,8 +2387,7 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 			if (PreparedCache.IsValid())
 			{
 				if (bIncrementalRevisionMatches
-					&& PreviousPreparedCache.IsValid()
-					&& PreviousPreparedCache == PreparedCache)
+					&& PreviousPreparedCache.IsValid())
 				{
 					FSightWeaveIncrementalSectorRequest IncrementalRequest;
 					IncrementalRequest.OldSegments = *ActiveDynamicSectorChange.OldSegments;
@@ -2397,6 +2396,7 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 						Input,
 						SolveResult,
 						*PreparedCache,
+						*PreviousPreparedCache,
 						IncrementalRequest,
 						IncrementalDiagnostics);
 				}

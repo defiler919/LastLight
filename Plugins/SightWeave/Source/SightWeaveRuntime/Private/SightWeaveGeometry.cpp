@@ -2405,64 +2405,6 @@ namespace SightWeave::Geometry
 		for (int32 RayIndex = 0; RayIndex < CandidateRayCount; ++RayIndex)
 		{
 			const double RelativeAngle = Result.CandidateAnglesRadians[RayIndex];
-			{
-#if WITH_DEV_AUTOMATION_TESTS
-				FScopedVisionSolveSubstage ActiveUpdateStage(
-					Result.VisionSolveDiagnostics,
-					ESightWeaveVisionSolveSubstage::ActiveSegmentUpdate,
-					false);
-#endif
-			while (NextIntervalIndex < AngularIntervals.Num()
-				&& AngularIntervals[NextIntervalIndex].StartAngle <= RelativeAngle + 1.0e-12)
-			{
-				const FSightWeaveAngularInterval& Interval = AngularIntervals[NextIntervalIndex++];
-				const FSightWeavePreparedSegment& Segment = CandidateSegments[Interval.SegmentIndex];
-				const FSightWeaveActiveInterval NewActiveInterval = {
-					Interval.EndAngle,
-					Segment.OriginDistanceSquared,
-					Segment.StableId,
-					Interval.SegmentIndex };
-				int32 InsertLower = 0;
-				int32 InsertUpper = ActiveIntervals.Num();
-				while (InsertLower < InsertUpper)
-				{
-					const int32 Middle = InsertLower + (InsertUpper - InsertLower) / 2;
-					if (ActiveIntervalLess(ActiveIntervals[Middle], NewActiveInterval))
-					{
-						InsertLower = Middle + 1;
-					}
-					else
-					{
-						InsertUpper = Middle;
-					}
-				}
-				ActiveIntervals.Insert(NewActiveInterval, InsertLower);
-				EarliestActiveEndAngle = FMath::Min(EarliestActiveEndAngle, Interval.EndAngle);
-			}
-			if (EarliestActiveEndAngle < RelativeAngle - 1.0e-12)
-			{
-				EarliestActiveEndAngle = TNumericLimits<double>::Max();
-				for (int32 ActiveIndex = ActiveIntervals.Num() - 1; ActiveIndex >= 0; --ActiveIndex)
-				{
-					if (ActiveIntervals[ActiveIndex].EndAngle < RelativeAngle - 1.0e-12)
-					{
-						ActiveIntervals.RemoveAt(ActiveIndex, 1, EAllowShrinking::No);
-					}
-					else
-					{
-						EarliestActiveEndAngle = FMath::Min(
-							EarliestActiveEndAngle,
-							ActiveIntervals[ActiveIndex].EndAngle);
-					}
-				}
-			}
-			}
-#if WITH_DEV_AUTOMATION_TESTS
-			Result.VisionSolveDiagnostics.MaximumActiveSetCount = FMath::Max(
-				Result.VisionSolveDiagnostics.MaximumActiveSetCount,
-				ActiveIntervals.Num());
-#endif
-
 			bool bCanReusePrevious = false;
 			{
 #if WITH_DEV_AUTOMATION_TESTS
@@ -2518,6 +2460,63 @@ namespace SightWeave::Geometry
 			}
 			else
 			{
+				{
+#if WITH_DEV_AUTOMATION_TESTS
+					FScopedVisionSolveSubstage ActiveUpdateStage(
+						Result.VisionSolveDiagnostics,
+						ESightWeaveVisionSolveSubstage::ActiveSegmentUpdate,
+						false);
+#endif
+					while (NextIntervalIndex < AngularIntervals.Num()
+						&& AngularIntervals[NextIntervalIndex].StartAngle <= RelativeAngle + 1.0e-12)
+					{
+						const FSightWeaveAngularInterval& Interval = AngularIntervals[NextIntervalIndex++];
+						const FSightWeavePreparedSegment& Segment = CandidateSegments[Interval.SegmentIndex];
+						const FSightWeaveActiveInterval NewActiveInterval = {
+							Interval.EndAngle,
+							Segment.OriginDistanceSquared,
+							Segment.StableId,
+							Interval.SegmentIndex };
+						int32 InsertLower = 0;
+						int32 InsertUpper = ActiveIntervals.Num();
+						while (InsertLower < InsertUpper)
+						{
+							const int32 Middle = InsertLower + (InsertUpper - InsertLower) / 2;
+							if (ActiveIntervalLess(ActiveIntervals[Middle], NewActiveInterval))
+							{
+								InsertLower = Middle + 1;
+							}
+							else
+							{
+								InsertUpper = Middle;
+							}
+						}
+						ActiveIntervals.Insert(NewActiveInterval, InsertLower);
+						EarliestActiveEndAngle = FMath::Min(EarliestActiveEndAngle, Interval.EndAngle);
+					}
+					if (EarliestActiveEndAngle < RelativeAngle - 1.0e-12)
+					{
+						EarliestActiveEndAngle = TNumericLimits<double>::Max();
+						for (int32 ActiveIndex = ActiveIntervals.Num() - 1; ActiveIndex >= 0; --ActiveIndex)
+						{
+							if (ActiveIntervals[ActiveIndex].EndAngle < RelativeAngle - 1.0e-12)
+							{
+								ActiveIntervals.RemoveAt(ActiveIndex, 1, EAllowShrinking::No);
+							}
+							else
+							{
+								EarliestActiveEndAngle = FMath::Min(
+									EarliestActiveEndAngle,
+									ActiveIntervals[ActiveIndex].EndAngle);
+							}
+						}
+					}
+				}
+#if WITH_DEV_AUTOMATION_TESTS
+				Result.VisionSolveDiagnostics.MaximumActiveSetCount = FMath::Max(
+					Result.VisionSolveDiagnostics.MaximumActiveSetCount,
+					ActiveIntervals.Num());
+#endif
 #if WITH_DEV_AUTOMATION_TESTS
 				FScopedVisionSolveSubstage ChangedIntersectionStage(
 					Result.VisionSolveDiagnostics,
@@ -2733,7 +2732,8 @@ namespace SightWeave::Geometry
 	void SolveOptimizedPolygonIntoIncrementalDynamicSector(
 		const FSightWeaveReferenceSolveInput& Input,
 		FSightWeaveReferenceSolveResult& Result,
-		FSightWeaveOptimizedSolveCache& Cache,
+		FSightWeaveOptimizedSolveCache& TargetCache,
+		const FSightWeaveOptimizedSolveCache& PreviousCache,
 		const FSightWeaveIncrementalSectorRequest& Request,
 		FSightWeaveIncrementalSectorDiagnostics& OutDiagnostics)
 	{
@@ -2754,7 +2754,7 @@ namespace SightWeave::Geometry
 			bContextPrepared = PrepareIncrementalSolveContext(
 				Input,
 				Result,
-				Cache,
+				PreviousCache,
 				Request,
 				IncrementalContext,
 				OutDiagnostics);
@@ -2768,7 +2768,7 @@ namespace SightWeave::Geometry
 			SolveOptimizedPolygonIntoInternal(
 				Input,
 				Result,
-				&Cache,
+				&TargetCache,
 				false,
 				&IncrementalContext,
 				true);
@@ -2795,7 +2795,7 @@ namespace SightWeave::Geometry
 			}
 		}
 		const double FallbackStartSeconds = FPlatformTime::Seconds();
-		SolveOptimizedPolygonIntoInternal(Input, Result, &Cache, false, nullptr, true);
+		SolveOptimizedPolygonIntoInternal(Input, Result, &TargetCache, false, nullptr, true);
 		OutDiagnostics.FullFallbackMicroseconds =
 			(FPlatformTime::Seconds() - FallbackStartSeconds) * 1000000.0;
 	}

@@ -117,6 +117,21 @@ namespace SightWeave::M2P4::DynamicSectorTests
 		return Result;
 	}
 
+	FSightWeaveIlluminationSourceDescription Illumination(
+		const FVector Location = FVector(0.0, 0.0, 100.0))
+	{
+		FSightWeaveIlluminationSourceDescription Result;
+		Result.KnowledgeOwnerId = Local;
+		Result.FloorId = Ground;
+		Result.Transform = FTransform(FQuat::Identity, Location);
+		Result.Shape = ESightWeaveSourceShape::Radial;
+		Result.Range = 1200.0f;
+		Result.HalfAngleDegrees = 180.0f;
+		Result.HeightRange.ZMin = 0.0f;
+		Result.HeightRange.ZMax = 300.0f;
+		return Result;
+	}
+
 	const FSightWeaveVisionSnapshotEntry* FindVisionEntry(
 		const FSightWeaveFrameSnapshot& Snapshot,
 		const FSightWeaveVisionSourceHandle Handle)
@@ -264,6 +279,68 @@ bool FSightWeaveM2P4DynamicSectorCyclicSeamTest::RunTest(const FString& Paramete
 	TestEqual(TEXT("Seam update avoids fallback"), Metrics.VisionIncrementalFallbackCount, int64(0));
 	TestTrue(TEXT("Seam update reuses cyclic neighbors"), Metrics.VisionIncrementalReusedRayCount > 0);
 	SnapshotMatchesFreshFullSolve(*this, *Subsystem, VisionHandle, TEXT("cyclic seam"));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM2P5SharedPreparedCacheDynamicSectorTest,
+	"SightWeave.M2P5.VisionTail.SharedPreparedCacheDynamicSectorExact",
+	SightWeave::M2P4::DynamicSectorTests::TestFlags)
+
+bool FSightWeaveM2P5SharedPreparedCacheDynamicSectorTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2P4::DynamicSectorTests;
+	USightWeaveSettings* Settings = GetMutableDefault<USightWeaveSettings>();
+	TGuardValue<ESightWeaveSolverMode> ModeGuard(Settings->SolverMode, ESightWeaveSolverMode::Optimized);
+	FTestWorld World(TEXT("SightWeaveM2P5SharedPreparedCache"));
+	USightWeaveWorldSubsystem* Subsystem = World.GetSubsystem();
+	FSightWeaveOccluderHandle DoorHandle;
+	FSightWeaveVisionSourceHandle VisionHandle;
+	if (!RegisterCommonScene(*this, Subsystem, Door(250.0), DoorHandle, VisionHandle))
+	{
+		return true;
+	}
+	const FSightWeaveIlluminationSourceHandle IlluminationHandle =
+		Subsystem->RegisterIlluminationSource(Illumination(), nullptr);
+	if (!TestTrue(TEXT("Geometry-compatible illumination registers"), IlluminationHandle.IsValid()))
+	{
+		return true;
+	}
+
+	for (int32 UpdateIndex = 0; UpdateIndex < 6; ++UpdateIndex)
+	{
+		const bool bOutward = (UpdateIndex % 2) == 0;
+		const double DoorX = bOutward ? 850.0 : 250.0;
+		const FString Prefix = FString::Printf(TEXT("shared-cache update %d"), UpdateIndex + 1);
+		TestTrue(
+			*FString::Printf(TEXT("%s publishes"), *Prefix),
+			Subsystem->UpdateOccluder(DoorHandle, Door(DoorX), true, true));
+		const FSightWeaveDynamicUpdateStageMetrics& Metrics =
+			Subsystem->GetLastDynamicUpdateStageMetrics();
+		TestEqual(
+			*FString::Printf(TEXT("%s attempts one vision incremental solve"), *Prefix),
+			Metrics.VisionIncrementalAttemptCount,
+			int64(1));
+		TestEqual(
+			*FString::Printf(TEXT("%s succeeds incrementally"), *Prefix),
+			Metrics.VisionIncrementalSuccessCount,
+			int64(1));
+		TestEqual(
+			*FString::Printf(TEXT("%s avoids full fallback"), *Prefix),
+			Metrics.VisionIncrementalFallbackCount,
+			int64(0));
+		TestTrue(
+			*FString::Printf(TEXT("%s has no fallback reason"), *Prefix),
+			Metrics.VisionIncrementalLastFallbackReason
+				== ESightWeaveIncrementalSectorFallbackReason::None);
+		TestTrue(
+			*FString::Printf(TEXT("%s reuses unchanged rays"), *Prefix),
+			Metrics.VisionIncrementalReusedRayCount > 0);
+		TestTrue(
+			*FString::Printf(TEXT("%s rebuilds dirty rays"), *Prefix),
+			Metrics.VisionIncrementalRebuiltRayCount > 0);
+		SnapshotMatchesFreshFullSolve(*this, *Subsystem, VisionHandle, *Prefix);
+	}
 	return true;
 }
 

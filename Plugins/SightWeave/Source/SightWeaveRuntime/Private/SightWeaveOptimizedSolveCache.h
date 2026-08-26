@@ -111,7 +111,8 @@ namespace SightWeave::Geometry
 	void SolveOptimizedPolygonIntoIncrementalDynamicSector(
 		const FSightWeaveReferenceSolveInput& Input,
 		FSightWeaveReferenceSolveResult& OutResult,
-		FSightWeaveOptimizedSolveCache& Cache,
+		FSightWeaveOptimizedSolveCache& TargetCache,
+		const FSightWeaveOptimizedSolveCache& PreviousCache,
 		const FSightWeaveIncrementalSectorRequest& Request,
 		FSightWeaveIncrementalSectorDiagnostics& OutDiagnostics);
 }

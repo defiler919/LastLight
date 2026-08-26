@@ -21,3 +21,9 @@ OutputColor = SceneColor * FinalPresentationWeight
 ```
 
 HardLive zero must always produce exact black. Feather width zero must remain pixel-identical to M3.3 and require no feather resource or work.
+
+## 4. Frozen algorithm selection
+
+M3.4 selects a dirty-tile-derived world-texel VisualFeather atlas using a bounded jump-flood distance transform. It rejects screen-space blur, full-screen direct multi-tap, separable blur/erosion, and any route that treats physical slots as logical neighbors, rebuilds the whole atlas every frame, samples SceneCapture/GBuffer color as authority, or can present a weight outside HardLive.
+
+The complete comparison, world-width definition, dirty expansion, resource estimate, provenance requirements, and failure rules are frozen in `Docs/SIGHTWEAVE_M3P4_HANDOFF.md` before implementation begins.

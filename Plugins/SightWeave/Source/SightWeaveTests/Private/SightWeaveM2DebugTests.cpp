@@ -357,15 +357,78 @@ bool FSightWeaveM2LabComponentFixturesTest::RunTest(const FString& Parameters)
 		}
 	}
 	TestEqual(TEXT("Lab has two explicit floors"), FloorCount, 2);
-	TestEqual(TEXT("Lab has thirty-two real vision-source components"), VisionCount, 32);
+	TestEqual(TEXT("Lab has thirty-three real vision-source components"), VisionCount, 33);
 	TestEqual(TEXT("Lab has four real legal-illumination components"), IlluminationCount, 4);
-	TestEqual(TEXT("Lab has twenty-eight explicit occluder components"), OccluderCount, 28);
-	TestEqual(TEXT("Lab has one real dynamic-door occluder"), DynamicOccluderCount, 1);
-	TestEqual(TEXT("Lab has one hard-live suppression component"), SuppressionCount, 1);
+	TestEqual(TEXT("Lab has thirty-six explicit occluder components"), OccluderCount, 36);
+	TestEqual(TEXT("Lab has two real dynamic-door occluders"), DynamicOccluderCount, 2);
+	TestEqual(TEXT("Lab has two hard-live suppression components"), SuppressionCount, 2);
 	TestEqual(TEXT("Lab has one no-tick authoritative debug query component"), DebugQueryCount, 1);
 	TestEqual(TEXT("Lab has eight independently authored stress sources"), StressSourceCount, 8);
 	TestTrue(TEXT("Lab has a named debug query marker"), bHasDebugMarker);
 	TestTrue(TEXT("Every authored bypass source has no compatibility key"), bAllBypassProfilesEmpty);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM3P4LabFeatherFixturesTest,
+	"SightWeave.M3P4.Lab.FeatherFixtures",
+	SightWeave::M2::DebugTests::TestFlags)
+
+bool FSightWeaveM3P4LabFeatherFixturesTest::RunTest(const FString& Parameters)
+{
+	UPackage* Package = LoadPackage(nullptr, TEXT("/SightWeave/Maps/L_SightWeave_Lab"), LOAD_None);
+	UWorld* World = Package ? UWorld::FindWorldInPackage(Package) : nullptr;
+	if (!TestNotNull(TEXT("M3.4 lab package contains a world"), World))
+	{
+		return true;
+	}
+	int32 OccluderCount = 0;
+	int32 VisionCount = 0;
+	int32 SuppressionCount = 0;
+	int32 SeamMarkerCount = 0;
+	int32 CameraCount = 0;
+	bool bHasDynamicDoor = false;
+	bool bHasFeatherLabel = false;
+	bool bHasPageBoundaryLabel = false;
+	for (ULevel* Level : World->GetLevels())
+	{
+		if (!Level) continue;
+		for (AActor* Actor : Level->Actors)
+		{
+			if (!Actor) continue;
+#if WITH_EDITOR
+			const FString Label = Actor->GetActorLabel();
+			if (!Label.StartsWith(TEXT("SW_M3P4_"))) continue;
+			if (const USightWeaveOccluderComponent* Occluder =
+				Actor->FindComponentByClass<USightWeaveOccluderComponent>())
+			{
+				++OccluderCount;
+				bHasDynamicDoor |= Label == TEXT("SW_M3P4_DynamicDoor") && Occluder->bDynamic;
+			}
+			if (const USightWeaveVisionSourceComponent* Vision =
+				Actor->FindComponentByClass<USightWeaveVisionSourceComponent>())
+			{
+				++VisionCount;
+				TestEqual(TEXT("M3.4 Lab remains Local-owner scoped"),
+					Vision->Description.KnowledgeOwnerId,
+					FSightWeaveKnowledgeOwnerId(FName(TEXT("Local"))));
+			}
+			SuppressionCount += Actor->FindComponentByClass<USightWeaveHardSuppressionComponent>() ? 1 : 0;
+			SeamMarkerCount += Label.StartsWith(TEXT("SW_M3P4_TileSeam_")) ? 1 : 0;
+			CameraCount += Label.EndsWith(TEXT("Camera")) ? 1 : 0;
+			bHasFeatherLabel |= Label == TEXT("SW_M3P4_Feather_Label");
+			bHasPageBoundaryLabel |= Label == TEXT("SW_M3P4_PageBoundary_Label");
+#endif
+		}
+	}
+	TestEqual(TEXT("M3.4 Lab has straight/L/T/corridor/dynamic occluders"), OccluderCount, 8);
+	TestEqual(TEXT("M3.4 Lab has explicit bypass presentation source"), VisionCount, 1);
+	TestEqual(TEXT("M3.4 Lab has suppression cut"), SuppressionCount, 1);
+	TestEqual(TEXT("M3.4 Lab marks five logical seams"), SeamMarkerCount, 5);
+	TestEqual(TEXT("M3.4 Lab has overview/rotated/close/dynamic/page cameras"), CameraCount, 5);
+	TestTrue(TEXT("M3.4 Lab has a dynamic door"), bHasDynamicDoor);
+	TestTrue(TEXT("M3.4 Lab has inward-feather safety label"), bHasFeatherLabel);
+	TestTrue(TEXT("M3.4 Lab identifies the logical page boundary"), bHasPageBoundaryLabel);
 	return true;
 }
 

@@ -1,6 +1,7 @@
 """Idempotently create the component-backed SightWeave M2/M3 lab through Unreal asset APIs."""
 
 import math
+import os
 import unreal
 
 MAP_DIRECTORY = "/SightWeave/Maps"
@@ -10,6 +11,8 @@ CYLINDER_PATH = "/Engine/BasicShapes/Cylinder.Cylinder"
 CONE_PATH = "/Engine/BasicShapes/Cone.Cone"
 GROUND = "Ground"
 LOCAL_OWNER = "Local"
+M3P4_ACTIVE_CAMERA = os.environ.get("SIGHTWEAVE_M3P4_LAB_CAMERA", "Overview")
+M3P4_DYNAMIC_DOOR_YAW = float(os.environ.get("SIGHTWEAVE_M3P4_DOOR_YAW", "28.0"))
 
 
 def floor_id(value):
@@ -364,7 +367,7 @@ def create_lab():
         spawn_mesh(f"SW_M3P3_TileSeam_{seam_index + 1}", cube,
                    (seam_x, 8500.0, 3.0), (0.025, 80.0, 0.03))
     spawn_camera("SW_M3P3_OverviewCamera", (0.0, 8500.0, 10000.0),
-                 yaw=0.0, ortho_width=14500.0, auto_activate=True)
+                 yaw=0.0, ortho_width=14500.0, auto_activate=False)
 
     # With Ground.BoundsMin.X == -8500 and Standard span == 2480 cm, this is the
     # logical 63/64 boundary. The narrow cone forces persistent residency across
@@ -386,6 +389,59 @@ def create_lab():
                  (page_boundary_x, page_strip_y, 6000.0),
                  yaw=0.0, ortho_width=7000.0, auto_activate=False)
 
+    # M3.4 is a separate presentation-only fixture strip. It deliberately reuses
+    # the Ground/Local authority data model while exposing inward-feather edge,
+    # corner, narrow-corridor, suppression, bypass, dirty-door, view, seam, and
+    # page-boundary inspection points. No host gameplay or SceneCapture is used.
+    m3p4_origin = (31000.0, 8500.0)
+    spawn_mesh("SW_M3P4_Feather_Base", cube,
+               (m3p4_origin[0], m3p4_origin[1], -16.0), (135.0, 45.0, 0.16))
+    spawn_text("SW_M3P4_Feather_Label",
+               "M3.4 WORLD-SPACE INWARD FEATHER / HARD POINT GATE REMAINS FINAL",
+               (m3p4_origin[0] - 6400.0, 6700.0, 130.0), 58.0,
+               unreal.Color(210, 145, 255, 255))
+
+    wall("SW_M3P4_StraightWall", cube, (24500.0, 8500.0), (0.0, 250.0), 1900.0)
+    wall("SW_M3P4_L_A", cube, (27500.0, 8500.0), (-450.0, 150.0), 1000.0)
+    wall("SW_M3P4_L_B", cube, (27500.0, 8500.0), (50.0, 650.0), 1000.0, 90.0)
+    wall("SW_M3P4_T_Top", cube, (30500.0, 8500.0), (0.0, 500.0), 1900.0)
+    wall("SW_M3P4_T_Stem", cube, (30500.0, 8500.0), (0.0, 0.0), 1000.0, 90.0)
+    wall("SW_M3P4_Corridor_Left", cube, (33500.0, 8500.0), (-330.0, 250.0), 1800.0, 90.0)
+    wall("SW_M3P4_Corridor_Right", cube, (33500.0, 8500.0), (330.0, 250.0), 1800.0, 90.0)
+    wall("SW_M3P4_DynamicDoor", cube, (36500.0, 8500.0), (0.0, 250.0),
+         1100.0, M3P4_DYNAMIC_DOOR_YAW, 260.0, dynamic=True)
+    add_vision("SW_M3P4_OverviewBypass", (31000.0, 7200.0, 100.0),
+               unreal.SightWeaveSourceShape.RADIAL, 8500.0, bypass=True)
+    add_suppression("SW_M3P4_SuppressionCut", (38200.0, 8500.0, 0.0), 420.0)
+    spawn_text("SW_M3P4_Bypass_Label", "BYPASS - SAME INWARD VISUAL RULE",
+               (23700.0, 10100.0, 110.0), 42.0, unreal.Color(110, 240, 255, 255))
+    spawn_text("SW_M3P4_Suppression_Label", "SUPPRESSION CUT - NEVER FEATHER OUTWARD",
+               (36800.0, 10100.0, 110.0), 42.0, unreal.Color(255, 125, 125, 255))
+
+    for seam_index, seam_x in enumerate((26220.0, 28700.0, 31180.0, 33660.0, 36140.0)):
+        spawn_mesh(f"SW_M3P4_TileSeam_{seam_index + 1}", cube,
+                   (seam_x, 8500.0, 4.0), (0.025, 80.0, 0.04))
+    spawn_camera("SW_M3P4_OverviewCamera", (31000.0, 8500.0, 10000.0),
+                 yaw=0.0, ortho_width=15500.0,
+                 auto_activate=M3P4_ACTIVE_CAMERA == "Overview")
+    spawn_camera("SW_M3P4_Rotated45Camera", (31000.0, 8500.0, 10000.0),
+                 yaw=45.0, ortho_width=15500.0,
+                 auto_activate=M3P4_ACTIVE_CAMERA == "Rotated45")
+    spawn_camera("SW_M3P4_CloseupCamera", (24500.0, 8500.0, 6000.0),
+                 yaw=0.0, ortho_width=4200.0,
+                 auto_activate=M3P4_ACTIVE_CAMERA == "Closeup")
+    spawn_camera("SW_M3P4_DynamicDoorCamera", (36500.0, 8500.0, 6000.0),
+                 yaw=0.0, ortho_width=4200.0,
+                 auto_activate=M3P4_ACTIVE_CAMERA == "DynamicDoor")
+    spawn_text("SW_M3P4_PageBoundary_Label",
+               "M3.4 FEATHER CONTINUITY REUSES LOGICAL 63/64 FIXTURE",
+               (page_boundary_x - 2500.0, page_strip_y + 1100.0, 130.0),
+               48.0, unreal.Color(210, 145, 255, 255))
+    spawn_camera("SW_M3P4_PageBoundaryCamera",
+                 (page_boundary_x, page_strip_y, 6000.0),
+                 yaw=45.0, ortho_width=7000.0,
+                 auto_activate=M3P4_ACTIVE_CAMERA == "PageBoundary")
+
     spawn_text("SW_M2_Lab_Title", "SIGHTWEAVE M2 CPU AUTHORITY LAB",
                (-2400.0, -6200.0, 240.0), 95.0, unreal.Color(105, 210, 255, 255))
     spawn_text("SW_M2_Lab_Disclaimer", "REFERENCE SOLVER / COMPONENT FIXTURES / DEBUG DATA - NO GPU FOG",
@@ -399,7 +455,7 @@ def create_lab():
         raise RuntimeError(f"Could not save {MAP_PATH}")
     if not unreal.EditorAssetLibrary.save_asset(MAP_PATH, only_if_is_dirty=False):
         raise RuntimeError(f"Could not persist {MAP_PATH}")
-    unreal.log(f"SightWeave M2/M3 created and saved {MAP_PATH}")
+    unreal.log(f"SightWeave M2/M3/M3.4 created and saved {MAP_PATH}")
 
 
 if __name__ == "__main__":

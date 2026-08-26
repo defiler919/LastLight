@@ -1,4 +1,4 @@
-"""Idempotently create the component-backed SightWeave M2 lab through Unreal asset APIs."""
+"""Idempotently create the component-backed SightWeave M2/M3 lab through Unreal asset APIs."""
 
 import math
 import unreal
@@ -57,6 +57,17 @@ def spawn_text(name, text, location, world_size=48.0, color=None):
     component.set_editor_property("text", unreal.Text(text))
     component.set_editor_property("world_size", world_size)
     component.set_editor_property("text_render_color", color or unreal.Color(235, 235, 235, 255))
+    return actor
+
+
+def spawn_camera(name, location, yaw=0.0, ortho_width=10000.0, auto_activate=False):
+    actor = spawn_actor(unreal.CameraActor, name, location, yaw)
+    actor.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=-90.0, yaw=yaw), False)
+    component = actor.get_component_by_class(unreal.CameraComponent)
+    component.set_editor_property("projection_mode", unreal.CameraProjectionMode.ORTHOGRAPHIC)
+    component.set_editor_property("ortho_width", ortho_width)
+    if auto_activate:
+        actor.set_editor_property("auto_activate_for_player", unreal.AutoReceiveInput.PLAYER0)
     return actor
 
 
@@ -199,7 +210,7 @@ def create_lab():
     world.get_world_settings().set_editor_property("default_game_mode", unreal.GameModeBase)
 
     add_floor("SW_M2_GroundFloor", (0.0, 0.0, 0.0), GROUND,
-              (-8500.0, -6500.0), (8500.0, 6500.0), 0.0, 300.0, True)
+              (-8500.0, -6500.0), (154500.0, 12500.0), 0.0, 300.0, True)
     add_floor("SW_M2_UpperFloor", (0.0, 0.0, 500.0), "Upper",
               (-8500.0, -6500.0), (8500.0, 6500.0), 0.0, 300.0, False)
 
@@ -333,6 +344,48 @@ def create_lab():
                (origins[19][0] + 350.0, origins[19][1] + 350.0, 70.0), (1.0, 1.0, 1.4))
     add_debug_query("SW_M2_20_AuthorityQuery", (origins[19][0] + 350.0, origins[19][1] + 350.0, 100.0))
 
+    # M3.3 presentation-only display area. The active Ground floor keeps Local as the
+    # explicit default presentation owner; these fixtures do not enter host gameplay.
+    m3_origin = (0.0, 8500.0)
+    spawn_mesh("SW_M3P3_Presentation_Base", cube,
+               (m3_origin[0], m3_origin[1], -16.0), (130.0, 45.0, 0.16))
+    spawn_text("SW_M3P3_Presentation_Label",
+               "M3.3 POST-TONEMAP HARD MASK / LIVE SCENE COLOR / STRICT BLACK",
+               (-6100.0, 6700.0, 130.0), 58.0, unreal.Color(120, 255, 165, 255))
+    wall("SW_M3P3_StraightWall", cube, (-4700.0, 8500.0), (0.0, 250.0), 1900.0)
+    wall("SW_M3P3_L_A", cube, (-1700.0, 8500.0), (-450.0, 150.0), 1000.0)
+    wall("SW_M3P3_L_B", cube, (-1700.0, 8500.0), (50.0, 650.0), 1000.0, 90.0)
+    wall("SW_M3P3_T_Top", cube, (1500.0, 8500.0), (0.0, 500.0), 1900.0)
+    wall("SW_M3P3_T_Stem", cube, (1500.0, 8500.0), (0.0, 0.0), 1000.0, 90.0)
+    wall("SW_M3P3_DiagonalWall", cube, (4700.0, 8500.0), (0.0, 300.0), 1900.0, 35.0)
+    add_vision("SW_M3P3_PresentationVision", (0.0, 7200.0, 100.0),
+               unreal.SightWeaveSourceShape.RADIAL, 7000.0, bypass=True)
+    for seam_index, seam_x in enumerate((-3540.0, -1060.0, 1420.0, 3900.0, 6380.0)):
+        spawn_mesh(f"SW_M3P3_TileSeam_{seam_index + 1}", cube,
+                   (seam_x, 8500.0, 3.0), (0.025, 80.0, 0.03))
+    spawn_camera("SW_M3P3_OverviewCamera", (0.0, 8500.0, 10000.0),
+                 yaw=0.0, ortho_width=14500.0, auto_activate=True)
+
+    # With Ground.BoundsMin.X == -8500 and Standard span == 2480 cm, this is the
+    # logical 63/64 boundary. The narrow cone forces persistent residency across
+    # page 0 slot 63 and page 1 slot 0 without covering a broad 2-D tile field.
+    page_boundary_x = -8500.0 + 64.0 * 2480.0
+    page_strip_y = 11000.0
+    add_vision("SW_M3P3_PageBoundaryVision", (-8000.0, page_strip_y, 100.0),
+               unreal.SightWeaveSourceShape.DIRECTIONAL_CONE,
+               160000.0, 0.2, 0.0, True)
+    spawn_mesh("SW_M3P3_PageBoundary_Base", cube,
+               (page_boundary_x, page_strip_y, -16.0), (55.0, 30.0, 0.16))
+    wall("SW_M3P3_PageBoundaryWall", cube, (page_boundary_x, page_strip_y),
+         (0.0, 0.0), 2000.0, 90.0)
+    spawn_text("SW_M3P3_PageBoundary_Label",
+               "LOGICAL 63 / 64 - PAGE 0 SLOT 63 / PAGE 1 SLOT 0",
+               (page_boundary_x - 2500.0, page_strip_y - 1200.0, 130.0),
+               52.0, unreal.Color(255, 205, 90, 255))
+    spawn_camera("SW_M3P3_PageBoundaryCamera",
+                 (page_boundary_x, page_strip_y, 6000.0),
+                 yaw=0.0, ortho_width=7000.0, auto_activate=False)
+
     spawn_text("SW_M2_Lab_Title", "SIGHTWEAVE M2 CPU AUTHORITY LAB",
                (-2400.0, -6200.0, 240.0), 95.0, unreal.Color(105, 210, 255, 255))
     spawn_text("SW_M2_Lab_Disclaimer", "REFERENCE SOLVER / COMPONENT FIXTURES / DEBUG DATA - NO GPU FOG",
@@ -346,7 +399,7 @@ def create_lab():
         raise RuntimeError(f"Could not save {MAP_PATH}")
     if not unreal.EditorAssetLibrary.save_asset(MAP_PATH, only_if_is_dirty=False):
         raise RuntimeError(f"Could not persist {MAP_PATH}")
-    unreal.log(f"SightWeave M2 created and saved {MAP_PATH}")
+    unreal.log(f"SightWeave M2/M3 created and saved {MAP_PATH}")
 
 
 if __name__ == "__main__":

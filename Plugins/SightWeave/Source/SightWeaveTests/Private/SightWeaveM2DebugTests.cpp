@@ -357,15 +357,85 @@ bool FSightWeaveM2LabComponentFixturesTest::RunTest(const FString& Parameters)
 		}
 	}
 	TestEqual(TEXT("Lab has two explicit floors"), FloorCount, 2);
-	TestEqual(TEXT("Lab has thirty real vision-source components"), VisionCount, 30);
+	TestEqual(TEXT("Lab has thirty-two real vision-source components"), VisionCount, 32);
 	TestEqual(TEXT("Lab has four real legal-illumination components"), IlluminationCount, 4);
-	TestEqual(TEXT("Lab has twenty-one explicit occluder components"), OccluderCount, 21);
+	TestEqual(TEXT("Lab has twenty-eight explicit occluder components"), OccluderCount, 28);
 	TestEqual(TEXT("Lab has one real dynamic-door occluder"), DynamicOccluderCount, 1);
 	TestEqual(TEXT("Lab has one hard-live suppression component"), SuppressionCount, 1);
 	TestEqual(TEXT("Lab has one no-tick authoritative debug query component"), DebugQueryCount, 1);
 	TestEqual(TEXT("Lab has eight independently authored stress sources"), StressSourceCount, 8);
 	TestTrue(TEXT("Lab has a named debug query marker"), bHasDebugMarker);
 	TestTrue(TEXT("Every authored bypass source has no compatibility key"), bAllBypassProfilesEmpty);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM3P3LabPresentationFixturesTest,
+	"SightWeave.M3P3.Lab.PresentationFixtures",
+	SightWeave::M2::DebugTests::TestFlags)
+
+bool FSightWeaveM3P3LabPresentationFixturesTest::RunTest(const FString& Parameters)
+{
+	UPackage* Package = LoadPackage(nullptr, TEXT("/SightWeave/Maps/L_SightWeave_Lab"), LOAD_None);
+	UWorld* World = Package ? UWorld::FindWorldInPackage(Package) : nullptr;
+	if (!TestNotNull(TEXT("M3.3 lab package contains a world"), World))
+	{
+		return true;
+	}
+	int32 M3OccluderCount = 0;
+	int32 M3VisionCount = 0;
+	int32 TileSeamMarkerCount = 0;
+	int32 CameraCount = 0;
+	bool bHasOverviewLabel = false;
+	bool bHasPageBoundaryLabel = false;
+	bool bHasPageBoundaryVision = false;
+	bool bGroundCoversPageBoundary = false;
+	for (ULevel* Level : World->GetLevels())
+	{
+		if (!Level) continue;
+		for (AActor* Actor : Level->Actors)
+		{
+			if (!Actor) continue;
+#if WITH_EDITOR
+			const FString Label = Actor->GetActorLabel();
+			if (Label.StartsWith(TEXT("SW_M3P3_")))
+			{
+				M3OccluderCount += Actor->FindComponentByClass<USightWeaveOccluderComponent>() ? 1 : 0;
+				if (const USightWeaveVisionSourceComponent* Vision =
+					Actor->FindComponentByClass<USightWeaveVisionSourceComponent>())
+				{
+					++M3VisionCount;
+					TestEqual(TEXT("M3.3 Lab vision remains Local-owner scoped"),
+						Vision->Description.KnowledgeOwnerId,
+						FSightWeaveKnowledgeOwnerId(FName(TEXT("Local"))));
+					bHasPageBoundaryVision |= Label == TEXT("SW_M3P3_PageBoundaryVision")
+						&& FMath::IsNearlyEqual(Vision->Description.Range, 160000.0f);
+				}
+				TileSeamMarkerCount += Label.StartsWith(TEXT("SW_M3P3_TileSeam_")) ? 1 : 0;
+				CameraCount += Label.EndsWith(TEXT("Camera")) ? 1 : 0;
+				bHasOverviewLabel |= Label == TEXT("SW_M3P3_Presentation_Label");
+				bHasPageBoundaryLabel |= Label == TEXT("SW_M3P3_PageBoundary_Label");
+			}
+#endif
+			if (const USightWeaveFloorComponent* Floor =
+				Actor->FindComponentByClass<USightWeaveFloorComponent>())
+			{
+				bGroundCoversPageBoundary |= Floor->Definition.FloorId
+					== FSightWeaveFloorId(FName(TEXT("Ground")))
+					&& Floor->Definition.BoundsMax.X >= 154000.0;
+			}
+		}
+	}
+	TestEqual(TEXT("M3.3 Lab has straight/L/T/diagonal/page-boundary occluders"),
+		M3OccluderCount, 7);
+	TestEqual(TEXT("M3.3 Lab has overview and page-boundary live sources"),
+		M3VisionCount, 2);
+	TestEqual(TEXT("M3.3 Lab marks five logical tile seams"), TileSeamMarkerCount, 5);
+	TestEqual(TEXT("M3.3 Lab has overview and page-boundary cameras"), CameraCount, 2);
+	TestTrue(TEXT("M3.3 Lab overview label exists"), bHasOverviewLabel);
+	TestTrue(TEXT("M3.3 Lab page-boundary label exists"), bHasPageBoundaryLabel);
+	TestTrue(TEXT("M3.3 Lab narrow source crosses logical tile 63/64"), bHasPageBoundaryVision);
+	TestTrue(TEXT("Ground floor bounds include the page-boundary fixture"), bGroundCoversPageBoundary);
 	return true;
 }
 

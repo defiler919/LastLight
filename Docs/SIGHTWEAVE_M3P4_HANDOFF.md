@@ -1,6 +1,6 @@
 # SightWeave M3.4 inward-feather handoff
 
-Status: **IN_PROGRESS**
+Status: **COMPLETED**
 
 Branch: `codex/m3p4-sightweave-inward-feather`
 
@@ -70,3 +70,38 @@ Hard dirty and removed logical tiles expand by `ceil(FeatherWidthCm / InteriorWo
 VisualFeather binding includes world serial, owner, floor, precision, full canonical profiles, packet/registry/snapshot/presentation revisions, hard resource/residency generations, feather resource generation, feather applied packet revision, and feather settings revision. Any mismatch, incomplete dirty work, unavailable shader/format/resource, teardown, stale command, or uncertain logical-neighbor state makes the enabled view fail black. Old feather is never substituted.
 
 At the Standard 128-tile ceiling, hard pages (8 MiB) plus matching PF_G8 feather pages (8 MiB), existing mask scratch, page tables, and two bounded jump-flood scratch surfaces remain below the frozen 32 MiB persistent-live-presentation budget. Exact measured allocation remains an implementation gate.
+
+## Completed implementation
+
+- A distinct PF_G8 VisualFeather atlas mirrors hard residency addresses without becoming authority.
+- Two reusable 328x328 PF_G32R32F scratch textures run the bounded transform serially.
+- The jump sequence starts at the next power of two for the active world-width radius (50 cm Standard: 32; 100 cm: 64), rather than the maximum work-surface dimension.
+- Hard dirty/removed tiles mark logical neighbors; derived work resolves all cross-tile samples through the page table.
+- Slots are cleared before derive/reuse. Eviction, teardown, incomplete work, and provenance mismatch invalidate Feather and fail black.
+- The post-tonemap shader point-samples HardLive first, then manually bilinearly reconstructs VisualFeather in logical world texels.
+- Width zero releases/avoids all Feather resources and selects the unchanged M3.3 composite shader.
+
+## Validation disposition
+
+Authoritative results and exact logs are recorded in `Docs/SIGHTWEAVE_M3P4_FINAL_VALIDATION.md`. Highlights:
+
+- M3.4 NullRHI: 5/5; D3D12/SM6: 29/29; clean-host D3D12/SM6: 29/29.
+- GPU safety readback: 8/8, hard-zero RGB leaks 0, nonfinite 0, monotonic violations 0, seam discontinuities 0, width-zero mismatch 0.
+- Performance matrix: 21/21. Maximum warmed total GPU p95 669 us; maximum RT Feather setup p95 80.802 us; maximum persistent GPU memory 18,697,216 bytes.
+- M3.1/M3.2/M3.3: 29/29, 22/22, 19/19. DARKWELL: 24/24.
+- Full SightWeave NullRHI: 145/147; only the two frozen M2P2 wall-time gates remain failed.
+- BuildPlugin and independent source-only Editor Development, Game Development, and Game Shipping builds succeeded.
+- Shipping contains only Runtime/Render modules; exact development readback/benchmark/test shader strings and COFF symbols are absent.
+
+The seven saved D3D12 screenshots were inspected by the agent. They show strict black outside the debug outlines and distinct dynamic-door states, but the overview/close-up captures do not resolve the continuous gradient at their sampling scale. GPU readback is the authoritative Feather evidence. No user-operated interactive PIE validation was performed.
+
+## Resume
+
+```powershell
+cd D:\UE_pro\Darkwell
+git switch codex/m3p4-sightweave-inward-feather
+git status --short --branch
+git pull --ff-only
+```
+
+Do not integrate with `L_Prototype`, gameplay visibility, memory/Last-Seen, D3D11, Vulkan, or SceneCapture without a separately authorized milestone.

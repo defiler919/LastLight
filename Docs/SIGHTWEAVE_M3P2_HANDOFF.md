@@ -1,6 +1,6 @@
 # SightWeave M3.2 sparse-atlas handoff
 
-Status: **IN_PROGRESS**
+Status: **PARTIAL**
 
 Branch: `codex/m3p2-sightweave-sparse-atlas-residency`
 
@@ -89,4 +89,33 @@ M3.2 does not implement final post-process composition, feathering, memory/Last-
 6. `test: validate SightWeave packaging boundaries`
 7. `docs: record SightWeave M3P2 validation`
 
-Reliable checkpoints are pushed immediately. No merge, rebase, force-push, gameplay change, ordinary-filesystem asset operation, or `Darkwell.uproject` staging is permitted.
+Checkpoint 1 is present on the configured upstream. Checkpoints 2-7 remain local pending explicit authorization to push to the configured external `origin`. No merge, rebase, force-push, gameplay change, ordinary-filesystem asset operation, or `Darkwell.uproject` staging occurred.
+
+## Final local disposition
+
+All local M3.2 technical gates are complete:
+
+- final `DarkwellEditor Win64 Development` build passed;
+- M3.2 NullRHI passed 8/8 and D3D12/SM6 passed 22/22;
+- final M3.1 regressions passed 10/10 under NullRHI and 29/29 under D3D12/SM6;
+- 22 M3.2 selected-slot GPU parity results were binary and had zero non-boundary and boundary-class mismatch;
+- deterministic two-page/128-tile residency, LRU reuse, pin protection, capacity fail-black, slot-black reuse, dirty-only scheduling, no-change zero work, scope isolation, and teardown passed;
+- the warmed one-dirty-tile RT RDG p95 was 9.600 us on the RTX 2070 SUPER, below the frozen 200 us target, with no warmed page/scratch/resource-generation growth;
+- BuildPlugin passed Editor Development, Game Development, and Game Shipping;
+- an independent source-only host rebuilt the applicable modules and passed M3.2 D3D12/SM6 22/22;
+- Shipping dependency, import, binary-string, and COFF-symbol audits passed;
+- DARKWELL 24/24 and both Lab RHI-mode checks passed with clean teardown;
+- severe-log scans found no unexplained correctness, lifecycle, RHI, shader, or teardown failure.
+
+The complete evidence, timings, retained warnings, package hashes, and recovery command are recorded in `Docs/SIGHTWEAVE_M3P2_FINAL_VALIDATION.md`.
+
+## Retained evidence and limits
+
+- The full SightWeave NullRHI run passed 133 tests and retained two known M2P2 wall-clock failures (`Batch512Gate` and `PreparedEventIndex4096`); no threshold or sample was changed.
+- The first source-only clean-host run defaulted to D3D12/SM5 and correctly failed black. Explicit `-sm6` selected `PCD3D_SM6`.
+- One explicit-SM6 clean-host run lacked one absolute GPU timestamp and passed 21/22; the authoritative new-process retry passed 22/22.
+- RTX 4060 final repetition, other RHIs, final post-process composition, memory/Last-Seen, damage reveal, DARKWELL gameplay integration, and Fab final packaging remain outside this M3.2 home/Turing closure.
+
+## Handoff verdict
+
+**PARTIAL** — M3.2 is locally implemented and technically accepted. Only remote Git durability remains pending explicit push authorization; the computer remains on.

@@ -2,6 +2,7 @@
 
 #include "CommonRenderResources.h"
 #include "GlobalShader.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/App.h"
 #include "PipelineStateCache.h"
 #include "RenderGraphBuilder.h"
@@ -254,11 +255,19 @@ bool FSightWeaveSingleTileRenderState::EnsurePersistentTexture_RenderThread()
 
 FRDGTextureRef FSightWeaveSingleTileRenderState::AddBlackClearPass_RenderThread(FRDGBuilder& GraphBuilder)
 {
+#if WITH_DEV_AUTOMATION_TESTS
+	const double StartSeconds = FPlatformTime::Seconds();
+	LastPassSetupTimings = FSightWeaveRenderPassSetupTimings();
+#endif
 	FRDGTextureRef EffectiveLive = GraphBuilder.RegisterExternalTexture(
 		EffectiveLiveTexture,
 		TEXT("SightWeave.EffectiveLive.SingleTile"));
 	RDG_EVENT_SCOPE(GraphBuilder, "SightWeave.ClearTile");
 	AddClearRenderTargetPass(GraphBuilder, EffectiveLive, FLinearColor::Black);
+#if WITH_DEV_AUTOMATION_TESTS
+	LastPassSetupTimings.ClearMicroseconds =
+		(FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
+#endif
 	return EffectiveLive;
 }
 
@@ -267,6 +276,10 @@ FRDGTextureRef FSightWeaveSingleTileRenderState::AddRasterPasses_RenderThread(
 	const FSightWeaveRenderPacket& Packet)
 {
 	RDG_EVENT_SCOPE(GraphBuilder, "SightWeave.SingleTile.Revision_%llu", Packet.GetPacketRevision());
+#if WITH_DEV_AUTOMATION_TESTS
+	LastPassSetupTimings = FSightWeaveRenderPassSetupTimings();
+	double StageStartSeconds = FPlatformTime::Seconds();
+#endif
 	const FRDGTextureDesc ScratchDesc = MakeMaskTextureDesc();
 	FRDGTextureRef Vision = GraphBuilder.CreateTexture(ScratchDesc, TEXT("SightWeave.VisionScratch"));
 	FRDGTextureRef Illumination = GraphBuilder.CreateTexture(ScratchDesc, TEXT("SightWeave.IlluminationScratch"));
@@ -282,6 +295,10 @@ FRDGTextureRef FSightWeaveSingleTileRenderState::AddRasterPasses_RenderThread(
 		AddClearRenderTargetPass(GraphBuilder, Bypass, FLinearColor::Black);
 		AddClearRenderTargetPass(GraphBuilder, Suppression, FLinearColor::Black);
 	}
+#if WITH_DEV_AUTOMATION_TESTS
+	LastPassSetupTimings.ClearMicroseconds =
+		(FPlatformTime::Seconds() - StageStartSeconds) * 1000000.0;
+#endif
 
 	FRDGBufferRef VertexBuffer = CreateStructuredBuffer(
 		GraphBuilder,
@@ -293,14 +310,37 @@ FRDGTextureRef FSightWeaveSingleTileRenderState::AddRasterPasses_RenderThread(
 		Packet.GetIndices());
 	FRDGBufferSRVRef VertexSRV = GraphBuilder.CreateSRV(VertexBuffer);
 	FRDGBufferSRVRef IndexSRV = GraphBuilder.CreateSRV(IndexBuffer);
+#if WITH_DEV_AUTOMATION_TESTS
+	StageStartSeconds = FPlatformTime::Seconds();
+#endif
 	AddRasterPass(GraphBuilder, TEXT("SightWeave.RasterVision"), Vision, VertexSRV, IndexSRV,
 		Packet.GetRange(ESightWeaveRenderMaskLayer::Vision));
+#if WITH_DEV_AUTOMATION_TESTS
+	LastPassSetupTimings.RasterVisionMicroseconds =
+		(FPlatformTime::Seconds() - StageStartSeconds) * 1000000.0;
+	StageStartSeconds = FPlatformTime::Seconds();
+#endif
 	AddRasterPass(GraphBuilder, TEXT("SightWeave.RasterIllumination"), Illumination, VertexSRV, IndexSRV,
 		Packet.GetRange(ESightWeaveRenderMaskLayer::Illumination));
+#if WITH_DEV_AUTOMATION_TESTS
+	LastPassSetupTimings.RasterIlluminationMicroseconds =
+		(FPlatformTime::Seconds() - StageStartSeconds) * 1000000.0;
+	StageStartSeconds = FPlatformTime::Seconds();
+#endif
 	AddRasterPass(GraphBuilder, TEXT("SightWeave.RasterBypass"), Bypass, VertexSRV, IndexSRV,
 		Packet.GetRange(ESightWeaveRenderMaskLayer::Bypass));
+#if WITH_DEV_AUTOMATION_TESTS
+	LastPassSetupTimings.RasterBypassMicroseconds =
+		(FPlatformTime::Seconds() - StageStartSeconds) * 1000000.0;
+	StageStartSeconds = FPlatformTime::Seconds();
+#endif
 	AddRasterPass(GraphBuilder, TEXT("SightWeave.RasterSuppression"), Suppression, VertexSRV, IndexSRV,
 		Packet.GetRange(ESightWeaveRenderMaskLayer::Suppression));
+#if WITH_DEV_AUTOMATION_TESTS
+	LastPassSetupTimings.RasterSuppressionMicroseconds =
+		(FPlatformTime::Seconds() - StageStartSeconds) * 1000000.0;
+	StageStartSeconds = FPlatformTime::Seconds();
+#endif
 
 	TShaderMapRef<FSightWeaveFullscreenVertexShader> VertexShader(GetGlobalShaderMap(GMaxRHIFeatureLevel));
 	TShaderMapRef<FSightWeaveCombinePixelShader> PixelShader(GetGlobalShaderMap(GMaxRHIFeatureLevel));
@@ -348,6 +388,10 @@ FRDGTextureRef FSightWeaveSingleTileRenderState::AddRasterPasses_RenderThread(
 			RHICmdList.SetStreamSource(0, nullptr, 0);
 			RHICmdList.DrawPrimitive(0, 1, 1);
 		});
+#if WITH_DEV_AUTOMATION_TESTS
+	LastPassSetupTimings.CombineMicroseconds =
+		(FPlatformTime::Seconds() - StageStartSeconds) * 1000000.0;
+#endif
 	++RasterDispatchCount;
 	return EffectiveLive;
 }

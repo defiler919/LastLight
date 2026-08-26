@@ -40,10 +40,22 @@ struct FSightWeaveRenderTestReadback::FState final
 	TAtomic<bool> bFinished{ false };
 	TUniquePtr<FSightWeaveSingleTileRenderState> RenderState;
 	TUniquePtr<FRHIGPUTextureReadback> Readback;
+	FRenderQueryRHIRef GPUStartQuery;
+	FRenderQueryRHIRef GPUEndQuery;
+	double StartSeconds = FPlatformTime::Seconds();
+	double GameThreadSubmitMicroseconds = 0.0;
+	double RenderThreadConsumeMicroseconds = 0.0;
+	double RenderThreadRDGSetupMicroseconds = 0.0;
+	bool bNoChangeProducedMaskWork = false;
+	bool bGPUTimestampsIssued = false;
 };
 
 namespace
 {
+	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeaveGPUTimestampPassParameters, )
+		RDG_TEXTURE_ACCESS(EffectiveLive, ERHIAccess::CopySrc)
+	END_SHADER_PARAMETER_STRUCT()
+
 	FSightWeaveRenderReadbackExpectation MakeExpectation(const FSightWeaveRenderPacket& Packet)
 	{
 		FSightWeaveRenderReadbackExpectation Result;
@@ -110,6 +122,7 @@ FSightWeaveRenderTestReadback::StartSequence(
 	const TSharedRef<FSightWeaveRenderTestReadback, ESPMode::ThreadSafe> Request =
 		MakeShareable(new FSightWeaveRenderTestReadback(NewState));
 
+	const double SubmitStartSeconds = FPlatformTime::Seconds();
 	ENQUEUE_RENDER_COMMAND(SightWeaveStartTestReadback)(
 		[NewState](FRHICommandListImmediate& RHICmdList)
 		{
@@ -136,14 +149,32 @@ FSightWeaveRenderTestReadback::StartSequence(
 
 			NewState->RenderState = MakeUnique<FSightWeaveSingleTileRenderState>(
 				Packet.GetWorldIdentity());
+			const double ConsumeStartSeconds = FPlatformTime::Seconds();
 			for (const TSharedPtr<const FSightWeaveRenderPacket, ESPMode::ThreadSafe>& Submitted
 				: NewState->Packets)
 			{
 				NewState->RenderState->SubmitPacket_RenderThread(Submitted);
 			}
+			NewState->RenderThreadConsumeMicroseconds =
+				(FPlatformTime::Seconds() - ConsumeStartSeconds) * 1000000.0;
+			if (GSupportsTimestampRenderQueries)
+			{
+				NewState->GPUStartQuery = RHICreateRenderQuery(RQT_AbsoluteTime);
+				NewState->GPUEndQuery = RHICreateRenderQuery(RQT_AbsoluteTime);
+				if (NewState->GPUStartQuery.IsValid() && NewState->GPUEndQuery.IsValid())
+				{
+					RHICmdList.EndRenderQuery(NewState->GPUStartQuery.GetReference());
+					NewState->bGPUTimestampsIssued = true;
+				}
+			}
 			FRDGBuilder GraphBuilder(RHICmdList, RDG_EVENT_NAME("SightWeave.TestReadback"));
+			const double RDGSetupStartSeconds = FPlatformTime::Seconds();
 			FRDGTextureRef EffectiveLive =
 				NewState->RenderState->ProcessPending_RenderThread(GraphBuilder);
+			NewState->RenderThreadRDGSetupMicroseconds =
+				(FPlatformTime::Seconds() - RDGSetupStartSeconds) * 1000000.0;
+			NewState->bNoChangeProducedMaskWork =
+				NewState->RenderState->ProcessPending_RenderThread(GraphBuilder) != nullptr;
 			FailureResult.Availability = NewState->RenderState->GetAvailability_RenderThread();
 			FailureResult.ResourceGeneration =
 				NewState->RenderState->GetResourceGeneration_RenderThread();
@@ -163,9 +194,26 @@ FSightWeaveRenderTestReadback::StartSequence(
 
 			NewState->Readback = MakeUnique<FRHIGPUTextureReadback>(
 				TEXT("SightWeave.M3P1.EffectiveLiveReadback"));
+			if (NewState->bGPUTimestampsIssued)
+			{
+				FSightWeaveGPUTimestampPassParameters* TimestampParameters =
+					GraphBuilder.AllocParameters<FSightWeaveGPUTimestampPassParameters>();
+				TimestampParameters->EffectiveLive = EffectiveLive;
+				FRHIRenderQuery* EndQuery = NewState->GPUEndQuery.GetReference();
+				GraphBuilder.AddPass(
+					RDG_EVENT_NAME("SightWeave.TimestampMaskComplete"),
+					TimestampParameters,
+					ERDGPassFlags::Copy | ERDGPassFlags::NeverCull,
+					[EndQuery](FRDGAsyncTask, FRHICommandList& CommandList)
+					{
+						CommandList.EndRenderQuery(EndQuery);
+					});
+			}
 			AddEnqueueCopyPass(GraphBuilder, NewState->Readback.Get(), EffectiveLive);
 			GraphBuilder.Execute();
 		});
+	NewState->GameThreadSubmitMicroseconds =
+		(FPlatformTime::Seconds() - SubmitStartSeconds) * 1000000.0;
 	return Request;
 }
 
@@ -203,6 +251,50 @@ void FSightWeaveRenderTestReadback::Poll()
 				PollState->RenderState->GetResourceGeneration_RenderThread();
 			Result.RasterDispatchCount =
 				PollState->RenderState->GetRasterDispatchCount_RenderThread();
+			Result.DuplicatePacketCount =
+				PollState->RenderState->GetDuplicatePacketCount_RenderThread();
+			Result.StalePacketCount =
+				PollState->RenderState->GetStalePacketCount_RenderThread();
+			Result.RejectedPacketCount =
+				PollState->RenderState->GetRejectedPacketCount_RenderThread();
+			Result.bNoChangeProducedMaskWork = PollState->bNoChangeProducedMaskWork;
+			Result.GameThreadSubmitMicroseconds = PollState->GameThreadSubmitMicroseconds;
+			Result.RenderThreadConsumeMicroseconds = PollState->RenderThreadConsumeMicroseconds;
+			Result.RenderThreadRDGSetupMicroseconds = PollState->RenderThreadRDGSetupMicroseconds;
+			const FSightWeaveRenderPassSetupTimings& PassTimings =
+				PollState->RenderState->GetLastPassSetupTimings_RenderThread();
+			Result.ClearPassSetupMicroseconds = PassTimings.ClearMicroseconds;
+			Result.RasterVisionSetupMicroseconds = PassTimings.RasterVisionMicroseconds;
+			Result.RasterIlluminationSetupMicroseconds = PassTimings.RasterIlluminationMicroseconds;
+			Result.RasterBypassSetupMicroseconds = PassTimings.RasterBypassMicroseconds;
+			Result.RasterSuppressionSetupMicroseconds = PassTimings.RasterSuppressionMicroseconds;
+			Result.CombinePassSetupMicroseconds = PassTimings.CombineMicroseconds;
+			Result.PersistentMaskBytes = 256ull * 256ull;
+			Result.ScratchMaskBytes = Packet.GetIndices().IsEmpty() ? 0ull : 4ull * 256ull * 256ull;
+			Result.PacketBufferBytes =
+				static_cast<uint64>(Packet.GetVertices().Num()) * sizeof(FVector2f)
+				+ static_cast<uint64>(Packet.GetIndices().Num()) * sizeof(uint32);
+			if (PollState->bGPUTimestampsIssued)
+			{
+				uint64 GPUStartMicroseconds = 0;
+				uint64 GPUEndMicroseconds = 0;
+				if (RHIGetRenderQueryResult(
+						PollState->GPUStartQuery.GetReference(),
+						GPUStartMicroseconds,
+						false)
+					&& RHIGetRenderQueryResult(
+						PollState->GPUEndQuery.GetReference(),
+						GPUEndMicroseconds,
+						false)
+					&& GPUEndMicroseconds >= GPUStartMicroseconds)
+				{
+					Result.bGPUTimestampAvailable = true;
+					Result.GPUWorkMicroseconds =
+						static_cast<double>(GPUEndMicroseconds - GPUStartMicroseconds);
+				}
+			}
+			Result.ReadbackEndToEndMicroseconds =
+				(FPlatformTime::Seconds() - PollState->StartSeconds) * 1000000.0;
 			Result.TileCoordinate = Packet.GetTileCoordinate();
 			Result.Width = SightWeave::RenderPacket::PhysicalTileSize;
 			Result.Height = SightWeave::RenderPacket::PhysicalTileSize;

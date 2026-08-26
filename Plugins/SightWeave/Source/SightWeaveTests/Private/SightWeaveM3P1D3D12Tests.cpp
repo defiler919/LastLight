@@ -29,6 +29,8 @@ namespace SightWeave::M3P1::D3D12Tests
 		TArray<FLayerPolygon> Polygons;
 		bool bExpectDiscardedStale = false;
 		uint64 ExpectedDispatchCount = 1;
+		uint64 ExpectedDuplicateCount = 0;
+		uint64 ExpectedStaleCount = 0;
 	};
 
 	struct FCaseContext
@@ -253,6 +255,14 @@ namespace SightWeave::M3P1::D3D12Tests
 			TEXT("PF_G8 lacks required Texture2D/RTV/SRV capabilities"));
 		Check(Result.RasterDispatchCount == Expected.ExpectedDispatchCount,
 			TEXT("unexpected redraw dispatch count"));
+		Check(Result.DuplicatePacketCount == Expected.ExpectedDuplicateCount,
+			TEXT("unexpected duplicate packet count"));
+		Check(Result.StalePacketCount == Expected.ExpectedStaleCount,
+			TEXT("unexpected stale packet count"));
+		Check(!Result.bNoChangeProducedMaskWork,
+			TEXT("no-change consume unexpectedly produced mask work"));
+		Check(Result.bGPUTimestampAvailable,
+			TEXT("D3D12 absolute GPU timestamp was unavailable"));
 		if (!bSuccess)
 		{
 			return false;
@@ -309,6 +319,30 @@ namespace SightWeave::M3P1::D3D12Tests
 			BoundaryMismatchCount,
 			Result.RowPitchInPixels,
 			Result.bPF_G8UAV ? TEXT("true") : TEXT("false")));
+		Test->AddInfo(FString::Printf(
+			TEXT("M3P1_PRELIMINARY_TIMING case=%s gt_submit_us=%.3f rt_consume_us=%.3f rt_rdg_setup_us=%.3f clear_setup_us=%.3f raster_vision_setup_us=%.3f raster_illumination_setup_us=%.3f raster_bypass_setup_us=%.3f raster_suppression_setup_us=%.3f combine_setup_us=%.3f gpu_mask_us=%.3f readback_e2e_us=%.3f no_change_mask_work=%s duplicate=%llu stale=%llu"),
+			*CaseName,
+			Result.GameThreadSubmitMicroseconds,
+			Result.RenderThreadConsumeMicroseconds,
+			Result.RenderThreadRDGSetupMicroseconds,
+			Result.ClearPassSetupMicroseconds,
+			Result.RasterVisionSetupMicroseconds,
+			Result.RasterIlluminationSetupMicroseconds,
+			Result.RasterBypassSetupMicroseconds,
+			Result.RasterSuppressionSetupMicroseconds,
+			Result.CombinePassSetupMicroseconds,
+			Result.GPUWorkMicroseconds,
+			Result.ReadbackEndToEndMicroseconds,
+			Result.bNoChangeProducedMaskWork ? TEXT("true") : TEXT("false"),
+			Result.DuplicatePacketCount,
+			Result.StalePacketCount));
+		Test->AddInfo(FString::Printf(
+			TEXT("M3P1_PRELIMINARY_CAPACITY case=%s persistent_mask_bytes=%llu scratch_mask_bytes=%llu packet_buffer_bytes=%llu peak_mask_bytes=%llu"),
+			*CaseName,
+			Result.PersistentMaskBytes,
+			Result.ScratchMaskBytes,
+			Result.PacketBufferBytes,
+			Result.PersistentMaskBytes + Result.ScratchMaskBytes));
 		return bSuccess;
 	}
 
@@ -408,6 +442,7 @@ namespace SightWeave::M3P1::D3D12Tests
 				Expected.Expectation = ExpectationFor(*Revision2);
 				Expected.PhysicalBounds = Bounds;
 				Expected.Polygons = MoveTemp(Revision2Geometry);
+				Expected.ExpectedStaleCount = 1;
 			}
 		}
 		else if (Name == TEXT("DuplicateNoRedispatch"))
@@ -422,6 +457,7 @@ namespace SightWeave::M3P1::D3D12Tests
 				Expected.Expectation = ExpectationFor(*Packet);
 				Expected.PhysicalBounds = Bounds;
 				Expected.Polygons = MoveTemp(Geometry);
+				Expected.ExpectedDuplicateCount = 1;
 			}
 		}
 		else if (Name == TEXT("SourceDeleteClearBlack"))

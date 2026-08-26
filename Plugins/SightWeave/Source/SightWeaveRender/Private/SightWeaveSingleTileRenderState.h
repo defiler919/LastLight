@@ -7,6 +7,18 @@
 class FRDGBuilder;
 struct IPooledRenderTarget;
 
+#if WITH_DEV_AUTOMATION_TESTS
+struct FSightWeaveRenderPassSetupTimings
+{
+	double ClearMicroseconds = 0.0;
+	double RasterVisionMicroseconds = 0.0;
+	double RasterIlluminationMicroseconds = 0.0;
+	double RasterBypassMicroseconds = 0.0;
+	double RasterSuppressionMicroseconds = 0.0;
+	double CombineMicroseconds = 0.0;
+};
+#endif
+
 class FSightWeaveSingleTileRenderState final
 {
 public:
@@ -22,6 +34,15 @@ public:
 	uint64 GetAppliedRevision_RenderThread() const { return AppliedRevision; }
 	uint64 GetRasterDispatchCount_RenderThread() const { return RasterDispatchCount; }
 	uint64 GetResourceGeneration_RenderThread() const { return ResourceGeneration; }
+	uint64 GetDuplicatePacketCount_RenderThread() const { return DuplicatePacketCount; }
+	uint64 GetStalePacketCount_RenderThread() const { return StalePacketCount; }
+	uint64 GetRejectedPacketCount_RenderThread() const { return RejectedPacketCount; }
+#if WITH_DEV_AUTOMATION_TESTS
+	const FSightWeaveRenderPassSetupTimings& GetLastPassSetupTimings_RenderThread() const
+	{
+		return LastPassSetupTimings;
+	}
+#endif
 
 private:
 	bool CheckCapabilities_RenderThread();
@@ -45,4 +66,7 @@ private:
 	ESightWeaveRenderAvailability Availability = ESightWeaveRenderAvailability::Unknown;
 	bool bPendingForceBlack = false;
 	bool bReleased = false;
+#if WITH_DEV_AUTOMATION_TESTS
+	FSightWeaveRenderPassSetupTimings LastPassSetupTimings;
+#endif
 };

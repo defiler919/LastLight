@@ -1267,7 +1267,14 @@ bool FSightWeaveSparseAtlasRenderState::AddFeatherTilePasses_RenderThread(
 
 	FRDGTextureRef CurrentSeeds = ScratchA;
 	FRDGTextureRef NextSeeds = ScratchB;
-	for (int32 JumpStep = 256; JumpStep >= 1; JumpStep >>= 1)
+	const int32 FeatherRadiusTexels = FMath::Clamp(
+		FMath::CeilToInt(
+			PresentationSelection.GetVisualFeather().WidthCentimeters
+			/ Tile.CentimetersPerTexel),
+		1,
+		SightWeave::VisualFeather::MaximumRadiusTexels);
+	const int32 FirstJumpStep = FMath::RoundUpToPowerOfTwo(FeatherRadiusTexels);
+	for (int32 JumpStep = FirstJumpStep; JumpStep >= 1; JumpStep >>= 1)
 	{
 		TShaderMapRef<FSightWeaveFeatherJumpPixelShader> JumpShader(
 			GetGlobalShaderMap(GMaxRHIFeatureLevel));

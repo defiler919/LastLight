@@ -1,5 +1,6 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Algo/AllOf.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/AutomationTest.h"
 #include "SightWeavePresentationBenchmark.h"
@@ -16,6 +17,7 @@ namespace SightWeave::M3P3::D3D12Tests
 	{
 		ESightWeaveRenderMaskLayer Layer = ESightWeaveRenderMaskLayer::Vision;
 		int64 StableId = 0;
+		uint64 SourceRevision = 1;
 		TArray<FVector2D> Vertices;
 	};
 
@@ -72,14 +74,17 @@ namespace SightWeave::M3P3::D3D12Tests
 		FAutomationTestBase* Test,
 		const uint64 WorldSerial,
 		const TArray<FPolygon>& Polygons,
-		const int32 Capacity = SightWeave::SparseAtlas::StandardActiveTileCapacity)
+		const int32 Capacity = SightWeave::SparseAtlas::StandardActiveTileCapacity,
+		const uint64 PacketRevision = 1,
+		TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> PreviousPacket = nullptr)
 	{
 		const FSightWeaveRenderProfileIdentity CompatibilityProfile = Profile();
 		FSightWeaveSparseRenderPacketBuildInput Input;
 		Input.WorldIdentity.Serial = WorldSerial;
-		Input.PacketRevision = 1;
-		Input.RegistryRevision = 2;
-		Input.PublishedSnapshotRevision = 3;
+		Input.PacketRevision = PacketRevision;
+		Input.RegistryRevision = PacketRevision + 1;
+		Input.PublishedSnapshotRevision = PacketRevision + 2;
+		Input.PreviousPacket = MoveTemp(PreviousPacket);
 		FSightWeaveSparseScopeBuildInput& Scope = Input.Scopes.AddDefaulted_GetRef();
 		Scope.KnowledgeOwnerId = FSightWeaveKnowledgeOwnerId(FName(TEXT("PresentationOwner")));
 		Scope.FloorId = FSightWeaveFloorId(FName(TEXT("PresentationFloor")));
@@ -89,7 +94,7 @@ namespace SightWeave::M3P3::D3D12Tests
 		{
 			FSightWeaveSparsePolygonInput& Destination = Scope.Polygons.AddDefaulted_GetRef();
 			Destination.StableSourceId = Source.StableId;
-			Destination.SourceRevision = 1;
+			Destination.SourceRevision = Source.SourceRevision;
 			Destination.Layer = Source.Layer;
 			Destination.CompatibilityProfile = CompatibilityProfile;
 			Destination.WorldVertices = Source.Vertices;
@@ -314,6 +319,9 @@ namespace SightWeave::M3P3::D3D12Tests
 		double StartSeconds = FPlatformTime::Seconds();
 		int32 SourceCount = 0;
 		int32 ResidentTileCount = 0;
+		float FeatherWidthCentimeters = 0.0f;
+		FString UpdateMode = TEXT("NoChange");
+		double PacketBuildP95Microseconds = 0.0;
 		FIntPoint Extent = FIntPoint::ZeroValue;
 		TSharedPtr<FSightWeavePresentationBenchmark, ESPMode::ThreadSafe> Request;
 	};
@@ -328,11 +336,15 @@ namespace SightWeave::M3P3::D3D12Tests
 
 	TSharedPtr<FBenchmarkContext> BuildBenchmarkCase(
 		FAutomationTestBase* Test,
-		const FString& Name)
+		const FString& Name,
+		const float FeatherWidthCentimeters = 0.0f,
+		const FString& UpdateMode = TEXT("NoChange"))
 	{
 		const TSharedPtr<FBenchmarkContext> Context = MakeShared<FBenchmarkContext>();
 		Context->Name = Name;
-		const bool b1440 = Name.StartsWith(TEXT("1440p"));
+		Context->FeatherWidthCentimeters = FeatherWidthCentimeters;
+		Context->UpdateMode = UpdateMode;
+		const bool b1440 = Name.Contains(TEXT("1440p"));
 		Context->Extent = b1440 ? FIntPoint(2560, 1440) : FIntPoint(1920, 1080);
 		if (Name.EndsWith(TEXT("Tiles1Sources2")))
 		{
@@ -419,17 +431,62 @@ namespace SightWeave::M3P3::D3D12Tests
 				FSightWeaveKnowledgeOwnerId(FName(TEXT("PresentationOwner"))),
 				FSightWeaveFloorId(FName(TEXT("PresentationFloor"))),
 				ESightWeaveRenderPrecisionTier::Standard,
-				1);
+				1,
+				FSightWeaveVisualFeatherSettings{ FeatherWidthCentimeters });
 		const FVector2f WorldStep(
 			static_cast<float>(Context->ResidentTileCount * Span / Context->Extent.X),
 			1000.0f / static_cast<float>(Context->Extent.Y));
+		TArray<TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe>> WarmPackets;
+		TArray<double> PacketBuildSamples;
+		if (UpdateMode != TEXT("NoChange"))
+		{
+			constexpr int32 UpdateSampleCount = 64;
+			WarmPackets.Reserve(UpdateSampleCount);
+			PacketBuildSamples.Reserve(UpdateSampleCount);
+			TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Previous = Packet;
+			for (int32 SampleIndex = 0; SampleIndex < UpdateSampleCount; ++SampleIndex)
+			{
+				TArray<FPolygon> UpdatedPolygons = Polygons;
+				const bool bAlternate = (SampleIndex & 1) != 0;
+				int32 ModifiedSourceCount = 1;
+				if (UpdateMode == TEXT("Dirty8"))
+				{
+					ModifiedSourceCount = FMath::Min(8, UpdatedPolygons.Num());
+				}
+				for (int32 SourceIndex = 0; SourceIndex < ModifiedSourceCount; ++SourceIndex)
+				{
+					FPolygon& Updated = UpdatedPolygons[SourceIndex];
+					const double Offset = bAlternate ? 12.0 : -12.0;
+					for (FVector2D& Vertex : Updated.Vertices)
+					{
+						Vertex.Y += Offset;
+					}
+					Updated.SourceRevision = static_cast<uint64>(SampleIndex + 2);
+				}
+				const double PacketBuildStart = FPlatformTime::Seconds();
+				const TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> UpdatedPacket =
+					BuildPacket(Test, WorldSerial, UpdatedPolygons, 128,
+						static_cast<uint64>(SampleIndex + 2), Previous);
+				PacketBuildSamples.Add((FPlatformTime::Seconds() - PacketBuildStart) * 1000000.0);
+				if (!UpdatedPacket.IsValid())
+				{
+					break;
+				}
+				WarmPackets.Add(UpdatedPacket);
+				Previous = UpdatedPacket;
+			}
+			Context->PacketBuildP95Microseconds = Percentile95(PacketBuildSamples);
+			Test->TestTrue(TEXT("GT packet build and dirty expansion p95 remains below 0.25 ms"),
+				Context->PacketBuildP95Microseconds < 250.0);
+		}
 		Context->Request = FSightWeavePresentationBenchmark::Start(
 			Packet,
 			Selection,
 			Context->Extent,
 			FVector2f::ZeroVector,
 			WorldStep,
-			64);
+			64,
+			MoveTemp(WarmPackets));
 		return Context;
 	}
 
@@ -470,52 +527,112 @@ namespace SightWeave::M3P3::D3D12Tests
 				return true;
 			}
 			const double ViewSetupP95 = Percentile95(Result.WarmRenderThreadViewSetupMicroseconds);
+			const double PacketSubmitP95 = Percentile95(Result.WarmRenderThreadPacketSubmitMicroseconds);
+			const double MaskSetupP95 = Percentile95(Result.WarmRenderThreadMaskSetupMicroseconds);
+			const double FeatherSetupP95 = Percentile95(Result.WarmRenderThreadFeatherSetupMicroseconds);
 			const double CompositeSetupP95 = Percentile95(Result.WarmRenderThreadCompositeSetupMicroseconds);
+			const double GPUFeatherP95 = Percentile95(Result.WarmGPUFeatherMicroseconds);
 			const double GPUP95 = Percentile95(Result.WarmGPUCompositeMicroseconds);
+			const double GPUTotalP95 = Percentile95(Result.WarmGPUTotalMicroseconds);
 			const double ResolutionBudget = Context->Extent.Y == 1080 ? 1000.0 : 1500.0;
 			const double PressureBudget = Context->Extent.Y == 1080 ? 2000.0 : 3000.0;
 			Test->TestEqual(TEXT("Expected resident tile count"), Result.ResidentTileCount,
 				Context->ResidentTileCount);
-			Test->TestEqual(TEXT("Camera/view-only setup does not re-upload page table"),
-				Result.FinalPageTableUploadCount, Result.InitialPageTableUploadCount);
-			Test->TestEqual(TEXT("Warmed composite does not allocate atlas pages"),
-				Result.FinalPageAllocationCount, Result.InitialPageAllocationCount);
-			Test->TestEqual(TEXT("Warmed composite does not allocate scratch textures"),
-				Result.FinalScratchAllocationCount, Result.InitialScratchAllocationCount);
-			Test->TestEqual(TEXT("Warmed composite does not regenerate persistent resources"),
-				Result.FinalResourceGeneration, Result.InitialResourceGeneration);
+			if (Context->UpdateMode == TEXT("NoChange"))
+			{
+				Test->TestEqual(TEXT("Camera/view-only setup does not re-upload page table"),
+					Result.FinalPageTableUploadCount, Result.InitialPageTableUploadCount);
+				Test->TestEqual(TEXT("Warmed composite does not allocate atlas pages"),
+					Result.FinalPageAllocationCount, Result.InitialPageAllocationCount);
+				Test->TestEqual(TEXT("Warmed composite does not allocate scratch textures"),
+					Result.FinalScratchAllocationCount, Result.InitialScratchAllocationCount);
+				Test->TestEqual(TEXT("Warmed composite does not regenerate persistent resources"),
+					Result.FinalResourceGeneration, Result.InitialResourceGeneration);
+				Test->TestTrue(TEXT("Warmed no-change does not dispatch Feather work"),
+					Algo::AllOf(Result.WarmFeatherTileDispatchCounts,
+						[](const uint64 Count) { return Count == 0; }));
+			}
+			else
+			{
+				const int32 ExpectedDirtyTiles = Context->UpdateMode == TEXT("Dirty8") ? 8 : 1;
+				Test->TestTrue(TEXT("Incremental packets contain the requested dirty tile count"),
+					Algo::AllOf(Result.WarmRequestedDirtyTileCounts,
+						[ExpectedDirtyTiles](const int32 Count) { return Count == ExpectedDirtyTiles; }));
+				if (Context->FeatherWidthCentimeters > 0.0f)
+				{
+					Test->TestTrue(TEXT("Incremental changes dispatch bounded Feather work"),
+						Algo::AllOf(Result.WarmFeatherTileDispatchCounts,
+							[](const uint64 Count) { return Count > 0 && Count <= 128; }));
+				}
+			}
+			if (Context->FeatherWidthCentimeters == 0.0f)
+			{
+				Test->TestEqual(TEXT("Width zero allocates no Feather pages"),
+					Result.AllocatedFeatherPageCount, 0);
+				Test->TestEqual(TEXT("Width zero allocates no Feather scratch"),
+					Result.FeatherScratchAllocationCount, uint64(0));
+				Test->TestEqual(TEXT("Width zero dispatches no Feather tiles"),
+					Result.FinalFeatherTileDispatchCount, uint64(0));
+			}
+			else
+			{
+				Test->TestTrue(TEXT("Enabled Feather allocates derived pages"),
+					Result.AllocatedFeatherPageCount > 0);
+				Test->TestTrue(TEXT("Enabled Feather allocates two bounded scratch textures"),
+					Result.FeatherScratchAllocationCount == 2);
+			}
 			Test->TestTrue(TEXT("GT submit remains below 0.25 ms"),
 				Result.GameThreadSubmitMicroseconds < 250.0);
+			Test->TestTrue(TEXT("RT packet submit remains below 0.20 ms"), PacketSubmitP95 < 200.0);
+			Test->TestTrue(TEXT("RT mask dirty setup remains below 0.20 ms"), MaskSetupP95 < 200.0);
+			Test->TestTrue(TEXT("RT Feather setup remains below 0.20 ms"), FeatherSetupP95 < 200.0);
 			Test->TestTrue(TEXT("RT warmed composite setup remains below 0.20 ms"),
 				CompositeSetupP95 < 200.0);
-			Test->TestTrue(TEXT("Warmed composite meets resolution budget"), GPUP95 < ResolutionBudget);
+			Test->TestTrue(TEXT("Warmed mask/Feather/composite meets resolution budget"),
+				GPUTotalP95 < ResolutionBudget);
 			if (Context->SourceCount == 32)
 			{
-				Test->TestTrue(TEXT("32-source pressure meets advised budget"), GPUP95 < PressureBudget);
+				Test->TestTrue(TEXT("32-source pressure meets advised budget"),
+					GPUTotalP95 < PressureBudget);
 			}
 			Test->TestTrue(TEXT("Persistent live-mask allocation stays below 32 MiB"),
 				Result.PersistentGPUBytes <= 32ull * 1024ull * 1024ull);
 			UE_LOG(LogTemp, Display,
-				TEXT("M3P3_PERF case=%s resolution=%dx%d sources=%d residents=%d warm_samples=%d gt_submit_us=%.3f rt_bind_submit_us=%.3f cold_rt_setup_us=%.3f cold_gpu_total_us=%.3f warm_view_setup_p95_us=%.3f warm_composite_setup_p95_us=%.3f warm_gpu_composite_p95_us=%.3f pages=%d persistent_bytes=%llu transient_output_bytes=%llu page_uploads=%llu allocations=%llu/%llu resource_generation=%llu"),
+				TEXT("M3P4_PERF case=%s mode=%s width_cm=%.1f resolution=%dx%d sources=%d residents=%d warm_samples=%d gt_submit_us=%.3f gt_packet_build_p95_us=%.3f rt_bind_submit_us=%.3f cold_rt_setup_us=%.3f cold_gpu_feather_us=%.3f cold_gpu_composite_us=%.3f cold_gpu_total_us=%.3f warm_packet_submit_p95_us=%.3f warm_mask_setup_p95_us=%.3f warm_view_setup_p95_us=%.3f warm_feather_setup_p95_us=%.3f warm_composite_setup_p95_us=%.3f warm_gpu_feather_p95_us=%.3f warm_gpu_composite_p95_us=%.3f warm_gpu_total_p95_us=%.3f pages=%d feather_pages=%d persistent_bytes=%llu transient_output_bytes=%llu page_uploads=%llu allocations=%llu/%llu feather_allocations=%llu/%llu feather_dispatches=%llu/%llu resource_generation=%llu"),
 				*Context->Name,
+				*Context->UpdateMode,
+				Context->FeatherWidthCentimeters,
 				Context->Extent.X,
 				Context->Extent.Y,
 				Context->SourceCount,
 				Result.ResidentTileCount,
 				Result.WarmGPUCompositeMicroseconds.Num(),
 				Result.GameThreadSubmitMicroseconds,
+				Context->PacketBuildP95Microseconds,
 				Result.RenderThreadBindingSubmitMicroseconds,
 				Result.ColdRenderThreadSetupMicroseconds,
+				Result.ColdGPUFeatherMicroseconds,
+				Result.ColdGPUCompositeMicroseconds,
 				Result.ColdGPUTotalMicroseconds,
+				PacketSubmitP95,
+				MaskSetupP95,
 				ViewSetupP95,
+				FeatherSetupP95,
 				CompositeSetupP95,
+				GPUFeatherP95,
 				GPUP95,
+				GPUTotalP95,
 				Result.AllocatedPageCount,
+				Result.AllocatedFeatherPageCount,
 				Result.PersistentGPUBytes,
 				Result.TransientOutputBytes,
 				Result.FinalPageTableUploadCount,
 				Result.FinalPageAllocationCount,
 				Result.FinalScratchAllocationCount,
+				Result.FeatherPageAllocationCount,
+				Result.FeatherScratchAllocationCount,
+				Result.InitialFeatherTileDispatchCount,
+				Result.FinalFeatherTileDispatchCount,
 				Result.FinalResourceGeneration);
 			return true;
 		}
@@ -586,6 +703,74 @@ bool FSightWeaveM3P3D3D12PresentationPerformanceTest::RunTest(const FString& Par
 {
 	using namespace SightWeave::M3P3::D3D12Tests;
 	const TSharedPtr<FBenchmarkContext> Context = BuildBenchmarkCase(this, Parameters);
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPresentationBenchmark(Context, this));
+	return true;
+}
+
+IMPLEMENT_COMPLEX_AUTOMATION_TEST(
+	FSightWeaveM3P4D3D12FeatherPresentationPerformanceTest,
+	"SightWeave.M3P4.D3D12.FeatherPresentationPerformance",
+	SightWeave::M3P3::D3D12Tests::TestFlags)
+
+void FSightWeaveM3P4D3D12FeatherPresentationPerformanceTest::GetTests(
+	TArray<FString>& OutBeautifiedNames,
+	TArray<FString>& OutTestCommands) const
+{
+	static const TCHAR* Cases[] = {
+		TEXT("Width0.1080p.Tiles1Sources2"),
+		TEXT("Width0.1080p.Tiles8Sources8"),
+		TEXT("Width0.1080p.Tiles128Sources32"),
+		TEXT("Width0.1440p.Tiles1Sources2"),
+		TEXT("Width0.1440p.Tiles8Sources8"),
+		TEXT("Width0.1440p.Tiles128Sources32"),
+		TEXT("Width50.1080p.Tiles1Sources2"),
+		TEXT("Width50.1080p.Tiles8Sources8"),
+		TEXT("Width50.1080p.Tiles128Sources32"),
+		TEXT("Width50.1440p.Tiles1Sources2"),
+		TEXT("Width50.1440p.Tiles8Sources8"),
+		TEXT("Width50.1440p.Tiles128Sources32"),
+		TEXT("Width100.1080p.Tiles1Sources2"),
+		TEXT("Width100.1080p.Tiles8Sources8"),
+		TEXT("Width100.1080p.Tiles128Sources32"),
+		TEXT("Width100.1440p.Tiles1Sources2"),
+		TEXT("Width100.1440p.Tiles8Sources8"),
+		TEXT("Width100.1440p.Tiles128Sources32"),
+		TEXT("Width50.1080p.Dirty1.Tiles1Sources2"),
+		TEXT("Width50.1080p.Dirty8.Tiles8Sources8"),
+		TEXT("Width50.1080p.DynamicContinuous.Tiles8Sources8")
+	};
+	for (const TCHAR* Case : Cases)
+	{
+		OutBeautifiedNames.Add(Case);
+		OutTestCommands.Add(Case);
+	}
+}
+
+bool FSightWeaveM3P4D3D12FeatherPresentationPerformanceTest::RunTest(
+	const FString& Parameters)
+{
+	using namespace SightWeave::M3P3::D3D12Tests;
+	const float FeatherWidth = Parameters.StartsWith(TEXT("Width100"))
+		? 100.0f
+		: Parameters.StartsWith(TEXT("Width50")) ? 50.0f : 0.0f;
+	FString UpdateMode = TEXT("NoChange");
+	if (Parameters.Contains(TEXT("DynamicContinuous")))
+	{
+		UpdateMode = TEXT("DynamicContinuous");
+	}
+	else if (Parameters.Contains(TEXT("Dirty8")))
+	{
+		UpdateMode = TEXT("Dirty8");
+	}
+	else if (Parameters.Contains(TEXT("Dirty1")))
+	{
+		UpdateMode = TEXT("Dirty1");
+	}
+	const TSharedPtr<FBenchmarkContext> Context = BuildBenchmarkCase(
+		this,
+		Parameters,
+		FeatherWidth,
+		UpdateMode);
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPresentationBenchmark(Context, this));
 	return true;
 }

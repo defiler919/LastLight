@@ -63,13 +63,18 @@ struct FSightWeavePresentationBenchmark::FState final
 	FVector2f WorldMin = FVector2f::ZeroVector;
 	FVector2f WorldStep = FVector2f::ZeroVector;
 	int32 WarmSampleCount = 0;
+	TArray<TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe>> WarmPackets;
 	FCriticalSection ResultGuard;
 	FSightWeavePresentationBenchmarkResult Result;
 	TAtomic<bool> bPollQueued{ false };
 	TAtomic<bool> bFinished{ false };
 	TUniquePtr<FSightWeaveSparseAtlasRenderState> RenderState;
 	FQueryPair ColdQueries;
+	FQueryPair ColdFeatherQueries;
+	FQueryPair ColdCompositeQueries;
 	TArray<FQueryPair> WarmQueries;
+	TArray<FQueryPair> WarmFeatherQueries;
+	TArray<FQueryPair> WarmCompositeQueries;
 	double StartSeconds = FPlatformTime::Seconds();
 
 	void Finish(FSightWeavePresentationBenchmarkResult&& InResult)
@@ -93,7 +98,8 @@ FSightWeavePresentationBenchmark::Start(
 	const FIntPoint OutputExtent,
 	const FVector2f TestWorldMin,
 	const FVector2f TestWorldStep,
-	const int32 WarmSampleCount)
+	const int32 WarmSampleCount,
+	TArray<TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe>> WarmPackets)
 {
 	check(IsInGameThread());
 	const double GTStartSeconds = FPlatformTime::Seconds();
@@ -104,6 +110,7 @@ FSightWeavePresentationBenchmark::Start(
 	NewState->WorldMin = TestWorldMin;
 	NewState->WorldStep = TestWorldStep;
 	NewState->WarmSampleCount = FMath::Max(1, WarmSampleCount);
+	NewState->WarmPackets = MoveTemp(WarmPackets);
 	NewState->Result.OutputExtent = OutputExtent;
 	const TSharedRef<FSightWeavePresentationBenchmark, ESPMode::ThreadSafe> Request =
 		MakeShareable(new FSightWeavePresentationBenchmark(NewState));
@@ -137,6 +144,10 @@ FSightWeavePresentationBenchmark::Start(
 
 			NewState->ColdQueries.Start = RHICreateRenderQuery(RQT_AbsoluteTime);
 			NewState->ColdQueries.End = RHICreateRenderQuery(RQT_AbsoluteTime);
+			NewState->ColdFeatherQueries.Start = RHICreateRenderQuery(RQT_AbsoluteTime);
+			NewState->ColdFeatherQueries.End = RHICreateRenderQuery(RQT_AbsoluteTime);
+			NewState->ColdCompositeQueries.Start = RHICreateRenderQuery(RQT_AbsoluteTime);
+			NewState->ColdCompositeQueries.End = RHICreateRenderQuery(RQT_AbsoluteTime);
 			if (!NewState->ColdQueries.Start.IsValid() || !NewState->ColdQueries.End.IsValid())
 			{
 				Result.Status = ESightWeavePresentationReadbackStatus::Failed;
@@ -152,7 +163,10 @@ FSightWeavePresentationBenchmark::Start(
 			const double ColdSetupStart = FPlatformTime::Seconds();
 			NewState->RenderState->ProcessPending_RenderThread(ColdGraph);
 			NewState->RenderState->PreparePresentationResources_RenderThread(ColdGraph);
+			AddTimestampStart(ColdGraph, NewState->ColdFeatherQueries.Start);
 			NewState->RenderState->ProcessVisualFeather_RenderThread(ColdGraph);
+			AddTimestampStart(ColdGraph, NewState->ColdFeatherQueries.End);
+			AddTimestampStart(ColdGraph, NewState->ColdCompositeQueries.Start);
 			FRDGTextureRef ColdOutput = NewState->RenderState->AddPresentationBenchmarkComposite_RenderThread(
 				ColdGraph, NewState->OutputExtent, NewState->WorldMin, NewState->WorldStep);
 			Result.ColdRenderThreadSetupMicroseconds =
@@ -167,6 +181,7 @@ FSightWeavePresentationBenchmark::Start(
 				NewState->Finish(MoveTemp(Result));
 				return;
 			}
+			AddTimestampEnd(ColdGraph, NewState->ColdCompositeQueries.End, ColdOutput);
 			AddTimestampEnd(ColdGraph, NewState->ColdQueries.End, ColdOutput);
 			ColdGraph.Execute();
 
@@ -182,13 +197,26 @@ FSightWeavePresentationBenchmark::Start(
 				NewState->RenderState->GetAllocatedFeatherPageCount_RenderThread();
 
 			NewState->WarmQueries.SetNum(NewState->WarmSampleCount);
+			NewState->WarmFeatherQueries.SetNum(NewState->WarmSampleCount);
+			NewState->WarmCompositeQueries.SetNum(NewState->WarmSampleCount);
+			Result.WarmRenderThreadPacketSubmitMicroseconds.Reserve(NewState->WarmSampleCount);
+			Result.WarmRenderThreadMaskSetupMicroseconds.Reserve(NewState->WarmSampleCount);
+			Result.WarmRenderThreadFeatherSetupMicroseconds.Reserve(NewState->WarmSampleCount);
 			Result.WarmRenderThreadViewSetupMicroseconds.Reserve(NewState->WarmSampleCount);
 			Result.WarmRenderThreadCompositeSetupMicroseconds.Reserve(NewState->WarmSampleCount);
+			Result.WarmRequestedDirtyTileCounts.Reserve(NewState->WarmSampleCount);
+			Result.WarmFeatherTileDispatchCounts.Reserve(NewState->WarmSampleCount);
 			for (int32 Index = 0; Index < NewState->WarmSampleCount; ++Index)
 			{
 				FQueryPair& Queries = NewState->WarmQueries[Index];
+				FQueryPair& FeatherQueries = NewState->WarmFeatherQueries[Index];
+				FQueryPair& CompositeQueries = NewState->WarmCompositeQueries[Index];
 				Queries.Start = RHICreateRenderQuery(RQT_AbsoluteTime);
 				Queries.End = RHICreateRenderQuery(RQT_AbsoluteTime);
+				FeatherQueries.Start = RHICreateRenderQuery(RQT_AbsoluteTime);
+				FeatherQueries.End = RHICreateRenderQuery(RQT_AbsoluteTime);
+				CompositeQueries.Start = RHICreateRenderQuery(RQT_AbsoluteTime);
+				CompositeQueries.End = RHICreateRenderQuery(RQT_AbsoluteTime);
 				if (!Queries.Start.IsValid() || !Queries.End.IsValid())
 				{
 					Result.Status = ESightWeavePresentationReadbackStatus::Failed;
@@ -198,17 +226,47 @@ FSightWeavePresentationBenchmark::Start(
 					NewState->Finish(MoveTemp(Result));
 					return;
 				}
+				const TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> WarmPacket =
+					NewState->WarmPackets.IsEmpty()
+						? nullptr
+						: NewState->WarmPackets[Index % NewState->WarmPackets.Num()];
+				const double PacketSubmitStart = FPlatformTime::Seconds();
+				if (WarmPacket.IsValid())
+				{
+					NewState->RenderState->SubmitPacket_RenderThread(WarmPacket);
+				}
+				Result.WarmRenderThreadPacketSubmitMicroseconds.Add(
+					(FPlatformTime::Seconds() - PacketSubmitStart) * 1000000.0);
+				Result.WarmRequestedDirtyTileCounts.Add(
+					WarmPacket.IsValid() ? WarmPacket->GetDirtyTileIndices().Num() : 0);
 				FRDGBuilder WarmGraph(RHICmdList, RDG_EVENT_NAME("SightWeave.Presentation.BenchmarkWarm"));
 				AddTimestampStart(WarmGraph, Queries.Start);
+				const double MaskSetupStart = FPlatformTime::Seconds();
+				NewState->RenderState->ProcessPending_RenderThread(WarmGraph);
+				Result.WarmRenderThreadMaskSetupMicroseconds.Add(
+					(FPlatformTime::Seconds() - MaskSetupStart) * 1000000.0);
 				const double ViewSetupStart = FPlatformTime::Seconds();
 				NewState->RenderState->PreparePresentationResources_RenderThread(WarmGraph);
 				Result.WarmRenderThreadViewSetupMicroseconds.Add(
 					(FPlatformTime::Seconds() - ViewSetupStart) * 1000000.0);
+				const uint64 FeatherDispatchStart =
+					NewState->RenderState->GetFeatherTileDispatchCount_RenderThread();
+				AddTimestampStart(WarmGraph, FeatherQueries.Start);
+				const double FeatherSetupStart = FPlatformTime::Seconds();
+				NewState->RenderState->ProcessVisualFeather_RenderThread(WarmGraph);
+				Result.WarmRenderThreadFeatherSetupMicroseconds.Add(
+					(FPlatformTime::Seconds() - FeatherSetupStart) * 1000000.0);
+				AddTimestampStart(WarmGraph, FeatherQueries.End);
+				Result.WarmFeatherTileDispatchCounts.Add(
+					NewState->RenderState->GetFeatherTileDispatchCount_RenderThread()
+						- FeatherDispatchStart);
+				AddTimestampStart(WarmGraph, CompositeQueries.Start);
 				const double CompositeSetupStart = FPlatformTime::Seconds();
 				FRDGTextureRef Output = NewState->RenderState->AddPresentationBenchmarkComposite_RenderThread(
 					WarmGraph, NewState->OutputExtent, NewState->WorldMin, NewState->WorldStep);
 				Result.WarmRenderThreadCompositeSetupMicroseconds.Add(
 					(FPlatformTime::Seconds() - CompositeSetupStart) * 1000000.0);
+				AddTimestampEnd(WarmGraph, CompositeQueries.End, Output);
 				AddTimestampEnd(WarmGraph, Queries.End, Output);
 				WarmGraph.Execute();
 			}
@@ -258,32 +316,65 @@ void FSightWeavePresentationBenchmark::Poll()
 			}
 			uint64 ColdStart = 0;
 			uint64 ColdEnd = 0;
+			uint64 ColdFeatherStart = 0;
+			uint64 ColdFeatherEnd = 0;
+			uint64 ColdCompositeStart = 0;
+			uint64 ColdCompositeEnd = 0;
 			if (!RHIGetRenderQueryResult(PollState->ColdQueries.Start.GetReference(), ColdStart, false)
-				|| !RHIGetRenderQueryResult(PollState->ColdQueries.End.GetReference(), ColdEnd, false))
+				|| !RHIGetRenderQueryResult(PollState->ColdQueries.End.GetReference(), ColdEnd, false)
+				|| !RHIGetRenderQueryResult(PollState->ColdFeatherQueries.Start.GetReference(), ColdFeatherStart, false)
+				|| !RHIGetRenderQueryResult(PollState->ColdFeatherQueries.End.GetReference(), ColdFeatherEnd, false)
+				|| !RHIGetRenderQueryResult(PollState->ColdCompositeQueries.Start.GetReference(), ColdCompositeStart, false)
+				|| !RHIGetRenderQueryResult(PollState->ColdCompositeQueries.End.GetReference(), ColdCompositeEnd, false))
 			{
 				PollState->bPollQueued.Store(false);
 				return;
 			}
 			TArray<double> WarmGPU;
+			TArray<double> WarmGPUFeather;
+			TArray<double> WarmGPUComposite;
 			WarmGPU.Reserve(PollState->WarmQueries.Num());
-			for (const FQueryPair& Queries : PollState->WarmQueries)
+			WarmGPUFeather.Reserve(PollState->WarmQueries.Num());
+			WarmGPUComposite.Reserve(PollState->WarmQueries.Num());
+			for (int32 Index = 0; Index < PollState->WarmQueries.Num(); ++Index)
 			{
+				const FQueryPair& Queries = PollState->WarmQueries[Index];
+				const FQueryPair& FeatherQueries = PollState->WarmFeatherQueries[Index];
+				const FQueryPair& CompositeQueries = PollState->WarmCompositeQueries[Index];
 				uint64 Start = 0;
 				uint64 End = 0;
+				uint64 FeatherStart = 0;
+				uint64 FeatherEnd = 0;
+				uint64 CompositeStart = 0;
+				uint64 CompositeEnd = 0;
 				if (!RHIGetRenderQueryResult(Queries.Start.GetReference(), Start, false)
-					|| !RHIGetRenderQueryResult(Queries.End.GetReference(), End, false))
+					|| !RHIGetRenderQueryResult(Queries.End.GetReference(), End, false)
+					|| !RHIGetRenderQueryResult(FeatherQueries.Start.GetReference(), FeatherStart, false)
+					|| !RHIGetRenderQueryResult(FeatherQueries.End.GetReference(), FeatherEnd, false)
+					|| !RHIGetRenderQueryResult(CompositeQueries.Start.GetReference(), CompositeStart, false)
+					|| !RHIGetRenderQueryResult(CompositeQueries.End.GetReference(), CompositeEnd, false))
 				{
 					PollState->bPollQueued.Store(false);
 					return;
 				}
 				WarmGPU.Add(End >= Start ? static_cast<double>(End - Start) : 0.0);
+				WarmGPUFeather.Add(FeatherEnd >= FeatherStart
+					? static_cast<double>(FeatherEnd - FeatherStart) : 0.0);
+				WarmGPUComposite.Add(CompositeEnd >= CompositeStart
+					? static_cast<double>(CompositeEnd - CompositeStart) : 0.0);
 			}
 
 			FSightWeavePresentationBenchmarkResult Result = MoveTemp(PollState->Result);
 			Result.Status = ESightWeavePresentationReadbackStatus::Complete;
 			Result.ColdGPUTotalMicroseconds =
 				ColdEnd >= ColdStart ? static_cast<double>(ColdEnd - ColdStart) : 0.0;
-			Result.WarmGPUCompositeMicroseconds = MoveTemp(WarmGPU);
+			Result.ColdGPUFeatherMicroseconds = ColdFeatherEnd >= ColdFeatherStart
+				? static_cast<double>(ColdFeatherEnd - ColdFeatherStart) : 0.0;
+			Result.ColdGPUCompositeMicroseconds = ColdCompositeEnd >= ColdCompositeStart
+				? static_cast<double>(ColdCompositeEnd - ColdCompositeStart) : 0.0;
+			Result.WarmGPUFeatherMicroseconds = MoveTemp(WarmGPUFeather);
+			Result.WarmGPUCompositeMicroseconds = MoveTemp(WarmGPUComposite);
+			Result.WarmGPUTotalMicroseconds = MoveTemp(WarmGPU);
 			PollState->RenderState->Release_RenderThread(PollState->Packet->GetWorldIdentity());
 			PollState->RenderState.Reset();
 			PollState->bPollQueued.Store(false);

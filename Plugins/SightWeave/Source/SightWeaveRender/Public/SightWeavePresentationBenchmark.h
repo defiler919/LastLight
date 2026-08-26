@@ -16,9 +16,18 @@ struct SIGHTWEAVERENDER_API FSightWeavePresentationBenchmarkResult
 	double RenderThreadBindingSubmitMicroseconds = 0.0;
 	double ColdRenderThreadSetupMicroseconds = 0.0;
 	double ColdGPUTotalMicroseconds = 0.0;
+	double ColdGPUFeatherMicroseconds = 0.0;
+	double ColdGPUCompositeMicroseconds = 0.0;
+	TArray<double> WarmRenderThreadPacketSubmitMicroseconds;
+	TArray<double> WarmRenderThreadMaskSetupMicroseconds;
+	TArray<double> WarmRenderThreadFeatherSetupMicroseconds;
 	TArray<double> WarmRenderThreadViewSetupMicroseconds;
 	TArray<double> WarmRenderThreadCompositeSetupMicroseconds;
+	TArray<double> WarmGPUFeatherMicroseconds;
 	TArray<double> WarmGPUCompositeMicroseconds;
+	TArray<double> WarmGPUTotalMicroseconds;
+	TArray<int32> WarmRequestedDirtyTileCounts;
+	TArray<uint64> WarmFeatherTileDispatchCounts;
 	uint64 InitialPageTableUploadCount = 0;
 	uint64 FinalPageTableUploadCount = 0;
 	uint64 InitialPageAllocationCount = 0;
@@ -50,7 +59,8 @@ public:
 		FIntPoint OutputExtent,
 		FVector2f TestWorldMin,
 		FVector2f TestWorldStep,
-		int32 WarmSampleCount = 32);
+		int32 WarmSampleCount = 32,
+		TArray<TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe>> WarmPackets = {});
 
 	void Poll();
 	bool TryTakeResult(FSightWeavePresentationBenchmarkResult& OutResult);

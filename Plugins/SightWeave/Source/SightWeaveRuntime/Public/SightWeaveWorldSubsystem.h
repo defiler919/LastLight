@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "SightWeaveDebug.h"
 #include "SightWeaveGeometry.h"
+#include "SightWeaveMemory.h"
 #include "SightWeaveQueries.h"
 #include "SightWeaveSpatialIndex.h"
 #include "SightWeavePreparedEventIndexStats.h"
@@ -17,6 +18,11 @@ using FSightWeaveImmutableSnapshotPtr =
 DECLARE_MULTICAST_DELEGATE_OneParam(
 	FSightWeaveSnapshotPublishedDelegate,
 	FSightWeaveImmutableSnapshotPtr);
+using FSightWeaveImmutableMemoryPacketPtr =
+	TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe>;
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FSightWeaveMemoryPacketPublishedDelegate,
+	FSightWeaveImmutableMemoryPacketPtr);
 
 #if WITH_DEV_AUTOMATION_TESTS
 enum class ESightWeaveDynamicUpdateStage : uint8
@@ -294,6 +300,31 @@ public:
 	FSightWeaveImmutableSnapshotPtr AcquirePublishedSnapshot() const { return PublishedSnapshot; }
 	FSightWeaveSnapshotPublishedDelegate& OnSnapshotPublished() { return SnapshotPublishedDelegate; }
 
+	/**
+	 * Selects one explicit CPU exploration-memory scope. M3.5 intentionally has
+	 * no implicit precision default until the four-tier experiment is complete.
+	 */
+	bool ConfigureExplorationMemory(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId,
+		ESightWeaveRenderPrecisionTier PrecisionTier,
+		int32 MaximumTiles = SightWeave::Memory::DefaultMaximumTiles);
+	void DisableExplorationMemory();
+	bool IsExplorationMemoryConfigured() const { return MemoryAuthority.IsConfigured(); }
+	bool QueryHardMemoryAtLocation(FVector WorldLocation) const;
+	const FSightWeaveMemoryUpdateDiagnostics& GetLastMemoryUpdateDiagnostics() const
+	{
+		return LastMemoryUpdateDiagnostics;
+	}
+	FSightWeaveImmutableMemoryPacketPtr AcquirePublishedMemoryPacket() const
+	{
+		return PublishedMemoryPacket;
+	}
+	FSightWeaveMemoryPacketPublishedDelegate& OnMemoryPacketPublished()
+	{
+		return MemoryPacketPublishedDelegate;
+	}
+
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Debug")
 	FSightWeaveDebugData BuildDebugData() const;
 
@@ -534,6 +565,12 @@ private:
 	TSharedPtr<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> PublishedSnapshot;
 	FSightWeaveSnapshotPublishedDelegate SnapshotPublishedDelegate;
 	TSharedPtr<FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> StandbySnapshot;
+	FSightWeaveRenderWorldIdentity MemoryWorldIdentity;
+	uint64 MemoryWorldGeneration = 0;
+	FSightWeaveMemoryAuthority MemoryAuthority;
+	FSightWeaveMemoryUpdateDiagnostics LastMemoryUpdateDiagnostics;
+	FSightWeaveImmutableMemoryPacketPtr PublishedMemoryPacket;
+	FSightWeaveMemoryPacketPublishedDelegate MemoryPacketPublishedDelegate;
 
 #if WITH_DEV_AUTOMATION_TESTS
 	FSightWeaveDynamicUpdateStageMetrics LastDynamicUpdateStageMetrics;

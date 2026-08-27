@@ -5,12 +5,14 @@
 #include "Async/ParallelFor.h"
 #endif
 #include "HAL/PlatformTime.h"
+#include "HAL/ThreadSafeCounter64.h"
 #include "SightWeaveOptimizedSolveCache.h"
 #include "SightWeavePreparedEventIndex.h"
 #include "SightWeaveSettings.h"
 
 namespace
 {
+	FThreadSafeCounter64 GNextSightWeaveMemoryWorldSerial;
 #if WITH_DEV_AUTOMATION_TESTS
 	FSightWeaveDynamicUpdateStageProbe GDynamicUpdateStageProbe = nullptr;
 	FSightWeaveBatchQueryStageProbe GBatchQueryStageProbe = nullptr;
@@ -334,6 +336,9 @@ void USightWeaveWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	ResetState();
+	MemoryWorldIdentity.Serial =
+		static_cast<uint64>(GNextSightWeaveMemoryWorldSerial.Increment());
+	MemoryWorldGeneration = MemoryWorldIdentity.Serial;
 	const USightWeaveSettings* Settings = GetDefault<USightWeaveSettings>();
 	SpatialIndex.SetCellSize(Settings->SpatialCellSizeCentimeters);
 	PreparedEventIndex = MakeShared<FSightWeavePreparedEventIndex>();
@@ -2159,6 +2164,19 @@ FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 		MoveTemp(PublishedSnapshot);
 	PublishedSnapshot = MoveTemp(NewSharedSnapshot);
 	StandbySnapshot = MoveTemp(PreviousSnapshot);
+	if (MemoryAuthority.IsConfigured())
+	{
+		LastMemoryUpdateDiagnostics = MemoryAuthority.WriteEffectiveLive(*PublishedSnapshot);
+		if (LastMemoryUpdateDiagnostics.Succeeded())
+		{
+			PublishedMemoryPacket = MemoryAuthority.PublishPacket();
+		}
+		else
+		{
+			PublishedMemoryPacket.Reset();
+		}
+		MemoryPacketPublishedDelegate.Broadcast(PublishedMemoryPacket);
+	}
 	SnapshotPublishedDelegate.Broadcast(PublishedSnapshot);
 #if WITH_DEV_AUTOMATION_TESTS
 	EmitDynamicUpdateStage(ESightWeaveDynamicUpdateStage::ImmutablePublication, false);
@@ -2172,6 +2190,57 @@ FSightWeaveFrameSnapshot USightWeaveWorldSubsystem::GetPublishedSnapshot() const
 {
 	const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot = PublishedSnapshot;
 	return Snapshot.IsValid() ? *Snapshot : FSightWeaveFrameSnapshot();
+}
+
+bool USightWeaveWorldSubsystem::ConfigureExplorationMemory(
+	const FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+	const FSightWeaveFloorId FloorId,
+	const ESightWeaveRenderPrecisionTier PrecisionTier,
+	const int32 MaximumTiles)
+{
+	check(IsInGameThread());
+	if (!bSightWeaveInitialized || !PublishedSnapshot.IsValid())
+	{
+		return false;
+	}
+	FSightWeaveMemoryScopeKey Scope;
+	if (!FSightWeaveMemoryAuthority::BuildScopeForSnapshot(
+			*PublishedSnapshot,
+			MemoryWorldIdentity,
+			MemoryWorldGeneration,
+			KnowledgeOwnerId,
+			FloorId,
+			PrecisionTier,
+			Scope)
+		|| !MemoryAuthority.Configure(Scope, MaximumTiles))
+	{
+		return false;
+	}
+	LastMemoryUpdateDiagnostics = MemoryAuthority.WriteEffectiveLive(*PublishedSnapshot);
+	if (!LastMemoryUpdateDiagnostics.Succeeded())
+	{
+		MemoryAuthority.Reset();
+		PublishedMemoryPacket.Reset();
+		MemoryPacketPublishedDelegate.Broadcast(PublishedMemoryPacket);
+		return false;
+	}
+	PublishedMemoryPacket = MemoryAuthority.PublishPacket(true);
+	MemoryPacketPublishedDelegate.Broadcast(PublishedMemoryPacket);
+	return PublishedMemoryPacket.IsValid() && PublishedMemoryPacket->IsValid();
+}
+
+void USightWeaveWorldSubsystem::DisableExplorationMemory()
+{
+	check(IsInGameThread());
+	MemoryAuthority.Reset();
+	LastMemoryUpdateDiagnostics = FSightWeaveMemoryUpdateDiagnostics();
+	PublishedMemoryPacket.Reset();
+	MemoryPacketPublishedDelegate.Broadcast(PublishedMemoryPacket);
+}
+
+bool USightWeaveWorldSubsystem::QueryHardMemoryAtLocation(const FVector WorldLocation) const
+{
+	return MemoryAuthority.QueryHardMemory(WorldLocation);
 }
 
 FSightWeavePreparedEventIndexStats USightWeaveWorldSubsystem::GetPreparedEventIndexStats() const
@@ -3010,6 +3079,14 @@ void USightWeaveWorldSubsystem::AdvanceRevision()
 
 void USightWeaveWorldSubsystem::ResetState()
 {
+	if (MemoryAuthority.IsConfigured())
+	{
+		MemoryAuthority.Reset();
+	}
+	PublishedMemoryPacket.Reset();
+	LastMemoryUpdateDiagnostics = FSightWeaveMemoryUpdateDiagnostics();
+	MemoryWorldIdentity = FSightWeaveRenderWorldIdentity();
+	MemoryWorldGeneration = 0;
 	Floors.Reset();
 	VisionSources.Reset();
 	IlluminationSources.Reset();

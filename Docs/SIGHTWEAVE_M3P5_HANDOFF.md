@@ -35,6 +35,10 @@ The only working-tree difference was the approved local `Darkwell.uproject` Engi
 
 `Docs/SIGHTWEAVE_M3P5_MEMORY_CONTRACT.md` freezes the packed `248 x 248` CPU tile format, complete non-hash scope equality, game-thread-only update transaction, immutable packet, modifier ordering, persistent sparse R8 mirror, explicit static eligibility plus derived neutral attribute route, and identical four-tier precision experiment. Production implementation begins only after that checkpoint is committed and pushed.
 
+## CPU authority checkpoint
+
+The first production slice adds a game-thread-only `FSightWeaveMemoryAuthority` with 7,688-byte packed logical tiles, signed world mapping, exact non-hash scope identity, monotonic EffectiveLive writes, no-change revision suppression, explicit capacity failure, immutable owned Memory packets, and world-subsystem publication. It consumes only immutable CPU snapshots; its API has no camera, viewport, renderer, Scene Color, or feather input. The focused NullRHI authority suite initially passes 4/4 after a full Editor Development build.
+
 ## Resume
 
 ```powershell

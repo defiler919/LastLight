@@ -6,6 +6,7 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "ISettingsContainer.h"
 #include "ISettingsModule.h"
 #include "Modules/ModuleManager.h"
 #include "Misc/CommandLine.h"
@@ -217,14 +218,15 @@ public:
 		LabMode = SightWeave::Lab::ResolveModeFromCommandLine();
 		TickerHandle = FTSTicker::GetCoreTicker().AddTicker(
 			FTickerDelegate::CreateRaw(this, &FSightWeaveEditorModule::Tick));
+		bTickerRegistered = true;
 	}
 
 	virtual void ShutdownModule() override
 	{
-		if (TickerHandle.IsValid())
+		if (bTickerRegistered)
 		{
 			FTSTicker::GetCoreTicker().RemoveTicker(TickerHandle);
-			TickerHandle = FDelegateHandle();
+			bTickerRegistered = false;
 		}
 
 		LabWorldStates.Reset();
@@ -235,7 +237,9 @@ private:
 	void RegisterSettings()
 	{
 		ISettingsModule& SettingsModule = FModuleManager::LoadModuleChecked<ISettingsModule>(TEXT("Settings"));
-		if (!SettingsModule.GetSection(TEXT("Project"), TEXT("Plugins"), TEXT("SightWeave")).IsValid())
+		const ISettingsContainerPtr ProjectSettings = SettingsModule.GetContainer(TEXT("Project"));
+		if (!ProjectSettings.IsValid()
+			|| !ProjectSettings->GetSection(TEXT("Plugins"), TEXT("SightWeave")).IsValid())
 		{
 			SettingsModule.RegisterSettings(
 				TEXT("Project"),
@@ -392,8 +396,9 @@ private:
 	}
 
 	ESightWeaveLabMode LabMode = ESightWeaveLabMode::M3P4;
-	FDelegateHandle TickerHandle;
+	FTSTicker::FDelegateHandle TickerHandle;
 	TArray<FSightWeaveLabWorldState> LabWorldStates;
+	bool bTickerRegistered = false;
 	bool bRegisteredSettings = false;
 };
 

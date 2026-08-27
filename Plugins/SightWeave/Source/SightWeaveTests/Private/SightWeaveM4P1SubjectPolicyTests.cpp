@@ -5,6 +5,38 @@
 
 namespace SightWeaveM4P1SubjectPolicyTests
 {
+	FSightWeaveBasicStaticMeshSnapshotCandidate MakeCandidate(const FVector Location);
+
+	class FTestSnapshotProvider final : public ISightWeaveSubjectSnapshotProvider
+	{
+	public:
+		FName ProviderName = FName(TEXT("TestProvider"));
+		uint32 ProviderVersion = 1;
+		bool bAccept = true;
+		bool bReturnValidCandidate = true;
+		mutable int32 BuildCount = 0;
+
+		virtual FName GetSightWeaveProviderName() const override { return ProviderName; }
+		virtual uint32 GetSightWeaveProviderVersion() const override { return ProviderVersion; }
+		virtual bool BuildSightWeaveSnapshotCandidate(
+			const FSightWeaveSubjectRegistration& Registration,
+			const FSightWeaveSubjectObservation& FallingEdgeObservation,
+			FSightWeaveBasicStaticMeshSnapshotCandidate& OutCandidate) const override
+		{
+			++BuildCount;
+			if (!bAccept)
+			{
+				return false;
+			}
+			OutCandidate = MakeCandidate(FVector(400.0, 500.0, 600.0));
+			if (!bReturnValidCandidate)
+			{
+				OutCandidate.StaticMeshAsset.Reset();
+			}
+			return true;
+		}
+	};
+
 	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext
 		| EAutomationTestFlags::EngineFilter;
 
@@ -351,6 +383,73 @@ bool FSightWeaveM4P1UnsupportedFailClosedTest::RunTest(const FString& Parameters
 	TestEqual(TEXT("Custom without registered provider fails closed"), CustomLost.Failure,
 		ESightWeaveSubjectTransitionFailure::MissingCustomProvider);
 	TestEqual(TEXT("Missing provider creates no descriptor"), CustomAuthority.GetSnapshotCount(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P1CustomProviderTest,
+	"SightWeave.M4P1.Subject.Custom.ProviderRoute",
+	Flags)
+
+bool FSightWeaveM4P1CustomProviderTest::RunTest(const FString& Parameters)
+{
+	const FSightWeaveSubjectRegistration Registration = MakeRegistration(
+		ESightWeaveSubjectMemoryPolicy::Custom);
+
+	auto RunProviderCase = [this, &Registration](
+		const TCHAR* Label,
+		const ISightWeaveSubjectSnapshotProvider* Provider,
+		const ESightWeaveSubjectTransitionFailure ExpectedFailure)
+	{
+		FSightWeaveSubjectMemoryAuthority Authority;
+		const FSightWeaveSubjectHandle Handle = Authority.Register(Registration);
+		Authority.SubmitObservation(Handle, MakeObservation(Registration, 1, true));
+		const FSightWeaveSubjectTransitionResult Lost = Authority.SubmitObservation(
+			Handle,
+			MakeObservation(Registration, 2, false, 1),
+			Provider);
+		TestEqual(Label, Lost.Failure, ExpectedFailure);
+		TestEqual(TEXT("Rejected provider owns no snapshot"), Authority.GetSnapshotCount(), 0);
+	};
+
+	RunProviderCase(TEXT("Missing provider fails closed"), nullptr,
+		ESightWeaveSubjectTransitionFailure::MissingCustomProvider);
+	FTestSnapshotProvider Mismatch;
+	Mismatch.ProviderVersion = 2;
+	RunProviderCase(TEXT("Provider version mismatch fails closed"), &Mismatch,
+		ESightWeaveSubjectTransitionFailure::CustomProviderMismatch);
+	TestEqual(TEXT("Mismatched provider is not invoked"), Mismatch.BuildCount, 0);
+	FTestSnapshotProvider Rejected;
+	Rejected.bAccept = false;
+	RunProviderCase(TEXT("Provider rejection fails closed"), &Rejected,
+		ESightWeaveSubjectTransitionFailure::CustomProviderRejected);
+	FTestSnapshotProvider Invalid;
+	Invalid.bReturnValidCandidate = false;
+	RunProviderCase(TEXT("Invalid provider output fails closed"), &Invalid,
+		ESightWeaveSubjectTransitionFailure::InvalidCustomProviderResult);
+
+	FSightWeaveSubjectMemoryAuthority Authority;
+	const FSightWeaveSubjectHandle Handle = Authority.Register(Registration);
+	Authority.SubmitObservation(Handle, MakeObservation(Registration, 1, true));
+	FTestSnapshotProvider Accepted;
+	const FSightWeaveSubjectTransitionResult Captured = Authority.SubmitObservation(
+		Handle,
+		MakeObservation(Registration, 2, false, 10),
+		&Accepted);
+	TestEqual(TEXT("Matching provider captures"), Captured.Disposition,
+		ESightWeaveSubjectTransitionDisposition::SnapshotCaptured);
+	TestEqual(TEXT("Provider invoked exactly once on falling edge"), Accepted.BuildCount, 1);
+	const FSightWeaveLastSeenSnapshotDescriptor* Snapshot = Authority.FindSnapshot(Handle);
+	TestNotNull(TEXT("Custom descriptor exists"), Snapshot);
+	if (Snapshot)
+	{
+		TestEqual(TEXT("Descriptor remains Custom policy"), Snapshot->Policy,
+			ESightWeaveSubjectMemoryPolicy::Custom);
+		TestEqual(TEXT("Provider transform is frozen"), Snapshot->WorldTransform.GetLocation(),
+			FVector(400.0, 500.0, 600.0));
+	}
+	Authority.SubmitObservation(Handle, MakeObservation(Registration, 3, false, 11), &Accepted);
+	TestEqual(TEXT("Non-live frames do not reinvoke provider"), Accepted.BuildCount, 1);
 	return true;
 }
 

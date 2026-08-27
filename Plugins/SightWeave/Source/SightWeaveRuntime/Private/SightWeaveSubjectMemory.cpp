@@ -265,7 +265,8 @@ void FSightWeaveSubjectMemoryAuthority::Reset()
 
 FSightWeaveSubjectTransitionResult FSightWeaveSubjectMemoryAuthority::SubmitObservation(
 	const FSightWeaveSubjectHandle Handle,
-	const FSightWeaveSubjectObservation& Observation)
+	const FSightWeaveSubjectObservation& Observation,
+	const ISightWeaveSubjectSnapshotProvider* CustomProvider)
 {
 	check(IsInGameThread());
 	FSightWeaveSubjectTransitionResult Result;
@@ -344,9 +345,7 @@ FSightWeaveSubjectTransitionResult FSightWeaveSubjectMemoryAuthority::SubmitObse
 	case ESightWeaveSubjectMemoryPolicy::StaticEnvironment:
 		return Result;
 	case ESightWeaveSubjectMemoryPolicy::Custom:
-		Result.Failure = ESightWeaveSubjectTransitionFailure::MissingCustomProvider;
-		Result.Disposition = ESightWeaveSubjectTransitionDisposition::Rejected;
-		return Result;
+		break;
 	case ESightWeaveSubjectMemoryPolicy::LastSeenSnapshot:
 		break;
 	default:
@@ -373,7 +372,40 @@ FSightWeaveSubjectTransitionResult FSightWeaveSubjectMemoryAuthority::SubmitObse
 		Result.Disposition = ESightWeaveSubjectTransitionDisposition::Rejected;
 		return Result;
 	}
-	if (!Record->bHasValidLastLiveCandidate)
+	FSightWeaveBasicStaticMeshSnapshotCandidate SnapshotCandidate = Record->LastLiveCandidate;
+	if (Record->Registration.Policy == ESightWeaveSubjectMemoryPolicy::Custom)
+	{
+		if (!CustomProvider)
+		{
+			Result.Failure = ESightWeaveSubjectTransitionFailure::MissingCustomProvider;
+			Result.Disposition = ESightWeaveSubjectTransitionDisposition::Rejected;
+			return Result;
+		}
+		if (CustomProvider->GetSightWeaveProviderName() != Record->Registration.CustomProviderName
+			|| CustomProvider->GetSightWeaveProviderVersion() != Record->Registration.CustomProviderVersion)
+		{
+			Result.Failure = ESightWeaveSubjectTransitionFailure::CustomProviderMismatch;
+			Result.Disposition = ESightWeaveSubjectTransitionDisposition::Rejected;
+			return Result;
+		}
+		SnapshotCandidate = FSightWeaveBasicStaticMeshSnapshotCandidate();
+		if (!CustomProvider->BuildSightWeaveSnapshotCandidate(
+			Record->Registration,
+			Observation,
+			SnapshotCandidate))
+		{
+			Result.Failure = ESightWeaveSubjectTransitionFailure::CustomProviderRejected;
+			Result.Disposition = ESightWeaveSubjectTransitionDisposition::Rejected;
+			return Result;
+		}
+		if (!SnapshotCandidate.IsValid())
+		{
+			Result.Failure = ESightWeaveSubjectTransitionFailure::InvalidCustomProviderResult;
+			Result.Disposition = ESightWeaveSubjectTransitionDisposition::Rejected;
+			return Result;
+		}
+	}
+	else if (!Record->bHasValidLastLiveCandidate)
 	{
 		Result.Failure = ESightWeaveSubjectTransitionFailure::UnsupportedSubject;
 		Result.Disposition = ESightWeaveSubjectTransitionDisposition::Rejected;
@@ -387,16 +419,16 @@ FSightWeaveSubjectTransitionResult FSightWeaveSubjectMemoryAuthority::SubmitObse
 	Snapshot.SnapshotRevision = Record->NextSnapshotRevision++;
 	Snapshot.EligibilityRevision = Record->LastLiveEligibilityRevision;
 	Snapshot.SourceLiveRevision = Record->LastLiveSourceRevision;
-	Snapshot.WorldTransform = Record->LastLiveCandidate.WorldTransform;
-	Snapshot.WorldBounds = Record->LastLiveCandidate.WorldBounds;
-	Snapshot.StaticMeshAsset = Record->LastLiveCandidate.StaticMeshAsset;
-	Snapshot.MaterialOverrides = Record->LastLiveCandidate.MaterialOverrides;
-	Snapshot.VisualVariantId = Record->LastLiveCandidate.VisualVariantId;
+	Snapshot.WorldTransform = SnapshotCandidate.WorldTransform;
+	Snapshot.WorldBounds = SnapshotCandidate.WorldBounds;
+	Snapshot.StaticMeshAsset = SnapshotCandidate.StaticMeshAsset;
+	Snapshot.MaterialOverrides = SnapshotCandidate.MaterialOverrides;
+	Snapshot.VisualVariantId = SnapshotCandidate.VisualVariantId;
 	Snapshot.CaptureReason = ESightWeaveSubjectCaptureReason::LiveToNonLive;
 	Snapshot.CaptureTransitionIdentity = Observation.TransitionIdentity;
 	Snapshot.Validity = SightWeaveSubjectMemoryPrivate::BuildValidity(
 		Record->Registration,
-		Record->LastLiveCandidate,
+		SnapshotCandidate,
 		Observation.TransitionIdentity);
 	if (!Snapshot.IsValid())
 	{

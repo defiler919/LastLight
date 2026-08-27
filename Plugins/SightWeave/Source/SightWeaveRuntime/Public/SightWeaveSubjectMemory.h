@@ -159,7 +159,10 @@ enum class ESightWeaveSubjectTransitionFailure : uint8
 	DuplicateTransition,
 	NotMemoryEligible,
 	UnsupportedSubject,
-	MissingCustomProvider
+	MissingCustomProvider,
+	CustomProviderMismatch,
+	CustomProviderRejected,
+	InvalidCustomProviderResult
 };
 
 enum class ESightWeaveSubjectTransitionDisposition : uint8
@@ -199,6 +202,23 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveSubjectTransitionResult
 	{
 		return Failure == ESightWeaveSubjectTransitionFailure::None;
 	}
+};
+
+/**
+ * Synchronous, non-owning host extension used only at a Custom policy falling edge.
+ * The authority never retains this object or any gameplay/render object referenced by it.
+ */
+class SIGHTWEAVERUNTIME_API ISightWeaveSubjectSnapshotProvider
+{
+public:
+	virtual ~ISightWeaveSubjectSnapshotProvider() = default;
+
+	virtual FName GetSightWeaveProviderName() const = 0;
+	virtual uint32 GetSightWeaveProviderVersion() const = 0;
+	virtual bool BuildSightWeaveSnapshotCandidate(
+		const FSightWeaveSubjectRegistration& Registration,
+		const FSightWeaveSubjectObservation& FallingEdgeObservation,
+		FSightWeaveBasicStaticMeshSnapshotCandidate& OutCandidate) const = 0;
 };
 
 enum class ESightWeaveSubjectPresentationState : uint8
@@ -261,7 +281,8 @@ public:
 
 	FSightWeaveSubjectTransitionResult SubmitObservation(
 		FSightWeaveSubjectHandle Handle,
-		const FSightWeaveSubjectObservation& Observation);
+		const FSightWeaveSubjectObservation& Observation,
+		const ISightWeaveSubjectSnapshotProvider* CustomProvider = nullptr);
 	FSightWeaveSubjectPresentationResult EvaluatePresentation(
 		FSightWeaveSubjectHandle Handle,
 		const FSightWeaveSubjectPresentationContext& Context) const;

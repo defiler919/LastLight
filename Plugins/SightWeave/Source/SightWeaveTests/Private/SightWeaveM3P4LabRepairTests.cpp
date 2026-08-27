@@ -1,7 +1,5 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
-#include "ISettingsContainer.h"
-#include "ISettingsModule.h"
 #include "Misc/AutomationTest.h"
 #include "Modules/ModuleManager.h"
 #include "SightWeaveLabSupport.h"
@@ -135,11 +133,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FSightWeaveM3P4SettingsRegistrationTest::RunTest(const FString& Parameters)
 {
 	FModuleManager::Get().LoadModule(TEXT("SightWeaveEditor"));
-	ISettingsModule& SettingsModule = FModuleManager::LoadModuleChecked<ISettingsModule>(TEXT("Settings"));
-	const ISettingsContainerPtr ProjectSettings = SettingsModule.GetContainer(TEXT("Project"));
 	TestTrue(TEXT("Project > Plugins > SightWeave settings section is registered"),
-		ProjectSettings.IsValid()
-			&& ProjectSettings->GetSection(TEXT("Plugins"), TEXT("SightWeave")).IsValid());
+		SightWeave::Lab::IsSettingsSectionRegistered());
 	return true;
 }
 

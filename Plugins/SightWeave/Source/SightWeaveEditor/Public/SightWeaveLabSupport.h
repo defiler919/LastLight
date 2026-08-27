@@ -33,6 +33,7 @@ namespace SightWeave::Lab
 	SIGHTWEAVEEDITOR_API const TCHAR* LexToString(ESightWeaveLabMode Mode);
 	SIGHTWEAVEEDITOR_API bool IsLabWorld(const UWorld* World);
 	SIGHTWEAVEEDITOR_API bool IsFixtureEnabled(const FString& ActorLabel, ESightWeaveLabMode Mode);
+	SIGHTWEAVEEDITOR_API bool IsSettingsSectionRegistered();
 	SIGHTWEAVEEDITOR_API FSightWeaveLabIsolationResult ApplyFixtureIsolation(
 		UWorld* World,
 		ESightWeaveLabMode Mode);

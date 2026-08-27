@@ -6,7 +6,6 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
-#include "ISettingsContainer.h"
 #include "ISettingsModule.h"
 #include "Modules/ModuleManager.h"
 #include "Misc/CommandLine.h"
@@ -30,6 +29,8 @@ namespace
 		bool bFailureLogged = false;
 		bool bHealthyLogged = false;
 	};
+
+	bool GSettingsSectionRegistered = false;
 
 	FString GetActorLabel(const AActor* Actor)
 	{
@@ -95,6 +96,11 @@ namespace
 
 namespace SightWeave::Lab
 {
+	bool IsSettingsSectionRegistered()
+	{
+		return GSettingsSectionRegistered;
+	}
+
 	ESightWeaveLabMode ResolveModeFromCommandLine()
 	{
 		FString RequestedMode;
@@ -237,19 +243,15 @@ private:
 	void RegisterSettings()
 	{
 		ISettingsModule& SettingsModule = FModuleManager::LoadModuleChecked<ISettingsModule>(TEXT("Settings"));
-		const ISettingsContainerPtr ProjectSettings = SettingsModule.GetContainer(TEXT("Project"));
-		if (!ProjectSettings.IsValid()
-			|| !ProjectSettings->GetSection(TEXT("Plugins"), TEXT("SightWeave")).IsValid())
-		{
-			SettingsModule.RegisterSettings(
-				TEXT("Project"),
-				TEXT("Plugins"),
-				TEXT("SightWeave"),
-				LOCTEXT("SightWeaveSettingsName", "SightWeave"),
-				LOCTEXT("SightWeaveSettingsDescription", "Configure SightWeave authority and presentation defaults."),
-				GetMutableDefault<USightWeaveSettings>());
-			bRegisteredSettings = true;
-		}
+		SettingsModule.RegisterSettings(
+			TEXT("Project"),
+			TEXT("Plugins"),
+			TEXT("SightWeave"),
+			LOCTEXT("SightWeaveSettingsName", "SightWeave"),
+			LOCTEXT("SightWeaveSettingsDescription", "Configure SightWeave authority and presentation defaults."),
+			GetMutableDefault<USightWeaveSettings>());
+		bRegisteredSettings = true;
+		GSettingsSectionRegistered = bRegisteredSettings;
 	}
 
 	void UnregisterSettings()
@@ -260,6 +262,7 @@ private:
 				.UnregisterSettings(TEXT("Project"), TEXT("Plugins"), TEXT("SightWeave"));
 		}
 		bRegisteredSettings = false;
+		GSettingsSectionRegistered = false;
 	}
 
 	bool Tick(float)

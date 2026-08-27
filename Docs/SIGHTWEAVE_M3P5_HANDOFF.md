@@ -31,6 +31,10 @@ The only working-tree difference was the approved local `Darkwell.uproject` Engi
 - Keep total SightWeave runtime memory at or below 64 MiB.
 - Modify the Lab map only through Unreal Editor asset APIs and keep it under Git LFS.
 
+## Contract checkpoint
+
+`Docs/SIGHTWEAVE_M3P5_MEMORY_CONTRACT.md` freezes the packed `248 x 248` CPU tile format, complete non-hash scope equality, game-thread-only update transaction, immutable packet, modifier ordering, persistent sparse R8 mirror, explicit static eligibility plus derived neutral attribute route, and identical four-tier precision experiment. Production implementation begins only after that checkpoint is committed and pushed.
+
 ## Resume
 
 ```powershell

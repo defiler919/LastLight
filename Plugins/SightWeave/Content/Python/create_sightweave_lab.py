@@ -373,7 +373,10 @@ def create_lab():
     # logical 63/64 boundary. The narrow cone forces persistent residency across
     # page 0 slot 63 and page 1 slot 0 without covering a broad 2-D tile field.
     page_boundary_x = -8500.0 + 64.0 * 2480.0
-    page_strip_y = 11000.0
+    # Keep the narrow 1600 m cone inside one logical tile row. At 11000 cm its
+    # finite half width straddled the 10860 cm row boundary, producing a 65x2
+    # sparse AABB (130 tiles) and correctly tripping the frozen capacity of 128.
+    page_strip_y = 12100.0
     add_vision("SW_M3P3_PageBoundaryVision", (-8000.0, page_strip_y, 100.0),
                unreal.SightWeaveSourceShape.DIRECTIONAL_CONE,
                160000.0, 0.2, 0.0, True)

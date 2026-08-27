@@ -2,13 +2,20 @@
 
 ## 1. Status
 
-**COMPLETED**
+**PARTIAL — superseded by integrated Lab repair validation**
 
-M3.4 implements world-space inward-only presentation feathering while retaining the M3.3 hard mask as the only eligibility gate. All M3.4 correctness, performance, packaging, Lab, clean-host, and persistence gates pass. The two explicitly retained M2P2 wall-time failures remain unchanged and do not originate in M3.4.
+M3.4 implements world-space inward-only presentation feathering while retaining the M3.3 hard mask as the only eligibility gate. Shader-level readback, performance, packaging, and clean-host evidence passed, but subsequent company-machine interactive PIE proved that the integrated committed Lab could fail closed to almost entirely black even at width zero. The earlier Lab screenshots did not establish a working SceneColor composite. Consequently the original completion claim is withdrawn pending repair validation. The two explicitly retained M2P2 wall-time failures remain unchanged and do not originate in M3.4.
+
+### Superseding repair finding (2026-08-27)
+
+`SW_M3P3_PageBoundaryVision` at Y=11000 cm straddled the Y=10860 cm logical tile-row boundary. Its narrow 160000 cm cone therefore covered an AABB of about 65x2=130 logical tiles, above `StandardActiveTileCapacity=128`, and correctly produced a fail-closed black presentation. M3.4 PIE also left historical M2/M3 fixtures active in the same `Local/Ground` scope.
+
+Repair branch `codex/m3p4-sightweave-lab-repair` centers the strip at Y=12100, isolates PIE fixtures per milestone, binds the M3P4 overview camera, registers the missing Project Settings section, and adds explicit capacity diagnostics and regression tests. This document remains historical evidence; `Docs/SIGHTWEAVE_M3P4_LAB_REPAIR.md` defines the new acceptance gate.
 
 ## 2. Branch, baseline, and final SHA
 
-- Branch: `codex/m3p4-sightweave-inward-feather`
+- Original branch: `codex/m3p4-sightweave-inward-feather`
+- Superseding repair branch: `codex/m3p4-sightweave-lab-repair`
 - Frozen M3.3 baseline: `35411db9b193ec6a669278af6e43e38fa72f9d9a`
 - Last source/test checkpoint before this validation document: `5ddde69`
 - Final SHA: the `docs: record SightWeave M3P4 validation` commit containing this file; verify with the closure commands in section 21.
@@ -168,8 +175,9 @@ All `Saved` evidence is intentionally untracked local validation output.
 ## 23. Next recovery command
 
 ```powershell
-cd D:\UE_pro\Darkwell
-git switch codex/m3p4-sightweave-inward-feather
+cd D:\UE_projects\LastLight
+git fetch origin
+git switch codex/m3p4-sightweave-lab-repair
 git status --short --branch
 git pull --ff-only
 ```

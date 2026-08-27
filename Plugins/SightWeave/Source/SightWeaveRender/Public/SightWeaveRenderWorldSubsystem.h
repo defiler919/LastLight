@@ -32,6 +32,8 @@ struct SIGHTWEAVERENDER_API FSightWeaveRenderWorldDiagnostics
 	uint64 LastSubmittedSnapshotRevision = 0;
 	uint64 SubmittedDirtyTileCount = 0;
 	uint64 SubmittedRemovedTileCount = 0;
+	int32 LastDesiredTileCount = 0;
+	int32 LastMaximumActiveTiles = 0;
 	uint64 PresentationSelectionRevision = 0;
 	bool bPresentationEnabled = false;
 	ESightWeaveSparsePacketFailure LastBuildFailure = ESightWeaveSparsePacketFailure::None;

@@ -1,14 +1,35 @@
 # SightWeave M3.4 inward-feather handoff
 
-Status: **COMPLETED**
+Status: **PARTIAL — integrated Lab repair awaiting Windows D3D12 confirmation**
 
-Branch: `codex/m3p4-sightweave-inward-feather`
+Repair branch: `codex/m3p4-sightweave-lab-repair`
+
+Original implementation branch: `codex/m3p4-sightweave-inward-feather`
 
 Frozen M3.3 baseline: `35411db9b193ec6a669278af6e43e38fa72f9d9a`
 
 Engine: Unreal Engine 5.8.1, changelist `56057345`, at `D:\UE_5.8`
 
 Validation GPU: NVIDIA GeForce RTX 2070 SUPER, Turing, 8192 MiB, Studio Driver 610.88
+
+## 2026-08-27 integrated Lab correction
+
+Company-machine interactive PIE exposed that the committed Lab could render almost entirely black even with `VisualFeatherWidthCentimeters=0`. This invalidates the previous `COMPLETED` disposition for the integrated Lab presentation path. The shader-level readback, performance, and packaging evidence remains useful, but byte-identical black screenshots are not proof of a working scene composite.
+
+Root cause: `SW_M3P3_PageBoundaryVision` was centered at Y=11000 cm. Its 160000 cm, 0.2-degree cone straddled the logical-row boundary at Y=10860 cm. The polygon AABB therefore requested approximately 65 columns by 2 rows (130 tiles), exceeding the frozen Standard active-tile capacity of 128. The render packet correctly failed closed. M3.4 also shared `Local/Ground` with every historical M2/M3 fixture, so unisolated PIE accumulated unrelated source bounds.
+
+The repair:
+
+- keeps the immutable 128-tile capacity and all authority contracts unchanged;
+- moves the page-boundary strip to Y=12100 cm, the center of logical row 7;
+- applies editor-only Lab milestone isolation in PIE, defaulting to M3P4;
+- preserves only the M3P4 fixtures plus the shared M3P3 page-boundary fixture;
+- binds the selected milestone overview camera once a PIE controller exists;
+- explicitly registers `Project Settings > Plugins > SightWeave`;
+- logs desired tile count, capacity, packet failure, recovery, and presentation state;
+- adds regression coverage for the old 130-tile failure, corrected bounded footprint, fixture routing, and settings registration.
+
+This branch must remain `PARTIAL` until a Windows UE 5.8.1 Editor build and D3D12 PIE run show a healthy packet, visible scene color inside HardLive, strict black outside, and a visible inward ramp at 50/100 cm.
 
 ## Objective
 
@@ -98,8 +119,9 @@ The seven saved D3D12 screenshots were inspected by the agent. They show strict 
 ## Resume
 
 ```powershell
-cd D:\UE_pro\Darkwell
-git switch codex/m3p4-sightweave-inward-feather
+cd D:\UE_projects\LastLight
+git fetch origin
+git switch codex/m3p4-sightweave-lab-repair
 git status --short --branch
 git pull --ff-only
 ```

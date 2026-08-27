@@ -278,16 +278,20 @@ void USightWeaveRenderWorldSubsystem::BuildAndSubmitPacket(
 		return;
 	}
 	Diagnostics.LastBuildFailure = ESightWeaveSparsePacketFailure::None;
+	Diagnostics.LastDesiredTileCount = 0;
+	Diagnostics.LastMaximumActiveTiles = 0;
 	Diagnostics.FailClosedClearCount += static_cast<uint64>(BuildResult.FailedScopeCount);
-	if (BuildResult.FailedScopeCount > 0)
+	for (const FSightWeaveSparseRenderScope& Scope : BuildResult.Packet->GetScopes())
 	{
-		for (const FSightWeaveSparseRenderScope& Scope : BuildResult.Packet->GetScopes())
+		Diagnostics.LastDesiredTileCount = FMath::Max(
+			Diagnostics.LastDesiredTileCount,
+			Scope.DesiredTileCount);
+		Diagnostics.LastMaximumActiveTiles = FMath::Max(
+			Diagnostics.LastMaximumActiveTiles,
+			Scope.MaximumActiveTiles);
+		if (!Scope.IsValid() && Diagnostics.LastBuildFailure == ESightWeaveSparsePacketFailure::None)
 		{
-			if (!Scope.IsValid())
-			{
-				Diagnostics.LastBuildFailure = Scope.Failure;
-				break;
-			}
+			Diagnostics.LastBuildFailure = Scope.Failure;
 		}
 	}
 	SubmitPacket(BuildResult.Packet);

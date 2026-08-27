@@ -11,8 +11,10 @@ public class SightWeaveEditor : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"Settings",
 			"UnrealEd",
-			"SightWeaveRuntime"
+			"SightWeaveRuntime",
+			"SightWeaveRender"
 		});
 	}
 }

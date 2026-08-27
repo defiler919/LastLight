@@ -26,6 +26,7 @@ The page-boundary source used Y=11000 cm. With Ground minimum Y=-6500 cm and a S
 - Default Lab mode is M3P4. `-SightWeaveLabMode=M3P3` selects M3.3 and `-SightWeaveLabMode=M2` selects M2 for manual work.
 - M3P4 enables only `SW_M3P4_*` authority components plus the shared `SW_M3P3_PageBoundary*` fixture. Historical M2 and broad M3P3 sources are disabled for that PIE world.
 - The overview camera is assigned with `SetViewTarget` once the PIE player controller exists. Later manual camera changes remain possible.
+- `SightWeave.Lab.Camera <0-4>` switches PIE cameras by stable Actor label instead of UE's transient internal object name: `0` overview, `1` closeup, `2` dynamic door, `3` page boundary, `4` rotated 45 degrees.
 - All isolation code is in `SightWeaveEditor`; Game and Shipping builds do not contain it.
 - `Project Settings > Plugins > SightWeave` is explicitly registered by the Editor module.
 
@@ -83,5 +84,7 @@ Then compare 0, 50, and 100 cm from `Project Settings > Plugins > SightWeave` (r
 - HardLive outside remains strictly black;
 - camera pan/rotation/zoom does not change world-space width;
 - the page boundary has no bright seam.
+
+For a readable close-up comparison while PIE is running, enter `SightWeave.Lab.Camera 1` in the Output Log `Cmd` field. Use `SightWeave.Lab.Camera 0` to return to the overview. Unlike `viewactor`, this selector resolves the checked-in Actor label and does not depend on a transient `CameraActor_N` object name.
 
 Do not mark M3.4 `COMPLETED` until this retest and the focused automation tests pass on D3D12/SM6.

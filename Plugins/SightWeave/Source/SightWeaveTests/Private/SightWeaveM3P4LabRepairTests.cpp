@@ -57,6 +57,27 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FSightWeaveM3P4LabFixtureIsolationTest::RunTest(const FString& Parameters)
 {
+	TestEqual(TEXT("M3.4 overview camera label is stable"),
+		FString(SightWeave::Lab::GetCameraLabel(
+			ESightWeaveLabMode::M3P4, ESightWeaveLabCamera::Overview)),
+		FString(TEXT("SW_M3P4_OverviewCamera")));
+	TestEqual(TEXT("M3.4 closeup camera label is stable"),
+		FString(SightWeave::Lab::GetCameraLabel(
+			ESightWeaveLabMode::M3P4, ESightWeaveLabCamera::Closeup)),
+		FString(TEXT("SW_M3P4_CloseupCamera")));
+	TestEqual(TEXT("M3.4 dynamic-door camera label is stable"),
+		FString(SightWeave::Lab::GetCameraLabel(
+			ESightWeaveLabMode::M3P4, ESightWeaveLabCamera::DynamicDoor)),
+		FString(TEXT("SW_M3P4_DynamicDoorCamera")));
+	TestEqual(TEXT("M3.4 page-boundary camera label is stable"),
+		FString(SightWeave::Lab::GetCameraLabel(
+			ESightWeaveLabMode::M3P4, ESightWeaveLabCamera::PageBoundary)),
+		FString(TEXT("SW_M3P4_PageBoundaryCamera")));
+	TestEqual(TEXT("M3.4 rotated camera label is stable"),
+		FString(SightWeave::Lab::GetCameraLabel(
+			ESightWeaveLabMode::M3P4, ESightWeaveLabCamera::Rotated45)),
+		FString(TEXT("SW_M3P4_Rotated45Camera")));
+
 	TestTrue(TEXT("M3.4 enables its overview source"),
 		SightWeave::Lab::IsFixtureEnabled(TEXT("SW_M3P4_OverviewBypass"), ESightWeaveLabMode::M3P4));
 	TestTrue(TEXT("M3.4 reuses the corrected page-boundary source"),

@@ -6,6 +6,7 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/IConsoleManager.h"
 #include "ISettingsModule.h"
 #include "Modules/ModuleManager.h"
 #include "Misc/CommandLine.h"
@@ -25,12 +26,19 @@ namespace
 	{
 		TWeakObjectPtr<UWorld> World;
 		bool bIsolationApplied = false;
-		bool bCameraBound = false;
+		int32 BoundCameraSelection = INDEX_NONE;
 		bool bFailureLogged = false;
 		bool bHealthyLogged = false;
 	};
 
 	bool GSettingsSectionRegistered = false;
+
+	TAutoConsoleVariable<int32> CVarSightWeaveLabCamera(
+		TEXT("SightWeave.Lab.Camera"),
+		static_cast<int32>(ESightWeaveLabCamera::Overview),
+		TEXT("Select the active M3.4 Lab camera by stable Actor label.\n")
+		TEXT("0: Overview, 1: Closeup, 2: DynamicDoor, 3: PageBoundary, 4: Rotated45."),
+		ECVF_Default);
 
 	FString GetActorLabel(const AActor* Actor)
 	{
@@ -54,20 +62,6 @@ namespace
 			return SightWeave::Lab::SafePageBoundaryY + 1100.0;
 		}
 		return SightWeave::Lab::SafePageBoundaryY;
-	}
-
-	const TCHAR* GetOverviewCameraLabel(const ESightWeaveLabMode Mode)
-	{
-		switch (Mode)
-		{
-		case ESightWeaveLabMode::M2:
-			return TEXT("SW_M2_01_OverviewCamera");
-		case ESightWeaveLabMode::M3P3:
-			return TEXT("SW_M3P3_OverviewCamera");
-		case ESightWeaveLabMode::M3P4:
-		default:
-			return TEXT("SW_M3P4_OverviewCamera");
-		}
 	}
 
 	template <typename ComponentType, typename SetterType>
@@ -132,6 +126,33 @@ namespace SightWeave::Lab
 		default:
 			return TEXT("M3P4");
 		}
+	}
+
+	const TCHAR* GetCameraLabel(
+		const ESightWeaveLabMode Mode,
+		const ESightWeaveLabCamera Camera)
+	{
+		if (Mode == ESightWeaveLabMode::M3P4)
+		{
+			switch (Camera)
+			{
+			case ESightWeaveLabCamera::Closeup:
+				return TEXT("SW_M3P4_CloseupCamera");
+			case ESightWeaveLabCamera::DynamicDoor:
+				return TEXT("SW_M3P4_DynamicDoorCamera");
+			case ESightWeaveLabCamera::PageBoundary:
+				return TEXT("SW_M3P4_PageBoundaryCamera");
+			case ESightWeaveLabCamera::Rotated45:
+				return TEXT("SW_M3P4_Rotated45Camera");
+			case ESightWeaveLabCamera::Overview:
+			default:
+				return TEXT("SW_M3P4_OverviewCamera");
+			}
+		}
+
+		return Mode == ESightWeaveLabMode::M2
+			? TEXT("SW_M2_01_OverviewCamera")
+			: TEXT("SW_M3P3_OverviewCamera");
 	}
 
 	bool IsLabWorld(const UWorld* World)
@@ -321,9 +342,14 @@ private:
 					Result.AdjustedPageBoundaryActors);
 			}
 
-			if (!State->bCameraBound)
+			const int32 CameraSelection = FMath::Clamp(
+				CVarSightWeaveLabCamera.GetValueOnGameThread(),
+				static_cast<int32>(ESightWeaveLabCamera::Overview),
+				static_cast<int32>(ESightWeaveLabCamera::Rotated45));
+			if (State->BoundCameraSelection != CameraSelection
+				&& BindCamera(World, static_cast<ESightWeaveLabCamera>(CameraSelection)))
 			{
-				State->bCameraBound = BindOverviewCamera(World);
+				State->BoundCameraSelection = CameraSelection;
 			}
 
 			ReportDiagnostics(World, *State);
@@ -332,7 +358,7 @@ private:
 		return true;
 	}
 
-	bool BindOverviewCamera(UWorld* World) const
+	bool BindCamera(UWorld* World, const ESightWeaveLabCamera Camera) const
 	{
 		APlayerController* PlayerController = World->GetFirstPlayerController();
 		if (!IsValid(PlayerController) || !IsValid(World->PersistentLevel))
@@ -340,7 +366,7 @@ private:
 			return false;
 		}
 
-		const FString ExpectedLabel(GetOverviewCameraLabel(LabMode));
+		const FString ExpectedLabel(SightWeave::Lab::GetCameraLabel(LabMode, Camera));
 		for (AActor* Actor : World->PersistentLevel->Actors)
 		{
 			if (IsValid(Actor)

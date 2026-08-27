@@ -11,6 +11,15 @@ enum class ESightWeaveLabMode : uint8
 	M3P4
 };
 
+enum class ESightWeaveLabCamera : uint8
+{
+	Overview = 0,
+	Closeup = 1,
+	DynamicDoor = 2,
+	PageBoundary = 3,
+	Rotated45 = 4
+};
+
 struct FSightWeaveLabIsolationResult
 {
 	int32 EnabledVisionSources = 0;
@@ -31,6 +40,9 @@ namespace SightWeave::Lab
 
 	SIGHTWEAVEEDITOR_API ESightWeaveLabMode ResolveModeFromCommandLine();
 	SIGHTWEAVEEDITOR_API const TCHAR* LexToString(ESightWeaveLabMode Mode);
+	SIGHTWEAVEEDITOR_API const TCHAR* GetCameraLabel(
+		ESightWeaveLabMode Mode,
+		ESightWeaveLabCamera Camera);
 	SIGHTWEAVEEDITOR_API bool IsLabWorld(const UWorld* World);
 	SIGHTWEAVEEDITOR_API bool IsFixtureEnabled(const FString& ActorLabel, ESightWeaveLabMode Mode);
 	SIGHTWEAVEEDITOR_API bool IsSettingsSectionRegistered();

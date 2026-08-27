@@ -68,6 +68,12 @@ IMPLEMENT_GLOBAL_SHADER(
 
 #if WITH_DEV_AUTOMATION_TESTS
 IMPLEMENT_GLOBAL_SHADER(
+	FSightWeaveMemoryPresentationTestPixelShader,
+	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
+	"SightWeaveMemoryPresentationTestPS",
+	SF_Pixel);
+
+IMPLEMENT_GLOBAL_SHADER(
 	FSightWeavePresentationTestPixelShader,
 	"/Plugin/SightWeave/Private/SightWeaveSingleTile.usf",
 	"SightWeavePresentationTestPS",

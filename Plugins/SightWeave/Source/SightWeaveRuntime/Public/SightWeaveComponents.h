@@ -4,6 +4,7 @@
 #include "SightWeaveDebug.h"
 #include "SightWeaveGeometry.h"
 #include "SightWeaveQueries.h"
+#include "SightWeaveStaticEnvironment.h"
 #include "SightWeaveTypes.h"
 
 #include "SightWeaveComponents.generated.h"
@@ -193,6 +194,56 @@ protected:
 private:
 	bool BuildWorldDescription(FSightWeaveHardSuppressionDescription& OutDescription) const;
 	FSightWeaveHardSuppressionHandle Handle;
+};
+
+/** Explicit immutable 2.5D neutral-attribute authoring; never infers eligibility. */
+UCLASS(ClassGroup = (SightWeave), BlueprintType, Blueprintable, meta = (BlueprintSpawnableComponent))
+class SIGHTWEAVERUNTIME_API USightWeaveStaticEnvironmentComponent final : public USceneComponent
+{
+	GENERATED_BODY()
+
+public:
+	USightWeaveStaticEnvironmentComponent();
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Static Environment")
+	FSightWeaveKnowledgeOwnerId KnowledgeOwnerId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Static Environment")
+	FSightWeaveFloorId FloorId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Static Environment")
+	FSightWeaveHeightRange LocalHeightRange;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Static Environment")
+	TArray<FVector2D> LocalFootprint;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Static Environment",
+		meta = (ClampMin = "1", ClampMax = "255"))
+	uint8 NeutralIntensity = 112;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Static Environment")
+	bool bExplicitlyImmutable = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Static Environment")
+	bool bEnabled = true;
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Static Environment")
+	bool RefreshStaticEnvironmentRegistration();
+
+	UFUNCTION(BlueprintPure, Category = "SightWeave|Static Environment")
+	FSightWeaveStaticEnvironmentHandle GetStaticEnvironmentHandle() const { return Handle; }
+
+protected:
+	virtual void OnRegister() override;
+	virtual void OnUnregister() override;
+	virtual void OnUpdateTransform(EUpdateTransformFlags UpdateTransformFlags, ETeleportType Teleport) override;
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
+
+private:
+	bool BuildWorldDescription(FSightWeaveStaticEnvironmentDescription& OutDescription) const;
+	FSightWeaveStaticEnvironmentHandle Handle;
 };
 
 /** No-tick marker that samples and optionally draws one authoritative query at BeginPlay. */

@@ -9,6 +9,7 @@
 
 class FSightWeaveSceneViewExtension;
 class FSightWeaveMemoryPacket;
+class FSightWeaveStaticEnvironmentPacket;
 struct FSightWeaveFrameSnapshot;
 
 enum class ESightWeaveRenderAvailability : uint8
@@ -71,6 +72,8 @@ private:
 		TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot);
 	void HandleMemoryPacketPublished(
 		TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> Packet);
+	void HandleStaticEnvironmentPacketPublished(
+		TSharedPtr<const FSightWeaveStaticEnvironmentPacket, ESPMode::ThreadSafe> Packet);
 	void BuildAndSubmitPacket(
 		const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe>& Snapshot);
 	void SubmitFailClosedClear(uint64 SnapshotRevision, ESightWeaveSparsePacketFailure Failure);
@@ -90,6 +93,7 @@ private:
 	bool bHasExplicitPresentationScope = false;
 	FDelegateHandle SnapshotPublishedHandle;
 	FDelegateHandle MemoryPacketPublishedHandle;
+	FDelegateHandle StaticEnvironmentPacketPublishedHandle;
 	TSharedPtr<FSightWeaveSceneViewExtension, ESPMode::ThreadSafe> SceneViewExtension;
 	FSightWeaveRenderWorldDiagnostics Diagnostics;
 };

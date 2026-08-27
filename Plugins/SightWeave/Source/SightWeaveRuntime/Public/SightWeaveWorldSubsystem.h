@@ -7,6 +7,7 @@
 #include "SightWeaveMemory.h"
 #include "SightWeaveQueries.h"
 #include "SightWeaveSpatialIndex.h"
+#include "SightWeaveStaticEnvironment.h"
 #include "SightWeavePreparedEventIndexStats.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "SightWeaveTypes.h"
@@ -23,6 +24,11 @@ using FSightWeaveImmutableMemoryPacketPtr =
 DECLARE_MULTICAST_DELEGATE_OneParam(
 	FSightWeaveMemoryPacketPublishedDelegate,
 	FSightWeaveImmutableMemoryPacketPtr);
+using FSightWeaveImmutableStaticEnvironmentPacketPtr =
+	TSharedPtr<const FSightWeaveStaticEnvironmentPacket, ESPMode::ThreadSafe>;
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FSightWeaveStaticEnvironmentPacketPublishedDelegate,
+	FSightWeaveImmutableStaticEnvironmentPacketPtr);
 
 #if WITH_DEV_AUTOMATION_TESTS
 enum class ESightWeaveDynamicUpdateStage : uint8
@@ -332,6 +338,22 @@ public:
 	{
 		return MemoryPacketPublishedDelegate;
 	}
+	FSightWeaveStaticEnvironmentHandle RegisterStaticEnvironment(
+		const FSightWeaveStaticEnvironmentDescription& Description,
+		UObject* Owner);
+	bool UpdateStaticEnvironment(
+		FSightWeaveStaticEnvironmentHandle Handle,
+		const FSightWeaveStaticEnvironmentDescription& Description);
+	bool UnregisterStaticEnvironment(FSightWeaveStaticEnvironmentHandle Handle);
+	bool IsStaticEnvironmentHandleValid(FSightWeaveStaticEnvironmentHandle Handle) const;
+	FSightWeaveImmutableStaticEnvironmentPacketPtr AcquirePublishedStaticEnvironmentPacket() const
+	{
+		return PublishedStaticEnvironmentPacket;
+	}
+	FSightWeaveStaticEnvironmentPacketPublishedDelegate& OnStaticEnvironmentPacketPublished()
+	{
+		return StaticEnvironmentPacketPublishedDelegate;
+	}
 
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Debug")
 	FSightWeaveDebugData BuildDebugData() const;
@@ -416,6 +438,7 @@ public:
 
 private:
 	void PublishMemoryAuthorityPacket(bool bForceFullRebuild = false);
+	void PublishStaticEnvironmentPacket();
 	void AdvanceRevision();
 	void ResetState();
 	FSightWeaveVisibilityQueryResult MakeQueryResult(
@@ -580,6 +603,10 @@ private:
 	FSightWeaveMemoryUpdateDiagnostics LastMemoryUpdateDiagnostics;
 	FSightWeaveImmutableMemoryPacketPtr PublishedMemoryPacket;
 	FSightWeaveMemoryPacketPublishedDelegate MemoryPacketPublishedDelegate;
+	FSightWeaveStaticEnvironmentAuthority StaticEnvironmentAuthority;
+	FSightWeaveImmutableStaticEnvironmentPacketPtr PublishedStaticEnvironmentPacket;
+	FSightWeaveStaticEnvironmentPacketPublishedDelegate
+		StaticEnvironmentPacketPublishedDelegate;
 
 #if WITH_DEV_AUTOMATION_TESTS
 	FSightWeaveDynamicUpdateStageMetrics LastDynamicUpdateStageMetrics;
@@ -592,4 +619,5 @@ private:
 	TMap<int64, TWeakObjectPtr<UObject>> SubjectRevealOwners;
 	TMap<int64, TWeakObjectPtr<UObject>> OccluderOwners;
 	TMap<int64, TWeakObjectPtr<UObject>> HardSuppressionOwners;
+	TMap<int64, TWeakObjectPtr<UObject>> StaticEnvironmentOwners;
 };

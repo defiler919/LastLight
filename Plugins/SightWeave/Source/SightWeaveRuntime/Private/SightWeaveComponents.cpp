@@ -509,6 +509,108 @@ bool USightWeaveHardSuppressionComponent::BuildWorldDescription(
 	return OutDescription.IsValid();
 }
 
+USightWeaveStaticEnvironmentComponent::USightWeaveStaticEnvironmentComponent()
+	: KnowledgeOwnerId(FName(TEXT("Local")))
+	, FloorId(FName(TEXT("Default")))
+{
+	PrimaryComponentTick.bCanEverTick = false;
+	bWantsOnUpdateTransform = true;
+	LocalHeightRange = { 0.0f, 300.0f };
+	LocalFootprint = {
+		FVector2D(-100.0, -100.0),
+		FVector2D(100.0, -100.0),
+		FVector2D(100.0, 100.0),
+		FVector2D(-100.0, 100.0)
+	};
+}
+
+void USightWeaveStaticEnvironmentComponent::OnRegister()
+{
+	Super::OnRegister();
+	RefreshStaticEnvironmentRegistration();
+}
+
+void USightWeaveStaticEnvironmentComponent::OnUnregister()
+{
+	if (USightWeaveWorldSubsystem* Subsystem = GetSightWeaveSubsystem(this);
+		Subsystem && Handle.IsValid())
+	{
+		Subsystem->UnregisterStaticEnvironment(Handle);
+	}
+	Handle = FSightWeaveStaticEnvironmentHandle();
+	Super::OnUnregister();
+}
+
+void USightWeaveStaticEnvironmentComponent::OnUpdateTransform(
+	const EUpdateTransformFlags UpdateTransformFlags,
+	const ETeleportType Teleport)
+{
+	Super::OnUpdateTransform(UpdateTransformFlags, Teleport);
+	if (IsRegistered())
+	{
+		RefreshStaticEnvironmentRegistration();
+	}
+}
+
+#if WITH_EDITOR
+void USightWeaveStaticEnvironmentComponent::PostEditChangeProperty(
+	FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	RefreshStaticEnvironmentRegistration();
+}
+#endif
+
+bool USightWeaveStaticEnvironmentComponent::RefreshStaticEnvironmentRegistration()
+{
+	USightWeaveWorldSubsystem* Subsystem = GetSightWeaveSubsystem(this);
+	FSightWeaveStaticEnvironmentDescription Description;
+	if (!Subsystem || !BuildWorldDescription(Description))
+	{
+		return false;
+	}
+	if (Handle.IsValid())
+	{
+		return Subsystem->UpdateStaticEnvironment(Handle, Description);
+	}
+	Handle = Subsystem->RegisterStaticEnvironment(Description, this);
+	return Handle.IsValid();
+}
+
+bool USightWeaveStaticEnvironmentComponent::BuildWorldDescription(
+	FSightWeaveStaticEnvironmentDescription& OutDescription) const
+{
+	OutDescription = FSightWeaveStaticEnvironmentDescription();
+	const FTransform Transform = GetComponentTransform();
+	const FVector Scale = Transform.GetScale3D();
+	const FRotator Rotation = Transform.Rotator();
+	if (Scale.X <= 0.0
+		|| Scale.Y <= 0.0
+		|| Scale.Z <= 0.0
+		|| !FMath::IsNearlyEqual(Scale.X, Scale.Y, 1.0e-4)
+		|| !FMath::IsNearlyZero(Rotation.Pitch, 1.0e-4)
+		|| !FMath::IsNearlyZero(Rotation.Roll, 1.0e-4))
+	{
+		return false;
+	}
+	OutDescription.KnowledgeOwnerId = KnowledgeOwnerId;
+	OutDescription.FloorId = FloorId;
+	OutDescription.HeightRange.ZMin =
+		Transform.GetLocation().Z + LocalHeightRange.ZMin * Scale.Z;
+	OutDescription.HeightRange.ZMax =
+		Transform.GetLocation().Z + LocalHeightRange.ZMax * Scale.Z;
+	OutDescription.WorldFootprint.Reserve(LocalFootprint.Num());
+	for (const FVector2D Local : LocalFootprint)
+	{
+		const FVector World = Transform.TransformPosition(FVector(Local, 0.0));
+		OutDescription.WorldFootprint.Emplace(World.X, World.Y);
+	}
+	OutDescription.NeutralIntensity = NeutralIntensity;
+	OutDescription.bExplicitlyImmutable = bExplicitlyImmutable;
+	OutDescription.bEnabled = bEnabled;
+	return OutDescription.IsValid();
+}
+
 USightWeaveDebugQueryComponent::USightWeaveDebugQueryComponent()
 	: KnowledgeOwnerId(FName(TEXT("Local")))
 	, FloorId(FName(TEXT("Default")))

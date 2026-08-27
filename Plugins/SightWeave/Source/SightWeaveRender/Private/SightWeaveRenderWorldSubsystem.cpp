@@ -107,6 +107,12 @@ void USightWeaveRenderWorldSubsystem::Initialize(FSubsystemCollectionBase& Colle
 			this,
 			&USightWeaveRenderWorldSubsystem::HandleMemoryPacketPublished);
 		HandleMemoryPacketPublished(Runtime->AcquirePublishedMemoryPacket());
+		StaticEnvironmentPacketPublishedHandle =
+			Runtime->OnStaticEnvironmentPacketPublished().AddUObject(
+				this,
+				&USightWeaveRenderWorldSubsystem::HandleStaticEnvironmentPacketPublished);
+		HandleStaticEnvironmentPacketPublished(
+			Runtime->AcquirePublishedStaticEnvironmentPacket());
 	}
 }
 
@@ -118,10 +124,13 @@ void USightWeaveRenderWorldSubsystem::Deinitialize()
 		{
 			Runtime->OnSnapshotPublished().Remove(SnapshotPublishedHandle);
 			Runtime->OnMemoryPacketPublished().Remove(MemoryPacketPublishedHandle);
+			Runtime->OnStaticEnvironmentPacketPublished().Remove(
+				StaticEnvironmentPacketPublishedHandle);
 		}
 	}
 	SnapshotPublishedHandle.Reset();
 	MemoryPacketPublishedHandle.Reset();
+	StaticEnvironmentPacketPublishedHandle.Reset();
 	if (SceneViewExtension.IsValid())
 	{
 		SceneViewExtension->Shutdown(WorldIdentity);
@@ -139,6 +148,15 @@ void USightWeaveRenderWorldSubsystem::HandleMemoryPacketPublished(
 	if (SceneViewExtension.IsValid())
 	{
 		SceneViewExtension->SubmitMemoryPacket(MoveTemp(Packet));
+	}
+}
+
+void USightWeaveRenderWorldSubsystem::HandleStaticEnvironmentPacketPublished(
+	TSharedPtr<const FSightWeaveStaticEnvironmentPacket, ESPMode::ThreadSafe> Packet)
+{
+	if (SceneViewExtension.IsValid())
+	{
+		SceneViewExtension->SubmitStaticEnvironmentPacket(MoveTemp(Packet));
 	}
 }
 

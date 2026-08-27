@@ -131,6 +131,18 @@ int2 SceneColorRectSize;
 float2 TranslatedFloorOrigin;
 float CentimetersPerTexel;
 uint PageTableCount;
+StructuredBuffer<int4> MemoryPageTable;
+Texture2D<float> MemoryPage0;
+Texture2D<float> MemoryPage1;
+uint MemoryPageTableCount;
+StructuredBuffer<int4> StaticAttributePageTable;
+Texture2D<float> StaticAttributePage0;
+Texture2D<float> StaticAttributePage1;
+uint StaticAttributePageTableCount;
+float2 MemoryTranslatedFloorOrigin;
+float MemoryTranslatedFloorPlaneZ;
+float MemoryCentimetersPerTexel;
+uint MemoryPresentationAvailable;
 
 bool SightWeaveCoordinateLess(int2 A, int2 B)
 {
@@ -224,6 +236,119 @@ bool SightWeaveIsHardLive(float2 TranslatedWorld)
 	return SightWeaveLoadAtlasMask(PageIndex, AtlasTexel) >= 0.5f;
 }
 
+int SightWeaveFindMemoryPageTableEntry(int2 LogicalCoordinate)
+{
+	int Low = 0;
+	int High = int(MemoryPageTableCount) - 1;
+	while (Low <= High)
+	{
+		const int Middle = Low + (High - Low) / 2;
+		const int2 Candidate = MemoryPageTable[Middle].xy;
+		if (all(Candidate == LogicalCoordinate)) return Middle;
+		if (SightWeaveCoordinateLess(Candidate, LogicalCoordinate)) Low = Middle + 1;
+		else High = Middle - 1;
+	}
+	return -1;
+}
+
+int SightWeaveFindStaticAttributePageTableEntry(int2 LogicalCoordinate)
+{
+	int Low = 0;
+	int High = int(StaticAttributePageTableCount) - 1;
+	while (Low <= High)
+	{
+		const int Middle = Low + (High - Low) / 2;
+		const int2 Candidate = StaticAttributePageTable[Middle].xy;
+		if (all(Candidate == LogicalCoordinate)) return Middle;
+		if (SightWeaveCoordinateLess(Candidate, LogicalCoordinate)) Low = Middle + 1;
+		else High = Middle - 1;
+	}
+	return -1;
+}
+
+float SightWeaveLoadMemoryPage(int PageIndex, int2 Texel)
+{
+	if (PageIndex == 0) return MemoryPage0.Load(int3(Texel, 0));
+	if (PageIndex == 1) return MemoryPage1.Load(int3(Texel, 0));
+	return 0.0f;
+}
+
+float SightWeaveLoadStaticAttributePage(int PageIndex, int2 Texel)
+{
+	if (PageIndex == 0) return StaticAttributePage0.Load(int3(Texel, 0));
+	if (PageIndex == 1) return StaticAttributePage1.Load(int3(Texel, 0));
+	return 0.0f;
+}
+
+float SightWeaveSampleMemory(float2 TranslatedWorld)
+{
+	const float2 Local = TranslatedWorld - MemoryTranslatedFloorOrigin;
+	const float InteriorSpan = 248.0f * MemoryCentimetersPerTexel;
+	const int2 LogicalCoordinate = int2(floor(Local / InteriorSpan));
+	const int EntryIndex = SightWeaveFindMemoryPageTableEntry(LogicalCoordinate);
+	if (EntryIndex < 0) return 0.0f;
+	const int4 Entry = MemoryPageTable[EntryIndex];
+	const int2 InteriorTexel = clamp(
+		int2(floor((Local - float2(LogicalCoordinate) * InteriorSpan)
+			/ MemoryCentimetersPerTexel)),
+		int2(0, 0), int2(247, 247));
+	const int2 SlotOrigin = int2(Entry.w & 7, Entry.w >> 3) * 256;
+	return SightWeaveLoadMemoryPage(Entry.z, SlotOrigin + int2(4, 4) + InteriorTexel);
+}
+
+float SightWeaveSampleStaticAttribute(float2 TranslatedWorld)
+{
+	const float2 Local = TranslatedWorld - MemoryTranslatedFloorOrigin;
+	const float InteriorSpan = 248.0f * MemoryCentimetersPerTexel;
+	const int2 LogicalCoordinate = int2(floor(Local / InteriorSpan));
+	const int EntryIndex = SightWeaveFindStaticAttributePageTableEntry(LogicalCoordinate);
+	if (EntryIndex < 0) return 0.0f;
+	const int4 Entry = StaticAttributePageTable[EntryIndex];
+	const int2 InteriorTexel = clamp(
+		int2(floor((Local - float2(LogicalCoordinate) * InteriorSpan)
+			/ MemoryCentimetersPerTexel)),
+		int2(0, 0), int2(247, 247));
+	const int2 SlotOrigin = int2(Entry.w & 7, Entry.w >> 3) * 256;
+	return SightWeaveLoadStaticAttributePage(
+		Entry.z,
+		SlotOrigin + int2(4, 4) + InteriorTexel);
+}
+
+bool SightWeaveIntersectFloorPlane(int2 DepthPixel, out float2 TranslatedFloorPosition)
+{
+	const float3 A = SvPositionToTranslatedWorld(
+		float4(float2(DepthPixel) + 0.5f, 0.5f, 1.0f));
+	const float3 B = SvPositionToTranslatedWorld(
+		float4(float2(DepthPixel) + 0.5f, 0.1f, 1.0f));
+	const float3 Direction = B - A;
+	if (abs(Direction.z) < 1.0e-6f)
+	{
+		TranslatedFloorPosition = 0.0f;
+		return false;
+	}
+	const float T = (MemoryTranslatedFloorPlaneZ - A.z) / Direction.z;
+	TranslatedFloorPosition = A.xy + Direction.xy * T;
+	return all(isfinite(TranslatedFloorPosition));
+}
+
+float4 SightWeaveRememberedEnvironment(int2 DepthPixel)
+{
+	if (MemoryPresentationAvailable == 0
+		|| MemoryPageTableCount == 0
+		|| StaticAttributePageTableCount == 0)
+	{
+		return 0.0f;
+	}
+	float2 TranslatedFloorPosition;
+	if (!SightWeaveIntersectFloorPlane(DepthPixel, TranslatedFloorPosition)
+		|| SightWeaveSampleMemory(TranslatedFloorPosition) < 0.5f)
+	{
+		return 0.0f;
+	}
+	const float Attribute = SightWeaveSampleStaticAttribute(TranslatedFloorPosition);
+	return Attribute > 0.0f ? float4(Attribute.xxx, 1.0f) : 0.0f;
+}
+
 float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 {
 	const int2 OutputPixel = int2(Position.xy);
@@ -243,7 +368,9 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 	const float3 TranslatedWorld = SvPositionToTranslatedWorld(
 		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
 	const bool bVisible = SightWeaveIsHardLive(TranslatedWorld.xy);
-	return bVisible ? SceneColorTexture.Load(int3(SceneColorPixel, 0)) : 0.0f;
+	return bVisible
+		? SceneColorTexture.Load(int3(SceneColorPixel, 0))
+		: SightWeaveRememberedEnvironment(DepthPixel);
 }
 
 Texture2D<float> FeatherPage0;
@@ -377,7 +504,7 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
 	if (!SightWeaveIsHardLive(TranslatedWorld.xy))
 	{
-		return 0.0f;
+		return SightWeaveRememberedEnvironment(DepthPixel);
 	}
 	const float VisualFeatherWeight = SightWeaveSampleVisualFeather(
 		TranslatedWorld.xy - TranslatedFloorOrigin);
@@ -387,6 +514,27 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 StructuredBuffer<float2> TestTranslatedWorldPositions;
 StructuredBuffer<float4> TestSceneColors;
 uint TestSampleCount;
+
+float4 SightWeaveMemoryPresentationTestPS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const uint SampleIndex = uint(Position.x);
+	if (SampleIndex >= TestSampleCount)
+	{
+		return 0.0f;
+	}
+	const float2 TranslatedWorld = TestTranslatedWorldPositions[SampleIndex];
+	if (SightWeaveIsHardLive(TranslatedWorld))
+	{
+		return TestSceneColors[SampleIndex];
+	}
+	if (MemoryPresentationAvailable == 0
+		|| SightWeaveSampleMemory(TranslatedWorld) < 0.5f)
+	{
+		return 0.0f;
+	}
+	const float Attribute = SightWeaveSampleStaticAttribute(TranslatedWorld);
+	return Attribute > 0.0f ? float4(Attribute.xxx, 1.0f) : 0.0f;
+}
 
 float4 SightWeavePresentationTestPS(float4 Position : SV_POSITION) : SV_Target0
 {

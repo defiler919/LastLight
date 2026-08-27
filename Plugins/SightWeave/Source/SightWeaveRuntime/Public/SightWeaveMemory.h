@@ -62,6 +62,7 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryScopeKey
 	FSightWeaveKnowledgeOwnerId KnowledgeOwnerId;
 	FSightWeaveFloorId FloorId;
 	FVector2D FloorOrigin = FVector2D::ZeroVector;
+	float FloorPlaneZ = 0.0f;
 	ESightWeaveRenderPrecisionTier PrecisionTier = ESightWeaveRenderPrecisionTier::Standard;
 	TArray<FSightWeaveRenderProfileIdentity> CanonicalProfiles;
 
@@ -92,6 +93,7 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryRegion
 
 	bool IsValid() const;
 	bool IsEquivalentTo(const FSightWeaveMemoryRegion& Other) const;
+	bool ContainsWorldLocation(FVector WorldLocation) const;
 };
 
 struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryModifierDescription

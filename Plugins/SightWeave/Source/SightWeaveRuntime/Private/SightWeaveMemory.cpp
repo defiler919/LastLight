@@ -367,6 +367,7 @@ bool FSightWeaveMemoryScopeKey::IsValid() const
 		|| !KnowledgeOwnerId.IsValid()
 		|| !FloorId.IsValid()
 		|| !IsFinite(FloorOrigin)
+		|| !FMath::IsFinite(FloorPlaneZ)
 		|| SightWeaveCentimetersPerTexel(PrecisionTier) <= 0.0f)
 	{
 		return false;
@@ -388,6 +389,7 @@ bool FSightWeaveMemoryScopeKey::IsEquivalentTo(const FSightWeaveMemoryScopeKey& 
 		&& KnowledgeOwnerId == Other.KnowledgeOwnerId
 		&& FloorId == Other.FloorId
 		&& FloorOrigin == Other.FloorOrigin
+		&& FloorPlaneZ == Other.FloorPlaneZ
 		&& PrecisionTier == Other.PrecisionTier
 		&& ProfilesEqual(CanonicalProfiles, Other.CanonicalProfiles);
 }
@@ -433,6 +435,11 @@ bool FSightWeaveMemoryRegion::IsEquivalentTo(const FSightWeaveMemoryRegion& Othe
 		&& RotationDegrees == Other.RotationDegrees
 		&& PolygonVertices == Other.PolygonVertices
 		&& bEnabled == Other.bEnabled;
+}
+
+bool FSightWeaveMemoryRegion::ContainsWorldLocation(const FVector WorldLocation) const
+{
+	return IsValid() && PointInRegion(*this, WorldLocation);
 }
 
 bool FSightWeaveMemoryModifierDescription::IsEquivalentTo(
@@ -1001,6 +1008,7 @@ bool FSightWeaveMemoryAuthority::BuildScopeForSnapshot(
 	OutScope.KnowledgeOwnerId = KnowledgeOwnerId;
 	OutScope.FloorId = FloorId;
 	OutScope.FloorOrigin = Floor->BoundsMin;
+	OutScope.FloorPlaneZ = Floor->HeightRange.ZMin;
 	OutScope.PrecisionTier = PrecisionTier;
 	BuildCanonicalProfiles(Snapshot, KnowledgeOwnerId, FloorId, OutScope.CanonicalProfiles);
 	return OutScope.IsValid();

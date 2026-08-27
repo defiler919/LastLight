@@ -4,6 +4,7 @@
 #include "SightWeaveMemory.h"
 #include "SightWeavePresentation.h"
 #include "SightWeaveSparseAtlas.h"
+#include "SightWeaveStaticEnvironment.h"
 
 class FSightWeaveSparseAtlasRenderState;
 
@@ -17,6 +18,8 @@ public:
 
 	void SubmitPacket(TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet);
 	void SubmitMemoryPacket(TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> Packet);
+	void SubmitStaticEnvironmentPacket(
+		TSharedPtr<const FSightWeaveStaticEnvironmentPacket, ESPMode::ThreadSafe> Packet);
 	void SubmitPresentationSelection(const FSightWeaveViewPresentationSelection& Selection);
 	void Shutdown(FSightWeaveRenderWorldIdentity ExpectedWorldIdentity);
 

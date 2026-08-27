@@ -136,6 +136,18 @@ public:
 		SHADER_PARAMETER(FVector2f, TranslatedFloorOrigin)
 		SHADER_PARAMETER(float, CentimetersPerTexel)
 		SHADER_PARAMETER(uint32, PageTableCount)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, MemoryPageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, MemoryPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, MemoryPage1)
+		SHADER_PARAMETER(uint32, MemoryPageTableCount)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, StaticAttributePageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, StaticAttributePage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, StaticAttributePage1)
+		SHADER_PARAMETER(uint32, StaticAttributePageTableCount)
+		SHADER_PARAMETER(FVector2f, MemoryTranslatedFloorOrigin)
+		SHADER_PARAMETER(float, MemoryTranslatedFloorPlaneZ)
+		SHADER_PARAMETER(float, MemoryCentimetersPerTexel)
+		SHADER_PARAMETER(uint32, MemoryPresentationAvailable)
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -241,6 +253,18 @@ public:
 		SHADER_PARAMETER(float, CentimetersPerTexel)
 		SHADER_PARAMETER(float, FeatherWidthCentimeters)
 		SHADER_PARAMETER(uint32, PageTableCount)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, MemoryPageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, MemoryPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, MemoryPage1)
+		SHADER_PARAMETER(uint32, MemoryPageTableCount)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, StaticAttributePageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, StaticAttributePage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, StaticAttributePage1)
+		SHADER_PARAMETER(uint32, StaticAttributePageTableCount)
+		SHADER_PARAMETER(FVector2f, MemoryTranslatedFloorOrigin)
+		SHADER_PARAMETER(float, MemoryTranslatedFloorPlaneZ)
+		SHADER_PARAMETER(float, MemoryCentimetersPerTexel)
+		SHADER_PARAMETER(uint32, MemoryPresentationAvailable)
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -251,6 +275,44 @@ public:
 };
 
 #if WITH_DEV_AUTOMATION_TESTS
+class FSightWeaveMemoryPresentationTestPixelShader final : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSightWeaveMemoryPresentationTestPixelShader);
+	SHADER_USE_PARAMETER_STRUCT(FSightWeaveMemoryPresentationTestPixelShader, FGlobalShader);
+
+public:
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float2>, TestTranslatedWorldPositions)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4>, TestSceneColors)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, PageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage1)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage2)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage3)
+		SHADER_PARAMETER(FVector2f, TranslatedFloorOrigin)
+		SHADER_PARAMETER(float, CentimetersPerTexel)
+		SHADER_PARAMETER(uint32, PageTableCount)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, MemoryPageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, MemoryPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, MemoryPage1)
+		SHADER_PARAMETER(uint32, MemoryPageTableCount)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, StaticAttributePageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, StaticAttributePage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, StaticAttributePage1)
+		SHADER_PARAMETER(uint32, StaticAttributePageTableCount)
+		SHADER_PARAMETER(FVector2f, MemoryTranslatedFloorOrigin)
+		SHADER_PARAMETER(float, MemoryTranslatedFloorPlaneZ)
+		SHADER_PARAMETER(float, MemoryCentimetersPerTexel)
+		SHADER_PARAMETER(uint32, MemoryPresentationAvailable)
+		SHADER_PARAMETER(uint32, TestSampleCount)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return Parameters.Platform == SP_PCD3D_SM6;
+	}
+};
+
 class FSightWeavePresentationTestPixelShader final : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FSightWeavePresentationTestPixelShader);

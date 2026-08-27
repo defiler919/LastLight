@@ -1250,6 +1250,18 @@ int32 USightWeaveWorldSubsystem::UnregisterAllForOwner(UObject* Owner)
 	{
 		RemovedCount += RemoveSubjectRevealOverride(Handle) ? 1 : 0;
 	}
+	TArray<FSightWeaveStaticEnvironmentHandle> OwnedStaticEnvironment;
+	for (const TPair<int64, TWeakObjectPtr<UObject>>& Pair : StaticEnvironmentOwners)
+	{
+		if (Pair.Value.Get() == Owner)
+		{
+			OwnedStaticEnvironment.Emplace(Pair.Key);
+		}
+	}
+	for (const FSightWeaveStaticEnvironmentHandle Handle : OwnedStaticEnvironment)
+	{
+		RemovedCount += UnregisterStaticEnvironment(Handle) ? 1 : 0;
+	}
 	return RemovedCount;
 }
 
@@ -2212,20 +2224,36 @@ bool USightWeaveWorldSubsystem::ConfigureExplorationMemory(
 			FloorId,
 			PrecisionTier,
 			Scope)
-		|| !MemoryAuthority.Configure(Scope, MaximumTiles))
+		|| !StaticEnvironmentAuthority.Configure(
+			Scope,
+			FMath::Min(
+				MaximumTiles,
+				SightWeave::StaticEnvironment::DefaultMaximumTiles)))
 	{
+		return false;
+	}
+	// Memory Configure cannot fail after the shared scope and capacity have been
+	// validated above. Configure it second so a static-capacity failure does not
+	// destroy an existing memory authority.
+	if (!MemoryAuthority.Configure(Scope, MaximumTiles))
+	{
+		StaticEnvironmentAuthority.Disable();
 		return false;
 	}
 	LastMemoryUpdateDiagnostics = MemoryAuthority.WriteEffectiveLive(*PublishedSnapshot);
 	if (!LastMemoryUpdateDiagnostics.Succeeded())
 	{
 		MemoryAuthority.Reset();
+		StaticEnvironmentAuthority.Disable();
 		PublishedMemoryPacket.Reset();
+		PublishedStaticEnvironmentPacket.Reset();
 		MemoryPacketPublishedDelegate.Broadcast(PublishedMemoryPacket);
+		StaticEnvironmentPacketPublishedDelegate.Broadcast(PublishedStaticEnvironmentPacket);
 		return false;
 	}
 	PublishedMemoryPacket = MemoryAuthority.PublishPacket(true);
 	MemoryPacketPublishedDelegate.Broadcast(PublishedMemoryPacket);
+	PublishStaticEnvironmentPacket();
 	return PublishedMemoryPacket.IsValid() && PublishedMemoryPacket->IsValid();
 }
 
@@ -2233,9 +2261,12 @@ void USightWeaveWorldSubsystem::DisableExplorationMemory()
 {
 	check(IsInGameThread());
 	MemoryAuthority.Reset();
+	StaticEnvironmentAuthority.Disable();
 	LastMemoryUpdateDiagnostics = FSightWeaveMemoryUpdateDiagnostics();
 	PublishedMemoryPacket.Reset();
 	MemoryPacketPublishedDelegate.Broadcast(PublishedMemoryPacket);
+	PublishedStaticEnvironmentPacket.Reset();
+	StaticEnvironmentPacketPublishedDelegate.Broadcast(PublishedStaticEnvironmentPacket);
 }
 
 bool USightWeaveWorldSubsystem::QueryHardMemoryAtLocation(const FVector WorldLocation) const
@@ -2306,6 +2337,67 @@ void USightWeaveWorldSubsystem::PublishMemoryAuthorityPacket(const bool bForceFu
 		PublishedMemoryPacket = MemoryAuthority.PublishPacket(bForceFullRebuild);
 	}
 	MemoryPacketPublishedDelegate.Broadcast(PublishedMemoryPacket);
+}
+
+FSightWeaveStaticEnvironmentHandle USightWeaveWorldSubsystem::RegisterStaticEnvironment(
+	const FSightWeaveStaticEnvironmentDescription& Description,
+	UObject* Owner)
+{
+	if (!bSightWeaveInitialized || !Owner)
+	{
+		return FSightWeaveStaticEnvironmentHandle();
+	}
+	const FSightWeaveStaticEnvironmentHandle Handle =
+		StaticEnvironmentAuthority.Register(Description);
+	if (Handle.IsValid())
+	{
+		StaticEnvironmentOwners.Add(Handle.GetValue(), Owner);
+		PublishStaticEnvironmentPacket();
+	}
+	return Handle;
+}
+
+bool USightWeaveWorldSubsystem::UpdateStaticEnvironment(
+	const FSightWeaveStaticEnvironmentHandle Handle,
+	const FSightWeaveStaticEnvironmentDescription& Description)
+{
+	if (!StaticEnvironmentAuthority.Update(Handle, Description))
+	{
+		return false;
+	}
+	PublishStaticEnvironmentPacket();
+	return true;
+}
+
+bool USightWeaveWorldSubsystem::UnregisterStaticEnvironment(
+	const FSightWeaveStaticEnvironmentHandle Handle)
+{
+	if (!StaticEnvironmentAuthority.Unregister(Handle))
+	{
+		return false;
+	}
+	StaticEnvironmentOwners.Remove(Handle.GetValue());
+	PublishStaticEnvironmentPacket();
+	return true;
+}
+
+bool USightWeaveWorldSubsystem::IsStaticEnvironmentHandleValid(
+	const FSightWeaveStaticEnvironmentHandle Handle) const
+{
+	return StaticEnvironmentAuthority.IsHandleValid(Handle);
+}
+
+void USightWeaveWorldSubsystem::PublishStaticEnvironmentPacket()
+{
+	if (!StaticEnvironmentAuthority.IsConfigured())
+	{
+		PublishedStaticEnvironmentPacket.Reset();
+	}
+	else
+	{
+		PublishedStaticEnvironmentPacket = StaticEnvironmentAuthority.PublishPacket();
+	}
+	StaticEnvironmentPacketPublishedDelegate.Broadcast(PublishedStaticEnvironmentPacket);
 }
 
 FSightWeavePreparedEventIndexStats USightWeaveWorldSubsystem::GetPreparedEventIndexStats() const
@@ -3188,6 +3280,7 @@ void USightWeaveWorldSubsystem::ResetState()
 	SubjectRevealOwners.Reset();
 	OccluderOwners.Reset();
 	HardSuppressionOwners.Reset();
+	StaticEnvironmentOwners.Reset();
 	NextVisionSourceId = 1;
 	NextIlluminationSourceId = 1;
 	NextSubjectRevealId = 1;

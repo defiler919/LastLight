@@ -792,6 +792,8 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 			}
 		}
 
+		TShaderMapRef<FSightWeaveFullscreenVertexShader> VertexShader(
+			GetGlobalShaderMap(View.GetFeatureLevel()));
 		TShaderMapRef<FSightWeaveInwardFeatherCompositePixelShader> PixelShader(
 			GetGlobalShaderMap(View.GetFeatureLevel()));
 		FSightWeaveInwardFeatherCompositePixelShader::FParameters* Parameters =
@@ -818,18 +820,40 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		Parameters->FeatherWidthCentimeters = Binding->GetVisualFeather().WidthCentimeters;
 		Parameters->PageTableCount = static_cast<uint32>(Scope->PageTableEntryCount);
 		Parameters->RenderTargets[0] = Output.GetRenderTargetBinding();
-		AddDrawScreenPass(
-			GraphBuilder,
+		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("SightWeave.InwardFeatherComposite"),
-			View,
-			FScreenPassTextureViewport(Output),
-			FScreenPassTextureViewport(SceneColor),
-			PixelShader,
-			Parameters);
+			Parameters,
+			ERDGPassFlags::Raster,
+			[Parameters, VertexShader, PixelShader, OutputRect = Output.ViewRect](
+				FRDGAsyncTask,
+				FRHICommandList& RHICmdList)
+			{
+				ConfigureViewport(RHICmdList, OutputRect);
+				FGraphicsPipelineStateInitializer GraphicsPSOInit;
+				RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
+				GraphicsPSOInit.BlendState = TStaticBlendState<>::GetRHI();
+				GraphicsPSOInit.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
+				GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
+				GraphicsPSOInit.PrimitiveType = PT_TriangleList;
+				GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI =
+					GEmptyVertexDeclaration.VertexDeclarationRHI;
+				GraphicsPSOInit.BoundShaderState.VertexShaderRHI = VertexShader.GetVertexShader();
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = PixelShader.GetPixelShader();
+				SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit, 0);
+				SetShaderParameters(
+					RHICmdList,
+					PixelShader,
+					PixelShader.GetPixelShader(),
+					*Parameters);
+				RHICmdList.SetStreamSource(0, nullptr, 0);
+				RHICmdList.DrawPrimitive(0, 1, 1);
+			});
 		ReportCompositeDiagnostic_RenderThread(2, TEXT("submitted-feather"), Scope);
 	}
 	else
 	{
+		TShaderMapRef<FSightWeaveFullscreenVertexShader> VertexShader(
+			GetGlobalShaderMap(View.GetFeatureLevel()));
 		TShaderMapRef<FSightWeaveHardMaskCompositePixelShader> PixelShader(
 			GetGlobalShaderMap(View.GetFeatureLevel()));
 		FSightWeaveHardMaskCompositePixelShader::FParameters* Parameters =
@@ -851,14 +875,34 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 			Binding->GetScopeKey().PrecisionTier);
 		Parameters->PageTableCount = static_cast<uint32>(Scope->PageTableEntryCount);
 		Parameters->RenderTargets[0] = Output.GetRenderTargetBinding();
-		AddDrawScreenPass(
-			GraphBuilder,
+		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("SightWeave.HardMaskComposite"),
-			View,
-			FScreenPassTextureViewport(Output),
-			FScreenPassTextureViewport(SceneColor),
-			PixelShader,
-			Parameters);
+			Parameters,
+			ERDGPassFlags::Raster,
+			[Parameters, VertexShader, PixelShader, OutputRect = Output.ViewRect](
+				FRDGAsyncTask,
+				FRHICommandList& RHICmdList)
+			{
+				ConfigureViewport(RHICmdList, OutputRect);
+				FGraphicsPipelineStateInitializer GraphicsPSOInit;
+				RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
+				GraphicsPSOInit.BlendState = TStaticBlendState<>::GetRHI();
+				GraphicsPSOInit.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
+				GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
+				GraphicsPSOInit.PrimitiveType = PT_TriangleList;
+				GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI =
+					GEmptyVertexDeclaration.VertexDeclarationRHI;
+				GraphicsPSOInit.BoundShaderState.VertexShaderRHI = VertexShader.GetVertexShader();
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = PixelShader.GetPixelShader();
+				SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit, 0);
+				SetShaderParameters(
+					RHICmdList,
+					PixelShader,
+					PixelShader.GetPixelShader(),
+					*Parameters);
+				RHICmdList.SetStreamSource(0, nullptr, 0);
+				RHICmdList.DrawPrimitive(0, 1, 1);
+			});
 		ReportCompositeDiagnostic_RenderThread(1, TEXT("submitted-hard"), Scope);
 	}
 	return MoveTemp(Output);

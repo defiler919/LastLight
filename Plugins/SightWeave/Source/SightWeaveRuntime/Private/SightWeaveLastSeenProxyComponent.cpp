@@ -112,3 +112,44 @@ void USightWeaveLastSeenProxyComponent::EnforceRenderOnlyConfiguration()
 	bAffectDistanceFieldLighting = false;
 	SetReceivesDecals(false);
 }
+
+bool FSightWeaveSubjectProxyPresentationBridge::Apply(
+	const FSightWeaveSubjectPresentationResult& Presentation,
+	const FSightWeaveLastSeenSnapshotDescriptor* Snapshot,
+	UPrimitiveComponent* LivePresentation,
+	USightWeaveLastSeenProxyComponent* ProxyPresentation)
+{
+	check(IsInGameThread());
+	if (!LivePresentation || !ProxyPresentation)
+	{
+		if (ProxyPresentation)
+		{
+			ProxyPresentation->HideAndClear();
+		}
+		if (LivePresentation)
+		{
+			LivePresentation->SetVisibility(false, true);
+		}
+		return false;
+	}
+
+	LivePresentation->SetVisibility(false, true);
+	ProxyPresentation->HideAndClear();
+	if (Presentation.Failure != ESightWeaveSubjectPresentationFailure::None)
+	{
+		return false;
+	}
+
+	switch (Presentation.State)
+	{
+	case ESightWeaveSubjectPresentationState::Live:
+		LivePresentation->SetVisibility(true, true);
+		return true;
+	case ESightWeaveSubjectPresentationState::LastSeenProxy:
+		return Snapshot && ProxyPresentation->PresentSnapshot(*Snapshot, Presentation);
+	case ESightWeaveSubjectPresentationState::Hidden:
+	case ESightWeaveSubjectPresentationState::StaticEnvironmentDelegated:
+	default:
+		return false;
+	}
+}

@@ -152,10 +152,6 @@ namespace SightWeaveM4P1SubjectPolicyTests
 				Lost.Disposition,
 				ESightWeaveSubjectTransitionDisposition::SnapshotCaptured);
 	}
-}
-
-using namespace SightWeaveM4P1SubjectPolicyTests;
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FSightWeaveM4P1PolicyMatrixTest,
 	"SightWeave.M4P1.Subject.Policy.Matrix",
@@ -451,6 +447,8 @@ bool FSightWeaveM4P1CustomProviderTest::RunTest(const FString& Parameters)
 	Authority.SubmitObservation(Handle, MakeObservation(Registration, 3, false, 11), &Accepted);
 	TestEqual(TEXT("Non-live frames do not reinvoke provider"), Accepted.BuildCount, 1);
 	return true;
+}
+
 }
 
 #endif

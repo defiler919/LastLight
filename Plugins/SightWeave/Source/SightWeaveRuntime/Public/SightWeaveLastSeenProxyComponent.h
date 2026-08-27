@@ -34,3 +34,14 @@ private:
 
 	uint64 PresentedSnapshotRevision = 0;
 };
+
+/** Applies one CPU-authoritative presentation result without changing gameplay state. */
+class SIGHTWEAVERUNTIME_API FSightWeaveSubjectProxyPresentationBridge final
+{
+public:
+	static bool Apply(
+		const FSightWeaveSubjectPresentationResult& Presentation,
+		const FSightWeaveLastSeenSnapshotDescriptor* Snapshot,
+		UPrimitiveComponent* LivePresentation,
+		USightWeaveLastSeenProxyComponent* ProxyPresentation);
+};

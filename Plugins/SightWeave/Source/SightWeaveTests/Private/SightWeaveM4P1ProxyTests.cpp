@@ -40,10 +40,6 @@ namespace SightWeaveM4P1ProxyTests
 		Snapshot.Validity = SightWeave::SubjectMemory::RequiredBasicSnapshotValidity;
 		return Snapshot;
 	}
-}
-
-using namespace SightWeaveM4P1ProxyTests;
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FSightWeaveM4P1ProxyLifecycleTest,
 	"SightWeave.M4P1.Proxy.RenderOnlyLifecycle",
@@ -91,6 +87,8 @@ bool FSightWeaveM4P1ProxyLifecycleTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Teardown hides proxy"), Proxy->IsVisible());
 	TestTrue(TEXT("Teardown clears mesh"), Proxy->GetStaticMesh() == nullptr);
 	return true;
+}
+
 }
 
 #endif

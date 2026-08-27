@@ -116,7 +116,10 @@ namespace SightWeaveM3P5CompositeTests
 	{
 		TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> LivePacket;
 		TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> MemoryPacket;
+		TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> SuppressedMemoryPacket;
+		TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> WrongWorldMemoryPacket;
 		TSharedPtr<const FSightWeaveStaticEnvironmentPacket, ESPMode::ThreadSafe> StaticPacket;
+		TSharedPtr<const FSightWeaveStaticEnvironmentPacket, ESPMode::ThreadSafe> WrongWorldStaticPacket;
 		FSightWeaveViewPresentationSelection Selection;
 	};
 
@@ -145,6 +148,18 @@ namespace SightWeaveM3P5CompositeTests
 			return false;
 		}
 		Out.MemoryPacket = Memory.PublishPacket(true);
+		FSightWeaveMemoryModifierDescription Suppression;
+		Suppression.Operation = ESightWeaveMemoryModifierOperation::SuppressMemoryPresentation;
+		Suppression.Region.Scope = Scope;
+		Suppression.Region.HeightRange = { 0.0f, 300.0f };
+		Suppression.Region.Shape = ESightWeaveMemoryRegionShape::AxisAlignedBox;
+		Suppression.Region.Center = FVector2D(1000.0, 1000.0);
+		Suppression.Region.HalfExtents = FVector2D(200.0, 200.0);
+		if (!Memory.RegisterModifier(Suppression).IsValid())
+		{
+			return false;
+		}
+		Out.SuppressedMemoryPacket = Memory.PublishPacket();
 		FSightWeaveStaticEnvironmentAuthority StaticEnvironment;
 		if (!StaticEnvironment.Configure(
 				Scope,
@@ -164,6 +179,33 @@ namespace SightWeaveM3P5CompositeTests
 			return false;
 		}
 		Out.StaticPacket = StaticEnvironment.PublishPacket();
+		FSightWeaveMemoryScopeKey WrongWorldScope;
+		if (!FSightWeaveMemoryAuthority::BuildScopeForSnapshot(
+				Snapshot,
+				FSightWeaveRenderWorldIdentity { WorldSerial + 1 },
+				WorldSerial + 1,
+				Owner,
+				FloorId,
+				ESightWeaveRenderPrecisionTier::Standard,
+				WrongWorldScope))
+		{
+			return false;
+		}
+		FSightWeaveMemoryAuthority WrongWorldMemory;
+		FSightWeaveStaticEnvironmentAuthority WrongWorldStatic;
+		if (!WrongWorldMemory.Configure(
+				WrongWorldScope,
+				SightWeave::SparseAtlas::StandardActiveTileCapacity)
+			|| !WrongWorldMemory.WriteEffectiveLive(Snapshot).Succeeded()
+			|| !WrongWorldStatic.Configure(
+				WrongWorldScope,
+				SightWeave::StaticEnvironment::DefaultMaximumTiles)
+			|| !WrongWorldStatic.Register(Description).IsValid())
+		{
+			return false;
+		}
+		Out.WrongWorldMemoryPacket = WrongWorldMemory.PublishPacket(true);
+		Out.WrongWorldStaticPacket = WrongWorldStatic.PublishPacket();
 		Out.Selection = FSightWeaveViewPresentationSelection::Enabled(
 			Out.LivePacket->GetWorldIdentity(),
 			Owner,
@@ -172,8 +214,14 @@ namespace SightWeaveM3P5CompositeTests
 			1);
 		return Out.MemoryPacket.IsValid()
 			&& Out.MemoryPacket->IsValid()
+			&& Out.SuppressedMemoryPacket.IsValid()
+			&& Out.SuppressedMemoryPacket->IsValid()
 			&& Out.StaticPacket.IsValid()
-			&& Out.StaticPacket->IsValid();
+			&& Out.StaticPacket->IsValid()
+			&& Out.WrongWorldMemoryPacket.IsValid()
+			&& Out.WrongWorldMemoryPacket->IsValid()
+			&& Out.WrongWorldStaticPacket.IsValid()
+			&& Out.WrongWorldStaticPacket->IsValid();
 	}
 
 	struct FContext
@@ -310,6 +358,36 @@ bool FSightWeaveM3P5ThreeStateCompositeD3D12Test::RunTest(const FString& Paramet
 		Positions,
 		Colors,
 		true);
+	TSharedPtr<FContext>& Suppressed = Contexts.Add_GetRef(MakeShared<FContext>());
+	Suppressed->Name = TEXT("PresentationSuppressed");
+	Suppressed->Expected = {
+		FColor(30, 80, 160, 255),
+		FColor(0, 0, 0, 0),
+		FColor(0, 0, 0, 0),
+		FColor(0, 0, 0, 0)
+	};
+	Suppressed->Request = FSightWeaveMemoryPresentationTestReadback::Start(
+		Fixture.LivePacket,
+		Fixture.Selection,
+		Fixture.SuppressedMemoryPacket,
+		Fixture.StaticPacket,
+		Positions,
+		Colors);
+	TSharedPtr<FContext>& WrongWorld = Contexts.Add_GetRef(MakeShared<FContext>());
+	WrongWorld->Name = TEXT("WrongMemoryWorldRejected");
+	WrongWorld->Expected = {
+		FColor(30, 80, 160, 255),
+		FColor(0, 0, 0, 0),
+		FColor(0, 0, 0, 0),
+		FColor(0, 0, 0, 0)
+	};
+	WrongWorld->Request = FSightWeaveMemoryPresentationTestReadback::Start(
+		Fixture.LivePacket,
+		Fixture.Selection,
+		Fixture.WrongWorldMemoryPacket,
+		Fixture.WrongWorldStaticPacket,
+		Positions,
+		Colors);
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForReadbacks(MoveTemp(Contexts), this));
 	return true;
 }

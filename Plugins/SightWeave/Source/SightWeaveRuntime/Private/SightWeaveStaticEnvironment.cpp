@@ -85,8 +85,6 @@ namespace SightWeaveStaticEnvironmentPrivate
 	}
 }
 
-using namespace SightWeaveStaticEnvironmentPrivate;
-
 bool FSightWeaveStaticEnvironmentDescription::IsValid() const
 {
 	if (!KnowledgeOwnerId.IsValid()
@@ -288,16 +286,20 @@ bool FSightWeaveStaticEnvironmentAuthority::Rebuild()
 			continue;
 		}
 		FBox2D Bounds;
-		if (!BuildBounds(Description.WorldFootprint, Bounds))
+		if (!SightWeaveStaticEnvironmentPrivate::BuildBounds(
+				Description.WorldFootprint,
+				Bounds))
 		{
 			return false;
 		}
 		const int64 MinX = FMath::FloorToInt64((Bounds.Min.X - Scope.FloorOrigin.X) / InteriorSpan);
 		const int64 MinY = FMath::FloorToInt64((Bounds.Min.Y - Scope.FloorOrigin.Y) / InteriorSpan);
 		const int64 MaxX = FMath::FloorToInt64(
-			(Bounds.Max.X - Scope.FloorOrigin.X - BoundaryBias) / InteriorSpan);
+			(Bounds.Max.X - Scope.FloorOrigin.X
+				- SightWeaveStaticEnvironmentPrivate::BoundaryBias) / InteriorSpan);
 		const int64 MaxY = FMath::FloorToInt64(
-			(Bounds.Max.Y - Scope.FloorOrigin.Y - BoundaryBias) / InteriorSpan);
+			(Bounds.Max.Y - Scope.FloorOrigin.Y
+				- SightWeaveStaticEnvironmentPrivate::BoundaryBias) / InteriorSpan);
 		if (MinX < MIN_int32 || MinY < MIN_int32 || MaxX > MAX_int32 || MaxY > MAX_int32)
 		{
 			return false;
@@ -320,12 +322,12 @@ bool FSightWeaveStaticEnvironmentAuthority::Rebuild()
 					Added.Attributes.SetNumZeroed(SightWeave::StaticEnvironment::BytesPerTile);
 					Tile = &Added;
 				}
-				Rasterize(Description, Scope, *Tile);
+				SightWeaveStaticEnvironmentPrivate::Rasterize(Description, Scope, *Tile);
 			}
 		}
 	}
 	Rebuilt.RemoveAll([](const FSightWeaveStaticEnvironmentTile& Tile) { return Tile.IsEmpty(); });
-	Rebuilt.Sort(TileLess);
+	Rebuilt.Sort(SightWeaveStaticEnvironmentPrivate::TileLess);
 	if (Rebuilt.Num() > MaximumTiles)
 	{
 		return false;

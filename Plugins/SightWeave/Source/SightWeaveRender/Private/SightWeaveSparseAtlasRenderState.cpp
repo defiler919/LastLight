@@ -18,6 +18,32 @@
 
 namespace SightWeaveSparseAtlasRenderPrivate
 {
+	bool MemoryScopeMatchesPresentationBinding(
+		const FSightWeaveMemoryScopeKey& MemoryScope,
+		const FSightWeaveViewPresentationBinding& Binding)
+	{
+		const FSightWeaveSparseScopeKey& LiveScope = Binding.GetScopeKey();
+		const TConstArrayView<FSightWeaveRenderProfileIdentity> LiveProfiles =
+			Binding.GetCanonicalProfiles();
+		if (MemoryScope.WorldIdentity != LiveScope.WorldIdentity
+			|| MemoryScope.KnowledgeOwnerId != LiveScope.KnowledgeOwnerId
+			|| MemoryScope.FloorId != LiveScope.FloorId
+			|| MemoryScope.PrecisionTier != LiveScope.PrecisionTier
+			|| MemoryScope.FloorOrigin != LiveScope.FloorOrigin
+			|| MemoryScope.CanonicalProfiles.Num() != LiveProfiles.Num())
+		{
+			return false;
+		}
+		for (int32 Index = 0; Index < LiveProfiles.Num(); ++Index)
+		{
+			if (!MemoryScope.CanonicalProfiles[Index].IsEquivalentTo(LiveProfiles[Index]))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeaveSparseRasterPassParameters, )
 		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveTileVertexShader::FParameters, VertexShader)
 		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveTilePixelShader::FParameters, PixelShader)
@@ -1479,8 +1505,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		&& MemoryMirror->Availability == ESightWeaveRenderAvailability::Available
 		&& MemoryMirror->AppliedPacket.IsValid()
 		&& MemoryMirror->CurrentPageTable
-		&& MemoryMirror->Scope.KnowledgeOwnerId == Binding->GetScopeKey().KnowledgeOwnerId
-		&& MemoryMirror->Scope.FloorId == Binding->GetScopeKey().FloorId;
+		&& MemoryScopeMatchesPresentationBinding(MemoryMirror->Scope, *Binding);
 	const bool bStaticEnvironmentReady = bMemoryReady
 		&& StaticAttributeMirror.IsValid()
 		&& StaticAttributeMirror->Availability == ESightWeaveRenderAvailability::Available
@@ -2963,8 +2988,7 @@ FRDGTextureRef FSightWeaveSparseAtlasRenderState::AddMemoryPresentationTestCompo
 		&& MemoryMirror.IsValid()
 		&& MemoryMirror->Availability == ESightWeaveRenderAvailability::Available
 		&& MemoryMirror->CurrentPageTable
-		&& MemoryMirror->Scope.KnowledgeOwnerId == Binding->GetScopeKey().KnowledgeOwnerId
-		&& MemoryMirror->Scope.FloorId == Binding->GetScopeKey().FloorId;
+		&& MemoryScopeMatchesPresentationBinding(MemoryMirror->Scope, *Binding);
 	const bool bStaticReady = bMemoryReady
 		&& StaticAttributeMirror.IsValid()
 		&& StaticAttributeMirror->Availability == ESightWeaveRenderAvailability::Available

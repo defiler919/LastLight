@@ -358,15 +358,13 @@ namespace SightWeaveMemoryPrivate
 	}
 }
 
-using namespace SightWeaveMemoryPrivate;
-
 bool FSightWeaveMemoryScopeKey::IsValid() const
 {
 	if (!WorldIdentity.IsValid()
 		|| WorldGeneration == 0
 		|| !KnowledgeOwnerId.IsValid()
 		|| !FloorId.IsValid()
-		|| !IsFinite(FloorOrigin)
+		|| !SightWeaveMemoryPrivate::IsFinite(FloorOrigin)
 		|| !FMath::IsFinite(FloorPlaneZ)
 		|| SightWeaveCentimetersPerTexel(PrecisionTier) <= 0.0f)
 	{
@@ -391,7 +389,7 @@ bool FSightWeaveMemoryScopeKey::IsEquivalentTo(const FSightWeaveMemoryScopeKey& 
 		&& FloorOrigin == Other.FloorOrigin
 		&& FloorPlaneZ == Other.FloorPlaneZ
 		&& PrecisionTier == Other.PrecisionTier
-		&& ProfilesEqual(CanonicalProfiles, Other.CanonicalProfiles);
+		&& SightWeaveMemoryPrivate::ProfilesEqual(CanonicalProfiles, Other.CanonicalProfiles);
 }
 
 bool FSightWeaveMemoryTileKey::IsEquivalentTo(const FSightWeaveMemoryTileKey& Other) const
@@ -401,8 +399,8 @@ bool FSightWeaveMemoryTileKey::IsEquivalentTo(const FSightWeaveMemoryTileKey& Ot
 
 bool FSightWeaveMemoryRegion::IsValid() const
 {
-	if (!Scope.IsValid() || !HeightRange.IsValid() || !IsFinite(Center)
-		|| !IsFinite(HalfExtents) || !FMath::IsFinite(Radius)
+	if (!Scope.IsValid() || !HeightRange.IsValid() || !SightWeaveMemoryPrivate::IsFinite(Center)
+		|| !SightWeaveMemoryPrivate::IsFinite(HalfExtents) || !FMath::IsFinite(Radius)
 		|| !FMath::IsFinite(RotationDegrees))
 	{
 		return false;
@@ -417,7 +415,10 @@ bool FSightWeaveMemoryRegion::IsValid() const
 	case ESightWeaveMemoryRegionShape::Polygon:
 		return PolygonVertices.Num() >= 3
 			&& !PolygonVertices.ContainsByPredicate(
-				[](const FVector2D& Vertex) { return !IsFinite(Vertex); });
+				[](const FVector2D& Vertex)
+				{
+					return !SightWeaveMemoryPrivate::IsFinite(Vertex);
+				});
 	default:
 		return false;
 	}
@@ -439,7 +440,7 @@ bool FSightWeaveMemoryRegion::IsEquivalentTo(const FSightWeaveMemoryRegion& Othe
 
 bool FSightWeaveMemoryRegion::ContainsWorldLocation(const FVector WorldLocation) const
 {
-	return IsValid() && PointInRegion(*this, WorldLocation);
+	return IsValid() && SightWeaveMemoryPrivate::PointInRegion(*this, WorldLocation);
 }
 
 bool FSightWeaveMemoryModifierDescription::IsEquivalentTo(
@@ -562,8 +563,12 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 		return Result;
 	}
 	TArray<FSightWeaveRenderProfileIdentity> SnapshotProfiles;
-	BuildCanonicalProfiles(Snapshot, Scope.KnowledgeOwnerId, Scope.FloorId, SnapshotProfiles);
-	if (!ProfilesAreSubset(SnapshotProfiles, Scope.CanonicalProfiles))
+	SightWeaveMemoryPrivate::BuildCanonicalProfiles(
+		Snapshot,
+		Scope.KnowledgeOwnerId,
+		Scope.FloorId,
+		SnapshotProfiles);
+	if (!SightWeaveMemoryPrivate::ProfilesAreSubset(SnapshotProfiles, Scope.CanonicalProfiles))
 	{
 		Result.Failure = LastFailure = ESightWeaveMemoryFailure::ProfileMismatch;
 		return Result;
@@ -579,14 +584,14 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 			continue;
 		}
 		FBox2D Bounds(ForceInit);
-		if (!BuildPolygonBounds(Vision.Polygon.Vertices, Bounds)
-			|| !AddBoundsTiles(Bounds, Scope, CandidateTiles))
+		if (!SightWeaveMemoryPrivate::BuildPolygonBounds(Vision.Polygon.Vertices, Bounds)
+			|| !SightWeaveMemoryPrivate::AddBoundsTiles(Bounds, Scope, CandidateTiles))
 		{
 			Result.Failure = LastFailure = ESightWeaveMemoryFailure::InvalidCoordinate;
 			return Result;
 		}
 	}
-	CandidateTiles.Sort(TileCoordinateLess);
+	CandidateTiles.Sort(SightWeaveMemoryPrivate::TileCoordinateLess);
 	Result.CandidateTileCount = CandidateTiles.Num();
 	if (CandidateTiles.Num() > MaximumTiles)
 	{
@@ -596,7 +601,7 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 
 	for (const FIntPoint LogicalCoordinate : CandidateTiles)
 	{
-		TArray<FProfileMasks> ProfileMasks;
+		TArray<SightWeaveMemoryPrivate::FProfileMasks> ProfileMasks;
 		TArray<uint8> Bypass;
 		TArray<uint8> Suppression;
 		TArray<uint8> WriteBlock;
@@ -616,13 +621,22 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 			if (Vision.Description.IlluminationPolicy
 				== ESightWeaveIlluminationPolicy::BypassLegalIllumination)
 			{
-				RasterizePolygon(Vision.Polygon.Vertices, Scope, LogicalCoordinate, Bypass);
+				SightWeaveMemoryPrivate::RasterizePolygon(
+					Vision.Polygon.Vertices,
+					Scope,
+					LogicalCoordinate,
+					Bypass);
 				continue;
 			}
 			const FSightWeaveRenderProfileIdentity Profile =
 				FSightWeaveRenderProfileIdentity::FromProfile(Vision.Description.Compatibility);
-			FProfileMasks& Masks = FindOrAddProfileMasks(ProfileMasks, Profile);
-			RasterizePolygon(Vision.Polygon.Vertices, Scope, LogicalCoordinate, Masks.Vision);
+			SightWeaveMemoryPrivate::FProfileMasks& Masks =
+				SightWeaveMemoryPrivate::FindOrAddProfileMasks(ProfileMasks, Profile);
+			SightWeaveMemoryPrivate::RasterizePolygon(
+				Vision.Polygon.Vertices,
+				Scope,
+				LogicalCoordinate,
+				Masks.Vision);
 			for (const int32 IlluminationIndex : Vision.CompatibleIlluminationSourceIndices)
 			{
 				if (!Snapshot.IlluminationSources.IsValidIndex(IlluminationIndex))
@@ -637,7 +651,7 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 					&& Illumination.Description.FloorId == Scope.FloorId
 					&& Illumination.Polygon.IsValid())
 				{
-					RasterizePolygon(
+					SightWeaveMemoryPrivate::RasterizePolygon(
 						Illumination.Polygon.Vertices,
 						Scope,
 						LogicalCoordinate,
@@ -662,7 +676,11 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 					Description.Center.Y + FMath::Sin(Angle) * Description.Radius,
 					0.0);
 			}
-			RasterizePolygon(Vertices, Scope, LogicalCoordinate, Suppression);
+			SightWeaveMemoryPrivate::RasterizePolygon(
+				Vertices,
+				Scope,
+				LogicalCoordinate,
+				Suppression);
 		}
 		for (const FModifierRecord& Modifier : Modifiers)
 		{
@@ -671,20 +689,26 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 					!= ESightWeaveMemoryModifierOperation::BlockMemoryWrites
 				|| !Region.bEnabled
 				|| !Region.Scope.IsEquivalentTo(Scope)
-				|| !HeightRangesOverlap(Region.HeightRange, Floor->HeightRange))
+				|| !SightWeaveMemoryPrivate::HeightRangesOverlap(
+					Region.HeightRange,
+					Floor->HeightRange))
 			{
 				continue;
 			}
 			TArray<FVector> RegionVertices;
-			if (BuildRegionPolygon(Region, RegionVertices))
+			if (SightWeaveMemoryPrivate::BuildRegionPolygon(Region, RegionVertices))
 			{
-				RasterizePolygon(RegionVertices, Scope, LogicalCoordinate, WriteBlock);
+				SightWeaveMemoryPrivate::RasterizePolygon(
+					RegionVertices,
+					Scope,
+					LogicalCoordinate,
+					WriteBlock);
 			}
 		}
 
 		TArray<uint8> Effective;
 		Effective = Bypass;
-		for (const FProfileMasks& Masks : ProfileMasks)
+		for (const SightWeaveMemoryPrivate::FProfileMasks& Masks : ProfileMasks)
 		{
 			for (int32 ByteIndex = 0; ByteIndex < SightWeave::Memory::PackedBytesPerTile; ++ByteIndex)
 			{
@@ -715,7 +739,9 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 			Added.PackedBits.SetNumZeroed(SightWeave::Memory::PackedBytesPerTile);
 			Tiles.Sort([](const FSightWeavePackedMemoryTile& A, const FSightWeavePackedMemoryTile& B)
 			{
-				return TileCoordinateLess(A.Key.LogicalCoordinate, B.Key.LogicalCoordinate);
+				return SightWeaveMemoryPrivate::TileCoordinateLess(
+					A.Key.LogicalCoordinate,
+					B.Key.LogicalCoordinate);
 			});
 			Tile = FindTile(LogicalCoordinate);
 		}
@@ -759,8 +785,8 @@ bool FSightWeaveMemoryAuthority::ClearMemory(const FSightWeaveMemoryRegion& Regi
 	}
 	TArray<FVector> RegionVertices;
 	FBox2D Bounds(ForceInit);
-	if (!BuildRegionPolygon(Region, RegionVertices)
-		|| !BuildPolygonBounds(RegionVertices, Bounds))
+	if (!SightWeaveMemoryPrivate::BuildRegionPolygon(Region, RegionVertices)
+		|| !SightWeaveMemoryPrivate::BuildPolygonBounds(RegionVertices, Bounds))
 	{
 		LastFailure = ESightWeaveMemoryFailure::InvalidCoordinate;
 		return false;
@@ -779,7 +805,11 @@ bool FSightWeaveMemoryAuthority::ClearMemory(const FSightWeaveMemoryRegion& Regi
 		}
 		TArray<uint8> ClearMask;
 		ClearMask.SetNumZeroed(SightWeave::Memory::PackedBytesPerTile);
-		RasterizePolygon(RegionVertices, Scope, Tile.Key.LogicalCoordinate, ClearMask);
+		SightWeaveMemoryPrivate::RasterizePolygon(
+			RegionVertices,
+			Scope,
+			Tile.Key.LogicalCoordinate,
+			ClearMask);
 		bool bTileChanged = false;
 		for (int32 ByteIndex = 0; ByteIndex < SightWeave::Memory::PackedBytesPerTile; ++ByteIndex)
 		{
@@ -898,7 +928,9 @@ bool FSightWeaveMemoryAuthority::IsMemoryPresentationSuppressed(
 				|| Modifier.Description.Operation
 					== ESightWeaveMemoryModifierOperation::SuppressMemoryPresentation)
 			&& Modifier.Description.Region.Scope.IsEquivalentTo(Scope)
-			&& PointInRegion(Modifier.Description.Region, WorldLocation))
+			&& SightWeaveMemoryPrivate::PointInRegion(
+				Modifier.Description.Region,
+				WorldLocation))
 		{
 			return true;
 		}
@@ -1010,7 +1042,11 @@ bool FSightWeaveMemoryAuthority::BuildScopeForSnapshot(
 	OutScope.FloorOrigin = Floor->BoundsMin;
 	OutScope.FloorPlaneZ = Floor->HeightRange.ZMin;
 	OutScope.PrecisionTier = PrecisionTier;
-	BuildCanonicalProfiles(Snapshot, KnowledgeOwnerId, FloorId, OutScope.CanonicalProfiles);
+	SightWeaveMemoryPrivate::BuildCanonicalProfiles(
+		Snapshot,
+		KnowledgeOwnerId,
+		FloorId,
+		OutScope.CanonicalProfiles);
 	return OutScope.IsValid();
 }
 
@@ -1020,7 +1056,7 @@ bool FSightWeaveMemoryAuthority::WorldToTileAndTexel(
 	FIntPoint& OutLogicalTile,
 	FIntPoint& OutInteriorTexel)
 {
-	if (!InScope.IsValid() || !IsFinite(WorldLocation))
+	if (!InScope.IsValid() || !SightWeaveMemoryPrivate::IsFinite(WorldLocation))
 	{
 		return false;
 	}

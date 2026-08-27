@@ -2,20 +2,21 @@
 
 ## 1. Status
 
-**PARTIAL — superseded by integrated Lab repair validation**
+**COMPLETED — integrated Lab repair validated**
 
-M3.4 implements world-space inward-only presentation feathering while retaining the M3.3 hard mask as the only eligibility gate. Shader-level readback, performance, packaging, and clean-host evidence passed, but subsequent company-machine interactive PIE proved that the integrated committed Lab could fail closed to almost entirely black even at width zero. The earlier Lab screenshots did not establish a working SceneColor composite. Consequently the original completion claim is withdrawn pending repair validation. The two explicitly retained M2P2 wall-time failures remain unchanged and do not originate in M3.4.
+M3.4 implements world-space inward-only presentation feathering while retaining the M3.3 hard mask as the only eligibility gate. The original shader-level readback, performance, packaging, and clean-host evidence passed, but subsequent company-machine interactive PIE proved that the committed Lab could fail closed to almost entirely black even at width zero. The repair branch closed that integrated-path defect, the later atlas packet-coalescing defect, and the D3D12 fullscreen PSO defect. User-operated PIE now shows a working SceneColor composite and distinct inward ramps at 50/100 cm; post-repair D3D12/SM6 and NullRHI automation passed 37/37 and 8/8. The two explicitly retained M2P2 wall-time failures remain unchanged and do not originate in M3.4.
 
 ### Superseding repair finding (2026-08-27)
 
 `SW_M3P3_PageBoundaryVision` at Y=11000 cm straddled the Y=10860 cm logical tile-row boundary. Its narrow 160000 cm cone therefore covered an AABB of about 65x2=130 logical tiles, above `StandardActiveTileCapacity=128`, and correctly produced a fail-closed black presentation. M3.4 PIE also left historical M2/M3 fixtures active in the same `Local/Ground` scope.
 
-Repair branch `codex/m3p4-sightweave-lab-repair` centers the strip at Y=12100, isolates PIE fixtures per milestone, binds the M3P4 overview camera, registers the missing Project Settings section, and adds explicit capacity diagnostics and regression tests. This document remains historical evidence; `Docs/SIGHTWEAVE_M3P4_LAB_REPAIR.md` defines the new acceptance gate.
+Repair branch `codex/m3p4-sightweave-lab-repair` centers the strip at Y=12100, isolates PIE fixtures per milestone, registers the missing Project Settings section, preserves dropped pending-packet work, uses an explicit vertex-ID fullscreen triangle for D3D12 composites, and adds stable label-based Lab camera selection plus focused regressions. `Docs/SIGHTWEAVE_M3P4_LAB_REPAIR.md` records the repair-specific acceptance evidence.
 
 ## 2. Branch, baseline, and final SHA
 
 - Original branch: `codex/m3p4-sightweave-inward-feather`
 - Superseding repair branch: `codex/m3p4-sightweave-lab-repair`
+- Last repair code checkpoint before final evidence: `74ef04a4ce8e30fe2355d19ad81363c535b1e200`
 - Frozen M3.3 baseline: `35411db9b193ec6a669278af6e43e38fa72f9d9a`
 - Last source/test checkpoint before this validation document: `5ddde69`
 - Final SHA: the `docs: record SightWeave M3P4 validation` commit containing this file; verify with the closure commands in section 21.
@@ -33,6 +34,17 @@ Repair branch `codex/m3p4-sightweave-lab-repair` centers the strip at Y=12100, i
 7. `c95a84f perf: measure SightWeave feather presentation`
 8. `5ddde69 test: validate SightWeave M3P4 packaging boundaries`
 9. `docs: record SightWeave M3P4 validation` (this document)
+
+Superseding repair checkpoints:
+
+1. `b7b0f6f` initial integrated Lab repair checkpoint
+2. `dc6683f` fix UE 5.8 ticker/settings API use
+3. `79e797e` register the SightWeave settings section
+4. `e86aa8d` add fail-black diagnostics and isolate the movable page fixture
+5. `a2c9fbc` preserve pending sparse-atlas updates and refresh Feather settings
+6. `14d4a08` use a vertex-ID fullscreen composite accepted by D3D12
+7. `74ef04a` add stable label-based Lab camera selection
+8. final repair validation documentation (the commit containing this update)
 
 Every reliable checkpoint was pushed to the current `origin` immediately after verification. No merge, rebase, force-push, or `Darkwell.uproject` modification was used.
 
@@ -87,7 +99,9 @@ The Lab map was modified only through Unreal Editor Python APIs and remains LFS-
 - `M3P4_DynamicDoor_Before_Width50.png`
 - `M3P4_DynamicDoor_After_Width50.png`
 
-The agent inspected each image. All show strict black outside cyan/green debug outlines; page seams show no outward light, and the door before/after silhouettes differ as expected. The three overview images are byte-identical because no sampled scene-color pixels at that framing resolve the narrow ramp; the straight close-up also does not visibly resolve the gradient. These are honest automated screenshot checks, not user-operated interactive PIE. GPU readback, not screenshot softness, is the authoritative visual-weight proof.
+The agent inspected each original automated image. All show strict black outside cyan/green debug outlines; page seams show no outward light, and the door before/after silhouettes differ as expected. Those automated overview images did not resolve the narrow ramp at their sampling scale, so GPU readback remained the authoritative visual-weight proof.
+
+The post-repair company session added user-operated interactive PIE evidence. The stable Lab selector bound `SW_M3P4_CloseupCamera`, `SW_M3P4_PageBoundaryCamera`, and `SW_M3P4_Rotated45Camera`. Close-up screenshots visibly distinguish the hard 0 cm edge, the narrow 50 cm inward ramp, and the wider 100 cm inward ramp. The page-boundary and 45-degree views show continuous inward attenuation with no periodic wave, bright Tile/Page seam, or outward SceneColor expansion. Cyan, green, and thin fixture lines are development overlays drawn after the composite and are not presentation leakage.
 
 ## 13. Cold and warmed performance
 
@@ -120,6 +134,8 @@ Maximum measured persistent presentation memory is 18,697,216 bytes, below 32 Mi
 | M3.4 D3D12/SM6 performance | 21/21 |
 | M3.4 D3D12/SM6 total / clean host | 29/29 |
 | M3.4 Lab NullRHI / D3D12 | 1/1 / 1/1 |
+| Post-repair M3.4 D3D12/SM6 complete filter | 37/37 |
+| Post-repair M3.4 NullRHI complete filter | 8/8 |
 | Full SightWeave NullRHI | 145/147; two retained M2P2 failures |
 | DARKWELL | 24/24 |
 
@@ -140,21 +156,22 @@ No threshold was lowered and no sample was deleted.
 - The first performance fixture run and pre-optimization 8-dirty run are retained as described in section 13.
 - MSVC 14.51.36256 is newer than UE's preferred 14.50.35717. C4996 warnings originate in UE headers. Non-Win64 SDK notices are incidental.
 - Nine authoritative final logs have zero assertion, ensure, fatal/critical, GPU crash, DXGI/device-removal, shader-compilation, RDG-validation, resource-leak, or stale-world severe hits.
+- Post-repair platform validation reported Win64 SDK valid. Missing Mac/iOS/Android/Linux/VisionOS SDK notices are unrelated to the Win64 D3D12/NullRHI acceptance runs.
 
 ## 19. Unvalidated items
 
-No user-operated interactive PIE session, Shipping-frame GPU capture, D3D11/Vulkan run, DARKWELL `L_Prototype` integration, gameplay visibility integration, memory/Last-Seen layer, RTX 4060 comparison, or Fab validation was performed. These are outside or explicitly prohibited by M3.4.
+No Shipping-frame GPU capture, D3D11/Vulkan run, DARKWELL `L_Prototype` integration, gameplay visibility integration, memory/Last-Seen layer, RTX 4060 comparison, or Fab validation was performed. These are outside or explicitly prohibited by M3.4.
 
 ## 20. Remaining risks
 
-- Automated Lab framing does not visually resolve the narrow gradient; future authorized art/gameplay integration should include human interactive inspection with representative lit content.
+- The Lab human inspection is now closed, but future authorized gameplay integration should repeat it with representative final lit content.
 - Development timestamp queries are not a substitute for a representative Shipping gameplay-frame GPU capture.
 - Jump flood is a bounded approximation; the automated geometry/seam/monotonic matrix is the current acceptance evidence.
 - UE minor-version or renderer callback changes require revalidation of post-tonemap ordering and shader availability.
 
 ## 21. Git and LFS status
 
-Final closure must show a clean worktree, unchanged `Darkwell.uproject`, no pending LFS objects, valid LFS objects, valid Git objects, and equality among local HEAD, upstream, and `git ls-remote origin refs/heads/codex/m3p4-sightweave-inward-feather`. The Lab `.umap` was saved through Unreal APIs, remains LFS-managed, and its object was uploaded at checkpoint `5d14f42`.
+Reliable repair changes are committed on `codex/m3p4-sightweave-lab-repair`; the Lab `.umap` remains LFS-managed and its object was uploaded at checkpoint `5d14f42`. Company-local `Darkwell.uproject` EngineAssociation and settings/config differences are intentionally excluded from repair commits. Final synchronization uses the repair branch, never the superseded implementation branch, and must not force-push.
 
 ## 22. Documents and evidence paths
 
@@ -166,6 +183,8 @@ Final closure must show a clean worktree, unchanged `Darkwell.uproject`, no pend
 - Full NullRHI: `Saved/Logs/SIGHTWEAVE_M3P4_FINAL_FULL_NULLRHI.log`
 - DARKWELL: `Saved/Logs/SIGHTWEAVE_M3P4_FINAL_DARKWELL_NULLRHI.log`
 - Lab: `Saved/Logs/SIGHTWEAVE_M3P4_LAB_D3D12_FINAL.log`
+- Post-repair D3D12: `Saved/Logs/M3P4_Repair_D3D12_20260827_133152.log`, report `Saved/AutomationReports/M3P4_Repair_D3D12_20260827_133152`
+- Post-repair NullRHI: `Saved/Logs/M3P4_Repair_NullRHI_20260827_133521.log`, report `Saved/AutomationReports/M3P4_Repair_NullRHI_20260827_133521`
 - BuildPlugin / clean host: `Saved/SightWeaveM3P4_BuildPlugin_20260827`, `Saved/SightWeaveM3P4_CleanHost_20260827`
 - Clean-host D3D12: `Saved/Logs/SIGHTWEAVE_M3P4_CLEANHOST_D3D12.log`
 - Screenshots: `Saved/Screenshots/WindowsEditor/M3P4_*.png`

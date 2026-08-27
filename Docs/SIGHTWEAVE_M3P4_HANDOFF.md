@@ -1,6 +1,6 @@
 # SightWeave M3.4 inward-feather handoff
 
-Status: **PARTIAL — integrated Lab repair awaiting Windows D3D12 confirmation**
+Status: **COMPLETED — integrated Lab repair validated on Windows D3D12/SM6**
 
 Repair branch: `codex/m3p4-sightweave-lab-repair`
 
@@ -29,7 +29,12 @@ The repair:
 - logs desired tile count, capacity, packet failure, recovery, and presentation state;
 - adds regression coverage for the old 130-tile failure, corrected bounded footprint, fixture routing, and settings registration.
 
-This branch must remain `PARTIAL` until a Windows UE 5.8.1 Editor build and D3D12 PIE run show a healthy packet, visible scene color inside HardLive, strict black outside, and a visible inward ramp at 50/100 cm.
+The first integrated repair exposed two additional production issues that were then closed on this branch:
+
+- render-thread pending packets could overwrite the first full-dirty packet before it was consumed, leaving an incremental packet with no atlas resources; coalescing now forces a full rebuild whenever an unapplied pending packet is replaced or no applied packet exists;
+- the first real post-process submission used a screen-pass vertex input layout with a vertex-ID-only shader and D3D12 rejected the PSO with `E_INVALIDARG`; Hard and Feather composites now use an explicit `SV_VertexID` fullscreen triangle with an empty vertex declaration.
+
+The company UE 5.8.1 retest now closes the former `PARTIAL` gate: Editor Development rebuilt successfully, the Lab published 113/128 resident tiles, the post-process submitted both Hard and Feather paths with `bindingFailure=0`, user-operated PIE visibly distinguished 0/50/100 cm, and the page-boundary and rotated cameras showed no bright seam or outward SceneColor leak.
 
 ## Objective
 
@@ -106,7 +111,8 @@ At the Standard 128-tile ceiling, hard pages (8 MiB) plus matching PF_G8 feather
 
 Authoritative results and exact logs are recorded in `Docs/SIGHTWEAVE_M3P4_FINAL_VALIDATION.md`. Highlights:
 
-- M3.4 NullRHI: 5/5; D3D12/SM6: 29/29; clean-host D3D12/SM6: 29/29.
+- Original M3.4 NullRHI: 5/5; D3D12/SM6: 29/29; clean-host D3D12/SM6: 29/29.
+- Post-repair company rerun: M3.4 D3D12/SM6 37/37 and NullRHI 8/8, with reports and logs recorded in the final validation document.
 - GPU safety readback: 8/8, hard-zero RGB leaks 0, nonfinite 0, monotonic violations 0, seam discontinuities 0, width-zero mismatch 0.
 - Performance matrix: 21/21. Maximum warmed total GPU p95 669 us; maximum RT Feather setup p95 80.802 us; maximum persistent GPU memory 18,697,216 bytes.
 - M3.1/M3.2/M3.3: 29/29, 22/22, 19/19. DARKWELL: 24/24.
@@ -114,7 +120,7 @@ Authoritative results and exact logs are recorded in `Docs/SIGHTWEAVE_M3P4_FINAL
 - BuildPlugin and independent source-only Editor Development, Game Development, and Game Shipping builds succeeded.
 - Shipping contains only Runtime/Render modules; exact development readback/benchmark/test shader strings and COFF symbols are absent.
 
-The seven saved D3D12 screenshots were inspected by the agent. They show strict black outside the debug outlines and distinct dynamic-door states, but the overview/close-up captures do not resolve the continuous gradient at their sampling scale. GPU readback is the authoritative Feather evidence. No user-operated interactive PIE validation was performed.
+The seven original automated D3D12 screenshots remain retained evidence. The subsequent user-operated company PIE session added readable close-up comparisons at 0/50/100 cm and fixed-camera page-boundary/45-degree views. Width zero was a hard edge, 50 cm produced a narrow inward ramp, and 100 cm produced a visibly wider inward ramp. Black SceneColor outside HardLive remained black; cyan/green/thin fixture lines are development debug overlays rendered after the presentation pass. GPU readback remains the authoritative zero-leak and monotonicity proof.
 
 ## Resume
 

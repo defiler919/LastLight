@@ -1,6 +1,6 @@
 # SightWeave M3.4 integrated Lab repair
 
-Status: **PARTIAL — implementation complete, company D3D12 retest required**
+Status: **COMPLETED — company D3D12/SM6 and NullRHI retest passed**
 
 Branch: `codex/m3p4-sightweave-lab-repair`
 
@@ -56,6 +56,19 @@ LogSightWeaveEditor: Warning: Lab render packet fail-closed failure=<code> desir
 
 No UE 5.8.1 toolchain or D3D12 RHI is available in the cloud workspace, so an Editor build and visual proof cannot be claimed here.
 
+## Company retest closure
+
+The company UE 5.8.1 machine rebuilt the Editor and exercised the repaired path in user-operated PIE. The Lab reported a healthy packet with 113 desired tiles under the frozen 128-tile capacity and submitted both `submitted-hard` and `submitted-feather` with `bindingFailure=0`, resource generation 3, residency generation 114, and 113 page-table entries/resident tiles.
+
+Interactive screenshots covered 0, 50, and 100 cm from `SW_M3P4_CloseupCamera`, followed by `SW_M3P4_PageBoundaryCamera` and `SW_M3P4_Rotated45Camera`. The hard edge, narrow inward ramp, and wider inward ramp were visibly distinct. Black SceneColor remained black outside HardLive, the page view showed no bright seam, and the rotated view showed no periodic wave or outward expansion. Development cyan/green/thin fixture overlays are drawn after the composite and are not Mask leakage.
+
+Focused automation closed without hidden failures:
+
+- D3D12/SM6: `37/37`, `ExitCode=0`, report `Saved/AutomationReports/M3P4_Repair_D3D12_20260827_133152`, log `Saved/Logs/M3P4_Repair_D3D12_20260827_133152.log`;
+- NullRHI: `8/8`, `ExitCode=0`, report `Saved/AutomationReports/M3P4_Repair_NullRHI_20260827_133521`, log `Saved/Logs/M3P4_Repair_NullRHI_20260827_133521.log`.
+
+The D3D12 filter includes `Width0BitExact`, geometry/seam safety, negative/large coordinates, slot 63/64 page crossing, 21 performance cases, settings registration, fixture isolation, bounded transform, binding isolation, safety contract, and Shipping-boundary checks.
+
 ## Company retest
 
 Preserve any local `Darkwell.uproject` EngineAssociation edit; do not commit it.
@@ -87,4 +100,4 @@ Then compare 0, 50, and 100 cm from `Project Settings > Plugins > SightWeave` (r
 
 For a readable close-up comparison while PIE is running, enter `SightWeave.Lab.Camera 1` in the Output Log `Cmd` field. Use `SightWeave.Lab.Camera 0` to return to the overview. Unlike `viewactor`, this selector resolves the checked-in Actor label and does not depend on a transient `CameraActor_N` object name.
 
-Do not mark M3.4 `COMPLETED` until this retest and the focused automation tests pass on D3D12/SM6.
+M3.4 is `COMPLETED` on the repaired branch. Any future `L_Prototype`, gameplay, memory/Last-Seen, D3D11/Vulkan, or distribution integration remains a separately authorized milestone.

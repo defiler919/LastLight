@@ -242,12 +242,27 @@ bool FSightWeaveM4P1FallingEdgeTest::RunTest(const FString& Parameters)
 		MakePresentationContext(Registration, Authority.FindSnapshot(Handle), true));
 	TestEqual(TEXT("Reacquire immediately selects live"), Reacquired.State,
 		ESightWeaveSubjectPresentationState::Live);
+	const FSightWeaveSubjectTransitionResult Delayed = Authority.SubmitObservation(
+		Handle,
+		MakeObservation(Registration, 3, false, 102, 2));
+	TestEqual(TEXT("Delayed observation revision is rejected"), Delayed.Failure,
+		ESightWeaveSubjectTransitionFailure::StaleObservation);
+	TestEqual(TEXT("Delayed command cannot advance snapshot"),
+		Authority.FindSnapshot(Handle)->SnapshotRevision, uint64(1));
 	const FSightWeaveSubjectTransitionResult SecondLost = Authority.SubmitObservation(
 		Handle,
 		MakeObservation(Registration, 5, false, 102, 2));
 	TestEqual(TEXT("Second falling edge captures"), SecondLost.Disposition,
 		ESightWeaveSubjectTransitionDisposition::SnapshotCaptured);
 	TestEqual(TEXT("Second edge advances exactly once"),
+		Authority.FindSnapshot(Handle)->SnapshotRevision, uint64(2));
+	Authority.SubmitObservation(Handle, MakeObservation(Registration, 6, true, 0, 3));
+	const FSightWeaveSubjectTransitionResult DuplicateTransition = Authority.SubmitObservation(
+		Handle,
+		MakeObservation(Registration, 7, false, 102, 3));
+	TestEqual(TEXT("Consumed transition identity is rejected"), DuplicateTransition.Failure,
+		ESightWeaveSubjectTransitionFailure::DuplicateTransition);
+	TestEqual(TEXT("Duplicate transition cannot advance snapshot"),
 		Authority.FindSnapshot(Handle)->SnapshotRevision, uint64(2));
 	return true;
 }
@@ -278,6 +293,12 @@ bool FSightWeaveM4P1ClearSuppressUnknownTest::RunTest(const FString& Parameters)
 		ESightWeaveSubjectPresentationState::Hidden);
 	TestEqual(TEXT("Suppression retains descriptor"), Authority.GetSnapshotCount(), 1);
 	Context.bSuppressMemoryPresentation = false;
+	Context.bBlockMemoryWrites = true;
+	TestEqual(TEXT("Write block hides proxy without deleting descriptor"),
+		Authority.EvaluatePresentation(Handle, Context).State,
+		ESightWeaveSubjectPresentationState::Hidden);
+	TestEqual(TEXT("Write block retains descriptor"), Authority.GetSnapshotCount(), 1);
+	Context.bBlockMemoryWrites = false;
 	Context.bHardMemoryAtSnapshot = false;
 	TestEqual(TEXT("Unknown is strict black"),
 		Authority.EvaluatePresentation(Handle, Context).State,
@@ -320,6 +341,47 @@ bool FSightWeaveM4P1IsolationTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Forced profile-hash collision fails exact scope"),
 		Authority.EvaluatePresentation(Handle, Context).Failure,
 		ESightWeaveSubjectPresentationFailure::ScopeMismatch);
+
+	auto TestScopeMutation = [this, &Authority, Handle, &Registration, Snapshot](
+		const TCHAR* Label,
+		TFunctionRef<void(FSightWeaveMemoryScopeKey&)> Mutate)
+	{
+		FSightWeaveSubjectPresentationContext Mutated = MakePresentationContext(
+			Registration,
+			Snapshot,
+			false);
+		Mutate(Mutated.Scope);
+		TestEqual(Label,
+			Authority.EvaluatePresentation(Handle, Mutated).Failure,
+			ESightWeaveSubjectPresentationFailure::ScopeMismatch);
+	};
+	TestScopeMutation(TEXT("Knowledge owner isolation is exact"),
+		[](FSightWeaveMemoryScopeKey& Scope)
+		{
+			Scope.KnowledgeOwnerId = FSightWeaveKnowledgeOwnerId(FName(TEXT("Remote")));
+		});
+	TestScopeMutation(TEXT("Floor isolation is exact"),
+		[](FSightWeaveMemoryScopeKey& Scope)
+		{
+			Scope.FloorId = FSightWeaveFloorId(FName(TEXT("Upper")));
+		});
+	TestScopeMutation(TEXT("Precision isolation is exact"),
+		[](FSightWeaveMemoryScopeKey& Scope)
+		{
+			Scope.PrecisionTier = ESightWeaveRenderPrecisionTier::Standard;
+		});
+	TestScopeMutation(TEXT("Floor origin isolation is exact"),
+		[](FSightWeaveMemoryScopeKey& Scope)
+		{
+			Scope.FloorOrigin.X += 25.0;
+		});
+	TestScopeMutation(TEXT("Canonical profile count isolation is exact"),
+		[](FSightWeaveMemoryScopeKey& Scope)
+		{
+			FSightWeaveRenderProfileIdentity& Extra = Scope.CanonicalProfiles.AddDefaulted_GetRef();
+			Extra.CanonicalCapabilities = { FName(TEXT("Infrared")) };
+			Extra.StableHash = 0x1234;
+		});
 	Context = MakePresentationContext(Registration, Snapshot, false);
 	--Context.SnapshotRevision;
 	TestEqual(TEXT("Stale snapshot revision fails closed"),

@@ -446,7 +446,7 @@ private:
 			State.bMemoryConfigured = Subsystem->ConfigureExplorationMemory(
 				Owner,
 				Floor,
-				ESightWeaveRenderPrecisionTier::Standard,
+				GetDefault<USightWeaveSettings>()->ExplorationMemoryPrecisionTier,
 				SightWeave::SparseAtlas::StandardActiveTileCapacity);
 			if (!State.bMemoryConfigured)
 			{

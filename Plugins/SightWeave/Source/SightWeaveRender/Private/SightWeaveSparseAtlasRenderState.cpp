@@ -745,9 +745,43 @@ bool FSightWeaveSparseAtlasRenderState::ProcessMemoryPending_RenderThread(
 		UploadBytes.SetNumZeroed(
 			SightWeave::SparseAtlas::PhysicalTileSize
 			* SightWeave::SparseAtlas::PhysicalTileSize);
-		for (int32 PhysicalY = 0; PhysicalY < SightWeave::SparseAtlas::PhysicalTileSize; ++PhysicalY)
+		if (Packet->GetPresentationSuppressions().IsEmpty())
 		{
-			for (int32 PhysicalX = 0; PhysicalX < SightWeave::SparseAtlas::PhysicalTileSize; ++PhysicalX)
+			// The overwhelmingly common path has no presentation suppression. Expand
+			// the authoritative packed interior a byte at a time, then resolve only
+			// the four-texel gutter through logical neighbors. This preserves exact
+			// point sampling without doing a TMap lookup for every interior texel.
+			const FSightWeavePackedMemoryTile* CenterTile =
+				MemoryMirror->CachedTiles.Find(Coordinate);
+			check(CenterTile);
+			for (int32 InteriorY = 0; InteriorY < SightWeave::Memory::InteriorTileSize; ++InteriorY)
+			{
+				const int32 SourceRow = InteriorY * SightWeave::Memory::RowBytes;
+				const int32 DestinationRow =
+					(InteriorY + SightWeave::SparseAtlas::GutterTexels)
+					* SightWeave::SparseAtlas::PhysicalTileSize
+					+ SightWeave::SparseAtlas::GutterTexels;
+				for (int32 ByteX = 0; ByteX < SightWeave::Memory::RowBytes; ++ByteX)
+				{
+					const uint8 Packed = CenterTile->PackedBits[SourceRow + ByteX];
+					const int32 Destination = DestinationRow + ByteX * 8;
+					if (Packed == 0)
+					{
+						continue;
+					}
+					if (Packed == 255)
+					{
+						FMemory::Memset(UploadBytes.GetData() + Destination, 255, 8);
+						continue;
+					}
+					for (int32 Bit = 0; Bit < 8; ++Bit)
+					{
+						UploadBytes[Destination + Bit] =
+							(Packed & (1u << Bit)) != 0 ? 255 : 0;
+					}
+				}
+			}
+			auto SampleGutter = [this, Coordinate](const int32 PhysicalX, const int32 PhysicalY)
 			{
 				const int32 GlobalX = Coordinate.X * SightWeave::Memory::InteriorTileSize
 					+ PhysicalX - SightWeave::SparseAtlas::GutterTexels;
@@ -758,32 +792,79 @@ bool FSightWeaveSparseAtlasRenderState::ProcessMemoryPending_RenderThread(
 					FloorDivide(GlobalY, SightWeave::Memory::InteriorTileSize));
 				const FSightWeavePackedMemoryTile* SourceTile =
 					MemoryMirror->CachedTiles.Find(SourceCoordinate);
-				if (!SourceTile)
-				{
-					continue;
-				}
-				const FIntPoint SourceTexel(
+				return SourceTile && SourceTile->TestBit(FIntPoint(
 					GlobalX - SourceCoordinate.X * SightWeave::Memory::InteriorTileSize,
-					GlobalY - SourceCoordinate.Y * SightWeave::Memory::InteriorTileSize);
-				bool bPresented = SourceTile->TestBit(SourceTexel);
-				if (bPresented)
+					GlobalY - SourceCoordinate.Y * SightWeave::Memory::InteriorTileSize));
+			};
+			for (int32 PhysicalY = 0; PhysicalY < SightWeave::SparseAtlas::GutterTexels; ++PhysicalY)
+			{
+				for (int32 PhysicalX = 0; PhysicalX < SightWeave::SparseAtlas::PhysicalTileSize; ++PhysicalX)
 				{
-					const float CentimetersPerTexel =
-						SightWeaveCentimetersPerTexel(MemoryMirror->Scope.PrecisionTier);
-					const FVector WorldLocation(
-						MemoryMirror->Scope.FloorOrigin.X
-							+ (static_cast<double>(GlobalX) + 0.5) * CentimetersPerTexel,
-						MemoryMirror->Scope.FloorOrigin.Y
-							+ (static_cast<double>(GlobalY) + 0.5) * CentimetersPerTexel,
-						MemoryMirror->Scope.FloorPlaneZ);
-					bPresented = !Packet->GetPresentationSuppressions().ContainsByPredicate(
-						[WorldLocation](const FSightWeaveMemoryModifierDescription& Modifier)
-						{
-							return Modifier.Region.ContainsWorldLocation(WorldLocation);
-						});
+					UploadBytes[PhysicalY * SightWeave::SparseAtlas::PhysicalTileSize + PhysicalX] =
+						SampleGutter(PhysicalX, PhysicalY) ? 255 : 0;
+					const int32 BottomY = SightWeave::SparseAtlas::PhysicalTileSize
+						- SightWeave::SparseAtlas::GutterTexels + PhysicalY;
+					UploadBytes[BottomY * SightWeave::SparseAtlas::PhysicalTileSize + PhysicalX] =
+						SampleGutter(PhysicalX, BottomY) ? 255 : 0;
 				}
-				UploadBytes[PhysicalY * SightWeave::SparseAtlas::PhysicalTileSize + PhysicalX] =
-					bPresented ? 255 : 0;
+			}
+			for (int32 PhysicalY = SightWeave::SparseAtlas::GutterTexels;
+				PhysicalY < SightWeave::SparseAtlas::PhysicalTileSize - SightWeave::SparseAtlas::GutterTexels;
+				++PhysicalY)
+			{
+				for (int32 PhysicalX = 0; PhysicalX < SightWeave::SparseAtlas::GutterTexels; ++PhysicalX)
+				{
+					UploadBytes[PhysicalY * SightWeave::SparseAtlas::PhysicalTileSize + PhysicalX] =
+						SampleGutter(PhysicalX, PhysicalY) ? 255 : 0;
+					const int32 RightX = SightWeave::SparseAtlas::PhysicalTileSize
+						- SightWeave::SparseAtlas::GutterTexels + PhysicalX;
+					UploadBytes[PhysicalY * SightWeave::SparseAtlas::PhysicalTileSize + RightX] =
+						SampleGutter(RightX, PhysicalY) ? 255 : 0;
+				}
+			}
+		}
+		else
+		{
+			for (int32 PhysicalY = 0; PhysicalY < SightWeave::SparseAtlas::PhysicalTileSize; ++PhysicalY)
+			{
+				for (int32 PhysicalX = 0; PhysicalX < SightWeave::SparseAtlas::PhysicalTileSize; ++PhysicalX)
+				{
+					const int32 GlobalX = Coordinate.X * SightWeave::Memory::InteriorTileSize
+						+ PhysicalX - SightWeave::SparseAtlas::GutterTexels;
+					const int32 GlobalY = Coordinate.Y * SightWeave::Memory::InteriorTileSize
+						+ PhysicalY - SightWeave::SparseAtlas::GutterTexels;
+					const FIntPoint SourceCoordinate(
+						FloorDivide(GlobalX, SightWeave::Memory::InteriorTileSize),
+						FloorDivide(GlobalY, SightWeave::Memory::InteriorTileSize));
+					const FSightWeavePackedMemoryTile* SourceTile =
+						MemoryMirror->CachedTiles.Find(SourceCoordinate);
+					if (!SourceTile)
+					{
+						continue;
+					}
+					const FIntPoint SourceTexel(
+						GlobalX - SourceCoordinate.X * SightWeave::Memory::InteriorTileSize,
+						GlobalY - SourceCoordinate.Y * SightWeave::Memory::InteriorTileSize);
+					bool bPresented = SourceTile->TestBit(SourceTexel);
+					if (bPresented)
+					{
+						const float CentimetersPerTexel =
+							SightWeaveCentimetersPerTexel(MemoryMirror->Scope.PrecisionTier);
+						const FVector WorldLocation(
+							MemoryMirror->Scope.FloorOrigin.X
+								+ (static_cast<double>(GlobalX) + 0.5) * CentimetersPerTexel,
+							MemoryMirror->Scope.FloorOrigin.Y
+								+ (static_cast<double>(GlobalY) + 0.5) * CentimetersPerTexel,
+							MemoryMirror->Scope.FloorPlaneZ);
+						bPresented = !Packet->GetPresentationSuppressions().ContainsByPredicate(
+							[WorldLocation](const FSightWeaveMemoryModifierDescription& Modifier)
+							{
+								return Modifier.Region.ContainsWorldLocation(WorldLocation);
+							});
+					}
+					UploadBytes[PhysicalY * SightWeave::SparseAtlas::PhysicalTileSize + PhysicalX] =
+						bPresented ? 255 : 0;
+				}
 			}
 		}
 

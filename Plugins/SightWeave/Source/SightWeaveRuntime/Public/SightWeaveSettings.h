@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
 #include "SightWeaveGeometry.h"
+#include "SightWeaveSparseAtlas.h"
 #include "SightWeaveTypes.h"
 
 #include "SightWeaveSettings.generated.h"
@@ -56,6 +57,11 @@ public:
 	/** Presentation-only inward feather width. HardLive remains the sole eligibility gate. */
 	UPROPERTY(Config, EditAnywhere, Category = "Visual Presentation", meta = (ClampMin = "0.0", ClampMax = "100.0", Units = "cm"))
 	float VisualFeatherWidthCentimeters = 50.0f;
+
+	/** M3.5 CPU/GPU exploration-memory precision; selected by the frozen four-tier experiment. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Exploration Memory")
+	ESightWeaveRenderPrecisionTier ExplorationMemoryPrecisionTier =
+		ESightWeaveRenderPrecisionTier::Coarse;
 
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Debug")
 	bool bEnableRuntimeDebug = false;

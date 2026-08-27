@@ -1,6 +1,6 @@
 # SightWeave M3.5 exploration-memory contract
 
-Status: **FROZEN FOR IMPLEMENTATION**
+Status: **FROZEN / PRECISION EXPERIMENT COMPLETE**
 
 Branch: `codex/m3p5-sightweave-static-environment-memory`
 
@@ -168,4 +168,17 @@ Selection is mechanical:
 4. If no tier passes, M3.5 is `PARTIAL`; thresholds are not weakened and no untested lower precision is substituted.
 5. If evidence cannot objectively distinguish passing tiers, record a recommendation and leave the production default unset.
 
-Until this experiment completes, there is no production Memory precision default. The existing M3 live-mask Standard tier is not silently reused as a Memory choice.
+The experiment completed on the recorded RTX 4060 machine without changing any threshold. `Coarse` (25 cm/texel) is the production Memory precision default. It was the only tier that repeatedly passed every frozen CPU, GT, RT, GPU, and memory gate in the combined four-tier run. The existing M3 live-mask Standard tier remains unchanged and was not silently reused as the Memory choice.
+
+## 9. Frozen precision decision
+
+The final combined run used 8 declared GPU/RT warmup updates followed by 56 warmed GPU samples, 63 warmed CPU dirty samples excluding cold index zero, and 16 no-change samples per tier. Candidate benchmarks remain successful automation entries because their purpose is to record selection data; only the selected production tier is a regression budget gate. `eligible_this_run` and each individual gate are emitted in the report so rejection cannot be hidden.
+
+| Tier | CPU packed | Tiles | CPU dirty p95 | GT packet p95 | RT total p95 | GPU dirty p95 | Boundary bound | Eligible |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Ultra 2.5 cm | 123,008 B | 16 | 1,391.299 us | 26.498 us | 742.000 us | 246.000 us | 1.25 cm | no: CPU and RT |
+| Fine 5 cm | 30,752 B | 4 | 458.401 us | 5.398 us | 351.101 us | 249.000 us | 2.50 cm | no: CPU and RT |
+| Standard 10 cm | 7,688 B | 1 | 82.098 us | 2.399 us | 71.898 us | 335.000 us | 5.00 cm | no: GPU |
+| **Coarse 25 cm** | **7,688 B** | **1** | **73.601 us** | **2.302 us** | **97.401 us** | **33.000 us** | **12.50 cm** | **yes / selected** |
+
+All tiers produced zero warmed no-change mirror work. The selected Coarse run also passed independently with CPU dirty p95 63.300 us, RT total p95 79.699 us, GPU dirty p95 43.000 us, and 36,462,592 B frozen worst-case plugin runtime memory. The full results, scale data, cold values, and evidence paths are recorded in `SIGHTWEAVE_M3P5_PERFORMANCE.md`.

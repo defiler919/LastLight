@@ -6,6 +6,7 @@
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 #include "RenderingThread.h"
+#include "RHI.h"
 #include "RHIGPUReadback.h"
 #include "SightWeaveSparseAtlasRenderState.h"
 
@@ -36,7 +37,19 @@ struct FSightWeaveMemoryTestReadback::FState final
 	TAtomic<bool> bFinished{ false };
 	TUniquePtr<FSightWeaveSparseAtlasRenderState> RenderState;
 	TUniquePtr<FRHIGPUTextureReadback> Readback;
+	TArray<FRenderQueryRHIRef> GPUStartQueries;
+	TArray<FRenderQueryRHIRef> GPUEndQueries;
 };
+
+namespace SightWeaveMemoryTestReadbackPrivate
+{
+	constexpr uint64 MemoryPageBytes =
+		static_cast<uint64>(SightWeave::SparseAtlas::PageSize)
+		* SightWeave::SparseAtlas::PageSize;
+	constexpr uint64 PageTableEntryBytes = sizeof(FIntVector4);
+}
+
+using namespace SightWeaveMemoryTestReadbackPrivate;
 
 FSightWeaveMemoryTestReadback::FSightWeaveMemoryTestReadback(
 	TSharedRef<FState, ESPMode::ThreadSafe> InState)
@@ -72,6 +85,8 @@ FSightWeaveMemoryTestReadback::StartSequence(
 			const FSightWeaveRenderWorldIdentity WorldIdentity =
 				NewState->Packets[0]->GetScope().WorldIdentity;
 			NewState->RenderState = MakeUnique<FSightWeaveSparseAtlasRenderState>(WorldIdentity);
+			NewState->GPUStartQueries.SetNum(NewState->Packets.Num());
+			NewState->GPUEndQueries.SetNum(NewState->Packets.Num());
 			for (int32 PacketIndex = 0; PacketIndex < NewState->Packets.Num(); ++PacketIndex)
 			{
 				const TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe>& Packet =
@@ -88,13 +103,47 @@ FSightWeaveMemoryTestReadback::StartSequence(
 				}
 				const uint64 UploadBefore =
 					NewState->RenderState->GetMemoryUploadCount_RenderThread();
+				const double TotalSetupStartSeconds = FPlatformTime::Seconds();
+				const double ConsumeStartSeconds = FPlatformTime::Seconds();
 				NewState->RenderState->SubmitMemoryPacket_RenderThread(Packet);
+				const double ConsumeMicroseconds =
+					(FPlatformTime::Seconds() - ConsumeStartSeconds) * 1000000.0;
 				FRDGBuilder GraphBuilder(
 					RHICmdList,
 					RDG_EVENT_NAME("SightWeave.Memory.TestUpdate"));
+				if (GSupportsTimestampRenderQueries)
+				{
+					NewState->GPUStartQueries[PacketIndex] = RHICreateRenderQuery(RQT_AbsoluteTime);
+					NewState->GPUEndQueries[PacketIndex] = RHICreateRenderQuery(RQT_AbsoluteTime);
+					if (NewState->GPUStartQueries[PacketIndex].IsValid()
+						&& NewState->GPUEndQueries[PacketIndex].IsValid())
+					{
+						RHICmdList.EndRenderQuery(
+							NewState->GPUStartQueries[PacketIndex].GetReference());
+					}
+				}
+				const double ResidencyStartSeconds = FPlatformTime::Seconds();
 				const bool bMirrorWork =
 					NewState->RenderState->ProcessMemoryPending_RenderThread(GraphBuilder);
+				const double ResidencyMicroseconds =
+					(FPlatformTime::Seconds() - ResidencyStartSeconds) * 1000000.0;
+				const double PageTableStartSeconds = FPlatformTime::Seconds();
 				NewState->RenderState->PrepareMemoryPresentationResources_RenderThread(GraphBuilder);
+				const double PageTableMicroseconds =
+					(FPlatformTime::Seconds() - PageTableStartSeconds) * 1000000.0;
+				if (NewState->GPUStartQueries[PacketIndex].IsValid()
+					&& NewState->GPUEndQueries[PacketIndex].IsValid())
+				{
+					FRHIRenderQuery* EndQuery =
+						NewState->GPUEndQueries[PacketIndex].GetReference();
+					GraphBuilder.AddPass(
+						RDG_EVENT_NAME("SightWeave.Memory.TimestampComplete"),
+						ERDGPassFlags::None | ERDGPassFlags::NeverCull,
+						[EndQuery](FRDGAsyncTask, FRHICommandList& CommandList)
+						{
+							CommandList.EndRenderQuery(EndQuery);
+						});
+				}
 
 				FSightWeaveMemoryMirrorUpdateSample& Sample = Result.Updates.AddDefaulted_GetRef();
 				Sample.PacketRevision = Packet->GetPacketRevision();
@@ -111,6 +160,19 @@ FSightWeaveMemoryTestReadback::StartSequence(
 					NewState->RenderState->GetMemoryResidentTileCount_RenderThread();
 				Sample.AllocatedPageCount =
 					NewState->RenderState->GetAllocatedMemoryPageCount_RenderThread();
+				Sample.RequestedDirtyTileCount = Packet->GetDirtyTiles().Num();
+				Sample.RequestedRemovedTileCount = Packet->GetRemovedTiles().Num();
+				Sample.UploadBytes = Sample.UploadDelta
+					* SightWeave::SparseAtlas::PhysicalTileSize
+					* SightWeave::SparseAtlas::PhysicalTileSize;
+				Sample.PersistentGPUBytes =
+					static_cast<uint64>(Sample.AllocatedPageCount) * MemoryPageBytes
+					+ FMath::Max(1, Sample.ResidentTileCount) * PageTableEntryBytes;
+				Sample.RenderThreadPacketConsumeMicroseconds = ConsumeMicroseconds;
+				Sample.RenderThreadResidencyUploadSetupMicroseconds = ResidencyMicroseconds;
+				Sample.RenderThreadPageTableSetupMicroseconds = PageTableMicroseconds;
+				Sample.RenderThreadTotalSetupMicroseconds =
+					(FPlatformTime::Seconds() - TotalSetupStartSeconds) * 1000000.0;
 				Sample.bProducedMirrorWork = bMirrorWork;
 
 				if (PacketIndex == NewState->Packets.Num() - 1)
@@ -201,6 +263,32 @@ void FSightWeaveMemoryTestReadback::Poll()
 			Result.Availability = PollState->RenderState->GetMemoryAvailability_RenderThread();
 			Result.Width = SightWeave::SparseAtlas::PhysicalTileSize;
 			Result.Height = SightWeave::SparseAtlas::PhysicalTileSize;
+			for (int32 SampleIndex = 0; SampleIndex < Result.Updates.Num(); ++SampleIndex)
+			{
+				if (!PollState->GPUStartQueries.IsValidIndex(SampleIndex)
+					|| !PollState->GPUEndQueries.IsValidIndex(SampleIndex)
+					|| !PollState->GPUStartQueries[SampleIndex].IsValid()
+					|| !PollState->GPUEndQueries[SampleIndex].IsValid())
+				{
+					continue;
+				}
+				uint64 GPUStartMicroseconds = 0;
+				uint64 GPUEndMicroseconds = 0;
+				if (RHIGetRenderQueryResult(
+						PollState->GPUStartQueries[SampleIndex].GetReference(),
+						GPUStartMicroseconds,
+						false)
+					&& RHIGetRenderQueryResult(
+						PollState->GPUEndQueries[SampleIndex].GetReference(),
+						GPUEndMicroseconds,
+						false)
+					&& GPUEndMicroseconds >= GPUStartMicroseconds)
+				{
+					Result.Updates[SampleIndex].bGPUTimestampAvailable = true;
+					Result.Updates[SampleIndex].GPUWorkMicroseconds =
+						static_cast<double>(GPUEndMicroseconds - GPUStartMicroseconds);
+				}
+			}
 			void* Source = PollState->Readback->Lock(Result.RowPitchInPixels, &Result.BufferHeight);
 			if (!Source
 				|| Result.RowPitchInPixels < Result.Width

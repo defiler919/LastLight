@@ -16,6 +16,7 @@ namespace SightWeave::SparseAtlas
 	inline constexpr uint64 PageBytes = static_cast<uint64>(PageSize) * PageSize;
 }
 
+UENUM(BlueprintType)
 enum class ESightWeaveRenderPrecisionTier : uint8
 {
 	Coarse,

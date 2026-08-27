@@ -25,6 +25,16 @@ struct SIGHTWEAVERENDER_API FSightWeaveMemoryMirrorUpdateSample
 	uint64 ResidencyGeneration = 0;
 	int32 ResidentTileCount = 0;
 	int32 AllocatedPageCount = 0;
+	int32 RequestedDirtyTileCount = 0;
+	int32 RequestedRemovedTileCount = 0;
+	uint64 UploadBytes = 0;
+	uint64 PersistentGPUBytes = 0;
+	double RenderThreadPacketConsumeMicroseconds = 0.0;
+	double RenderThreadResidencyUploadSetupMicroseconds = 0.0;
+	double RenderThreadPageTableSetupMicroseconds = 0.0;
+	double RenderThreadTotalSetupMicroseconds = 0.0;
+	bool bGPUTimestampAvailable = false;
+	double GPUWorkMicroseconds = 0.0;
 	bool bProducedMirrorWork = false;
 };
 

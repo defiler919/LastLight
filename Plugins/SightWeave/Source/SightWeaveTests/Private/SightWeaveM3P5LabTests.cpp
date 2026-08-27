@@ -233,16 +233,18 @@ bool FSightWeaveM3P5LabVisualCaptureTest::RunTest(const FString& Parameters)
 		TEXT("Presentation composite state=submitted-feather"),
 		EAutomationExpectedErrorFlags::Contains,
 		1);
-	// This visualization-only map intentionally has no navigation data, and UE's
-	// offscreen PIE bootstrap also emits one engine-owned motion-vector CVar note.
+	// This visualization-only map may emit a missing-navigation warning depending
+	// on the host project's navigation defaults. UE's offscreen PIE bootstrap may
+	// likewise emit an engine-owned motion-vector CVar note. Suppress either when
+	// present without requiring environment-specific noise for the test to pass.
 	AddExpectedError(
 		TEXT("Unable to find RecastNavMesh instance while trying to create UCrowdManager instance"),
 		EAutomationExpectedErrorFlags::Contains,
-		1);
+		-1);
 	AddExpectedError(
 		TEXT("Console variable 'r.MotionVectorSimulation' used in the render thread"),
 		EAutomationExpectedErrorFlags::Contains,
-		1);
+		-1);
 
 	const FString ScreenshotFilename = FPaths::ConvertRelativePathToFull(
 		FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Screenshots/M3P5_PIE_Overview.png")));

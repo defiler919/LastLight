@@ -147,6 +147,12 @@ public:
 	uint64 GetModifierRevision() const { return ModifierRevision; }
 	bool IsFullRebuild() const { return bFullRebuild; }
 	TConstArrayView<FSightWeavePackedMemoryTile> GetDirtyTiles() const { return DirtyTiles; }
+	TConstArrayView<FSightWeavePackedMemoryTile> GetAuthorityTiles() const
+	{
+		return AuthorityTiles.IsValid()
+			? MakeArrayView(*AuthorityTiles)
+			: TConstArrayView<FSightWeavePackedMemoryTile>();
+	}
 	TConstArrayView<FSightWeaveMemoryTileKey> GetRemovedTiles() const { return RemovedTiles; }
 	TConstArrayView<FSightWeaveMemoryModifierDescription> GetPresentationSuppressions() const
 	{
@@ -175,6 +181,7 @@ private:
 	TArray<FSightWeavePackedMemoryTile> DirtyTiles;
 	TArray<FSightWeaveMemoryTileKey> RemovedTiles;
 	TArray<FSightWeaveMemoryModifierDescription> PresentationSuppressions;
+	TSharedPtr<const TArray<FSightWeavePackedMemoryTile>, ESPMode::ThreadSafe> AuthorityTiles;
 };
 
 /**
@@ -236,6 +243,8 @@ private:
 		FSightWeaveMemoryModifierDescription Description;
 	};
 	TArray<FSightWeavePackedMemoryTile> Tiles;
+	TSharedPtr<const TArray<FSightWeavePackedMemoryTile>, ESPMode::ThreadSafe>
+		PublishedAuthorityTiles;
 	TArray<FModifierRecord> Modifiers;
 	TArray<FIntPoint> DirtyLogicalTiles;
 	TArray<FSightWeaveMemoryTileKey> RemovedTiles;

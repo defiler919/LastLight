@@ -488,6 +488,7 @@ void FSightWeaveMemoryAuthority::Reset()
 	check(IsInGameThread());
 	Scope = FSightWeaveMemoryScopeKey();
 	Tiles.Reset();
+	PublishedAuthorityTiles.Reset();
 	Modifiers.Reset();
 	DirtyLogicalTiles.Reset();
 	RemovedTiles.Reset();
@@ -729,6 +730,7 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 	if (Result.ChangedTileCount > 0)
 	{
 		++MemoryRevision;
+		PublishedAuthorityTiles.Reset();
 		Result.bAuthorityChanged = true;
 	}
 	Result.MemoryRevision = MemoryRevision;
@@ -797,6 +799,7 @@ bool FSightWeaveMemoryAuthority::ClearMemory(const FSightWeaveMemoryRegion& Regi
 	if (bChanged)
 	{
 		++MemoryRevision;
+		PublishedAuthorityTiles.Reset();
 	}
 	LastFailure = ESightWeaveMemoryFailure::None;
 	return true;
@@ -947,6 +950,12 @@ FSightWeaveMemoryAuthority::PublishPacket(const bool bForceFullRebuild)
 			}
 		}
 	}
+	if (!PublishedAuthorityTiles.IsValid())
+	{
+		PublishedAuthorityTiles =
+			MakeShared<TArray<FSightWeavePackedMemoryTile>, ESPMode::ThreadSafe>(Tiles);
+	}
+	Packet->AuthorityTiles = PublishedAuthorityTiles;
 	Packet->RemovedTiles = RemovedTiles;
 	for (const FModifierRecord& Modifier : Modifiers)
 	{

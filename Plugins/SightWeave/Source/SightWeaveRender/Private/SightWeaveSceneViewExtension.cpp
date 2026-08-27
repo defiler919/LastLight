@@ -30,6 +30,22 @@ void FSightWeaveSceneViewExtension::SubmitPacket(
 		});
 }
 
+void FSightWeaveSceneViewExtension::SubmitMemoryPacket(
+	TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> Packet)
+{
+	check(IsInGameThread());
+	if (bShutdown)
+	{
+		return;
+	}
+	const TSharedRef<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe> State = RenderState;
+	ENQUEUE_RENDER_COMMAND(SightWeaveSubmitMemoryPacket)(
+		[State, Packet = MoveTemp(Packet)](FRHICommandListImmediate& RHICmdList)
+		{
+			State->SubmitMemoryPacket_RenderThread(Packet);
+		});
+}
+
 void FSightWeaveSceneViewExtension::SubmitPresentationSelection(
 	const FSightWeaveViewPresentationSelection& Selection)
 {
@@ -68,7 +84,9 @@ void FSightWeaveSceneViewExtension::PreRenderViewFamily_RenderThread(
 	FSceneViewFamily& ViewFamily)
 {
 	RenderState->ProcessPending_RenderThread(GraphBuilder);
+	RenderState->ProcessMemoryPending_RenderThread(GraphBuilder);
 	RenderState->PreparePresentationResources_RenderThread(GraphBuilder);
+	RenderState->PrepareMemoryPresentationResources_RenderThread(GraphBuilder);
 	RenderState->ProcessVisualFeather_RenderThread(GraphBuilder);
 }
 

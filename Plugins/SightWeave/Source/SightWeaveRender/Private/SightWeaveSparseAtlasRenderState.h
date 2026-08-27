@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RenderGraphResources.h"
+#include "SightWeaveMemory.h"
 #include "SightWeavePresentation.h"
 #include "SightWeaveRenderWorldSubsystem.h"
 #include "SightWeaveSparseAtlas.h"
@@ -35,9 +36,13 @@ public:
 		const TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe>& Packet);
 	void SubmitPresentationSelection_RenderThread(
 		const FSightWeaveViewPresentationSelection& Selection);
+	void SubmitMemoryPacket_RenderThread(
+		const TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe>& Packet);
 	bool ProcessPending_RenderThread(FRDGBuilder& GraphBuilder);
+	bool ProcessMemoryPending_RenderThread(FRDGBuilder& GraphBuilder);
 	bool ProcessVisualFeather_RenderThread(FRDGBuilder& GraphBuilder);
 	void PreparePresentationResources_RenderThread(FRDGBuilder& GraphBuilder);
+	void PrepareMemoryPresentationResources_RenderThread(FRDGBuilder& GraphBuilder);
 	FScreenPassTexture AddHardMaskComposite_RenderThread(
 		FRDGBuilder& GraphBuilder,
 		const FSceneView& View,
@@ -64,6 +69,14 @@ public:
 	uint64 GetFeatherPageAllocationCount_RenderThread() const { return FeatherPageAllocationCount; }
 	uint64 GetFeatherScratchAllocationCount_RenderThread() const { return FeatherScratchAllocationCount; }
 	uint64 GetFeatherTileDispatchCount_RenderThread() const { return FeatherTileDispatchCount; }
+	ESightWeaveRenderAvailability GetMemoryAvailability_RenderThread() const;
+	uint64 GetMemoryAppliedRevision_RenderThread() const;
+	uint64 GetMemoryResourceGeneration_RenderThread() const;
+	uint64 GetMemoryResidencyGeneration_RenderThread() const;
+	uint64 GetMemoryUploadCount_RenderThread() const;
+	uint64 GetMemoryPageTableUploadCount_RenderThread() const;
+	int32 GetMemoryResidentTileCount_RenderThread() const;
+	int32 GetAllocatedMemoryPageCount_RenderThread() const;
 	bool IsPresentationEnabled_RenderThread() const
 	{
 		return PresentationSelection.IsEnabled() && !bReleased;
@@ -95,10 +108,20 @@ public:
 	bool RemoveReadback_RenderThread(
 		const FSightWeaveSparseTileIdentity& Identity,
 		const FSightWeaveSparsePhysicalAddress& Address);
+	FRDGTextureRef RegisterMemoryPageForReadback_RenderThread(
+		FRDGBuilder& GraphBuilder,
+		const FSightWeaveMemoryTileKey& TileKey,
+		FIntRect& OutSlotRect,
+		FSightWeaveSparsePhysicalAddress& OutAddress);
+	bool AddMemoryReadback_RenderThread(const FSightWeaveMemoryTileKey& TileKey);
+	bool RemoveMemoryReadback_RenderThread(
+		const FSightWeaveMemoryTileKey& TileKey,
+		const FSightWeaveSparsePhysicalAddress& Address);
 #endif
 
 private:
 	struct FScopeState;
+	struct FMemoryMirrorState;
 
 	bool CheckCapabilities_RenderThread();
 	bool EnsureScratchTextures_RenderThread();
@@ -143,6 +166,14 @@ private:
 		int32 DiagnosticCode,
 		const TCHAR* DiagnosticName,
 		const FScopeState* Scope);
+	bool CheckMemoryCapabilities_RenderThread();
+	bool EnsureMemoryPage_RenderThread(
+		FRDGBuilder& GraphBuilder,
+		int32 PageIndex,
+		FRDGTextureRef& OutPage,
+		bool& bOutColdCreated);
+	bool PrepareMemoryPageTable_RenderThread(FRDGBuilder& GraphBuilder);
+	void FailMemoryMirror_RenderThread(ESightWeaveRenderAvailability Failure);
 
 	FSightWeaveRenderWorldIdentity WorldIdentity;
 	TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> PendingPacket;
@@ -152,6 +183,7 @@ private:
 	ESightWeavePresentationBindingFailure PresentationBindingFailure =
 		ESightWeavePresentationBindingFailure::Disabled;
 	TArray<TUniquePtr<FScopeState>> Scopes;
+	TUniquePtr<FMemoryMirrorState> MemoryMirror;
 	TRefCountPtr<IPooledRenderTarget> VisionScratch;
 	TRefCountPtr<IPooledRenderTarget> IlluminationScratch;
 	TRefCountPtr<IPooledRenderTarget> SuppressionScratch;

@@ -8,6 +8,7 @@
 #include "SightWeaveRenderWorldSubsystem.generated.h"
 
 class FSightWeaveSceneViewExtension;
+class FSightWeaveMemoryPacket;
 struct FSightWeaveFrameSnapshot;
 
 enum class ESightWeaveRenderAvailability : uint8
@@ -68,6 +69,8 @@ public:
 private:
 	void HandleSnapshotPublished(
 		TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot);
+	void HandleMemoryPacketPublished(
+		TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> Packet);
 	void BuildAndSubmitPacket(
 		const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe>& Snapshot);
 	void SubmitFailClosedClear(uint64 SnapshotRevision, ESightWeaveSparsePacketFailure Failure);
@@ -86,6 +89,7 @@ private:
 		ESightWeaveRenderPrecisionTier::Standard;
 	bool bHasExplicitPresentationScope = false;
 	FDelegateHandle SnapshotPublishedHandle;
+	FDelegateHandle MemoryPacketPublishedHandle;
 	TSharedPtr<FSightWeaveSceneViewExtension, ESPMode::ThreadSafe> SceneViewExtension;
 	FSightWeaveRenderWorldDiagnostics Diagnostics;
 };

@@ -54,6 +54,10 @@ namespace SightWeaveSparseAtlasRenderPrivate
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 
+	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeaveMemoryUploadPassParameters, )
+		RDG_TEXTURE_ACCESS(Texture, ERHIAccess::CopyDest)
+	END_SHADER_PARAMETER_STRUCT()
+
 #if WITH_DEV_AUTOMATION_TESTS
 	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeavePresentationTestPassParameters, )
 		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveFullscreenVertexShader::FParameters, VertexShader)
@@ -294,6 +298,36 @@ namespace SightWeaveSparseAtlasRenderPrivate
 			return Tile.Identity.IsEquivalentTo(Identity);
 		});
 	}
+
+	FSightWeaveSparseTileIdentity MakeMemoryTileIdentity(
+		const FSightWeaveMemoryScopeKey& Scope,
+		const FIntPoint LogicalCoordinate)
+	{
+		FSightWeaveSparseTileIdentity Identity;
+		Identity.TileKey.Scope.WorldIdentity = Scope.WorldIdentity;
+		Identity.TileKey.Scope.KnowledgeOwnerId = Scope.KnowledgeOwnerId;
+		Identity.TileKey.Scope.FloorId = Scope.FloorId;
+		Identity.TileKey.Scope.PrecisionTier = Scope.PrecisionTier;
+		Identity.TileKey.Scope.FloorOrigin = Scope.FloorOrigin;
+		Identity.TileKey.LogicalCoordinate = LogicalCoordinate;
+		Identity.CanonicalProfiles = Scope.CanonicalProfiles;
+		return Identity;
+	}
+
+	bool MemoryTileMatchesScope(
+		const FSightWeavePackedMemoryTile& Tile,
+		const FSightWeaveMemoryScopeKey& Scope)
+	{
+		return Tile.IsValid() && Tile.Key.Scope.IsEquivalentTo(Scope);
+	}
+
+	int32 FloorDivide(const int32 Value, const int32 Divisor)
+	{
+		check(Divisor > 0);
+		const int32 Quotient = Value / Divisor;
+		const int32 Remainder = Value % Divisor;
+		return Remainder < 0 ? Quotient - 1 : Quotient;
+	}
 }
 
 using namespace SightWeaveSparseAtlasRenderPrivate;
@@ -325,9 +359,41 @@ struct FSightWeaveSparseAtlasRenderState::FScopeState final
 	ESightWeaveRenderAvailability Availability = ESightWeaveRenderAvailability::Unknown;
 };
 
+struct FSightWeaveSparseAtlasRenderState::FMemoryMirrorState final
+{
+	FMemoryMirrorState()
+		: Residency(SightWeave::SparseAtlas::StandardActiveTileCapacity)
+	{
+	}
+
+	FSightWeaveMemoryScopeKey Scope;
+	FSightWeaveSparseAtlasResidency Residency;
+	TMap<FIntPoint, FSightWeavePackedMemoryTile> CachedTiles;
+	TArray<TRefCountPtr<IPooledRenderTarget>> Pages;
+	TRefCountPtr<FRDGPooledBuffer> PageTable;
+	FRDGBufferRef CurrentPageTable = nullptr;
+	TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> PendingPacket;
+	TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> AppliedPacket;
+	uint64 DesiredPacketRevision = 0;
+	uint64 AppliedPacketRevision = 0;
+	uint64 AppliedMemoryRevision = 0;
+	uint64 AppliedModifierRevision = 0;
+	uint64 ResourceGeneration = 1;
+	uint64 ResidencyGeneration = 1;
+	uint64 PageTableResidencyGeneration = 0;
+	uint64 PageTableMemoryRevision = 0;
+	uint64 UploadCount = 0;
+	uint64 PageTableUploadCount = 0;
+	int32 PageTableEntryCount = 0;
+	ESightWeaveRenderAvailability Availability = ESightWeaveRenderAvailability::Unknown;
+	bool bHasScope = false;
+	bool bForceFullRebuild = false;
+};
+
 FSightWeaveSparseAtlasRenderState::FSightWeaveSparseAtlasRenderState(
 	const FSightWeaveRenderWorldIdentity InWorldIdentity)
 	: WorldIdentity(InWorldIdentity)
+	, MemoryMirror(MakeUnique<FMemoryMirrorState>())
 {
 }
 
@@ -426,6 +492,253 @@ void FSightWeaveSparseAtlasRenderState::SubmitPresentationSelection_RenderThread
 		}
 	}
 	RefreshPresentationBinding_RenderThread();
+}
+
+void FSightWeaveSparseAtlasRenderState::SubmitMemoryPacket_RenderThread(
+	const TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe>& Packet)
+{
+	check(IsInRenderingThread());
+	if (bReleased || !MemoryMirror.IsValid())
+	{
+		return;
+	}
+	if (!Packet.IsValid())
+	{
+		MemoryMirror->PendingPacket.Reset();
+		MemoryMirror->Availability = ESightWeaveRenderAvailability::Unknown;
+		return;
+	}
+	if (Packet->GetPacketRevision() <= MemoryMirror->DesiredPacketRevision)
+	{
+		return;
+	}
+	if (MemoryMirror->bHasScope
+		&& !MemoryMirror->Scope.IsEquivalentTo(Packet->GetScope()))
+	{
+		MemoryMirror->PendingPacket = Packet;
+		MemoryMirror->DesiredPacketRevision = Packet->GetPacketRevision();
+		MemoryMirror->Availability = ESightWeaveRenderAvailability::InvalidPacket;
+		MemoryMirror->bForceFullRebuild = true;
+		return;
+	}
+	const bool bDroppedPending = MemoryMirror->PendingPacket.IsValid();
+	MemoryMirror->PendingPacket = Packet;
+	MemoryMirror->DesiredPacketRevision = Packet->GetPacketRevision();
+	MemoryMirror->bForceFullRebuild = MemoryMirror->bForceFullRebuild
+		|| bDroppedPending
+		|| !MemoryMirror->AppliedPacket.IsValid();
+}
+
+bool FSightWeaveSparseAtlasRenderState::ProcessMemoryPending_RenderThread(
+	FRDGBuilder& GraphBuilder)
+{
+	check(IsInRenderingThread());
+	if (bReleased || !MemoryMirror.IsValid() || !MemoryMirror->PendingPacket.IsValid())
+	{
+		return false;
+	}
+	const TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> Packet =
+		MoveTemp(MemoryMirror->PendingPacket);
+	const bool bForceFullRebuild = MemoryMirror->bForceFullRebuild || Packet->IsFullRebuild();
+	MemoryMirror->bForceFullRebuild = false;
+
+	if (!Packet->IsValid()
+		|| !Packet->GetScope().IsValid()
+		|| Packet->GetAuthorityTiles().Num()
+			> SightWeave::SparseAtlas::StandardActiveTileCapacity)
+	{
+		FailMemoryMirror_RenderThread(ESightWeaveRenderAvailability::InvalidPacket);
+		return false;
+	}
+	if (MemoryMirror->bHasScope
+		&& !MemoryMirror->Scope.IsEquivalentTo(Packet->GetScope()))
+	{
+		FailMemoryMirror_RenderThread(ESightWeaveRenderAvailability::InvalidPacket);
+		return false;
+	}
+	if (!CheckMemoryCapabilities_RenderThread())
+	{
+		FailMemoryMirror_RenderThread(MemoryMirror->Availability);
+		return false;
+	}
+	if (!MemoryMirror->bHasScope)
+	{
+		MemoryMirror->Scope = Packet->GetScope();
+		MemoryMirror->bHasScope = true;
+	}
+
+	TArray<FIntPoint> ChangedCoordinates;
+	auto AddChanged = [&ChangedCoordinates](const FIntPoint Coordinate)
+	{
+		ChangedCoordinates.AddUnique(Coordinate);
+	};
+
+	if (bForceFullRebuild)
+	{
+		MemoryMirror->CachedTiles.Reset();
+		MemoryMirror->Residency.Reset();
+		++MemoryMirror->ResidencyGeneration;
+		for (const FSightWeavePackedMemoryTile& Tile : Packet->GetAuthorityTiles())
+		{
+			if (!MemoryTileMatchesScope(Tile, MemoryMirror->Scope))
+			{
+				FailMemoryMirror_RenderThread(ESightWeaveRenderAvailability::InvalidPacket);
+				return false;
+			}
+			MemoryMirror->CachedTiles.Add(Tile.Key.LogicalCoordinate, Tile);
+			AddChanged(Tile.Key.LogicalCoordinate);
+		}
+	}
+	else
+	{
+		for (const FSightWeaveMemoryTileKey& Removed : Packet->GetRemovedTiles())
+		{
+			if (!Removed.IsValid() || !Removed.Scope.IsEquivalentTo(MemoryMirror->Scope))
+			{
+				FailMemoryMirror_RenderThread(ESightWeaveRenderAvailability::InvalidPacket);
+				return false;
+			}
+			MemoryMirror->CachedTiles.Remove(Removed.LogicalCoordinate);
+			const FSightWeaveSparseTileIdentity Identity =
+				MakeMemoryTileIdentity(MemoryMirror->Scope, Removed.LogicalCoordinate);
+			if (MemoryMirror->Residency.Release(Identity))
+			{
+				++MemoryMirror->ResidencyGeneration;
+			}
+			AddChanged(Removed.LogicalCoordinate);
+		}
+		for (const FSightWeavePackedMemoryTile& Tile : Packet->GetDirtyTiles())
+		{
+			if (!MemoryTileMatchesScope(Tile, MemoryMirror->Scope))
+			{
+				FailMemoryMirror_RenderThread(ESightWeaveRenderAvailability::InvalidPacket);
+				return false;
+			}
+			MemoryMirror->CachedTiles.Add(Tile.Key.LogicalCoordinate, Tile);
+			AddChanged(Tile.Key.LogicalCoordinate);
+		}
+	}
+	if (MemoryMirror->CachedTiles.Num()
+		> SightWeave::SparseAtlas::StandardActiveTileCapacity)
+	{
+		FailMemoryMirror_RenderThread(ESightWeaveRenderAvailability::ResourceAllocationFailed);
+		return false;
+	}
+
+	TArray<FIntPoint> UploadCoordinates;
+	for (const FIntPoint Changed : ChangedCoordinates)
+	{
+		for (int32 Y = -1; Y <= 1; ++Y)
+		{
+			for (int32 X = -1; X <= 1; ++X)
+			{
+				const FIntPoint Candidate = Changed + FIntPoint(X, Y);
+				if (MemoryMirror->CachedTiles.Contains(Candidate))
+				{
+					UploadCoordinates.AddUnique(Candidate);
+				}
+			}
+		}
+	}
+
+	bool bUploaded = false;
+	for (const FIntPoint Coordinate : UploadCoordinates)
+	{
+		const FSightWeaveSparseTileIdentity Identity =
+			MakeMemoryTileIdentity(MemoryMirror->Scope, Coordinate);
+		const FSightWeaveSparseResidencyResult ResidencyResult =
+			MemoryMirror->Residency.Acquire(Identity, Packet->GetMemoryRevision());
+		if (!ResidencyResult.Succeeded())
+		{
+			FailMemoryMirror_RenderThread(ESightWeaveRenderAvailability::ResourceAllocationFailed);
+			return false;
+		}
+		if (ResidencyResult.Disposition == ESightWeaveSparseResidencyDisposition::Allocated
+			|| ResidencyResult.Disposition == ESightWeaveSparseResidencyDisposition::Reused)
+		{
+			++MemoryMirror->ResidencyGeneration;
+		}
+		FRDGTextureRef Page = nullptr;
+		bool bColdCreated = false;
+		if (!EnsureMemoryPage_RenderThread(
+				GraphBuilder,
+				ResidencyResult.Address.PageIndex,
+				Page,
+				bColdCreated)
+			|| !Page)
+		{
+			FailMemoryMirror_RenderThread(ESightWeaveRenderAvailability::ResourceAllocationFailed);
+			return false;
+		}
+
+		TArray<uint8> UploadBytes;
+		UploadBytes.SetNumZeroed(
+			SightWeave::SparseAtlas::PhysicalTileSize
+			* SightWeave::SparseAtlas::PhysicalTileSize);
+		for (int32 PhysicalY = 0; PhysicalY < SightWeave::SparseAtlas::PhysicalTileSize; ++PhysicalY)
+		{
+			for (int32 PhysicalX = 0; PhysicalX < SightWeave::SparseAtlas::PhysicalTileSize; ++PhysicalX)
+			{
+				const int32 GlobalX = Coordinate.X * SightWeave::Memory::InteriorTileSize
+					+ PhysicalX - SightWeave::SparseAtlas::GutterTexels;
+				const int32 GlobalY = Coordinate.Y * SightWeave::Memory::InteriorTileSize
+					+ PhysicalY - SightWeave::SparseAtlas::GutterTexels;
+				const FIntPoint SourceCoordinate(
+					FloorDivide(GlobalX, SightWeave::Memory::InteriorTileSize),
+					FloorDivide(GlobalY, SightWeave::Memory::InteriorTileSize));
+				const FSightWeavePackedMemoryTile* SourceTile =
+					MemoryMirror->CachedTiles.Find(SourceCoordinate);
+				if (!SourceTile)
+				{
+					continue;
+				}
+				const FIntPoint SourceTexel(
+					GlobalX - SourceCoordinate.X * SightWeave::Memory::InteriorTileSize,
+					GlobalY - SourceCoordinate.Y * SightWeave::Memory::InteriorTileSize);
+				UploadBytes[PhysicalY * SightWeave::SparseAtlas::PhysicalTileSize + PhysicalX] =
+					SourceTile->TestBit(SourceTexel) ? 255 : 0;
+			}
+		}
+
+		const FIntRect SlotRect = ResidencyResult.Address.GetSlotRect();
+		FSightWeaveMemoryUploadPassParameters* Parameters =
+			GraphBuilder.AllocParameters<FSightWeaveMemoryUploadPassParameters>();
+		Parameters->Texture = Page;
+		GraphBuilder.AddPass(
+			RDG_EVENT_NAME("SightWeave.Memory.Upload"),
+			Parameters,
+			ERDGPassFlags::Copy,
+			[Page, SlotRect, UploadBytes = MoveTemp(UploadBytes)](
+				FRDGAsyncTask,
+				FRHICommandList& RHICmdList)
+			{
+				const FUpdateTextureRegion2D Region(
+					SlotRect.Min.X,
+					SlotRect.Min.Y,
+					0,
+					0,
+					SightWeave::SparseAtlas::PhysicalTileSize,
+					SightWeave::SparseAtlas::PhysicalTileSize);
+				RHICmdList.UpdateTexture2D(
+					Page->GetRHI(),
+					0,
+					Region,
+					SightWeave::SparseAtlas::PhysicalTileSize,
+					UploadBytes.GetData());
+			});
+		MemoryMirror->Residency.MarkApplied(
+			ResidencyResult.Address,
+			Packet->GetMemoryRevision());
+		++MemoryMirror->UploadCount;
+		bUploaded = true;
+	}
+
+	MemoryMirror->AppliedPacket = Packet;
+	MemoryMirror->AppliedPacketRevision = Packet->GetPacketRevision();
+	MemoryMirror->AppliedMemoryRevision = Packet->GetMemoryRevision();
+	MemoryMirror->AppliedModifierRevision = Packet->GetModifierRevision();
+	MemoryMirror->Availability = ESightWeaveRenderAvailability::Available;
+	return bUploaded;
 }
 
 bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder& GraphBuilder)
@@ -633,6 +946,75 @@ void FSightWeaveSparseAtlasRenderState::PreparePresentationResources_RenderThrea
 			PrepareScopePageTable_RenderThread(GraphBuilder, *Scope);
 		}
 	}
+}
+
+void FSightWeaveSparseAtlasRenderState::PrepareMemoryPresentationResources_RenderThread(
+	FRDGBuilder& GraphBuilder)
+{
+	check(IsInRenderingThread());
+	if (!MemoryMirror.IsValid())
+	{
+		return;
+	}
+	MemoryMirror->CurrentPageTable = nullptr;
+	if (MemoryMirror->Availability == ESightWeaveRenderAvailability::Available)
+	{
+		PrepareMemoryPageTable_RenderThread(GraphBuilder);
+	}
+}
+
+bool FSightWeaveSparseAtlasRenderState::PrepareMemoryPageTable_RenderThread(
+	FRDGBuilder& GraphBuilder)
+{
+	check(IsInRenderingThread());
+	if (!MemoryMirror.IsValid())
+	{
+		return false;
+	}
+	if (MemoryMirror->PageTable.IsValid()
+		&& MemoryMirror->PageTableResidencyGeneration == MemoryMirror->ResidencyGeneration
+		&& MemoryMirror->PageTableMemoryRevision == MemoryMirror->AppliedMemoryRevision)
+	{
+		MemoryMirror->CurrentPageTable = GraphBuilder.RegisterExternalBuffer(
+			MemoryMirror->PageTable,
+			TEXT("SightWeave.Memory.PageTable"));
+		return MemoryMirror->CurrentPageTable != nullptr;
+	}
+
+	TArray<FIntVector4> Entries;
+	Entries.Reserve(MemoryMirror->Residency.GetResidentCount());
+	for (const FSightWeaveSparseResidencySlot& Slot : MemoryMirror->Residency.GetSlots())
+	{
+		if (!Slot.bOccupied || Slot.AppliedRevision != MemoryMirror->AppliedMemoryRevision)
+		{
+			continue;
+		}
+		Entries.Emplace(
+			Slot.Identity.TileKey.LogicalCoordinate.X,
+			Slot.Identity.TileKey.LogicalCoordinate.Y,
+			Slot.Address.PageIndex,
+			Slot.Address.SlotIndex);
+	}
+	Algo::Sort(Entries, [](const FIntVector4& A, const FIntVector4& B)
+	{
+		return A.X < B.X || (A.X == B.X && A.Y < B.Y);
+	});
+	MemoryMirror->PageTableEntryCount = Entries.Num();
+	if (Entries.IsEmpty())
+	{
+		Entries.Emplace(0, 0, INDEX_NONE, INDEX_NONE);
+	}
+	MemoryMirror->CurrentPageTable = CreateStructuredBuffer(
+		GraphBuilder,
+		TEXT("SightWeave.Memory.PageTable"),
+		MoveTemp(Entries));
+	GraphBuilder.QueueBufferExtraction(
+		MemoryMirror->CurrentPageTable,
+		&MemoryMirror->PageTable);
+	MemoryMirror->PageTableResidencyGeneration = MemoryMirror->ResidencyGeneration;
+	MemoryMirror->PageTableMemoryRevision = MemoryMirror->AppliedMemoryRevision;
+	++MemoryMirror->PageTableUploadCount;
+	return true;
 }
 
 bool FSightWeaveSparseAtlasRenderState::PrepareScopePageTable_RenderThread(
@@ -954,6 +1336,19 @@ void FSightWeaveSparseAtlasRenderState::Release_RenderThread(
 	PresentationSelection = FSightWeaveViewPresentationSelection();
 	PresentationBindingFailure = ESightWeavePresentationBindingFailure::WorldTeardown;
 	Scopes.Reset();
+	if (MemoryMirror.IsValid())
+	{
+		MemoryMirror->PendingPacket.Reset();
+		MemoryMirror->AppliedPacket.Reset();
+		MemoryMirror->CachedTiles.Reset();
+		MemoryMirror->Residency.Reset();
+		MemoryMirror->Pages.Reset();
+		MemoryMirror->PageTable.SafeRelease();
+		MemoryMirror->CurrentPageTable = nullptr;
+		MemoryMirror->Availability = ESightWeaveRenderAvailability::WorldTeardown;
+		++MemoryMirror->ResourceGeneration;
+		++MemoryMirror->ResidencyGeneration;
+	}
 	VisionScratch.SafeRelease();
 	IlluminationScratch.SafeRelease();
 	SuppressionScratch.SafeRelease();
@@ -1000,6 +1395,114 @@ bool FSightWeaveSparseAtlasRenderState::CheckCapabilities_RenderThread()
 		return false;
 	}
 	return true;
+}
+
+bool FSightWeaveSparseAtlasRenderState::CheckMemoryCapabilities_RenderThread()
+{
+	check(IsInRenderingThread());
+	if (!MemoryMirror.IsValid())
+	{
+		return false;
+	}
+	if (GUsingNullRHI || !FApp::CanEverRender())
+	{
+		MemoryMirror->Availability = ESightWeaveRenderAvailability::NullRHI;
+		return false;
+	}
+	if (GMaxRHIShaderPlatform != SP_PCD3D_SM6)
+	{
+		MemoryMirror->Availability = ESightWeaveRenderAvailability::UnsupportedRHI;
+		return false;
+	}
+	constexpr EPixelFormatCapabilities RequiredCapabilities =
+		EPixelFormatCapabilities::Texture2D
+		| EPixelFormatCapabilities::TextureLoad
+		| EPixelFormatCapabilities::TextureSample;
+	if (!GPixelFormats[PF_G8].Supported
+		|| !RHIPixelFormatHasCapabilities(PF_G8, RequiredCapabilities))
+	{
+		MemoryMirror->Availability = ESightWeaveRenderAvailability::UnsupportedPixelFormat;
+		return false;
+	}
+	return true;
+}
+
+bool FSightWeaveSparseAtlasRenderState::EnsureMemoryPage_RenderThread(
+	FRDGBuilder& GraphBuilder,
+	const int32 PageIndex,
+	FRDGTextureRef& OutPage,
+	bool& bOutColdCreated)
+{
+	check(IsInRenderingThread());
+	OutPage = nullptr;
+	bOutColdCreated = false;
+	if (!MemoryMirror.IsValid())
+	{
+		return false;
+	}
+	const int32 MaximumPages = FMath::DivideAndRoundUp(
+		SightWeave::SparseAtlas::StandardActiveTileCapacity,
+		SightWeave::SparseAtlas::SlotsPerPage);
+	if (PageIndex < 0 || PageIndex >= MaximumPages)
+	{
+		return false;
+	}
+	if (MemoryMirror->Pages.Num() <= PageIndex)
+	{
+		MemoryMirror->Pages.SetNum(PageIndex + 1);
+	}
+	if (!MemoryMirror->Pages[PageIndex].IsValid())
+	{
+		AllocatePooledTexture(
+			MakeMaskTextureDesc(SightWeave::SparseAtlas::PageSize),
+			MemoryMirror->Pages[PageIndex],
+			TEXT("SightWeave.Memory.Page"));
+		if (!MemoryMirror->Pages[PageIndex].IsValid())
+		{
+			return false;
+		}
+		bOutColdCreated = true;
+		++MemoryMirror->ResourceGeneration;
+	}
+	OutPage = GraphBuilder.RegisterExternalTexture(
+		MemoryMirror->Pages[PageIndex],
+		TEXT("SightWeave.Memory.Page"));
+	if (bOutColdCreated)
+	{
+		AddClearRenderTargetPass(GraphBuilder, OutPage, FLinearColor::Black);
+	}
+	return OutPage != nullptr;
+}
+
+void FSightWeaveSparseAtlasRenderState::FailMemoryMirror_RenderThread(
+	const ESightWeaveRenderAvailability Failure)
+{
+	check(IsInRenderingThread());
+	if (!MemoryMirror.IsValid())
+	{
+		return;
+	}
+	const bool bReleasedResources = !MemoryMirror->Pages.IsEmpty()
+		|| MemoryMirror->PageTable.IsValid();
+	MemoryMirror->PendingPacket.Reset();
+	MemoryMirror->AppliedPacket.Reset();
+	MemoryMirror->CachedTiles.Reset();
+	MemoryMirror->Residency.Reset();
+	MemoryMirror->Pages.Reset();
+	MemoryMirror->PageTable.SafeRelease();
+	MemoryMirror->CurrentPageTable = nullptr;
+	MemoryMirror->Scope = FSightWeaveMemoryScopeKey();
+	MemoryMirror->bHasScope = false;
+	MemoryMirror->AppliedPacketRevision = 0;
+	MemoryMirror->AppliedMemoryRevision = 0;
+	MemoryMirror->AppliedModifierRevision = 0;
+	MemoryMirror->PageTableEntryCount = 0;
+	MemoryMirror->Availability = Failure;
+	++MemoryMirror->ResidencyGeneration;
+	if (bReleasedResources)
+	{
+		++MemoryMirror->ResourceGeneration;
+	}
 }
 
 bool FSightWeaveSparseAtlasRenderState::EnsureScratchTextures_RenderThread()
@@ -1821,6 +2324,58 @@ int32 FSightWeaveSparseAtlasRenderState::GetAllocatedFeatherPageCount_RenderThre
 	return Count;
 }
 
+ESightWeaveRenderAvailability
+FSightWeaveSparseAtlasRenderState::GetMemoryAvailability_RenderThread() const
+{
+	return MemoryMirror.IsValid()
+		? MemoryMirror->Availability
+		: ESightWeaveRenderAvailability::Unknown;
+}
+
+uint64 FSightWeaveSparseAtlasRenderState::GetMemoryAppliedRevision_RenderThread() const
+{
+	return MemoryMirror.IsValid() ? MemoryMirror->AppliedMemoryRevision : 0;
+}
+
+uint64 FSightWeaveSparseAtlasRenderState::GetMemoryResourceGeneration_RenderThread() const
+{
+	return MemoryMirror.IsValid() ? MemoryMirror->ResourceGeneration : 0;
+}
+
+uint64 FSightWeaveSparseAtlasRenderState::GetMemoryResidencyGeneration_RenderThread() const
+{
+	return MemoryMirror.IsValid() ? MemoryMirror->ResidencyGeneration : 0;
+}
+
+uint64 FSightWeaveSparseAtlasRenderState::GetMemoryUploadCount_RenderThread() const
+{
+	return MemoryMirror.IsValid() ? MemoryMirror->UploadCount : 0;
+}
+
+uint64 FSightWeaveSparseAtlasRenderState::GetMemoryPageTableUploadCount_RenderThread() const
+{
+	return MemoryMirror.IsValid() ? MemoryMirror->PageTableUploadCount : 0;
+}
+
+int32 FSightWeaveSparseAtlasRenderState::GetMemoryResidentTileCount_RenderThread() const
+{
+	return MemoryMirror.IsValid() ? MemoryMirror->Residency.GetResidentCount() : 0;
+}
+
+int32 FSightWeaveSparseAtlasRenderState::GetAllocatedMemoryPageCount_RenderThread() const
+{
+	if (!MemoryMirror.IsValid())
+	{
+		return 0;
+	}
+	int32 Count = 0;
+	for (const TRefCountPtr<IPooledRenderTarget>& Page : MemoryMirror->Pages)
+	{
+		Count += Page.IsValid() ? 1 : 0;
+	}
+	return Count;
+}
+
 #if WITH_DEV_AUTOMATION_TESTS
 FRDGTextureRef FSightWeaveSparseAtlasRenderState::AddPresentationTestComposite_RenderThread(
 	FRDGBuilder& GraphBuilder,
@@ -2229,5 +2784,56 @@ bool FSightWeaveSparseAtlasRenderState::RemoveReadback_RenderThread(
 {
 	FScopeState* Scope = FindScope_RenderThread(Identity.TileKey.Scope);
 	return Scope && Scope->Residency.RemoveReadback(Address);
+}
+
+FRDGTextureRef FSightWeaveSparseAtlasRenderState::RegisterMemoryPageForReadback_RenderThread(
+	FRDGBuilder& GraphBuilder,
+	const FSightWeaveMemoryTileKey& TileKey,
+	FIntRect& OutSlotRect,
+	FSightWeaveSparsePhysicalAddress& OutAddress)
+{
+	if (!MemoryMirror.IsValid() || !MemoryMirror->bHasScope
+		|| !TileKey.Scope.IsEquivalentTo(MemoryMirror->Scope))
+	{
+		return nullptr;
+	}
+	const FSightWeaveSparseTileIdentity Identity =
+		MakeMemoryTileIdentity(MemoryMirror->Scope, TileKey.LogicalCoordinate);
+	const FSightWeaveSparseResidencySlot* Slot = MemoryMirror->Residency.Find(Identity);
+	if (!Slot
+		|| !MemoryMirror->Pages.IsValidIndex(Slot->Address.PageIndex)
+		|| !MemoryMirror->Pages[Slot->Address.PageIndex].IsValid())
+	{
+		return nullptr;
+	}
+	OutAddress = Slot->Address;
+	OutSlotRect = Slot->Address.GetSlotRect();
+	return GraphBuilder.RegisterExternalTexture(
+		MemoryMirror->Pages[Slot->Address.PageIndex],
+		TEXT("SightWeave.Memory.ReadbackPage"));
+}
+
+bool FSightWeaveSparseAtlasRenderState::AddMemoryReadback_RenderThread(
+	const FSightWeaveMemoryTileKey& TileKey)
+{
+	if (!MemoryMirror.IsValid() || !MemoryMirror->bHasScope
+		|| !TileKey.Scope.IsEquivalentTo(MemoryMirror->Scope))
+	{
+		return false;
+	}
+	const FSightWeaveSparseTileIdentity Identity =
+		MakeMemoryTileIdentity(MemoryMirror->Scope, TileKey.LogicalCoordinate);
+	const FSightWeaveSparseResidencySlot* Slot = MemoryMirror->Residency.Find(Identity);
+	return Slot && MemoryMirror->Residency.AddReadback(Slot->Address);
+}
+
+bool FSightWeaveSparseAtlasRenderState::RemoveMemoryReadback_RenderThread(
+	const FSightWeaveMemoryTileKey& TileKey,
+	const FSightWeaveSparsePhysicalAddress& Address)
+{
+	return MemoryMirror.IsValid()
+		&& MemoryMirror->bHasScope
+		&& TileKey.Scope.IsEquivalentTo(MemoryMirror->Scope)
+		&& MemoryMirror->Residency.RemoveReadback(Address);
 }
 #endif

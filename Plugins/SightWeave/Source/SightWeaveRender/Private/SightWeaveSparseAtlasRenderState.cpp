@@ -373,6 +373,7 @@ void FSightWeaveSparseAtlasRenderState::SubmitPacket_RenderThread(
 			++RejectedPacketCount;
 			PendingPacket = Packet;
 			bPendingForceBlack = true;
+			bPendingRequiresFullRebuild = false;
 			DesiredHash = 0;
 			Availability = ESightWeaveRenderAvailability::InvalidPacket;
 		}
@@ -381,10 +382,14 @@ void FSightWeaveSparseAtlasRenderState::SubmitPacket_RenderThread(
 #endif
 		return;
 	}
+	const bool bDroppedUnappliedPacket = PendingPacket.IsValid();
 	DesiredRevision = Packet->GetPacketRevision();
 	DesiredHash = Packet->GetContentHash();
 	PendingPacket = Packet;
 	bPendingForceBlack = false;
+	bPendingRequiresFullRebuild = bPendingRequiresFullRebuild
+		|| bDroppedUnappliedPacket
+		|| !AppliedPacket.IsValid();
 #if WITH_DEV_AUTOMATION_TESTS
 	FinishConsumeTiming();
 #endif
@@ -439,7 +444,9 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 #endif
 	const TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet = MoveTemp(PendingPacket);
 	const bool bForceBlack = bPendingForceBlack;
+	const bool bForceFullRebuild = bPendingRequiresFullRebuild;
 	bPendingForceBlack = false;
+	bPendingRequiresFullRebuild = false;
 	if (bForceBlack
 		|| !Packet->IsValid()
 		|| FSightWeaveSparseRenderPacketBuilder::Validate(*Packet) != ESightWeaveSparsePacketFailure::None)
@@ -506,7 +513,8 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 #endif
 
 	bool bAnyMaskWork = false;
-	for (const int32 DirtyTileIndex : Packet->GetDirtyTileIndices())
+	auto ProcessDirtyTile = [this, &GraphBuilder, &Packet, &bAnyFeatherImpact, &bAnyMaskWork](
+		const int32 DirtyTileIndex)
 	{
 		const FSightWeaveSparseRenderTile& Tile = Packet->GetTiles()[DirtyTileIndex];
 		MarkFeatherDirtyAround_RenderThread(Tile.Identity.TileKey);
@@ -516,14 +524,14 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 			|| Scope->Availability == ESightWeaveRenderAvailability::InvalidPacket
 			|| Scope->Availability == ESightWeaveRenderAvailability::ResourceAllocationFailed)
 		{
-			continue;
+			return;
 		}
 		const FSightWeaveSparseResidencyResult ResidencyResult =
 			Scope->Residency.Acquire(Tile.Identity, Packet->GetPacketRevision());
 		if (!ResidencyResult.Succeeded())
 		{
 			FailScope_RenderThread(*Scope, ESightWeaveRenderAvailability::ResourceAllocationFailed);
-			continue;
+			return;
 		}
 		if (ResidencyResult.Disposition == ESightWeaveSparseResidencyDisposition::Allocated
 			|| ResidencyResult.Disposition == ESightWeaveSparseResidencyDisposition::Reused)
@@ -541,11 +549,11 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 			|| !EnsureScratchTextures_RenderThread())
 		{
 			FailScope_RenderThread(*Scope, ESightWeaveRenderAvailability::ResourceAllocationFailed);
-			continue;
+			return;
 		}
 		if (!Page)
 		{
-			continue;
+			return;
 		}
 		const FIntRect SlotRect = ResidencyResult.Address.GetSlotRect();
 #if WITH_DEV_AUTOMATION_TESTS
@@ -565,6 +573,20 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 		Scope->Residency.MarkApplied(ResidencyResult.Address, Packet->GetPacketRevision());
 		++DirtyTileDispatchCount;
 		bAnyMaskWork = true;
+	};
+	if (bForceFullRebuild)
+	{
+		for (int32 TileIndex = 0; TileIndex < Packet->GetTiles().Num(); ++TileIndex)
+		{
+			ProcessDirtyTile(TileIndex);
+		}
+	}
+	else
+	{
+		for (const int32 DirtyTileIndex : Packet->GetDirtyTileIndices())
+		{
+			ProcessDirtyTile(DirtyTileIndex);
+		}
 	}
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -860,9 +882,10 @@ void FSightWeaveSparseAtlasRenderState::ReportCompositeDiagnostic_RenderThread(
 	UE_LOG(
 		LogSightWeaveRender,
 		Warning,
-		TEXT("Presentation composite state=%s bindingFailure=%d applied=%llu resourceGeneration=%llu residencyGeneration=%llu scopeApplied=%llu pageTableEntries=%d residentTiles=%d"),
+		TEXT("Presentation composite state=%s bindingFailure=%d featherWidth=%.3f applied=%llu resourceGeneration=%llu residencyGeneration=%llu scopeApplied=%llu pageTableEntries=%d residentTiles=%d"),
 		DiagnosticName,
 		static_cast<int32>(PresentationBindingFailure),
+		PresentationSelection.GetVisualFeather().WidthCentimeters,
 		AppliedRevision,
 		ResourceGeneration,
 		ResidencyGeneration,
@@ -881,6 +904,7 @@ void FSightWeaveSparseAtlasRenderState::Release_RenderThread(
 	}
 	bReleased = true;
 	PendingPacket.Reset();
+	bPendingRequiresFullRebuild = false;
 	AppliedPacket.Reset();
 	PresentationBinding.Reset();
 	PresentationSelection = FSightWeaveViewPresentationSelection();

@@ -400,6 +400,7 @@ void USightWeaveRenderWorldSubsystem::UpdateDefaultPresentationSelection(
 	FSightWeaveFloorId DesiredFloor;
 	ESightWeaveRenderPrecisionTier DesiredPrecision = ESightWeaveRenderPrecisionTier::Standard;
 	bool bDesiredEnabled = false;
+	const FSightWeaveVisualFeatherSettings DesiredVisualFeather = GetConfiguredVisualFeather();
 	if (bHasExplicitPresentationScope)
 	{
 		DesiredOwner = ExplicitPresentationOwner;
@@ -436,7 +437,8 @@ void USightWeaveRenderWorldSubsystem::UpdateDefaultPresentationSelection(
 		&& (!bDesiredEnabled
 			|| (PresentationSelection.GetKnowledgeOwnerId() == DesiredOwner
 				&& PresentationSelection.GetFloorId() == DesiredFloor
-				&& PresentationSelection.GetPrecisionTier() == DesiredPrecision));
+				&& PresentationSelection.GetPrecisionTier() == DesiredPrecision
+				&& PresentationSelection.GetVisualFeather().IsEquivalentTo(DesiredVisualFeather)));
 	if (bUnchanged)
 	{
 		return;
@@ -448,7 +450,7 @@ void USightWeaveRenderWorldSubsystem::UpdateDefaultPresentationSelection(
 			DesiredFloor,
 			DesiredPrecision,
 			NextPresentationRevision++,
-			GetConfiguredVisualFeather())
+			DesiredVisualFeather)
 		: FSightWeaveViewPresentationSelection::Disabled(
 			WorldIdentity,
 			NextPresentationRevision++);

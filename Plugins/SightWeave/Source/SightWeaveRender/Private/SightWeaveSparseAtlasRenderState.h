@@ -176,6 +176,7 @@ private:
 	uint64 RejectedPacketCount = 0;
 	ESightWeaveRenderAvailability Availability = ESightWeaveRenderAvailability::Unknown;
 	bool bPendingForceBlack = false;
+	bool bPendingRequiresFullRebuild = false;
 	bool bFeatherFullRebuildPending = false;
 	bool bFeatherUpdateIncomplete = false;
 	bool bReleased = false;

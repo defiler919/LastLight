@@ -25,3 +25,6 @@ Deferred work includes save persistence and migration, cross-level persistence, 
 
 Reliable checkpoints will record exact builds, targeted test counts, NullRHI and D3D12/SM6 results, M3.4/M3.5 regressions, severe-log scans, Lab evidence, preserved warnings/failures, repository/LFS closure, and any intentionally unverified work. Until those gates run, status remains `IN_PROGRESS`.
 
+## 5. Frozen contract
+
+`Docs/SIGHTWEAVE_M4P1_SUBJECT_MEMORY_CONTRACT.md` records the M4P1 policy matrix, immutable descriptor fields, exact non-hash scope equality, legal falling-edge capture, deterministic state priority, clear/suppression/unknown behavior, render-only proxy constraints, and versioned Custom-provider fail-closed boundary. This is design evidence only; implementation results will be added after build and targeted automation.

@@ -22,7 +22,7 @@ The task started from the exact M3.5 baseline. Local HEAD, upstream, and `origin
 
 ## Current checkpoint
 
-This initial documentation-only checkpoint records the authorized scope before product-code work. No M4P1 implementation or validation result is claimed yet.
+The initial documentation-only checkpoint records the authorized scope before product-code work. The implementation contract is frozen in `Docs/SIGHTWEAVE_M4P1_SUBJECT_MEMORY_CONTRACT.md`; it defines exact identity, immutable descriptors, falling-edge capture, deterministic presentation priority, render-only proxy isolation, and versioned Custom-provider fail-closed behavior. No M4P1 implementation or validation result is claimed yet.
 
 ## Resume
 
@@ -31,4 +31,3 @@ git fetch origin
 git switch codex/m4p1-sightweave-subject-policy-last-seen
 git pull --ff-only
 ```
-

@@ -18,30 +18,39 @@
 
 namespace SightWeaveSparseAtlasRenderPrivate
 {
-	bool MemoryScopeMatchesPresentationBinding(
+	uint32 MemoryScopeMismatchMask(
 		const FSightWeaveMemoryScopeKey& MemoryScope,
 		const FSightWeaveViewPresentationBinding& Binding)
 	{
 		const FSightWeaveSparseScopeKey& LiveScope = Binding.GetScopeKey();
 		const TConstArrayView<FSightWeaveRenderProfileIdentity> LiveProfiles =
 			Binding.GetCanonicalProfiles();
-		if (MemoryScope.WorldIdentity != LiveScope.WorldIdentity
-			|| MemoryScope.KnowledgeOwnerId != LiveScope.KnowledgeOwnerId
-			|| MemoryScope.FloorId != LiveScope.FloorId
-			|| MemoryScope.PrecisionTier != LiveScope.PrecisionTier
-			|| MemoryScope.FloorOrigin != LiveScope.FloorOrigin
-			|| MemoryScope.CanonicalProfiles.Num() != LiveProfiles.Num())
+		uint32 MismatchMask = 0;
+		MismatchMask |= MemoryScope.WorldIdentity != LiveScope.WorldIdentity ? 1u << 0 : 0;
+		MismatchMask |= MemoryScope.KnowledgeOwnerId != LiveScope.KnowledgeOwnerId ? 1u << 1 : 0;
+		MismatchMask |= MemoryScope.FloorId != LiveScope.FloorId ? 1u << 2 : 0;
+		MismatchMask |= MemoryScope.PrecisionTier != LiveScope.PrecisionTier ? 1u << 3 : 0;
+		MismatchMask |= MemoryScope.FloorOrigin != LiveScope.FloorOrigin ? 1u << 4 : 0;
+		MismatchMask |= MemoryScope.CanonicalProfiles.Num() != LiveProfiles.Num() ? 1u << 5 : 0;
+		if (MemoryScope.CanonicalProfiles.Num() == LiveProfiles.Num())
 		{
-			return false;
-		}
-		for (int32 Index = 0; Index < LiveProfiles.Num(); ++Index)
-		{
-			if (!MemoryScope.CanonicalProfiles[Index].IsEquivalentTo(LiveProfiles[Index]))
+			for (int32 Index = 0; Index < LiveProfiles.Num(); ++Index)
 			{
-				return false;
+				if (!MemoryScope.CanonicalProfiles[Index].IsEquivalentTo(LiveProfiles[Index]))
+				{
+					MismatchMask |= 1u << 6;
+					break;
+				}
 			}
 		}
-		return true;
+		return MismatchMask;
+	}
+
+	bool MemoryScopeMatchesPresentationBinding(
+		const FSightWeaveMemoryScopeKey& MemoryScope,
+		const FSightWeaveViewPresentationBinding& Binding)
+	{
+		return MemoryScopeMismatchMask(MemoryScope, Binding) == 0;
 	}
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeaveSparseRasterPassParameters, )
@@ -1593,6 +1602,16 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		&& StaticAttributeMirror->AppliedPacket.IsValid()
 		&& StaticAttributeMirror->CurrentPageTable
 		&& StaticAttributeMirror->Scope.IsEquivalentTo(MemoryMirror->Scope);
+	ReportMemoryPresentationDiagnostic_RenderThread(
+		Binding->GetVisualFeather().IsEnabled() ? 2 : 1,
+		bMemoryReady,
+		bStaticEnvironmentReady,
+		MemoryMirror.IsValid() && MemoryMirror->Scope.IsValid(),
+		MemoryMirror.IsValid()
+			&& MemoryScopeMatchesPresentationBinding(MemoryMirror->Scope, *Binding),
+		MemoryMirror.IsValid()
+			&& StaticAttributeMirror.IsValid()
+			&& StaticAttributeMirror->Scope.IsEquivalentTo(MemoryMirror->Scope));
 	FRDGBufferRef MemoryPageTable = bMemoryReady
 		? MemoryMirror->CurrentPageTable
 		: Scope->CurrentPageTable;
@@ -1843,6 +1862,158 @@ void FSightWeaveSparseAtlasRenderState::ReportCompositeDiagnostic_RenderThread(
 		ScopeAppliedRevision,
 		PageTableEntryCount,
 		ResidentTileCount);
+}
+
+bool FSightWeaveSparseAtlasRenderState::FMemoryPresentationDiagnosticSnapshot::IsEquivalentTo(
+	const FMemoryPresentationDiagnosticSnapshot& Other) const
+{
+	return bInitialized == Other.bInitialized
+		&& CompositeDiagnosticCode == Other.CompositeDiagnosticCode
+		&& MemoryAvailability == Other.MemoryAvailability
+		&& StaticEnvironmentAvailability == Other.StaticEnvironmentAvailability
+		&& MemoryPacketRevision == Other.MemoryPacketRevision
+		&& StaticPacketRevision == Other.StaticPacketRevision
+		&& StaticEligibilityRevision == Other.StaticEligibilityRevision
+		&& MemoryResourceGeneration == Other.MemoryResourceGeneration
+		&& StaticResourceGeneration == Other.StaticResourceGeneration
+		&& MemoryResidencyGeneration == Other.MemoryResidencyGeneration
+		&& StaticResidencyGeneration == Other.StaticResidencyGeneration
+		&& MemoryPageTableEntryCount == Other.MemoryPageTableEntryCount
+		&& StaticPageTableEntryCount == Other.StaticPageTableEntryCount
+		&& MemoryResidentTileCount == Other.MemoryResidentTileCount
+		&& StaticResidentTileCount == Other.StaticResidentTileCount
+		&& MemoryScopeMismatchMask == Other.MemoryScopeMismatchMask
+		&& MemoryPrecisionTier == Other.MemoryPrecisionTier
+		&& LivePrecisionTier == Other.LivePrecisionTier
+		&& bMemoryReady == Other.bMemoryReady
+		&& bStaticEnvironmentReady == Other.bStaticEnvironmentReady
+		&& bMemoryPresentationAvailable == Other.bMemoryPresentationAvailable
+		&& bMemoryScopeValid == Other.bMemoryScopeValid
+		&& bMemoryScopeMatchesBinding == Other.bMemoryScopeMatchesBinding
+		&& bStaticScopeMatchesMemory == Other.bStaticScopeMatchesMemory;
+}
+
+void FSightWeaveSparseAtlasRenderState::ReportMemoryPresentationDiagnostic_RenderThread(
+	const int32 CompositeDiagnosticCode,
+	const bool bMemoryReady,
+	const bool bStaticEnvironmentReady,
+	const bool bMemoryScopeValid,
+	const bool bMemoryScopeMatchesBinding,
+	const bool bStaticScopeMatchesMemory)
+{
+	check(IsInRenderingThread());
+	FMemoryPresentationDiagnosticSnapshot Current;
+	Current.CompositeDiagnosticCode = CompositeDiagnosticCode;
+	Current.MemoryAvailability = MemoryMirror.IsValid()
+		? MemoryMirror->Availability
+		: ESightWeaveRenderAvailability::Unknown;
+	Current.StaticEnvironmentAvailability = StaticAttributeMirror.IsValid()
+		? StaticAttributeMirror->Availability
+		: ESightWeaveRenderAvailability::Unknown;
+	Current.MemoryPacketRevision = MemoryMirror.IsValid()
+		? MemoryMirror->AppliedPacketRevision
+		: 0;
+	Current.StaticPacketRevision = StaticAttributeMirror.IsValid()
+		? StaticAttributeMirror->AppliedPacketRevision
+		: 0;
+	Current.StaticEligibilityRevision = StaticAttributeMirror.IsValid()
+		? StaticAttributeMirror->AppliedEligibilityRevision
+		: 0;
+	Current.MemoryResourceGeneration = MemoryMirror.IsValid()
+		? MemoryMirror->ResourceGeneration
+		: 0;
+	Current.StaticResourceGeneration = StaticAttributeMirror.IsValid()
+		? StaticAttributeMirror->ResourceGeneration
+		: 0;
+	Current.MemoryResidencyGeneration = MemoryMirror.IsValid()
+		? MemoryMirror->ResidencyGeneration
+		: 0;
+	Current.StaticResidencyGeneration = StaticAttributeMirror.IsValid()
+		? StaticAttributeMirror->ResidencyGeneration
+		: 0;
+	Current.MemoryPageTableEntryCount = MemoryMirror.IsValid()
+		? MemoryMirror->PageTableEntryCount
+		: 0;
+	Current.StaticPageTableEntryCount = StaticAttributeMirror.IsValid()
+		? StaticAttributeMirror->PageTableEntryCount
+		: 0;
+	Current.MemoryResidentTileCount = MemoryMirror.IsValid()
+		? MemoryMirror->Residency.GetResidentCount()
+		: 0;
+	Current.StaticResidentTileCount = StaticAttributeMirror.IsValid()
+		? StaticAttributeMirror->Residency.GetResidentCount()
+		: 0;
+	Current.MemoryPrecisionTier = MemoryMirror.IsValid()
+		? MemoryMirror->Scope.PrecisionTier
+		: ESightWeaveRenderPrecisionTier::Standard;
+	Current.LivePrecisionTier = PresentationBinding.IsValid()
+		? PresentationBinding->GetScopeKey().PrecisionTier
+		: ESightWeaveRenderPrecisionTier::Standard;
+	Current.bMemoryReady = bMemoryReady;
+	Current.bStaticEnvironmentReady = bStaticEnvironmentReady;
+	Current.bMemoryPresentationAvailable = bMemoryReady && bStaticEnvironmentReady;
+	Current.bMemoryScopeValid = bMemoryScopeValid;
+	Current.bMemoryScopeMatchesBinding = bMemoryScopeMatchesBinding;
+	Current.bStaticScopeMatchesMemory = bStaticScopeMatchesMemory;
+	Current.MemoryScopeMismatchMask = MemoryMirror.IsValid() && PresentationBinding.IsValid()
+		? MemoryScopeMismatchMask(MemoryMirror->Scope, *PresentationBinding)
+		: MAX_uint32;
+	Current.bInitialized = true;
+	if (LastMemoryPresentationDiagnostic.IsEquivalentTo(Current))
+	{
+		return;
+	}
+	LastMemoryPresentationDiagnostic = Current;
+
+	UE_LOG(
+		LogSightWeaveRender,
+		Display,
+		TEXT("Presentation memory state composite=%d memoryReady=%d staticEnvironmentReady=%d memoryPresentationAvailable=%d memoryAvailability=%d staticEnvironmentAvailability=%d memoryPacketRevision=%llu staticPacketRevision=%llu staticEligibilityRevision=%llu memoryPageTableEntries=%d staticPageTableEntries=%d memoryResidentTiles=%d staticResidentTiles=%d memoryResourceGeneration=%llu staticResourceGeneration=%llu memoryResidencyGeneration=%llu staticResidencyGeneration=%llu memoryScopeValid=%d memoryScopeMatchesBinding=%d memoryScopeMismatchMask=0x%02x staticScopeMatchesMemory=%d memoryPrecisionTier=%d livePrecisionTier=%d memoryWorld=%llu liveWorld=%llu memoryOwner=%s liveOwner=%s memoryFloor=%s liveFloor=%s memoryFloorOrigin=(%.3f,%.3f) liveFloorOrigin=(%.3f,%.3f) memoryProfiles=%d liveProfiles=%d"),
+		Current.CompositeDiagnosticCode,
+		Current.bMemoryReady,
+		Current.bStaticEnvironmentReady,
+		Current.bMemoryPresentationAvailable,
+		static_cast<int32>(Current.MemoryAvailability),
+		static_cast<int32>(Current.StaticEnvironmentAvailability),
+		Current.MemoryPacketRevision,
+		Current.StaticPacketRevision,
+		Current.StaticEligibilityRevision,
+		Current.MemoryPageTableEntryCount,
+		Current.StaticPageTableEntryCount,
+		Current.MemoryResidentTileCount,
+		Current.StaticResidentTileCount,
+		Current.MemoryResourceGeneration,
+		Current.StaticResourceGeneration,
+		Current.MemoryResidencyGeneration,
+		Current.StaticResidencyGeneration,
+		Current.bMemoryScopeValid,
+		Current.bMemoryScopeMatchesBinding,
+		Current.MemoryScopeMismatchMask,
+		Current.bStaticScopeMatchesMemory,
+		static_cast<int32>(Current.MemoryPrecisionTier),
+		static_cast<int32>(Current.LivePrecisionTier),
+		MemoryMirror.IsValid() ? MemoryMirror->Scope.WorldIdentity.Serial : 0,
+		PresentationBinding.IsValid()
+			? PresentationBinding->GetScopeKey().WorldIdentity.Serial
+			: 0,
+		MemoryMirror.IsValid()
+			? *MemoryMirror->Scope.KnowledgeOwnerId.GetValue().ToString()
+			: TEXT("None"),
+		PresentationBinding.IsValid()
+			? *PresentationBinding->GetScopeKey().KnowledgeOwnerId.GetValue().ToString()
+			: TEXT("None"),
+		MemoryMirror.IsValid()
+			? *MemoryMirror->Scope.FloorId.GetValue().ToString()
+			: TEXT("None"),
+		PresentationBinding.IsValid()
+			? *PresentationBinding->GetScopeKey().FloorId.GetValue().ToString()
+			: TEXT("None"),
+		MemoryMirror.IsValid() ? MemoryMirror->Scope.FloorOrigin.X : 0.0,
+		MemoryMirror.IsValid() ? MemoryMirror->Scope.FloorOrigin.Y : 0.0,
+		PresentationBinding.IsValid() ? PresentationBinding->GetScopeKey().FloorOrigin.X : 0.0,
+		PresentationBinding.IsValid() ? PresentationBinding->GetScopeKey().FloorOrigin.Y : 0.0,
+		MemoryMirror.IsValid() ? MemoryMirror->Scope.CanonicalProfiles.Num() : 0,
+		PresentationBinding.IsValid() ? PresentationBinding->GetCanonicalProfiles().Num() : 0);
 }
 
 void FSightWeaveSparseAtlasRenderState::Release_RenderThread(

@@ -248,16 +248,36 @@ bool FSightWeaveM3P5LabVisualCaptureTest::RunTest(const FString& Parameters)
 		EAutomationExpectedErrorFlags::Contains,
 		-1);
 
-	const FString ScreenshotFilename = FPaths::ConvertRelativePathToFull(
-		FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Screenshots/M3P5_PIE_Overview.png")));
 	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(TEXT("/SightWeave/Maps/L_SightWeave_Lab")));
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
 	ADD_LATENT_AUTOMATION_COMMAND(FStartPIECommand(false));
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(5.0f));
 	ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(TEXT("setres 1920x1080")));
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
-	ADD_LATENT_AUTOMATION_COMMAND(FSightWeaveM3P5TakeLabScreenshotCommand(ScreenshotFilename));
-	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(2.0f));
+	const TCHAR* CameraNames[] = {
+		TEXT("Overview"),
+		TEXT("Remembered"),
+		TEXT("DynamicLeak"),
+		TEXT("PageBoundary"),
+		TEXT("Rotated45")
+	};
+	for (int32 CameraIndex = 0; CameraIndex < UE_ARRAY_COUNT(CameraNames); ++CameraIndex)
+	{
+		ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(FString::Printf(
+			TEXT("SightWeave.Lab.Camera %d"),
+			CameraIndex)));
+		ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.5f));
+		const FString ScreenshotFilename = FPaths::ConvertRelativePathToFull(
+			FPaths::Combine(
+				FPaths::ProjectSavedDir(),
+				FString::Printf(
+					TEXT("Screenshots/M3P5_PIE_Camera%d_%s.png"),
+					CameraIndex,
+					CameraNames[CameraIndex])));
+		ADD_LATENT_AUTOMATION_COMMAND(
+			FSightWeaveM3P5TakeLabScreenshotCommand(ScreenshotFilename));
+		ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
+	}
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 	return true;
 }

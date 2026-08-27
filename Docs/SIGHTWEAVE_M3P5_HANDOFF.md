@@ -12,6 +12,27 @@ Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
 
 Validation machine: NVIDIA GeForce RTX 4060, driver 610.88, 8188 MiB
 
+## Camera 1 repair follow-up (2026-08-27)
+
+The Camera 1 all-black blocker is repaired in automated D3D12 PIE. Status remains **PARTIAL** only because the user must repeat the manual Camera 0-4 PIE inspection after pulling the repair.
+
+The root cause was a fail-closed presentation-scope mismatch, not missing CPU HardMemory or missing GPU resources. Memory used Coarse while the live packet was fixed at Standard; after precision alignment, the sparse live binding still omitted the canonical compatibility profile of bypass vision sources. Both GPU mirrors were already available. The final composite now reports `memoryReady=1 staticEnvironmentReady=1 memoryPresentationAvailable=1 memoryScopeMismatchMask=0x00 memoryPrecisionTier=0 livePrecisionTier=0 memoryProfiles=1 liveProfiles=1`, with 55 memory and 9 static page-table entries.
+
+The render world now rebuilds the default live packet at the valid memory scope's precision for the same owner/floor, while explicit presentation scope remains authoritative. Sparse bypass tiles retain their canonical profiles, restoring exact profile equivalence without relaxing fail-closed behavior. State-change-limited diagnostics now expose readiness, availability, packet/eligibility revisions, page tables, resident tiles, resource/residency generations, scope components, mismatch mask, and precision tiers.
+
+Fresh gates on the repair machine (NVIDIA GeForce RTX 2070 SUPER, D3D12 SM6) are:
+
+- Editor Development: succeeded after the final changes.
+- complete M3.5 NullRHI: 16/16.
+- complete M3.5 D3D12/SM6: 26/26.
+- M3.4 presentation: 3/3; M3.4 D3D12 feather/safety/performance: 29/29.
+- Camera 1 focused D3D12 capture: 1/1, no warnings or failures.
+- final severe Shader/RDG/RHI/GPU/fatal/assert/ensure scan: zero matches.
+
+Lab automation now captures all five cameras. Direct inspection shows Camera 1's authored neutral gray `(68,68,68)` instead of black, continuous Camera 3 page-boundary output, aligned yaw=45 Camera 4 output, and no non-live dynamic/current-light/VFX content promoted into remembered gray. The earlier Overview-only screenshot claim did not prove Camera 1 and is superseded by these five-camera captures.
+
+The only new preserved failure is one intermediate compile error from an extra parenthesis while adding the five-camera test; it was corrected before the successful final build and gates. Generated reports and screenshots remain untracked.
+
 ## Outcome
 
 M3.5 now provides world-scoped exploration memory for explicitly eligible immutable static environment. The CPU-packed authority is the only HardMemory truth; the R8 GPU memory/static mirrors are derived presentation resources. Final ordering is exact HardLive Scene Color, remembered eligible neutral static environment, then strict-black Unknown. Clear, write-block, presentation-suppress, scope, generation, teardown, fail-black, and Width=0/50 compatibility behavior are covered in native automation.

@@ -182,6 +182,13 @@ private:
 		int32 DiagnosticCode,
 		const TCHAR* DiagnosticName,
 		const FScopeState* Scope);
+	void ReportMemoryPresentationDiagnostic_RenderThread(
+		int32 CompositeDiagnosticCode,
+		bool bMemoryReady,
+		bool bStaticEnvironmentReady,
+		bool bMemoryScopeValid,
+		bool bMemoryScopeMatchesBinding,
+		bool bStaticScopeMatchesMemory);
 	bool CheckMemoryCapabilities_RenderThread();
 	bool EnsureMemoryPage_RenderThread(
 		FRDGBuilder& GraphBuilder,
@@ -237,6 +244,39 @@ private:
 	bool bFeatherUpdateIncomplete = false;
 	bool bReleased = false;
 	int32 LastCompositeDiagnosticCode = INDEX_NONE;
+	struct FMemoryPresentationDiagnosticSnapshot
+	{
+		int32 CompositeDiagnosticCode = INDEX_NONE;
+		ESightWeaveRenderAvailability MemoryAvailability = ESightWeaveRenderAvailability::Unknown;
+		ESightWeaveRenderAvailability StaticEnvironmentAvailability =
+			ESightWeaveRenderAvailability::Unknown;
+		uint64 MemoryPacketRevision = 0;
+		uint64 StaticPacketRevision = 0;
+		uint64 StaticEligibilityRevision = 0;
+		uint64 MemoryResourceGeneration = 0;
+		uint64 StaticResourceGeneration = 0;
+		uint64 MemoryResidencyGeneration = 0;
+		uint64 StaticResidencyGeneration = 0;
+		int32 MemoryPageTableEntryCount = 0;
+		int32 StaticPageTableEntryCount = 0;
+		int32 MemoryResidentTileCount = 0;
+		int32 StaticResidentTileCount = 0;
+		uint32 MemoryScopeMismatchMask = MAX_uint32;
+		ESightWeaveRenderPrecisionTier MemoryPrecisionTier =
+			ESightWeaveRenderPrecisionTier::Standard;
+		ESightWeaveRenderPrecisionTier LivePrecisionTier =
+			ESightWeaveRenderPrecisionTier::Standard;
+		bool bMemoryReady = false;
+		bool bStaticEnvironmentReady = false;
+		bool bMemoryPresentationAvailable = false;
+		bool bMemoryScopeValid = false;
+		bool bMemoryScopeMatchesBinding = false;
+		bool bStaticScopeMatchesMemory = false;
+		bool bInitialized = false;
+
+		bool IsEquivalentTo(const FMemoryPresentationDiagnosticSnapshot& Other) const;
+	};
+	FMemoryPresentationDiagnosticSnapshot LastMemoryPresentationDiagnostic;
 #if WITH_DEV_AUTOMATION_TESTS
 	FSightWeaveSparseRenderTimings LastTimings;
 #endif

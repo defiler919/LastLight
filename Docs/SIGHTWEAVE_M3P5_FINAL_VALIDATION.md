@@ -1,5 +1,62 @@
 # SightWeave M3.5 final validation
 
+## 2026-08-27 Camera 1 remembered-presentation repair
+
+Status remains **PARTIAL**. The automated repair gate is complete, but the user must repeat the interactive Camera 0-4 PIE inspection. The earlier Overview-only automated screenshot did not prove that Camera 1 worked and is superseded by the five-camera evidence below.
+
+### Root cause
+
+The CPU HardMemory authority and both GPU mirrors were healthy, but the real PIE composite correctly failed closed because its memory scope was not equivalent to the live presentation binding:
+
+1. exploration memory used the selected Coarse tier while the render-world default presentation and live sparse packet were hard-coded to Standard;
+2. after aligning precision, the remaining mismatch was canonical profiles: memory retained the active bypass vision source profile, while the sparse live packet omitted bypass profiles from tile identity and the derived presentation binding.
+
+The pre-fix Camera 1 diagnostic was `memoryReady=0 staticEnvironmentReady=0 memoryPresentationAvailable=0`, with both mirrors `Available`, 55 memory entries, 9 static entries, and finally `memoryScopeMismatchMask=0x20 memoryProfiles=1 liveProfiles=0`. This explains why `submitted-feather` coexisted with an all-black remembered branch.
+
+### Repair
+
+- The render-world subsystem now derives the default live presentation precision from the valid world-scoped memory packet for the same owner/floor and rebuilds the live sparse packet at that tier. Explicit presentation scope still has priority. Clearing explicit scope, changing memory scope, and disabling memory rebuild the packet at the newly selected tier.
+- Bypass vision profiles are now validated and retained in sparse tile canonical identity, so the presentation binding and CPU memory authority share the same canonical profile set.
+- Scope, revision, readiness, page-table, residency, resource-generation, and precision diagnostics are emitted only when the captured state changes. The mismatch mask bits are world `0x01`, owner `0x02`, floor `0x04`, precision `0x08`, floor origin `0x10`, profile count `0x20`, and profile identity `0x40`.
+- Lab automation now captures Camera 0 Overview, Camera 1 Remembered, Camera 2 DynamicLeak, Camera 3 PageBoundary, and Camera 4 Rotated45 in one real D3D12 PIE run.
+- New native tests cover memory-derived precision lifecycle and bypass canonical-profile binding. Existing GPU mirror/composite readback continues to cover live color, remembered neutral static color, strict black Unknown/suppressed/unavailable, wrong-world rejection, gutter/page behavior, and fail-closed resource loss.
+
+The final healthy Lab line is:
+
+```text
+memoryReady=1 staticEnvironmentReady=1 memoryPresentationAvailable=1
+memoryAvailability=1 staticEnvironmentAvailability=1
+memoryPageTableEntries=55 staticPageTableEntries=9
+memoryResidentTiles=55 staticResidentTiles=9
+memoryScopeValid=1 memoryScopeMatchesBinding=1 memoryScopeMismatchMask=0x00
+staticScopeMatchesMemory=1 memoryPrecisionTier=0 livePrecisionTier=0
+memoryProfiles=1 liveProfiles=1
+```
+
+### Exact repair validation
+
+| Gate | RHI | Exact result |
+| --- | --- | ---: |
+| `DarkwellEditor Win64 Development` after final source changes | build | succeeded, 4 actions |
+| M3.5 complete | NullRHI | 16 succeeded, 0 warning, 0 failed |
+| M3.5 complete | D3D12/SM6 | 26 succeeded, 0 warning, 0 failed |
+| M3.4 presentation contracts | D3D12/SM6 | 3 succeeded, 0 warning, 0 failed |
+| M3.4 D3D12 feather/safety/performance | D3D12/SM6 | 29 succeeded, 0 warning, 0 failed |
+| Focused Camera 1 Lab capture | D3D12/SM6 | 1 succeeded, 0 warning, 0 failed |
+| Memory-derived precision lifecycle | NullRHI and complete D3D12 gate | passed |
+| Bypass canonical-profile binding | complete NullRHI and D3D12 gates | passed |
+
+Reports are `Saved/AutomationReports/M3P5_Restore_Final_NullRHI`, `M3P5_Restore_Final_D3D12`, `M3P4_Presentation_RestoreRegression_D3D12`, and `M3P4_D3D12_RestoreRegression`. Their logs have zero Shader compiler, RDG validation, D3D12/RHI error, GPU crash/hang, fatal, assertion, or ensure matches under the final severe scan.
+
+The final five-camera screenshots are `Saved/Screenshots/M3P5_PIE_Camera0_Overview.png` through `M3P5_PIE_Camera4_Rotated45.png`. Direct image inspection found:
+
+- Camera 1 is no longer all black. Its dominant remembered value is the authored neutral `(68,68,68)` (125,561 pixels), with authored wall values 168/176/184 and strict `(0,0,0)` elsewhere.
+- Camera 0 and yaw=45 Camera 4 contain the same authored 68 gray, without page shift or a visible tile seam. Camera 3's page-boundary strip is continuous.
+- Camera 2 retains current light/Scene Color only inside HardLive. The non-live dynamic-door, moving-mesh, and emissive/VFX sentinel regions do not become remembered gray; outside the live/static eligibility branch remains black.
+- Unknown, clear, block, and presentation-suppressed areas are black. The CPU transition remains `remembered:1 live:1 clear:0 block:0 suppressed:1/1 unknown:0`.
+
+One intermediate Editor build failed because the first five-camera test edit had one extra closing parenthesis. It was immediately corrected; all subsequent full Editor builds and automation gates passed. The existing non-preferred Visual Studio 14.51 versus preferred 14.50 warning remains. Generated reports, logs, screenshots, binaries, and intermediates are not committed.
+
 ## 1. Final status
 
 **PARTIAL**

@@ -80,6 +80,9 @@ private:
 	void SubmitPacket(TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet);
 	void UpdateDefaultPresentationSelection(const FSightWeaveFrameSnapshot& Snapshot);
 	void PublishPresentationSelection();
+	ESightWeaveRenderPrecisionTier ResolveScopePrecision(
+		FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+		FSightWeaveFloorId FloorId) const;
 
 	FSightWeaveRenderWorldIdentity WorldIdentity;
 	uint64 NextPacketRevision = 1;
@@ -91,6 +94,11 @@ private:
 	ESightWeaveRenderPrecisionTier ExplicitPresentationPrecision =
 		ESightWeaveRenderPrecisionTier::Standard;
 	bool bHasExplicitPresentationScope = false;
+	FSightWeaveKnowledgeOwnerId MemoryPresentationOwner;
+	FSightWeaveFloorId MemoryPresentationFloor;
+	ESightWeaveRenderPrecisionTier MemoryPresentationPrecision =
+		ESightWeaveRenderPrecisionTier::Standard;
+	bool bHasMemoryPresentationScope = false;
 	FDelegateHandle SnapshotPublishedHandle;
 	FDelegateHandle MemoryPacketPublishedHandle;
 	FDelegateHandle StaticEnvironmentPacketPublishedHandle;

@@ -729,7 +729,8 @@ FSightWeaveSparseRenderPacketBuildResult FSightWeaveSparseRenderPacketBuilder::B
 				break;
 			}
 			if ((Polygon.Layer == ESightWeaveRenderMaskLayer::Vision
-					|| Polygon.Layer == ESightWeaveRenderMaskLayer::Illumination)
+					|| Polygon.Layer == ESightWeaveRenderMaskLayer::Illumination
+					|| Polygon.Layer == ESightWeaveRenderMaskLayer::Bypass)
 				&& !AddUniqueProfile(Profiles, Polygon.CompatibilityProfile))
 			{
 				bInvalidPolygon = true;
@@ -893,6 +894,12 @@ FSightWeaveSparseRenderPacketBuildResult FSightWeaveSparseRenderPacketBuilder::B
 					&& BoundsOverlap(PolygonBounds[PolygonIndex], Tile.PhysicalWorldBounds))
 				{
 					AddLegacyPolygon(Common, Polygon);
+					if (Polygon.Layer == ESightWeaveRenderMaskLayer::Bypass)
+					{
+						AddUniqueProfile(
+							Tile.Identity.CanonicalProfiles,
+							Polygon.CompatibilityProfile);
+					}
 				}
 			}
 			const FSightWeaveRenderPacketBuildResult CommonBuilt =
@@ -904,6 +911,7 @@ FSightWeaveSparseRenderPacketBuildResult FSightWeaveSparseRenderPacketBuilder::B
 			}
 			AppendLegacyRange(*CommonBuilt.Packet, ESightWeaveRenderMaskLayer::Bypass, Tile, Tile.BypassRange);
 			AppendLegacyRange(*CommonBuilt.Packet, ESightWeaveRenderMaskLayer::Suppression, Tile, Tile.SuppressionRange);
+			Tile.Identity.CanonicalProfiles.Sort(ProfileLess);
 			Tile.ContentHash = ComputeTileHash(Tile);
 			Packet->Tiles.Add(MoveTemp(Tile));
 		}

@@ -138,6 +138,10 @@ void USightWeaveRenderWorldSubsystem::Deinitialize()
 	}
 	LastPacket.Reset();
 	PresentationSelection = FSightWeaveViewPresentationSelection();
+	MemoryPresentationOwner = FSightWeaveKnowledgeOwnerId();
+	MemoryPresentationFloor = FSightWeaveFloorId();
+	MemoryPresentationPrecision = ESightWeaveRenderPrecisionTier::Standard;
+	bHasMemoryPresentationScope = false;
 	WorldIdentity = FSightWeaveRenderWorldIdentity();
 	Super::Deinitialize();
 }
@@ -145,6 +149,36 @@ void USightWeaveRenderWorldSubsystem::Deinitialize()
 void USightWeaveRenderWorldSubsystem::HandleMemoryPacketPublished(
 	TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> Packet)
 {
+	const bool bNewScopeValid = Packet.IsValid()
+		&& Packet->IsValid()
+		&& Packet->GetScope().IsValid()
+		&& Packet->GetScope().WorldIdentity == WorldIdentity;
+	const bool bScopeChanged = bHasMemoryPresentationScope != bNewScopeValid
+		|| (bNewScopeValid
+			&& (MemoryPresentationOwner != Packet->GetScope().KnowledgeOwnerId
+				|| MemoryPresentationFloor != Packet->GetScope().FloorId
+				|| MemoryPresentationPrecision != Packet->GetScope().PrecisionTier));
+	bHasMemoryPresentationScope = bNewScopeValid;
+	MemoryPresentationOwner = bNewScopeValid
+		? Packet->GetScope().KnowledgeOwnerId
+		: FSightWeaveKnowledgeOwnerId();
+	MemoryPresentationFloor = bNewScopeValid
+		? Packet->GetScope().FloorId
+		: FSightWeaveFloorId();
+	MemoryPresentationPrecision = bNewScopeValid
+		? Packet->GetScope().PrecisionTier
+		: ESightWeaveRenderPrecisionTier::Standard;
+	if (bScopeChanged && !bHasExplicitPresentationScope)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (USightWeaveWorldSubsystem* Runtime =
+				World->GetSubsystem<USightWeaveWorldSubsystem>())
+			{
+				BuildAndSubmitPacket(Runtime->AcquirePublishedSnapshot());
+			}
+		}
+	}
 	if (SceneViewExtension.IsValid())
 	{
 		SceneViewExtension->SubmitMemoryPacket(MoveTemp(Packet));
@@ -211,8 +245,9 @@ void USightWeaveRenderWorldSubsystem::BuildAndSubmitPacket(
 			Added.KnowledgeOwnerId = OwnerId;
 			Added.FloorId = FloorId;
 			Added.FloorOrigin = Floor->BoundsMin;
-			Added.PrecisionTier = ESightWeaveRenderPrecisionTier::Standard;
-			Added.MaximumActiveTiles = SightWeave::SparseAtlas::StandardActiveTileCapacity;
+			Added.PrecisionTier = ResolveScopePrecision(OwnerId, FloorId);
+			Added.MaximumActiveTiles = SightWeaveDefaultActiveTileCapacity(
+				Added.PrecisionTier);
 			Scope = &Added;
 		}
 
@@ -388,6 +423,19 @@ bool USightWeaveRenderWorldSubsystem::SetPresentationScope(
 	ExplicitPresentationOwner = KnowledgeOwnerId;
 	ExplicitPresentationFloor = FloorId;
 	ExplicitPresentationPrecision = PrecisionTier;
+	if (UWorld* World = GetWorld())
+	{
+		if (USightWeaveWorldSubsystem* Runtime = World->GetSubsystem<USightWeaveWorldSubsystem>())
+		{
+			const TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot =
+				Runtime->AcquirePublishedSnapshot();
+			if (Snapshot.IsValid() && Snapshot->bPublished)
+			{
+				BuildAndSubmitPacket(Snapshot);
+				return true;
+			}
+		}
+	}
 	PresentationSelection = FSightWeaveViewPresentationSelection::Enabled(
 		WorldIdentity,
 		KnowledgeOwnerId,
@@ -414,7 +462,7 @@ void USightWeaveRenderWorldSubsystem::ClearPresentationScope()
 				Runtime->AcquirePublishedSnapshot();
 			if (Snapshot.IsValid() && Snapshot->bPublished)
 			{
-				UpdateDefaultPresentationSelection(*Snapshot);
+				BuildAndSubmitPacket(Snapshot);
 				return;
 			}
 		}
@@ -461,6 +509,7 @@ void USightWeaveRenderWorldSubsystem::UpdateDefaultPresentationSelection(
 		{
 			DesiredOwner = FSightWeaveKnowledgeOwnerId(FName(TEXT("Local")));
 			DesiredFloor = ActiveFloor->FloorId;
+			DesiredPrecision = ResolveScopePrecision(DesiredOwner, DesiredFloor);
 			bDesiredEnabled = true;
 		}
 	}
@@ -488,6 +537,25 @@ void USightWeaveRenderWorldSubsystem::UpdateDefaultPresentationSelection(
 			WorldIdentity,
 			NextPresentationRevision++);
 	PublishPresentationSelection();
+}
+
+ESightWeaveRenderPrecisionTier USightWeaveRenderWorldSubsystem::ResolveScopePrecision(
+	const FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
+	const FSightWeaveFloorId FloorId) const
+{
+	if (bHasExplicitPresentationScope
+		&& ExplicitPresentationOwner == KnowledgeOwnerId
+		&& ExplicitPresentationFloor == FloorId)
+	{
+		return ExplicitPresentationPrecision;
+	}
+	if (bHasMemoryPresentationScope
+		&& MemoryPresentationOwner == KnowledgeOwnerId
+		&& MemoryPresentationFloor == FloorId)
+	{
+		return MemoryPresentationPrecision;
+	}
+	return ESightWeaveRenderPrecisionTier::Standard;
 }
 
 void USightWeaveRenderWorldSubsystem::PublishPresentationSelection()

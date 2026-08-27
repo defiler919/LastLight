@@ -2,7 +2,7 @@
 
 ## 2026-08-27 Camera 1 remembered-presentation repair
 
-Status remains **PARTIAL**. The automated repair gate is complete, but the user must repeat the interactive Camera 0-4 PIE inspection. The earlier Overview-only automated screenshot did not prove that Camera 1 worked and is superseded by the five-camera evidence below.
+Status is **COMPLETED**. The automated repair gate passed and the user subsequently completed the interactive Camera 0-4 PIE inspection. The earlier Overview-only automated screenshot did not prove that Camera 1 worked and is superseded by the five-camera automated evidence plus the user's final manual validation below.
 
 ### Root cause
 
@@ -59,9 +59,9 @@ One intermediate Editor build failed because the first five-camera test edit had
 
 ## 1. Final status
 
-**PARTIAL**
+**COMPLETED**
 
-All implementation, automated Lab capture, performance matrices, NullRHI and D3D12/SM6 gates, full SightWeave and DARKWELL regression coverage, BuildPlugin, source-only clean-host builds, Shipping isolation scans, and repository integrity checks are complete. The only intentionally open completion gate is a user-operated interactive PIE inspection. Automated capture and direct agent image inspection are not represented as a substitute for that human interaction.
+All implementation, automated Lab capture, performance matrices, NullRHI and D3D12/SM6 gates, full SightWeave and DARKWELL regression coverage, BuildPlugin, source-only clean-host builds, Shipping isolation scans, repository integrity checks, and the user-operated interactive PIE inspection are complete. Automated capture and direct agent image inspection remain recorded separately from the user's final manual evidence.
 
 One full-suite D3D12 M2P2 wall-time sample exceeded its historical strict median threshold by 1.52%. The exact failure is retained below. Its single permitted isolated confirmation passed without changing the gate, so this is classified as full-suite load sensitivity rather than an M3.5 correctness failure.
 
@@ -134,7 +134,17 @@ remembered:1 live:1 clear:0 block:0 suppressed:1/1 unknown:0
 
 The final complete D3D12 run also passed `SightWeave.M3P5.Visual.LabCapture`. The agent directly inspected the resulting `Saved/Screenshots/M3P5_PIE_Overview.png`: the live region retained white/gray Scene Color, remembered static structure remained neutral, and unknown/clear/block/suppress regions were strict black; cyan content was limited to authored Lab boundaries and markers. No dynamic-subject, current-lighting, or viewport-history leakage was visible.
 
-This remains automated PIE plus agent inspection. **User-operated interactive PIE is still pending**, therefore the milestone is `PARTIAL` rather than `COMPLETED`.
+The user subsequently completed the interactive M3.5 PIE inspection for Camera 0-4 and reported all five cameras passed:
+
+- Camera 0: live Scene Color, the 50 cm inward feather, remembered gray, and strict-black Unknown were correct.
+- Camera 1: remembered neutral-gray static structure displayed correctly; clear and presentation-suppressed areas remained black.
+- Camera 2: no dynamic door, moving mesh, current light, or VFX leaked into non-live remembered areas.
+- Camera 3: the page boundary was continuous, with no black or bright seam.
+- Camera 4: yaw=45 showed no visible misalignment or tile/page seam.
+
+The final observed log state was `memoryReady=1 staticEnvironmentReady=1 memoryPresentationAvailable=1 memoryScopeMatchesBinding=1 memoryScopeMismatchMask=0x00 memoryProfiles=1 liveProfiles=1`, followed by `submitted-feather bindingFailure=0`. The PIE startup's initial `bindingFailure=13` occurred before resource publication and was the expected fail-closed transition; recovery to healthy `submitted-feather` means it is not a validation failure. Epic DataRouter/libcurl/OpenSSL warnings were telemetry-network failures and unrelated to the SightWeave composite.
+
+With this user-operated evidence, the milestone is `COMPLETED`.
 
 ## 7. BuildPlugin and clean-host
 
@@ -204,4 +214,4 @@ git switch codex/m3p5-sightweave-static-environment-memory
 git pull --ff-only
 ```
 
-Then open Unreal Engine 5.8.1, run the isolated M3.5 Lab mode in PIE, and manually verify live white/Scene Color, remembered neutral static structure, strict-black unknown/clear/block/suppress, and absence of dynamic/current-lighting leakage. No shutdown, sleep, or restart is part of this handoff.
+The final interactive PIE gate has already been completed by the user; no additional M3.5 validation action remains. No shutdown, sleep, or restart is part of this handoff.

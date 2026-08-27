@@ -1,6 +1,6 @@
 # SightWeave M3.5 static-environment memory handoff
 
-Status: **PARTIAL**
+Status: **COMPLETED**
 
 Branch: `codex/m3p5-sightweave-static-environment-memory`
 
@@ -14,7 +14,7 @@ Validation machine: NVIDIA GeForce RTX 4060, driver 610.88, 8188 MiB
 
 ## Camera 1 repair follow-up (2026-08-27)
 
-The Camera 1 all-black blocker is repaired in automated D3D12 PIE. Status remains **PARTIAL** only because the user must repeat the manual Camera 0-4 PIE inspection after pulling the repair.
+The Camera 1 all-black blocker is repaired in automated D3D12 PIE, and the user has completed the final manual Camera 0-4 PIE inspection. Status is **COMPLETED**.
 
 The root cause was a fail-closed presentation-scope mismatch, not missing CPU HardMemory or missing GPU resources. Memory used Coarse while the live packet was fixed at Standard; after precision alignment, the sparse live binding still omitted the canonical compatibility profile of bypass vision sources. Both GPU mirrors were already available. The final composite now reports `memoryReady=1 staticEnvironmentReady=1 memoryPresentationAvailable=1 memoryScopeMismatchMask=0x00 memoryPrecisionTier=0 livePrecisionTier=0 memoryProfiles=1 liveProfiles=1`, with 55 memory and 9 static page-table entries.
 
@@ -33,11 +33,25 @@ Lab automation now captures all five cameras. Direct inspection shows Camera 1's
 
 The only new preserved failure is one intermediate compile error from an extra parenthesis while adding the five-camera test; it was corrected before the successful final build and gates. Generated reports and screenshots remain untracked.
 
+### Final user-operated PIE evidence
+
+The user reported all Camera 0-4 checks passed:
+
+- Camera 0: live Scene Color, 50 cm inward feather, remembered gray, and strict-black Unknown were correct.
+- Camera 1: remembered neutral-gray static structure displayed normally; clear and presentation-suppressed regions remained black.
+- Camera 2: no dynamic door, moving mesh, current light, or VFX leaked into non-live remembered regions.
+- Camera 3: the page boundary was continuous, with no black or bright seam.
+- Camera 4: yaw=45 had no visible misalignment or tile/page seam.
+
+The final log state was `memoryReady=1 staticEnvironmentReady=1 memoryPresentationAvailable=1 memoryScopeMatchesBinding=1 memoryScopeMismatchMask=0x00 memoryProfiles=1 liveProfiles=1`, with `submitted-feather bindingFailure=0`.
+
+The initial PIE-frame `bindingFailure=13` is the expected fail-closed state before resources are published; subsequent recovery to healthy `submitted-feather` means it is not a failure. Epic DataRouter/libcurl/OpenSSL warnings are telemetry-network warnings and are unrelated to the SightWeave composite.
+
 ## Outcome
 
 M3.5 now provides world-scoped exploration memory for explicitly eligible immutable static environment. The CPU-packed authority is the only HardMemory truth; the R8 GPU memory/static mirrors are derived presentation resources. Final ordering is exact HardLive Scene Color, remembered eligible neutral static environment, then strict-black Unknown. Clear, write-block, presentation-suppress, scope, generation, teardown, fail-black, and Width=0/50 compatibility behavior are covered in native automation.
 
-All implementation, automated performance/memory work, M3.1-M3.5 regressions, M3.5 NullRHI and D3D12/SM6 gates, DARKWELL 24, automated Lab capture, BuildPlugin, clean-host Editor/Game Development/Game Shipping, Shipping isolation, and repository closure work are complete. The single remaining gate is user-operated interactive PIE. Automated PIE and agent screenshot inspection passed, but are not claimed as the user's manual check; therefore status is `PARTIAL`.
+All implementation, automated performance/memory work, M3.1-M3.5 regressions, M3.5 NullRHI and D3D12/SM6 gates, DARKWELL 24, automated Lab capture, BuildPlugin, clean-host Editor/Game Development/Game Shipping, Shipping isolation, repository closure work, and the user-operated interactive PIE gate are complete. Automated PIE, agent screenshot inspection, and the user's manual evidence remain identified separately.
 
 ## Exact headline evidence
 
@@ -57,7 +71,7 @@ Exact automation paths, timings, memory bytes, warning classification, BuildPlug
 
 ## Preserved issues
 
-- User-operated interactive PIE remains pending.
+- No M3.5 completion gate remains pending.
 - The complete D3D12 run's M2P2 4096-source sample failed at 1,015.197 us median; isolated confirmation passed at 985.600 us.
 - One passed D3D12 test carried the engine 258 GB/256 GB virtual-resource reservation warning.
 - D3D12 startup retained 13 pre-test `Condition failed` lines plus navigation/scalability warnings; focused reports and the M3.5 24-test report have zero test warnings/errors.
@@ -76,6 +90,6 @@ git switch codex/m3p5-sightweave-static-environment-memory
 git pull --ff-only
 ```
 
-After opening the project with Unreal Engine 5.8.1, perform the one remaining interactive M3.5 Lab PIE check: verify live white/current Scene Color, neutral remembered static structure, strict-black unknown/clear/block/suppress, and no dynamic-object or current-lighting memory leakage. If that manual check passes, update the milestone status from `PARTIAL` to `COMPLETED` with the user's evidence.
+The user has completed the final interactive M3.5 Lab PIE check and the milestone is `COMPLETED`. No additional M3.5 validation action remains after pulling this documentation closure.
 
 Keep the computer on; do not shut down, sleep, or restart it as part of this handoff.

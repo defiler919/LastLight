@@ -17,6 +17,8 @@ namespace SightWeave::M3P5::LabTests
 {
 	constexpr EAutomationTestFlags TestFlags = EAutomationTestFlags::EditorContext
 		| EAutomationTestFlags::EngineFilter;
+	constexpr EAutomationTestFlags VisualTestFlags = TestFlags
+		| EAutomationTestFlags::NonNullRHI;
 }
 
 DEFINE_LATENT_AUTOMATION_COMMAND_ONE_PARAMETER(
@@ -213,7 +215,7 @@ bool FSightWeaveM3P5LabAuthoredFixturesTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FSightWeaveM3P5LabVisualCaptureTest,
 	"SightWeave.M3P5.Visual.LabCapture",
-	SightWeave::M3P5::LabTests::TestFlags)
+	SightWeave::M3P5::LabTests::VisualTestFlags)
 
 bool FSightWeaveM3P5LabVisualCaptureTest::RunTest(const FString& Parameters)
 {

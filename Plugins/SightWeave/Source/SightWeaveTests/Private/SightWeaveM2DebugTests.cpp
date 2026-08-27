@@ -357,10 +357,10 @@ bool FSightWeaveM2LabComponentFixturesTest::RunTest(const FString& Parameters)
 		}
 	}
 	TestEqual(TEXT("Lab has two explicit floors"), FloorCount, 2);
-	TestEqual(TEXT("Lab has thirty-three real vision-source components"), VisionCount, 33);
+	TestEqual(TEXT("Expanded Lab has thirty-seven real vision-source components"), VisionCount, 37);
 	TestEqual(TEXT("Lab has four real legal-illumination components"), IlluminationCount, 4);
-	TestEqual(TEXT("Lab has thirty-six explicit occluder components"), OccluderCount, 36);
-	TestEqual(TEXT("Lab has two real dynamic-door occluders"), DynamicOccluderCount, 2);
+	TestEqual(TEXT("Expanded Lab has forty-seven explicit occluder components"), OccluderCount, 47);
+	TestEqual(TEXT("Expanded Lab has three real dynamic-door occluders"), DynamicOccluderCount, 3);
 	TestEqual(TEXT("Lab has two hard-live suppression components"), SuppressionCount, 2);
 	TestEqual(TEXT("Lab has one no-tick authoritative debug query component"), DebugQueryCount, 1);
 	TestEqual(TEXT("Lab has eight independently authored stress sources"), StressSourceCount, 8);

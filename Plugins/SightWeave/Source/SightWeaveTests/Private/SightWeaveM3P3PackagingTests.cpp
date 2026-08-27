@@ -103,9 +103,10 @@ bool FSightWeaveM3P3PackagingBoundariesTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Production shader uses integer atlas loads and the four-texel gutter"),
 		ShaderSource.Contains(TEXT("AtlasPage0.Load"))
 		&& ShaderSource.Contains(TEXT("SlotOrigin + int2(4, 4) + InteriorTexel")));
-	TestTrue(TEXT("Hard composite preserves scene color or emits exact zero"),
-		ShaderSource.Contains(
-			TEXT("return bVisible ? SceneColorTexture.Load(int3(SceneColorPixel, 0)) : 0.0f;")));
+	TestTrue(TEXT("HardLive branch still preserves the current Scene Color before later fallbacks"),
+		ShaderSource.Contains(TEXT("const bool bVisible = SightWeaveIsHardLive(TranslatedWorld.xy)"))
+		&& ShaderSource.Contains(TEXT("return bVisible"))
+		&& ShaderSource.Contains(TEXT("? SceneColorTexture.Load(int3(SceneColorPixel, 0))")));
 	for (const TCHAR* Forbidden : {
 		TEXT("TemporalHistory"), TEXT("LastSeen"), TEXT("SceneCapture") })
 	{

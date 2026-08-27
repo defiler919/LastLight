@@ -202,6 +202,7 @@ namespace SightWeave::Lab
 
 			const double CorrectedPageBoundaryY = GetPageBoundaryFixtureY(ActorLabel);
 			if (IsPageBoundaryFixture(ActorLabel)
+				&& Actor->FindComponentByClass<USightWeaveVisionSourceComponent>()
 				&& !FMath::IsNearlyEqual(Actor->GetActorLocation().Y, CorrectedPageBoundaryY))
 			{
 				FVector Location = Actor->GetActorLocation();

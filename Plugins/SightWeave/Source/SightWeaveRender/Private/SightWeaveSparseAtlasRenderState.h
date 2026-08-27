@@ -139,6 +139,10 @@ private:
 		const FSightWeaveSparseRenderPacket& Packet,
 		const FSightWeaveSparseScopeKey& ScopeKey) const;
 	bool PrepareScopePageTable_RenderThread(FRDGBuilder& GraphBuilder, FScopeState& Scope);
+	void ReportCompositeDiagnostic_RenderThread(
+		int32 DiagnosticCode,
+		const TCHAR* DiagnosticName,
+		const FScopeState* Scope);
 
 	FSightWeaveRenderWorldIdentity WorldIdentity;
 	TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> PendingPacket;
@@ -175,6 +179,7 @@ private:
 	bool bFeatherFullRebuildPending = false;
 	bool bFeatherUpdateIncomplete = false;
 	bool bReleased = false;
+	int32 LastCompositeDiagnosticCode = INDEX_NONE;
 #if WITH_DEV_AUTOMATION_TESTS
 	FSightWeaveSparseRenderTimings LastTimings;
 #endif

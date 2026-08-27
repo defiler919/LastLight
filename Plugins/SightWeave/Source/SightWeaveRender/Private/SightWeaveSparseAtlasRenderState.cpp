@@ -12,6 +12,7 @@
 #include "RHIStaticStates.h"
 #include "PostProcess/PostProcessMaterialInputs.h"
 #include "ScreenPass.h"
+#include "SightWeaveRenderModule.h"
 #include "SightWeaveTileShaders.h"
 #include "SystemTextures.h"
 
@@ -682,8 +683,12 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 			View.GetOverwriteLoadAction(),
 			TEXT("SightWeave.HardMask.Output"));
 	}
-	auto FailBlack = [&GraphBuilder, &Output]() -> FScreenPassTexture
+	auto FailBlack = [this, &GraphBuilder, &Output](
+		const int32 DiagnosticCode,
+		const TCHAR* DiagnosticName,
+		const FScopeState* Scope = nullptr) -> FScreenPassTexture
 	{
+		ReportCompositeDiagnostic_RenderThread(DiagnosticCode, DiagnosticName, Scope);
 		AddClearRenderTargetPass(GraphBuilder, Output.Texture, FLinearColor::Black, Output.ViewRect);
 		return MoveTemp(Output);
 	};
@@ -696,7 +701,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		|| Binding->GetResidencyGeneration() != ResidencyGeneration
 		|| Binding->GetPacketRevision() != AppliedRevision)
 	{
-		return FailBlack();
+		return FailBlack(101, TEXT("fail-binding"));
 	}
 	FScopeState* Scope = FindScope_RenderThread(Binding->GetScopeKey());
 	if (!Scope
@@ -706,24 +711,24 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		|| Scope->PageTablePacketRevision != Binding->GetPacketRevision()
 		|| !Scope->CurrentPageTable)
 	{
-		return FailBlack();
+		return FailBlack(102, TEXT("fail-scope-page-table"), Scope);
 	}
 	for (const FSightWeaveSparseResidencySlot& Slot : Scope->Residency.GetSlots())
 	{
 		if (Slot.bOccupied && Slot.Address.PageIndex >= 4)
 		{
-			return FailBlack();
+			return FailBlack(103, TEXT("fail-page-index"), Scope);
 		}
 	}
 	if (!Inputs.SceneTextures.SceneTextures)
 	{
-		return FailBlack();
+		return FailBlack(104, TEXT("fail-scene-textures"), Scope);
 	}
 	FRDGTextureRef SceneDepth =
 		Inputs.SceneTextures.SceneTextures->GetParameters()->SceneDepthTexture;
 	if (!SceneDepth)
 	{
-		return FailBlack();
+		return FailBlack(105, TEXT("fail-scene-depth"), Scope);
 	}
 
 	FRDGTextureRef DummyPage = GSystemTextures.GetBlackDummy(GraphBuilder);
@@ -747,7 +752,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 			|| Binding->GetFeatherAppliedRevision() != AppliedRevision
 			|| Binding->GetFeatherSettingsRevision() != Binding->GetPresentationRevision())
 		{
-			return FailBlack();
+			return FailBlack(106, TEXT("fail-feather-revision"), Scope);
 		}
 		FRDGTextureRef FeatherPages[4] = { DummyPage, DummyPage, DummyPage, DummyPage };
 		for (int32 PageIndex = 0; PageIndex < Scope->Pages.Num() && PageIndex < 4; ++PageIndex)
@@ -757,7 +762,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 				if (!Scope->FeatherPages.IsValidIndex(PageIndex)
 					|| !Scope->FeatherPages[PageIndex].IsValid())
 				{
-					return FailBlack();
+					return FailBlack(107, TEXT("fail-feather-page"), Scope);
 				}
 				FeatherPages[PageIndex] = GraphBuilder.RegisterExternalTexture(
 					Scope->FeatherPages[PageIndex],
@@ -799,6 +804,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 			FScreenPassTextureViewport(SceneColor),
 			PixelShader,
 			Parameters);
+		ReportCompositeDiagnostic_RenderThread(2, TEXT("submitted-feather"), Scope);
 	}
 	else
 	{
@@ -831,8 +837,38 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 			FScreenPassTextureViewport(SceneColor),
 			PixelShader,
 			Parameters);
+		ReportCompositeDiagnostic_RenderThread(1, TEXT("submitted-hard"), Scope);
 	}
 	return MoveTemp(Output);
+}
+
+void FSightWeaveSparseAtlasRenderState::ReportCompositeDiagnostic_RenderThread(
+	const int32 DiagnosticCode,
+	const TCHAR* DiagnosticName,
+	const FScopeState* Scope)
+{
+	check(IsInRenderingThread());
+	if (LastCompositeDiagnosticCode == DiagnosticCode)
+	{
+		return;
+	}
+	LastCompositeDiagnosticCode = DiagnosticCode;
+
+	const uint64 ScopeAppliedRevision = Scope ? Scope->AppliedRevision : 0;
+	const int32 PageTableEntryCount = Scope ? Scope->PageTableEntryCount : 0;
+	const int32 ResidentTileCount = Scope ? Scope->Residency.GetResidentCount() : 0;
+	UE_LOG(
+		LogSightWeaveRender,
+		Warning,
+		TEXT("Presentation composite state=%s bindingFailure=%d applied=%llu resourceGeneration=%llu residencyGeneration=%llu scopeApplied=%llu pageTableEntries=%d residentTiles=%d"),
+		DiagnosticName,
+		static_cast<int32>(PresentationBindingFailure),
+		AppliedRevision,
+		ResourceGeneration,
+		ResidencyGeneration,
+		ScopeAppliedRevision,
+		PageTableEntryCount,
+		ResidentTileCount);
 }
 
 void FSightWeaveSparseAtlasRenderState::Release_RenderThread(

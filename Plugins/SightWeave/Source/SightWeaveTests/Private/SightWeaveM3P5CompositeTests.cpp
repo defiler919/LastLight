@@ -297,7 +297,8 @@ namespace SightWeaveM3P5CompositeTests
 	};
 }
 
-using namespace SightWeaveM3P5CompositeTests;
+namespace SightWeaveM3P5CompositeTests
+{
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FSightWeaveM3P5ThreeStateCompositeD3D12Test,
@@ -390,6 +391,8 @@ bool FSightWeaveM3P5ThreeStateCompositeD3D12Test::RunTest(const FString& Paramet
 		Colors);
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForReadbacks(MoveTemp(Contexts), this));
 	return true;
+}
+
 }
 
 #endif

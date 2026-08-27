@@ -83,6 +83,36 @@ public:
 };
 
 UCLASS(BlueprintType, Blueprintable)
+class SIGHTWEAVERUNTIME_API ASightWeaveStaticEnvironmentActor final : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	ASightWeaveStaticEnvironmentActor();
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	TObjectPtr<USceneComponent> SceneRoot;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	TObjectPtr<USightWeaveStaticEnvironmentComponent> StaticEnvironmentComponent;
+};
+
+UCLASS(BlueprintType, Blueprintable)
+class SIGHTWEAVERUNTIME_API ASightWeaveMemoryModifierActor final : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	ASightWeaveMemoryModifierActor();
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	TObjectPtr<USceneComponent> SceneRoot;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave")
+	TObjectPtr<USightWeaveMemoryModifierComponent> MemoryModifierComponent;
+};
+
+UCLASS(BlueprintType, Blueprintable)
 class SIGHTWEAVERUNTIME_API ASightWeaveDebugQueryActor final : public AActor
 {
 	GENERATED_BODY()

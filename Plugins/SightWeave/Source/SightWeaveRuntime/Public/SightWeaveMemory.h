@@ -41,6 +41,7 @@ private:
 	int64 Value = 0;
 };
 
+UENUM(BlueprintType)
 enum class ESightWeaveMemoryRegionShape : uint8
 {
 	Circle,
@@ -49,6 +50,7 @@ enum class ESightWeaveMemoryRegionShape : uint8
 	Polygon
 };
 
+UENUM(BlueprintType)
 enum class ESightWeaveMemoryModifierOperation : uint8
 {
 	BlockMemoryWrites,

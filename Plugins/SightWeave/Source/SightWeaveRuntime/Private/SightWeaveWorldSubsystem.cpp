@@ -2274,6 +2274,18 @@ bool USightWeaveWorldSubsystem::QueryHardMemoryAtLocation(const FVector WorldLoc
 	return MemoryAuthority.QueryHardMemory(WorldLocation);
 }
 
+bool USightWeaveWorldSubsystem::GetExplorationMemoryScope(
+	FSightWeaveMemoryScopeKey& OutScope) const
+{
+	if (!MemoryAuthority.IsConfigured())
+	{
+		OutScope = FSightWeaveMemoryScopeKey();
+		return false;
+	}
+	OutScope = MemoryAuthority.GetScope();
+	return true;
+}
+
 bool USightWeaveWorldSubsystem::ClearExplorationMemory(
 	const FSightWeaveMemoryRegion& Region)
 {

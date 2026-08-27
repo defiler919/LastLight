@@ -60,7 +60,8 @@ namespace SightWeaveM3P5StaticEnvironmentTests
 	}
 }
 
-using namespace SightWeaveM3P5StaticEnvironmentTests;
+namespace SightWeaveM3P5StaticEnvironmentTests
+{
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FSightWeaveM3P5StaticEnvironmentAuthorityTest,
@@ -127,6 +128,8 @@ bool FSightWeaveM3P5StaticEnvironmentIsolationTest::RunTest(const FString& Param
 	Authority.Reset();
 	TestFalse(TEXT("World teardown clears handles"), Authority.IsHandleValid(FSightWeaveStaticEnvironmentHandle(1)));
 	return true;
+}
+
 }
 
 #endif

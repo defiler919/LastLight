@@ -13,6 +13,7 @@ GROUND = "Ground"
 LOCAL_OWNER = "Local"
 M3P4_ACTIVE_CAMERA = os.environ.get("SIGHTWEAVE_M3P4_LAB_CAMERA", "Overview")
 M3P4_DYNAMIC_DOOR_YAW = float(os.environ.get("SIGHTWEAVE_M3P4_DOOR_YAW", "28.0"))
+M3P5_ACTIVE_CAMERA = os.environ.get("SIGHTWEAVE_M3P5_LAB_CAMERA", "Overview")
 
 
 def floor_id(value):
@@ -180,13 +181,66 @@ def add_debug_query(name, location, name_id=GROUND, owner=LOCAL_OWNER):
     return actor
 
 
+def add_static_environment(name, location, footprint, yaw=0.0, intensity=112,
+                           owner=LOCAL_OWNER, name_id=GROUND):
+    actor = spawn_actor(unreal.SightWeaveStaticEnvironmentActor, name, location, yaw)
+    component = actor.get_component_by_class(unreal.SightWeaveStaticEnvironmentComponent)
+    component.set_editor_property("knowledge_owner_id", owner_id(owner))
+    component.set_editor_property("floor_id", floor_id(name_id))
+    component.set_editor_property("local_height_range", height_range())
+    component.set_editor_property(
+        "local_footprint", [unreal.Vector2D(*point) for point in footprint]
+    )
+    component.set_editor_property("neutral_intensity", intensity)
+    component.set_editor_property("explicitly_immutable", True)
+    component.set_editor_property("enabled", True)
+    if not component.refresh_static_environment_registration():
+        raise RuntimeError(f"Could not register static environment {name}")
+    return actor
+
+
+def add_memory_modifier(name, location, operation, shape, radius=100.0,
+                        half_extents=(100.0, 100.0), rotation=0.0,
+                        polygon=(), owner=LOCAL_OWNER, name_id=GROUND):
+    actor = spawn_actor(unreal.SightWeaveMemoryModifierActor, name, location)
+    component = actor.get_component_by_class(unreal.SightWeaveMemoryModifierComponent)
+    component.set_editor_property("knowledge_owner_id", owner_id(owner))
+    component.set_editor_property("floor_id", floor_id(name_id))
+    component.set_editor_property("local_height_range", height_range())
+    component.set_editor_property("operation", operation)
+    component.set_editor_property("shape", shape)
+    component.set_editor_property("radius", radius)
+    component.set_editor_property("half_extents", unreal.Vector2D(*half_extents))
+    component.set_editor_property("rotation_degrees", rotation)
+    component.set_editor_property(
+        "local_polygon_vertices", [unreal.Vector2D(*point) for point in polygon]
+    )
+    component.set_editor_property("enabled", True)
+    # Registration intentionally occurs in PIE after exploration memory has an
+    # exact world-lifetime scope. The authored component remains deterministic.
+    return actor
+
+
 def wall(name, cube, origin, offset, length=1100.0, yaw=0.0,
-         wall_height=300.0, z_min=0.0, dynamic=False):
+         wall_height=300.0, z_min=0.0, dynamic=False,
+         static_memory=False, memory_intensity=160):
     x, y = origin[0] + offset[0], origin[1] + offset[1]
-    spawn_mesh(f"{name}_Visual", cube, (x, y, z_min + wall_height * 0.5),
-               (length / 100.0, 0.35, wall_height / 100.0), yaw)
-    return add_occluder(name, (x, y, z_min), ((-length * 0.5, 0.0), (length * 0.5, 0.0)),
-                        yaw=yaw, z_min=0.0, z_max=wall_height, dynamic=dynamic)
+    visual = spawn_mesh(f"{name}_Visual", cube, (x, y, z_min + wall_height * 0.5),
+                        (length / 100.0, 0.35, wall_height / 100.0), yaw)
+    if dynamic:
+        visual.static_mesh_component.set_mobility(unreal.ComponentMobility.MOVABLE)
+    occluder = add_occluder(
+        name, (x, y, z_min), ((-length * 0.5, 0.0), (length * 0.5, 0.0)),
+        yaw=yaw, z_min=0.0, z_max=wall_height, dynamic=dynamic
+    )
+    if static_memory:
+        add_static_environment(
+            f"{name}_Memory", (x, y, z_min),
+            ((-length * 0.5, -28.0), (length * 0.5, -28.0),
+             (length * 0.5, 28.0), (-length * 0.5, 28.0)),
+            yaw=yaw, intensity=memory_intensity
+        )
+    return occluder
 
 
 def create_lab():
@@ -445,6 +499,122 @@ def create_lab():
                  yaw=45.0, ortho_width=7000.0,
                  auto_activate=M3P4_ACTIVE_CAMERA == "PageBoundary")
 
+    # M3.5 static-environment exploration-memory strip. Every remembered cue is
+    # explicitly authored through immutable CPU footprints; dynamic sentinels do
+    # not receive eligibility and therefore cannot leak their current state.
+    m3p5_origin = (52000.0, 8500.0)
+    spawn_mesh("SW_M3P5_Memory_Base", cube,
+               (m3p5_origin[0], m3p5_origin[1], -16.0), (190.0, 45.0, 0.16))
+    add_static_environment(
+        "SW_M3P5_StaticGroundMemory", (m3p5_origin[0], m3p5_origin[1], 0.0),
+        ((-9500.0, -2250.0), (9500.0, -2250.0),
+         (9500.0, 2250.0), (-9500.0, 2250.0)), intensity=68
+    )
+    spawn_text("SW_M3P5_Memory_Label",
+               "M3.5 HARDLIVE > HARDMEMORY + EXPLICIT STATIC ATTRIBUTE > UNKNOWN",
+               (43000.0, 6500.0, 130.0), 54.0, unreal.Color(165, 215, 255, 255))
+    spawn_text("SW_M3P5_Remembered_Label", "REMEMBERED STATIC GRAY / CLEAR / SUPPRESS",
+               (44500.0, 10300.0, 110.0), 38.0, unreal.Color(185, 185, 185, 255))
+    spawn_text("SW_M3P5_Live_Label", "CURRENT LIVE SCENE COLOR",
+               (55500.0, 10300.0, 110.0), 42.0, unreal.Color(110, 255, 150, 255))
+    spawn_text("SW_M3P5_Unknown_Label", "UNKNOWN = STRICT BLACK",
+               (59500.0, 10300.0, 110.0), 42.0, unreal.Color(255, 95, 95, 255))
+
+    wall("SW_M3P5_StraightWall", cube, (44500.0, 8500.0), (0.0, 250.0),
+         1900.0, static_memory=True, memory_intensity=168)
+    wall("SW_M3P5_L_A", cube, (47500.0, 8500.0), (-450.0, 150.0),
+         1000.0, static_memory=True, memory_intensity=176)
+    wall("SW_M3P5_L_B", cube, (47500.0, 8500.0), (50.0, 650.0),
+         1000.0, 90.0, static_memory=True, memory_intensity=176)
+    wall("SW_M3P5_T_Top", cube, (50500.0, 8500.0), (0.0, 500.0),
+         1900.0, static_memory=True, memory_intensity=184)
+    wall("SW_M3P5_T_Stem", cube, (50500.0, 8500.0), (0.0, 0.0),
+         1000.0, 90.0, static_memory=True, memory_intensity=184)
+    wall("SW_M3P5_DiagonalWall", cube, (53500.0, 8500.0), (0.0, 250.0),
+         1800.0, 35.0, static_memory=True, memory_intensity=192)
+    for suffix, offset, length, yaw in (
+        ("North", (0.0, 900.0), 1900.0, 0.0),
+        ("South", (0.0, -100.0), 1900.0, 0.0),
+        ("East", (950.0, 400.0), 1000.0, 90.0),
+        ("West", (-950.0, 400.0), 1000.0, 90.0),
+    ):
+        wall(f"SW_M3P5_Room_{suffix}", cube, (56000.0, 8500.0), offset,
+             length, yaw, static_memory=True, memory_intensity=158)
+    wall("SW_M3P5_DynamicDoor", cube, (58000.0, 8500.0), (0.0, 300.0),
+         1100.0, 32.0, 260.0, dynamic=True, static_memory=False)
+    moving = spawn_mesh("SW_M3P5_MovingMeshLeakSentinel", cylinder,
+                        (59000.0, 8500.0, 120.0), (2.0, 2.0, 2.4))
+    moving.static_mesh_component.set_mobility(unreal.ComponentMobility.MOVABLE)
+    point_light = spawn_actor(unreal.PointLight, "SW_M3P5_CurrentLightLeakSentinel",
+                              (57000.0, 8500.0, 450.0))
+    point_light.point_light_component.set_mobility(unreal.ComponentMobility.MOVABLE)
+    point_light.point_light_component.set_editor_property("intensity", 9000.0)
+    emissive = spawn_mesh("SW_M3P5_EmissiveParticleLeakSentinel", cone,
+                          (60000.0, 8500.0, 100.0), (1.4, 1.4, 2.0))
+    emissive.static_mesh_component.set_mobility(unreal.ComponentMobility.MOVABLE)
+    spawn_text("SW_M3P5_DynamicLeak_Label",
+               "DYNAMIC DOOR / MOVING MESH / CURRENT LIGHT / VFX MUST DISAPPEAR",
+               (56500.0, 6800.0, 110.0), 34.0, unreal.Color(255, 150, 95, 255))
+
+    add_vision("SW_M3P5_RememberOnce", (48000.0, 8500.0, 100.0),
+               unreal.SightWeaveSourceShape.RADIAL, 4300.0, bypass=True)
+    add_vision("SW_M3P5_LiveNow", (57000.0, 8500.0, 100.0),
+               unreal.SightWeaveSourceShape.RADIAL, 2100.0, bypass=True)
+    add_vision("SW_M3P5_BlockProbe", (53000.0, 8500.0, 100.0),
+               unreal.SightWeaveSourceShape.RADIAL, 700.0, bypass=True)
+    add_memory_modifier(
+        "SW_M3P5_BlockMemoryWrites", (53000.0, 8500.0, 0.0),
+        unreal.SightWeaveMemoryModifierOperation.BLOCK_MEMORY_WRITES,
+        unreal.SightWeaveMemoryRegionShape.CIRCLE, radius=850.0
+    )
+    add_memory_modifier(
+        "SW_M3P5_SuppressMemoryPresentation", (49500.0, 8500.0, 0.0),
+        unreal.SightWeaveMemoryModifierOperation.SUPPRESS_MEMORY_PRESENTATION,
+        unreal.SightWeaveMemoryRegionShape.ROTATED_BOX,
+        half_extents=(500.0, 350.0), rotation=25.0
+    )
+    spawn_text("SW_M3P5_Clear_Label", "CLEAR MEMORY -> UNKNOWN",
+               (46500.0, 7600.0, 90.0), 32.0, unreal.Color(255, 90, 90, 255))
+    spawn_text("SW_M3P5_Block_Label", "BLOCK WRITES -> STAYS UNKNOWN",
+               (52000.0, 7600.0, 90.0), 32.0, unreal.Color(255, 185, 75, 255))
+    spawn_text("SW_M3P5_Suppress_Label", "SUPPRESS PRESENTATION / AUTHORITY RETAINED",
+               (48700.0, 9300.0, 90.0), 30.0, unreal.Color(205, 130, 255, 255))
+
+    # Explicit off-floor-bounds source exercises negative logical tiles relative
+    # to Ground.BoundsMin without changing the frozen page-boundary mapping.
+    add_vision("SW_M3P5_NegativeTileRememberOnce", (-12000.0, 8500.0, 100.0),
+               unreal.SightWeaveSourceShape.RADIAL, 900.0, bypass=True)
+    add_static_environment(
+        "SW_M3P5_NegativeTileStaticMemory", (-12000.0, 8500.0, 0.0),
+        ((-1000.0, -1000.0), (1000.0, -1000.0),
+         (1000.0, 1000.0), (-1000.0, 1000.0)), intensity=124
+    )
+    add_static_environment(
+        "SW_M3P5_PageBoundaryStaticMemory", (page_boundary_x, page_strip_y, 0.0),
+        ((-2600.0, -600.0), (2600.0, -600.0),
+         (2600.0, 600.0), (-2600.0, 600.0)), intensity=140
+    )
+
+    for seam_index, seam_x in enumerate((43500.0, 45980.0, 48460.0, 50940.0,
+                                         53420.0, 55900.0, 58380.0, 60860.0)):
+        spawn_mesh(f"SW_M3P5_TileSeam_{seam_index + 1}", cube,
+                   (seam_x, 8500.0, 4.0), (0.025, 80.0, 0.04))
+    spawn_camera("SW_M3P5_OverviewCamera", (52000.0, 8500.0, 12000.0),
+                 yaw=90.0, ortho_width=21000.0,
+                 auto_activate=M3P5_ACTIVE_CAMERA == "Overview")
+    spawn_camera("SW_M3P5_Rotated45Camera", (52000.0, 8500.0, 12000.0),
+                 yaw=45.0, ortho_width=21000.0,
+                 auto_activate=M3P5_ACTIVE_CAMERA == "Rotated45")
+    spawn_camera("SW_M3P5_RememberedCamera", (48000.0, 8500.0, 6500.0),
+                 yaw=90.0, ortho_width=6500.0,
+                 auto_activate=M3P5_ACTIVE_CAMERA == "Remembered")
+    spawn_camera("SW_M3P5_DynamicLeakCamera", (58500.0, 8500.0, 6500.0),
+                 yaw=90.0, ortho_width=6000.0,
+                 auto_activate=M3P5_ACTIVE_CAMERA == "DynamicLeak")
+    spawn_camera("SW_M3P5_PageBoundaryCamera", (page_boundary_x, page_strip_y, 6500.0),
+                 yaw=90.0, ortho_width=7500.0,
+                 auto_activate=M3P5_ACTIVE_CAMERA == "PageBoundary")
+
     spawn_text("SW_M2_Lab_Title", "SIGHTWEAVE M2 CPU AUTHORITY LAB",
                (-2400.0, -6200.0, 240.0), 95.0, unreal.Color(105, 210, 255, 255))
     spawn_text("SW_M2_Lab_Disclaimer", "REFERENCE SOLVER / COMPONENT FIXTURES / DEBUG DATA - NO GPU FOG",
@@ -458,7 +628,7 @@ def create_lab():
         raise RuntimeError(f"Could not save {MAP_PATH}")
     if not unreal.EditorAssetLibrary.save_asset(MAP_PATH, only_if_is_dirty=False):
         raise RuntimeError(f"Could not persist {MAP_PATH}")
-    unreal.log(f"SightWeave M2/M3/M3.4 created and saved {MAP_PATH}")
+    unreal.log(f"SightWeave M2/M3/M3.4/M3.5 created and saved {MAP_PATH}")
 
 
 if __name__ == "__main__":

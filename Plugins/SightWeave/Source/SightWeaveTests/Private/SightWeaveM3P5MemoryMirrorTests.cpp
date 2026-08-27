@@ -175,7 +175,8 @@ namespace SightWeaveM3P5MemoryMirrorTests
 	};
 }
 
-using namespace SightWeaveM3P5MemoryMirrorTests;
+namespace SightWeaveM3P5MemoryMirrorTests
+{
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FSightWeaveM3P5MemoryMirrorNullRHITest,
@@ -228,6 +229,8 @@ bool FSightWeaveM3P5MemoryMirrorD3D12Test::RunTest(const FString& Parameters)
 		Fixture.SelectedTile);
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForMemoryMirror(Context, this));
 	return true;
+}
+
 }
 
 #endif

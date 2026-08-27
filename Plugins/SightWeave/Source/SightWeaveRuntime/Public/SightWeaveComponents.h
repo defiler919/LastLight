@@ -230,6 +230,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "SightWeave|Static Environment")
 	bool RefreshStaticEnvironmentRegistration();
 
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Static Environment")
+	void SetStaticEnvironmentEnabled(bool bInEnabled);
+
 	UFUNCTION(BlueprintPure, Category = "SightWeave|Static Environment")
 	FSightWeaveStaticEnvironmentHandle GetStaticEnvironmentHandle() const { return Handle; }
 
@@ -244,6 +247,70 @@ protected:
 private:
 	bool BuildWorldDescription(FSightWeaveStaticEnvironmentDescription& OutDescription) const;
 	FSightWeaveStaticEnvironmentHandle Handle;
+};
+
+/** World-authored BlockMemoryWrites/SuppressMemoryPresentation region. */
+UCLASS(ClassGroup = (SightWeave), BlueprintType, Blueprintable, meta = (BlueprintSpawnableComponent))
+class SIGHTWEAVERUNTIME_API USightWeaveMemoryModifierComponent final : public USceneComponent
+{
+	GENERATED_BODY()
+
+public:
+	USightWeaveMemoryModifierComponent();
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	FSightWeaveKnowledgeOwnerId KnowledgeOwnerId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	FSightWeaveFloorId FloorId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	FSightWeaveHeightRange LocalHeightRange;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	ESightWeaveMemoryModifierOperation Operation =
+		ESightWeaveMemoryModifierOperation::BlockMemoryWrites;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	ESightWeaveMemoryRegionShape Shape = ESightWeaveMemoryRegionShape::Circle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	FVector2D LocalCenter = FVector2D::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	FVector2D HalfExtents = FVector2D(100.0, 100.0);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory", meta = (ClampMin = "0.01"))
+	float Radius = 100.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	float RotationDegrees = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	TArray<FVector2D> LocalPolygonVertices;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	bool bEnabled = true;
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Memory")
+	bool RefreshMemoryModifierRegistration();
+
+	UFUNCTION(BlueprintCallable, Category = "SightWeave|Memory")
+	void SetMemoryModifierEnabled(bool bInEnabled);
+
+	FSightWeaveMemoryModifierHandle GetMemoryModifierHandle() const { return Handle; }
+
+protected:
+	virtual void OnRegister() override;
+	virtual void OnUnregister() override;
+	virtual void OnUpdateTransform(EUpdateTransformFlags UpdateTransformFlags, ETeleportType Teleport) override;
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
+
+private:
+	bool BuildWorldDescription(FSightWeaveMemoryModifierDescription& OutDescription) const;
+	FSightWeaveMemoryModifierHandle Handle;
 };
 
 /** No-tick marker that samples and optionally draws one authoritative query at BeginPlay. */

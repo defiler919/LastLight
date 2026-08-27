@@ -142,7 +142,8 @@ namespace SightWeaveM3P5MemoryAuthorityTests
 	}
 }
 
-using namespace SightWeaveM3P5MemoryAuthorityTests;
+namespace SightWeaveM3P5MemoryAuthorityTests
+{
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FSightWeaveM3P5PackedMappingTest,
@@ -491,6 +492,8 @@ bool FSightWeaveM3P5ClearBlockPriorityTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Overlapped update succeeds"), Authority.WriteEffectiveLive(Snapshot).Succeeded());
 	TestFalse(TEXT("Clear plus block remains Unknown"), Authority.QueryHardMemory(Center));
 	return true;
+}
+
 }
 
 #endif

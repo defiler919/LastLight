@@ -45,6 +45,26 @@ ASightWeaveHardSuppressionActor::ASightWeaveHardSuppressionActor()
 	HardSuppressionComponent->SetupAttachment(SceneRoot);
 }
 
+ASightWeaveStaticEnvironmentActor::ASightWeaveStaticEnvironmentActor()
+{
+	PrimaryActorTick.bCanEverTick = false;
+	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
+	SetRootComponent(SceneRoot);
+	StaticEnvironmentComponent =
+		CreateDefaultSubobject<USightWeaveStaticEnvironmentComponent>(TEXT("SightWeaveStaticEnvironment"));
+	StaticEnvironmentComponent->SetupAttachment(SceneRoot);
+}
+
+ASightWeaveMemoryModifierActor::ASightWeaveMemoryModifierActor()
+{
+	PrimaryActorTick.bCanEverTick = false;
+	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
+	SetRootComponent(SceneRoot);
+	MemoryModifierComponent =
+		CreateDefaultSubobject<USightWeaveMemoryModifierComponent>(TEXT("SightWeaveMemoryModifier"));
+	MemoryModifierComponent->SetupAttachment(SceneRoot);
+}
+
 ASightWeaveDebugQueryActor::ASightWeaveDebugQueryActor()
 {
 	PrimaryActorTick.bCanEverTick = false;

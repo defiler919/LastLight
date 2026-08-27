@@ -577,6 +577,16 @@ bool USightWeaveStaticEnvironmentComponent::RefreshStaticEnvironmentRegistration
 	return Handle.IsValid();
 }
 
+void USightWeaveStaticEnvironmentComponent::SetStaticEnvironmentEnabled(const bool bInEnabled)
+{
+	if (bEnabled == bInEnabled)
+	{
+		return;
+	}
+	bEnabled = bInEnabled;
+	RefreshStaticEnvironmentRegistration();
+}
+
 bool USightWeaveStaticEnvironmentComponent::BuildWorldDescription(
 	FSightWeaveStaticEnvironmentDescription& OutDescription) const
 {
@@ -608,6 +618,125 @@ bool USightWeaveStaticEnvironmentComponent::BuildWorldDescription(
 	OutDescription.NeutralIntensity = NeutralIntensity;
 	OutDescription.bExplicitlyImmutable = bExplicitlyImmutable;
 	OutDescription.bEnabled = bEnabled;
+	return OutDescription.IsValid();
+}
+
+USightWeaveMemoryModifierComponent::USightWeaveMemoryModifierComponent()
+	: KnowledgeOwnerId(FName(TEXT("Local")))
+	, FloorId(FName(TEXT("Default")))
+{
+	PrimaryComponentTick.bCanEverTick = false;
+	bWantsOnUpdateTransform = true;
+	LocalHeightRange = { 0.0f, 300.0f };
+	LocalPolygonVertices = {
+		FVector2D(-100.0, -100.0),
+		FVector2D(100.0, -100.0),
+		FVector2D(100.0, 100.0),
+		FVector2D(-100.0, 100.0)
+	};
+}
+
+void USightWeaveMemoryModifierComponent::OnRegister()
+{
+	Super::OnRegister();
+	RefreshMemoryModifierRegistration();
+}
+
+void USightWeaveMemoryModifierComponent::OnUnregister()
+{
+	if (USightWeaveWorldSubsystem* Subsystem = GetSightWeaveSubsystem(this);
+		Subsystem && Handle.IsValid())
+	{
+		Subsystem->UnregisterMemoryModifier(Handle);
+	}
+	Handle = FSightWeaveMemoryModifierHandle();
+	Super::OnUnregister();
+}
+
+void USightWeaveMemoryModifierComponent::OnUpdateTransform(
+	const EUpdateTransformFlags UpdateTransformFlags,
+	const ETeleportType Teleport)
+{
+	Super::OnUpdateTransform(UpdateTransformFlags, Teleport);
+	if (IsRegistered())
+	{
+		RefreshMemoryModifierRegistration();
+	}
+}
+
+#if WITH_EDITOR
+void USightWeaveMemoryModifierComponent::PostEditChangeProperty(
+	FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	RefreshMemoryModifierRegistration();
+}
+#endif
+
+bool USightWeaveMemoryModifierComponent::RefreshMemoryModifierRegistration()
+{
+	USightWeaveWorldSubsystem* Subsystem = GetSightWeaveSubsystem(this);
+	FSightWeaveMemoryModifierDescription Description;
+	if (!Subsystem || !BuildWorldDescription(Description))
+	{
+		return false;
+	}
+	if (Handle.IsValid())
+	{
+		return Subsystem->UpdateMemoryModifier(Handle, Description);
+	}
+	Handle = Subsystem->RegisterMemoryModifier(Description);
+	return Handle.IsValid();
+}
+
+void USightWeaveMemoryModifierComponent::SetMemoryModifierEnabled(const bool bInEnabled)
+{
+	if (bEnabled == bInEnabled)
+	{
+		return;
+	}
+	bEnabled = bInEnabled;
+	RefreshMemoryModifierRegistration();
+}
+
+bool USightWeaveMemoryModifierComponent::BuildWorldDescription(
+	FSightWeaveMemoryModifierDescription& OutDescription) const
+{
+	OutDescription = FSightWeaveMemoryModifierDescription();
+	USightWeaveWorldSubsystem* Subsystem = GetSightWeaveSubsystem(this);
+	FSightWeaveMemoryScopeKey Scope;
+	const FTransform Transform = GetComponentTransform();
+	const FVector Scale = Transform.GetScale3D();
+	const FRotator Rotation = Transform.Rotator();
+	if (!Subsystem
+		|| !Subsystem->GetExplorationMemoryScope(Scope)
+		|| Scope.KnowledgeOwnerId != KnowledgeOwnerId
+		|| Scope.FloorId != FloorId
+		|| Scale.X <= 0.0 || Scale.Y <= 0.0 || Scale.Z <= 0.0
+		|| !FMath::IsNearlyEqual(Scale.X, Scale.Y, 1.0e-4)
+		|| !FMath::IsNearlyZero(Rotation.Pitch, 1.0e-4)
+		|| !FMath::IsNearlyZero(Rotation.Roll, 1.0e-4))
+	{
+		return false;
+	}
+	OutDescription.Operation = Operation;
+	FSightWeaveMemoryRegion& Region = OutDescription.Region;
+	Region.Scope = MoveTemp(Scope);
+	Region.HeightRange.ZMin = Transform.GetLocation().Z + LocalHeightRange.ZMin * Scale.Z;
+	Region.HeightRange.ZMax = Transform.GetLocation().Z + LocalHeightRange.ZMax * Scale.Z;
+	Region.Shape = Shape;
+	const FVector WorldCenter = Transform.TransformPosition(FVector(LocalCenter, 0.0));
+	Region.Center = FVector2D(WorldCenter.X, WorldCenter.Y);
+	Region.HalfExtents = HalfExtents * Scale.X;
+	Region.Radius = Radius * Scale.X;
+	Region.RotationDegrees = RotationDegrees + Rotation.Yaw;
+	Region.PolygonVertices.Reserve(LocalPolygonVertices.Num());
+	for (const FVector2D Local : LocalPolygonVertices)
+	{
+		const FVector World = Transform.TransformPosition(FVector(Local, 0.0));
+		Region.PolygonVertices.Emplace(World.X, World.Y);
+	}
+	Region.bEnabled = bEnabled;
 	return OutDescription.IsValid();
 }
 

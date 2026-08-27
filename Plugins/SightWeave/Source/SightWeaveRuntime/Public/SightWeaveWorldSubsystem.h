@@ -318,6 +318,7 @@ public:
 	void DisableExplorationMemory();
 	bool IsExplorationMemoryConfigured() const { return MemoryAuthority.IsConfigured(); }
 	bool QueryHardMemoryAtLocation(FVector WorldLocation) const;
+	bool GetExplorationMemoryScope(FSightWeaveMemoryScopeKey& OutScope) const;
 	bool ClearExplorationMemory(const FSightWeaveMemoryRegion& Region);
 	FSightWeaveMemoryModifierHandle RegisterMemoryModifier(
 		const FSightWeaveMemoryModifierDescription& Description);

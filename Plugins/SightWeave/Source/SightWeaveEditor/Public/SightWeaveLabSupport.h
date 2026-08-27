@@ -8,7 +8,8 @@ enum class ESightWeaveLabMode : uint8
 {
 	M2,
 	M3P3,
-	M3P4
+	M3P4,
+	M3P5
 };
 
 enum class ESightWeaveLabCamera : uint8
@@ -30,6 +31,10 @@ struct FSightWeaveLabIsolationResult
 	int32 DisabledOccluders = 0;
 	int32 EnabledSuppressions = 0;
 	int32 DisabledSuppressions = 0;
+	int32 EnabledStaticEnvironments = 0;
+	int32 DisabledStaticEnvironments = 0;
+	int32 EnabledMemoryModifiers = 0;
+	int32 DisabledMemoryModifiers = 0;
 	int32 AdjustedPageBoundaryActors = 0;
 };
 

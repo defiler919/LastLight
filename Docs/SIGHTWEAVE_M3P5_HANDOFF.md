@@ -39,6 +39,10 @@ The only working-tree difference was the approved local `Darkwell.uproject` Engi
 
 The first production slice adds a game-thread-only `FSightWeaveMemoryAuthority` with 7,688-byte packed logical tiles, signed world mapping, exact non-hash scope identity, monotonic EffectiveLive writes, no-change revision suppression, explicit capacity failure, immutable owned Memory packets, and world-subsystem publication. It consumes only immutable CPU snapshots; its API has no camera, viewport, renderer, Scene Color, or feather input. The focused NullRHI authority suite initially passes 4/4 after a full Editor Development build.
 
+## Memory modifier checkpoint
+
+`ClearMemory` mutates packed authority and removes empty tiles; a later CPU snapshot can re-explore it. Registered `BlockMemoryWrites` regions prevent new bits without clearing old authority and also suppress remembered presentation. `SuppressMemoryPresentation` publishes derived presentation suppression without revising authority. Circle, axis-aligned box, rotated box, polygon, height filtering, exact scope rejection, overlap priority, movement, and teardown are covered. The first retained fixture run was 7/8 because the alleged new blocked sample had already been explored; the corrected smaller-then-expanded fixture passes the final NullRHI Memory suite 8/8.
+
 ## Resume
 
 ```powershell

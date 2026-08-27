@@ -227,6 +227,109 @@ namespace SightWeaveMemoryPrivate
 		return true;
 	}
 
+	bool BuildRegionPolygon(const FSightWeaveMemoryRegion& Region, TArray<FVector>& OutVertices)
+	{
+		OutVertices.Reset();
+		if (!Region.IsValid())
+		{
+			return false;
+		}
+		switch (Region.Shape)
+		{
+		case ESightWeaveMemoryRegionShape::Circle:
+		{
+			constexpr int32 CircleSteps = 64;
+			OutVertices.Reserve(CircleSteps);
+			for (int32 Step = 0; Step < CircleSteps; ++Step)
+			{
+				const double Angle = 2.0 * PI * static_cast<double>(Step) / CircleSteps;
+				OutVertices.Emplace(
+					Region.Center.X + FMath::Cos(Angle) * Region.Radius,
+					Region.Center.Y + FMath::Sin(Angle) * Region.Radius,
+					0.0);
+			}
+			break;
+		}
+		case ESightWeaveMemoryRegionShape::AxisAlignedBox:
+		case ESightWeaveMemoryRegionShape::RotatedBox:
+		{
+			const double Radians = Region.Shape == ESightWeaveMemoryRegionShape::RotatedBox
+				? FMath::DegreesToRadians(static_cast<double>(Region.RotationDegrees))
+				: 0.0;
+			const double Cosine = FMath::Cos(Radians);
+			const double Sine = FMath::Sin(Radians);
+			const FVector2D Corners[4] =
+			{
+				FVector2D(-Region.HalfExtents.X, -Region.HalfExtents.Y),
+				FVector2D(Region.HalfExtents.X, -Region.HalfExtents.Y),
+				FVector2D(Region.HalfExtents.X, Region.HalfExtents.Y),
+				FVector2D(-Region.HalfExtents.X, Region.HalfExtents.Y)
+			};
+			for (const FVector2D Corner : Corners)
+			{
+				const FVector2D Rotated(
+					Corner.X * Cosine - Corner.Y * Sine,
+					Corner.X * Sine + Corner.Y * Cosine);
+				OutVertices.Emplace(Region.Center + Rotated, 0.0);
+			}
+			break;
+		}
+		case ESightWeaveMemoryRegionShape::Polygon:
+			OutVertices.Reserve(Region.PolygonVertices.Num());
+			for (const FVector2D Vertex : Region.PolygonVertices)
+			{
+				OutVertices.Emplace(Vertex, 0.0);
+			}
+			break;
+		default:
+			return false;
+		}
+		return OutVertices.Num() >= 3;
+	}
+
+	bool PointInRegion(const FSightWeaveMemoryRegion& Region, const FVector WorldLocation)
+	{
+		if (!Region.bEnabled
+			|| WorldLocation.Z < Region.HeightRange.ZMin
+			|| WorldLocation.Z > Region.HeightRange.ZMax)
+		{
+			return false;
+		}
+		if (Region.Shape == ESightWeaveMemoryRegionShape::Circle)
+		{
+			return FVector2D::DistSquared(
+				Region.Center,
+				FVector2D(WorldLocation.X, WorldLocation.Y))
+				<= FMath::Square(static_cast<double>(Region.Radius));
+		}
+		TArray<FVector> Vertices;
+		if (!BuildRegionPolygon(Region, Vertices))
+		{
+			return false;
+		}
+		const FVector2D Point(WorldLocation.X, WorldLocation.Y);
+		bool bInside = false;
+		for (int32 Index = 0, Previous = Vertices.Num() - 1; Index < Vertices.Num(); Previous = Index++)
+		{
+			const FVector2D A(Vertices[Index].X, Vertices[Index].Y);
+			const FVector2D B(Vertices[Previous].X, Vertices[Previous].Y);
+			const bool bCrosses = (A.Y > Point.Y) != (B.Y > Point.Y);
+			if (bCrosses
+				&& Point.X < (B.X - A.X) * (Point.Y - A.Y) / (B.Y - A.Y) + A.X)
+			{
+				bInside = !bInside;
+			}
+		}
+		return bInside;
+	}
+
+	bool HeightRangesOverlap(
+		const FSightWeaveHeightRange& A,
+		const FSightWeaveHeightRange& B)
+	{
+		return A.ZMin <= B.ZMax && A.ZMax >= B.ZMin;
+	}
+
 	struct FProfileMasks
 	{
 		FSightWeaveRenderProfileIdentity Profile;
@@ -294,6 +397,50 @@ bool FSightWeaveMemoryTileKey::IsEquivalentTo(const FSightWeaveMemoryTileKey& Ot
 	return LogicalCoordinate == Other.LogicalCoordinate && Scope.IsEquivalentTo(Other.Scope);
 }
 
+bool FSightWeaveMemoryRegion::IsValid() const
+{
+	if (!Scope.IsValid() || !HeightRange.IsValid() || !IsFinite(Center)
+		|| !IsFinite(HalfExtents) || !FMath::IsFinite(Radius)
+		|| !FMath::IsFinite(RotationDegrees))
+	{
+		return false;
+	}
+	switch (Shape)
+	{
+	case ESightWeaveMemoryRegionShape::Circle:
+		return Radius > 0.0f;
+	case ESightWeaveMemoryRegionShape::AxisAlignedBox:
+	case ESightWeaveMemoryRegionShape::RotatedBox:
+		return HalfExtents.X > 0.0 && HalfExtents.Y > 0.0;
+	case ESightWeaveMemoryRegionShape::Polygon:
+		return PolygonVertices.Num() >= 3
+			&& !PolygonVertices.ContainsByPredicate(
+				[](const FVector2D& Vertex) { return !IsFinite(Vertex); });
+	default:
+		return false;
+	}
+}
+
+bool FSightWeaveMemoryRegion::IsEquivalentTo(const FSightWeaveMemoryRegion& Other) const
+{
+	return Scope.IsEquivalentTo(Other.Scope)
+		&& HeightRange.ZMin == Other.HeightRange.ZMin
+		&& HeightRange.ZMax == Other.HeightRange.ZMax
+		&& Shape == Other.Shape
+		&& Center == Other.Center
+		&& HalfExtents == Other.HalfExtents
+		&& Radius == Other.Radius
+		&& RotationDegrees == Other.RotationDegrees
+		&& PolygonVertices == Other.PolygonVertices
+		&& bEnabled == Other.bEnabled;
+}
+
+bool FSightWeaveMemoryModifierDescription::IsEquivalentTo(
+	const FSightWeaveMemoryModifierDescription& Other) const
+{
+	return Operation == Other.Operation && Region.IsEquivalentTo(Other.Region);
+}
+
 bool FSightWeavePackedMemoryTile::IsValid() const
 {
 	return Key.IsValid() && PackedBits.Num() == SightWeave::Memory::PackedBytesPerTile;
@@ -341,15 +488,19 @@ void FSightWeaveMemoryAuthority::Reset()
 	check(IsInGameThread());
 	Scope = FSightWeaveMemoryScopeKey();
 	Tiles.Reset();
+	Modifiers.Reset();
 	DirtyLogicalTiles.Reset();
 	RemovedTiles.Reset();
 	MaximumTiles = 0;
 	MemoryRevision = 0;
 	LastSnapshotRevision = 0;
 	NextPacketRevision = 1;
+	ModifierRevision = 0;
+	NextModifierId = 1;
 	LastFailure = ESightWeaveMemoryFailure::NotConfigured;
 	bConfigured = false;
 	bNeedsFullRebuild = false;
+	bModifierStateDirty = false;
 }
 
 int64 FSightWeaveMemoryAuthority::GetPackedAuthorityBytes() const
@@ -440,8 +591,10 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 		TArray<FProfileMasks> ProfileMasks;
 		TArray<uint8> Bypass;
 		TArray<uint8> Suppression;
+		TArray<uint8> WriteBlock;
 		Bypass.SetNumZeroed(SightWeave::Memory::PackedBytesPerTile);
 		Suppression.SetNumZeroed(SightWeave::Memory::PackedBytesPerTile);
+		WriteBlock.SetNumZeroed(SightWeave::Memory::PackedBytesPerTile);
 
 		for (const FSightWeaveVisionSnapshotEntry& Vision : Snapshot.VisionSources)
 		{
@@ -503,6 +656,23 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 			}
 			RasterizePolygon(Vertices, Scope, LogicalCoordinate, Suppression);
 		}
+		for (const FModifierRecord& Modifier : Modifiers)
+		{
+			const FSightWeaveMemoryRegion& Region = Modifier.Description.Region;
+			if (Modifier.Description.Operation
+					!= ESightWeaveMemoryModifierOperation::BlockMemoryWrites
+				|| !Region.bEnabled
+				|| !Region.Scope.IsEquivalentTo(Scope)
+				|| !HeightRangesOverlap(Region.HeightRange, Floor->HeightRange))
+			{
+				continue;
+			}
+			TArray<FVector> RegionVertices;
+			if (BuildRegionPolygon(Region, RegionVertices))
+			{
+				RasterizePolygon(RegionVertices, Scope, LogicalCoordinate, WriteBlock);
+			}
+		}
 
 		TArray<uint8> Effective;
 		Effective = Bypass;
@@ -516,6 +686,7 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 		for (int32 ByteIndex = 0; ByteIndex < SightWeave::Memory::PackedBytesPerTile; ++ByteIndex)
 		{
 			Effective[ByteIndex] &= ~Suppression[ByteIndex];
+			Effective[ByteIndex] &= ~WriteBlock[ByteIndex];
 		}
 		if (!Effective.ContainsByPredicate([](const uint8 Byte) { return Byte != 0; }))
 		{
@@ -568,6 +739,163 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 	return Result;
 }
 
+bool FSightWeaveMemoryAuthority::ClearMemory(const FSightWeaveMemoryRegion& Region)
+{
+	check(IsInGameThread());
+	if (!bConfigured || !Region.IsValid() || !Region.bEnabled
+		|| !Region.Scope.IsEquivalentTo(Scope))
+	{
+		LastFailure = ESightWeaveMemoryFailure::ScopeMismatch;
+		return false;
+	}
+	TArray<FVector> RegionVertices;
+	FBox2D Bounds(ForceInit);
+	if (!BuildRegionPolygon(Region, RegionVertices)
+		|| !BuildPolygonBounds(RegionVertices, Bounds))
+	{
+		LastFailure = ESightWeaveMemoryFailure::InvalidCoordinate;
+		return false;
+	}
+	bool bChanged = false;
+	for (int32 TileIndex = Tiles.Num() - 1; TileIndex >= 0; --TileIndex)
+	{
+		FSightWeavePackedMemoryTile& Tile = Tiles[TileIndex];
+		const FBox2D TileBounds = FSightWeaveSparseRenderPacketBuilder::LogicalTileToPhysicalBounds(
+			Tile.Key.LogicalCoordinate,
+			Scope.FloorOrigin,
+			Scope.PrecisionTier);
+		if (!Bounds.Intersect(TileBounds))
+		{
+			continue;
+		}
+		TArray<uint8> ClearMask;
+		ClearMask.SetNumZeroed(SightWeave::Memory::PackedBytesPerTile);
+		RasterizePolygon(RegionVertices, Scope, Tile.Key.LogicalCoordinate, ClearMask);
+		bool bTileChanged = false;
+		for (int32 ByteIndex = 0; ByteIndex < SightWeave::Memory::PackedBytesPerTile; ++ByteIndex)
+		{
+			const uint8 Prior = Tile.PackedBits[ByteIndex];
+			Tile.PackedBits[ByteIndex] &= ~ClearMask[ByteIndex];
+			bTileChanged |= Prior != Tile.PackedBits[ByteIndex];
+		}
+		if (!bTileChanged)
+		{
+			continue;
+		}
+		bChanged = true;
+		if (Tile.IsEmpty())
+		{
+			RemovedTiles.Add(Tile.Key);
+			DirtyLogicalTiles.Remove(Tile.Key.LogicalCoordinate);
+			Tiles.RemoveAt(TileIndex, 1, EAllowShrinking::No);
+		}
+		else
+		{
+			DirtyLogicalTiles.AddUnique(Tile.Key.LogicalCoordinate);
+		}
+	}
+	if (bChanged)
+	{
+		++MemoryRevision;
+	}
+	LastFailure = ESightWeaveMemoryFailure::None;
+	return true;
+}
+
+FSightWeaveMemoryModifierHandle FSightWeaveMemoryAuthority::RegisterModifier(
+	const FSightWeaveMemoryModifierDescription& Description)
+{
+	check(IsInGameThread());
+	if (!bConfigured || !Description.IsValid()
+		|| !Description.Region.Scope.IsEquivalentTo(Scope))
+	{
+		LastFailure = ESightWeaveMemoryFailure::ScopeMismatch;
+		return FSightWeaveMemoryModifierHandle();
+	}
+	FModifierRecord& Added = Modifiers.AddDefaulted_GetRef();
+	Added.Handle = FSightWeaveMemoryModifierHandle(NextModifierId++);
+	Added.Description = Description;
+	Modifiers.Sort([](const FModifierRecord& A, const FModifierRecord& B)
+	{
+		return A.Handle.GetValue() < B.Handle.GetValue();
+	});
+	++ModifierRevision;
+	bModifierStateDirty = true;
+	LastFailure = ESightWeaveMemoryFailure::None;
+	return Added.Handle;
+}
+
+bool FSightWeaveMemoryAuthority::UpdateModifier(
+	const FSightWeaveMemoryModifierHandle Handle,
+	const FSightWeaveMemoryModifierDescription& Description)
+{
+	check(IsInGameThread());
+	if (!Handle.IsValid() || !Description.IsValid()
+		|| !Description.Region.Scope.IsEquivalentTo(Scope))
+	{
+		return false;
+	}
+	FModifierRecord* Existing = Modifiers.FindByPredicate(
+		[Handle](const FModifierRecord& Candidate) { return Candidate.Handle == Handle; });
+	if (!Existing)
+	{
+		return false;
+	}
+	if (Existing->Description.IsEquivalentTo(Description))
+	{
+		return true;
+	}
+	Existing->Description = Description;
+	++ModifierRevision;
+	bModifierStateDirty = true;
+	return true;
+}
+
+bool FSightWeaveMemoryAuthority::UnregisterModifier(
+	const FSightWeaveMemoryModifierHandle Handle)
+{
+	check(IsInGameThread());
+	const int32 Removed = Modifiers.RemoveAll(
+		[Handle](const FModifierRecord& Candidate) { return Candidate.Handle == Handle; });
+	if (Removed == 0)
+	{
+		return false;
+	}
+	++ModifierRevision;
+	bModifierStateDirty = true;
+	return true;
+}
+
+bool FSightWeaveMemoryAuthority::IsModifierHandleValid(
+	const FSightWeaveMemoryModifierHandle Handle) const
+{
+	return Handle.IsValid()
+		&& Modifiers.ContainsByPredicate(
+			[Handle](const FModifierRecord& Candidate) { return Candidate.Handle == Handle; });
+}
+
+bool FSightWeaveMemoryAuthority::IsMemoryPresentationSuppressed(
+	const FVector WorldLocation) const
+{
+	if (!bConfigured)
+	{
+		return true;
+	}
+	for (const FModifierRecord& Modifier : Modifiers)
+	{
+		if ((Modifier.Description.Operation
+				== ESightWeaveMemoryModifierOperation::BlockMemoryWrites
+				|| Modifier.Description.Operation
+					== ESightWeaveMemoryModifierOperation::SuppressMemoryPresentation)
+			&& Modifier.Description.Region.Scope.IsEquivalentTo(Scope)
+			&& PointInRegion(Modifier.Description.Region, WorldLocation))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 bool FSightWeaveMemoryAuthority::QueryHardMemory(const FVector WorldLocation) const
 {
 	return QueryHardMemory2D(FVector2D(WorldLocation.X, WorldLocation.Y));
@@ -596,8 +924,10 @@ FSightWeaveMemoryAuthority::PublishPacket(const bool bForceFullRebuild)
 	Packet->MemoryRevision = MemoryRevision;
 	Packet->SnapshotRevision = LastSnapshotRevision;
 	Packet->PacketRevision = NextPacketRevision++;
+	Packet->ModifierRevision = ModifierRevision;
 	Packet->PackedAuthorityBytes = GetPackedAuthorityBytes();
 	Packet->bFullRebuild = bForceFullRebuild || bNeedsFullRebuild;
+	Packet->bModifierStateChanged = bModifierStateDirty;
 	if (!bConfigured || !Scope.IsValid())
 	{
 		Packet->Failure = ESightWeaveMemoryFailure::NotConfigured;
@@ -618,11 +948,23 @@ FSightWeaveMemoryAuthority::PublishPacket(const bool bForceFullRebuild)
 		}
 	}
 	Packet->RemovedTiles = RemovedTiles;
+	for (const FModifierRecord& Modifier : Modifiers)
+	{
+		if (Modifier.Description.Region.bEnabled
+			&& (Modifier.Description.Operation
+					== ESightWeaveMemoryModifierOperation::BlockMemoryWrites
+				|| Modifier.Description.Operation
+					== ESightWeaveMemoryModifierOperation::SuppressMemoryPresentation))
+		{
+			Packet->PresentationSuppressions.Add(Modifier.Description);
+		}
+	}
 	Packet->bValid = true;
 	Packet->Failure = ESightWeaveMemoryFailure::None;
 	DirtyLogicalTiles.Reset();
 	RemovedTiles.Reset();
 	bNeedsFullRebuild = false;
+	bModifierStateDirty = false;
 	return Packet;
 }
 

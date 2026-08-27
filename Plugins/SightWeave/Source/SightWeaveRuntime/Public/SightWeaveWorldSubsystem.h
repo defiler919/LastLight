@@ -312,6 +312,14 @@ public:
 	void DisableExplorationMemory();
 	bool IsExplorationMemoryConfigured() const { return MemoryAuthority.IsConfigured(); }
 	bool QueryHardMemoryAtLocation(FVector WorldLocation) const;
+	bool ClearExplorationMemory(const FSightWeaveMemoryRegion& Region);
+	FSightWeaveMemoryModifierHandle RegisterMemoryModifier(
+		const FSightWeaveMemoryModifierDescription& Description);
+	bool UpdateMemoryModifier(
+		FSightWeaveMemoryModifierHandle Handle,
+		const FSightWeaveMemoryModifierDescription& Description);
+	bool UnregisterMemoryModifier(FSightWeaveMemoryModifierHandle Handle);
+	bool IsMemoryPresentationSuppressedAtLocation(FVector WorldLocation) const;
 	const FSightWeaveMemoryUpdateDiagnostics& GetLastMemoryUpdateDiagnostics() const
 	{
 		return LastMemoryUpdateDiagnostics;
@@ -407,6 +415,7 @@ public:
 	}
 
 private:
+	void PublishMemoryAuthorityPacket(bool bForceFullRebuild = false);
 	void AdvanceRevision();
 	void ResetState();
 	FSightWeaveVisibilityQueryResult MakeQueryResult(

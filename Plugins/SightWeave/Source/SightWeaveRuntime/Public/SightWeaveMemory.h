@@ -25,6 +25,36 @@ enum class ESightWeaveMemoryFailure : uint8
 	CapacityExceeded
 };
 
+struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryModifierHandle
+{
+	FSightWeaveMemoryModifierHandle() = default;
+	explicit FSightWeaveMemoryModifierHandle(const int64 InValue) : Value(InValue) {}
+
+	bool IsValid() const { return Value > 0; }
+	int64 GetValue() const { return Value; }
+	friend bool operator==(const FSightWeaveMemoryModifierHandle& A, const FSightWeaveMemoryModifierHandle& B)
+	{
+		return A.Value == B.Value;
+	}
+
+private:
+	int64 Value = 0;
+};
+
+enum class ESightWeaveMemoryRegionShape : uint8
+{
+	Circle,
+	AxisAlignedBox,
+	RotatedBox,
+	Polygon
+};
+
+enum class ESightWeaveMemoryModifierOperation : uint8
+{
+	BlockMemoryWrites,
+	SuppressMemoryPresentation
+};
+
 struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryScopeKey
 {
 	FSightWeaveRenderWorldIdentity WorldIdentity;
@@ -46,6 +76,32 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryTileKey
 
 	bool IsValid() const { return Scope.IsValid(); }
 	bool IsEquivalentTo(const FSightWeaveMemoryTileKey& Other) const;
+};
+
+struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryRegion
+{
+	FSightWeaveMemoryScopeKey Scope;
+	FSightWeaveHeightRange HeightRange;
+	ESightWeaveMemoryRegionShape Shape = ESightWeaveMemoryRegionShape::Circle;
+	FVector2D Center = FVector2D::ZeroVector;
+	FVector2D HalfExtents = FVector2D(100.0, 100.0);
+	float Radius = 100.0f;
+	float RotationDegrees = 0.0f;
+	TArray<FVector2D> PolygonVertices;
+	bool bEnabled = true;
+
+	bool IsValid() const;
+	bool IsEquivalentTo(const FSightWeaveMemoryRegion& Other) const;
+};
+
+struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryModifierDescription
+{
+	ESightWeaveMemoryModifierOperation Operation =
+		ESightWeaveMemoryModifierOperation::BlockMemoryWrites;
+	FSightWeaveMemoryRegion Region;
+
+	bool IsValid() const { return Region.IsValid(); }
+	bool IsEquivalentTo(const FSightWeaveMemoryModifierDescription& Other) const;
 };
 
 struct SIGHTWEAVERUNTIME_API FSightWeavePackedMemoryTile
@@ -88,11 +144,20 @@ public:
 	uint64 GetMemoryRevision() const { return MemoryRevision; }
 	uint64 GetSnapshotRevision() const { return SnapshotRevision; }
 	uint64 GetPacketRevision() const { return PacketRevision; }
+	uint64 GetModifierRevision() const { return ModifierRevision; }
 	bool IsFullRebuild() const { return bFullRebuild; }
 	TConstArrayView<FSightWeavePackedMemoryTile> GetDirtyTiles() const { return DirtyTiles; }
 	TConstArrayView<FSightWeaveMemoryTileKey> GetRemovedTiles() const { return RemovedTiles; }
+	TConstArrayView<FSightWeaveMemoryModifierDescription> GetPresentationSuppressions() const
+	{
+		return PresentationSuppressions;
+	}
 	int64 GetPackedAuthorityBytes() const { return PackedAuthorityBytes; }
-	bool HasMirrorWork() const { return bFullRebuild || !DirtyTiles.IsEmpty() || !RemovedTiles.IsEmpty(); }
+	bool HasMirrorWork() const
+	{
+		return bFullRebuild || bModifierStateChanged
+			|| !DirtyTiles.IsEmpty() || !RemovedTiles.IsEmpty();
+	}
 
 private:
 	friend class FSightWeaveMemoryAuthority;
@@ -103,10 +168,13 @@ private:
 	uint64 MemoryRevision = 0;
 	uint64 SnapshotRevision = 0;
 	uint64 PacketRevision = 0;
+	uint64 ModifierRevision = 0;
 	int64 PackedAuthorityBytes = 0;
 	bool bFullRebuild = false;
+	bool bModifierStateChanged = false;
 	TArray<FSightWeavePackedMemoryTile> DirtyTiles;
 	TArray<FSightWeaveMemoryTileKey> RemovedTiles;
+	TArray<FSightWeaveMemoryModifierDescription> PresentationSuppressions;
 };
 
 /**
@@ -123,11 +191,22 @@ public:
 	const FSightWeaveMemoryScopeKey& GetScope() const { return Scope; }
 	uint64 GetMemoryRevision() const { return MemoryRevision; }
 	uint64 GetLastSnapshotRevision() const { return LastSnapshotRevision; }
+	uint64 GetModifierRevision() const { return ModifierRevision; }
 	int32 GetAllocatedTileCount() const { return Tiles.Num(); }
 	int64 GetPackedAuthorityBytes() const;
 	ESightWeaveMemoryFailure GetLastFailure() const { return LastFailure; }
 
 	FSightWeaveMemoryUpdateDiagnostics WriteEffectiveLive(const FSightWeaveFrameSnapshot& Snapshot);
+	bool ClearMemory(const FSightWeaveMemoryRegion& Region);
+	FSightWeaveMemoryModifierHandle RegisterModifier(
+		const FSightWeaveMemoryModifierDescription& Description);
+	bool UpdateModifier(
+		FSightWeaveMemoryModifierHandle Handle,
+		const FSightWeaveMemoryModifierDescription& Description);
+	bool UnregisterModifier(FSightWeaveMemoryModifierHandle Handle);
+	bool IsModifierHandleValid(FSightWeaveMemoryModifierHandle Handle) const;
+	bool IsMemoryPresentationSuppressed(FVector WorldLocation) const;
+	int32 GetModifierCount() const { return Modifiers.Num(); }
 	bool QueryHardMemory(FVector WorldLocation) const;
 	bool QueryHardMemory2D(FVector2D WorldLocation) const;
 	TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> PublishPacket(bool bForceFullRebuild = false);
@@ -151,14 +230,23 @@ private:
 	const FSightWeavePackedMemoryTile* FindTile(FIntPoint LogicalCoordinate) const;
 
 	FSightWeaveMemoryScopeKey Scope;
+	struct FModifierRecord
+	{
+		FSightWeaveMemoryModifierHandle Handle;
+		FSightWeaveMemoryModifierDescription Description;
+	};
 	TArray<FSightWeavePackedMemoryTile> Tiles;
+	TArray<FModifierRecord> Modifiers;
 	TArray<FIntPoint> DirtyLogicalTiles;
 	TArray<FSightWeaveMemoryTileKey> RemovedTiles;
 	int32 MaximumTiles = 0;
 	uint64 MemoryRevision = 0;
 	uint64 LastSnapshotRevision = 0;
 	uint64 NextPacketRevision = 1;
+	uint64 ModifierRevision = 0;
+	int64 NextModifierId = 1;
 	ESightWeaveMemoryFailure LastFailure = ESightWeaveMemoryFailure::NotConfigured;
 	bool bConfigured = false;
 	bool bNeedsFullRebuild = false;
+	bool bModifierStateDirty = false;
 };

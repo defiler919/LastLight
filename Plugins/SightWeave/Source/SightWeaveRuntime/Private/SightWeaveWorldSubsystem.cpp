@@ -2243,6 +2243,71 @@ bool USightWeaveWorldSubsystem::QueryHardMemoryAtLocation(const FVector WorldLoc
 	return MemoryAuthority.QueryHardMemory(WorldLocation);
 }
 
+bool USightWeaveWorldSubsystem::ClearExplorationMemory(
+	const FSightWeaveMemoryRegion& Region)
+{
+	if (!MemoryAuthority.ClearMemory(Region))
+	{
+		return false;
+	}
+	PublishMemoryAuthorityPacket();
+	return true;
+}
+
+FSightWeaveMemoryModifierHandle USightWeaveWorldSubsystem::RegisterMemoryModifier(
+	const FSightWeaveMemoryModifierDescription& Description)
+{
+	const FSightWeaveMemoryModifierHandle Handle =
+		MemoryAuthority.RegisterModifier(Description);
+	if (Handle.IsValid())
+	{
+		PublishMemoryAuthorityPacket();
+	}
+	return Handle;
+}
+
+bool USightWeaveWorldSubsystem::UpdateMemoryModifier(
+	const FSightWeaveMemoryModifierHandle Handle,
+	const FSightWeaveMemoryModifierDescription& Description)
+{
+	if (!MemoryAuthority.UpdateModifier(Handle, Description))
+	{
+		return false;
+	}
+	PublishMemoryAuthorityPacket();
+	return true;
+}
+
+bool USightWeaveWorldSubsystem::UnregisterMemoryModifier(
+	const FSightWeaveMemoryModifierHandle Handle)
+{
+	if (!MemoryAuthority.UnregisterModifier(Handle))
+	{
+		return false;
+	}
+	PublishMemoryAuthorityPacket();
+	return true;
+}
+
+bool USightWeaveWorldSubsystem::IsMemoryPresentationSuppressedAtLocation(
+	const FVector WorldLocation) const
+{
+	return MemoryAuthority.IsMemoryPresentationSuppressed(WorldLocation);
+}
+
+void USightWeaveWorldSubsystem::PublishMemoryAuthorityPacket(const bool bForceFullRebuild)
+{
+	if (!MemoryAuthority.IsConfigured())
+	{
+		PublishedMemoryPacket.Reset();
+	}
+	else
+	{
+		PublishedMemoryPacket = MemoryAuthority.PublishPacket(bForceFullRebuild);
+	}
+	MemoryPacketPublishedDelegate.Broadcast(PublishedMemoryPacket);
+}
+
 FSightWeavePreparedEventIndexStats USightWeaveWorldSubsystem::GetPreparedEventIndexStats() const
 {
 	return PreparedEventIndex.IsValid()

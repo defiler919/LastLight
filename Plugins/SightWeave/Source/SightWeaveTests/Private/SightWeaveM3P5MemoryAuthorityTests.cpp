@@ -115,6 +115,31 @@ namespace SightWeaveM3P5MemoryAuthorityTests
 				Scope)
 			&& Authority.Configure(Scope, 256);
 	}
+
+	FSightWeaveMemoryRegion MakeRegion(
+		const FSightWeaveMemoryAuthority& Authority,
+		const ESightWeaveMemoryRegionShape Shape,
+		const FVector2D Center,
+		const FVector2D HalfExtents = FVector2D(100.0, 100.0))
+	{
+		FSightWeaveMemoryRegion Region;
+		Region.Scope = Authority.GetScope();
+		Region.HeightRange = { 0.0f, 300.0f };
+		Region.Shape = Shape;
+		Region.Center = Center;
+		Region.HalfExtents = HalfExtents;
+		Region.Radius = static_cast<float>(HalfExtents.X);
+		if (Shape == ESightWeaveMemoryRegionShape::Polygon)
+		{
+			Region.PolygonVertices = {
+				Center + FVector2D(-HalfExtents.X, -HalfExtents.Y),
+				Center + FVector2D(HalfExtents.X, -HalfExtents.Y),
+				Center + FVector2D(HalfExtents.X, HalfExtents.Y),
+				Center + FVector2D(-HalfExtents.X, HalfExtents.Y)
+			};
+		}
+		return Region;
+	}
 }
 
 using namespace SightWeaveM3P5MemoryAuthorityTests;
@@ -271,6 +296,200 @@ bool FSightWeaveM3P5IsolationLifecycleTest::RunTest(const FString& Parameters)
 	TestTrue(
 		TEXT("Source removal does not erase monotonic memory"),
 		OldWorld.QueryHardMemory2D(FVector2D(-1000000.0, -1000000.0)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM3P5ClearAndReexploreTest,
+	"SightWeave.M3P5.Memory.Modifier.ClearAndReexplore",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSightWeaveM3P5ClearAndReexploreTest::RunTest(const FString& Parameters)
+{
+	FSightWeaveFrameSnapshot Snapshot =
+		MakeSnapshot(1, true, BoxVertices(-1000300.0, -1000300.0, -999700.0, -999700.0));
+	FSightWeaveMemoryAuthority Authority;
+	TestTrue(TEXT("Configures"), Configure(Authority, Snapshot));
+	TestTrue(TEXT("Explores"), Authority.WriteEffectiveLive(Snapshot).Succeeded());
+	const FVector2D Center(-1000000.0, -1000000.0);
+	TestTrue(TEXT("Center starts remembered"), Authority.QueryHardMemory2D(Center));
+	const uint64 BeforeClearRevision = Authority.GetMemoryRevision();
+	TestTrue(
+		TEXT("Clear mutation succeeds"),
+		Authority.ClearMemory(MakeRegion(
+			Authority,
+			ESightWeaveMemoryRegionShape::Circle,
+			Center,
+			FVector2D(150.0, 150.0))));
+	TestFalse(TEXT("Clear returns the center to Unknown"), Authority.QueryHardMemory2D(Center));
+	TestEqual(TEXT("Clear advances authority once"), Authority.GetMemoryRevision(), BeforeClearRevision + 1);
+
+	Snapshot.Revision = FSightWeaveRevision(2);
+	TestTrue(TEXT("Later snapshot re-explores"), Authority.WriteEffectiveLive(Snapshot).Succeeded());
+	TestTrue(TEXT("Cleared center can be remembered again"), Authority.QueryHardMemory2D(Center));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM3P5BlockAndSuppressTest,
+	"SightWeave.M3P5.Memory.Modifier.BlockSuppressOverlap",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSightWeaveM3P5BlockAndSuppressTest::RunTest(const FString& Parameters)
+{
+	FSightWeaveFrameSnapshot Snapshot =
+		MakeSnapshot(1, true, BoxVertices(-1000500.0, -1000500.0, -999800.0, -999800.0));
+	FSightWeaveMemoryAuthority Authority;
+	TestTrue(TEXT("Configures"), Configure(Authority, Snapshot));
+	TestTrue(TEXT("Initial exploration"), Authority.WriteEffectiveLive(Snapshot).Succeeded());
+	const FVector ExistingPoint(-1000200.0, -1000200.0, 100.0);
+	const FVector NewBlockedPoint(-999500.0, -999500.0, 100.0);
+	TestTrue(TEXT("Existing point remembered"), Authority.QueryHardMemory(ExistingPoint));
+
+	FSightWeaveMemoryModifierDescription Block;
+	Block.Operation = ESightWeaveMemoryModifierOperation::BlockMemoryWrites;
+	Block.Region = MakeRegion(
+		Authority,
+		ESightWeaveMemoryRegionShape::AxisAlignedBox,
+		FVector2D(-999500.0, -999500.0),
+		FVector2D(180.0, 180.0));
+	const FSightWeaveMemoryModifierHandle BlockHandle = Authority.RegisterModifier(Block);
+	TestTrue(TEXT("Block registers"), BlockHandle.IsValid());
+	TestTrue(TEXT("Block suppresses remembered presentation"), Authority.IsMemoryPresentationSuppressed(NewBlockedPoint));
+	TestTrue(TEXT("Block does not clear old authority"), Authority.QueryHardMemory(ExistingPoint));
+
+	Snapshot.VisionSources[0].Polygon =
+		MakePolygon(
+			Snapshot.VisionSources[0].Handle,
+			BoxVertices(-1000500.0, -1000500.0, -999300.0, -999300.0));
+	Snapshot.Revision = FSightWeaveRevision(2);
+	TestTrue(TEXT("Blocked update succeeds"), Authority.WriteEffectiveLive(Snapshot).Succeeded());
+	TestFalse(TEXT("Block prevents new HardMemory"), Authority.QueryHardMemory(NewBlockedPoint));
+
+	FSightWeaveMemoryModifierDescription Suppress;
+	Suppress.Operation = ESightWeaveMemoryModifierOperation::SuppressMemoryPresentation;
+	Suppress.Region = MakeRegion(
+		Authority,
+		ESightWeaveMemoryRegionShape::Circle,
+		FVector2D(ExistingPoint.X, ExistingPoint.Y),
+		FVector2D(100.0, 100.0));
+	const uint64 BeforeSuppressRevision = Authority.GetMemoryRevision();
+	const FSightWeaveMemoryModifierHandle SuppressHandle = Authority.RegisterModifier(Suppress);
+	TestTrue(TEXT("Suppress registers"), SuppressHandle.IsValid());
+	TestTrue(TEXT("Suppress hides presentation"), Authority.IsMemoryPresentationSuppressed(ExistingPoint));
+	TestTrue(TEXT("Suppress preserves authority"), Authority.QueryHardMemory(ExistingPoint));
+	TestEqual(TEXT("Suppress does not revise HardMemory"), Authority.GetMemoryRevision(), BeforeSuppressRevision);
+
+	const TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> ModifierPacket =
+		Authority.PublishPacket();
+	TestTrue(TEXT("Modifier state schedules derived presentation work"), ModifierPacket->HasMirrorWork());
+	TestEqual(TEXT("Block and suppress are both published"), ModifierPacket->GetPresentationSuppressions().Num(), 2);
+
+	TestTrue(TEXT("Suppress unregisters"), Authority.UnregisterModifier(SuppressHandle));
+	TestFalse(TEXT("Suppress teardown restores presentation"), Authority.IsMemoryPresentationSuppressed(ExistingPoint));
+	TestTrue(TEXT("Block unregisters"), Authority.UnregisterModifier(BlockHandle));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM3P5ModifierShapesTest,
+	"SightWeave.M3P5.Memory.Modifier.ShapesMoveDestroyScopeHeight",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSightWeaveM3P5ModifierShapesTest::RunTest(const FString& Parameters)
+{
+	const FSightWeaveFrameSnapshot Snapshot =
+		MakeSnapshot(1, true, BoxVertices(-1001000.0, -1001000.0, -998000.0, -998000.0));
+	FSightWeaveMemoryAuthority Authority;
+	TestTrue(TEXT("Configures"), Configure(Authority, Snapshot));
+
+	const ESightWeaveMemoryRegionShape Shapes[] =
+	{
+		ESightWeaveMemoryRegionShape::Circle,
+		ESightWeaveMemoryRegionShape::AxisAlignedBox,
+		ESightWeaveMemoryRegionShape::RotatedBox,
+		ESightWeaveMemoryRegionShape::Polygon
+	};
+	for (int32 ShapeIndex = 0; ShapeIndex < UE_ARRAY_COUNT(Shapes); ++ShapeIndex)
+	{
+		const FVector2D Center(-1000800.0 + ShapeIndex * 300.0, -1000800.0);
+		FSightWeaveMemoryModifierDescription Description;
+		Description.Operation = ESightWeaveMemoryModifierOperation::SuppressMemoryPresentation;
+		Description.Region = MakeRegion(Authority, Shapes[ShapeIndex], Center);
+		Description.Region.RotationDegrees = Shapes[ShapeIndex]
+				== ESightWeaveMemoryRegionShape::RotatedBox
+			? 45.0f
+			: 0.0f;
+		const FSightWeaveMemoryModifierHandle Handle = Authority.RegisterModifier(Description);
+		TestTrue(*FString::Printf(TEXT("Shape %d registers"), ShapeIndex), Handle.IsValid());
+		TestTrue(
+			*FString::Printf(TEXT("Shape %d contains center"), ShapeIndex),
+			Authority.IsMemoryPresentationSuppressed(FVector(Center, 100.0)));
+	}
+
+	FSightWeaveMemoryModifierDescription Moving;
+	Moving.Operation = ESightWeaveMemoryModifierOperation::SuppressMemoryPresentation;
+	Moving.Region = MakeRegion(
+		Authority,
+		ESightWeaveMemoryRegionShape::RotatedBox,
+		FVector2D(-999000.0, -999000.0));
+	const FSightWeaveMemoryModifierHandle MovingHandle = Authority.RegisterModifier(Moving);
+	const FVector OldPoint(-999000.0, -999000.0, 100.0);
+	const FVector NewPoint(-998700.0, -999000.0, 100.0);
+	TestTrue(TEXT("Moving modifier starts at old point"), Authority.IsMemoryPresentationSuppressed(OldPoint));
+	Moving.Region.Center = FVector2D(NewPoint.X, NewPoint.Y);
+	TestTrue(TEXT("Moving modifier updates"), Authority.UpdateModifier(MovingHandle, Moving));
+	TestFalse(TEXT("Old bounds are released"), Authority.IsMemoryPresentationSuppressed(OldPoint));
+	TestTrue(TEXT("New bounds are active"), Authority.IsMemoryPresentationSuppressed(NewPoint));
+	TestTrue(TEXT("Destroy succeeds"), Authority.UnregisterModifier(MovingHandle));
+	TestFalse(TEXT("Destroy leaves no stale state"), Authority.IsMemoryPresentationSuppressed(NewPoint));
+
+	FSightWeaveMemoryModifierDescription HeightFiltered;
+	HeightFiltered.Operation = ESightWeaveMemoryModifierOperation::SuppressMemoryPresentation;
+	HeightFiltered.Region = MakeRegion(
+		Authority,
+		ESightWeaveMemoryRegionShape::Circle,
+		FVector2D(-998300.0, -998300.0));
+	HeightFiltered.Region.HeightRange = { 0.0f, 50.0f };
+	TestTrue(TEXT("Height modifier registers"), Authority.RegisterModifier(HeightFiltered).IsValid());
+	TestFalse(
+		TEXT("Height mismatch does not suppress"),
+		Authority.IsMemoryPresentationSuppressed(FVector(-998300.0, -998300.0, 100.0)));
+
+	FSightWeaveMemoryModifierDescription WrongScope = HeightFiltered;
+	WrongScope.Region.Scope.KnowledgeOwnerId =
+		FSightWeaveKnowledgeOwnerId(FName(TEXT("OtherOwner")));
+	TestFalse(TEXT("Scope mismatch is rejected"), Authority.RegisterModifier(WrongScope).IsValid());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM3P5ClearBlockPriorityTest,
+	"SightWeave.M3P5.Memory.Modifier.ClearBlockPriority",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSightWeaveM3P5ClearBlockPriorityTest::RunTest(const FString& Parameters)
+{
+	FSightWeaveFrameSnapshot Snapshot =
+		MakeSnapshot(1, true, BoxVertices(-1000300.0, -1000300.0, -999700.0, -999700.0));
+	FSightWeaveMemoryAuthority Authority;
+	TestTrue(TEXT("Configures"), Configure(Authority, Snapshot));
+	TestTrue(TEXT("Initial exploration"), Authority.WriteEffectiveLive(Snapshot).Succeeded());
+	const FVector Center(-1000000.0, -1000000.0, 100.0);
+
+	const FSightWeaveMemoryRegion Region = MakeRegion(
+		Authority,
+		ESightWeaveMemoryRegionShape::AxisAlignedBox,
+		FVector2D(Center.X, Center.Y),
+		FVector2D(150.0, 150.0));
+	FSightWeaveMemoryModifierDescription Block;
+	Block.Operation = ESightWeaveMemoryModifierOperation::BlockMemoryWrites;
+	Block.Region = Region;
+	TestTrue(TEXT("Block registers"), Authority.RegisterModifier(Block).IsValid());
+	TestTrue(TEXT("Clear applies before blocked reacquisition"), Authority.ClearMemory(Region));
+	Snapshot.Revision = FSightWeaveRevision(2);
+	TestTrue(TEXT("Overlapped update succeeds"), Authority.WriteEffectiveLive(Snapshot).Succeeded());
+	TestFalse(TEXT("Clear plus block remains Unknown"), Authority.QueryHardMemory(Center));
 	return true;
 }
 

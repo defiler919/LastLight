@@ -1,54 +1,60 @@
 # SightWeave M3.5 static-environment memory handoff
 
-Status: **IN_PROGRESS**
+Status: **PARTIAL**
 
 Branch: `codex/m3p5-sightweave-static-environment-memory`
 
 Frozen M3.4 baseline: `22f55b1e744cea37ad5d3c7beb618be0509fbf99`
 
+Final implementation checkpoint before documentation closure: `b6102fa`
+
 Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
 
 Validation machine: NVIDIA GeForce RTX 4060, driver 610.88, 8188 MiB
 
-## Objective
+## Outcome
 
-M3.5 adds world-scoped exploration memory for immutable static environment above the M3.4 hard-live and inward-feather presentation path. The final ordering is `HardLive -> HardMemory plus StaticEnvironmentEligibility -> strict-black Unknown`.
+M3.5 now provides world-scoped exploration memory for explicitly eligible immutable static environment. The CPU-packed authority is the only HardMemory truth; the R8 GPU memory/static mirrors are derived presentation resources. Final ordering is exact HardLive Scene Color, remembered eligible neutral static environment, then strict-black Unknown. Clear, write-block, presentation-suppress, scope, generation, teardown, fail-black, and Width=0/50 compatibility behavior are covered in native automation.
 
-CPU packed memory is the only HardMemory authority. GPU resources are derived presentation mirrors. Camera state, viewport state, Scene Color, GBuffer appearance, lighting, shadows, VFX, dynamic subjects, and visual feathering are never memory-write authority.
+All implementation, automated performance/memory work, M3.1-M3.5 regressions, M3.5 NullRHI and D3D12/SM6 gates, DARKWELL 24, automated Lab capture, BuildPlugin, clean-host Editor/Game Development/Game Shipping, Shipping isolation, and repository closure work are complete. The single remaining gate is user-operated interactive PIE. Automated PIE and agent screenshot inspection passed, but are not claimed as the user's manual check; therefore status is `PARTIAL`.
 
-## Starting audit
+## Exact headline evidence
 
-The milestone starts from the exact M3.4 repair baseline. Local HEAD, upstream, and remote branch all resolved to `22f55b1e744cea37ad5d3c7beb618be0509fbf99`. Git LFS status was empty and `git lfs fsck` passed. `Config/DefaultGame.ini` had no local override. M3.4 retained the 50 cm default `VisualFeatherWidthCentimeters` and the shader continued to point-sample HardLive before presentation feathering.
+- M3.5: NullRHI 14/14; D3D12/SM6 24/24.
+- Full SightWeave: NullRHI 164/164. Full D3D12 performed 248: 246 clean successes, one success with an engine RHI warning, and one historical M2P2 wall-time failure.
+- The retained M2P2 full-suite median was 1,015.197 us against `< 1,000 us`; the one isolated confirmation passed at 985.600 us median. No gate or sample was changed.
+- DARKWELL: 24/24 NullRHI.
+- Precision: 4/4; Coarse 25 cm/texel selected. Resident/dirty scale: 3/3. Frozen M3.4 Width=50 live matrix: 9/9.
+- Lab authority record: `remembered:1 live:1 clear:0 block:0 suppressed:1/1 unknown:0`.
+- Final BuildPlugin: Editor 94, Game Development 30, Game Shipping 30 actions; all succeeded.
+- Clean host: initial 94/30/30 clean actions succeeded; final test-only sync rebuilt Editor 6 actions, Game Development/Shipping remained up-to-date and succeeded.
+- Repo/package/clean-host `Source`+`Shaders`+`Content`: 115 files each, zero missing/mismatch/extra.
+- Shipping: 30 objects, only Runtime/Render modules, zero forbidden string/import/COFF symbol hits. Five generic `SceneCapture` metadata occurrences are engine types/fields, not SightWeave code or authority.
+- Severe D3D12 log scan: zero Shader/RDG/D3D12/RHI fatal, GPU crash, assertion, or ensure matches.
 
-The only working-tree difference was the approved local `Darkwell.uproject` EngineAssociation change from `"5.8"` to `{1C0F19FD-493D-6BCD-A0CC-9FAB451BA183}`. It is excluded from every M3.5 commit.
+Exact automation paths, timings, memory bytes, warning classification, BuildPlugin/clean-host locations, all commits, and Shipping scans are in `Docs/SIGHTWEAVE_M3P5_FINAL_VALIDATION.md`. Canonical performance tables are in `Docs/SIGHTWEAVE_M3P5_PERFORMANCE.md`.
 
-## Scope guardrails
+## Preserved issues
 
-- Do not modify `/Game/Maps/L_Prototype` or integrate DARKWELL gameplay.
-- Do not implement Last-Seen, subject memory, save persistence, networking, SceneCapture, GPU authority, or camera-derived writes.
-- Do not let uncertain or unsupported environment content appear in memory; it fails black.
-- Preserve the M3.4 HardLive point gate and 32 MiB live-presentation budget.
-- Keep total SightWeave runtime memory at or below 64 MiB.
-- Modify the Lab map only through Unreal Editor asset APIs and keep it under Git LFS.
+- User-operated interactive PIE remains pending.
+- The complete D3D12 run's M2P2 4096-source sample failed at 1,015.197 us median; isolated confirmation passed at 985.600 us.
+- One passed D3D12 test carried the engine 258 GB/256 GB virtual-resource reservation warning.
+- D3D12 startup retained 13 pre-test `Condition failed` lines plus navigation/scalability warnings; focused reports and the M3.5 24-test report have zero test warnings/errors.
+- BuildPlugin/clean-host compilation retained UE engine-header C4996 warnings and the VS 14.51 non-preferred-toolchain warning.
+- The first clean-host Lab attempt expected a host-dependent Recast warning exactly once and failed when it occurred zero times; that brittle expectation was repaired and the retry passed 1/1. The original report remains preserved.
 
-## Contract checkpoint
+## Scope and working tree
 
-`Docs/SIGHTWEAVE_M3P5_MEMORY_CONTRACT.md` freezes the packed `248 x 248` CPU tile format, complete non-hash scope equality, game-thread-only update transaction, immutable packet, modifier ordering, persistent sparse R8 mirror, explicit static eligibility plus derived neutral attribute route, and identical four-tier precision experiment. Production implementation begins only after that checkpoint is committed and pushed.
+`/Game/Maps/L_Prototype` was not modified. `Darkwell.uproject` was not staged, restored, or committed; its only local difference remains the approved EngineAssociation GUID. Generated Binaries, Intermediate, Saved, DDC, AutomationReports, temporary packages, and the BuildPlugin-generated default FilterPlugin template are not committed.
 
-## CPU authority checkpoint
-
-The first production slice adds a game-thread-only `FSightWeaveMemoryAuthority` with 7,688-byte packed logical tiles, signed world mapping, exact non-hash scope identity, monotonic EffectiveLive writes, no-change revision suppression, explicit capacity failure, immutable owned Memory packets, and world-subsystem publication. It consumes only immutable CPU snapshots; its API has no camera, viewport, renderer, Scene Color, or feather input. The focused NullRHI authority suite initially passes 4/4 after a full Editor Development build.
-
-## Memory modifier checkpoint
-
-`ClearMemory` mutates packed authority and removes empty tiles; a later CPU snapshot can re-explore it. Registered `BlockMemoryWrites` regions prevent new bits without clearing old authority and also suppress remembered presentation. `SuppressMemoryPresentation` publishes derived presentation suppression without revising authority. Circle, axis-aligned box, rotated box, polygon, height filtering, exact scope rejection, overlap priority, movement, and teardown are covered. The first retained fixture run was 7/8 because the alleged new blocked sample had already been explored; the corrected smaller-then-expanded fixture passes the final NullRHI Memory suite 8/8.
-
-## Resume
+## Resume at home
 
 ```powershell
-cd D:\UE_projects\LastLight
 git fetch origin
 git switch codex/m3p5-sightweave-static-environment-memory
-git status --short --branch
 git pull --ff-only
 ```
+
+After opening the project with Unreal Engine 5.8.1, perform the one remaining interactive M3.5 Lab PIE check: verify live white/current Scene Color, neutral remembered static structure, strict-black unknown/clear/block/suppress, and no dynamic-object or current-lighting memory leakage. If that manual check passes, update the milestone status from `PARTIAL` to `COMPLETED` with the user's evidence.
+
+Keep the computer on; do not shut down, sleep, or restart it as part of this handoff.

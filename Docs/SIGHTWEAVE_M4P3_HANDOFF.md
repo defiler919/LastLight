@@ -2,7 +2,7 @@
 
 ## Final state
 
-**COMPLETED.** M4P3 deterministic persistence/atomic restore and every requested closure gate passed. The validated implementation/test head is `ad10f3ac8dc1443a8738a5f71f7b9f7c244d0f02`; the exact documentation closure SHA and final remote-equal branch tip are recorded by the succeeding handoff-pointer commit and the final task response because a commit cannot contain its own content hash.
+**COMPLETED.** M4P3 deterministic persistence/atomic restore and every requested closure gate passed. The validated implementation/test head is `ad10f3ac8dc1443a8738a5f71f7b9f7c244d0f02`. The final validated source-and-documentation closure SHA is `bb51b846fd3f54c1c1ea214ed42f1998b9fc606c`; this handoff-pointer commit is its metadata-only successor, whose exact remote-equal branch-tip SHA is reported in the final task response because a commit cannot contain its own content hash.
 
 Branch: `codex/m4p3-sightweave-persistence-restore-closure`
 
@@ -49,4 +49,4 @@ Do not rerun the milestone unless later source changes invalidate a recorded gat
 
 ## Shutdown disposition
 
-Safe shutdown is scheduled only after the closure documentation commit is pushed, local/upstream/remote SHAs and Git LFS are identical/clean, no task Unreal/build process remains, and the final branch-tip pointer is written here by the successor commit. The requested command uses a 120-second delay and does not force-close applications.
+Safe shutdown is scheduled only after this handoff-pointer commit is pushed, local/upstream/remote SHAs and Git LFS are identical/clean, and no task Unreal/build process remains. The requested command uses a 120-second delay and does not force-close applications.

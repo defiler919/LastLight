@@ -1,11 +1,12 @@
 # SightWeave M4P1 visual acceptance handoff
 
-Status: **PARTIAL — automated closure complete; user interactive PIE pending**
+Status: **PARTIAL — automated closure complete; user Camera 3/4 PIE recheck pending**
 
 - Branch: `codex/m4p1-sightweave-subject-policy-last-seen`
 - Continuation baseline: `d2b27136288ecf11d96b6e09d7a2b2fea6dbaa05`
 - Frozen M3.5 baseline: `941dcb75fe9fcda05bcb972a4d2d9651c6d521be`
 - Timing-repair continuation baseline: `4e0b5e1ec93391467846028f1bf46fdf92e67ed3`
+- Camera 3/4 observability continuation baseline: `598e1798cc649b32b2ed244eba9fcec915b67205`
 - Last source/test checkpoint before this documentation commit: `3e0ed45`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
 - GPU/RHI: NVIDIA GeForce RTX 4060, D3D12 / SM6; NullRHI also validated
@@ -14,7 +15,7 @@ Status: **PARTIAL — automated closure complete; user interactive PIE pending**
 
 M4P1 now has a real runtime-generated Lab fixture inside the PIE world, five stable cameras, six controllable subject states, CustomDepth/stencil-only Last-Seen proxies, D3D12/SM6 screenshots, exact pixel validation, agent image inspection, lifecycle coverage, and green M3.4/M3.5 regressions. No map asset was modified: the fixture is created and destroyed by the editor module around `/SightWeave/Maps/L_SightWeave_Lab` PIE.
 
-The only remaining acceptance item is the user's interactive PIE inspection, which must be repeated for Camera 0-4 after the timing repair. Automated implementation, build, Lab, continuous-frame image, regression, severe-log, and remote-checkpoint gates are green. BuildPlugin, clean-host, Game Shipping, full SightWeave, DARKWELL, and the full performance matrix were explicitly outside this bounded M4P1 timing continuation and do not block this status.
+The user has passed Camera 0 Overview, Camera 1 live/remembered/reacquire timing, and Camera 2 fail-black policy inspection. The only remaining acceptance item is the user's interactive Camera 3/4 PIE recheck after the observability repair. Automated implementation, build, Lab, continuous-frame image, ROI, regression, severe-log, and remote-checkpoint gates are green. BuildPlugin, clean-host, Game Shipping, full SightWeave, DARKWELL, and the full performance matrix were explicitly outside this bounded M4P1 continuation and do not block this status.
 
 ## Timing-defect repair
 
@@ -22,7 +23,17 @@ Manual Camera 1 PIE exposed two defects that stable single screenshots could not
 
 The repair keeps TAA, Width=50 feather, bloom, and quality enabled. `r.CustomDepthTemporalAAJitter=0` removes jitter only from the CustomDepth pass consumed after TAA. A presented immutable descriptor is now idempotent: the same revision, mesh/material paths, transform, and descriptor do not clear/reload/recreate the scene proxy. Reacquire hides the proxy before showing live, rejects old temporal history with UE's camera-cut flag, and retains monotonic source/residency generation ordering. Lab state transitions mutate only the primary authority/presentation objects; the comparison matrix, lights, descriptors, and transforms remain in place.
 
-The new `SightWeave.M4P1.Visual.ContinuousTransition` D3D12/SM6 test captures 120 immediate State 1 frames plus 32 immediate State 1-to-2 frames. Final evidence: State 1 `count_min=count_max=1936`, bounds `(483,148)-(527,192)`, centroid max delta `0`; reacquire `proxy_only=0`, `black_handoff=0`, `live=32`, maximum proxy-color collision `0`, final live bounds `(475,141)-(535,200)`. The agent opened five remembered and four reacquire representative frames; no jitter, black hole, proxy residue, double image, or white ring was present.
+The new `SightWeave.M4P1.Visual.ContinuousTransition` D3D12/SM6 test captures 120 immediate State 1 frames plus 32 immediate State 1-to-2 frames. Final evidence: State 1 `count_min=count_max=1936`, bounds `(483,148)-(527,192)`, centroid max delta `0`; reacquire `proxy_only=0`, `black_handoff=0`, `live=32`, maximum proxy-color collision `0`, final live bounds `(475,141)-(534,200)`. The agent opened representative remembered and reacquire frames; no jitter, black hole, proxy residue, double image, or white ring was present.
+
+## Camera 3/4 observability repair
+
+Manual Camera 3/4 PIE then exposed a Lab-only composition defect. The CPU counts changed because `SW_M4P1_PrimaryTransition` changed off-camera, while Camera 3's local suppression/clear sentinels were permanently hidden from fixture construction and Camera 4's local identity sentinel used `NeverRemember`. Each camera therefore contained only its unchanged page-boundary or yaw45 control. This was not a SubjectMemory, proxy, renderer, descriptor, or command-ordering defect.
+
+The fixture now owns three independent in-place transition targets: the original Camera 1 target, `SW_M4P1_PageBoundaryTransition`, and `SW_M4P1_IdentityReuseTransition`. Camera 3 places its state target to the right of a smaller horizontal page-boundary control; Camera 4 places its old-generation target to the left of a smaller vertical yaw45 control. State 3 suppresses the Camera 3 target, returning to State 1 restores the same frozen descriptor at the same transform, State 4 clears it, and State 5 invalidates the Camera 4 target by generation update. Controls retain separate authority records and remain visible.
+
+Accurate expanded-fixture logs are State 0/2 `live=3 proxies=4`, State 1 `live=0 proxies=7 retainedSnapshots=13`, State 3 `live=0 proxies=4 retainedSnapshots=13`, and State 4/5 `live=0 proxies=4 retainedSnapshots=10`. Camera binding names remain unchanged.
+
+`SightWeave.M4P1.Visual.Camera34Observability` captures six D3D12/SM6 frames and validates separated ROIs. At 1009x340, Camera 3 control RGB117 pixels are `[928,928,928,928]`; transition nonblack pixels are `[300,0,300,0]` for State 1/3/restored 1/4, with changed pixels `[300,300,300]` and absolute RGB errors `[105300,105300,105300]`. Camera 4 yaw45 control pixels are `[264,264]`; old-generation nonblack pixels are `[250,0]`, with 250 changed pixels and absolute RGB error 87750. The agent opened all six frames and confirmed both targets are spatially separated, black only in their required states, and the controls remain visible.
 
 ## Reliable remote checkpoints
 
@@ -40,6 +51,7 @@ All listed commits were pushed to `origin/codex/m4p1-sightweave-subject-policy-l
 10. `1e848b8` — `test: validate SightWeave Last-Seen presentation`
 11. `e22d0a7` — `test: preserve M3P5 boundaries through Last-Seen rendering`
 12. `3e0ed45` — `fix: stabilize SightWeave last-seen transitions`
+13. `598e179` — `docs: record M4P1 timing repair validation`
 
 The final documentation checkpoint is the commit containing this file; the authoritative final SHA is the post-push `git rev-parse HEAD` value in the final Git closure and user handoff message. This avoids pretending a Git commit can contain its own hash.
 
@@ -89,20 +101,21 @@ Camera actors logged by the binding command are, in order, `SW_M4P1_Camera0_Over
 
 - Final standard `DarkwellEditor Win64 Development`: independent runtime/source build succeeded with 15 actions; the final post-test build succeeded with 4 actions. MSVC 14.51 remains newer than UE 5.8's preferred 14.50.
 - M4P1 full NullRHI: 9/9, 0 warning, 0 failed.
-- M4P1 full D3D12/SM6: 11/11, 0 warning, 0 failed; this includes the stable-frame and continuous-frame visual tests.
+- M4P1 full D3D12/SM6: 12/12, 0 warning, 0 failed; this includes stable-frame, continuous-frame, and Camera 3/4 ROI visual tests.
+- Dedicated Camera 3/4 ROI D3D12/SM6: 1/1, 0 warning, 0 failed; six state captures with strict-black target ROIs and pixel-stable controls.
 - Dedicated continuous transition D3D12/SM6: 1/1, 0 warning, 0 failed; 120 remembered + 32 reacquire frames.
 - Dedicated M4P1 visual D3D12/SM6: 1/1, 0 warning, 0 failed, 28.73 s.
 - M4P1 Lab: NullRHI 2/2 and D3D12/SM6 2/2, both with zero warnings/failures.
 - M3.4 presentation D3D12/SM6: 3/3, 0 warning, 0 failed.
 - M3.5 complete D3D12/SM6 after compatibility repair: 26/26, 0 warning, 0 failed.
 - Five timing-repair final gate logs: zero severe Shader compiler, ShaderCompileWorker, Renderer/RenderCore, RDG, D3D12/RHI, GPU crash/hang/device-removal, fatal, assert, ensure, or failed-test matches.
-- Eight final screenshots: `nonfinite=0`; exact neutral proxy pixels use RGB 117; every negative-region assertion reports zero leakage.
+- Eight full-Lab screenshots plus six Camera 3/4 ROI screenshots: `nonfinite=0`; exact neutral proxy pixels use RGB 117; every negative-region assertion reports zero leakage.
 
 Canonical evidence paths are listed in `Docs/SIGHTWEAVE_M4P1_FINAL_VALIDATION.md`. All reports, logs, and screenshots live under `Saved` and are intentionally uncommitted.
 
 ## Preserved limitations and warnings
 
-- User-operated Camera 0-4 interactive PIE rerun remains pending; this is the sole reason for `PARTIAL`.
+- User-operated Camera 3/4 interactive PIE recheck remains pending; Cameras 0-2 already passed. This is the sole reason for `PARTIAL`.
 - Two restricted build launches waited before UBT log creation/global-mutex acquisition and were stopped only after process/log inspection. The single authorized standard build then completed 15/15 actions; later serial incremental/final builds also succeeded.
 - No authored `.umap` was changed. Unreal may log cleanup of the project-default `L_Prototype` before loading the allowed Lab, but no PIE, save, asset operation, or source change targeted `/Game/Maps/L_Prototype`.
 - No WorldSubsystem/gameplay adapter, production subject, persistence, skeletal/VFX/light/audio snapshot, SceneCapture, or reveal override was added.
@@ -122,4 +135,4 @@ git pull --ff-only
 & 'D:\UE_projects\LastLight\Scripts\BuildEditor.ps1' -EngineRoot 'D:\UE_5.8'
 ```
 
-After recovery, perform only the user PIE checklist above. Confirm Camera 0–4, states 0–5, no live/proxy double image on reacquire, black negative subjects, continuous page-boundary proxy, yaw-45 alignment, and no identity-reuse inheritance. Copy the final `M4P1 Lab state=...` and `Lab camera bound...` lines. Do not modify `/Game/Maps/L_Prototype` or `Darkwell.uproject`.
+After recovery, perform only the remaining Camera 3/4 PIE checklist. For Camera 3 run State `1 -> 3 -> 1 -> 4` and confirm two objects, target disappearance, same-position restore, then clear while the page-boundary control remains. For Camera 4 run State `1 -> 5` and confirm the left old-generation target disappears while the yaw45 control remains. Copy the final `M4P1 Lab state=...` and `Lab camera bound...` lines. Do not modify `/Game/Maps/L_Prototype` or `Darkwell.uproject`.

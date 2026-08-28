@@ -4,13 +4,14 @@
 
 **PARTIAL**
 
-All scoped implementation, standard build, NullRHI, D3D12/SM6, real Lab screenshot, exact pixel, agent image inspection, lifecycle, M3.4/M3.5 regression, severe-log, and remote checkpoint gates passed. The sole remaining item is user-operated interactive PIE; this document does not label automated screenshot inspection as manual acceptance.
+All scoped implementation, standard build, NullRHI, D3D12/SM6, real Lab screenshot, exact pixel/ROI, agent image inspection, lifecycle, M3.4/M3.5 regression, severe-log, and remote checkpoint gates passed. User Camera 0-2 PIE passed; the sole remaining item is the user-operated Camera 3/4 recheck. This document does not label automated screenshot inspection as manual acceptance.
 
 ## 2. Identity and baseline
 
 - Branch: `codex/m4p1-sightweave-subject-policy-last-seen`
 - Continuation baseline: `d2b27136288ecf11d96b6e09d7a2b2fea6dbaa05`
 - Timing-repair continuation baseline: `4e0b5e1ec93391467846028f1bf46fdf92e67ed3`
+- Camera 3/4 observability continuation baseline: `598e1798cc649b32b2ed244eba9fcec915b67205`
 - Frozen M3.5 baseline: `941dcb75fe9fcda05bcb972a4d2d9651c6d521be`
 - Last source/test checkpoint before this documentation commit: `3e0ed45`
 - Final SHA: authoritative post-push `git rev-parse HEAD` recorded in the final task report; a commit cannot embed its own SHA.
@@ -24,6 +25,12 @@ At continuation start local, upstream, and remote were all `d2b2713`. The only p
 The manual Camera 1 failure had two independent causes. The Last-Seen stencil was composited after TAA while UE's CustomDepth pass still carried temporal projection jitter, so a frozen proxy appeared to move every running frame and stopped when PIE paused. Reacquire rebuilt all fixture actors/components/lights and introduced an abrupt live presentation into incompatible temporal history, producing the transient white ring. The state rebuild also made sparse residency accidentally depend on fresh source registration.
 
 The final repair disables temporal jitter only for CustomDepth (`r.CustomDepthTemporalAAJitter=0`), leaves TAA/Width=50 feather/bloom/quality intact, makes repeated identical snapshot presentation idempotent, orders proxy hide before live show, rejects incompatible temporal history at the legal reacquire edge, preserves monotonic residency generations, and changes State 0-5 transitions to update the primary subject in place. Snapshot revision, descriptor, mesh/material, world transform, and proxy presentation stay frozen throughout State 1.
+
+The later Camera 3/4 manual failure was a distinct Lab-only observability defect. The changing `SW_M4P1_PrimaryTransition` was outside both camera frusta; Camera 3's local suppression/clear fixtures were permanent negative samples, and Camera 4's local identity fixture was `NeverRemember`. Thus log counts correctly changed while each viewport showed only one static control. Product SubjectMemory, proxy, renderer, descriptor, revision/generation, and presentation-command logic required no change.
+
+The Lab now uses an array of three independent in-place transition targets. `SW_M4P1_PageBoundaryTransition` is separated to the right of the page-boundary control and follows State `1 -> 3 -> 1 -> 4`; `SW_M4P1_IdentityReuseTransition` is separated to the left of the yaw45 control and follows State `1 -> 5`. Their own legal falling edges, frozen descriptors, suppression, clear regions, and generation update drive the visual change. The static controls use separate authority records and never disappear.
+
+The final state logs match the expanded fixture: State 0/2 report `live=3 proxies=4`; State 1 reports `live=0 proxies=7 retainedSnapshots=13`; State 3 reports `live=0 proxies=4 retainedSnapshots=13`; State 4/5 report `live=0 proxies=4 retainedSnapshots=10`. Camera commands continue to bind the exact actors `SW_M4P1_Camera3_PageBoundary` and `SW_M4P1_Camera4_Rotated45`.
 
 - `SightWeaveSubjectMemory.h/.cpp`: policy enum, generation-safe handle and identity, registration, basic static-mesh candidate, immutable descriptor, observation/result contracts, deterministic CPU authority, exact-scope clear, and fail-closed presentation evaluation.
 - `ISightWeaveSubjectSnapshotProvider`: synchronous non-owning host boundary invoked only on a Custom falling edge, with exact provider name/version matching and distinct missing/mismatch/reject/invalid failures.
@@ -59,7 +66,7 @@ The proxy constructor, registration, presentation, hide, and teardown enforce no
 
 ## 7. Automated tests and lifecycle
 
-Final M4P1 test inventory is 11; NullRHI executes the 9 non-visual tests and D3D12/SM6 executes all 11:
+Final M4P1 test inventory is 12; NullRHI executes the 9 non-visual tests and D3D12/SM6 executes all 12:
 
 1. `SightWeave.M4P1.Lab.GeneratedFixture.FullTransition`
 2. `SightWeave.M4P1.Proxy.RenderOnlyLifecycle`
@@ -72,35 +79,37 @@ Final M4P1 test inventory is 11; NullRHI executes the 9 non-visual tests and D3D
 9. `SightWeave.M4P1.Lab.ModeContract`
 10. `SightWeave.M4P1.Visual.LastSeenLab`
 11. `SightWeave.M4P1.Visual.ContinuousTransition`
+12. `SightWeave.M4P1.Visual.Camera34Observability`
 
-Coverage includes all five policies, falling-edge single capture, no non-live churn, immediate reacquire, second revision, clear/rebuild, suppression retain/hide/restore, unknown black, stale descriptor/presentation revisions, exact world/owner/floor/precision/profile comparisons including forced hash collision, generation reuse, teardown/reset, unsupported complex input, provider failure modes, render-only invariants, and integrated live/proxy/black switching. The visual test starts PIE, rebuilds the transient fixture across eight state/camera captures, stops PIE, and logs world cleanup; repeated dedicated/full runs established consistent restart behavior with no duplicate actors, components, delegate, ticker, or pending-render-command failure.
+Coverage includes all five policies, falling-edge single capture, no non-live churn, immediate reacquire, second revision, clear/rebuild, suppression retain/hide/restore, unknown black, stale descriptor/presentation revisions, exact world/owner/floor/precision/profile comparisons including forced hash collision, generation reuse, teardown/reset, unsupported complex input, provider failure modes, render-only invariants, and integrated live/proxy/black switching. The visual tests start PIE, capture the eight full-Lab views plus six dedicated Camera 3/4 state frames, stop PIE, and log world cleanup; repeated dedicated/full runs established consistent restart behavior with no duplicate actors, components, delegate, ticker, or pending-render-command failure.
 
 ## 8. Exact gate results
 
 | Gate | RHI | Report | Result |
 | --- | --- | --- | ---: |
-| Final Editor Development build | build | standard `Scripts/BuildEditor.ps1` | succeeded; 15-action independent source build and final 4-action test build |
-| M4P1 full | NullRHI | `Saved/AutomationReports/M4P1_TimingFix_Full_Final_NullRHI` | 9 succeeded, 0 warning, 0 failed |
-| M4P1 full | D3D12/SM6 | `Saved/AutomationReports/M4P1_TimingFix_Full_Final_D3D12` | 11 succeeded, 0 warning, 0 failed; 42.55 s |
+| Final Editor Development build | build | standard `Scripts/BuildEditor.ps1` | succeeded; 8 actions, 6.67 s; both Lab fixture and ROI test compiled independently |
+| M4P1 full | NullRHI | `Saved/AutomationReports/M4P1_Camera34_Full_NullRHI` | 9 succeeded, 0 warning, 0 failed; 0.074 s |
+| M4P1 full | D3D12/SM6 | `Saved/AutomationReports/M4P1_Camera34_Full_D3D12` | 12 succeeded, 0 warning, 0 failed; 65.82 s |
+| Camera 3/4 ROI | D3D12/SM6 | `Saved/AutomationReports/M4P1_Camera34_ROI_Iteration1` | 1 succeeded, 0 warning, 0 failed; six captures inspected |
 | Continuous transition | D3D12/SM6 | `Saved/AutomationReports/M4P1_Continuous_Final_D3D12` | 1 succeeded, 0 warning, 0 failed; 13.46 s |
 | Dedicated visual/Camera | D3D12/SM6 | `Saved/AutomationReports/M4P1_Visual_D3D12_ExactPixels` | 1 succeeded, 0 warning, 0 failed; 28.73 s |
 | M4P1 Lab prefix | NullRHI | `Saved/AutomationReports/M4P1_Lab_Final_NullRHI` | 2 succeeded, 0 warning, 0 failed |
 | M4P1 Lab prefix | D3D12/SM6 | `Saved/AutomationReports/M4P1_Lab_Final_D3D12` | 2 succeeded, 0 warning, 0 failed |
-| Frozen M3.4 presentation | D3D12/SM6 | `Saved/AutomationReports/M4P1_TimingFix_M3P4_D3D12` | 3 succeeded, 0 warning, 0 failed |
-| Complete M3.5 prefix | D3D12/SM6 | `Saved/AutomationReports/M4P1_TimingFix_M3P5_D3D12` | 26 succeeded, 0 warning, 0 failed; 16.34 s |
+| Frozen M3.4 presentation | D3D12/SM6 | `Saved/AutomationReports/M4P1_Camera34_M3P4_D3D12` | 3 succeeded, 0 warning, 0 failed |
+| Complete M3.5 prefix | D3D12/SM6 | `Saved/AutomationReports/M4P1_Camera34_M3P5_D3D12` | 26 succeeded, 0 warning, 0 failed; 16.16 s |
 | Repaired M3.5 packaging case | D3D12/SM6 | `Saved/AutomationReports/M4P1_M3P5PackagingFix_D3D12` | 1 succeeded, 0 warning, 0 failed |
 
 The D3D12 log records `Using Highest Feature Level of D3D12: SM6`, shader model 6.7 support on the selected adapter, and creation of the D3D12 RHI at SM6.
 
 ## 9. Severe scans and preserved diagnostics
 
-The five timing-repair final logs for M4P1 NullRHI, M4P1 D3D12, dedicated continuous D3D12, M3.4 D3D12, and M3.5 D3D12 each produced zero matches for Shader compiler/ShaderCompileWorker failure, Renderer/RenderCore error, RDG error/warning, D3D12/RHI error, GPU crash/hang/device removal, fatal error, assertion, ensure, or failed automation result.
+The final Camera 3/4 logs for M4P1 NullRHI, M4P1 D3D12, M3.4 D3D12, and M3.5 D3D12 produced zero severe matches for Shader compiler/ShaderCompileWorker failure, Renderer/RenderCore error, RDG error/warning, D3D12/RHI error, GPU crash/hang/device removal, fatal error, assertion, ensure, or failed automation result.
 
 Preserved facts:
 
 - MSVC 14.51 is newer than UE 5.8's preferred 14.50; all final standard builds succeeded.
 - Two restricted launches waited before UBT acquired its global mutex or created a new log. They were stopped only after process/log inspection; no compilation occurred. The single outside-sandbox standard build then succeeded 15/15.
-- A sandboxed build attempt failed before compile because UBT could not rotate `%LOCALAPPDATA%\UnrealBuildTool\Log.txt`. Process/log inspection identified the filesystem restriction; the independently launched standard build outside the sandbox succeeded.
+- Two sandboxed build attempts failed before compile because UBT could not rotate `%LOCALAPPDATA%\UnrealBuildTool\Log.txt`; the second reproduced the same `UnauthorizedAccessException` after process/log inspection. The standard build outside the filesystem sandbox then compiled all 8 actions successfully. Neither sandbox failure was a source failure.
 - The first D3D visual report `M4P1_Visual_D3D12_First` failed only Camera 1 Reacquired because root-component installation reset the actor transform. Explicit post-registration placement fixed it; all later visual reports passed and the failure remains preserved.
 - The first final M3.5 report `M4P1_Visual_M3P5Regression_D3D12` retained 25 successes and one packaging source-string failure. The old test forbade any render-state `LastSeen` token and matched obsolete shader syntax. Its authority exclusions were kept; a bounded assertion now proves the M4P1 stencil constants are presentation-only and no subject authority/descriptor enters RenderState. Isolated 1/1 and final 26/26 passed.
 - A first non-escalated M3.5 launch exited before creating a report/log after platform validation. No Unreal/UBT process remained; the authorized retry created full evidence. This is retained as a host sandbox launch failure, not a test result.
@@ -112,20 +121,20 @@ Preserved facts:
 
 The M4P1 fixture is runtime-generated in the real PIE copy of `/SightWeave/Maps/L_SightWeave_Lab`; it is not a CPU-only simulation and does not modify the `.umap`. It creates real world actors, real static-mesh live/proxy components, real camera views, and the production M3 composite. Camera bindings and each in-place state transaction are logged. PIE teardown logs `BeginTearingDown`, `CleanupWorld`, and subsystem shutdown after capture.
 
-The final continuous sequence contains 152 screenshots at 1009x340. All 120 remembered frames have exactly 1936 RGB117 pixels, identical bounds `(483,148)-(527,192)`, identical centroid, no non-proxy RGB, and no descriptor/presentation churn. All 32 immediate reacquire frames classify as live; none classify as proxy or black handoff, none exceed the final live bounds by more than 2 px or its pixel count by more than 10%, and the final full-prefix run records zero proxy-color collision. The agent opened frames 0/30/60/90/119 and reacquire 0/1/15/31 and found no visible jitter, black hole, double image, residue, or ring.
+The final continuous sequence contains 152 screenshots at 1009x340. All 120 remembered frames have exactly 1936 RGB117 pixels, identical bounds `(483,148)-(527,192)`, identical centroid, no non-proxy RGB, and no descriptor/presentation churn. All 32 immediate reacquire frames classify as live; none classify as proxy or black handoff, none exceed the final live bounds by more than 2 px or its pixel count by more than 10%, and the final full-prefix run records zero proxy-color collision. The final live bounds are `(475,141)-(534,200)`. The agent opened representative remembered/reacquire frames and found no visible jitter, black hole, double image, residue, or ring.
 
 | Screenshot | Black | Nonblack | Neutral | Exact RGB117 proxy | Center nonblack | Nonfinite | Agent inspection |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `M4P1_Camera0_Overview.png` | 834366 | 1882 | 639 | 559 | 182 | 0 | live subject visible; neutral remembered controls; negative fixtures black |
-| `M4P1_Camera1_LastSeen.png` | 831418 | 4830 | 4830 | 4830 | 4830 | 0 | centered fixed-neutral Last-Seen proxy |
-| `M4P1_Camera1_Reacquired.png` | 828765 | 7483 | 71 | 0 | 7483 | 0 | live square restored; proxy absent, no double image |
-| `M4P1_Camera2_NoDynamicLeak.png` | 836248 | 0 | 0 | 0 | 0 | 0 | strict black; NeverRemember, VisibleOnly, moving mesh and current light do not leak |
-| `M4P1_Camera3_PageBoundary.png` | 832344 | 3904 | 3904 | 3904 | 3904 | 0 | continuous neutral proxy across page boundary; no seam break |
-| `M4P1_Camera3_ClearSuppression.png` | 832222 | 4026 | 4026 | 4026 | 4026 | 0 | control proxy retained; clear/suppression/block ROIs strict black |
-| `M4P1_Camera4_Yaw45.png` | 835029 | 1219 | 1219 | 1219 | 1219 | 0 | rotated proxy aligned with yaw-45 view |
-| `M4P1_Camera4_IdentityReuse.png` | 835029 | 1219 | 1219 | 1219 | 1219 | 0 | control remains; reused generation and mismatch subjects remain black |
+| `M4P1_Camera0_Overview.png` | 342280 | 780 | 235 | 183 | 72 | 0 | live subject visible; neutral remembered controls; negative fixtures black |
+| `M4P1_Camera1_LastSeen.png` | 341124 | 1936 | 1936 | 1936 | 1936 | 0 | centered fixed-neutral Last-Seen proxy |
+| `M4P1_Camera1_Reacquired.png` | 340048 | 3012 | 172 | 0 | 3012 | 0 | live square restored; proxy absent, no double image |
+| `M4P1_Camera2_NoDynamicLeak.png` | 343060 | 0 | 0 | 0 | 0 | 0 | strict black; NeverRemember, VisibleOnly, moving mesh and current light do not leak |
+| `M4P1_Camera3_PageBoundary.png` | 341612 | 1448 | 1448 | 1448 | 928 | 0 | page-boundary control and separated transition target both visible |
+| `M4P1_Camera3_ClearSuppression.png` | 342132 | 928 | 928 | 928 | 928 | 0 | control retained; separated transition target strict black |
+| `M4P1_Camera4_Yaw45.png` | 342546 | 514 | 514 | 514 | 264 | 0 | yaw45 control and separated old-generation target both visible |
+| `M4P1_Camera4_IdentityReuse.png` | 342796 | 264 | 264 | 264 | 264 | 0 | yaw45 control remains; old-generation target strict black |
 
-All images are 1526x548 under `Saved/Screenshots/M4P1/` and remain uncommitted. The automated validator additionally checks exact black ROIs for unknown, NeverRemember, VisibleOnly, invalid Custom, clear, suppression/block, identity reuse, scope/revision mismatch, moving mesh, and current light. Camera 0 contains thin cyan authored/live-region Lab markers; Camera 2's exact-zero frame proves no negative-fixture leakage. The agent opened and inspected all eight final images. User interactive inspection has not yet occurred.
+All current images are 1009x340 under `Saved/Screenshots/M4P1/` and remain uncommitted. The dedicated ROI sequence records Camera 3 control exact pixels `[928,928,928,928]`, transition nonblack `[300,0,300,0]`, changed pixels `[300,300,300]`, and absolute RGB errors `[105300,105300,105300]`. Camera 4 records yaw45 control `[264,264]`, old-generation nonblack `[250,0]`, 250 changed pixels, and absolute RGB error 87750. The agent opened all six dedicated frames and confirmed the separated objects and state changes visually. Cameras 0-2 passed user PIE; Camera 3/4 user recheck remains pending.
 
 ## 11. Build, packaging, and shipping boundary
 
@@ -152,22 +161,20 @@ d2b2713 docs: record SightWeave M4P1 validation
 1e848b8 test: validate SightWeave Last-Seen presentation
 e22d0a7 test: preserve M3P5 boundaries through Last-Seen rendering
 3e0ed45 fix: stabilize SightWeave last-seen transitions
+598e179 docs: record M4P1 timing repair validation
 ```
 
 The final documentation commit containing this file is added to the post-push task report. Every reliable checkpoint is pushed to the normal branch; no rescue branch, merge, rebase, force push, reset, or clean was used. Generated reports/logs/screenshots, `Binaries`, `Intermediate`, and `Saved` are ignored and uncommitted. `Darkwell.uproject` retains only the known local EngineAssociation GUID difference and is never staged. Final HEAD/upstream/remote, LFS, and object-database results are the closure commands run after the documentation push.
 
 ## 13. User interactive PIE acceptance
 
-The real visual Lab integration is complete. The only remaining M4P1 work is this user-operated check:
+The real visual Lab integration is complete. Cameras 0-2 already passed user PIE. The only remaining M4P1 work is this Camera 3/4 recheck:
 
 1. Open `/SightWeave/Maps/L_SightWeave_Lab` and start PIE.
 2. Run `SightWeave.Lab.Mode 4`.
-3. Run `SightWeave.Lab.Camera 0`, then `SightWeave.Lab.M4P1.State 0`; confirm the Overview contains live, remembered, and black-negative controls.
-4. Run Camera 1 with State 0, then 1 and watch continuously for at least several seconds, then 2. Confirm Live -> completely frozen fixed-neutral Remembered -> immediate stable Reacquired, with no jitter, live/proxy double image, white ring, or residual feather frame.
-5. Run Camera 2 with State 1. Confirm NeverRemember, VisibleOnly, moving mesh, and current-light sentinels remain black.
-6. Run Camera 3 with State 1, then 3, then 1, then 4. Confirm page-boundary continuity, suppression/block black, exact restore after suppression lifts, and clear remains black without stale reuse.
-7. Run Camera 4 with State 1, then 5. Confirm yaw-45 alignment and that the reused identity, stale revision, and scope mismatch do not inherit an old proxy.
-8. Copy the final `M4P1 Lab state=...` and `Lab camera bound mode=M4P1 actor=...` health lines from the Output Log, stop PIE, and confirm no teardown error.
+3. Run `SightWeave.Lab.Camera 3`, then State `1 -> 3 -> 1 -> 4`. Confirm the horizontal page-boundary control remains throughout; the separated target is visible, black, restored at the same position, then black after clear.
+4. Run `SightWeave.Lab.Camera 4`, then State `1 -> 5`. Confirm the vertical yaw45 control remains while the separated left old-generation target becomes black.
+5. Copy the final `M4P1 Lab state=...` and `Lab camera bound mode=M4P1 actor=...` health lines from the Output Log, stop PIE, and confirm no teardown error.
 
 State mapping is `0=Live`, `1=Remembered`, `2=Reacquired`, `3=SuppressedBlocked`, `4=Cleared`, `5=IdentityReuse`. Camera actors are `SW_M4P1_Camera0_Overview`, `SW_M4P1_Camera1_Transition`, `SW_M4P1_Camera2_PolicyMatrix`, `SW_M4P1_Camera3_PageBoundary`, and `SW_M4P1_Camera4_Rotated45`.
 

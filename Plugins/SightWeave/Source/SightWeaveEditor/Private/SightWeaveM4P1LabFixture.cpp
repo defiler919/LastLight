@@ -209,7 +209,7 @@ bool FSightWeaveM4P1LabFixture::Initialize(UWorld* InWorld)
 bool FSightWeaveM4P1LabFixture::ApplyState(const int32 InState)
 {
 	const int32 ClampedState = FMath::Clamp(InState, MinimumState, MaximumState);
-	return bReady && (AppliedState == ClampedState || ApplyPrimaryState(ClampedState));
+	return bReady && (AppliedState == ClampedState || ApplyTransitionState(ClampedState));
 }
 
 void FSightWeaveM4P1LabFixture::Tick()
@@ -236,16 +236,8 @@ void FSightWeaveM4P1LabFixture::Shutdown()
 	Scope = FSightWeaveMemoryScopeKey();
 	StaticEnvironmentCaptureSource.Reset();
 	PresentationScopeAnchorSource.Reset();
-	PrimaryLivePresentation.Reset();
-	PrimaryProxyPresentation.Reset();
-	PrimaryLiveSource.Reset();
-	PrimaryRegistration = FSightWeaveSubjectRegistration();
-	PrimaryCandidate = FSightWeaveBasicStaticMeshSnapshotCandidate();
-	PrimaryHandle = FSightWeaveSubjectHandle();
+	TransitionTargets.Reset();
 	StaticEnvironmentSampleLocation = FVector::ZeroVector;
-	PrimaryObservationRevision = 1;
-	PrimaryTransitionIdentity = 1001;
-	bPrimaryHardLive = false;
 	World.Reset();
 	AppliedState = INDEX_NONE;
 	VisibleProxyCount = 0;
@@ -296,6 +288,7 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 	Authority.Reset();
 	DestroyActors(SubjectActors);
 	StaticEnvironmentCaptureSource.Reset();
+	TransitionTargets.Reset();
 	VisibleProxyCount = 0;
 	VisibleLiveCount = 0;
 
@@ -390,8 +383,10 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 
 		FSightWeaveSubjectRegistration Registration;
 		Registration.Identity.StableId = FName(Label);
-		const bool bIdentityReuse = FStringView(Label) == TEXTVIEW("SW_M4P1_PrimaryTransition")
-			&& InState == 5;
+		const bool bTransitionTarget = FStringView(Label) == TEXTVIEW("SW_M4P1_PrimaryTransition")
+			|| FStringView(Label) == TEXTVIEW("SW_M4P1_PageBoundaryTransition")
+			|| FStringView(Label) == TEXTVIEW("SW_M4P1_IdentityReuseTransition");
+		const bool bIdentityReuse = bTransitionTarget && InState == 5;
 		Registration.Identity.InstanceGeneration = bIdentityReuse ? 1 : Generation;
 		Registration.Scope = Scope;
 		Registration.Policy = Policy;
@@ -436,7 +431,7 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 				Authority.SubmitObservation(Handle, Falling);
 			}
 		}
-		if (FStringView(Label) == TEXTVIEW("SW_M4P1_PrimaryTransition") && InState == 2)
+		if (bTransitionTarget && InState == 2)
 		{
 			Authority.SubmitObservation(Handle, MakeObservation(Registration, Candidate, 3, true));
 		}
@@ -481,16 +476,17 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 			Authority.EvaluatePresentation(Handle, Context);
 		FSightWeaveSubjectProxyPresentationBridge::Apply(
 			Presentation, Snapshot, Live, Proxy);
-		if (FStringView(Label) == TEXTVIEW("SW_M4P1_PrimaryTransition"))
+		if (bTransitionTarget)
 		{
-			PrimaryLivePresentation = Live;
-			PrimaryProxyPresentation = Proxy;
-			PrimaryRegistration = Registration;
-			PrimaryCandidate = Candidate;
-			PrimaryHandle = Handle;
-			PrimaryObservationRevision = InState == 2 ? 3 : (bSubmitNonLive ? 2 : 1);
-			PrimaryTransitionIdentity = 1001 + Generation;
-			bPrimaryHardLive = bContextLive;
+			FTransitionTarget& Target = TransitionTargets.AddDefaulted_GetRef();
+			Target.LivePresentation = Live;
+			Target.ProxyPresentation = Proxy;
+			Target.Registration = Registration;
+			Target.Candidate = Candidate;
+			Target.Handle = Handle;
+			Target.ObservationRevision = InState == 2 ? 3 : (bSubmitNonLive ? 2 : 1);
+			Target.TransitionIdentity = 1001 + Generation;
+			Target.bHardLive = bContextLive;
 		}
 		VisibleLiveCount += Live->IsVisible() ? 1 : 0;
 		VisibleProxyCount += Proxy->IsVisible() ? 1 : 0;
@@ -504,27 +500,53 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 	const bool bPrimarySuppressed = InState == 3;
 	const bool bPrimaryCleared = InState == 4;
 	const bool bPrimaryReuse = InState == 5;
-	bSuccess &= AddSubject(
-		TEXT("SW_M4P1_PrimaryTransition"), FVector(72000.0, 7500.0, 120.0), 0.0f,
-		FVector(4.0, 4.0, 2.4), ESightWeaveSubjectMemoryPolicy::LastSeenSnapshot,
-		bPrimaryReuse ? 2 : 1, true, !bPrimaryLive || InState == 2, bPrimaryLive,
-		bPrimarySuppressed, bPrimarySuppressed, false, bPrimaryCleared,
-		bPrimaryReuse, false, false);
-	if (bPrimaryLive)
+	auto AddTransitionTarget = [this, &AddSubject, &bSuccess, FixtureWorld,
+		bPrimaryLive, bPrimarySuppressed, bPrimaryCleared, bPrimaryReuse, InState](
+		const TCHAR* Label,
+		const TCHAR* SourceLabel,
+		const FVector& Location,
+		const float Yaw,
+		const FVector& Scale,
+		const int64 Generation)
 	{
+		const int32 TargetIndex = TransitionTargets.Num();
+		bSuccess &= AddSubject(
+			Label, Location, Yaw, Scale, ESightWeaveSubjectMemoryPolicy::LastSeenSnapshot,
+			bPrimaryReuse ? 2 : Generation, true, !bPrimaryLive || InState == 2, bPrimaryLive,
+			bPrimarySuppressed, bPrimarySuppressed, false, bPrimaryCleared,
+			bPrimaryReuse, false, false);
 		AActor* Source = SpawnRootedActor(
 			FixtureWorld,
-			TEXT("SW_M4P1_PrimaryLiveSource"),
-			FVector(72000.0, 7500.0, 100.0));
+			SourceLabel,
+			Location);
 		USightWeaveVisionSourceComponent* Vision =
 			Source ? AddVisionSource(Source, 650.0f, true) : nullptr;
 		bSuccess &= Vision != nullptr;
-		PrimaryLiveSource = Vision;
+		if (TransitionTargets.IsValidIndex(TargetIndex))
+		{
+			TransitionTargets[TargetIndex].LiveSource = Vision;
+		}
+		else
+		{
+			bSuccess = false;
+		}
 		if (Source)
 		{
 			SubjectActors.Add(Source);
 		}
-	}
+	};
+	AddTransitionTarget(
+		TEXT("SW_M4P1_PrimaryTransition"),
+		TEXT("SW_M4P1_PrimaryLiveSource"),
+		FVector(72000.0, 7500.0, 120.0), 0.0f, FVector(4.0, 4.0, 2.4), 1);
+	AddTransitionTarget(
+		TEXT("SW_M4P1_PageBoundaryTransition"),
+		TEXT("SW_M4P1_PageBoundaryTransitionLiveSource"),
+		FVector(147800.0, 9800.0, 120.0), 0.0f, FVector(3.0, 2.4, 2.0), 1);
+	AddTransitionTarget(
+		TEXT("SW_M4P1_IdentityReuseTransition"),
+		TEXT("SW_M4P1_IdentityReuseTransitionLiveSource"),
+		FVector(84600.0, 6900.0, 120.0), 0.0f, FVector(2.2, 1.8, 2.0), 1);
 
 	// Always-on comparison matrix.
 	bSuccess &= AddSubject(TEXT("SW_M4P1_LastSeenRemembered"), FVector(75500.0, 5900.0, 100.0),
@@ -578,10 +600,10 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 		0.0f, FVector(2.6, 2.6, 2.0), ESightWeaveSubjectMemoryPolicy::NeverRemember,
 		25, true, true, false, false, false, false, false, false, false, false);
 	bSuccess &= AddSubject(TEXT("SW_M4P1_Rotated45"), FVector(83000.0, 8800.0, 100.0),
-		45.0f, FVector(4.2, 1.8, 2.0), ESightWeaveSubjectMemoryPolicy::LastSeenSnapshot,
+		45.0f, FVector(3.0, 1.4, 2.0), ESightWeaveSubjectMemoryPolicy::LastSeenSnapshot,
 		22, true, true, false, false, false, false, false, false, false, false);
 	bSuccess &= AddSubject(TEXT("SW_M4P1_PageBoundary"), FVector(150220.0, 9800.0, 100.0),
-		0.0f, FVector(9.0, 2.4, 2.0), ESightWeaveSubjectMemoryPolicy::LastSeenSnapshot,
+		0.0f, FVector(7.0, 2.0, 2.0), ESightWeaveSubjectMemoryPolicy::LastSeenSnapshot,
 		23, true, true, false, false, false, false, false, false, false, false);
 	bSuccess &= AddSubject(TEXT("SW_M4P1_PageBoundarySuppressed"), FVector(148700.0, 8400.0, 100.0),
 		0.0f, FVector(3.0, 3.0, 2.0), ESightWeaveSubjectMemoryPolicy::LastSeenSnapshot,
@@ -631,125 +653,152 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 	return bSuccess;
 }
 
-bool FSightWeaveM4P1LabFixture::ResetPrimaryRegistration()
+bool FSightWeaveM4P1LabFixture::ResetTransitionRegistration(FTransitionTarget& Target)
 {
-	if (PrimaryHandle.IsValid())
+	if (Target.Handle.IsValid())
 	{
-		Authority.Unregister(PrimaryHandle);
+		Authority.Unregister(Target.Handle);
 	}
-	PrimaryRegistration.Identity.InstanceGeneration = 1;
-	PrimaryHandle = Authority.Register(PrimaryRegistration);
-	PrimaryObservationRevision = 0;
-	PrimaryTransitionIdentity = 1001;
-	bPrimaryHardLive = false;
-	return PrimaryHandle.IsValid();
+	Target.Registration.Identity.InstanceGeneration = 1;
+	Target.Handle = Authority.Register(Target.Registration);
+	Target.ObservationRevision = 0;
+	Target.TransitionIdentity = 1001;
+	Target.bHardLive = false;
+	return Target.Handle.IsValid();
 }
 
-bool FSightWeaveM4P1LabFixture::ApplyPrimaryState(const int32 InState)
+bool FSightWeaveM4P1LabFixture::ApplyTransitionState(const int32 InState)
 {
-	UPrimitiveComponent* Live = PrimaryLivePresentation.Get();
-	USightWeaveLastSeenProxyComponent* Proxy = PrimaryProxyPresentation.Get();
-	USightWeaveVisionSourceComponent* Vision = PrimaryLiveSource.Get();
 	USightWeaveVisionSourceComponent* AnchorVision = PresentationScopeAnchorSource.Get();
-	if (!Live || !Proxy || !Vision || !AnchorVision || !PrimaryHandle.IsValid())
+	if (!AnchorVision || TransitionTargets.IsEmpty())
 	{
 		return false;
+	}
+	for (const FTransitionTarget& Target : TransitionTargets)
+	{
+		if (!Target.LivePresentation.IsValid()
+			|| !Target.ProxyPresentation.IsValid()
+			|| !Target.LiveSource.IsValid()
+			|| !Target.Handle.IsValid())
+		{
+			return false;
+		}
 	}
 
 	// Generation-reuse is deliberately terminal for that record. Re-entering
 	// another lab state creates a fresh authority record while retaining every
 	// render object, avoiding temporal-history invalidation.
-	if (PrimaryRegistration.Identity.InstanceGeneration != 1 && InState != 5
-		&& !ResetPrimaryRegistration())
+	for (FTransitionTarget& Target : TransitionTargets)
 	{
-		return false;
+		if (Target.Registration.Identity.InstanceGeneration != 1
+			&& InState != 5
+			&& !ResetTransitionRegistration(Target))
+		{
+			return false;
+		}
 	}
 
 	const bool bWantsLive = InState == 0 || InState == 2;
-	const bool bWasHardLive = bPrimaryHardLive;
-	Vision->SetVisionSourceEnabled(false);
-	// This refresh is intentionally sequenced after the primary update. It gives
+	bool bWasAnyHardLive = false;
+	for (FTransitionTarget& Target : TransitionTargets)
+	{
+		bWasAnyHardLive |= Target.bHardLive;
+		Target.LiveSource->SetVisionSourceEnabled(false);
+	}
+	// This refresh is intentionally sequenced after all live sources are disabled. It gives
 	// the retained anchor the newest residency generation, so an older RT clear
 	// command cannot evict the presentation page after the falling edge.
 	AnchorVision->SetVisionSourceEnabled(false);
 	AnchorVision->SetVisionSourceEnabled(true);
 
-	auto Submit = [this](const bool bHardLive)
+	bool bAllPresented = true;
+	for (FTransitionTarget& Target : TransitionTargets)
 	{
-		const uint64 Revision = ++PrimaryObservationRevision;
-		const uint64 Transition = bHardLive ? 0 : PrimaryTransitionIdentity++;
-		const FSightWeaveSubjectTransitionResult Result = Authority.SubmitObservation(
-			PrimaryHandle,
-			MakeObservation(PrimaryRegistration, PrimaryCandidate, Revision, bHardLive, Transition));
-		if (Result.Succeeded())
+		auto Submit = [this, &Target](const bool bHardLive)
 		{
-			bPrimaryHardLive = bHardLive;
-		}
-		return Result.Succeeded();
-	};
+			const uint64 Revision = ++Target.ObservationRevision;
+			const uint64 Transition = bHardLive ? 0 : Target.TransitionIdentity++;
+			const FSightWeaveSubjectTransitionResult Result = Authority.SubmitObservation(
+				Target.Handle,
+				MakeObservation(Target.Registration, Target.Candidate, Revision, bHardLive, Transition));
+			if (Result.Succeeded())
+			{
+				Target.bHardLive = bHardLive;
+			}
+			return Result.Succeeded();
+		};
 
-	if (bWantsLive)
-	{
-		if (!bPrimaryHardLive && !Submit(true))
+		if (bWantsLive)
 		{
-			return false;
+			if (!Target.bHardLive && !Submit(true))
+			{
+				return false;
+			}
 		}
-	}
-	else
-	{
-		// A cleared/reused record may have no prior live sample. Re-establish the
-		// frozen candidate in CPU authority, then consume exactly one legal edge.
-		if (!Authority.FindSnapshot(PrimaryHandle) && !bPrimaryHardLive && !Submit(true))
+		else
 		{
-			return false;
+			// A cleared/reused record may have no prior live sample. Re-establish the
+			// frozen candidate in CPU authority, then consume exactly one legal edge.
+			if (!Authority.FindSnapshot(Target.Handle) && !Target.bHardLive && !Submit(true))
+			{
+				return false;
+			}
+			if (Target.bHardLive && !Submit(false))
+			{
+				return false;
+			}
 		}
-		if (bPrimaryHardLive && !Submit(false))
+
+		const FSightWeaveLastSeenSnapshotDescriptor* Snapshot =
+			Authority.FindSnapshot(Target.Handle);
+		if (InState == 4 && Snapshot)
 		{
-			return false;
+			FSightWeaveMemoryRegion Region;
+			Region.Scope = Target.Registration.Scope;
+			Region.HeightRange = { 0.0f, 300.0f };
+			Region.Shape = ESightWeaveMemoryRegionShape::Circle;
+			Region.Center = FVector2D(
+				Target.Candidate.WorldTransform.GetLocation().X,
+				Target.Candidate.WorldTransform.GetLocation().Y);
+			Region.Radius = 700.0f;
+			Authority.ClearSnapshots(Region);
+			Snapshot = Authority.FindSnapshot(Target.Handle);
 		}
+		if (InState == 5)
+		{
+			FSightWeaveSubjectRegistration Reused = Target.Registration;
+			Reused.Identity.InstanceGeneration = 2;
+			if (!Authority.Update(Target.Handle, Reused))
+			{
+				return false;
+			}
+			Target.Registration = MoveTemp(Reused);
+			Target.bHardLive = false;
+			Snapshot = Authority.FindSnapshot(Target.Handle);
+		}
+
+		FSightWeaveSubjectPresentationContext Context =
+			MakeContext(Target.Registration, Snapshot, bWantsLive);
+		Context.bSuppressMemoryPresentation = InState == 3;
+		Context.bBlockMemoryWrites = InState == 3;
+		const FSightWeaveSubjectPresentationResult Presentation =
+			Authority.EvaluatePresentation(Target.Handle, Context);
+
+		UPrimitiveComponent* Live = Target.LivePresentation.Get();
+		USightWeaveLastSeenProxyComponent* Proxy = Target.ProxyPresentation.Get();
+		const bool bWasLiveVisible = Live->IsVisible();
+		const bool bWasProxyVisible = Proxy->IsVisible();
+		const bool bPresented = FSightWeaveSubjectProxyPresentationBridge::Apply(
+			Presentation, Snapshot, Live, Proxy);
+		bAllPresented &= bPresented
+			|| Presentation.State == ESightWeaveSubjectPresentationState::Hidden;
+		VisibleLiveCount += (Live->IsVisible() ? 1 : 0) - (bWasLiveVisible ? 1 : 0);
+		VisibleProxyCount += (Proxy->IsVisible() ? 1 : 0) - (bWasProxyVisible ? 1 : 0);
 	}
 
-	const FSightWeaveLastSeenSnapshotDescriptor* Snapshot = Authority.FindSnapshot(PrimaryHandle);
-	if (InState == 4 && Snapshot)
+	if (bWantsLive && bAllPresented)
 	{
-		FSightWeaveMemoryRegion Region;
-		Region.Scope = PrimaryRegistration.Scope;
-		Region.HeightRange = { 0.0f, 300.0f };
-		Region.Shape = ESightWeaveMemoryRegionShape::Circle;
-		Region.Center = FVector2D(
-			PrimaryCandidate.WorldTransform.GetLocation().X,
-			PrimaryCandidate.WorldTransform.GetLocation().Y);
-		Region.Radius = 700.0f;
-		Authority.ClearSnapshots(Region);
-		Snapshot = Authority.FindSnapshot(PrimaryHandle);
-	}
-	if (InState == 5)
-	{
-		FSightWeaveSubjectRegistration Reused = PrimaryRegistration;
-		Reused.Identity.InstanceGeneration = 2;
-		if (!Authority.Update(PrimaryHandle, Reused))
-		{
-			return false;
-		}
-		PrimaryRegistration = MoveTemp(Reused);
-		bPrimaryHardLive = false;
-		Snapshot = Authority.FindSnapshot(PrimaryHandle);
-	}
-
-	FSightWeaveSubjectPresentationContext Context =
-		MakeContext(PrimaryRegistration, Snapshot, bWantsLive);
-	Context.bSuppressMemoryPresentation = InState == 3;
-	Context.bBlockMemoryWrites = InState == 3;
-	const FSightWeaveSubjectPresentationResult Presentation =
-		Authority.EvaluatePresentation(PrimaryHandle, Context);
-
-	const bool bWasLiveVisible = Live->IsVisible();
-	const bool bWasProxyVisible = Proxy->IsVisible();
-	const bool bPresented = FSightWeaveSubjectProxyPresentationBridge::Apply(
-		Presentation, Snapshot, Live, Proxy);
-	if (bWantsLive && bPresented)
-	{
-		if (!bWasHardLive)
+		if (!bWasAnyHardLive)
 		{
 			if (APlayerController* PlayerController = World->GetFirstPlayerController())
 			{
@@ -759,12 +808,13 @@ bool FSightWeaveM4P1LabFixture::ApplyPrimaryState(const int32 InState)
 				}
 			}
 		}
-		Vision->SetVisionSourceEnabled(true);
+		for (FTransitionTarget& Target : TransitionTargets)
+		{
+			Target.LiveSource->SetVisionSourceEnabled(true);
+		}
 	}
-	VisibleLiveCount += (Live->IsVisible() ? 1 : 0) - (bWasLiveVisible ? 1 : 0);
-	VisibleProxyCount += (Proxy->IsVisible() ? 1 : 0) - (bWasProxyVisible ? 1 : 0);
 	AppliedState = InState;
-	return bPresented || Presentation.State == ESightWeaveSubjectPresentationState::Hidden;
+	return bAllPresented;
 }
 
 void FSightWeaveM4P1LabFixture::DestroyActors(TArray<TWeakObjectPtr<AActor>>& Actors)

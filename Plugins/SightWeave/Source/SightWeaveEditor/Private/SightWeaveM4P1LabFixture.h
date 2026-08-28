@@ -27,10 +27,23 @@ public:
 	int32 GetRetainedSnapshotCount() const { return Authority.GetSnapshotCount(); }
 
 private:
+	struct FTransitionTarget
+	{
+		TWeakObjectPtr<UPrimitiveComponent> LivePresentation;
+		TWeakObjectPtr<USightWeaveLastSeenProxyComponent> ProxyPresentation;
+		TWeakObjectPtr<USightWeaveVisionSourceComponent> LiveSource;
+		FSightWeaveSubjectRegistration Registration;
+		FSightWeaveBasicStaticMeshSnapshotCandidate Candidate;
+		FSightWeaveSubjectHandle Handle;
+		uint64 ObservationRevision = 1;
+		uint64 TransitionIdentity = 1001;
+		bool bHardLive = false;
+	};
+
 	bool BuildCameras();
 	bool RebuildSubjects(int32 InState);
-	bool ApplyPrimaryState(int32 InState);
-	bool ResetPrimaryRegistration();
+	bool ApplyTransitionState(int32 InState);
+	bool ResetTransitionRegistration(FTransitionTarget& Target);
 	void DestroyActors(TArray<TWeakObjectPtr<AActor>>& Actors);
 
 	TWeakObjectPtr<UWorld> World;
@@ -40,16 +53,8 @@ private:
 	FSightWeaveMemoryScopeKey Scope;
 	TWeakObjectPtr<USightWeaveVisionSourceComponent> StaticEnvironmentCaptureSource;
 	TWeakObjectPtr<USightWeaveVisionSourceComponent> PresentationScopeAnchorSource;
-	TWeakObjectPtr<UPrimitiveComponent> PrimaryLivePresentation;
-	TWeakObjectPtr<USightWeaveLastSeenProxyComponent> PrimaryProxyPresentation;
-	TWeakObjectPtr<USightWeaveVisionSourceComponent> PrimaryLiveSource;
-	FSightWeaveSubjectRegistration PrimaryRegistration;
-	FSightWeaveBasicStaticMeshSnapshotCandidate PrimaryCandidate;
-	FSightWeaveSubjectHandle PrimaryHandle;
+	TArray<FTransitionTarget> TransitionTargets;
 	FVector StaticEnvironmentSampleLocation = FVector::ZeroVector;
-	uint64 PrimaryObservationRevision = 1;
-	uint64 PrimaryTransitionIdentity = 1001;
-	bool bPrimaryHardLive = false;
 	int32 AppliedState = INDEX_NONE;
 	int32 VisibleProxyCount = 0;
 	int32 VisibleLiveCount = 0;

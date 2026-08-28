@@ -39,6 +39,94 @@ namespace SightWeave::M4P1::VisualLabTests
 		double ProxyCentroidY = 0.0;
 	};
 
+	struct FRoiMetrics
+	{
+		uint64 NonBlackCount = 0;
+		uint64 ExactProxyCount = 0;
+	};
+
+	struct FRoiDifference
+	{
+		uint64 ChangedPixelCount = 0;
+		uint64 AbsoluteRgbError = 0;
+	};
+
+	bool LoadBgraImage(
+		FAutomationTestBase& Test,
+		const FString& Filename,
+		FImage& OutImage)
+	{
+		FImage SourceImage;
+		if (!FImageUtils::LoadImage(*Filename, SourceImage)
+			|| SourceImage.SizeX <= 0
+			|| SourceImage.SizeY <= 0)
+		{
+			Test.AddError(FString::Printf(TEXT("M4P1 ROI frame unreadable: %s"), *Filename));
+			return false;
+		}
+		SourceImage.CopyTo(OutImage, ERawImageFormat::BGRA8, EGammaSpace::sRGB);
+		return true;
+	}
+
+	FIntRect MakePercentRoi(
+		const FImage& Image,
+		const int32 MinXPct,
+		const int32 MinYPct,
+		const int32 MaxXPct,
+		const int32 MaxYPct)
+	{
+		return FIntRect(
+			Image.SizeX * MinXPct / 100,
+			Image.SizeY * MinYPct / 100,
+			Image.SizeX * MaxXPct / 100,
+			Image.SizeY * MaxYPct / 100);
+	}
+
+	FRoiMetrics MeasureRoi(FImage& Image, const FIntRect& Roi)
+	{
+		FRoiMetrics Metrics;
+		const TArrayView64<FColor> Pixels = Image.AsBGRA8();
+		for (int32 Y = Roi.Min.Y; Y < Roi.Max.Y; ++Y)
+		{
+			for (int32 X = Roi.Min.X; X < Roi.Max.X; ++X)
+			{
+				const FColor Pixel = Pixels[static_cast<int64>(Y) * Image.SizeX + X];
+				Metrics.NonBlackCount += Pixel.R != 0 || Pixel.G != 0 || Pixel.B != 0 ? 1 : 0;
+				Metrics.ExactProxyCount +=
+					Pixel.R == 117 && Pixel.G == 117 && Pixel.B == 117 ? 1 : 0;
+			}
+		}
+		return Metrics;
+	}
+
+	FRoiDifference CompareRoi(FImage& A, FImage& B, const FIntRect& Roi)
+	{
+		FRoiDifference Difference;
+		if (A.SizeX != B.SizeX || A.SizeY != B.SizeY)
+		{
+			Difference.ChangedPixelCount = MAX_uint64;
+			Difference.AbsoluteRgbError = MAX_uint64;
+			return Difference;
+		}
+		const TArrayView64<FColor> PixelsA = A.AsBGRA8();
+		const TArrayView64<FColor> PixelsB = B.AsBGRA8();
+		for (int32 Y = Roi.Min.Y; Y < Roi.Max.Y; ++Y)
+		{
+			for (int32 X = Roi.Min.X; X < Roi.Max.X; ++X)
+			{
+				const int64 Index = static_cast<int64>(Y) * A.SizeX + X;
+				const FColor PixelA = PixelsA[Index];
+				const FColor PixelB = PixelsB[Index];
+				Difference.ChangedPixelCount +=
+					PixelA.R != PixelB.R || PixelA.G != PixelB.G || PixelA.B != PixelB.B ? 1 : 0;
+				Difference.AbsoluteRgbError += FMath::Abs(int32(PixelA.R) - int32(PixelB.R));
+				Difference.AbsoluteRgbError += FMath::Abs(int32(PixelA.G) - int32(PixelB.G));
+				Difference.AbsoluteRgbError += FMath::Abs(int32(PixelA.B) - int32(PixelB.B));
+			}
+		}
+		return Difference;
+	}
+
 	bool LoadFrameMetrics(
 		FAutomationTestBase& Test,
 		const FString& Filename,
@@ -363,6 +451,154 @@ bool FSightWeaveM4P1TakeScreenshotCommand::Update()
 	return true;
 }
 
+class FSightWeaveM4P1ValidateCamera34RoiCommand final : public IAutomationLatentCommand
+{
+public:
+	FSightWeaveM4P1ValidateCamera34RoiCommand(
+		FAutomationTestBase* InTest,
+		FString InDirectory)
+		: Test(InTest)
+		, Directory(MoveTemp(InDirectory))
+	{
+	}
+
+	virtual bool Update() override
+	{
+		using namespace SightWeave::M4P1::VisualLabTests;
+		FImage Camera3State1;
+		FImage Camera3State3;
+		FImage Camera3Restored;
+		FImage Camera3State4;
+		FImage Camera4State1;
+		FImage Camera4State5;
+		if (!Load(TEXT("Camera3_State1.png"), Camera3State1)
+			|| !Load(TEXT("Camera3_State3.png"), Camera3State3)
+			|| !Load(TEXT("Camera3_Restored.png"), Camera3Restored)
+			|| !Load(TEXT("Camera3_State4.png"), Camera3State4)
+			|| !Load(TEXT("Camera4_State1.png"), Camera4State1)
+			|| !Load(TEXT("Camera4_State5.png"), Camera4State5))
+		{
+			return true;
+		}
+
+		Test->TestEqual(TEXT("Camera 3 ROI captures have equal widths"),
+			Camera3State3.SizeX, Camera3State1.SizeX);
+		Test->TestEqual(TEXT("Camera 3 ROI captures have equal heights"),
+			Camera3State3.SizeY, Camera3State1.SizeY);
+		Test->TestEqual(TEXT("Camera 4 ROI captures have equal widths"),
+			Camera4State5.SizeX, Camera4State1.SizeX);
+		Test->TestEqual(TEXT("Camera 4 ROI captures have equal heights"),
+			Camera4State5.SizeY, Camera4State1.SizeY);
+
+		const FIntRect Camera3ControlRoi = MakePercentRoi(Camera3State1, 38, 24, 63, 76);
+		const FIntRect Camera3TransitionRoi = MakePercentRoi(Camera3State1, 70, 24, 97, 76);
+		const FIntRect Camera4YawRoi = MakePercentRoi(Camera4State1, 39, 20, 66, 80);
+		const FIntRect Camera4OldGenerationRoi = MakePercentRoi(Camera4State1, 8, 20, 36, 80);
+
+		const FRoiMetrics C3Control1 = MeasureRoi(Camera3State1, Camera3ControlRoi);
+		const FRoiMetrics C3Control3 = MeasureRoi(Camera3State3, Camera3ControlRoi);
+		const FRoiMetrics C3ControlRestored = MeasureRoi(Camera3Restored, Camera3ControlRoi);
+		const FRoiMetrics C3Control4 = MeasureRoi(Camera3State4, Camera3ControlRoi);
+		const FRoiMetrics C3Target1 = MeasureRoi(Camera3State1, Camera3TransitionRoi);
+		const FRoiMetrics C3Target3 = MeasureRoi(Camera3State3, Camera3TransitionRoi);
+		const FRoiMetrics C3TargetRestored = MeasureRoi(Camera3Restored, Camera3TransitionRoi);
+		const FRoiMetrics C3Target4 = MeasureRoi(Camera3State4, Camera3TransitionRoi);
+		const FRoiDifference C3Control13 = CompareRoi(
+			Camera3State1, Camera3State3, Camera3ControlRoi);
+		const FRoiDifference C3Control1Restored = CompareRoi(
+			Camera3State1, Camera3Restored, Camera3ControlRoi);
+		const FRoiDifference C3Control14 = CompareRoi(
+			Camera3State1, Camera3State4, Camera3ControlRoi);
+		const FRoiDifference C3Target13 = CompareRoi(
+			Camera3State1, Camera3State3, Camera3TransitionRoi);
+		const FRoiDifference C3TargetRestored3 = CompareRoi(
+			Camera3Restored, Camera3State3, Camera3TransitionRoi);
+		const FRoiDifference C3TargetRestored4 = CompareRoi(
+			Camera3Restored, Camera3State4, Camera3TransitionRoi);
+
+		Test->TestTrue(TEXT("Camera 3 page-boundary control ROI is visible in State 1"),
+			C3Control1.ExactProxyCount >= 64);
+		Test->TestEqual(TEXT("Camera 3 page-boundary control remains pixel-stable in State 3"),
+			C3Control13.ChangedPixelCount, uint64(0));
+		Test->TestEqual(TEXT("Camera 3 page-boundary control remains pixel-stable after restore"),
+			C3Control1Restored.ChangedPixelCount, uint64(0));
+		Test->TestEqual(TEXT("Camera 3 page-boundary control remains pixel-stable in State 4"),
+			C3Control14.ChangedPixelCount, uint64(0));
+		Test->TestEqual(TEXT("Camera 3 control exact color count remains stable in State 3"),
+			C3Control3.ExactProxyCount, C3Control1.ExactProxyCount);
+		Test->TestEqual(TEXT("Camera 3 control exact color count remains stable after restore"),
+			C3ControlRestored.ExactProxyCount, C3Control1.ExactProxyCount);
+		Test->TestEqual(TEXT("Camera 3 control exact color count remains stable in State 4"),
+			C3Control4.ExactProxyCount, C3Control1.ExactProxyCount);
+		Test->TestTrue(TEXT("Camera 3 transition ROI is visible in State 1"),
+			C3Target1.ExactProxyCount >= 64);
+		Test->TestEqual(TEXT("Camera 3 transition ROI is strict black in State 3"),
+			C3Target3.NonBlackCount, uint64(0));
+		Test->TestTrue(TEXT("Camera 3 transition ROI restores at its original position"),
+			C3TargetRestored.ExactProxyCount >= 64);
+		Test->TestEqual(TEXT("Camera 3 restored transition ROI matches State 1"),
+			C3TargetRestored.ExactProxyCount, C3Target1.ExactProxyCount);
+		Test->TestEqual(TEXT("Camera 3 transition ROI is strict black after clear"),
+			C3Target4.NonBlackCount, uint64(0));
+		Test->TestTrue(TEXT("Camera 3 State 1 to State 3 target ROI has nonzero AE difference"),
+			C3Target13.ChangedPixelCount >= 64 && C3Target13.AbsoluteRgbError > 0);
+		Test->TestTrue(TEXT("Camera 3 State 3 to restored State 1 target ROI has nonzero AE difference"),
+			C3TargetRestored3.ChangedPixelCount >= 64 && C3TargetRestored3.AbsoluteRgbError > 0);
+		Test->TestTrue(TEXT("Camera 3 restored State 1 to State 4 target ROI has nonzero AE difference"),
+			C3TargetRestored4.ChangedPixelCount >= 64 && C3TargetRestored4.AbsoluteRgbError > 0);
+
+		const FRoiMetrics C4Yaw1 = MeasureRoi(Camera4State1, Camera4YawRoi);
+		const FRoiMetrics C4Yaw5 = MeasureRoi(Camera4State5, Camera4YawRoi);
+		const FRoiMetrics C4Old1 = MeasureRoi(Camera4State1, Camera4OldGenerationRoi);
+		const FRoiMetrics C4Old5 = MeasureRoi(Camera4State5, Camera4OldGenerationRoi);
+		const FRoiDifference C4Yaw15 = CompareRoi(Camera4State1, Camera4State5, Camera4YawRoi);
+		const FRoiDifference C4Old15 = CompareRoi(
+			Camera4State1, Camera4State5, Camera4OldGenerationRoi);
+		Test->TestTrue(TEXT("Camera 4 yaw45 control ROI is visible in State 1"),
+			C4Yaw1.ExactProxyCount >= 64);
+		Test->TestEqual(TEXT("Camera 4 yaw45 control remains pixel-stable in State 5"),
+			C4Yaw15.ChangedPixelCount, uint64(0));
+		Test->TestEqual(TEXT("Camera 4 yaw45 exact color count remains stable in State 5"),
+			C4Yaw5.ExactProxyCount, C4Yaw1.ExactProxyCount);
+		Test->TestTrue(TEXT("Camera 4 old-generation ROI is visible in State 1"),
+			C4Old1.ExactProxyCount >= 64);
+		Test->TestEqual(TEXT("Camera 4 old-generation ROI is strict black in State 5"),
+			C4Old5.NonBlackCount, uint64(0));
+		Test->TestTrue(TEXT("Camera 4 State 1 to State 5 target ROI has nonzero AE difference"),
+			C4Old15.ChangedPixelCount >= 64 && C4Old15.AbsoluteRgbError > 0);
+
+		Test->AddInfo(FString::Printf(
+			TEXT("M4P1_CAMERA34_ROI camera=3 control_exact=[%llu,%llu,%llu,%llu] transition_nonblack=[%llu,%llu,%llu,%llu] transition_exact=[%llu,%llu,%llu,%llu] changed=[%llu,%llu,%llu] ae=[%llu,%llu,%llu]"),
+			C3Control1.ExactProxyCount, C3Control3.ExactProxyCount,
+			C3ControlRestored.ExactProxyCount, C3Control4.ExactProxyCount,
+			C3Target1.NonBlackCount, C3Target3.NonBlackCount,
+			C3TargetRestored.NonBlackCount, C3Target4.NonBlackCount,
+			C3Target1.ExactProxyCount, C3Target3.ExactProxyCount,
+			C3TargetRestored.ExactProxyCount, C3Target4.ExactProxyCount,
+			C3Target13.ChangedPixelCount, C3TargetRestored3.ChangedPixelCount,
+			C3TargetRestored4.ChangedPixelCount,
+			C3Target13.AbsoluteRgbError, C3TargetRestored3.AbsoluteRgbError,
+			C3TargetRestored4.AbsoluteRgbError));
+		Test->AddInfo(FString::Printf(
+			TEXT("M4P1_CAMERA34_ROI camera=4 yaw_exact=[%llu,%llu] old_generation_nonblack=[%llu,%llu] old_generation_exact=[%llu,%llu] changed=%llu ae=%llu"),
+			C4Yaw1.ExactProxyCount, C4Yaw5.ExactProxyCount,
+			C4Old1.NonBlackCount, C4Old5.NonBlackCount,
+			C4Old1.ExactProxyCount, C4Old5.ExactProxyCount,
+			C4Old15.ChangedPixelCount, C4Old15.AbsoluteRgbError));
+		return true;
+	}
+
+private:
+	bool Load(const TCHAR* Filename, FImage& OutImage) const
+	{
+		return SightWeave::M4P1::VisualLabTests::LoadBgraImage(
+			*Test, FPaths::Combine(Directory, Filename), OutImage);
+	}
+
+	FAutomationTestBase* Test = nullptr;
+	FString Directory;
+};
+
 DEFINE_LATENT_AUTOMATION_COMMAND_THREE_PARAMETER(
 	FSightWeaveM4P1ValidateScreenshotCommand,
 	FAutomationTestBase*,
@@ -602,6 +838,66 @@ bool FSightWeaveM4P1VisualLabTest::RunTest(const FString& Parameters)
 	AddCapture(3, 3, TEXT("M4P1_Camera3_ClearSuppression"), EExpectation::Boundary);
 	AddCapture(4, 1, TEXT("M4P1_Camera4_Yaw45"), EExpectation::YawIsolation);
 	AddCapture(4, 5, TEXT("M4P1_Camera4_IdentityReuse"), EExpectation::YawIsolation);
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P1Camera34ObservabilityTest,
+	"SightWeave.M4P1.Visual.Camera34Observability",
+	SightWeave::M4P1::VisualLabTests::VisualFlags)
+
+bool FSightWeaveM4P1Camera34ObservabilityTest::RunTest(const FString& Parameters)
+{
+	if (GUsingNullRHI)
+	{
+		AddError(TEXT("M4P1 Camera 3/4 ROI validation requires a real RHI."));
+		return true;
+	}
+	AddExpectedError(TEXT("Presentation composite state=fail-binding"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+	AddExpectedError(TEXT("Presentation composite state=submitted-feather"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+	AddExpectedError(
+		TEXT("Unable to find RecastNavMesh instance while trying to create UCrowdManager instance"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+	AddExpectedError(TEXT("Console variable 'r.MotionVectorSimulation' used in the render thread"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+
+	const FString ScreenshotDirectory = FPaths::ConvertRelativePathToFull(
+		FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Screenshots/M4P1/Camera34ROI")));
+	auto AddCapture = [this, &ScreenshotDirectory](
+		const int32 Camera,
+		const int32 State,
+		const TCHAR* Filename)
+	{
+		ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(FString::Printf(
+			TEXT("SightWeave.Lab.M4P1.State %d"), State)));
+		ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.75f));
+		ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(FString::Printf(
+			TEXT("SightWeave.Lab.Camera %d"), Camera)));
+		ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.75f));
+		const FString Screenshot = FPaths::Combine(ScreenshotDirectory, Filename);
+		ADD_LATENT_AUTOMATION_COMMAND(FSightWeaveM4P1TakeScreenshotCommand(Screenshot));
+		ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
+	};
+
+	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(TEXT("/SightWeave/Maps/L_SightWeave_Lab")));
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
+	ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(TEXT("SightWeave.Lab.Mode 4")));
+	ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(TEXT("SightWeave.Lab.M4P1.State 1")));
+	ADD_LATENT_AUTOMATION_COMMAND(FStartPIECommand(false));
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(6.0f));
+	ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(TEXT("setres 1920x1080")));
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
+	AddCapture(3, 1, TEXT("Camera3_State1.png"));
+	AddCapture(3, 3, TEXT("Camera3_State3.png"));
+	AddCapture(3, 1, TEXT("Camera3_Restored.png"));
+	AddCapture(3, 4, TEXT("Camera3_State4.png"));
+	AddCapture(4, 1, TEXT("Camera4_State1.png"));
+	AddCapture(4, 5, TEXT("Camera4_State5.png"));
+	ADD_LATENT_AUTOMATION_COMMAND(
+		FSightWeaveM4P1ValidateCamera34RoiCommand(this, ScreenshotDirectory));
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 	return true;
 }

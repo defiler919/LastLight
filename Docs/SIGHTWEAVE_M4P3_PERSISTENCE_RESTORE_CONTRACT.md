@@ -223,4 +223,3 @@ The M4P3 suite covers:
 ## 15. Frozen behavior preserved
 
 M4P3 does not alter M2 CPU visibility authority, black/gray/live ordering, black-to-gray legal sight, Coarse 25 cm memory precision, M3.4 Width=50 inward feather, M3.5 clear/block/suppress behavior, M4P1 five policies/falling-edge/reacquire/proxy semantics, Subject Reveal isolation, source-compatible queries, or the rule that GPU/Render data is presentation-only.
-

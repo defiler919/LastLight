@@ -118,4 +118,3 @@ Report `PARTIAL` rather than `COMPLETED` if any required correctness, rollback, 
 ## 7. Repository discipline
 
 Do not merge, rebase, force-push, reset, clean, stash, restore user changes, delete unknown files, or modify binary assets with filesystem commands. Never stage `Darkwell.uproject`. Each reliable nonempty checkpoint is built/tested in proportion to its contents, committed, and normally pushed immediately.
-

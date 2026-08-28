@@ -2,9 +2,9 @@
 
 ## 1. Status
 
-**PARTIAL**
+**COMPLETED**
 
-All scoped implementation, standard build, NullRHI, D3D12/SM6, real Lab screenshot, exact pixel/ROI, agent image inspection, lifecycle, M3.4/M3.5 regression, severe-log, and remote checkpoint gates passed. User Camera 0-2 PIE passed; the sole remaining item is the user-operated Camera 3/4 recheck. This document does not label automated screenshot inspection as manual acceptance.
+All scoped implementation, standard build, NullRHI, D3D12/SM6, real Lab screenshot, exact pixel/ROI, agent image inspection, lifecycle, M3.4/M3.5 regression, severe-log, remote checkpoint, and user-operated Camera 0–4 PIE gates passed. M4P1 has no remaining acceptance item.
 
 ## 2. Identity and baseline
 
@@ -13,7 +13,7 @@ All scoped implementation, standard build, NullRHI, D3D12/SM6, real Lab screensh
 - Timing-repair continuation baseline: `4e0b5e1ec93391467846028f1bf46fdf92e67ed3`
 - Camera 3/4 observability continuation baseline: `598e1798cc649b32b2ed244eba9fcec915b67205`
 - Frozen M3.5 baseline: `941dcb75fe9fcda05bcb972a4d2d9651c6d521be`
-- Last source/test checkpoint before this documentation commit: `3e0ed45`
+- Last source/test checkpoint before this documentation commit: `e330b1f5e025ae9d7c4f348fc6a787787f7c362d`
 - Final SHA: authoritative post-push `git rev-parse HEAD` recorded in the final task report; a commit cannot embed its own SHA.
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
 - Hardware/RHI: NVIDIA GeForce RTX 4060, NullRHI plus D3D12 / SM6
@@ -116,6 +116,8 @@ Preserved facts:
 - In the standalone M4P1 visual PIE session, the delegated StaticEnvironment control logged `memoryReady=0` / packet-identity mismatch and correctly failed black. It did not affect Last-Seen assertions. The independent frozen M3.5 D3D12 prefix passed 26/26, so this remains a fixture-session diagnostic rather than evidence of an M3.5 contract regression.
 - UE startup retains optional profiler/localization/network diagnostics unrelated to the tested renderer. No final report records them as test warnings.
 - Unreal can clean up the default `L_Prototype` world before loading `/SightWeave/Maps/L_SightWeave_Lab`; no PIE, save, asset operation, or source change targeted `/Game/Maps/L_Prototype`.
+- User Camera 0–4 PIE passed. UE's Lumen `CachedLightingPreExposure=-8.5` red exposure hint was observed but is unrelated to SightWeave behavior and did not affect any acceptance state.
+- A thin blue old-Lab strip appeared briefly only after PIE startup and before explicitly running `SightWeave.Lab.Mode 4`. It disappeared on formal M4P1 entry and did not recur in any tested state; this is retained as a startup-transition observation, not an M4P1 failure.
 
 ## 10. Lab and visual evidence
 
@@ -134,7 +136,7 @@ The final continuous sequence contains 152 screenshots at 1009x340. All 120 reme
 | `M4P1_Camera4_Yaw45.png` | 342546 | 514 | 514 | 514 | 264 | 0 | yaw45 control and separated old-generation target both visible |
 | `M4P1_Camera4_IdentityReuse.png` | 342796 | 264 | 264 | 264 | 264 | 0 | yaw45 control remains; old-generation target strict black |
 
-All current images are 1009x340 under `Saved/Screenshots/M4P1/` and remain uncommitted. The dedicated ROI sequence records Camera 3 control exact pixels `[928,928,928,928]`, transition nonblack `[300,0,300,0]`, changed pixels `[300,300,300]`, and absolute RGB errors `[105300,105300,105300]`. Camera 4 records yaw45 control `[264,264]`, old-generation nonblack `[250,0]`, 250 changed pixels, and absolute RGB error 87750. The agent opened all six dedicated frames and confirmed the separated objects and state changes visually. Cameras 0-2 passed user PIE; Camera 3/4 user recheck remains pending.
+All current images are 1009x340 under `Saved/Screenshots/M4P1/` and remain uncommitted. The dedicated ROI sequence records Camera 3 control exact pixels `[928,928,928,928]`, transition nonblack `[300,0,300,0]`, changed pixels `[300,300,300]`, and absolute RGB errors `[105300,105300,105300]`. Camera 4 records yaw45 control `[264,264]`, old-generation nonblack `[250,0]`, 250 changed pixels, and absolute RGB error 87750. The agent opened all six dedicated frames and confirmed the separated objects and state changes visually. The user subsequently completed and passed Camera 0–4 PIE.
 
 ## 11. Build, packaging, and shipping boundary
 
@@ -162,19 +164,22 @@ d2b2713 docs: record SightWeave M4P1 validation
 e22d0a7 test: preserve M3P5 boundaries through Last-Seen rendering
 3e0ed45 fix: stabilize SightWeave last-seen transitions
 598e179 docs: record M4P1 timing repair validation
+e330b1f fix: expose M4P1 Camera 3 and 4 transitions
 ```
 
 The final documentation commit containing this file is added to the post-push task report. Every reliable checkpoint is pushed to the normal branch; no rescue branch, merge, rebase, force push, reset, or clean was used. Generated reports/logs/screenshots, `Binaries`, `Intermediate`, and `Saved` are ignored and uncommitted. `Darkwell.uproject` retains only the known local EngineAssociation GUID difference and is never staged. Final HEAD/upstream/remote, LFS, and object-database results are the closure commands run after the documentation push.
 
 ## 13. User interactive PIE acceptance
 
-The real visual Lab integration is complete. Cameras 0-2 already passed user PIE. The only remaining M4P1 work is this Camera 3/4 recheck:
+The user completed the authoritative Camera 0–4 pass through `SightWeave.Lab.Mode 4`:
 
-1. Open `/SightWeave/Maps/L_SightWeave_Lab` and start PIE.
-2. Run `SightWeave.Lab.Mode 4`.
-3. Run `SightWeave.Lab.Camera 3`, then State `1 -> 3 -> 1 -> 4`. Confirm the horizontal page-boundary control remains throughout; the separated target is visible, black, restored at the same position, then black after clear.
-4. Run `SightWeave.Lab.Camera 4`, then State `1 -> 5`. Confirm the vertical yaw45 control remains while the separated left old-generation target becomes black.
-5. Copy the final `M4P1 Lab state=...` and `Lab camera bound mode=M4P1 actor=...` health lines from the Output Log, stop PIE, and confirm no teardown error.
+1. Camera 0 Overview passed: live, remembered, and black unknown controls were visible; presentation was healthy and `bindingFailure=0`.
+2. Camera 1 Transition passed: State 0 live, State 1 frozen Last-Seen proxy, and State 2 reacquired live were stable, with no jitter, white ring, double display, residual frame, or black handoff.
+3. Camera 2 PolicyMatrix passed: State 1 was strictly black; NeverRemember, VisibleOnly, dynamic content, and invalid Custom provider output did not leak.
+4. Camera 3 PageBoundary passed: State `1 -> 3 -> 1 -> 4` showed two objects, hid only the right target, restored it at the same position, then cleared it while retaining the horizontal control. No seam, offset, jitter, white flash, or double display occurred.
+5. Camera 4 Rotated45 passed: State `1 -> 5` removed only the left old-generation diamond while retaining the vertical yaw45 control. No stale descriptor inheritance, offset, duplicate, jitter, or white flash occurred.
+
+The Lumen exposure hint and pre-Mode-4 thin blue startup strip described in Section 9 are retained observations and did not occur as failures in the formal acceptance states.
 
 State mapping is `0=Live`, `1=Remembered`, `2=Reacquired`, `3=SuppressedBlocked`, `4=Cleared`, `5=IdentityReuse`. Camera actors are `SW_M4P1_Camera0_Overview`, `SW_M4P1_Camera1_Transition`, `SW_M4P1_Camera2_PolicyMatrix`, `SW_M4P1_Camera3_PageBoundary`, and `SW_M4P1_Camera4_Rotated45`.
 

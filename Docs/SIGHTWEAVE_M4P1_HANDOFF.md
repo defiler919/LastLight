@@ -1,13 +1,13 @@
 # SightWeave M4P1 visual acceptance handoff
 
-Status: **PARTIAL — automated closure complete; user Camera 3/4 PIE recheck pending**
+Status: **COMPLETED — automated and user Camera 0–4 PIE acceptance passed**
 
 - Branch: `codex/m4p1-sightweave-subject-policy-last-seen`
 - Continuation baseline: `d2b27136288ecf11d96b6e09d7a2b2fea6dbaa05`
 - Frozen M3.5 baseline: `941dcb75fe9fcda05bcb972a4d2d9651c6d521be`
 - Timing-repair continuation baseline: `4e0b5e1ec93391467846028f1bf46fdf92e67ed3`
 - Camera 3/4 observability continuation baseline: `598e1798cc649b32b2ed244eba9fcec915b67205`
-- Last source/test checkpoint before this documentation commit: `3e0ed45`
+- Last source/test checkpoint before this documentation commit: `e330b1f5e025ae9d7c4f348fc6a787787f7c362d`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
 - GPU/RHI: NVIDIA GeForce RTX 4060, D3D12 / SM6; NullRHI also validated
 
@@ -15,7 +15,7 @@ Status: **PARTIAL — automated closure complete; user Camera 3/4 PIE recheck pe
 
 M4P1 now has a real runtime-generated Lab fixture inside the PIE world, five stable cameras, six controllable subject states, CustomDepth/stencil-only Last-Seen proxies, D3D12/SM6 screenshots, exact pixel validation, agent image inspection, lifecycle coverage, and green M3.4/M3.5 regressions. No map asset was modified: the fixture is created and destroyed by the editor module around `/SightWeave/Maps/L_SightWeave_Lab` PIE.
 
-The user has passed Camera 0 Overview, Camera 1 live/remembered/reacquire timing, and Camera 2 fail-black policy inspection. The only remaining acceptance item is the user's interactive Camera 3/4 PIE recheck after the observability repair. Automated implementation, build, Lab, continuous-frame image, ROI, regression, severe-log, and remote-checkpoint gates are green. BuildPlugin, clean-host, Game Shipping, full SightWeave, DARKWELL, and the full performance matrix were explicitly outside this bounded M4P1 continuation and do not block this status.
+The user completed and passed Camera 0–4 interactive PIE after both visual repairs. Automated implementation, build, Lab, continuous-frame image, ROI, regression, severe-log, and remote-checkpoint gates are also green. M4P1 has no remaining acceptance item. BuildPlugin, clean-host, Game Shipping, full SightWeave, DARKWELL, and the full performance matrix were explicitly outside this bounded M4P1 continuation and do not block completion.
 
 ## Timing-defect repair
 
@@ -35,6 +35,18 @@ Accurate expanded-fixture logs are State 0/2 `live=3 proxies=4`, State 1 `live=0
 
 `SightWeave.M4P1.Visual.Camera34Observability` captures six D3D12/SM6 frames and validates separated ROIs. At 1009x340, Camera 3 control RGB117 pixels are `[928,928,928,928]`; transition nonblack pixels are `[300,0,300,0]` for State 1/3/restored 1/4, with changed pixels `[300,300,300]` and absolute RGB errors `[105300,105300,105300]`. Camera 4 yaw45 control pixels are `[264,264]`; old-generation nonblack pixels are `[250,0]`, with 250 changed pixels and absolute RGB error 87750. The agent opened all six frames and confirmed both targets are spatially separated, black only in their required states, and the controls remain visible.
 
+## Final user PIE acceptance
+
+The user completed the authoritative Camera 0–4 pass through `SightWeave.Lab.Mode 4`:
+
+- Camera 0 Overview: live, remembered, and black unknown controls were visible; presentation was healthy and `bindingFailure=0`.
+- Camera 1 Transition: State 0 live, State 1 Last-Seen proxy, and State 2 reacquired live were stable. There was no jitter, white ring, live/proxy double display, residual frame, or black handoff.
+- Camera 2 PolicyMatrix: State 1 remained strictly black. NeverRemember, VisibleOnly, dynamic content, and invalid Custom provider output did not leak.
+- Camera 3 PageBoundary: State 1 showed the horizontal control plus the right target; State 3 hid only the target; returning to State 1 restored it at the same position; State 4 hid it again while retaining the control. There was no seam, offset, jitter, white flash, or double display.
+- Camera 4 Rotated45: State 1 showed the vertical yaw45 control plus the left old-generation diamond; State 5 removed only the old-generation target. There was no stale descriptor inheritance, offset, duplicate, jitter, or white flash.
+
+Two observations are retained but do not block acceptance: UE emitted the unrelated Lumen `CachedLightingPreExposure=-8.5` red exposure hint; and immediately after PIE startup, before explicitly selecting Mode 4, an old-Lab thin blue strip briefly appeared. It disappeared upon entering the formal M4P1 Lab and did not recur in any tested state.
+
 ## Reliable remote checkpoints
 
 All listed commits were pushed to `origin/codex/m4p1-sightweave-subject-policy-last-seen`:
@@ -52,6 +64,7 @@ All listed commits were pushed to `origin/codex/m4p1-sightweave-subject-policy-l
 11. `e22d0a7` — `test: preserve M3P5 boundaries through Last-Seen rendering`
 12. `3e0ed45` — `fix: stabilize SightWeave last-seen transitions`
 13. `598e179` — `docs: record M4P1 timing repair validation`
+14. `e330b1f` — `fix: expose M4P1 Camera 3 and 4 transitions`
 
 The final documentation checkpoint is the commit containing this file; the authoritative final SHA is the post-push `git rev-parse HEAD` value in the final Git closure and user handoff message. This avoids pretending a Git commit can contain its own hash.
 
@@ -115,7 +128,9 @@ Canonical evidence paths are listed in `Docs/SIGHTWEAVE_M4P1_FINAL_VALIDATION.md
 
 ## Preserved limitations and warnings
 
-- User-operated Camera 3/4 interactive PIE recheck remains pending; Cameras 0-2 already passed. This is the sole reason for `PARTIAL`.
+- User-operated Camera 0–4 interactive PIE passed; no M4P1 acceptance work remains.
+- UE's Lumen `CachedLightingPreExposure=-8.5` red exposure hint is unrelated to SightWeave behavior and did not affect acceptance.
+- A thin blue old-Lab strip was briefly visible only during PIE startup before `SightWeave.Lab.Mode 4`; it disappeared on formal entry and never appeared in a tested M4P1 state.
 - Two restricted build launches waited before UBT log creation/global-mutex acquisition and were stopped only after process/log inspection. The single authorized standard build then completed 15/15 actions; later serial incremental/final builds also succeeded.
 - No authored `.umap` was changed. Unreal may log cleanup of the project-default `L_Prototype` before loading the allowed Lab, but no PIE, save, asset operation, or source change targeted `/Game/Maps/L_Prototype`.
 - No WorldSubsystem/gameplay adapter, production subject, persistence, skeletal/VFX/light/audio snapshot, SceneCapture, or reveal override was added.
@@ -135,4 +150,4 @@ git pull --ff-only
 & 'D:\UE_projects\LastLight\Scripts\BuildEditor.ps1' -EngineRoot 'D:\UE_5.8'
 ```
 
-After recovery, perform only the remaining Camera 3/4 PIE checklist. For Camera 3 run State `1 -> 3 -> 1 -> 4` and confirm two objects, target disappearance, same-position restore, then clear while the page-boundary control remains. For Camera 4 run State `1 -> 5` and confirm the left old-generation target disappears while the yaw45 control remains. Copy the final `M4P1 Lab state=...` and `Lab camera bound...` lines. Do not modify `/Game/Maps/L_Prototype` or `Darkwell.uproject`.
+M4P1 is complete after recovery; no acceptance rerun is required unless later work changes its product or Lab paths. Begin the next milestone only from an explicit new task. Do not modify `/Game/Maps/L_Prototype` or the local `Darkwell.uproject` association while recovering this checkpoint.

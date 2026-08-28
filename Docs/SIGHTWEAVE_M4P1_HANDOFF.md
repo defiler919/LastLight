@@ -98,6 +98,7 @@ Canonical evidence paths are listed in `Docs/SIGHTWEAVE_M4P1_FINAL_VALIDATION.md
 - The first D3D visual run retained one failure because Camera 1 Reacquired was black; installing a root component had reset the actor location. Explicit post-registration placement repaired it, and all later dedicated/full visual runs passed.
 - One sandboxed standard build failed before compilation because UBT could not rotate `%LOCALAPPDATA%\UnrealBuildTool\Log.txt`; the same standard build outside the filesystem sandbox succeeded. This was not a source failure.
 - The first final M3.5 attempt retained 25 successes and one old packaging source-string failure. The M3.5 authority exclusions remain frozen; the test now recognizes only the bounded M4P1 stencil presentation extension. The isolated repair passed 1/1 and the final full prefix passed 26/26.
+- The standalone M4P1 visual session's delegated StaticEnvironment control logged `memoryReady=0` / packet-identity mismatch and correctly failed black. The independent frozen M3.5 D3D12 prefix passed 26/26; treat this as a retained fixture-session diagnostic, not a Last-Seen or M3.5 regression.
 - No rescue branch was required because every retained implementation checkpoint compiled, tested, committed, and reached the normal remote branch.
 
 ## Resume

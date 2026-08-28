@@ -32,6 +32,7 @@ namespace SightWeave::M2P1::DynamicTests
 			FWorldContext& Context = GEngine->CreateNewWorldContext(World->WorldType);
 			Context.SetCurrentWorld(World);
 			World->InitializeNewWorld(UWorld::InitializationValues()
+				.InitializeScenes(false)
 				.AllowAudioPlayback(false)
 				.CreatePhysicsScene(false)
 				.RequiresHitProxies(false)

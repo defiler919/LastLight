@@ -297,6 +297,7 @@ namespace SightWeave::M2P::DifferentialTests
 			FWorldContext& Context = GEngine->CreateNewWorldContext(World->WorldType);
 			Context.SetCurrentWorld(World);
 			World->InitializeNewWorld(UWorld::InitializationValues()
+				.InitializeScenes(false)
 				.AllowAudioPlayback(false)
 				.CreatePhysicsScene(false)
 				.RequiresHitProxies(false)

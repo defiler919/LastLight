@@ -49,6 +49,7 @@ namespace SightWeave::Tests
 			FWorldContext& WorldContext = GEngine->CreateNewWorldContext(World->WorldType);
 			WorldContext.SetCurrentWorld(World);
 			World->InitializeNewWorld(UWorld::InitializationValues()
+				.InitializeScenes(false)
 				.AllowAudioPlayback(false)
 				.CreatePhysicsScene(false)
 				.RequiresHitProxies(false)

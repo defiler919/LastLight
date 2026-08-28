@@ -2,7 +2,10 @@
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "HAL/PlatformMemory.h"
 #include "Misc/AutomationTest.h"
+#include "RHIGlobals.h"
+#include "RenderingThread.h"
 #include "SightWeaveWorldSubsystem.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
@@ -23,6 +26,7 @@ namespace SightWeave::M2::QueryTests
 			FWorldContext& Context = GEngine->CreateNewWorldContext(World->WorldType);
 			Context.SetCurrentWorld(World);
 			World->InitializeNewWorld(UWorld::InitializationValues()
+				.InitializeScenes(false)
 				.AllowAudioPlayback(false)
 				.CreatePhysicsScene(false)
 				.RequiresHitProxies(false)
@@ -599,6 +603,61 @@ bool FSightWeaveM2InvalidQueryTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("Stale source-specific handle is explicit"),
 			Subsystem->QueryVisionSourceHardLiveAtLocation(Handle, Local, Ground, FVector::ZeroVector).Status == ESightWeaveQueryStatus::InvalidHandle);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P2CpuWorldResourceLifetimeTest,
+	"SightWeave.M4P2.ResourceLifetime.CpuWorldCycles",
+	SightWeave::M2::QueryTests::TestFlags)
+
+bool FSightWeaveM4P2CpuWorldResourceLifetimeTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M2::QueryTests;
+	constexpr int32 CycleCount = 40;
+	FlushRenderingCommands();
+	const int64 BaselineReservedVirtualBytes = GRHIGlobals.ReservedResources.VirtualSize;
+	const FPlatformMemoryStats BaselineMemory = FPlatformMemory::GetStats();
+	FString ReservedSamples;
+	FString ProcessPhysicalSamples;
+	FString ProcessVirtualSamples;
+	for (int32 CycleIndex = 0; CycleIndex < CycleCount; ++CycleIndex)
+	{
+		{
+			FTestWorld World(TEXT("SightWeaveM4P2CpuWorldLifetime"));
+			USightWeaveWorldSubsystem* Subsystem = World.GetSubsystem();
+			if (!TestNotNull(TEXT("Lifecycle subsystem exists"), Subsystem)
+				|| !TestTrue(TEXT("Lifecycle floor registers"), Subsystem->RegisterFloor(Floor(), nullptr)))
+			{
+				return false;
+			}
+		}
+		FlushRenderingCommands();
+		const int64 ReservedVirtualBytes = GRHIGlobals.ReservedResources.VirtualSize;
+		const FPlatformMemoryStats Memory = FPlatformMemory::GetStats();
+		if (CycleIndex > 0)
+		{
+			ReservedSamples += TEXT(",");
+			ProcessPhysicalSamples += TEXT(",");
+			ProcessVirtualSamples += TEXT(",");
+		}
+		ReservedSamples += FString::Printf(TEXT("%lld"), ReservedVirtualBytes);
+		ProcessPhysicalSamples += FString::Printf(TEXT("%llu"), Memory.UsedPhysical);
+		ProcessVirtualSamples += FString::Printf(TEXT("%llu"), Memory.UsedVirtual);
+		TestEqual(
+			*FString::Printf(TEXT("Cycle %d returns to reserved-resource baseline"), CycleIndex),
+			ReservedVirtualBytes,
+			BaselineReservedVirtualBytes);
+	}
+	AddInfo(FString::Printf(
+		TEXT("M4P2_RESOURCE_LIFETIME kind=cpu_world cycles=%d baseline_reserved_virtual_bytes=%lld baseline_process_physical_bytes=%llu baseline_process_virtual_bytes=%llu reserved_virtual_samples=[%s] process_physical_samples=[%s] process_virtual_samples=[%s]"),
+		CycleCount,
+		BaselineReservedVirtualBytes,
+		BaselineMemory.UsedPhysical,
+		BaselineMemory.UsedVirtual,
+		*ReservedSamples,
+		*ProcessPhysicalSamples,
+		*ProcessVirtualSamples));
 	return true;
 }
 

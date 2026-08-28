@@ -5,7 +5,8 @@ Status: **PARTIAL — automated closure complete; user interactive PIE pending**
 - Branch: `codex/m4p1-sightweave-subject-policy-last-seen`
 - Continuation baseline: `d2b27136288ecf11d96b6e09d7a2b2fea6dbaa05`
 - Frozen M3.5 baseline: `941dcb75fe9fcda05bcb972a4d2d9651c6d521be`
-- Last source/test checkpoint before this documentation commit: `e22d0a7`
+- Timing-repair continuation baseline: `4e0b5e1ec93391467846028f1bf46fdf92e67ed3`
+- Last source/test checkpoint before this documentation commit: `3e0ed45`
 - Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
 - GPU/RHI: NVIDIA GeForce RTX 4060, D3D12 / SM6; NullRHI also validated
 
@@ -13,7 +14,15 @@ Status: **PARTIAL — automated closure complete; user interactive PIE pending**
 
 M4P1 now has a real runtime-generated Lab fixture inside the PIE world, five stable cameras, six controllable subject states, CustomDepth/stencil-only Last-Seen proxies, D3D12/SM6 screenshots, exact pixel validation, agent image inspection, lifecycle coverage, and green M3.4/M3.5 regressions. No map asset was modified: the fixture is created and destroyed by the editor module around `/SightWeave/Maps/L_SightWeave_Lab` PIE.
 
-The only remaining acceptance item is the user's interactive PIE inspection. Automated implementation, build, Lab, image, regression, severe-log, and remote-checkpoint gates are green. BuildPlugin, clean-host, Game Shipping, full SightWeave, DARKWELL, and the full performance matrix were explicitly outside this M4P1 visual continuation and do not block this status.
+The only remaining acceptance item is the user's interactive PIE inspection, which must be repeated for Camera 0-4 after the timing repair. Automated implementation, build, Lab, continuous-frame image, regression, severe-log, and remote-checkpoint gates are green. BuildPlugin, clean-host, Game Shipping, full SightWeave, DARKWELL, and the full performance matrix were explicitly outside this bounded M4P1 timing continuation and do not block this status.
+
+## Timing-defect repair
+
+Manual Camera 1 PIE exposed two defects that stable single screenshots could not see. State 1 jitter came from the post-tonemap proxy composite reading CustomDepth with temporal projection jitter. State 2's white ring came from rebuilding the entire fixture on every state change and then carrying incompatible temporal post-process history into the reacquired live frame. The old rebuild also relied on a transient source-registration side effect to keep the presentation page resident.
+
+The repair keeps TAA, Width=50 feather, bloom, and quality enabled. `r.CustomDepthTemporalAAJitter=0` removes jitter only from the CustomDepth pass consumed after TAA. A presented immutable descriptor is now idempotent: the same revision, mesh/material paths, transform, and descriptor do not clear/reload/recreate the scene proxy. Reacquire hides the proxy before showing live, rejects old temporal history with UE's camera-cut flag, and retains monotonic source/residency generation ordering. Lab state transitions mutate only the primary authority/presentation objects; the comparison matrix, lights, descriptors, and transforms remain in place.
+
+The new `SightWeave.M4P1.Visual.ContinuousTransition` D3D12/SM6 test captures 120 immediate State 1 frames plus 32 immediate State 1-to-2 frames. Final evidence: State 1 `count_min=count_max=1936`, bounds `(483,148)-(527,192)`, centroid max delta `0`; reacquire `proxy_only=0`, `black_handoff=0`, `live=32`, maximum proxy-color collision `0`, final live bounds `(475,141)-(535,200)`. The agent opened five remembered and four reacquire representative frames; no jitter, black hole, proxy residue, double image, or white ring was present.
 
 ## Reliable remote checkpoints
 
@@ -30,6 +39,7 @@ All listed commits were pushed to `origin/codex/m4p1-sightweave-subject-policy-l
 9. `1596807` — `feat: add SightWeave M4P1 visual Lab fixture`
 10. `1e848b8` — `test: validate SightWeave Last-Seen presentation`
 11. `e22d0a7` — `test: preserve M3P5 boundaries through Last-Seen rendering`
+12. `3e0ed45` — `fix: stabilize SightWeave last-seen transitions`
 
 The final documentation checkpoint is the commit containing this file; the authoritative final SHA is the post-push `git rev-parse HEAD` value in the final Git closure and user handoff message. This avoids pretending a Git commit can contain its own hash.
 
@@ -47,7 +57,7 @@ The descriptor carries stable ID and instance generation, complete non-hash memo
 
 Clear deletes intersecting exact-scope descriptors. Suppression and block hide the proxy while retaining the descriptor. Unknown, stale revision, scope mismatch, world mismatch, or generation reuse selects black with no stale fallback. Authority reset removes subjects and snapshots for teardown/world restart.
 
-The proxy is a transient `UStaticMeshComponent` with no collision, overlap, physics, navigation relevance, tick, decals, dynamic shadow, or dynamic indirect/distance-field lighting. It loads only stable mesh/material asset paths, requires opaque material overrides, clears stale resources before every decision, and presents only when the CPU result and descriptor revision match. The bridge mutates presentation visibility only; it does not alter gameplay, AI, damage, interaction, save, audio, VFX, or light state.
+The proxy is a transient `UStaticMeshComponent` with no collision, overlap, physics, navigation relevance, tick, decals, dynamic shadow, or dynamic indirect/distance-field lighting. It loads only stable mesh/material asset paths, requires opaque material overrides, preserves an exactly matching immutable presentation without churn, and clears stale resources on invalid, hidden, or changed decisions. The bridge mutates presentation visibility only; it does not alter gameplay, AI, damage, interaction, save, audio, VFX, or light state.
 
 The final presentation path additionally disables main-pass and ordinary depth rendering. A reserved CustomDepth stencil value of `246` identifies legal proxies; the M3 hard-mask/inward-feather composite checks proxy depth against SceneDepth and emits the fixed neutral intensity `0.46` (8-bit RGB `117`). Hidden proxies disable CustomDepth. This preserves M3.5 HardLive-first ordering and never stores Scene Color, current lighting, shadow, VFX, skeletal, or dynamic-material output.
 
@@ -77,21 +87,23 @@ Camera actors logged by the binding command are, in order, `SW_M4P1_Camera0_Over
 
 ## Validation summary
 
-- Final standard `DarkwellEditor Win64 Development`: succeeded, 9 actions after the last test change. An independent standard up-to-date run also succeeded earlier. MSVC 14.51 remains newer than UE 5.8's preferred 14.50.
+- Final standard `DarkwellEditor Win64 Development`: independent runtime/source build succeeded with 15 actions; the final post-test build succeeded with 4 actions. MSVC 14.51 remains newer than UE 5.8's preferred 14.50.
 - M4P1 full NullRHI: 9/9, 0 warning, 0 failed.
-- M4P1 full D3D12/SM6: 10/10, 0 warning, 0 failed; this includes the real visual test.
+- M4P1 full D3D12/SM6: 11/11, 0 warning, 0 failed; this includes the stable-frame and continuous-frame visual tests.
+- Dedicated continuous transition D3D12/SM6: 1/1, 0 warning, 0 failed; 120 remembered + 32 reacquire frames.
 - Dedicated M4P1 visual D3D12/SM6: 1/1, 0 warning, 0 failed, 28.73 s.
 - M4P1 Lab: NullRHI 2/2 and D3D12/SM6 2/2, both with zero warnings/failures.
 - M3.4 presentation D3D12/SM6: 3/3, 0 warning, 0 failed.
 - M3.5 complete D3D12/SM6 after compatibility repair: 26/26, 0 warning, 0 failed.
-- Seven final gate logs: zero severe Shader compiler, ShaderCompileWorker, Renderer/RenderCore, RDG, D3D12/RHI, GPU crash/hang/device-removal, fatal, assert, ensure, or failed-test matches.
+- Five timing-repair final gate logs: zero severe Shader compiler, ShaderCompileWorker, Renderer/RenderCore, RDG, D3D12/RHI, GPU crash/hang/device-removal, fatal, assert, ensure, or failed-test matches.
 - Eight final screenshots: `nonfinite=0`; exact neutral proxy pixels use RGB 117; every negative-region assertion reports zero leakage.
 
 Canonical evidence paths are listed in `Docs/SIGHTWEAVE_M4P1_FINAL_VALIDATION.md`. All reports, logs, and screenshots live under `Saved` and are intentionally uncommitted.
 
 ## Preserved limitations and warnings
 
-- User-operated interactive PIE remains pending; this is the sole reason for `PARTIAL`.
+- User-operated Camera 0-4 interactive PIE rerun remains pending; this is the sole reason for `PARTIAL`.
+- Two restricted build launches waited before UBT log creation/global-mutex acquisition and were stopped only after process/log inspection. The single authorized standard build then completed 15/15 actions; later serial incremental/final builds also succeeded.
 - No authored `.umap` was changed. Unreal may log cleanup of the project-default `L_Prototype` before loading the allowed Lab, but no PIE, save, asset operation, or source change targeted `/Game/Maps/L_Prototype`.
 - No WorldSubsystem/gameplay adapter, production subject, persistence, skeletal/VFX/light/audio snapshot, SceneCapture, or reveal override was added.
 - Full SightWeave, DARKWELL, BuildPlugin, clean-host, Game/Shipping, and expanded performance/package matrices were not required or run in this bounded visual continuation.

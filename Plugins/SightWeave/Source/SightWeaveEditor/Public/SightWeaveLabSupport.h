@@ -9,7 +9,8 @@ enum class ESightWeaveLabMode : uint8
 	M2,
 	M3P3,
 	M3P4,
-	M3P5
+	M3P5,
+	M4P1
 };
 
 enum class ESightWeaveLabCamera : uint8

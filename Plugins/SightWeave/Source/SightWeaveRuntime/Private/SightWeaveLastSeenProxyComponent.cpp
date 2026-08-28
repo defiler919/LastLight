@@ -54,6 +54,7 @@ bool USightWeaveLastSeenProxyComponent::PresentSnapshot(
 		ETeleportType::TeleportPhysics);
 	PresentedSnapshotRevision = Snapshot.SnapshotRevision;
 	EnforceRenderOnlyConfiguration();
+	SetRenderCustomDepth(true);
 	SetVisibility(true, true);
 	return true;
 }
@@ -69,6 +70,7 @@ void USightWeaveLastSeenProxyComponent::HideAndClear()
 	SetStaticMesh(nullptr);
 	PresentedSnapshotRevision = 0;
 	EnforceRenderOnlyConfiguration();
+	SetRenderCustomDepth(false);
 }
 
 bool USightWeaveLastSeenProxyComponent::HasRenderOnlyConfiguration() const
@@ -81,7 +83,10 @@ bool USightWeaveLastSeenProxyComponent::HasRenderOnlyConfiguration() const
 		&& !IsSimulatingPhysics()
 		&& !CastShadow
 		&& !bAffectDynamicIndirectLighting
-		&& !bAffectDistanceFieldLighting;
+		&& !bAffectDistanceFieldLighting
+		&& !bRenderInMainPass
+		&& !bRenderInDepthPass
+		&& CustomDepthStencilValue == SightWeave::SubjectMemory::LastSeenProxyStencilValue;
 }
 
 void USightWeaveLastSeenProxyComponent::OnRegister()
@@ -108,6 +113,9 @@ void USightWeaveLastSeenProxyComponent::EnforceRenderOnlyConfiguration()
 	SetEnableGravity(false);
 	SetCanEverAffectNavigation(false);
 	SetCastShadow(false);
+	SetRenderInMainPass(false);
+	SetRenderInDepthPass(false);
+	SetCustomDepthStencilValue(SightWeave::SubjectMemory::LastSeenProxyStencilValue);
 	bAffectDynamicIndirectLighting = false;
 	bAffectDistanceFieldLighting = false;
 	SetReceivesDecals(false);

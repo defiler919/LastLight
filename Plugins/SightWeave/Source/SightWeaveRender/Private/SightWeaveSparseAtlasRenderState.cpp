@@ -13,6 +13,7 @@
 #include "PostProcess/PostProcessMaterialInputs.h"
 #include "ScreenPass.h"
 #include "SightWeaveRenderModule.h"
+#include "SightWeaveLastSeenProxyComponent.h"
 #include "SightWeaveTileShaders.h"
 #include "SystemTextures.h"
 
@@ -1578,6 +1579,14 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 	{
 		return FailBlack(105, TEXT("fail-scene-depth"), Scope);
 	}
+	FRDGTextureRef SubjectProxyDepth =
+		Inputs.SceneTextures.SceneTextures->GetParameters()->CustomDepthTexture;
+	FRDGTextureSRVRef SubjectProxyStencil =
+		Inputs.SceneTextures.SceneTextures->GetParameters()->CustomStencilTexture;
+	if (!SubjectProxyDepth || !SubjectProxyStencil)
+	{
+		return FailBlack(108, TEXT("fail-subject-proxy-depth-stencil"), Scope);
+	}
 
 	FRDGTextureRef DummyPage = GSystemTextures.GetBlackDummy(GraphBuilder);
 	FRDGTextureRef AtlasPages[4] = { DummyPage, DummyPage, DummyPage, DummyPage };
@@ -1725,6 +1734,12 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		Parameters->View = View.ViewUniformBuffer;
 		Parameters->SceneColorTexture = SceneColor.Texture;
 		Parameters->SceneDepthTexture = SceneDepth;
+		Parameters->SubjectProxyDepthTexture = SubjectProxyDepth;
+		Parameters->SubjectProxyStencilTexture = SubjectProxyStencil;
+		Parameters->SubjectProxyStencilValue =
+			SightWeave::SubjectMemory::LastSeenProxyStencilValue;
+		Parameters->SubjectProxyNeutralIntensity =
+			SightWeave::SubjectMemory::LastSeenProxyNeutralIntensity;
 		Parameters->PageTable = GraphBuilder.CreateSRV(Scope->CurrentPageTable);
 		Parameters->AtlasPage0 = AtlasPages[0];
 		Parameters->AtlasPage1 = AtlasPages[1];
@@ -1786,6 +1801,12 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		Parameters->View = View.ViewUniformBuffer;
 		Parameters->SceneColorTexture = SceneColor.Texture;
 		Parameters->SceneDepthTexture = SceneDepth;
+		Parameters->SubjectProxyDepthTexture = SubjectProxyDepth;
+		Parameters->SubjectProxyStencilTexture = SubjectProxyStencil;
+		Parameters->SubjectProxyStencilValue =
+			SightWeave::SubjectMemory::LastSeenProxyStencilValue;
+		Parameters->SubjectProxyNeutralIntensity =
+			SightWeave::SubjectMemory::LastSeenProxyNeutralIntensity;
 		Parameters->PageTable = GraphBuilder.CreateSRV(Scope->CurrentPageTable);
 		Parameters->AtlasPage0 = AtlasPages[0];
 		Parameters->AtlasPage1 = AtlasPages[1];

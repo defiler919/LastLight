@@ -1,4 +1,5 @@
 #include "SightWeaveLabSupport.h"
+#include "SightWeaveM4P1LabFixture.h"
 
 #include "Camera/CameraActor.h"
 #include "Containers/Ticker.h"
@@ -32,6 +33,8 @@ namespace
 		int32 BoundCameraSelection = INDEX_NONE;
 		bool bFailureLogged = false;
 		bool bHealthyLogged = false;
+		int32 M4P1LoggedState = INDEX_NONE;
+		TUniquePtr<FSightWeaveM4P1LabFixture> M4P1Fixture;
 	};
 
 	bool GSettingsSectionRegistered = false;
@@ -41,6 +44,21 @@ namespace
 		static_cast<int32>(ESightWeaveLabCamera::Overview),
 		TEXT("Select the active SightWeave Lab camera by stable Actor label.\n")
 		TEXT("0: Overview, 1: Closeup, 2: DynamicDoor, 3: PageBoundary, 4: Rotated45."),
+		ECVF_Default);
+
+	TAutoConsoleVariable<int32> CVarSightWeaveLabMode(
+		TEXT("SightWeave.Lab.Mode"),
+		static_cast<int32>(ESightWeaveLabMode::M3P5),
+		TEXT("Select the isolated SightWeave Lab milestone.\n")
+		TEXT("0: M2, 1: M3P3, 2: M3P4, 3: M3P5, 4: M4P1."),
+		ECVF_Default);
+
+	TAutoConsoleVariable<int32> CVarSightWeaveM4P1State(
+		TEXT("SightWeave.Lab.M4P1.State"),
+		1,
+		TEXT("Drive the primary M4P1 transition fixture.\n")
+		TEXT("0: Live, 1: Remembered, 2: Reacquired, 3: SuppressedBlocked, ")
+		TEXT("4: Cleared, 5: IdentityReuse."),
 		ECVF_Default);
 
 	FString GetActorLabel(const AActor* Actor)
@@ -146,6 +164,11 @@ namespace SightWeave::Lab
 			{
 				return ESightWeaveLabMode::M3P5;
 			}
+			if (RequestedMode.Equals(TEXT("M4P1"), ESearchCase::IgnoreCase)
+				|| RequestedMode.Equals(TEXT("M4.1"), ESearchCase::IgnoreCase))
+			{
+				return ESightWeaveLabMode::M4P1;
+			}
 		}
 
 		return ESightWeaveLabMode::M3P5;
@@ -161,6 +184,8 @@ namespace SightWeave::Lab
 			return TEXT("M3P3");
 		case ESightWeaveLabMode::M3P4:
 			return TEXT("M3P4");
+		case ESightWeaveLabMode::M4P1:
+			return TEXT("M4P1");
 		case ESightWeaveLabMode::M3P5:
 		default:
 			return TEXT("M3P5");
@@ -171,6 +196,23 @@ namespace SightWeave::Lab
 		const ESightWeaveLabMode Mode,
 		const ESightWeaveLabCamera Camera)
 	{
+		if (Mode == ESightWeaveLabMode::M4P1)
+		{
+			switch (Camera)
+			{
+			case ESightWeaveLabCamera::Closeup:
+				return TEXT("SW_M4P1_Camera1_Transition");
+			case ESightWeaveLabCamera::DynamicDoor:
+				return TEXT("SW_M4P1_Camera2_PolicyMatrix");
+			case ESightWeaveLabCamera::PageBoundary:
+				return TEXT("SW_M4P1_Camera3_PageBoundary");
+			case ESightWeaveLabCamera::Rotated45:
+				return TEXT("SW_M4P1_Camera4_Rotated45");
+			case ESightWeaveLabCamera::Overview:
+			default:
+				return TEXT("SW_M4P1_Camera0_Overview");
+			}
+		}
 		if (Mode == ESightWeaveLabMode::M3P4 || Mode == ESightWeaveLabMode::M3P5)
 		{
 			switch (Camera)
@@ -221,6 +263,8 @@ namespace SightWeave::Lab
 			return ActorLabel.StartsWith(TEXT("SW_M3P3_"));
 		case ESightWeaveLabMode::M3P4:
 			return ActorLabel.StartsWith(TEXT("SW_M3P4_")) || IsPageBoundaryFixture(ActorLabel);
+		case ESightWeaveLabMode::M4P1:
+			return ActorLabel.StartsWith(TEXT("SW_M4P1_"));
 		case ESightWeaveLabMode::M3P5:
 		default:
 			return ActorLabel.StartsWith(TEXT("SW_M3P5_"))
@@ -308,6 +352,11 @@ public:
 	{
 		RegisterSettings();
 		LabMode = SightWeave::Lab::ResolveModeFromCommandLine();
+		if (IConsoleVariable* ModeVariable =
+			IConsoleManager::Get().FindConsoleVariable(TEXT("SightWeave.Lab.Mode")))
+		{
+			ModeVariable->Set(static_cast<int32>(LabMode), ECVF_SetByCode);
+		}
 		TickerHandle = FTSTicker::GetCoreTicker().AddTicker(
 			FTickerDelegate::CreateRaw(this, &FSightWeaveEditorModule::Tick));
 		bTickerRegistered = true;
@@ -363,6 +412,28 @@ private:
 			return true;
 		}
 
+		const ESightWeaveLabMode RequestedMode = static_cast<ESightWeaveLabMode>(FMath::Clamp(
+			CVarSightWeaveLabMode.GetValueOnGameThread(),
+			static_cast<int32>(ESightWeaveLabMode::M2),
+			static_cast<int32>(ESightWeaveLabMode::M4P1)));
+		if (RequestedMode != LabMode)
+		{
+			for (FSightWeaveLabWorldState& State : LabWorldStates)
+			{
+				State.M4P1Fixture.Reset();
+				State.bIsolationApplied = false;
+				State.bMemoryConfigured = false;
+				State.bMemoryFixtureTransitionApplied = false;
+				State.BoundCameraSelection = INDEX_NONE;
+				State.bFailureLogged = false;
+				State.bHealthyLogged = false;
+				State.M4P1LoggedState = INDEX_NONE;
+			}
+			LabMode = RequestedMode;
+			UE_LOG(LogSightWeaveEditor, Display, TEXT("Lab mode changed mode=%s"),
+				SightWeave::Lab::LexToString(LabMode));
+		}
+
 		for (const FWorldContext& Context : GEngine->GetWorldContexts())
 		{
 			UWorld* World = Context.World();
@@ -413,6 +484,40 @@ private:
 			if (LabMode == ESightWeaveLabMode::M3P5)
 			{
 				PrepareM3P5Memory(World, *State);
+			}
+			else if (LabMode == ESightWeaveLabMode::M4P1)
+			{
+				if (!State->M4P1Fixture)
+				{
+					State->M4P1Fixture = MakeUnique<FSightWeaveM4P1LabFixture>();
+					if (!State->M4P1Fixture->Initialize(World))
+					{
+						State->M4P1Fixture.Reset();
+						continue;
+					}
+					State->BoundCameraSelection = INDEX_NONE;
+				}
+				const int32 RequestedState = FMath::Clamp(
+					CVarSightWeaveM4P1State.GetValueOnGameThread(), 0, 5);
+				if (State->M4P1Fixture->GetAppliedState() != RequestedState)
+				{
+					if (!State->M4P1Fixture->ApplyState(RequestedState))
+					{
+						continue;
+					}
+					State->BoundCameraSelection = INDEX_NONE;
+				}
+				if (State->M4P1LoggedState != RequestedState)
+				{
+					State->M4P1LoggedState = RequestedState;
+					UE_LOG(LogSightWeaveEditor, Display,
+						TEXT("M4P1 Lab state=%d live=%d proxies=%d retainedSnapshots=%d"),
+						RequestedState,
+						State->M4P1Fixture->GetVisibleLiveCount(),
+						State->M4P1Fixture->GetVisibleProxyCount(),
+						State->M4P1Fixture->GetRetainedSnapshotCount());
+				}
+				State->M4P1Fixture->Tick();
 			}
 
 			const int32 CameraSelection = FMath::Clamp(

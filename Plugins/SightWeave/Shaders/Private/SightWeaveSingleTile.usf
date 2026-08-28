@@ -119,6 +119,10 @@ float SightWeaveAtlasSuppressionPS(float4 Position : SV_POSITION) : SV_Target0
 
 Texture2D<float4> SceneColorTexture;
 Texture2D<float> SceneDepthTexture;
+Texture2D<float> SubjectProxyDepthTexture;
+Texture2D<uint2> SubjectProxyStencilTexture;
+uint SubjectProxyStencilValue;
+float SubjectProxyNeutralIntensity;
 StructuredBuffer<int4> PageTable;
 Texture2D<float> AtlasPage0;
 Texture2D<float> AtlasPage1;
@@ -349,6 +353,24 @@ float4 SightWeaveRememberedEnvironment(int2 DepthPixel)
 	return Attribute > 0.0f ? float4(Attribute.xxx, 1.0f) : 0.0f;
 }
 
+bool SightWeaveIsVisibleSubjectProxy(int2 DepthPixel, float SceneDeviceZ)
+{
+	const uint Stencil = SubjectProxyStencilTexture.Load(int3(DepthPixel, 0))
+		STENCIL_COMPONENT_SWIZZLE;
+	if (Stencil != SubjectProxyStencilValue)
+	{
+		return false;
+	}
+	const float ProxyDeviceZ = SubjectProxyDepthTexture.Load(int3(DepthPixel, 0));
+	// Unreal's reversed-Z device depth is larger for geometry closer to the camera.
+	return ProxyDeviceZ + 1.0e-6f >= SceneDeviceZ;
+}
+
+float4 SightWeaveSubjectProxyNeutral()
+{
+	return float4(SubjectProxyNeutralIntensity.xxx, 1.0f);
+}
+
 float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 {
 	const int2 OutputPixel = int2(Position.xy);
@@ -368,8 +390,12 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 	const float3 TranslatedWorld = SvPositionToTranslatedWorld(
 		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
 	const bool bVisible = SightWeaveIsHardLive(TranslatedWorld.xy);
-	return bVisible
-		? SceneColorTexture.Load(int3(SceneColorPixel, 0))
+	if (bVisible)
+	{
+		return SceneColorTexture.Load(int3(SceneColorPixel, 0));
+	}
+	return SightWeaveIsVisibleSubjectProxy(DepthPixel, DeviceZ)
+		? SightWeaveSubjectProxyNeutral()
 		: SightWeaveRememberedEnvironment(DepthPixel);
 }
 
@@ -504,7 +530,9 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
 	if (!SightWeaveIsHardLive(TranslatedWorld.xy))
 	{
-		return SightWeaveRememberedEnvironment(DepthPixel);
+		return SightWeaveIsVisibleSubjectProxy(DepthPixel, DeviceZ)
+			? SightWeaveSubjectProxyNeutral()
+			: SightWeaveRememberedEnvironment(DepthPixel);
 	}
 	const float VisualFeatherWeight = SightWeaveSampleVisualFeather(
 		TranslatedWorld.xy - TranslatedFloorOrigin);

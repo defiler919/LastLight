@@ -5,6 +5,13 @@
 
 #include "SightWeaveLastSeenProxyComponent.generated.h"
 
+namespace SightWeave::SubjectMemory
+{
+	/** Reserved render-only stencil marker consumed by the M3 presentation composite. */
+	inline constexpr int32 LastSeenProxyStencilValue = 246;
+	inline constexpr float LastSeenProxyNeutralIntensity = 0.46f;
+}
+
 /**
  * Presentation-only static mesh for one immutable Last-Seen descriptor.
  * It owns no subject authority and deliberately has no gameplay-facing API.

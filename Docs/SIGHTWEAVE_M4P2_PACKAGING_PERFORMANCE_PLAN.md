@@ -1,198 +1,85 @@
 # SightWeave M4P2 packaging and performance plan
 
-Status: **FROZEN AND EXECUTED — FINAL VERDICT PARTIAL**
+Status: **FROZEN, EXECUTED, AND COMPLETED**
 
 Frozen product baseline: M4P1 `93f156f552aa85ee9d30891508d439011c57c479`
 
-## 1. Purpose and authority
+## 1. Authority and purpose
 
-M4P2 closes the P2 packaging work explicitly deferred by `SIGHTWEAVE_M4P1_FINAL_VALIDATION.md`: independent BuildPlugin delivery, source-isolated clean-host builds, Shipping isolation, packaged D3D12/SM6 lifecycle/presentation smoke, complete regression, and the expanded performance matrix. It does not add capability.
+M4P2 closed the work explicitly deferred by `SIGHTWEAVE_M4P1_FINAL_VALIDATION.md`: BuildPlugin delivery, source-isolated Editor/Game builds, Shipping isolation, Cooked/Staged D3D12/SM6 lifecycle smoke, full regression, render/readback lifecycle, and expanded performance evidence. It added no capability.
 
-Normative product contracts remain:
+The normative M4P1 subject-memory, M3.5 memory, M3 GPU-mask, requirements, and architecture contracts remained frozen. Historical M2/M3 performance documents supplied the thresholds. No threshold was weakened, renamed, or inferred from a baseline-only row.
 
-- `SIGHTWEAVE_M4P1_SUBJECT_MEMORY_CONTRACT.md`
-- `SIGHTWEAVE_M3P5_MEMORY_CONTRACT.md`
-- `SIGHTWEAVE_M3_GPU_MASK_CONTRACT.md`
-- `SIGHTWEAVE_M3_GPU_MASK_VALIDATION_PLAN.md`
-- `VISION_SYSTEM_REQUIREMENTS.md`
-- `VISION_SYSTEM_ARCHITECTURE.md`
+## 2. Frozen exclusions
 
-Historical measurements and threshold sources are `SIGHTWEAVE_M3P4_FINAL_VALIDATION.md`, `SIGHTWEAVE_M3P5_FINAL_VALIDATION.md`, `SIGHTWEAVE_M3P5_PERFORMANCE.md`, and the M2P2/M2P3 performance contracts. No threshold may be weakened, renamed, or inferred from a baseline-only measurement.
+M4P2 excluded new gameplay or visual behavior, public policy/API/serialization changes, DARKWELL adapter or persistence work, SceneCapture authority, skeletal/VFX/light/audio/material snapshot expansion, reveal overrides, D3D11/Vulkan expansion, art/content changes, legacy-fog deletion, and `/Game/Maps/L_Prototype` changes. No `.uasset` or `.umap` was moved, renamed, deleted, or rewritten.
 
-## 2. Hard exclusions
-
-The following are outside M4P2: new gameplay/visual behavior; policy/API/serialization changes; DARKWELL adapter integration; persistence implementation; SceneCapture authority; skeletal, Niagara, VFX, light, audio, dynamic-material, or Blueprint-assembly snapshot support; reveal override; D3D11/Vulkan expansion; art/content changes; legacy fog removal; `/Game/Maps/L_Prototype`; and any ordinary-filesystem mutation of Unreal assets.
-
-Development-only validation may be reorganized only when the production Runtime/Render behavior remains byte/semantic equivalent. A required public or runtime semantic change stops as an architecture blocker.
-
-## 3. Serialized execution discipline
-
-All UBT, dotnet/UBT, BuildEditor, BuildPlugin, UnrealEditor-Cmd, cook, package, and automation processes run strictly one at a time. Before each launch, inspect for residual `UnrealBuildTool`, UBT `dotnet`, `UnrealEditor-Cmd`, AutomationTool/BuildPlugin, and Live Coding processes.
-
-On failure: preserve the log/report/package directory; wait for the related process to exit; classify the root cause; repair; retry once serially; retain both attempts. No failed evidence directory is deleted and no concurrent retry is allowed.
-
-## 4. BuildPlugin topology and gate
-
-Use the installed UE 5.8 AutomationTool:
-
-```powershell
-& 'D:\UE_5.8\Engine\Build\BatchFiles\RunUAT.bat' BuildPlugin `
-  '-Plugin=D:\UE_projects\LastLight\Plugins\SightWeave\SightWeave.uplugin' `
-  '-Package=<new external temp directory>' `
-  '-TargetPlatforms=Win64' -Rocket
-```
-
-The output directory is newly timestamped and outside the repository. It must contain the descriptor, Runtime/Render/Editor/Tests source as permitted by BuildPlugin, shader source/metadata, content, and the expected precompiled products. UAT must perform and pass UnrealEditor Win64 Development, UnrealGame Win64 Development, and UnrealGame Win64 Shipping. Package inventories and SHA-256 comparisons cover at least `Source`, `Shaders`, `Content`, `Config` when present, and the descriptor.
-
-The descriptor gate checks module names/types/loading phases, Win64 support, `CanContainContent`, and absence of an unintended host-project dependency. No generated default filter file is committed.
-
-## 5. Independent clean-host topology
-
-Create a fresh blank UE 5.8 C++ host under a new external temporary directory. Install only the BuildPlugin package at `<CleanHost>/Plugins/SightWeave`. Do not use a junction, symlink, include path, plugin search path, or copy from `D:\UE_projects\LastLight\Plugins\SightWeave` after installation. The host must not contain DARKWELL source.
-
-Delete no evidence on failure. Begin without plugin `Binaries`/`Intermediate` when testing source portability, or consume only BuildPlugin precompiled products when validating package consumption; record which topology each command exercises. Required clean-host targets are:
-
-1. `UnrealEditor Win64 Development`
-2. `UnrealGame Win64 Development`
-3. `UnrealGame Win64 Shipping`
-
-Any minimal smoke fixture uses only public SightWeave interfaces and neutral host code/content. Repository/package/host source inventories and SHA-256 values must prove no missing, mismatched, or extra plugin source/shader/content file.
-
-## 6. Shipping dependency boundary and scans
-
-Expected Shipping modules are exactly `SightWeaveRuntime` and `SightWeaveRender`.
-
-Allowed UE dependencies:
-
-- Runtime: Core, CoreUObject, Engine, DeveloperSettings
-- Render: Core, CoreUObject, Engine, SightWeaveRuntime, Projects, RHI, RenderCore, Renderer
-
-Forbidden in Shipping source/build products/imports/strings/COFF symbols include:
-
-- `SightWeaveTests`, `SightWeaveEditor`, UnrealEd, AutomationTest and automation registration
-- test readback types, `FRHIGPUTextureReadback`, test shader entry points, test-only console/Lab control paths, screenshot capture, benchmark/readback APIs
-- DARKWELL/private host modules and paths
-- development-only ETW/test libraries such as Advapi32, Psapi, and PowrProf when not a platform dependency of permitted engine modules
-- SceneCapture used as SightWeave authority or packaged-smoke substitution
-
-Scans cover Build.cs/source guards, UBT response/dependency/precompiled files, Shipping object file paths, DLL import tables, exact binary strings, and `dumpbin /symbols` COFF output. Generic engine metadata hits are classified by source/symbol and are not waived by broad substring suppression. A real forbidden dependency is fixed at the boundary, never hidden by renaming.
-
-## 7. Packaged D3D12/SM6 smoke
-
-Run on the RTX 4060 with real D3D12/SM6 and a real game view, not SceneCapture. The smoke must prove:
-
-1. packaged plugin/module load and neutral host startup;
-2. world create/destroy and at least two restart/transition cycles;
-3. Render/Runtime world subsystem creation, packet publication, RHI resource initialization, applied revision, and resource release;
-4. M3.4 Width=50 inward feather with hard-zero pixels remaining black;
-5. M3.5 explicit static-environment memory, dirty/no-change/clear behavior, and neutral attribute path;
-6. M4P1 legal falling-edge Last-Seen, frozen neutral proxy, suppression/clear/unknown, reacquire, identity reuse, and page/tile-boundary path through public interfaces;
-7. proxy hide before live reacquire, no duplicate/residue/black handoff;
-8. render-command drain, world teardown, module/process exit, and no late stale command/readback callback.
-
-Capture exact logs and where practical deterministic screenshots/readbacks. Development readback may validate Development, but Shipping smoke must not depend on test-only symbols.
-
-## 8. Automation matrix
-
-Each run records exact discovered, performed, succeeded, succeeded-with-warning, failed, skipped/not-run, duration, process exit code, report path, and log path. Counts are discovered from the current binary and never assumed from M4P1/M3.5 reports.
-
-| Gate | RHI/configuration | Filter |
-| --- | --- | --- |
-| M4P1 complete | NullRHI | `SightWeave.M4P1` |
-| M4P1 complete | D3D12/SM6 | `SightWeave.M4P1` |
-| continuous transition | D3D12/SM6 | `SightWeave.M4P1.Visual.ContinuousTransition` |
-| M3.4 presentation | D3D12/SM6 | current presentation prefix discovered under M3P4 |
-| M3.5 complete | NullRHI and D3D12/SM6 as supported by discovered tests | `SightWeave.M3P5` |
-| full SightWeave | NullRHI | `SightWeave` |
-| full SightWeave | D3D12/SM6 | `SightWeave` |
-| full DARKWELL | NullRHI | `Darkwell` |
-| Lab | NullRHI | current SightWeave Lab filters, including M4P1 |
-| Lab | D3D12/SM6 | current SightWeave Lab filters, including M4P1 |
-| clean-host focused/full | D3D12/SM6 | package-supported M3.4/M3.5/M4P1 filters |
-
-Historical M2P2 wall-time failures remain governed by their frozen contracts. A full-suite failure is retained and may receive one isolated confirmation without changing the original result or threshold.
-
-## 9. Performance workload matrix
-
-Run D3D12/SM6 Development with VSync and smoothing disabled, stable power/clock conditions, declared warmup, retained samples, and p50/p95/p99. Cold creation is separate. If existing tests do not cover the complete Cartesian matrix, add bounded Development automation/harness coverage without production semantic changes.
-
-Axes:
-
-- resolution: 1920x1080 and 2560x1440;
-- source count: 2, 8, 32 total sources;
-- resident memory tiles: 1, 8, 128;
-- dirty memory tiles: 1, 8, 32, including gutter expansion;
-- operations/states: dirty, warmed no-change, clear, block, suppress, Last-Seen remembered, reacquire, identity reuse, and page/tile boundary;
-- live presentation: unchanged/composite-only, controlled dirty updates, Width=50 inward feather, and the 32-source pressure row.
-
-At minimum every axis value must participate in a declared paired/scaling matrix matching the frozen M3.5 topology (2/1, 8/8, 32/128 plus dirty 1/8/32) and every operation/state must have a measured row. Do not imply an unmeasured full Cartesian product.
-
-For each row record:
-
-- Game Thread p50/p95/p99 and sample count;
-- Render Thread p50/p95/p99 and sample count;
-- total/stage GPU p50/p95/p99 and sample count;
-- GPU Memory mirror/update p50/p95/p99;
-- CPU snapshot/packed authority bytes;
-- GPU persistent live, memory, static-attribute, page-table, and total bytes;
-- worst plugin persistent runtime memory and transient 1080p/1440p output separately;
-- upload bytes, requested/expanded dirty counts, allocations, and no-change work;
-- nonfinite, hard-black leak, stale-command/readback, binding-failure, capacity, and lifecycle counters.
-
-## 10. Existing threshold sources
-
-Formal/frozen gates are not invented by M4P2:
-
-| Metric | Existing gate/source |
-| --- | --- |
-| selected Memory CPU dirty p95 | `<250 us`, M3.5 memory contract/performance |
-| selected Memory GT packet p95 | `<250 us`, M3.5 performance |
-| selected Memory RT dirty/setup p95 | `<200 us`, M3.5 performance |
-| selected Memory GPU dirty p95 | `<250 us`, M3.5 memory contract/performance |
-| warmed no-change | zero mirror/upload/raster/allocation work; M3.5 contract |
-| live total GPU p95 at 1080p 2/8 sources | `<1.0 ms`; M3 validation plan/M3.5 |
-| live total GPU p95 at 1440p 2/8 sources | `<1.5 ms`; M3 validation plan/M3.5 |
-| 32-source pressure p95 | `<2.0 ms` at 1080p, `<3.0 ms` at 1440p; M3 validation plan/M3.5 |
-| persistent live presentation | `<32 MiB`; M3.4/M3.5 |
-| worst plugin runtime persistent memory | `<=64 MiB`; M3.5 memory contract |
-| hard-zero/nonfinite/seam/stale/binding failures | zero unexplained occurrences; M3/M3.4/M3.5 contracts |
-| Width=50 | frozen standard development behavior; M3.4 |
-
-The resident 8/dirty 8 and resident 128/dirty 32 CPU/RT values were historically pressure data above the one-dirty update budgets; they remain reported baselines unless an authority document explicitly gives them a gate. Likewise M4P1 transition/identity operations have correctness gates but no existing independent timing threshold. M4P2 records their baselines and risks rather than fabricating pass criteria.
-
-M2 intrinsic gates remain unchanged when exercised by the full prefix: Batch512 p50 `<=150 us`, p95 `<=180 us`, p99 `<=200 us`; broad door p99 `<250 us`; Prepared 4096 p50 `<1 ms`, p99 `<2 ms`; and frozen hot-path allocation/parity requirements.
-
-## 11. Evidence layout and severe-log scan
-
-Generated evidence is ignored and uncommitted:
+## 3. Executed delivery topology
 
 ```text
-Saved/
-  AutomationReports/M4P2/<gate>-<rhi>-<timestamp>/
-  Logs/M4P2/<gate>-<rhi>-<timestamp>.log
-  Screenshots/M4P2/<gate>-<timestamp>/
-<system-temp>/SightWeaveM4P2_BuildPlugin_<timestamp>/
-<system-temp>/SightWeaveM4P2_CleanHost_<timestamp>/
+repository SightWeave plugin
+  -> RunUAT BuildPlugin -TargetPlatforms=Win64 -Rocket
+  -> new external package directory
+  -> new external source-isolated host
+  -> Editor Development
+  -> Game Development
+  -> Game Shipping
+  -> BuildCookRun Win64 Shipping, Pak + IoStore, D3D12/SM6
+  -> public-interface staged lifecycle smoke
 ```
 
-Every final log is scanned for shader compiler/ShaderCompileWorker errors, Renderer/RenderCore errors, RDG validation, D3D12/RHI errors, DXGI/device removal, GPU crash/hang, fatal, critical error, assertion, ensure, unhandled exception, stale command/readback, binding failure, and failed tests. Known engine diagnostics are identified by exact message and context; broad exclusion is forbidden.
+All UBT, UAT, editor automation, package, cook, stage, and runtime processes were serialized. Failed evidence was retained and classified before bounded retries.
 
-## 12. Git and LFS checkpoints
+## 4. Packaging and Shipping gates
 
-Before every commit: inspect `git status --short --branch`, `git diff --check`, staged paths, and `git diff -- Darkwell.uproject`. Source/build checkpoints require the repository-standard full Editor build before commit. After relevant validation, commit non-empty results and push normally immediately.
+BuildPlugin had to compile Editor Development, Game Development, and Game Shipping, exit zero, and preserve the repository Source/Shaders/Content/Config delivery map. A fresh host could contain no repository linkage, reparse point, DARKWELL source, or reused generated directory.
 
-Never commit generated directories, package/host outputs, reports, screenshots, temporary filter templates, `Darkwell.uproject`, or `/Game/Maps/L_Prototype`. Never force-push, merge, rebase, reset, or clean this milestone branch.
+Shipping modules were restricted to `SightWeaveRuntime` and `SightWeaveRender`. Editor, Tests, UnrealEd, automation registration, test readback/benchmark implementations, development Lab/screenshot controls, and host/DARKWELL dependencies were forbidden. Source/build metadata, objects, imports, exact strings, and COFF symbols were scanned and classified.
 
-Final closure runs the exact Git/LFS/object commands required by the task and records local/upstream/remote SHA equality plus the sole approved EngineAssociation difference.
+These gates passed. Final detail is in `SIGHTWEAVE_M4P2_EXECUTION_REPORT.md`.
 
-## 13. Verdict rules
+## 5. Staged D3D12/SM6 gate
 
-**COMPLETED** requires every BuildPlugin, clean-host, Shipping, packaged-smoke, automation, lifecycle, severe-log, threshold, Git, and LFS condition in this plan. Existing baseline-only rows may remain baseline-only only where the authority documents contain no threshold, and the final report must say so.
+The staged Win64 Shipping game had to prove plugin/module load, real GameViewport and camera, Runtime/Render subsystem creation, RHI resources, M3.4 Width=50 inward feather, M3.5 static memory dirty/no-change/clear, all required M4P1 LastSeen transitions, resource release, render-command drain, world teardown, and natural process exit. SceneCapture and test-only Shipping symbols were not permitted substitutes.
 
-**PARTIAL** is required when reliable plugin packaging exists but a manual/external packaged smoke, required environment, full matrix row, or existing gate remains unresolved or failed. **BLOCKED** is required for an unresolved architecture/roadmap conflict, true forbidden Shipping dependency, external authority that prevents progress, or a gate that can only be met by weakening a frozen contract.
+The final Pak/IoStore archive passed 56/56 deterministic public-interface checks under D3D12/SM6 and exited naturally.
 
-## 14. Execution disposition
+## 6. Automation gate
 
-The plan was executed without weakening thresholds. BuildPlugin, fresh-host Editor/Game Development/Game Shipping, Shipping isolation, full D3D12/SM6 package-after-install correctness, all requested milestone/Lab prefixes, and expanded p50/p95/p99 baselines were completed. The authoritative numbers and evidence paths are in `SIGHTWEAVE_M4P2_EXECUTION_REPORT.md`.
+Exact discovered/performed results were required for full SightWeave under NullRHI and D3D12/SM6, full DARKWELL NullRHI, M3.4, M3.5, M4P1, Lab/focused coverage, and lifecycle tests. Final closure is SightWeave 175/175 NullRHI and 267/267 D3D12/SM6, DARKWELL 24/24, M3.4 21/21 NullRHI and 37/37 D3D12, M3.5 26/26 D3D12, and M4P1 9/9 NullRHI and 12/12 D3D12.
 
-The applied verdict is **PARTIAL** because existing Prepared4096, NullRHI Batch512, and dedicated M3.4 performance evidence contains retained gate failures, and the blank BuildPlugin host was not Cooked/Staged into a runnable Shipping game. This status is a direct application of the frozen rules above, not a new exception.
+## 7. Performance gates
+
+| Metric | Frozen gate |
+| --- | --- |
+| Batch512 | p50 `<=150 us`, p95 `<=180 us`, p99 `<=200 us` |
+| Prepared4096 | p50 `<1 ms`, p99 `<2 ms` |
+| Selected M3.5 Memory CPU dirty | p95 `<250 us` |
+| Selected M3.5 GT packet | p95 `<250 us` |
+| Selected M3.5 RT dirty/setup | p95 `<200 us` |
+| Selected M3.5 GPU dirty | p95 `<250 us` |
+| Warm no-change | zero mirror/upload/raster/allocation work |
+| Live 1080p, 2/8 sources | GPU p95 `<1 ms` |
+| Live 1440p, 2/8 sources | GPU p95 `<1.5 ms` |
+| 32-source pressure | GPU p95 `<2 ms` at 1080p, `<3 ms` at 1440p |
+| Persistent live presentation | `<32 MiB` |
+| Plugin runtime persistent memory | `<=64 MiB` |
+| hard-zero/nonfinite/seam/stale/binding | zero unexplained failures |
+
+Final Prepared4096 p50/p99 was 119.098/191.499 us under NullRHI and 74.700/79.699 us under D3D12. Final Batch512 worst p95/p99 was 139.002/145.901 us under NullRHI and 144.098/151.899 us under D3D12, with zero capacity growth. The formerly variable exact M3.4 row passed three independent processes with GPU p95 at or below 950 us. All other frozen gates passed.
+
+Expanded resident/dirty pressure and M4P1 transition timings remain baselines wherever their authority specifies no independent performance limit; correctness gates still pass.
+
+## 8. Evidence and severe-log policy
+
+Generated reports, logs, screenshots, package outputs, clean hosts, staged archives, Binaries, Intermediate, Saved, and DDC remain ignored and uncommitted. Every final log was checked for shader/RDG errors, D3D12/RHI errors, device removal, GPU crash/hang, fatal, assertion, ensure, unhandled exception, stale callback, binding failure, and automation failure. Final evidence contains no severe result.
+
+Retained failures are not deleted or reclassified as passes. The execution report records early performance variance, Zen staging transport failures, and the neutral fixture range error together with their validated resolution.
+
+## 9. Git discipline
+
+Every reliable non-empty checkpoint was built or tested in proportion to risk, committed, and pushed normally. No force push, merge, rebase, reset, clean, generated output, or `Darkwell.uproject` change was allowed. Final closure runs the exact requested Git/LFS/object commands and verifies local, upstream, and remote equality.
+
+## 10. Applied verdict
+
+**COMPLETED.** BuildPlugin, clean-host Editor/Game Development/Game Shipping, Shipping scans, Cooked/Staged D3D12/SM6 runtime smoke, complete automation, lifecycle closure, all frozen thresholds, clean severe logs, and Git/LFS closure passed. No unresolved M4P2 item remains.

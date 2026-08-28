@@ -2,176 +2,178 @@
 
 ## 1. Verdict
 
-**PARTIAL.** Independent packaging, source-isolated builds, Shipping boundaries, D3D12/SM6 correctness, Lab coverage, and expanded baselines are reliable. Completion is withheld because existing performance gates remain unresolved and no Cooked/Staged Shipping game smoke was produced.
+**COMPLETED.** Independent plugin packaging, clean-host compilation, Shipping isolation, Cooked/Staged D3D12/SM6 execution, full automation, render/readback lifecycle, frozen performance thresholds, and repository integrity all closed without weakening a gate or changing a frozen product contract.
 
-## 2. Identity
+## 2. Identity and repository discipline
 
 - Branch: `codex/m4p2-sightweave-packaging-performance-closure`
 - Frozen M4P1 baseline: `93f156f552aa85ee9d30891508d439011c57c479`
 - Engine: UE 5.8.1, `D:\UE_5.8`
-- Hardware: RTX 4060, driver 610.88, D3D12/SM6; i5-13500; 32 GiB
-- Scope: packaging/Shipping/clean-host/performance closure only; no new capability or asset change
+- Hardware: RTX 4060 D3D12/SM6, i5-13500, 32 GiB
+- Scope: packaging, Shipping, lifecycle, regression, and performance closure only
 
-`Darkwell.uproject` retained only the user's unstaged EngineAssociation GUID difference and was never staged, restored, overwritten, or formatted.
+The only persistent local project-descriptor difference is the user's `Darkwell.uproject` EngineAssociation GUID. That file was never staged, restored, overwritten, formatted, or committed. Generated outputs remain ignored and untracked.
 
-## 3. Changes
+## 3. Reliable implementation checkpoints
 
-The only production-package fix moved the already-required CustomDepth invariant into portable plugin config:
-
-- `Config/Engine.ini`: `r.CustomDepth=3`, `r.CustomDepthTemporalAAJitter=0`;
-- `Config/FilterPlugin.ini`: includes `/Config/Engine.ini` in BuildPlugin output.
-
-Other source edits are Development-only test assertion refreshes and p50/p95/p99/performance matrices. No Runtime/Render policy, API, serialization, or visual behavior changed.
-
-## 4. Checkpoints
-
-| Commit | SHA | Remote |
+| Commit | SHA | State |
 | --- | --- | --- |
 | docs: start SightWeave M4P2 packaging closure | `f246ce5` | pushed |
 | build: close SightWeave plugin packaging boundaries | `f3bb4c7` | pushed |
 | test: refresh SightWeave packaging assertions | `f33dd3f` | pushed |
 | perf: expand SightWeave closure matrices | `c57b774` | pushed |
-| docs: record SightWeave M4P2 final validation | pending | pending |
+| docs: record SightWeave M4P2 final validation | `ac1ece8` | pushed; later superseded |
+| fix: close SightWeave automation resource lifetime | `1abafb6` | pushed |
+| perf: stabilize SightWeave prepared and batch gates | `0809a1c` | pushed |
+| test: retain SightWeave presentation GPU samples | `4dae900` | pushed |
+| test: prove SightWeave render lifecycle closure | `a6a5c83` | pushed |
+| test: isolate SightWeave batch performance core | `95d59f2` | pushed |
 
-## 5. Retained package-boundary failure
+The final documentation commit follows this ledger and is pushed before exact final Git/LFS closure.
 
-The first clean host ran M4P1 D3D12 at 9/12. Screenshots showed sparse jittered dots instead of solid Last-Seen proxies because the host-only temporal-jitter CVar was absent from BuildPlugin output. After plugin-owned config was added, the single repair retry passed 12/12: Camera1 exact proxy 1936, Camera3 1448, Camera4 514, nonfinite 0. Both attempts are retained.
+## 4. Production-package change
 
-## 6. Final BuildPlugin
+The only production delivery correction placed the already-required CustomDepth invariants in portable plugin config and included that config in BuildPlugin output: `r.CustomDepth=3` and `r.CustomDepthTemporalAAJitter=0`.
 
-Output: `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM4P2_BuildPlugin_Final_c57b774_20260828_153400`
+This repaired independent-host portability; it did not change SightWeave runtime semantics. Remaining edits were Development-only assertion, measurement, lifecycle, and isolation coverage. No public API, serialization, memory/presentation policy, or production asset changed.
+
+## 5. Final BuildPlugin
+
+Output: `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM4P2_BuildPlugin_Closure_95d59f2_20260828_1748`
 
 | Target | Actions | Result |
 | --- | ---: | --- |
 | UnrealEditor Development | 102 | pass |
 | UnrealGame Development | 32 | pass |
 | UnrealGame Shipping | 32 | pass |
-| AutomationTool | — | exit 0, 4m02s |
+| AutomationTool | — | exit 0, 4m06s |
 
-Package inventory: 281 files; Source 123/123, Shaders 1/1, Content 2/2. Released `Engine.ini` SHA-256 matches source: `20B5D72E3EA4E1409E9997182F140B9E1C45B74AEEF82E2E1E42F1B26F4A54DC`.
+The package contains 281 files and 626,582,253 bytes. Repository/package delivery mapping across Source, Shaders, Content, and `Engine.ini` is 128/128 with no missing or extra file. Portable `Engine.ini` SHA-256: `20B5D72E3EA4E1409E9997182F140B9E1C45B74AEEF82E2E1E42F1B26F4A54DC`.
 
-## 7. Final independent host
+Descriptor differences are only standard UAT transforms: installed flag, normalized EngineVersion, and blank packaging metadata.
 
-Host: `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM4P2_CleanHost_Final_c57b774_20260828_154000`
+## 6. Final clean host
 
-It contains the final package as its sole plugin, no DARKWELL source, zero reparse points, zero repository absolute-path references, and no reused generated directories.
+Host: `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM4P2_CleanHost_Closure_95d59f2_20260828_1805`
+
+The host began without generated directories, reparse points, DARKWELL source, or repository path references. It contains only the packaged SightWeave plugin.
 
 | Target | Actions | Time | Result |
 | --- | ---: | ---: | --- |
-| Editor Development | 102 | 137.15s | pass |
-| Game Development | 32 | 54.72s | pass |
-| Game Shipping | 32 | 43.55s | pass |
+| Editor Development | 102 | 148.63s | pass |
+| Game Development | 32 | 49.18s | pass |
+| Game Shipping | 32 | 40.12s | pass |
 
-## 8. Repository build
+## 7. Shipping isolation
 
-Final `Scripts/BuildEditor.ps1`: DarkwellEditor Win64 Development, 5/5 current incremental actions, exit 0. BuildPlugin and the clean host also compiled all current plugin TUs from source.
+Shipping compiled exactly 32 implementation objects: SightWeaveRuntime 19 and SightWeaveRender 13. Both module definitions have `WITH_DEV_AUTOMATION_TESTS 0`, `WITH_EDITOR 0`, `WITH_EDITORONLY_DATA 0`, and `UE_BUILD_SHIPPING 1`.
 
-## 9. Shipping inventory
+Six guarded readback/benchmark objects contain zero forbidden COFF symbol rows. Final source, dependency, object-name, binary-string, content, and PE-import scans found:
 
-The clean-host Shipping tree has 32 objects, 34 response files, 2 precompiled headers, 32 dependency JSON files, and 32 SARIF files. Modules are exactly SightWeaveRender (13 objects) and SightWeaveRuntime (19 objects). Tests, Editor, UnrealEd, AutomationTest, and DARKWELL metadata hits are zero.
+- zero forbidden readback/benchmark implementation types;
+- zero repository path or DARKWELL references;
+- zero `SightWeaveTests` or `SightWeaveEditor` strings in the Shipping executable;
+- zero UnrealEd/test/DARKWELL PE imports;
+- zero severe UAT log results.
 
-Both module `Definitions.h` files contain `WITH_DEV_AUTOMATION_TESTS 0`, `WITH_EDITOR 0`, `WITH_EDITORONLY_DATA 0`, and `UE_BUILD_SHIPPING 1`.
+The plugin descriptor inside Pak names the available Editor/Test modules as metadata, but no corresponding Shipping binary, implementation, symbol, or import exists. Generic AutomationTest strings in the monolithic executable are engine metadata, not SightWeave test implementation.
 
-## 10. COFF and dependency isolation
+## 8. Full automation closure
 
-The six guarded test-readback/benchmark TUs produce empty Shipping objects. `dumpbin /symbols` found zero actual symbol rows containing FSightWeave, Automation, Benchmark, Readback, RenderGraph, or RHI. Runtime/Render source scans found zero host/test/editor dependencies.
+| Gate | RHI | Result | Evidence |
+| --- | --- | ---: | --- |
+| Full SightWeave | NullRHI | 175/175 | `Saved/AutomationReports/M4P2/M4P2_FullSightWeave_NullRHI_Closure_Retry1` |
+| Full SightWeave | D3D12/SM6 | 267/267 | `Saved/AutomationReports/M4P2/M4P2_FullSightWeave_D3D12_Closure` |
+| Full DARKWELL | NullRHI | 24/24 | retained M4P2 DARKWELL report |
+| M3.4 | NullRHI | 21/21 | retained M4P2 M3.4 report |
+| M3.4 | D3D12/SM6 | 37/37 | final D3D12 prefix |
+| M3.5 | D3D12/SM6 | 26/26 | final D3D12 prefix |
+| M4P1 | NullRHI | 9/9 | retained M4P2 M4P1 report |
+| M4P1 | D3D12/SM6 | 12/12 | final D3D12 prefix |
 
-## 11. Package-after-install D3D12 smoke
+The D3D12 full closure ran for 129.24 seconds. Real GameViewport/game views and RHI readbacks were used; SceneCapture was not authority. Readback lifecycle and LastSeen real-view lifecycle pass in one process, and final teardown reports no stale callback or virtual-resource reservation warning.
 
-The final package, installed as the independent host's sole plugin, ran the complete SightWeave prefix on RTX 4060 D3D12/SM6: 263 tests performed. M3.4 was 37/37, M3.5 26/26, M4P1 12/12, and M4P2 LastSeen frame coverage 1/1. Real PIE/game views and RHI readbacks were used; SceneCapture was not authority.
+## 9. Prepared4096 closure
 
-Severe-log scan: no fatal, assert, ensure, shader/RDG failure, GPU crash, device removal, or nonfinite visual result. A direct generic Shipping executable launch was attempted but the blank host was not Cooked/Staged and exited 1 immediately; it is not counted as a valid smoke or plugin regression. A staged Shipping game remains follow-up work.
+Final 101-repeat measurements:
 
-## 12. Automation matrix
+| RHI | min | p50 | p95 | p99 |
+| --- | ---: | ---: | ---: | ---: |
+| NullRHI | 84.102 us | 119.098 us | 138.599 us | 191.499 us |
+| D3D12/SM6 | 68.597 us | 74.700 us | 78.201 us | 79.699 us |
 
-| Gate | RHI | Success | Warning | Fail | Total |
-| --- | --- | ---: | ---: | ---: | ---: |
-| Full SightWeave | NullRHI | 173 | 0 | 2 | 175 |
-| Full SightWeave | D3D12/SM6 | 261 | 1 | 1 | 263 |
-| Full DARKWELL | NullRHI | 24 | 0 | 0 | 24 |
-| M3.5 focused | NullRHI | 16 | 0 | 0 | 16 |
-| M3.5 focused | D3D12/SM6 | 26 | 0 | 0 | 26 |
-| M4P1 focused | NullRHI | 9 | 0 | 0 | 9 |
-| M4P1 repaired | D3D12/SM6 | 12 | 0 | 0 | 12 |
-| M4P1 Lab | NullRHI / D3D12 | 2 / 2 | 0 | 0 | 2 / 2 |
-| Continuous transition | D3D12/SM6 | 1 | 0 | 0 | 1 |
+Both pass the unchanged p50 `<1 ms` and p99 `<2 ms` gates.
 
-## 13. M3.4 presentation performance
+## 10. Batch512 closure
 
-The first dedicated matrix was 19/21. After an 8-sample GPU warmup and applying the already-authoritative 32-source pressure gates, the permitted retry was 20/21. Width0, 1080p, 1 tile/2 sources retained the failure: GT binding p95 0.201us, RT p95 2.798us, GPU p50/p95/p99 0.348/1.169/1.942ms against p95 `<1.0ms`.
+All ten distributions pass under both RHIs with zero capacity growth:
 
-The same row later passed in the final full D3D12 prefix at 0.041/0.046/0.048ms. The variance is not erased or resolved by another retry. All 32-source rows met the existing 1080p `<2ms` and 1440p `<3ms` pressure gates.
+- NullRHI median range approximately 89.9–90.4 us; worst p95 139.002 us; worst p99 145.901 us.
+- D3D12/SM6 median range 88.599–90.398 us; worst p95 144.098 us; worst p99 151.899 us.
 
-## 14. Selected M3.5 precision
+These pass unchanged p50 `<=150 us`, p95 `<=180 us`, and p99 `<=200 us` gates. Three additional independent physical-core-isolated focused processes pass. One representative third run pinned physical core 10 and recorded distribution 0 median 89.899 us, p95 147.302 us, p99 158.802 us, capacity growth zero.
 
-Targeted memory performance passed 7/7. Final full D3D12 production-eligible rows:
+## 11. M3.4 presentation closure
 
-| Precision | CPU dirty p95/p99 | GT p95/p99 | RT p95/p99 | GPU p95/p99 | Worst persistent |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 10cm | 59.500/69.898us | 1.200/1.799us | 59.698/63.799us | 54/190us | 36,462,592 B |
-| 25cm | 51.901/63.602us | 3.599/4.701us | 57.898/73.798us | 42/193us | 36,462,592 B |
+The exact formerly variable row `Width0.1080p.Tiles1Sources2` passed three independent focused processes. GPU p95 results were 296 us, 188 us, and 950 us, all below the unchanged 1 ms gate. Raw samples are retained; GT and RT distributions remained tightly stable. Sparse p99 spikes are retained as diagnostic baselines because this authority defines a p95 gate, not a p99 gate.
 
-All formal selected-precision gates pass; no-change work is zero. The 5cm/2.5cm rows remain candidate baselines, not new gates.
+All 32-source pressure rows pass the existing 1080p `<2 ms` and 1440p `<3 ms` gates. Width=50 inward feather, hard-zero, nonfinite, seam, stale-command, and binding correctness counters pass.
 
-## 15. Memory scaling baselines
+## 12. M3.5 and LastSeen results
 
-| Resident/dirty | CPU clear p95/p99 | CPU write p95/p99 | RT write p95/p99 | GPU p95/p99 | CPU/GPU persistent bytes |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 1/1 | 45.300/47.598us | 59.500/59.500us | 51.998/57.500us | 203/292us | 7,688 / 4,194,320 |
-| 8/8 | 379.700/392.199us | 493.299/621.501us | 493.404/629.801us | 77/81us | 61,504 / 4,194,432 |
-| 128/32 | 1972.400/2381.399us | 2430.599/2530.400us | 3555.700/5676.102us | 407/484us | 984,064 / 8,390,656 |
+Selected 10 cm and 25 cm memory precision rows pass their frozen CPU, GT, RT, GPU, persistent-memory, and no-change zero-work gates. Expanded resident/dirty scaling rows remain declared pressure baselines where their authority supplies no formal budget.
 
-The last two are pressure baselines; existing authority does not assign the one-dirty formal budget to them.
+M4P1 remembered-nochange, reacquire, block/suppress, clear, identity reuse, and page/tile-boundary timings remain baseline-only because M4P1 specifies correctness, not an independent frame-time gate. All associated pixel, nonfinite, ordering, resource, identity, and lifecycle checks pass.
 
-## 16. LastSeen frame baselines
+## 13. Cooked/Staged Shipping build
 
-Each operation used 8 warmup + 64 samples at 1009x340; all nonfinite counts were zero.
+Final archive: `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM4P2_StagedShipping_Closure_95d59f2_20260828_1955_FinalFix2`
 
-| Operation | GT p50/p95/p99 | RT p50/p95/p99 | GPU p50/p95/p99 |
-| --- | --- | --- | --- |
-| remembered_nochange | 8.576/10.101/10.688ms | 9.721/11.451/12.328ms | 3.161/3.566/3.743ms |
-| reacquire | 7.433/12.278/16.368ms | 3.999/6.431/6.773ms | 1.644/1.964/2.093ms |
-| block_suppress | 8.326/16.278/17.412ms | 4.337/6.931/14.814ms | 1.860/2.315/2.551ms |
-| clear | 5.919/7.359/8.528ms | 3.257/4.367/4.659ms | 1.866/2.940/3.454ms |
-| identity_reuse | 6.178/7.974/9.671ms | 3.466/4.482/5.078ms | 2.021/2.688/2.800ms |
-| page_tile_boundary | 5.820/7.252/7.694ms | 3.240/3.925/4.040ms | 2.036/2.724/2.878ms |
+The successful BuildCookRun rebuilt current Editor and Shipping source (7/7 actions), cooked 494 packages, skipped seven platform-inapplicable entries from 501, staged Pak/IoStore, archived, and exited 0 after 287.42 seconds.
 
-These are baseline-only because M4P1 defines correctness, not an independent frame-time threshold.
+UE 5.8's default Zen staging attempted to retrieve an oplog from `[::1]:8558` and failed in two retained earlier attempts. `UProjectPackagingSettings` is Game config, so the final neutral host fixture correctly used `DefaultGame.ini` with `bUseZenStore=False` plus `-AdditionalCookerOptions=-SkipZenStore`. This disabled only the failing Zen staging transport; Shipping, Pak, IoStore, and SM6 remained required and enabled.
 
-## 17. Visual correctness
+Final IoStore evidence: 494 packages, 1,838 chunks, 192.11 MiB, `Zen: 0`, loose-file input 321,842,106 bytes, and both SM6 shader archives with 2,065 host shaders. The archive has 30 files and 673,112,704 bytes. Main executable SHA-256: `AD2FA409148448002EFA1BF368592E14BA5D974D105A24BF8AD48DB288FB6AAA`.
 
-Final M4P1 pixels: Camera0 exact proxy 183; Camera1 LastSeen 1936; reacquired proxy 0/live 2988; Camera2 leak 0; Camera3 page boundary 1448; clear suppression 928; Camera4 yaw45 514; identity reuse 264. All nonfinite counts were zero. Continuous transition, proxy-before-live reacquire, clear/suppression/unknown, identity reuse, and page/tile boundaries passed.
+## 14. Staged runtime smoke
 
-## 18. Retained failures and warning
+Authoritative ignored JSON copied to `Saved/Logs/M4P2/M4P2_ShippingSmoke_FinalFix2.json` records:
 
-- NullRHI Batch512 distribution 7 p99 271.499us >200us; D3D12 later passed with worst p99 184.599us.
-- Prepared4096 failed both full runs: Null p50 1005.203us and D3D12 p50 1017.399us against `<1000us`; both p99 values remained below 2ms.
-- Dedicated M3.4 Width0 1080p 1/2 p95 1.169ms >1ms, despite later full-prefix pass.
-- Full D3D12 emitted one engine RHI warning: reserved virtual resource size 258 GiB exceeded its 256 GiB budget during a passing M2 query test. No device removal or allocation failure occurred; cumulative reservation growth remains a risk.
-- UE warns that MSVC 14.51 is newer than preferred 14.50 and emits engine-header C4996 warnings; all targets passed.
-- Pre-queue sandboxed UE launches failed because LocalAppData Zen/DDC was not writable. The valid authorized run passed; no automation result was overwritten.
+- `success=true`;
+- `teardown_complete=true`;
+- `ready_for_screenshot=true`;
+- D3D12 and SM6 true;
+- Width=50 cm;
+- 56 passes, zero failures;
+- Runtime/Render subsystem, real GameViewport, and real camera;
+- M3.4 presentation;
+- M3.5 packet/static/no-change/dirty/clear;
+- M4P1 falling edge, frozen proxy, suppress/restore, reacquire, identity, tile/page, clear, and unknown paths;
+- subsystem unregister and render-command drain.
 
-## 19. Evidence
+The process exited naturally. The visible window screenshot at `Saved/Screenshots/M4P2/SightWeaveShipping_Closure_95d59f2.jpg` shows PASS, D3D12, SM6 true, Width=50 cm, and its visual check count. A Windows Firewall prompt raised by an earlier UAT `UnrealPak` process overlays the screenshot center; no network access was granted. Deterministic JSON is authoritative.
 
-- Final host reports: `<final-host>\Saved\AutomationReports\M4P2_FullSightWeave_{NullRHI,D3D12}_Final`
-- Final host logs: `<final-host>\Saved\Logs\M4P2_FullSightWeave_*.log`
-- DARKWELL: `Saved\AutomationReports\M4P2\M4P2_FullDarkwell_NullRHI_Final`
-- M3.4 retry: `Saved\AutomationReports\M4P2\M4P2_M3P4_PresentationPerformance_D3D12_Retry1`
-- M3.5 performance: `Saved\AutomationReports\M4P2\M4P2_M3P5_MemoryPerformance_D3D12`
-- LastSeen: `Saved\AutomationReports\M4P2\M4P2_LastSeenFrameMatrix_D3D12_Valid1`
+## 15. Retained failed attempts
 
-Generated evidence is ignored and uncommitted.
+Failures were preserved and repaired without hiding evidence:
 
-## 20. Git/LFS closure
+1. Early independent-host visual failures identified missing portable CustomDepth config. The package fix preserved product behavior and final M4P1 passed.
+2. Early Prepared4096 and Batch512 misses were traced through prepared-state and batch-core isolation; final full matrices and three independent focused processes pass unchanged gates.
+3. The retained M3.4 1.169 ms p95 process was followed by three independent exact-row passes; no gate changed.
+4. Two valid cooks initially failed only at Zen oplog attachment during stage. Correct Game packaging config plus `-SkipZenStore` produced Pak/IoStore Shipping successfully.
+5. The first valid staged runtime reported two fixture failures because the neutral fixture's static-description range `-100..250` excluded its configured `FloorPlaneZ=-200`. Production filtering was correct. Only the ignored fixture range was corrected; FinalFix2 passed all 56 checks.
+6. Pre-authorization sandbox launches that could not write required UE local state are not product evidence. Authorized serialized runs supersede them.
 
-Final documentation commit must record local/upstream/remote equality, `git diff --check`, `git lfs status`, `git lfs fsck`, `git fsck --no-reflogs`, and proof that only the known unstaged project descriptor remains. No generated package, host, report, screenshot, Binaries, Intermediate, Saved, or DDC path may be tracked.
+Engine C4996 and newer-than-preferred MSVC diagnostics remain informational. No fatal, assert, ensure, shader/RDG failure, GPU crash, device removal, or production-code failure remains.
 
-## 21. Resume
+## 16. Final repository closure
 
-Remain on M4P2. Investigate Prepared4096/Batch512 without weakening gates; stabilize M3.4 under controlled clocks; Cook/Stage a blank Win64 Shipping host for D3D12 lifecycle smoke; and investigate cumulative RHI virtual reservations.
+The final documentation checkpoint is committed and pushed normally. Closure then runs the exact requested status, diff, SHA, remote, LFS, and Git object-integrity commands. The task handoff reports their exact results and confirms local/upstream/remote equality. Only `Darkwell.uproject` remains modified locally; no generated output is tracked.
+
+## 17. Home recovery
 
 ```powershell
-cd D:\UE_projects\LastLight
+git fetch origin
 git switch codex/m4p2-sightweave-packaging-performance-closure
-git status --short --branch
+git pull --ff-only
 ```

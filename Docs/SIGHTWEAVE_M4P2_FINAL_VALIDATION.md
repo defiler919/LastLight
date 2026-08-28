@@ -2,76 +2,91 @@
 
 ## 1. Status
 
-**PARTIAL — packaging/Shipping boundaries closed; existing performance gates remain unresolved**
+**COMPLETED.** The frozen M4P1 behavior now has reliable BuildPlugin delivery, independent clean-host builds, clean Shipping boundaries, Cooked/Staged Win64 Shipping evidence, full D3D12/SM6 and NullRHI regression, lifecycle closure, and passing frozen performance gates.
 
-The authoritative 21-section result is in `SIGHTWEAVE_M4P2_EXECUTION_REPORT.md`. BuildPlugin, independent-host Editor/Game Development/Game Shipping, Shipping isolation, and package-after-install D3D12/SM6 coverage passed. M4P2 remains PARTIAL because the frozen Prepared4096 median gate failed, Batch512 failed under final NullRHI, the dedicated M3.4 1 ms row retained a failure despite later full-prefix success, and an actual Cooked/Staged Shipping game smoke remains outstanding.
+Authoritative execution detail is in `SIGHTWEAVE_M4P2_EXECUTION_REPORT.md`; recovery and compact evidence are in `SIGHTWEAVE_M4P2_HANDOFF.md`.
 
-## 2. Identity and audit baseline
+## 2. Identity and scope
 
-- Formal milestone: **M4P2 — SightWeave Packaging / Shipping / Clean-Host / Performance Closure**
+- Milestone: M4P2 — SightWeave Packaging / Shipping / Clean-Host / Performance Closure
 - Branch: `codex/m4p2-sightweave-packaging-performance-closure`
-- Frozen M4P1 baseline: `93f156f552aa85ee9d30891508d439011c57c479`
-- Scope source: `SIGHTWEAVE_M4P1_FINAL_VALIDATION.md`, section 11, which assigns the omitted packaging, Shipping, full-regression, and expanded-performance work to P2 packaging closure
-- Engine: Unreal Engine 5.8.1 at `D:\UE_5.8`
-- Required GPU path: NVIDIA GeForce RTX 4060, D3D12 / SM6
+- Frozen baseline: M4P1 `93f156f552aa85ee9d30891508d439011c57c479`
+- Engine: UE 5.8.1 at `D:\UE_5.8`
+- GPU path: RTX 4060, D3D12 / SM6
+- Scope: closure only; no gameplay, visual, public API, serialization, or production-asset change
 
-Start audit:
+`Darkwell.uproject` retains only the user's unstaged EngineAssociation GUID difference. It was never staged, restored, rewritten, or committed.
 
-- local HEAD: `93f156f552aa85ee9d30891508d439011c57c479`
-- upstream M4P1: `93f156f552aa85ee9d30891508d439011c57c479`
-- remote M4P1: `93f156f552aa85ee9d30891508d439011c57c479`
-- worktree: only `Darkwell.uproject` EngineAssociation differs (`5.8` to the local GUID)
-- `git diff --check`: passed
-- `git lfs status`: no objects to push or commit; only the known unstaged project descriptor
-- `git lfs fsck`: `Git LFS fsck OK`
+## 3. Build and packaging gates
 
-The local project descriptor will not be staged, restored, overwritten, or formatted.
+| Gate | Result |
+| --- | --- |
+| Repository Editor target | passed after relevant C++ changes |
+| BuildPlugin `-Rocket -TargetPlatforms=Win64` | passed; UAT exit 0 |
+| BuildPlugin Editor / Development Game / Shipping Game | 102/102, 32/32, 32/32 |
+| Delivery inventory | 128/128 Source + Shaders + Content + Engine.ini; no missing/extra files |
+| Fresh source-isolated clean host | Editor 102/102, Development 32/32, Shipping 32/32 |
+| Shipping implementation | exactly Runtime 19 + Render 13 objects |
+| Shipping compile definitions | dev automation/editor/editor-only data off; Shipping on |
+| COFF/dependency/import/string scans | no forbidden implementation or host dependency |
+| Cooked/Staged Shipping | passed BuildCookRun, Pak + IoStore, 494 cooked packages |
+| Staged runtime | D3D12/SM6, 56/56 checks, clean teardown and natural exit |
 
-## 3. Frozen scope and exclusions
+Final BuildPlugin: `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM4P2_BuildPlugin_Closure_95d59f2_20260828_1748`.
 
-The exact scope, matrices, thresholds, and verdict rules are in `SIGHTWEAVE_M4P2_PACKAGING_PERFORMANCE_PLAN.md`. M4P1 subject policies and presentation behavior, M3.4 inward feather, and M3.5 memory/static-environment semantics are immutable inputs to this validation.
+Final clean host: `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM4P2_CleanHost_Closure_95d59f2_20260828_1805`.
 
-## 4. Checkpoint ledger
+Final archive: `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM4P2_StagedShipping_Closure_95d59f2_20260828_1955_FinalFix2`.
 
-| Checkpoint | SHA | Remote | Evidence |
-| --- | --- | --- | --- |
-| `docs: start SightWeave M4P2 packaging closure` | `f246ce5` | pushed | baseline/roadmap audit and three planning documents |
-| `build: close SightWeave plugin packaging boundaries` | `f3bb4c7` | pushed | portable CustomDepth config and package boundary |
-| `test: refresh SightWeave packaging assertions` | `f33dd3f` | pushed | frozen-source assertion/fixture refresh |
-| `perf: expand SightWeave closure matrices` | `c57b774` | pushed | p50/p95/p99 and LastSeen matrix |
+The archive contains 30 files and 673,112,704 bytes. Main executable SHA-256: `AD2FA409148448002EFA1BF368592E14BA5D974D105A24BF8AD48DB288FB6AAA`.
 
-## 5. BuildPlugin
+## 4. Final regression matrix
 
-Passed: Editor Development 102 actions, Game Development 32, Game Shipping 32, UAT exit 0. Final 281-file output is `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM4P2_BuildPlugin_Final_c57b774_20260828_153400`; inventories and portable Engine.ini SHA-256 match source.
+| Gate | RHI | Result |
+| --- | --- | ---: |
+| Full SightWeave | NullRHI | 175/175 |
+| Full SightWeave | D3D12/SM6 | 267/267 |
+| Full DARKWELL | NullRHI | 24/24 |
+| M3.4 presentation | NullRHI | 21/21 |
+| M3.4 presentation | D3D12/SM6 | 37/37 |
+| M3.5 | D3D12/SM6 | 26/26 |
+| M4P1 | NullRHI | 9/9 |
+| M4P1 | D3D12/SM6 | 12/12 |
 
-## 6. Clean host
+Readback lifecycle and LastSeen real-view lifecycle pass in the same process. Final D3D12 full closure produced no fatal, assert, ensure, RDG/shader error, GPU crash, device removal, nonfinite result, stale callback, or cumulative resource-reservation warning.
 
-Passed from source in a new external host: Editor 102, Development Game 32, Shipping Game 32. The host has only the final package, zero reparse points/repository paths, and no DARKWELL source.
+## 5. Frozen performance gates
 
-## 7. Shipping isolation
+| Prepared4096 RHI | Minimum | p50 | p95 | p99 |
+| --- | ---: | ---: | ---: | ---: |
+| NullRHI | 84.102 us | 119.098 us | 138.599 us | 191.499 us |
+| D3D12/SM6 | 68.597 us | 74.700 us | 78.201 us | 79.699 us |
 
-Passed: exactly Runtime 19 + Render 13 objects; test/editor/host metadata hits zero; Shipping macros correct; six guarded test objects contain zero forbidden COFF symbol rows.
+Both pass the unchanged p50 `<1 ms` and p99 `<2 ms` gates.
 
-## 8. Package-after-install D3D12/SM6
+Batch512 final ten-distribution results pass the unchanged p50 `<=150 us`, p95 `<=180 us`, and p99 `<=200 us` gates. Worst NullRHI p95/p99 was `139.002/145.901 us`; worst D3D12 p95/p99 was `144.098/151.899 us`. Every row reported zero capacity growth. Three physical-core-isolated runs also passed independently.
 
-The independent host's final package passed 261/263 with one retained performance failure and one engine warning. M3.4 was 37/37, M3.5 26/26, M4P1 12/12, and severe GPU/RHI/shader/fatal scans were clean. An actual Cooked/Staged Shipping game smoke remains outstanding.
+The exact M3.4 `Width0.1080p.Tiles1Sources2` row passed three independent focused processes with GPU p95 `296 us`, `188 us`, and `950 us`, all below 1 ms. Raw GPU samples are retained. Selected M3.5 10 cm and 25 cm gates, no-change zero-work rules, 32-source pressure limits, persistent-memory limits, and correctness counters also pass.
 
-## 9. Automation matrix
+M4P1 LastSeen operation timing remains baseline-only because its authority defines correctness but no independent frame-time threshold. All baseline runs remained correctness-clean.
 
-Final full results: SightWeave NullRHI 173/175, SightWeave D3D12/SM6 261 success + 1 warning + 1 failure out of 263, and DARKWELL NullRHI 24/24. Exact focused/Lab counts are in the execution report.
+## 6. Staged Shipping lifecycle
 
-## 10. Performance and memory
+The final runtime JSON at `Saved/Logs/M4P2/M4P2_ShippingSmoke_FinalFix2.json` records:
 
-Selected M3.5 10/25cm gates pass and all expanded p50/p95/p99/scaling rows are recorded. Prepared4096, NullRHI Batch512, and the dedicated M3.4 1ms row retain failures. Six LastSeen operations are baseline-only and correctness-clean.
+- `success=true`, `teardown_complete=true`, `ready_for_screenshot=true`;
+- D3D12, SM6 true, visual feather width 50 cm;
+- 56 passes and zero failures;
+- Runtime/Render subsystem and real GameViewport/camera availability;
+- M3.4 presentation, M3.5 static memory/no-change/dirty/clear, and all required M4P1 falling-edge/proxy/suppression/reacquire/identity/tile/unknown paths;
+- unregister, render-command drain, resource release, and clean natural process exit.
 
-## 11. Severe logs, warnings, and retained failures
+The visible staged window was also inspected and showed PASS. Its screenshot contains an unrelated Windows Firewall prompt raised by the earlier UAT `UnrealPak` process; no network permission was granted, and deterministic JSON is authoritative.
 
-No final fatal/assert/ensure/shader/RDG/GPU-crash/device-removal result. Retained evidence includes performance failures, one cumulative RHI 258/256GiB virtual-reservation warning, engine C4996 warnings, and the non-preferred MSVC version.
+## 7. Retained attempts
 
-## 12. Final Git/LFS closure
+All meaningful failed evidence remains retained. Early performance misses were superseded by isolated core validation and full final closure without changing thresholds. Two Zen staging attempts failed at the UE 5.8 oplog HTTP attachment; the final run used the correct Game packaging config and `-SkipZenStore` while preserving Pak/IoStore/SM6. The first staged fixture excluded its own floor Z from its static-description range; only the ignored neutral fixture was corrected, and FinalFix2 passed without production-code changes.
 
-Performed after the final documentation commit; the resulting SHA and command results are appended to the execution report and handoff.
+## 8. Disposition
 
-## 13. Final disposition and recovery
-
-Authoritative detail: `SIGHTWEAVE_M4P2_EXECUTION_REPORT.md`. Resume on this M4P2 branch for gate investigation, controlled-clock confirmation, a Cooked/Staged Shipping host, and cumulative RHI reservation analysis.
+All M4P2 completion rules are met. No optimization lacking compilation or validation was committed. Generated evidence remains ignored. Final Git/LFS/object integrity and local/upstream/remote equality are performed after the documentation checkpoint and reported with the task handoff.

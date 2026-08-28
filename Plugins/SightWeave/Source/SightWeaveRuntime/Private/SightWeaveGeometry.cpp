@@ -6,6 +6,7 @@
 #include "Containers/StaticArray.h"
 #include "HAL/PlatformTime.h"
 #include "HAL/ThreadSingleton.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "Templates/Sorting.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSightWeaveGeometry, Log, All);
@@ -840,7 +841,11 @@ namespace
 		}
 
 		const FVector2D Origin(Input.Origin.X, Input.Origin.Y);
-		const FVector2D Forward = Input.Forward.GetSafeNormal();
+		// A radial source has no facing direction. Canonicalize its angular frame so
+		// rotations do not rotate the boundary tessellation or fragment exact results.
+		const FVector2D Forward = Input.Shape == ESightWeaveSourceShape::Radial
+			? FVector2D(1.0, 0.0)
+			: Input.Forward.GetSafeNormal();
 		if (!Cache.bInputInvariantInitialized
 			|| Cache.Origin.X != Origin.X
 			|| Cache.Origin.Y != Origin.Y
@@ -1720,7 +1725,10 @@ namespace SightWeave::Geometry
 		}
 
 		const FVector2D Origin(Input.Origin.X, Input.Origin.Y);
-		const FVector2D Forward = Input.Forward.GetSafeNormal();
+		// Use the same direction-independent radial frame as the optimized solver.
+		const FVector2D Forward = Input.Shape == ESightWeaveSourceShape::Radial
+			? FVector2D(1.0, 0.0)
+			: Input.Forward.GetSafeNormal();
 		const double ForwardAngle = FMath::Atan2(Forward.Y, Forward.X);
 		const double HalfAngleRadians = FMath::DegreesToRadians(Input.HalfAngleDegrees);
 		const double AngularEpsilon = FMath::DegreesToRadians(Input.Tolerances.EndpointAngularEpsilonDegrees);
@@ -1904,6 +1912,7 @@ namespace SightWeave::Geometry
 		FSightWeaveIncrementalSolveContext* IncrementalContext = nullptr,
 		const bool bPreserveVisionSolveDiagnostics = false)
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(SightWeave_SolveOptimizedPolygon);
 		FSightWeaveSolverFrameLease FrameLease;
 		FSightWeaveSolverFrame& SolverFrame = FrameLease.Get();
 		if (IncrementalContext)
@@ -1956,7 +1965,11 @@ namespace SightWeave::Geometry
 		TArray<uint8>& IncrementalReusedRays = SolverFrame.IncrementalReusedRays;
 
 		const FVector2D Origin(Input.Origin.X, Input.Origin.Y);
-		const FVector2D Forward = Input.Forward.GetSafeNormal();
+		// A radial source has no facing direction. Keep its boundary tessellation,
+		// prepared angles, and exact results stable across transform rotations.
+		const FVector2D Forward = Input.Shape == ESightWeaveSourceShape::Radial
+			? FVector2D(1.0, 0.0)
+			: Input.Forward.GetSafeNormal();
 		const double ForwardAngle = FMath::Atan2(Forward.Y, Forward.X);
 		const double HalfAngleRadians = FMath::DegreesToRadians(Input.HalfAngleDegrees);
 		const double AngularEpsilon = FMath::DegreesToRadians(Input.Tolerances.EndpointAngularEpsilonDegrees);
@@ -2084,23 +2097,14 @@ namespace SightWeave::Geometry
 		{
 			if (bPreparedForwardChanged)
 			{
-				int32 CandidateIndex = 0;
-				for (FSightWeaveOptimizedPreparedSegmentSlot& Slot : PreparedCache->SegmentSlots)
+				// CandidateSegments is the authoritative dense hot-path view. Slot.Prepared
+				// retains absolute endpoint data for future key-miss reconstruction, so a
+				// pure forward change does not need to rewrite both representations.
+				for (FSightWeaveOptimizedPreparedSegment& Prepared : CandidateSegments)
 				{
-					if (!Slot.bCandidate)
-					{
-						continue;
-					}
-					Slot.Prepared.AAngle = NormalizeRadians(
-						Slot.Prepared.AbsoluteAAngle - ForwardAngle);
-					Slot.Prepared.BAngle = NormalizeRadians(
-						Slot.Prepared.AbsoluteBAngle - ForwardAngle);
-					check(CandidateSegments.IsValidIndex(CandidateIndex));
-					CandidateSegments[CandidateIndex].AAngle = Slot.Prepared.AAngle;
-					CandidateSegments[CandidateIndex].BAngle = Slot.Prepared.BAngle;
-					++CandidateIndex;
+					Prepared.AAngle = NormalizeRadians(Prepared.AbsoluteAAngle - ForwardAngle);
+					Prepared.BAngle = NormalizeRadians(Prepared.AbsoluteBAngle - ForwardAngle);
 				}
-				check(CandidateIndex == CandidateSegments.Num());
 			}
 		}
 		else

@@ -160,6 +160,20 @@ namespace SightWeave::M2P2::PreparedEventIndexTests
 		return Result;
 	}
 
+	FString RawSamples(TConstArrayView<double> Samples)
+	{
+		FString Result;
+		for (int32 Index = 0; Index < Samples.Num(); ++Index)
+		{
+			if (Index > 0)
+			{
+				Result += TEXT(",");
+			}
+			Result += FString::Printf(TEXT("%.3f"), Samples[Index]);
+		}
+		return Result;
+	}
+
 	TArray<FSightWeaveSegment2D> MakeDenseSegments(const int32 Count)
 	{
 		TArray<FSightWeaveSegment2D> Segments;
@@ -260,19 +274,37 @@ bool FSightWeaveM2P2PreparedEventIndex4096Test::RunTest(const FString& Parameter
 	TArray<double> Candidate;
 	TArray<double> Sort;
 	TArray<double> Acceleration;
+	TArray<double> RayCast;
+	TArray<double> PostProcess;
+	TArray<double> Topology;
 	FSightWeaveReferenceSolveResult LastResult;
-	const bool bSucceeded = SightWeave::Geometry::Testing::MeasureCachedOptimizedForwardSequence(
+	const bool bSucceeded = USightWeaveWorldSubsystem::MeasurePreparedEventIndexForwardSequenceForTesting(
 		Input,
 		Forwards,
 		Total,
 		Candidate,
 		Sort,
 		Acceleration,
+		RayCast,
+		PostProcess,
+		Topology,
 		LastResult);
+	AddInfo(FString::Printf(
+		TEXT("M2P2_PREPARED_4096_WARMUP_RAW total_us=[%s] candidate_us=[%s] sort_us=[%s] acceleration_us=[%s] ray_us=[%s] post_us=[%s] topology_us=[%s]"),
+		*RawSamples(TConstArrayView<double>(Total.GetData(), Warmups)),
+		*RawSamples(TConstArrayView<double>(Candidate.GetData(), Warmups)),
+		*RawSamples(TConstArrayView<double>(Sort.GetData(), Warmups)),
+		*RawSamples(TConstArrayView<double>(Acceleration.GetData(), Warmups)),
+		*RawSamples(TConstArrayView<double>(RayCast.GetData(), Warmups)),
+		*RawSamples(TConstArrayView<double>(PostProcess.GetData(), Warmups)),
+		*RawSamples(TConstArrayView<double>(Topology.GetData(), Warmups))));
 	Total.RemoveAt(0, Warmups, EAllowShrinking::No);
 	Candidate.RemoveAt(0, Warmups, EAllowShrinking::No);
 	Sort.RemoveAt(0, Warmups, EAllowShrinking::No);
 	Acceleration.RemoveAt(0, Warmups, EAllowShrinking::No);
+	RayCast.RemoveAt(0, Warmups, EAllowShrinking::No);
+	PostProcess.RemoveAt(0, Warmups, EAllowShrinking::No);
+	Topology.RemoveAt(0, Warmups, EAllowShrinking::No);
 
 	const FDistribution TotalStats = Distribution(Total);
 	const FDistribution CandidateStats = Distribution(Candidate);
@@ -288,6 +320,15 @@ bool FSightWeaveM2P2PreparedEventIndex4096Test::RunTest(const FString& Parameter
 		LastResult.CandidateSegmentCount,
 		LastResult.CastRayCount,
 		LastResult.Vertices.Num()));
+	AddInfo(FString::Printf(
+		TEXT("M2P2_PREPARED_4096_RAW total_us=[%s] candidate_us=[%s] sort_us=[%s] acceleration_us=[%s] ray_us=[%s] post_us=[%s] topology_us=[%s]"),
+		*RawSamples(Total),
+		*RawSamples(Candidate),
+		*RawSamples(Sort),
+		*RawSamples(Acceleration),
+		*RawSamples(RayCast),
+		*RawSamples(PostProcess),
+		*RawSamples(Topology)));
 
 	TestTrue(TEXT("All cached 4096 solves succeed"), bSucceeded);
 	TestEqual(TEXT("Representative warmed sample count"), Total.Num(), Repeats);
@@ -321,6 +362,18 @@ bool FSightWeaveM2P5PreparedExactResultKeyTest::RunTest(const FString& Parameter
 		USightWeaveWorldSubsystem::ExercisePreparedEventIndexExactResultReuseForTesting(
 			Baseline,
 			Baseline,
+			true));
+
+	FSightWeaveReferenceSolveInput RadialBaseline = Baseline;
+	RadialBaseline.Shape = ESightWeaveSourceShape::Radial;
+	RadialBaseline.NearAwarenessRadius = 0.0;
+	FSightWeaveReferenceSolveInput RadialRotation = RadialBaseline;
+	RadialRotation.Forward = FVector2D(-0.6, 0.8);
+	TestTrue(
+		TEXT("Radial forward changes reuse the canonical exact result"),
+		USightWeaveWorldSubsystem::ExercisePreparedEventIndexExactResultReuseForTesting(
+			RadialBaseline,
+			RadialRotation,
 			true));
 
 	auto ExactKeyRejects = [this, &Baseline](

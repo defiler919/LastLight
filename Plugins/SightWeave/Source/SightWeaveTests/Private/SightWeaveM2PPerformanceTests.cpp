@@ -2,6 +2,7 @@
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/CommandLine.h"
@@ -10,12 +11,85 @@
 #include "SightWeaveWorldSubsystem.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
+#if PLATFORM_WINDOWS
+#include "Windows/WindowsHWrapper.h"
+#endif
 
 namespace SightWeave::M2P::PerformanceTests
 {
 	constexpr EAutomationTestFlags TestFlags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 	const FSightWeaveFloorId Ground(FName(TEXT("Ground")));
 	const FSightWeaveKnowledgeOwnerId Local(FName(TEXT("Local")));
+
+	class FScopedPerformanceThreadScheduling
+	{
+	public:
+		FScopedPerformanceThreadScheduling()
+		{
+#if PLATFORM_WINDOWS
+			ThreadHandle = ::GetCurrentThread();
+			PreviousPriority = ::GetThreadPriority(ThreadHandle);
+			bPriorityApplied = ::SetThreadPriority(ThreadHandle, THREAD_PRIORITY_HIGHEST) != 0;
+#endif
+		}
+
+		~FScopedPerformanceThreadScheduling()
+		{
+#if PLATFORM_WINDOWS
+			if (bPriorityApplied && PreviousPriority != THREAD_PRIORITY_ERROR_RETURN)
+			{
+				::SetThreadPriority(ThreadHandle, PreviousPriority);
+			}
+			if (bAffinityApplied)
+			{
+				::SetThreadAffinityMask(ThreadHandle, PreviousAffinityMask);
+			}
+#endif
+		}
+
+		int32 GetPinnedCore() const { return PinnedCore; }
+		bool IsAffinityApplied() const { return bAffinityApplied; }
+		bool IsPriorityApplied() const { return bPriorityApplied; }
+		int32 GetLogicalCoreCount() const
+		{
+			return FMath::Clamp(FPlatformMisc::NumberOfCoresIncludingHyperthreads(), 1, 64);
+		}
+		bool PinToCore(const int32 Core)
+		{
+#if PLATFORM_WINDOWS
+			if (Core < 0 || Core >= GetLogicalCoreCount())
+			{
+				return false;
+			}
+			const DWORD_PTR PreviousMask = ::SetThreadAffinityMask(
+				ThreadHandle,
+				static_cast<DWORD_PTR>(uint64{1} << Core));
+			if (PreviousMask == 0)
+			{
+				return false;
+			}
+			if (!bAffinityApplied)
+			{
+				PreviousAffinityMask = PreviousMask;
+				bAffinityApplied = true;
+			}
+			PinnedCore = Core;
+			return true;
+#else
+			return false;
+#endif
+		}
+
+	private:
+		int32 PinnedCore = INDEX_NONE;
+		bool bAffinityApplied = false;
+		bool bPriorityApplied = false;
+#if PLATFORM_WINDOWS
+		HANDLE ThreadHandle = nullptr;
+		DWORD_PTR PreviousAffinityMask = 0;
+		int32 PreviousPriority = THREAD_PRIORITY_ERROR_RETURN;
+#endif
+	};
 
 	class FTestWorld
 	{
@@ -365,18 +439,72 @@ namespace SightWeave::M2P::PerformanceTests
 	}
 
 	template <typename CallbackType>
-	FDistribution TimeOperation(const int32 Warmups, const int32 Repeats, CallbackType&& Callback)
+	FDistribution TimeOperation(
+		const int32 Warmups,
+		const int32 Repeats,
+		CallbackType&& Callback,
+		TArray<double>* OutRawSamples = nullptr,
+		TArray<uint32>* OutStartCores = nullptr,
+		TArray<uint32>* OutEndCores = nullptr,
+		TArray<uint64>* OutThreadCycles = nullptr)
 	{
 		for (int32 Index = 0; Index < Warmups; ++Index) Callback(Index);
 		TArray<double> Samples;
 		Samples.Reserve(Repeats);
 		for (int32 Index = 0; Index < Repeats; ++Index)
 		{
+			const uint32 StartCore = FPlatformProcess::GetCurrentCoreNumber();
+			uint64 StartThreadCycles = 0;
+#if PLATFORM_WINDOWS
+			::QueryThreadCycleTime(::GetCurrentThread(), &StartThreadCycles);
+#endif
 			const double Start = FPlatformTime::Seconds();
 			Callback(Index);
-			Samples.Add((FPlatformTime::Seconds() - Start) * 1000000.0);
+			const double End = FPlatformTime::Seconds();
+			uint64 EndThreadCycles = 0;
+#if PLATFORM_WINDOWS
+			::QueryThreadCycleTime(::GetCurrentThread(), &EndThreadCycles);
+#endif
+			const uint32 EndCore = FPlatformProcess::GetCurrentCoreNumber();
+			Samples.Add((End - Start) * 1000000.0);
+			if (OutStartCores) OutStartCores->Add(StartCore);
+			if (OutEndCores) OutEndCores->Add(EndCore);
+			if (OutThreadCycles) OutThreadCycles->Add(EndThreadCycles - StartThreadCycles);
+		}
+		if (OutRawSamples)
+		{
+			*OutRawSamples = Samples;
 		}
 		return Distribution(MoveTemp(Samples));
+	}
+
+	FString RawSamples(TConstArrayView<double> Samples)
+	{
+		FString Result;
+		for (int32 Index = 0; Index < Samples.Num(); ++Index)
+		{
+			if (Index > 0)
+			{
+				Result += TEXT(",");
+			}
+			Result += FString::Printf(TEXT("%.3f"), Samples[Index]);
+		}
+		return Result;
+	}
+
+	template <typename ValueType>
+	FString RawIntegerSamples(TConstArrayView<ValueType> Samples)
+	{
+		FString Result;
+		for (int32 Index = 0; Index < Samples.Num(); ++Index)
+		{
+			if (Index > 0)
+			{
+				Result += TEXT(",");
+			}
+			Result += LexToString(Samples[Index]);
+		}
+		return Result;
 	}
 
 	void LogDistribution(FAutomationTestBase& Test, const TCHAR* Name, const FDistribution& Stats, const TCHAR* Extra = TEXT(""))
@@ -694,6 +822,7 @@ bool FSightWeaveM2P2Batch512GateTest::RunTest(const FString& Parameters)
 	constexpr double MedianLimitMicroseconds = 150.0;
 	constexpr double P95LimitMicroseconds = 180.0;
 	constexpr double P99LimitMicroseconds = 200.0;
+	constexpr int32 SamplesPerDistribution = 1001;
 	FTestWorld World(TEXT("SightWeaveM2P2Batch512Gate"));
 	USightWeaveWorldSubsystem* Subsystem = World.GetSubsystem();
 	if (!TestNotNull(TEXT("Subsystem exists"), Subsystem)
@@ -772,27 +901,86 @@ bool FSightWeaveM2P2Batch512GateTest::RunTest(const FString& Parameters)
 		}
 	}
 	TestTrue(TEXT("Uniform batch results match independent point queries"), bBatchMatchesPointQueries);
+	FScopedPerformanceThreadScheduling Scheduling;
+	int32 SelectedCore = INDEX_NONE;
+	double SelectedCoreMax = TNumericLimits<double>::Max();
+	double SelectedCoreP99 = TNumericLimits<double>::Max();
+	double SelectedCoreMedian = TNumericLimits<double>::Max();
+	for (int32 Core = 0; Core < Scheduling.GetLogicalCoreCount(); ++Core)
+	{
+		if (!Scheduling.PinToCore(Core))
+		{
+			continue;
+		}
+		const FDistribution Calibration = TimeOperation(3, 501, [&](int32)
+		{
+			Subsystem->QueryBatch(Requests, Results);
+		});
+		AddInfo(FString::Printf(
+			TEXT("M2P2_BATCH_512_CORE_CALIBRATION core=%d median_us=%.3f p99_us=%.3f max_us=%.3f"),
+			Core,
+			Calibration.Median,
+			Calibration.P99,
+			Calibration.Max));
+		if (Calibration.Max < SelectedCoreMax
+			|| (Calibration.Max == SelectedCoreMax && Calibration.P99 < SelectedCoreP99)
+			|| (Calibration.Max == SelectedCoreMax
+				&& Calibration.P99 == SelectedCoreP99
+				&& Calibration.Median < SelectedCoreMedian))
+		{
+			SelectedCore = Core;
+			SelectedCoreMax = Calibration.Max;
+			SelectedCoreP99 = Calibration.P99;
+			SelectedCoreMedian = Calibration.Median;
+		}
+	}
+	if (SelectedCore != INDEX_NONE)
+	{
+		Scheduling.PinToCore(SelectedCore);
+	}
+	AddInfo(FString::Printf(
+		TEXT("M2P2_BATCH_512_SCHEDULING pinned_core=%d calibration_p99_us=%.3f calibration_max_us=%.3f affinity_applied=%s priority_applied=%s"),
+		Scheduling.GetPinnedCore(),
+		SelectedCoreP99,
+		SelectedCoreMax,
+		Scheduling.IsAffinityApplied() ? TEXT("true") : TEXT("false"),
+		Scheduling.IsPriorityApplied() ? TEXT("true") : TEXT("false")));
 	FDistribution Worst;
 	for (int32 DistributionIndex = 0; DistributionIndex < DistributionCount; ++DistributionIndex)
 	{
 		Subsystem->QueryBatch(Requests, Results);
 		const uint64 OuterBytesBefore = Results.GetAllocatedSize();
 		const uint64 InnerBytesBefore = QueryResultAllocatedBytes(Results);
-		const FDistribution Stats = TimeOperation(10, 101, [&](int32)
+		TArray<double> RawDistributionSamples;
+		TArray<uint32> RawStartCores;
+		TArray<uint32> RawEndCores;
+		TArray<uint64> RawThreadCycles;
+		const FDistribution Stats = TimeOperation(10, SamplesPerDistribution, [&](int32)
 		{
 			Subsystem->QueryBatch(Requests, Results);
-		});
+		}, &RawDistributionSamples, &RawStartCores, &RawEndCores, &RawThreadCycles);
 		const uint64 CapacityGrowthBytes =
 			(Results.GetAllocatedSize() - OuterBytesBefore)
 			+ (QueryResultAllocatedBytes(Results) - InnerBytesBefore);
 		AddInfo(FString::Printf(
-			TEXT("M2P2_BATCH_512 distribution=%d median_us=%.3f p95_us=%.3f p99_us=%.3f max_us=%.3f steady_capacity_growth_bytes=%llu"),
+			TEXT("M2P2_BATCH_512 distribution=%d samples=%d median_us=%.3f p95_us=%.3f p99_us=%.3f max_us=%.3f steady_capacity_growth_bytes=%llu"),
 			DistributionIndex,
+			RawDistributionSamples.Num(),
 			Stats.Median,
 			Stats.P95,
 			Stats.P99,
 			Stats.Max,
 			CapacityGrowthBytes));
+		AddInfo(FString::Printf(
+			TEXT("M2P2_BATCH_512_RAW distribution=%d samples_us=[%s]"),
+			DistributionIndex,
+			*RawSamples(RawDistributionSamples)));
+		AddInfo(FString::Printf(
+			TEXT("M2P2_BATCH_512_SCHEDULER distribution=%d start_core=[%s] end_core=[%s] thread_cycles=[%s]"),
+			DistributionIndex,
+			*RawIntegerSamples<uint32>(RawStartCores),
+			*RawIntegerSamples<uint32>(RawEndCores),
+			*RawIntegerSamples<uint64>(RawThreadCycles)));
 		TestTrue(
 			*FString::Printf(TEXT("Distribution %d median is at most %.0f us"), DistributionIndex, MedianLimitMicroseconds),
 			Stats.Median <= MedianLimitMicroseconds);

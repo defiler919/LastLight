@@ -1,5 +1,7 @@
 #include "SightWeavePreparedEventIndex.h"
 
+#include "ProfilingDebugging/CpuProfilerTrace.h"
+
 namespace
 {
 	template <typename ElementType>
@@ -93,6 +95,7 @@ FSightWeavePreparedEventIndex::FAcquireResult FSightWeavePreparedEventIndex::Acq
 	const TSharedPtr<FSightWeaveOptimizedSolveCache>& CurrentBinding,
 	const uint64 Revision)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(SightWeave_PreparedEventIndex_Acquire);
 	FAcquireResult Result;
 	for (FSlot& Slot : Slots)
 	{
@@ -187,6 +190,7 @@ bool FSightWeavePreparedEventIndex::TryReuseExactResult(
 	const TSharedPtr<FSightWeaveOptimizedSolveCache>& Cache,
 	FSightWeaveReferenceSolveResult& OutResult)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(SightWeave_PreparedEventIndex_TryReuseExactResult);
 	const FSlot* Slot = FindSlot(Cache);
 	if (!Slot
 		|| !Slot->bValid
@@ -406,8 +410,9 @@ bool FSightWeavePreparedEventIndex::MatchesExactResultInput(
 		&& Cache.ExactResultOrigin.X == Input.Origin.X
 		&& Cache.ExactResultOrigin.Y == Input.Origin.Y
 		&& Cache.ExactResultOrigin.Z == Input.Origin.Z
-		&& Cache.ExactResultForward.X == Input.Forward.X
-		&& Cache.ExactResultForward.Y == Input.Forward.Y
+		&& (Input.Shape == ESightWeaveSourceShape::Radial
+			|| (Cache.ExactResultForward.X == Input.Forward.X
+				&& Cache.ExactResultForward.Y == Input.Forward.Y))
 		&& Cache.ExactResultShape == Input.Shape
 		&& Cache.ExactResultRange == Input.Range
 		&& Cache.ExactResultHalfAngleDegrees == Input.HalfAngleDegrees

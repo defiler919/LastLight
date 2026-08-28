@@ -1821,6 +1821,7 @@ void USightWeaveWorldSubsystem::QueryBatch(
 	LastBatchQueryDiagnostics.VisionSourceCount = Snapshot.IsValid() ? Snapshot->VisionSources.Num() : 0;
 	LastBatchQueryDiagnostics.IlluminationSourceCount = Snapshot.IsValid() ? Snapshot->IlluminationSources.Num() : 0;
 	EmitBatchQueryStage(ESightWeaveBatchQueryStage::Classification, true);
+	bool bBatchClassificationStageClosed = false;
 #endif
 	if (Requests.Num() >= 256
 		&& Requests.Num() <= 512
@@ -1852,33 +1853,6 @@ void USightWeaveWorldSubsystem::QueryBatch(
 			&& SharedFloor->bEnabled
 			&& SharedFloor->bActiveForQueries
 			&& IsPointInHeightRange(SharedZ, SharedFloor->HeightRange, Tolerances.HeightOverlapEpsilon);
-		for (const FSightWeaveQueryRequest& Request : Requests)
-		{
-			if (!bUniformValidatedBatch)
-			{
-				break;
-			}
-			const bool bValidAnchor = Request.SampleSet.Rule == ESightWeaveSampleRule::Anchor
-				&& Request.SampleSet.Samples.IsValidIndex(Request.SampleSet.AnchorIndex)
-				&& !Request.SampleSet.Samples[Request.SampleSet.AnchorIndex].ContainsNaN();
-			if (!bValidAnchor
-				|| Request.KnowledgeOwnerId != SharedKnowledgeOwnerId
-				|| Request.FloorId != SharedFloorId
-				|| Request.SampleSet.Samples[Request.SampleSet.AnchorIndex].Z != SharedZ)
-			{
-				bUniformValidatedBatch = false;
-				break;
-			}
-			const FVector& Location = Request.SampleSet.Samples[Request.SampleSet.AnchorIndex];
-			if (Location.X < SharedFloor->BoundsMin.X - Tolerances.PointOnEdgeEpsilon
-				|| Location.X > SharedFloor->BoundsMax.X + Tolerances.PointOnEdgeEpsilon
-				|| Location.Y < SharedFloor->BoundsMin.Y - Tolerances.PointOnEdgeEpsilon
-				|| Location.Y > SharedFloor->BoundsMax.Y + Tolerances.PointOnEdgeEpsilon)
-			{
-				bUniformValidatedBatch = false;
-				break;
-			}
-		}
 		if (bUniformValidatedBatch)
 		{
 			const FSightWeaveVisionSnapshotEntry* PrefilteredVisionEntries[16];
@@ -1917,13 +1891,33 @@ void USightWeaveWorldSubsystem::QueryBatch(
 				}
 			}
 #if WITH_DEV_AUTOMATION_TESTS
-			LastBatchQueryDiagnostics.bFastPath = true;
 			EmitBatchQueryStage(ESightWeaveBatchQueryStage::Classification, false);
+			bBatchClassificationStageClosed = true;
 			EmitBatchQueryStage(ESightWeaveBatchQueryStage::ResultMaterialization, true);
 #endif
 			for (int32 RequestIndex = 0; RequestIndex < Requests.Num(); ++RequestIndex)
 			{
 				const FSightWeaveQueryRequest& Request = Requests[RequestIndex];
+				const bool bValidAnchor = Request.SampleSet.Rule == ESightWeaveSampleRule::Anchor
+					&& Request.SampleSet.Samples.IsValidIndex(Request.SampleSet.AnchorIndex)
+					&& !Request.SampleSet.Samples[Request.SampleSet.AnchorIndex].ContainsNaN();
+				if (!bValidAnchor
+					|| Request.KnowledgeOwnerId != SharedKnowledgeOwnerId
+					|| Request.FloorId != SharedFloorId
+					|| Request.SampleSet.Samples[Request.SampleSet.AnchorIndex].Z != SharedZ)
+				{
+					bUniformValidatedBatch = false;
+					break;
+				}
+				const FVector& Location = Request.SampleSet.Samples[Request.SampleSet.AnchorIndex];
+				if (Location.X < SharedFloor->BoundsMin.X - Tolerances.PointOnEdgeEpsilon
+					|| Location.X > SharedFloor->BoundsMax.X + Tolerances.PointOnEdgeEpsilon
+					|| Location.Y < SharedFloor->BoundsMin.Y - Tolerances.PointOnEdgeEpsilon
+					|| Location.Y > SharedFloor->BoundsMax.Y + Tolerances.PointOnEdgeEpsilon)
+				{
+					bUniformValidatedBatch = false;
+					break;
+				}
 				QueryEffectiveLiveValidated(
 					Request.KnowledgeOwnerId,
 					Request.FloorId,
@@ -1942,12 +1936,19 @@ void USightWeaveWorldSubsystem::QueryBatch(
 			}
 #if WITH_DEV_AUTOMATION_TESTS
 			EmitBatchQueryStage(ESightWeaveBatchQueryStage::ResultMaterialization, false);
+			LastBatchQueryDiagnostics.bFastPath = bUniformValidatedBatch;
 #endif
-			return;
+			if (bUniformValidatedBatch)
+			{
+				return;
+			}
 		}
 	}
 #if WITH_DEV_AUTOMATION_TESTS
-	EmitBatchQueryStage(ESightWeaveBatchQueryStage::Classification, false);
+	if (!bBatchClassificationStageClosed)
+	{
+		EmitBatchQueryStage(ESightWeaveBatchQueryStage::Classification, false);
+	}
 	EmitBatchQueryStage(ESightWeaveBatchQueryStage::ResultMaterialization, true);
 #endif
 	FSightWeaveFloorId CachedFloorId;
@@ -2555,6 +2556,76 @@ bool USightWeaveWorldSubsystem::ExercisePreparedEventIndexExactResultReuseForTes
 		&& ReusedResult.CandidateDistances == FreshResult.CandidateDistances
 		&& ReusedResult.CandidateBoundaryPoints == FreshResult.CandidateBoundaryPoints;
 }
+
+bool USightWeaveWorldSubsystem::MeasurePreparedEventIndexForwardSequenceForTesting(
+	const FSightWeaveReferenceSolveInput& BaseInput,
+	const TConstArrayView<FVector2D> Forwards,
+	TArray<double>& OutTotalMicroseconds,
+	TArray<double>& OutCandidateMicroseconds,
+	TArray<double>& OutSortMicroseconds,
+	TArray<double>& OutAccelerationMicroseconds,
+	TArray<double>& OutRayCastMicroseconds,
+	TArray<double>& OutPostProcessMicroseconds,
+	TArray<double>& OutTopologyMicroseconds,
+	FSightWeaveReferenceSolveResult& OutLastResult)
+{
+	OutTotalMicroseconds.Reset(Forwards.Num());
+	OutCandidateMicroseconds.Reset(Forwards.Num());
+	OutSortMicroseconds.Reset(Forwards.Num());
+	OutAccelerationMicroseconds.Reset(Forwards.Num());
+	OutRayCastMicroseconds.Reset(Forwards.Num());
+	OutPostProcessMicroseconds.Reset(Forwards.Num());
+	OutTopologyMicroseconds.Reset(Forwards.Num());
+
+	FSightWeavePreparedEventIndex Index;
+	Index.Initialize(2, 16ll * 1024ll * 1024ll);
+	TSharedPtr<FSightWeaveOptimizedSolveCache> Binding;
+	FSightWeaveReferenceSolveInput Input = BaseInput;
+	bool bAllSucceeded = true;
+	for (int32 ForwardIndex = 0; ForwardIndex < Forwards.Num(); ++ForwardIndex)
+	{
+		Input.Forward = Forwards[ForwardIndex];
+		const double StartSeconds = FPlatformTime::Seconds();
+		const FSightWeavePreparedEventIndex::FAcquireResult Acquisition =
+			Index.Acquire(Input, Binding, static_cast<uint64>(ForwardIndex + 1));
+		Binding = Acquisition.Cache;
+		bool bReused = Acquisition.bHit
+			&& Binding.IsValid()
+			&& Index.TryReuseExactResult(Input, Binding, OutLastResult);
+		if (!bReused && Binding.IsValid())
+		{
+			if (Acquisition.bHit)
+			{
+				SightWeave::Geometry::SolveOptimizedPolygonIntoValidatedCache(
+					Input, OutLastResult, *Binding);
+			}
+			else
+			{
+				SightWeave::Geometry::SolveOptimizedPolygonIntoCached(
+					Input, OutLastResult, *Binding);
+			}
+			bReused = Index.StoreExactResult(Input, OutLastResult, Binding)
+				&& Index.Commit(Binding);
+		}
+		const double TotalMicroseconds =
+			(FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
+		bAllSucceeded &= Binding.IsValid() && OutLastResult.bSucceeded && bReused;
+		OutTotalMicroseconds.Add(TotalMicroseconds);
+		OutCandidateMicroseconds.Add(
+			OutLastResult.StageMetrics.CandidateFilterAndEndpointEventMicroseconds);
+		OutSortMicroseconds.Add(
+			OutLastResult.StageMetrics.EventSortDeduplicateMicroseconds);
+		OutAccelerationMicroseconds.Add(
+			OutLastResult.StageMetrics.AccelerationBuildMicroseconds);
+		OutRayCastMicroseconds.Add(OutLastResult.StageMetrics.RayCastMicroseconds);
+		OutPostProcessMicroseconds.Add(
+			OutLastResult.StageMetrics.PolygonPostProcessMicroseconds);
+		OutTopologyMicroseconds.Add(
+			OutLastResult.StageMetrics.TopologyValidationMicroseconds);
+	}
+	Index.Release(Binding);
+	return bAllSucceeded;
+}
 #endif
 
 void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
@@ -2612,9 +2683,11 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 		Input.Forward = FVector2D(Forward3.X, Forward3.Y);
 		if (!Input.Forward.Normalize()) Input.Forward = FVector2D(1.0, 0.0);
 		Entry.PolarOrigin = FVector2D(Input.Origin.X, Input.Origin.Y);
-		Entry.PolarForwardAngleRadians = FMath::Atan2(Input.Forward.Y, Input.Forward.X);
 		Entry.NominalForward = Input.Forward;
 		Input.Shape = Description->Shape;
+		Entry.PolarForwardAngleRadians = Input.Shape == ESightWeaveSourceShape::Radial
+			? 0.0
+			: FMath::Atan2(Input.Forward.Y, Input.Forward.X);
 		Input.Range = Description->Range;
 		Input.HalfAngleDegrees = Description->HalfAngleDegrees;
 		Input.NearAwarenessRadius = Description->NearAwarenessRadius;
@@ -2934,9 +3007,11 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 		Input.Forward = FVector2D(Forward3.X, Forward3.Y);
 		if (!Input.Forward.Normalize()) Input.Forward = FVector2D(1.0, 0.0);
 		Entry.PolarOrigin = FVector2D(Input.Origin.X, Input.Origin.Y);
-		Entry.PolarForwardAngleRadians = FMath::Atan2(Input.Forward.Y, Input.Forward.X);
 		Entry.NominalForward = Input.Forward;
 		Input.Shape = Description->Shape;
+		Entry.PolarForwardAngleRadians = Input.Shape == ESightWeaveSourceShape::Radial
+			? 0.0
+			: FMath::Atan2(Input.Forward.Y, Input.Forward.X);
 		Input.Range = Description->Range;
 		Input.HalfAngleDegrees = Description->HalfAngleDegrees;
 		Input.NearAwarenessRadius = 0.0;

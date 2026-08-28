@@ -422,6 +422,17 @@ public:
 		const FSightWeaveReferenceSolveInput& BaselineInput,
 		const FSightWeaveReferenceSolveInput& CandidateInput,
 		bool bExpectedReuse);
+	static bool MeasurePreparedEventIndexForwardSequenceForTesting(
+		const FSightWeaveReferenceSolveInput& BaseInput,
+		TConstArrayView<FVector2D> Forwards,
+		TArray<double>& OutTotalMicroseconds,
+		TArray<double>& OutCandidateMicroseconds,
+		TArray<double>& OutSortMicroseconds,
+		TArray<double>& OutAccelerationMicroseconds,
+		TArray<double>& OutRayCastMicroseconds,
+		TArray<double>& OutPostProcessMicroseconds,
+		TArray<double>& OutTopologyMicroseconds,
+		FSightWeaveReferenceSolveResult& OutLastResult);
 #endif
 
 	void QueryOccluderSegments(

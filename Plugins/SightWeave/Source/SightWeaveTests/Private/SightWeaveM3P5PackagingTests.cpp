@@ -127,8 +127,10 @@ bool FSightWeaveM3P5PackagingBoundariesTest::RunTest(const FString& Parameters)
 		&& ViewExtension.Contains(TEXT("AddHardMaskComposite_RenderThread")));
 	TestTrue(TEXT("Production composite orders HardLive before remembered Memory"),
 		ShaderSource.Contains(TEXT("const bool bVisible = SightWeaveIsHardLive(TranslatedWorld.xy)"))
+		&& ShaderSource.Contains(TEXT("if (bVisible)"))
+		&& ShaderSource.Contains(TEXT("return SceneColorTexture.Load"))
 		&& ShaderSource.Contains(TEXT("SightWeaveRememberedEnvironment(DepthPixel)"))
-		&& ShaderSource.Contains(TEXT("return bVisible")));
+		&& ShaderSource.Contains(TEXT("SightWeaveIsVisibleSubjectProxy(DepthPixel, DeviceZ)")));
 	TestTrue(TEXT("Remembered branch requires Memory, eligibility, and fixed attribute"),
 		ShaderSource.Contains(TEXT("SightWeaveSampleMemory(TranslatedFloorPosition) < 0.5f"))
 		&& ShaderSource.Contains(TEXT("const float Attribute = SightWeaveSampleStaticAttribute"))
@@ -138,9 +140,14 @@ bool FSightWeaveM3P5PackagingBoundariesTest::RunTest(const FString& Parameters)
 		TEXT("DamageSourceReveal") })
 	{
 		Excludes(*this, TEXT("Production M3.5 view extension"), ViewExtension, Forbidden);
-		Excludes(*this, TEXT("Production M3.5 render state"), RenderStateSource, Forbidden);
 		Excludes(*this, TEXT("Production M3.5 shader"), ShaderSource, Forbidden);
 	}
+	TestTrue(TEXT("M4P1 Last-Seen integration is presentation-only and stencil bounded"),
+		RenderStateSource.Contains(TEXT("SightWeaveLastSeenProxyComponent.h"))
+		&& RenderStateSource.Contains(TEXT("LastSeenProxyStencilValue"))
+		&& RenderStateSource.Contains(TEXT("LastSeenProxyNeutralIntensity"))
+		&& !RenderStateSource.Contains(TEXT("FSightWeaveSubjectMemoryAuthority"))
+		&& !RenderStateSource.Contains(TEXT("FSightWeaveLastSeenSnapshotDescriptor")));
 
 	TestTrue(TEXT("Memory mirror readback API and implementation are development-only"),
 		MemoryReadbackHeader.Contains(TEXT("#if WITH_DEV_AUTOMATION_TESTS"))

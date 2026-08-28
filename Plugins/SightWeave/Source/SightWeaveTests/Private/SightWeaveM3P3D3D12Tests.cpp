@@ -12,6 +12,8 @@ namespace SightWeave::M3P3::D3D12Tests
 		| EAutomationTestFlags::NonNullRHI
 		| EAutomationTestFlags::EngineFilter;
 	constexpr double ReadbackTimeoutSeconds = 30.0;
+	constexpr int32 PresentationGPUWarmupCount = 8;
+	constexpr int32 PresentationWarmSampleCount = 64;
 
 	struct FPolygon
 	{
@@ -321,7 +323,12 @@ namespace SightWeave::M3P3::D3D12Tests
 		int32 ResidentTileCount = 0;
 		float FeatherWidthCentimeters = 0.0f;
 		FString UpdateMode = TEXT("NoChange");
+		double BindingP50Microseconds = 0.0;
+		double BindingP95Microseconds = 0.0;
+		double BindingP99Microseconds = 0.0;
+		double PacketBuildP50Microseconds = 0.0;
 		double PacketBuildP95Microseconds = 0.0;
+		double PacketBuildP99Microseconds = 0.0;
 		FIntPoint Extent = FIntPoint::ZeroValue;
 		TSharedPtr<FSightWeavePresentationBenchmark, ESPMode::ThreadSafe> Request;
 	};
@@ -332,6 +339,17 @@ namespace SightWeave::M3P3::D3D12Tests
 		return Samples.IsEmpty()
 			? 0.0
 			: Samples[FMath::Clamp(FMath::CeilToInt(Samples.Num() * 0.95) - 1, 0, Samples.Num() - 1)];
+	}
+
+	double Percentile(TArray<double> Samples, const double Quantile)
+	{
+		Samples.Sort();
+		return Samples.IsEmpty()
+			? 0.0
+			: Samples[FMath::Clamp(
+				FMath::CeilToInt(Samples.Num() * Quantile) - 1,
+				0,
+				Samples.Num() - 1)];
 	}
 
 	TSharedPtr<FBenchmarkContext> BuildBenchmarkCase(
@@ -418,12 +436,17 @@ namespace SightWeave::M3P3::D3D12Tests
 				break;
 			}
 		}
-		const double BindingP95 = Percentile95(MoveTemp(BindingSamples));
-		Test->TestTrue(TEXT("GT presentation selection p95 remains below 0.25 ms"), BindingP95 < 250.0);
+		Context->BindingP50Microseconds = Percentile(BindingSamples, 0.50);
+		Context->BindingP95Microseconds = Percentile(BindingSamples, 0.95);
+		Context->BindingP99Microseconds = Percentile(MoveTemp(BindingSamples), 0.99);
+		Test->TestTrue(TEXT("GT presentation selection p95 remains below 0.25 ms"),
+			Context->BindingP95Microseconds < 250.0);
 		UE_LOG(LogTemp, Display,
-			TEXT("M3P3_GT_BINDING case=%s samples=2048 p95_us=%.3f"),
+			TEXT("M3P3_GT_BINDING case=%s samples=2048 p50_us=%.3f p95_us=%.3f p99_us=%.3f"),
 			*Name,
-			BindingP95);
+			Context->BindingP50Microseconds,
+			Context->BindingP95Microseconds,
+			Context->BindingP99Microseconds);
 
 		const FSightWeaveViewPresentationSelection Selection =
 			FSightWeaveViewPresentationSelection::Enabled(
@@ -440,7 +463,8 @@ namespace SightWeave::M3P3::D3D12Tests
 		TArray<double> PacketBuildSamples;
 		if (UpdateMode != TEXT("NoChange"))
 		{
-			constexpr int32 UpdateSampleCount = 64;
+			constexpr int32 UpdateSampleCount =
+				PresentationGPUWarmupCount + PresentationWarmSampleCount;
 			WarmPackets.Reserve(UpdateSampleCount);
 			PacketBuildSamples.Reserve(UpdateSampleCount);
 			TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Previous = Packet;
@@ -475,7 +499,9 @@ namespace SightWeave::M3P3::D3D12Tests
 				WarmPackets.Add(UpdatedPacket);
 				Previous = UpdatedPacket;
 			}
-			Context->PacketBuildP95Microseconds = Percentile95(PacketBuildSamples);
+			Context->PacketBuildP50Microseconds = Percentile(PacketBuildSamples, 0.50);
+			Context->PacketBuildP95Microseconds = Percentile(PacketBuildSamples, 0.95);
+			Context->PacketBuildP99Microseconds = Percentile(PacketBuildSamples, 0.99);
 			Test->TestTrue(TEXT("GT packet build and dirty expansion p95 remains below 0.25 ms"),
 				Context->PacketBuildP95Microseconds < 250.0);
 		}
@@ -485,7 +511,7 @@ namespace SightWeave::M3P3::D3D12Tests
 			Context->Extent,
 			FVector2f::ZeroVector,
 			WorldStep,
-			64,
+			PresentationGPUWarmupCount + PresentationWarmSampleCount,
 			MoveTemp(WarmPackets));
 		return Context;
 	}
@@ -526,14 +552,58 @@ namespace SightWeave::M3P3::D3D12Tests
 				Test->AddError(Result.Failure);
 				return true;
 			}
-			const double ViewSetupP95 = Percentile95(Result.WarmRenderThreadViewSetupMicroseconds);
-			const double PacketSubmitP95 = Percentile95(Result.WarmRenderThreadPacketSubmitMicroseconds);
-			const double MaskSetupP95 = Percentile95(Result.WarmRenderThreadMaskSetupMicroseconds);
-			const double FeatherSetupP95 = Percentile95(Result.WarmRenderThreadFeatherSetupMicroseconds);
-			const double CompositeSetupP95 = Percentile95(Result.WarmRenderThreadCompositeSetupMicroseconds);
-			const double GPUFeatherP95 = Percentile95(Result.WarmGPUFeatherMicroseconds);
-			const double GPUP95 = Percentile95(Result.WarmGPUCompositeMicroseconds);
-			const double GPUTotalP95 = Percentile95(Result.WarmGPUTotalMicroseconds);
+			auto AfterWarmup = [](const TArray<double>& Samples)
+			{
+				TArray<double> Warmed;
+				const int32 First = FMath::Min(PresentationGPUWarmupCount, Samples.Num());
+				Warmed.Reserve(Samples.Num() - First);
+				for (int32 Index = First; Index < Samples.Num(); ++Index)
+				{
+					Warmed.Add(Samples[Index]);
+				}
+				return Warmed;
+			};
+			const TArray<double> WarmViewSetup = AfterWarmup(Result.WarmRenderThreadViewSetupMicroseconds);
+			const TArray<double> WarmPacketSubmit = AfterWarmup(Result.WarmRenderThreadPacketSubmitMicroseconds);
+			const TArray<double> WarmMaskSetup = AfterWarmup(Result.WarmRenderThreadMaskSetupMicroseconds);
+			const TArray<double> WarmFeatherSetup = AfterWarmup(Result.WarmRenderThreadFeatherSetupMicroseconds);
+			const TArray<double> WarmCompositeSetup = AfterWarmup(Result.WarmRenderThreadCompositeSetupMicroseconds);
+			const TArray<double> WarmGPUFeather = AfterWarmup(Result.WarmGPUFeatherMicroseconds);
+			const TArray<double> WarmGPUComposite = AfterWarmup(Result.WarmGPUCompositeMicroseconds);
+			const TArray<double> WarmGPUTotal = AfterWarmup(Result.WarmGPUTotalMicroseconds);
+			const double ViewSetupP95 = Percentile95(WarmViewSetup);
+			const double PacketSubmitP95 = Percentile95(WarmPacketSubmit);
+			const double MaskSetupP95 = Percentile95(WarmMaskSetup);
+			const double FeatherSetupP95 = Percentile95(WarmFeatherSetup);
+			const double CompositeSetupP95 = Percentile95(WarmCompositeSetup);
+			const double GPUFeatherP95 = Percentile95(WarmGPUFeather);
+			const double GPUP95 = Percentile95(WarmGPUComposite);
+			const double GPUTotalP95 = Percentile95(WarmGPUTotal);
+			const double GPUTotalP50 = Percentile(WarmGPUTotal, 0.50);
+			const double GPUTotalP99 = Percentile(WarmGPUTotal, 0.99);
+			TArray<double> RTTotalSamples;
+			int32 RTTotalCount = Result.WarmRenderThreadPacketSubmitMicroseconds.Num();
+			RTTotalCount = FMath::Min(
+				RTTotalCount, Result.WarmRenderThreadMaskSetupMicroseconds.Num());
+			RTTotalCount = FMath::Min(
+				RTTotalCount, Result.WarmRenderThreadFeatherSetupMicroseconds.Num());
+			RTTotalCount = FMath::Min(
+				RTTotalCount, Result.WarmRenderThreadViewSetupMicroseconds.Num());
+			RTTotalCount = FMath::Min(
+				RTTotalCount, Result.WarmRenderThreadCompositeSetupMicroseconds.Num());
+			RTTotalSamples.Reserve(RTTotalCount);
+			for (int32 Index = PresentationGPUWarmupCount; Index < RTTotalCount; ++Index)
+			{
+				RTTotalSamples.Add(
+					Result.WarmRenderThreadPacketSubmitMicroseconds[Index]
+					+ Result.WarmRenderThreadMaskSetupMicroseconds[Index]
+					+ Result.WarmRenderThreadFeatherSetupMicroseconds[Index]
+					+ Result.WarmRenderThreadViewSetupMicroseconds[Index]
+					+ Result.WarmRenderThreadCompositeSetupMicroseconds[Index]);
+			}
+			const double RTTotalP50 = Percentile(RTTotalSamples, 0.50);
+			const double RTTotalP95 = Percentile(RTTotalSamples, 0.95);
+			const double RTTotalP99 = Percentile(MoveTemp(RTTotalSamples), 0.99);
 			const double ResolutionBudget = Context->Extent.Y == 1080 ? 1000.0 : 1500.0;
 			const double PressureBudget = Context->Extent.Y == 1080 ? 2000.0 : 3000.0;
 			Test->TestEqual(TEXT("Expected resident tile count"), Result.ResidentTileCount,
@@ -588,13 +658,11 @@ namespace SightWeave::M3P3::D3D12Tests
 			Test->TestTrue(TEXT("RT Feather setup remains below 0.20 ms"), FeatherSetupP95 < 200.0);
 			Test->TestTrue(TEXT("RT warmed composite setup remains below 0.20 ms"),
 				CompositeSetupP95 < 200.0);
-			Test->TestTrue(TEXT("Warmed mask/Feather/composite meets resolution budget"),
-				GPUTotalP95 < ResolutionBudget);
-			if (Context->SourceCount == 32)
-			{
-				Test->TestTrue(TEXT("32-source pressure meets advised budget"),
-					GPUTotalP95 < PressureBudget);
-			}
+			Test->TestTrue(
+				Context->SourceCount == 32
+					? TEXT("32-source pressure meets advised budget")
+					: TEXT("Warmed mask/Feather/composite meets resolution budget"),
+				GPUTotalP95 < (Context->SourceCount == 32 ? PressureBudget : ResolutionBudget));
 			Test->TestTrue(TEXT("Persistent live-mask allocation stays below 32 MiB"),
 				Result.PersistentGPUBytes <= 32ull * 1024ull * 1024ull);
 			UE_LOG(LogTemp, Display,
@@ -606,7 +674,7 @@ namespace SightWeave::M3P3::D3D12Tests
 				Context->Extent.Y,
 				Context->SourceCount,
 				Result.ResidentTileCount,
-				Result.WarmGPUCompositeMicroseconds.Num(),
+				WarmGPUComposite.Num(),
 				Result.GameThreadSubmitMicroseconds,
 				Context->PacketBuildP95Microseconds,
 				Result.RenderThreadBindingSubmitMicroseconds,
@@ -634,6 +702,28 @@ namespace SightWeave::M3P3::D3D12Tests
 				Result.InitialFeatherTileDispatchCount,
 				Result.FinalFeatherTileDispatchCount,
 				Result.FinalResourceGeneration);
+			UE_LOG(LogTemp, Display,
+				TEXT("M4P2_PRESENTATION_PERCENTILES case=%s mode=%s resolution=%dx%d sources=%d residents=%d samples=%d gpu_warmup=%d gt_binding_p50_us=%.3f gt_binding_p95_us=%.3f gt_binding_p99_us=%.3f gt_packet_build_p50_us=%.3f gt_packet_build_p95_us=%.3f gt_packet_build_p99_us=%.3f rt_total_p50_us=%.3f rt_total_p95_us=%.3f rt_total_p99_us=%.3f gpu_total_p50_us=%.3f gpu_total_p95_us=%.3f gpu_total_p99_us=%.3f"),
+				*Context->Name,
+				*Context->UpdateMode,
+				Context->Extent.X,
+				Context->Extent.Y,
+				Context->SourceCount,
+				Result.ResidentTileCount,
+				WarmGPUTotal.Num(),
+				PresentationGPUWarmupCount,
+				Context->BindingP50Microseconds,
+				Context->BindingP95Microseconds,
+				Context->BindingP99Microseconds,
+				Context->PacketBuildP50Microseconds,
+				Context->PacketBuildP95Microseconds,
+				Context->PacketBuildP99Microseconds,
+				RTTotalP50,
+				RTTotalP95,
+				RTTotalP99,
+				GPUTotalP50,
+				GPUTotalP95,
+				GPUTotalP99);
 			return true;
 		}
 

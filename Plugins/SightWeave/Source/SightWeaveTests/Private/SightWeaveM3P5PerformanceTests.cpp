@@ -27,6 +27,7 @@ namespace SightWeave::M3P5::PerformanceTests
 	{
 		double P50 = 0.0;
 		double P95 = 0.0;
+		double P99 = 0.0;
 		double Max = 0.0;
 	};
 
@@ -48,6 +49,7 @@ namespace SightWeave::M3P5::PerformanceTests
 		};
 		Result.P50 = Percentile(0.50);
 		Result.P95 = Percentile(0.95);
+		Result.P99 = Percentile(0.99);
 		Result.Max = Samples.Last();
 		return Result;
 	}
@@ -437,6 +439,17 @@ namespace SightWeave::M3P5::PerformanceTests
 				bRtPass ? 1 : 0,
 				bGpuPass ? 1 : 0,
 				bMemoryPass ? 1 : 0));
+			Test->AddInfo(FString::Printf(
+				TEXT("M4P2_MEMORY_PERCENTILES tier=%s cpu_dirty_p99_us=%.3f cpu_nochange_p99_us=%.3f gt_publish_p99_us=%.3f rt_consume_p99_us=%.3f rt_residency_upload_p99_us=%.3f rt_page_table_p99_us=%.3f rt_total_p99_us=%.3f gpu_dirty_p99_us=%.3f"),
+				TierName(Context->CPU.Tier),
+				Context->CPU.DirtyUpdate.P99,
+				Context->CPU.NoChangeUpdate.P99,
+				Context->CPU.PacketPublish.P99,
+				RTConsumeStats.P99,
+				RTResidencyStats.P99,
+				RTPageTableStats.P99,
+				RTTotalStats.P99,
+				GPUStats.P99));
 
 			Test->TestEqual(TEXT("Warmed no-change performs no mirror work"), NoChangeWorkCount, 0);
 			Test->TestTrue(TEXT("Frozen M3 live persistent memory remains within 32 MiB"),
@@ -703,7 +716,9 @@ namespace SightWeave::M3P5::PerformanceTests
 				return true;
 			}
 
+			TArray<double> RTClear;
 			TArray<double> RTTotal;
+			TArray<double> GPUClear;
 			TArray<double> GPU;
 			uint64 DirtyUploadBytes = 0;
 			uint64 PersistentGPUBytes = 0;
@@ -725,7 +740,12 @@ namespace SightWeave::M3P5::PerformanceTests
 				{
 					continue;
 				}
+				RTClear.Add(Clear.RenderThreadTotalSetupMicroseconds);
 				RTTotal.Add(Write.RenderThreadTotalSetupMicroseconds);
+				if (Clear.bGPUTimestampAvailable)
+				{
+					GPUClear.Add(Clear.GPUWorkMicroseconds);
+				}
 				if (Write.bGPUTimestampAvailable)
 				{
 					GPU.Add(Write.GPUWorkMicroseconds);
@@ -736,7 +756,9 @@ namespace SightWeave::M3P5::PerformanceTests
 					static_cast<int32>(Write.UploadDelta));
 			}
 
+			const FStatistics RTClearStats = Summarize(MoveTemp(RTClear));
 			const FStatistics RTStats = Summarize(MoveTemp(RTTotal));
+			const FStatistics GPUClearStats = Summarize(MoveTemp(GPUClear));
 			const FStatistics GPUStats = Summarize(MoveTemp(GPU));
 			Test->TestEqual(TEXT("Scale clear packets contain exact removed count"),
 				MatchedClearSamples, ScaleSampleCount);
@@ -761,6 +783,20 @@ namespace SightWeave::M3P5::PerformanceTests
 				DirtyUploadBytes,
 				MaximumExpandedDirtyTiles,
 				PersistentGPUBytes));
+			Test->AddInfo(FString::Printf(
+				TEXT("M4P2_MEMORY_SCALE_PERCENTILES case=%s cpu_clear_p99_us=%.3f cpu_write_p99_us=%.3f gt_publish_p99_us=%.3f rt_clear_p50_us=%.3f rt_clear_p95_us=%.3f rt_clear_p99_us=%.3f rt_write_p99_us=%.3f gpu_clear_p50_us=%.3f gpu_clear_p95_us=%.3f gpu_clear_p99_us=%.3f gpu_write_p99_us=%.3f"),
+				*Context->Case.Name,
+				Context->CPUClear.P99,
+				Context->CPUWrite.P99,
+				Context->PacketPublish.P99,
+				RTClearStats.P50,
+				RTClearStats.P95,
+				RTClearStats.P99,
+				RTStats.P99,
+				GPUClearStats.P50,
+				GPUClearStats.P95,
+				GPUClearStats.P99,
+				GPUStats.P99));
 			return true;
 		}
 

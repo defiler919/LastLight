@@ -9,6 +9,8 @@
 #include "SightWeaveLabSupport.h"
 
 #include "HAL/FileManager.h"
+#include "DynamicRHI.h"
+#include "RenderTimer.h"
 #include "UnrealClient.h"
 
 namespace SightWeave::M4P1::VisualLabTests
@@ -259,6 +261,107 @@ private:
 	int32 FrameIndex = 0;
 	int32 UpdateCount = 0;
 	bool bScreenshotRequested = false;
+};
+
+class FSightWeaveM4P2FrameTimingCommand final : public IAutomationLatentCommand
+{
+public:
+	FSightWeaveM4P2FrameTimingCommand(
+		FAutomationTestBase* InTest,
+		FString InOperation,
+		const int32 InWarmupFrames = 8,
+		const int32 InSampleFrames = 64)
+		: Test(InTest)
+		, Operation(MoveTemp(InOperation))
+		, WarmupFrames(InWarmupFrames)
+		, InitialWarmupFrames(InWarmupFrames)
+		, SampleFrames(InSampleFrames)
+	{
+		GameThreadMilliseconds.Reserve(SampleFrames);
+		RenderThreadMilliseconds.Reserve(SampleFrames);
+		GPUMilliseconds.Reserve(SampleFrames);
+	}
+
+	virtual bool Update() override
+	{
+		if (!Test)
+		{
+			return true;
+		}
+		if (WarmupFrames-- > 0)
+		{
+			return false;
+		}
+		const double GT = FPlatformTime::ToMilliseconds(GGameThreadTime);
+		const double RT = FPlatformTime::ToMilliseconds(GRenderThreadTime);
+		const double GPU = FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles());
+		NonFiniteCount += FMath::IsFinite(GT) && FMath::IsFinite(RT) && FMath::IsFinite(GPU)
+			? 0
+			: 1;
+		GameThreadMilliseconds.Add(GT);
+		RenderThreadMilliseconds.Add(RT);
+		GPUMilliseconds.Add(GPU);
+		if (GameThreadMilliseconds.Num() < SampleFrames)
+		{
+			return false;
+		}
+
+		auto Percentile = [](TArray<double> Samples, const double Quantile)
+		{
+			Samples.Sort();
+			return Samples.IsEmpty()
+				? 0.0
+				: Samples[FMath::Clamp(
+					FMath::CeilToInt(Samples.Num() * Quantile) - 1,
+					0,
+					Samples.Num() - 1)];
+		};
+		const FIntPoint Extent = GEngine && GEngine->GameViewport && GEngine->GameViewport->Viewport
+			? GEngine->GameViewport->Viewport->GetSizeXY()
+			: FIntPoint::ZeroValue;
+		const double GTP50 = Percentile(GameThreadMilliseconds, 0.50);
+		const double GTP95 = Percentile(GameThreadMilliseconds, 0.95);
+		const double GTP99 = Percentile(GameThreadMilliseconds, 0.99);
+		const double RTP50 = Percentile(RenderThreadMilliseconds, 0.50);
+		const double RTP95 = Percentile(RenderThreadMilliseconds, 0.95);
+		const double RTP99 = Percentile(RenderThreadMilliseconds, 0.99);
+		const double GPUP50 = Percentile(GPUMilliseconds, 0.50);
+		const double GPUP95 = Percentile(GPUMilliseconds, 0.95);
+		const double GPUP99 = Percentile(GPUMilliseconds, 0.99);
+		Test->TestEqual(*FString::Printf(TEXT("%s frame timing is finite"), *Operation),
+			NonFiniteCount, 0);
+		Test->TestTrue(*FString::Printf(TEXT("%s GPU frame timing is available"), *Operation),
+			GPUP50 > 0.0);
+		Test->AddInfo(FString::Printf(
+			TEXT("M4P2_LASTSEEN_FRAME_PERF operation=%s samples=%d warmup=%d viewport=%dx%d gt_p50_ms=%.3f gt_p95_ms=%.3f gt_p99_ms=%.3f rt_p50_ms=%.3f rt_p95_ms=%.3f rt_p99_ms=%.3f gpu_p50_ms=%.3f gpu_p95_ms=%.3f gpu_p99_ms=%.3f nonfinite=%d"),
+			*Operation,
+			SampleFrames,
+			InitialWarmupFrames,
+			Extent.X,
+			Extent.Y,
+			GTP50,
+			GTP95,
+			GTP99,
+			RTP50,
+			RTP95,
+			RTP99,
+			GPUP50,
+			GPUP95,
+			GPUP99,
+			NonFiniteCount));
+		return true;
+	}
+
+private:
+	FAutomationTestBase* Test = nullptr;
+	FString Operation;
+	int32 WarmupFrames = 0;
+	int32 InitialWarmupFrames = 0;
+	int32 SampleFrames = 0;
+	int32 NonFiniteCount = 0;
+	TArray<double> GameThreadMilliseconds;
+	TArray<double> RenderThreadMilliseconds;
+	TArray<double> GPUMilliseconds;
 };
 
 class FSightWeaveM4P1ValidateRememberedSequenceCommand final : public IAutomationLatentCommand
@@ -947,6 +1050,58 @@ bool FSightWeaveM4P1ContinuousTransitionTest::RunTest(const FString& Parameters)
 		this, SequenceDirectory, TEXT("Reacquire"), ReacquireFrameCount));
 	ADD_LATENT_AUTOMATION_COMMAND(FSightWeaveM4P1ValidateReacquireSequenceCommand(
 		this, SequenceDirectory, TEXT("Reacquire"), ReacquireFrameCount));
+	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P2LastSeenFramePerformanceTest,
+	"SightWeave.M4P2.Performance.LastSeenFrameMatrix",
+	SightWeave::M4P1::VisualLabTests::VisualFlags)
+
+bool FSightWeaveM4P2LastSeenFramePerformanceTest::RunTest(const FString& Parameters)
+{
+	if (GUsingNullRHI)
+	{
+		AddError(TEXT("M4P2 Last-Seen frame performance requires a real RHI."));
+		return true;
+	}
+	AddExpectedError(TEXT("Presentation composite state=fail-binding"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+	AddExpectedError(TEXT("Presentation composite state=submitted-feather"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+	AddExpectedError(
+		TEXT("Unable to find RecastNavMesh instance while trying to create UCrowdManager instance"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+	AddExpectedError(TEXT("Console variable 'r.MotionVectorSimulation' used in the render thread"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+
+	auto AddTiming = [this](const int32 Camera, const int32 State, const TCHAR* Operation)
+	{
+		ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(FString::Printf(
+			TEXT("SightWeave.Lab.M4P1.State %d"), State)));
+		ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.75f));
+		ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(FString::Printf(
+			TEXT("SightWeave.Lab.Camera %d"), Camera)));
+		ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.75f));
+		ADD_LATENT_AUTOMATION_COMMAND(FSightWeaveM4P2FrameTimingCommand(
+			this, FString(Operation)));
+	};
+
+	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(TEXT("/SightWeave/Maps/L_SightWeave_Lab")));
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
+	ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(TEXT("SightWeave.Lab.Mode 4")));
+	ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(TEXT("SightWeave.Lab.M4P1.State 0")));
+	ADD_LATENT_AUTOMATION_COMMAND(FStartPIECommand(false));
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(6.0f));
+	ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(TEXT("setres 1920x1080")));
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
+	AddTiming(1, 1, TEXT("remembered_nochange"));
+	AddTiming(1, 2, TEXT("reacquire"));
+	AddTiming(1, 3, TEXT("block_suppress"));
+	AddTiming(3, 4, TEXT("clear"));
+	AddTiming(4, 5, TEXT("identity_reuse"));
+	AddTiming(3, 1, TEXT("page_tile_boundary"));
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
 	return true;
 }

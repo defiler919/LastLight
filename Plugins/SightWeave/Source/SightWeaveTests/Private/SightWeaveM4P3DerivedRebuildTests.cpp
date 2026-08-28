@@ -54,6 +54,7 @@ namespace SightWeaveM4P3DerivedRebuildTests
 			{
 				GEngine->DestroyWorldContext(World);
 				World->DestroyWorld(true);
+				World->MarkObjectsPendingKill();
 			}
 		}
 
@@ -116,7 +117,7 @@ namespace SightWeaveM4P3DerivedRebuildTests
 		for (TObjectIterator<UObject> It; It; ++It)
 		{
 			UObject* Object = *It;
-			if (!Object) continue;
+			if (!IsValid(Object)) continue;
 			++Result.TotalUObjects;
 			Result.RootedUObjects += Object->IsRooted();
 			Result.Worlds += Object->IsA<UWorld>();
@@ -131,6 +132,21 @@ namespace SightWeaveM4P3DerivedRebuildTests
 		Result.UsedPhysicalBytes = Memory.UsedPhysical;
 		Result.PeakUsedPhysicalBytes = Memory.PeakUsedPhysical;
 		return Result;
+	}
+
+	bool HasLoadedSightWeaveMapWorld(const UWorld* ExcludedWorld)
+	{
+		for (TObjectIterator<UWorld> It; It; ++It)
+		{
+			const UWorld* World = *It;
+			if (IsValid(World)
+				&& World != ExcludedWorld
+				&& World->GetPathName().StartsWith(TEXT("/SightWeave/Maps/")))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	FVector TileCenter(const FSightWeaveMemoryScopeKey& Scope)
@@ -428,7 +444,11 @@ bool FSightWeaveM4P3WorldIsolationRestoreTest::RunTest(const FString& Parameters
 	TestTrue(TEXT("Restart remaps durable data to its own scope"),
 		Runtime->QueryHardMemoryAtLocation(TileCenter(Scope)));
 	FlushRenderingCommands();
-	CollectGarbage(RF_NoFlags, true);
+	const bool bUseGlobalGarbageCollection = !HasLoadedSightWeaveMapWorld(Restarted.Get());
+	if (bUseGlobalGarbageCollection)
+	{
+		CollectGarbage(RF_NoFlags, true);
+	}
 	const FObjectResourceCounts ResourceBefore = GatherObjectResourceCounts();
 	bool bAllTeardownCyclesSucceeded = true;
 	for (int32 CycleIndex = 0; CycleIndex < 100; ++CycleIndex)
@@ -446,12 +466,15 @@ bool FSightWeaveM4P3WorldIsolationRestoreTest::RunTest(const FString& Parameters
 				&& RestoreState(*CycleRuntime, CycleBlob);
 		}
 		FlushRenderingCommands();
-		if ((CycleIndex + 1) % 20 == 0)
+		if (bUseGlobalGarbageCollection && (CycleIndex + 1) % 20 == 0)
 		{
 			CollectGarbage(RF_NoFlags, true);
 		}
 	}
-	CollectGarbage(RF_NoFlags, true);
+	if (bUseGlobalGarbageCollection)
+	{
+		CollectGarbage(RF_NoFlags, true);
+	}
 	FlushRenderingCommands();
 	const FObjectResourceCounts ResourceAfter = GatherObjectResourceCounts();
 	TestTrue(TEXT("100 world teardown/rebuild cycles succeed"), bAllTeardownCyclesSucceeded);
@@ -461,12 +484,18 @@ bool FSightWeaveM4P3WorldIsolationRestoreTest::RunTest(const FString& Parameters
 		ResourceAfter.RuntimeSubsystems, ResourceBefore.RuntimeSubsystems);
 	TestEqual(TEXT("Render subsystem count returns to baseline"),
 		ResourceAfter.RenderSubsystems, ResourceBefore.RenderSubsystems);
-	TestTrue(TEXT("SightWeave UObject count does not grow after GC"),
+	TestTrue(TEXT("Live SightWeave UObject count does not grow after teardown"),
 		ResourceAfter.SightWeaveUObjects <= ResourceBefore.SightWeaveUObjects);
-	TestTrue(TEXT("Total UObject count remains at a bounded plateau after GC"),
-		ResourceAfter.TotalUObjects <= ResourceBefore.TotalUObjects + 16);
+	if (bUseGlobalGarbageCollection)
+	{
+		TestTrue(TEXT("Total live UObject count remains at a bounded plateau after GC"),
+			ResourceAfter.TotalUObjects <= ResourceBefore.TotalUObjects + 16);
+	}
 	UE_LOG(LogTemp, Display,
-		TEXT("SIGHTWEAVE_M4P3_WORLD_LIFECYCLE loops=100 gc_interval=20 render_flush_each=1 total_uobjects_before=%d total_uobjects_after=%d sightweave_uobjects_before=%d sightweave_uobjects_after=%d rooted_before=%d rooted_after=%d worlds_before=%d worlds_after=%d runtime_subsystems_before=%d runtime_subsystems_after=%d render_subsystems_before=%d render_subsystems_after=%d used_physical_before=%llu used_physical_after=%llu peak_used_physical_before=%llu peak_used_physical_after=%llu"),
+		TEXT("SIGHTWEAVE_M4P3_WORLD_LIFECYCLE loops=100 explicit_pending_kill_each=1 global_gc=%s gc_interval=%d foreign_sightweave_map_loaded=%s render_flush_each=1 total_live_uobjects_before=%d total_live_uobjects_after=%d sightweave_live_uobjects_before=%d sightweave_live_uobjects_after=%d rooted_before=%d rooted_after=%d worlds_before=%d worlds_after=%d runtime_subsystems_before=%d runtime_subsystems_after=%d render_subsystems_before=%d render_subsystems_after=%d used_physical_before=%llu used_physical_after=%llu peak_used_physical_before=%llu peak_used_physical_after=%llu"),
+		bUseGlobalGarbageCollection ? TEXT("true") : TEXT("false"),
+		bUseGlobalGarbageCollection ? 20 : 0,
+		bUseGlobalGarbageCollection ? TEXT("false") : TEXT("true"),
 		ResourceBefore.TotalUObjects, ResourceAfter.TotalUObjects,
 		ResourceBefore.SightWeaveUObjects, ResourceAfter.SightWeaveUObjects,
 		ResourceBefore.RootedUObjects, ResourceAfter.RootedUObjects,

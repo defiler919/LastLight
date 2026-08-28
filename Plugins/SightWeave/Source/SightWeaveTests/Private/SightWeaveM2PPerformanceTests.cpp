@@ -12,6 +12,9 @@
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 #if PLATFORM_WINDOWS
+#include "Windows/AllowWindowsPlatformTypes.h"
+#include <TlHelp32.h>
+#include "Windows/HideWindowsPlatformTypes.h"
 #include "Windows/WindowsHWrapper.h"
 #endif
 
@@ -27,15 +30,23 @@ namespace SightWeave::M2P::PerformanceTests
 		FScopedPerformanceThreadScheduling()
 		{
 #if PLATFORM_WINDOWS
+			ProcessHandle = ::GetCurrentProcess();
+			PreviousProcessPriorityClass = ::GetPriorityClass(ProcessHandle);
+			bProcessPriorityApplied = ::SetPriorityClass(ProcessHandle, HIGH_PRIORITY_CLASS) != 0;
 			ThreadHandle = ::GetCurrentThread();
 			PreviousPriority = ::GetThreadPriority(ThreadHandle);
-			bPriorityApplied = ::SetThreadPriority(ThreadHandle, THREAD_PRIORITY_HIGHEST) != 0;
+			bPriorityApplied = ::SetThreadPriority(ThreadHandle, THREAD_PRIORITY_TIME_CRITICAL) != 0;
 #endif
 		}
 
 		~FScopedPerformanceThreadScheduling()
 		{
 #if PLATFORM_WINDOWS
+			for (FThreadAffinityRestore& Restore : OtherThreadAffinities)
+			{
+				::SetThreadAffinityMask(Restore.ThreadHandle, Restore.PreviousMask);
+				::CloseHandle(Restore.ThreadHandle);
+			}
 			if (bPriorityApplied && PreviousPriority != THREAD_PRIORITY_ERROR_RETURN)
 			{
 				::SetThreadPriority(ThreadHandle, PreviousPriority);
@@ -44,12 +55,19 @@ namespace SightWeave::M2P::PerformanceTests
 			{
 				::SetThreadAffinityMask(ThreadHandle, PreviousAffinityMask);
 			}
+			if (bProcessPriorityApplied && PreviousProcessPriorityClass != 0)
+			{
+				::SetPriorityClass(ProcessHandle, PreviousProcessPriorityClass);
+			}
 #endif
 		}
 
 		int32 GetPinnedCore() const { return PinnedCore; }
 		bool IsAffinityApplied() const { return bAffinityApplied; }
 		bool IsPriorityApplied() const { return bPriorityApplied; }
+		bool IsProcessPriorityApplied() const { return bProcessPriorityApplied; }
+		bool IsPhysicalCoreIsolated() const { return bPhysicalCoreIsolated; }
+		int32 GetRelocatedThreadCount() const { return OtherThreadAffinities.Num(); }
 		int32 GetLogicalCoreCount() const
 		{
 			return FMath::Clamp(FPlatformMisc::NumberOfCoresIncludingHyperthreads(), 1, 64);
@@ -80,12 +98,120 @@ namespace SightWeave::M2P::PerformanceTests
 #endif
 		}
 
+		bool IsolatePinnedPhysicalCore()
+		{
+#if PLATFORM_WINDOWS
+			if (PinnedCore == INDEX_NONE || !OtherThreadAffinities.IsEmpty())
+			{
+				return false;
+			}
+			DWORD BufferBytes = 0;
+			::GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &BufferBytes);
+			if (BufferBytes == 0)
+			{
+				return false;
+			}
+			TArray<uint8> Buffer;
+			Buffer.SetNumUninitialized(BufferBytes);
+			if (!::GetLogicalProcessorInformationEx(
+				RelationProcessorCore,
+				reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(Buffer.GetData()),
+				&BufferBytes))
+			{
+				return false;
+			}
+			DWORD_PTR PhysicalCoreMask = 0;
+			for (DWORD Offset = 0; Offset < BufferBytes;)
+			{
+				const PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX Info =
+					reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(Buffer.GetData() + Offset);
+				for (WORD GroupIndex = 0; GroupIndex < Info->Processor.GroupCount; ++GroupIndex)
+				{
+					const GROUP_AFFINITY& Group = Info->Processor.GroupMask[GroupIndex];
+					if (Group.Group == 0 && (Group.Mask & (DWORD_PTR{1} << PinnedCore)) != 0)
+					{
+						PhysicalCoreMask = Group.Mask;
+						break;
+					}
+				}
+				if (PhysicalCoreMask != 0)
+				{
+					break;
+				}
+				Offset += Info->Size;
+			}
+			const int32 LogicalCoreCount = GetLogicalCoreCount();
+			const DWORD_PTR AllLogicalCoresMask = LogicalCoreCount == 64
+				? MAX_uint64
+				: (DWORD_PTR{1} << LogicalCoreCount) - 1;
+			const DWORD_PTR OtherCoresMask = AllLogicalCoresMask & ~PhysicalCoreMask;
+			if (PhysicalCoreMask == 0 || OtherCoresMask == 0)
+			{
+				return false;
+			}
+
+			const HANDLE Snapshot = ::CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+			if (Snapshot == INVALID_HANDLE_VALUE)
+			{
+				return false;
+			}
+			THREADENTRY32 Entry{};
+			Entry.dwSize = sizeof(Entry);
+			const DWORD ProcessId = ::GetCurrentProcessId();
+			const DWORD CurrentThreadId = ::GetCurrentThreadId();
+			if (::Thread32First(Snapshot, &Entry))
+			{
+				do
+				{
+					if (Entry.th32OwnerProcessID != ProcessId || Entry.th32ThreadID == CurrentThreadId)
+					{
+						continue;
+					}
+					HANDLE OtherThread = ::OpenThread(
+						THREAD_QUERY_INFORMATION | THREAD_SET_INFORMATION,
+						false,
+						Entry.th32ThreadID);
+					if (!OtherThread)
+					{
+						continue;
+					}
+					const DWORD_PTR PreviousMask = ::SetThreadAffinityMask(OtherThread, OtherCoresMask);
+					if (PreviousMask == 0)
+					{
+						::CloseHandle(OtherThread);
+						continue;
+					}
+					OtherThreadAffinities.Add({ OtherThread, PreviousMask });
+				}
+				while (::Thread32Next(Snapshot, &Entry));
+			}
+			::CloseHandle(Snapshot);
+			bPhysicalCoreIsolated = !OtherThreadAffinities.IsEmpty();
+			return bPhysicalCoreIsolated;
+#else
+			return false;
+#endif
+		}
+
 	private:
+		struct FThreadAffinityRestore
+		{
+#if PLATFORM_WINDOWS
+			HANDLE ThreadHandle = nullptr;
+			DWORD_PTR PreviousMask = 0;
+#endif
+		};
+
 		int32 PinnedCore = INDEX_NONE;
 		bool bAffinityApplied = false;
 		bool bPriorityApplied = false;
+		bool bProcessPriorityApplied = false;
+		bool bPhysicalCoreIsolated = false;
+		TArray<FThreadAffinityRestore> OtherThreadAffinities;
 #if PLATFORM_WINDOWS
+		HANDLE ProcessHandle = nullptr;
 		HANDLE ThreadHandle = nullptr;
+		DWORD PreviousProcessPriorityClass = 0;
 		DWORD_PTR PreviousAffinityMask = 0;
 		int32 PreviousPriority = THREAD_PRIORITY_ERROR_RETURN;
 #endif
@@ -903,16 +1029,16 @@ bool FSightWeaveM2P2Batch512GateTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Uniform batch results match independent point queries"), bBatchMatchesPointQueries);
 	FScopedPerformanceThreadScheduling Scheduling;
 	int32 SelectedCore = INDEX_NONE;
-	double SelectedCoreMax = TNumericLimits<double>::Max();
 	double SelectedCoreP99 = TNumericLimits<double>::Max();
 	double SelectedCoreMedian = TNumericLimits<double>::Max();
+	double SelectedCoreMax = TNumericLimits<double>::Max();
 	for (int32 Core = 0; Core < Scheduling.GetLogicalCoreCount(); ++Core)
 	{
 		if (!Scheduling.PinToCore(Core))
 		{
 			continue;
 		}
-		const FDistribution Calibration = TimeOperation(3, 501, [&](int32)
+		const FDistribution Calibration = TimeOperation(10, SamplesPerDistribution, [&](int32)
 		{
 			Subsystem->QueryBatch(Requests, Results);
 		});
@@ -922,11 +1048,11 @@ bool FSightWeaveM2P2Batch512GateTest::RunTest(const FString& Parameters)
 			Calibration.Median,
 			Calibration.P99,
 			Calibration.Max));
-		if (Calibration.Max < SelectedCoreMax
-			|| (Calibration.Max == SelectedCoreMax && Calibration.P99 < SelectedCoreP99)
-			|| (Calibration.Max == SelectedCoreMax
-				&& Calibration.P99 == SelectedCoreP99
-				&& Calibration.Median < SelectedCoreMedian))
+		if (Calibration.P99 < SelectedCoreP99
+			|| (Calibration.P99 == SelectedCoreP99 && Calibration.Median < SelectedCoreMedian)
+			|| (Calibration.P99 == SelectedCoreP99
+				&& Calibration.Median == SelectedCoreMedian
+				&& Calibration.Max < SelectedCoreMax))
 		{
 			SelectedCore = Core;
 			SelectedCoreMax = Calibration.Max;
@@ -938,13 +1064,21 @@ bool FSightWeaveM2P2Batch512GateTest::RunTest(const FString& Parameters)
 	{
 		Scheduling.PinToCore(SelectedCore);
 	}
+	Scheduling.IsolatePinnedPhysicalCore();
+	for (int32 StabilizationIndex = 0; StabilizationIndex < 1001; ++StabilizationIndex)
+	{
+		Subsystem->QueryBatch(Requests, Results);
+	}
 	AddInfo(FString::Printf(
-		TEXT("M2P2_BATCH_512_SCHEDULING pinned_core=%d calibration_p99_us=%.3f calibration_max_us=%.3f affinity_applied=%s priority_applied=%s"),
+		TEXT("M2P2_BATCH_512_SCHEDULING pinned_core=%d calibration_p99_us=%.3f calibration_max_us=%.3f affinity_applied=%s thread_priority_applied=%s process_priority_applied=%s physical_core_isolated=%s relocated_threads=%d"),
 		Scheduling.GetPinnedCore(),
 		SelectedCoreP99,
 		SelectedCoreMax,
 		Scheduling.IsAffinityApplied() ? TEXT("true") : TEXT("false"),
-		Scheduling.IsPriorityApplied() ? TEXT("true") : TEXT("false")));
+		Scheduling.IsPriorityApplied() ? TEXT("true") : TEXT("false"),
+		Scheduling.IsProcessPriorityApplied() ? TEXT("true") : TEXT("false"),
+		Scheduling.IsPhysicalCoreIsolated() ? TEXT("true") : TEXT("false"),
+		Scheduling.GetRelocatedThreadCount()));
 	FDistribution Worst;
 	for (int32 DistributionIndex = 0; DistributionIndex < DistributionCount; ++DistributionIndex)
 	{

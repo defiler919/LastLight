@@ -19,6 +19,16 @@ enum class ESightWeaveSnapshotCompressionMethod : uint8
 	Zlib = 1
 };
 
+enum class ESightWeavePersistenceProviderResult : uint8
+{
+	Succeeded,
+	Unsupported,
+	CaptureFailed,
+	VersionMismatch,
+	InvalidPayload,
+	PrepareFailed
+};
+
 enum class ESightWeaveSnapshotResult : uint8
 {
 	Succeeded,
@@ -88,6 +98,14 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveSnapshotDiagnostic
 	uint32 ProviderPayloadCount = 0;
 	FName PrimaryId = NAME_None;
 	FString Detail;
+	FString CanonicalHashHex;
+	TArray<FName> MissingProviderIds;
+	TArray<FString> ProviderFallbackDomains;
+	double CaptureMicroseconds = 0.0;
+	double PrepareMicroseconds = 0.0;
+	double ValidateMicroseconds = 0.0;
+	double CommitMicroseconds = 0.0;
+	double DerivedPublicationMicroseconds = 0.0;
 
 	bool Succeeded() const
 	{
@@ -206,6 +224,38 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveCanonicalSnapshot
 	TArray<FSightWeaveProviderPayloadRecord> ProviderPayloads;
 };
 
+/** Game-thread-only, non-owning registry. Provider registration order is non-semantic. */
+class SIGHTWEAVERUNTIME_API FSightWeavePersistenceProviderRegistry final
+{
+public:
+	bool Register(ISightWeaveSubjectSnapshotProvider& Provider);
+	bool Unregister(FName ProviderId);
+	void Reset();
+	const ISightWeaveSubjectSnapshotProvider* Find(FName ProviderId) const;
+	ISightWeaveSubjectSnapshotProvider* FindMutable(FName ProviderId) const;
+	int32 Num() const { return Providers.Num(); }
+	void GetProvidersCanonical(
+		TArray<ISightWeaveSubjectSnapshotProvider*>& OutProviders) const;
+
+private:
+	TMap<FName, ISightWeaveSubjectSnapshotProvider*> Providers;
+};
+
+/**
+ * Call-local mapping from a durable scope ID to existing authorities. Callbacks
+ * contain no durable state and are never retained by a snapshot.
+ */
+struct SIGHTWEAVERUNTIME_API FSightWeavePersistenceScopeBinding
+{
+	FName StableScopeId = NAME_None;
+	FSightWeaveMemoryAuthority* MemoryAuthority = nullptr;
+	FSightWeaveSubjectMemoryAuthority* SubjectAuthority = nullptr;
+	TFunction<bool()> IsTargetAlive;
+	TFunction<void()> PublishDerivedState;
+
+	bool IsValid() const;
+};
+
 /** Deterministic, bounded V1 codec. It owns no file, slot, UObject, or RHI behavior. */
 class SIGHTWEAVERUNTIME_API FSightWeavePersistence final
 {
@@ -218,5 +268,17 @@ public:
 	static FSightWeaveSnapshotDiagnostic ParseBlob(
 		const FSightWeaveSnapshotBlob& Blob,
 		FSightWeaveCanonicalSnapshot& OutSnapshot,
+		const FSightWeaveSnapshotLimits& Limits = FSightWeaveSnapshotLimits());
+
+	static FSightWeaveSnapshotDiagnostic Capture(
+		TConstArrayView<FSightWeavePersistenceScopeBinding> Bindings,
+		const FSightWeavePersistenceProviderRegistry& Providers,
+		FSightWeaveSnapshotBlob& OutBlob,
+		const FSightWeaveSnapshotLimits& Limits = FSightWeaveSnapshotLimits());
+
+	static FSightWeaveSnapshotDiagnostic Restore(
+		const FSightWeaveSnapshotBlob& Blob,
+		TConstArrayView<FSightWeavePersistenceScopeBinding> Bindings,
+		FSightWeavePersistenceProviderRegistry& Providers,
 		const FSightWeaveSnapshotLimits& Limits = FSightWeaveSnapshotLimits());
 };

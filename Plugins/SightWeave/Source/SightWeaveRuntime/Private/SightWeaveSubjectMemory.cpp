@@ -1,5 +1,7 @@
 #include "SightWeaveSubjectMemory.h"
 
+#include "SightWeavePersistence.h"
+
 #include "Algo/Sort.h"
 
 namespace SightWeaveSubjectMemoryPrivate
@@ -94,6 +96,33 @@ namespace SightWeaveSubjectMemoryPrivate
 		}
 		return Result;
 	}
+}
+
+bool ISightWeaveSubjectSnapshotProvider::SupportsSightWeavePersistence() const
+{
+	return false;
+}
+
+ESightWeavePersistenceProviderResult
+ISightWeaveSubjectSnapshotProvider::CaptureSightWeavePersistence(
+	TArray<FSightWeaveProviderPayloadRecord>& OutPayloads) const
+{
+	OutPayloads.Reset();
+	return ESightWeavePersistenceProviderResult::Unsupported;
+}
+
+ESightWeavePersistenceProviderResult
+ISightWeaveSubjectSnapshotProvider::PrepareSightWeavePersistence(
+	const FSightWeaveProviderPayloadRecord& Payload,
+	TUniquePtr<ISightWeavePersistencePreparedPayload>& OutPrepared) const
+{
+	OutPrepared.Reset();
+	return ESightWeavePersistenceProviderResult::Unsupported;
+}
+
+void ISightWeaveSubjectSnapshotProvider::CommitSightWeavePersistence(
+	TUniquePtr<ISightWeavePersistencePreparedPayload>&& Prepared)
+{
 }
 
 bool FSightWeaveBasicStaticMeshSnapshotCandidate::IsValid() const
@@ -210,6 +239,7 @@ FSightWeaveSubjectHandle FSightWeaveSubjectMemoryAuthority::Register(
 	{
 		return A.Handle.GetValue() < B.Handle.GetValue();
 	});
+	++PersistenceGuardRevision;
 	return Added.Handle;
 }
 
@@ -240,14 +270,17 @@ bool FSightWeaveSubjectMemoryAuthority::Update(
 	*Record = FRecord();
 	Record->Handle = StableHandle;
 	Record->Registration = Registration;
+	++PersistenceGuardRevision;
 	return true;
 }
 
 bool FSightWeaveSubjectMemoryAuthority::Unregister(const FSightWeaveSubjectHandle Handle)
 {
 	check(IsInGameThread());
-	return Records.RemoveAll(
+	const bool bRemoved = Records.RemoveAll(
 		[Handle](const FRecord& Record) { return Record.Handle == Handle; }) == 1;
+	PersistenceGuardRevision += bRemoved ? 1 : 0;
+	return bRemoved;
 }
 
 bool FSightWeaveSubjectMemoryAuthority::IsHandleValid(
@@ -261,6 +294,7 @@ void FSightWeaveSubjectMemoryAuthority::Reset()
 	check(IsInGameThread());
 	Records.Reset();
 	NextHandle = 1;
+	++PersistenceGuardRevision;
 }
 
 FSightWeaveSubjectTransitionResult FSightWeaveSubjectMemoryAuthority::SubmitObservation(
@@ -310,6 +344,7 @@ FSightWeaveSubjectTransitionResult FSightWeaveSubjectMemoryAuthority::SubmitObse
 		Result.Failure = ESightWeaveSubjectTransitionFailure::StaleSourceLiveRevision;
 		return Result;
 	}
+	++PersistenceGuardRevision;
 
 	const bool bFallingEdge = Record->bHasObservation
 		&& Record->bWasHardLive
@@ -548,6 +583,7 @@ int32 FSightWeaveSubjectMemoryAuthority::ClearSnapshots(const FSightWeaveMemoryR
 			++RemovedCount;
 		}
 	}
+	PersistenceGuardRevision += RemovedCount > 0 ? 1 : 0;
 	return RemovedCount;
 }
 
@@ -566,6 +602,143 @@ int32 FSightWeaveSubjectMemoryAuthority::GetSnapshotCount() const
 		Count += Record.Snapshot.IsSet() ? 1 : 0;
 	}
 	return Count;
+}
+
+bool FSightWeaveSubjectMemoryAuthority::ExportPersistentState(
+	const FSightWeaveMemoryScopeKey& Scope,
+	FSightWeaveSubjectPersistentState& OutState) const
+{
+	check(IsInGameThread());
+	OutState = FSightWeaveSubjectPersistentState();
+	if (!Scope.IsValid())
+	{
+		return false;
+	}
+	OutState.Scope = Scope;
+	for (const FRecord& Record : Records)
+	{
+		if (!Record.Registration.Scope.IsEquivalentTo(Scope))
+		{
+			continue;
+		}
+		if (!Record.Registration.IsValid()
+			|| (Record.Snapshot.IsSet()
+				&& !DoesSnapshotMatchRegistration(
+					Record.Snapshot.GetValue(),
+					Record.Registration)))
+		{
+			OutState = FSightWeaveSubjectPersistentState();
+			return false;
+		}
+		FSightWeaveSubjectPersistentStateRecord& Added =
+			OutState.Records.AddDefaulted_GetRef();
+		Added.Registration = Record.Registration;
+		Added.Snapshot = Record.Snapshot;
+	}
+	OutState.Records.Sort([](
+		const FSightWeaveSubjectPersistentStateRecord& A,
+		const FSightWeaveSubjectPersistentStateRecord& B)
+	{
+		const FString AName = A.Registration.Identity.StableId.ToString().ToLower();
+		const FString BName = B.Registration.Identity.StableId.ToString().ToLower();
+		return AName != BName
+			? AName < BName
+			: A.Registration.Identity.InstanceGeneration
+				< B.Registration.Identity.InstanceGeneration;
+	});
+	return true;
+}
+
+bool FSightWeaveSubjectMemoryAuthority::PreparePersistentReplacement(
+	const FSightWeaveSubjectPersistentState& State)
+{
+	check(IsInGameThread());
+	if (!State.Scope.IsValid())
+	{
+		return false;
+	}
+	for (int32 Index = 0; Index < State.Records.Num(); ++Index)
+	{
+		const FSightWeaveSubjectPersistentStateRecord& Candidate = State.Records[Index];
+		if (!Candidate.Registration.IsValid()
+			|| !Candidate.Registration.Scope.IsEquivalentTo(State.Scope)
+			|| (Candidate.Snapshot.IsSet()
+				&& !DoesSnapshotMatchRegistration(
+					Candidate.Snapshot.GetValue(),
+					Candidate.Registration)))
+		{
+			return false;
+		}
+		for (int32 Prior = 0; Prior < Index; ++Prior)
+		{
+			if (State.Records[Prior].Registration.Identity.IsEquivalentTo(
+				Candidate.Registration.Identity))
+			{
+				return false;
+			}
+		}
+		if (Records.ContainsByPredicate([&Candidate, &State](const FRecord& Existing)
+			{
+				return !Existing.Registration.Scope.IsEquivalentTo(State.Scope)
+					&& Existing.Registration.Identity.IsEquivalentTo(
+						Candidate.Registration.Identity);
+			}))
+		{
+			return false;
+		}
+	}
+
+	TArray<FSightWeaveSubjectHandle> PreservedHandles;
+	PreservedHandles.Reserve(State.Records.Num());
+	for (const FSightWeaveSubjectPersistentStateRecord& Candidate : State.Records)
+	{
+		const FRecord* Existing = Records.FindByPredicate([&Candidate](const FRecord& Record)
+		{
+			return Record.Registration.Identity.IsEquivalentTo(
+				Candidate.Registration.Identity);
+		});
+		PreservedHandles.Add(Existing ? Existing->Handle : FSightWeaveSubjectHandle());
+	}
+	Records.RemoveAll([&State](const FRecord& Record)
+	{
+		return Record.Registration.Scope.IsEquivalentTo(State.Scope);
+	});
+	for (int32 Index = 0; Index < State.Records.Num(); ++Index)
+	{
+		const FSightWeaveSubjectPersistentStateRecord& Source = State.Records[Index];
+		FRecord& Added = Records.AddDefaulted_GetRef();
+		Added.Handle = PreservedHandles[Index].IsValid()
+			? PreservedHandles[Index]
+			: FSightWeaveSubjectHandle(NextHandle++);
+		Added.Registration = Source.Registration;
+		Added.Snapshot = Source.Snapshot;
+		Added.NextSnapshotRevision = Source.Snapshot.IsSet()
+			? Source.Snapshot->SnapshotRevision + 1
+			: 1;
+	}
+	Records.Sort([](const FRecord& A, const FRecord& B)
+	{
+		return A.Handle.GetValue() < B.Handle.GetValue();
+	});
+	++PersistenceGuardRevision;
+	return true;
+}
+
+void FSightWeaveSubjectMemoryAuthority::FinalizePreparedPersistentReplacement(
+	const uint64 PriorGuardRevision)
+{
+	check(IsInGameThread());
+	PersistenceGuardRevision = PriorGuardRevision + 1;
+}
+
+FSightWeaveSubjectHandle FSightWeaveSubjectMemoryAuthority::FindHandleByIdentity(
+	const FSightWeaveSubjectIdentity& Identity) const
+{
+	const FRecord* Record = Records.FindByPredicate([&Identity](const FRecord& Candidate)
+	{
+		return Candidate.Registration.Identity.IsEquivalentTo(Identity);
+	});
+	return Record ? Record->Handle : FSightWeaveSubjectHandle();
 }
 
 bool FSightWeaveSubjectMemoryAuthority::DoesSnapshotMatchRegistration(

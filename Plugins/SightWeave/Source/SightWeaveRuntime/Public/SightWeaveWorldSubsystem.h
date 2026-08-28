@@ -5,6 +5,7 @@
 #include "SightWeaveDebug.h"
 #include "SightWeaveGeometry.h"
 #include "SightWeaveMemory.h"
+#include "SightWeavePersistence.h"
 #include "SightWeaveQueries.h"
 #include "SightWeaveSpatialIndex.h"
 #include "SightWeaveStaticEnvironment.h"
@@ -339,6 +340,18 @@ public:
 	{
 		return MemoryPacketPublishedDelegate;
 	}
+	FSightWeaveSnapshotDiagnostic CapturePersistenceSnapshot(
+		FName StableScopeId,
+		FSightWeaveSubjectMemoryAuthority* SubjectAuthority,
+		const FSightWeavePersistenceProviderRegistry& Providers,
+		FSightWeaveSnapshotBlob& OutBlob,
+		const FSightWeaveSnapshotLimits& Limits = FSightWeaveSnapshotLimits());
+	FSightWeaveSnapshotDiagnostic RestorePersistenceSnapshot(
+		const FSightWeaveSnapshotBlob& Blob,
+		FName StableScopeId,
+		FSightWeaveSubjectMemoryAuthority* SubjectAuthority,
+		FSightWeavePersistenceProviderRegistry& Providers,
+		const FSightWeaveSnapshotLimits& Limits = FSightWeaveSnapshotLimits());
 	FSightWeaveStaticEnvironmentHandle RegisterStaticEnvironment(
 		const FSightWeaveStaticEnvironmentDescription& Description,
 		UObject* Owner);

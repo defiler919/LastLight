@@ -22,7 +22,9 @@ enum class ESightWeaveMemoryFailure : uint8
 	ScopeMismatch,
 	ProfileMismatch,
 	InvalidCoordinate,
-	CapacityExceeded
+	CapacityExceeded,
+	InvalidPersistentState,
+	DuplicatePersistentModifier
 };
 
 struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryModifierHandle
@@ -55,6 +57,14 @@ enum class ESightWeaveMemoryModifierOperation : uint8
 {
 	BlockMemoryWrites,
 	SuppressMemoryPresentation
+};
+
+/** Snapshot participation is always opt-in. Existing modifiers remain transient. */
+UENUM(BlueprintType)
+enum class ESightWeaveMemoryModifierPersistence : uint8
+{
+	Transient,
+	Persistent
 };
 
 struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryScopeKey
@@ -103,8 +113,17 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryModifierDescription
 	ESightWeaveMemoryModifierOperation Operation =
 		ESightWeaveMemoryModifierOperation::BlockMemoryWrites;
 	FSightWeaveMemoryRegion Region;
+	ESightWeaveMemoryModifierPersistence Persistence =
+		ESightWeaveMemoryModifierPersistence::Transient;
+	FName StablePersistenceId = NAME_None;
 
 	bool IsValid() const { return Region.IsValid(); }
+	bool HasValidPersistenceMetadata() const
+	{
+		return Persistence == ESightWeaveMemoryModifierPersistence::Transient
+			|| (Persistence == ESightWeaveMemoryModifierPersistence::Persistent
+				&& !StablePersistenceId.IsNone());
+	}
 	bool IsEquivalentTo(const FSightWeaveMemoryModifierDescription& Other) const;
 };
 
@@ -133,6 +152,14 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryUpdateDiagnostics
 	bool bDuplicateSnapshot = false;
 
 	bool Succeeded() const { return Failure == ESightWeaveMemoryFailure::None; }
+};
+
+/** Plain-data durable state used to prepare a replacement authority off to the side. */
+struct SIGHTWEAVERUNTIME_API FSightWeaveMemoryPersistentState
+{
+	FSightWeaveMemoryScopeKey Scope;
+	TArray<FSightWeavePackedMemoryTile> Tiles;
+	TArray<FSightWeaveMemoryModifierDescription> PersistentModifiers;
 };
 
 /**
@@ -203,6 +230,8 @@ public:
 	uint64 GetMemoryRevision() const { return MemoryRevision; }
 	uint64 GetLastSnapshotRevision() const { return LastSnapshotRevision; }
 	uint64 GetModifierRevision() const { return ModifierRevision; }
+	uint64 GetPersistenceGuardRevision() const { return PersistenceGuardRevision; }
+	int32 GetMaximumTiles() const { return MaximumTiles; }
 	int32 GetAllocatedTileCount() const { return Tiles.Num(); }
 	int64 GetPackedAuthorityBytes() const;
 	ESightWeaveMemoryFailure GetLastFailure() const { return LastFailure; }
@@ -220,6 +249,15 @@ public:
 	int32 GetModifierCount() const { return Modifiers.Num(); }
 	bool QueryHardMemory(FVector WorldLocation) const;
 	bool QueryHardMemory2D(FVector2D WorldLocation) const;
+	ESightWeaveMemoryFailure ExportPersistentState(
+		FSightWeaveMemoryPersistentState& OutState) const;
+	/** Mutates only the receiving staging copy; commit is a later move assignment. */
+	ESightWeaveMemoryFailure PreparePersistentReplacement(
+		const FSightWeaveMemoryPersistentState& State);
+	void FinalizePreparedPersistentReplacement(
+		uint64 PriorMemoryRevision,
+		uint64 PriorModifierRevision,
+		uint64 PriorGuardRevision);
 	TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> PublishPacket(bool bForceFullRebuild = false);
 
 	static bool BuildScopeForSnapshot(
@@ -257,6 +295,7 @@ private:
 	uint64 LastSnapshotRevision = 0;
 	uint64 NextPacketRevision = 1;
 	uint64 ModifierRevision = 0;
+	uint64 PersistenceGuardRevision = 0;
 	int64 NextModifierId = 1;
 	ESightWeaveMemoryFailure LastFailure = ESightWeaveMemoryFailure::NotConfigured;
 	bool bConfigured = false;

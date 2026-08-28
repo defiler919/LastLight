@@ -6,6 +6,16 @@
 
 #include "SightWeaveSubjectMemory.generated.h"
 
+enum class ESightWeavePersistenceProviderResult : uint8;
+struct FSightWeaveProviderPayloadRecord;
+
+/** Owned provider staging data. It may not mutate formal provider state before commit. */
+class SIGHTWEAVERUNTIME_API ISightWeavePersistencePreparedPayload
+{
+public:
+	virtual ~ISightWeavePersistencePreparedPayload() = default;
+};
+
 UENUM(BlueprintType)
 enum class ESightWeaveSubjectMemoryPolicy : uint8
 {
@@ -219,6 +229,17 @@ public:
 		const FSightWeaveSubjectRegistration& Registration,
 		const FSightWeaveSubjectObservation& FallingEdgeObservation,
 		FSightWeaveBasicStaticMeshSnapshotCandidate& OutCandidate) const = 0;
+
+	/** Optional M4P3 persistence extension; existing falling-edge providers remain source-compatible. */
+	virtual bool SupportsSightWeavePersistence() const;
+	virtual ESightWeavePersistenceProviderResult CaptureSightWeavePersistence(
+		TArray<FSightWeaveProviderPayloadRecord>& OutPayloads) const;
+	virtual ESightWeavePersistenceProviderResult PrepareSightWeavePersistence(
+		const FSightWeaveProviderPayloadRecord& Payload,
+		TUniquePtr<ISightWeavePersistencePreparedPayload>& OutPrepared) const;
+	/** Contractually infallible after a successful prepare. */
+	virtual void CommitSightWeavePersistence(
+		TUniquePtr<ISightWeavePersistencePreparedPayload>&& Prepared);
 };
 
 enum class ESightWeaveSubjectPresentationState : uint8
@@ -267,6 +288,18 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveSubjectPresentationResult
 	uint64 SnapshotRevision = 0;
 };
 
+struct SIGHTWEAVERUNTIME_API FSightWeaveSubjectPersistentStateRecord
+{
+	FSightWeaveSubjectRegistration Registration;
+	TOptional<FSightWeaveLastSeenSnapshotDescriptor> Snapshot;
+};
+
+struct SIGHTWEAVERUNTIME_API FSightWeaveSubjectPersistentState
+{
+	FSightWeaveMemoryScopeKey Scope;
+	TArray<FSightWeaveSubjectPersistentStateRecord> Records;
+};
+
 /** Game-thread-only deterministic CPU authority. It owns no Actor or render object. */
 class SIGHTWEAVERUNTIME_API FSightWeaveSubjectMemoryAuthority final
 {
@@ -292,6 +325,15 @@ public:
 		FSightWeaveSubjectHandle Handle) const;
 	int32 GetSubjectCount() const { return Records.Num(); }
 	int32 GetSnapshotCount() const;
+	uint64 GetPersistenceGuardRevision() const { return PersistenceGuardRevision; }
+	bool ExportPersistentState(
+		const FSightWeaveMemoryScopeKey& Scope,
+		FSightWeaveSubjectPersistentState& OutState) const;
+	/** Mutates only the receiving staging copy; commit is a later move assignment. */
+	bool PreparePersistentReplacement(const FSightWeaveSubjectPersistentState& State);
+	void FinalizePreparedPersistentReplacement(uint64 PriorGuardRevision);
+	FSightWeaveSubjectHandle FindHandleByIdentity(
+		const FSightWeaveSubjectIdentity& Identity) const;
 
 	static bool DoesSnapshotMatchRegistration(
 		const FSightWeaveLastSeenSnapshotDescriptor& Snapshot,
@@ -320,4 +362,5 @@ private:
 
 	TArray<FRecord> Records;
 	int64 NextHandle = 1;
+	uint64 PersistenceGuardRevision = 0;
 };

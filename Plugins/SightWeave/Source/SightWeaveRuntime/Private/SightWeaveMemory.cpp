@@ -446,7 +446,10 @@ bool FSightWeaveMemoryRegion::ContainsWorldLocation(const FVector WorldLocation)
 bool FSightWeaveMemoryModifierDescription::IsEquivalentTo(
 	const FSightWeaveMemoryModifierDescription& Other) const
 {
-	return Operation == Other.Operation && Region.IsEquivalentTo(Other.Region);
+	return Operation == Other.Operation
+		&& Region.IsEquivalentTo(Other.Region)
+		&& Persistence == Other.Persistence
+		&& StablePersistenceId == Other.StablePersistenceId;
 }
 
 bool FSightWeavePackedMemoryTile::IsValid() const
@@ -487,6 +490,7 @@ bool FSightWeaveMemoryAuthority::Configure(
 	MaximumTiles = InMaximumTiles;
 	bConfigured = true;
 	bNeedsFullRebuild = true;
+	PersistenceGuardRevision = 1;
 	LastFailure = ESightWeaveMemoryFailure::None;
 	return true;
 }
@@ -505,6 +509,7 @@ void FSightWeaveMemoryAuthority::Reset()
 	LastSnapshotRevision = 0;
 	NextPacketRevision = 1;
 	ModifierRevision = 0;
+	PersistenceGuardRevision = 0;
 	NextModifierId = 1;
 	LastFailure = ESightWeaveMemoryFailure::NotConfigured;
 	bConfigured = false;
@@ -771,6 +776,7 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 	Result.DirtyTileCount = DirtyLogicalTiles.Num();
 	Result.PackedAuthorityBytes = GetPackedAuthorityBytes();
 	LastFailure = ESightWeaveMemoryFailure::None;
+	++PersistenceGuardRevision;
 	return Result;
 }
 
@@ -836,6 +842,7 @@ bool FSightWeaveMemoryAuthority::ClearMemory(const FSightWeaveMemoryRegion& Regi
 	if (bChanged)
 	{
 		++MemoryRevision;
+		++PersistenceGuardRevision;
 		PublishedAuthorityTiles.Reset();
 	}
 	LastFailure = ESightWeaveMemoryFailure::None;
@@ -852,6 +859,20 @@ FSightWeaveMemoryModifierHandle FSightWeaveMemoryAuthority::RegisterModifier(
 		LastFailure = ESightWeaveMemoryFailure::ScopeMismatch;
 		return FSightWeaveMemoryModifierHandle();
 	}
+	if (Description.Persistence == ESightWeaveMemoryModifierPersistence::Persistent
+		&& !Description.StablePersistenceId.IsNone()
+		&& Modifiers.ContainsByPredicate(
+			[&Description](const FModifierRecord& Candidate)
+			{
+				return Candidate.Description.Persistence
+						== ESightWeaveMemoryModifierPersistence::Persistent
+					&& Candidate.Description.StablePersistenceId
+						== Description.StablePersistenceId;
+			}))
+	{
+		LastFailure = ESightWeaveMemoryFailure::DuplicatePersistentModifier;
+		return FSightWeaveMemoryModifierHandle();
+	}
 	FModifierRecord& Added = Modifiers.AddDefaulted_GetRef();
 	Added.Handle = FSightWeaveMemoryModifierHandle(NextModifierId++);
 	Added.Description = Description;
@@ -860,6 +881,7 @@ FSightWeaveMemoryModifierHandle FSightWeaveMemoryAuthority::RegisterModifier(
 		return A.Handle.GetValue() < B.Handle.GetValue();
 	});
 	++ModifierRevision;
+	++PersistenceGuardRevision;
 	bModifierStateDirty = true;
 	LastFailure = ESightWeaveMemoryFailure::None;
 	return Added.Handle;
@@ -881,12 +903,28 @@ bool FSightWeaveMemoryAuthority::UpdateModifier(
 	{
 		return false;
 	}
+	if (Description.Persistence == ESightWeaveMemoryModifierPersistence::Persistent
+		&& !Description.StablePersistenceId.IsNone()
+		&& Modifiers.ContainsByPredicate(
+			[Handle, &Description](const FModifierRecord& Candidate)
+			{
+				return Candidate.Handle != Handle
+					&& Candidate.Description.Persistence
+						== ESightWeaveMemoryModifierPersistence::Persistent
+					&& Candidate.Description.StablePersistenceId
+						== Description.StablePersistenceId;
+			}))
+	{
+		LastFailure = ESightWeaveMemoryFailure::DuplicatePersistentModifier;
+		return false;
+	}
 	if (Existing->Description.IsEquivalentTo(Description))
 	{
 		return true;
 	}
 	Existing->Description = Description;
 	++ModifierRevision;
+	++PersistenceGuardRevision;
 	bModifierStateDirty = true;
 	return true;
 }
@@ -902,6 +940,7 @@ bool FSightWeaveMemoryAuthority::UnregisterModifier(
 		return false;
 	}
 	++ModifierRevision;
+	++PersistenceGuardRevision;
 	bModifierStateDirty = true;
 	return true;
 }
@@ -954,6 +993,135 @@ bool FSightWeaveMemoryAuthority::QueryHardMemory2D(const FVector2D WorldLocation
 	}
 	const FSightWeavePackedMemoryTile* Tile = FindTile(LogicalTile);
 	return Tile && Tile->TestBit(InteriorTexel);
+}
+
+ESightWeaveMemoryFailure FSightWeaveMemoryAuthority::ExportPersistentState(
+	FSightWeaveMemoryPersistentState& OutState) const
+{
+	check(IsInGameThread());
+	OutState = FSightWeaveMemoryPersistentState();
+	if (!bConfigured || !Scope.IsValid())
+	{
+		return ESightWeaveMemoryFailure::NotConfigured;
+	}
+	OutState.Scope = Scope;
+	OutState.Tiles = Tiles;
+	for (const FModifierRecord& Modifier : Modifiers)
+	{
+		if (Modifier.Description.Persistence
+			!= ESightWeaveMemoryModifierPersistence::Persistent)
+		{
+			continue;
+		}
+		if (!Modifier.Description.IsValid()
+			|| !Modifier.Description.HasValidPersistenceMetadata()
+			|| !Modifier.Description.Region.Scope.IsEquivalentTo(Scope))
+		{
+			OutState = FSightWeaveMemoryPersistentState();
+			return ESightWeaveMemoryFailure::InvalidPersistentState;
+		}
+		if (OutState.PersistentModifiers.ContainsByPredicate(
+			[&Modifier](const FSightWeaveMemoryModifierDescription& Existing)
+			{
+				return Existing.StablePersistenceId
+					== Modifier.Description.StablePersistenceId;
+			}))
+		{
+			OutState = FSightWeaveMemoryPersistentState();
+			return ESightWeaveMemoryFailure::DuplicatePersistentModifier;
+		}
+		OutState.PersistentModifiers.Add(Modifier.Description);
+	}
+	OutState.PersistentModifiers.Sort(
+		[](const FSightWeaveMemoryModifierDescription& A,
+			const FSightWeaveMemoryModifierDescription& B)
+		{
+			return A.StablePersistenceId.ToString().ToLower()
+				< B.StablePersistenceId.ToString().ToLower();
+		});
+	return ESightWeaveMemoryFailure::None;
+}
+
+ESightWeaveMemoryFailure FSightWeaveMemoryAuthority::PreparePersistentReplacement(
+	const FSightWeaveMemoryPersistentState& State)
+{
+	check(IsInGameThread());
+	if (!bConfigured || !State.Scope.IsValid()
+		|| !State.Scope.IsEquivalentTo(Scope)
+		|| State.Tiles.Num() > MaximumTiles)
+	{
+		return ESightWeaveMemoryFailure::InvalidPersistentState;
+	}
+	TSet<FIntPoint> Coordinates;
+	for (const FSightWeavePackedMemoryTile& Tile : State.Tiles)
+	{
+		if (!Tile.IsValid() || Tile.IsEmpty()
+			|| !Tile.Key.Scope.IsEquivalentTo(Scope)
+			|| Coordinates.Contains(Tile.Key.LogicalCoordinate))
+		{
+			return ESightWeaveMemoryFailure::InvalidPersistentState;
+		}
+		Coordinates.Add(Tile.Key.LogicalCoordinate);
+	}
+	TSet<FName> StableModifierIds;
+	for (const FSightWeaveMemoryModifierDescription& Modifier : State.PersistentModifiers)
+	{
+		if (!Modifier.IsValid() || !Modifier.HasValidPersistenceMetadata()
+			|| Modifier.Persistence != ESightWeaveMemoryModifierPersistence::Persistent
+			|| !Modifier.Region.Scope.IsEquivalentTo(Scope))
+		{
+			return ESightWeaveMemoryFailure::InvalidPersistentState;
+		}
+		if (StableModifierIds.Contains(Modifier.StablePersistenceId))
+		{
+			return ESightWeaveMemoryFailure::DuplicatePersistentModifier;
+		}
+		StableModifierIds.Add(Modifier.StablePersistenceId);
+	}
+
+	Tiles = State.Tiles;
+	Tiles.Sort([](const FSightWeavePackedMemoryTile& A, const FSightWeavePackedMemoryTile& B)
+	{
+		return SightWeaveMemoryPrivate::TileCoordinateLess(
+			A.Key.LogicalCoordinate,
+			B.Key.LogicalCoordinate);
+	});
+	Modifiers.RemoveAll([](const FModifierRecord& Record)
+	{
+		return Record.Description.Persistence
+			== ESightWeaveMemoryModifierPersistence::Persistent;
+	});
+	for (const FSightWeaveMemoryModifierDescription& Modifier : State.PersistentModifiers)
+	{
+		FModifierRecord& Added = Modifiers.AddDefaulted_GetRef();
+		Added.Handle = FSightWeaveMemoryModifierHandle(NextModifierId++);
+		Added.Description = Modifier;
+	}
+	Modifiers.Sort([](const FModifierRecord& A, const FModifierRecord& B)
+	{
+		return A.Handle.GetValue() < B.Handle.GetValue();
+	});
+	++MemoryRevision;
+	++ModifierRevision;
+	++PersistenceGuardRevision;
+	PublishedAuthorityTiles.Reset();
+	DirtyLogicalTiles.Reset();
+	RemovedTiles.Reset();
+	bNeedsFullRebuild = true;
+	bModifierStateDirty = true;
+	LastFailure = ESightWeaveMemoryFailure::None;
+	return ESightWeaveMemoryFailure::None;
+}
+
+void FSightWeaveMemoryAuthority::FinalizePreparedPersistentReplacement(
+	const uint64 PriorMemoryRevision,
+	const uint64 PriorModifierRevision,
+	const uint64 PriorGuardRevision)
+{
+	check(IsInGameThread());
+	MemoryRevision = PriorMemoryRevision + 1;
+	ModifierRevision = PriorModifierRevision + 1;
+	PersistenceGuardRevision = PriorGuardRevision + 1;
 }
 
 TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe>

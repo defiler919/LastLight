@@ -720,6 +720,8 @@ bool USightWeaveMemoryModifierComponent::BuildWorldDescription(
 		return false;
 	}
 	OutDescription.Operation = Operation;
+	OutDescription.Persistence = Persistence;
+	OutDescription.StablePersistenceId = StablePersistenceId;
 	FSightWeaveMemoryRegion& Region = OutDescription.Region;
 	Region.Scope = MoveTemp(Scope);
 	Region.HeightRange.ZMin = Transform.GetLocation().Z + LocalHeightRange.ZMin * Scale.Z;

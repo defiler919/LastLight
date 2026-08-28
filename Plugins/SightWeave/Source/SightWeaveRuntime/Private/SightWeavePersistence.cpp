@@ -495,6 +495,48 @@ namespace SightWeavePersistencePrivate
 		return OutRecord.IsValid();
 	}
 
+	void NormalizeProviderDomain(FSightWeaveProviderDomain& Domain)
+	{
+		switch (Domain.Type)
+		{
+		case ESightWeaveProviderDomainType::Subject:
+			Domain.Region = FSightWeavePersistentRegion();
+			Domain.SemanticDomainId = NAME_None;
+			break;
+		case ESightWeaveProviderDomainType::Region:
+			Domain.SubjectIdentity = FSightWeaveSubjectIdentity();
+			Domain.SemanticDomainId = NAME_None;
+			break;
+		case ESightWeaveProviderDomainType::Semantic:
+			Domain.SubjectIdentity = FSightWeaveSubjectIdentity();
+			Domain.Region = FSightWeavePersistentRegion();
+			break;
+		default:
+			break;
+		}
+	}
+
+	TArray<uint8> ProviderDomainKey(const FSightWeaveProviderDomain& Domain)
+	{
+		FWriter Writer(1024 * 1024);
+		Writer.WriteU8(static_cast<uint8>(Domain.Type));
+		Writer.WriteName(Domain.StableScopeId);
+		Writer.WriteName(Domain.SubjectIdentity.StableId);
+		Writer.WriteU64(static_cast<uint64>(Domain.SubjectIdentity.InstanceGeneration));
+		WriteRegion(Writer, Domain.Region);
+		Writer.WriteName(Domain.SemanticDomainId);
+		return Writer.GetBytes();
+	}
+
+	int32 CompareByteArrays(const TArray<uint8>& A, const TArray<uint8>& B)
+	{
+		const int32 Common = FMath::Min(A.Num(), B.Num());
+		const int32 Compared = Common > 0
+			? FMemory::Memcmp(A.GetData(), B.GetData(), Common)
+			: 0;
+		return Compared != 0 ? Compared : A.Num() - B.Num();
+	}
+
 	bool NormalizeAndValidate(FSightWeaveCanonicalSnapshot& Snapshot, FSightWeaveSnapshotDiagnostic& Diagnostic)
 	{
 		for (FSightWeaveSnapshotScopeRecord& ScopeRecord : Snapshot.Scopes)
@@ -529,25 +571,19 @@ namespace SightWeavePersistencePrivate
 		{
 			return ScopeKey(A.Scope) < ScopeKey(B.Scope);
 		});
+		for (FSightWeaveProviderPayloadRecord& Provider : Snapshot.ProviderPayloads)
+		{
+			NormalizeProviderDomain(Provider.Domain);
+		}
 		Snapshot.ProviderPayloads.Sort([](const auto& A, const auto& B)
 		{
 			const int32 ProviderComparison = CompareName(A.ProviderId, B.ProviderId);
 			if (ProviderComparison != 0) return ProviderComparison < 0;
 			if (A.SchemaVersion != B.SchemaVersion) return A.SchemaVersion < B.SchemaVersion;
 			if (A.Domain.Type != B.Domain.Type) return A.Domain.Type < B.Domain.Type;
-			const int32 ScopeComparison = CompareName(A.Domain.StableScopeId, B.Domain.StableScopeId);
-			if (ScopeComparison != 0) return ScopeComparison < 0;
-			const int32 SubjectComparison = CompareName(
-				A.Domain.SubjectIdentity.StableId,
-				B.Domain.SubjectIdentity.StableId);
-			if (SubjectComparison != 0) return SubjectComparison < 0;
-			if (A.Domain.SubjectIdentity.InstanceGeneration
-				!= B.Domain.SubjectIdentity.InstanceGeneration)
-			{
-				return A.Domain.SubjectIdentity.InstanceGeneration
-					< B.Domain.SubjectIdentity.InstanceGeneration;
-			}
-			return NameLess(A.Domain.SemanticDomainId, B.Domain.SemanticDomainId);
+			return CompareByteArrays(
+				ProviderDomainKey(A.Domain),
+				ProviderDomainKey(B.Domain)) < 0;
 		});
 
 		for (int32 ScopeIndex = 0; ScopeIndex < Snapshot.Scopes.Num(); ++ScopeIndex)
@@ -612,11 +648,9 @@ namespace SightWeavePersistencePrivate
 				const auto& Prior = Snapshot.ProviderPayloads[Index - 1];
 				const bool bSameDomain = CompareName(Prior.ProviderId, Provider.ProviderId) == 0
 					&& Prior.SchemaVersion == Provider.SchemaVersion
-					&& Prior.Domain.Type == Provider.Domain.Type
-					&& CompareName(Prior.Domain.StableScopeId, Provider.Domain.StableScopeId) == 0
-					&& Prior.Domain.SubjectIdentity.IsEquivalentTo(Provider.Domain.SubjectIdentity)
-					&& CompareName(Prior.Domain.SemanticDomainId,
-						Provider.Domain.SemanticDomainId) == 0;
+					&& CompareByteArrays(
+						ProviderDomainKey(Prior.Domain),
+						ProviderDomainKey(Provider.Domain)) == 0;
 				if (bSameDomain)
 				{
 					Diagnostic.Result = ESightWeaveSnapshotResult::DuplicateProviderId;
@@ -1135,6 +1169,7 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::BuildBlob(
 	Diagnostic.StoredBytes = OutBlob.Bytes.Num();
 	Diagnostic.ScopeCount = Canonical.Scopes.Num();
 	Diagnostic.ProviderPayloadCount = Canonical.ProviderPayloads.Num();
+	Diagnostic.CanonicalHashHex = BytesToHex(Hash.GetBytes(), 32).ToLower();
 	return Diagnostic;
 }
 
@@ -1279,6 +1314,7 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::ParseBlob(
 	}
 	const FBlake3Hash ActualHash =
 		FBlake3::HashBuffer(CanonicalBytes.GetData(), CanonicalBytes.Num());
+	Diagnostic.CanonicalHashHex = BytesToHex(ActualHash.GetBytes(), 32).ToLower();
 	if (FMemory::Memcmp(Blob.Bytes.GetData() + 48, ActualHash.GetBytes(), 32) != 0)
 	{
 		Diagnostic.Result = ESightWeaveSnapshotResult::ChecksumMismatch;
@@ -1316,5 +1352,692 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::ParseBlob(
 	}
 	OutSnapshot = MoveTemp(Parsed);
 	Diagnostic.Result = ESightWeaveSnapshotResult::Succeeded;
+	return Diagnostic;
+}
+
+namespace SightWeavePersistenceAuthorityPrivate
+{
+	FSightWeavePersistentRegion ToPersistentRegion(const FSightWeaveMemoryRegion& Region)
+	{
+		FSightWeavePersistentRegion Result;
+		Result.HeightRange = Region.HeightRange;
+		Result.Shape = Region.Shape;
+		Result.Center = Region.Center;
+		Result.HalfExtents = Region.HalfExtents;
+		Result.Radius = Region.Radius;
+		Result.RotationDegrees = Region.RotationDegrees;
+		Result.PolygonVertices = Region.PolygonVertices;
+		Result.bEnabled = Region.bEnabled;
+		return Result;
+	}
+
+	FSightWeaveMemoryRegion ToRuntimeRegion(
+		const FSightWeavePersistentRegion& Region,
+		const FSightWeaveMemoryScopeKey& Scope)
+	{
+		FSightWeaveMemoryRegion Result;
+		Result.Scope = Scope;
+		Result.HeightRange = Region.HeightRange;
+		Result.Shape = Region.Shape;
+		Result.Center = Region.Center;
+		Result.HalfExtents = Region.HalfExtents;
+		Result.Radius = Region.Radius;
+		Result.RotationDegrees = Region.RotationDegrees;
+		Result.PolygonVertices = Region.PolygonVertices;
+		Result.bEnabled = Region.bEnabled;
+		return Result;
+	}
+
+	FSightWeavePersistentScopeKey ToPersistentScope(
+		const FName StableScopeId,
+		const FSightWeaveMemoryScopeKey& Scope)
+	{
+		FSightWeavePersistentScopeKey Result;
+		Result.StableScopeId = StableScopeId;
+		Result.KnowledgeOwnerId = Scope.KnowledgeOwnerId;
+		Result.FloorId = Scope.FloorId;
+		Result.FloorOrigin = Scope.FloorOrigin;
+		Result.FloorPlaneZ = Scope.FloorPlaneZ;
+		Result.PrecisionTier = Scope.PrecisionTier;
+		Result.CanonicalProfiles = Scope.CanonicalProfiles;
+		return Result;
+	}
+
+	bool ScopeMatches(
+		const FSightWeavePersistentScopeKey& Persistent,
+		const FSightWeaveMemoryScopeKey& Runtime)
+	{
+		if (Persistent.KnowledgeOwnerId != Runtime.KnowledgeOwnerId
+			|| Persistent.FloorId != Runtime.FloorId
+			|| Persistent.FloorOrigin != Runtime.FloorOrigin
+			|| Persistent.FloorPlaneZ != Runtime.FloorPlaneZ
+			|| Persistent.PrecisionTier != Runtime.PrecisionTier
+			|| Persistent.CanonicalProfiles.Num() != Runtime.CanonicalProfiles.Num())
+		{
+			return false;
+		}
+		for (int32 Index = 0; Index < Persistent.CanonicalProfiles.Num(); ++Index)
+		{
+			if (Persistent.CanonicalProfiles[Index].CanonicalCapabilities
+				!= Runtime.CanonicalProfiles[Index].CanonicalCapabilities)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	FSightWeavePersistentLastSeenRecord ToPersistentLastSeen(
+		const FSightWeaveLastSeenSnapshotDescriptor& Snapshot)
+	{
+		FSightWeavePersistentLastSeenRecord Result;
+		Result.SnapshotRevision = Snapshot.SnapshotRevision;
+		Result.EligibilityRevision = Snapshot.EligibilityRevision;
+		Result.SourceLiveRevision = Snapshot.SourceLiveRevision;
+		Result.WorldTransform = Snapshot.WorldTransform;
+		Result.WorldBounds = Snapshot.WorldBounds;
+		Result.StaticMeshAsset = Snapshot.StaticMeshAsset;
+		Result.MaterialOverrides = Snapshot.MaterialOverrides;
+		Result.VisualVariantId = Snapshot.VisualVariantId;
+		Result.CaptureReason = Snapshot.CaptureReason;
+		Result.CaptureTransitionIdentity = Snapshot.CaptureTransitionIdentity;
+		Result.Validity = Snapshot.Validity;
+		return Result;
+	}
+
+	FSightWeaveLastSeenSnapshotDescriptor ToRuntimeLastSeen(
+		const FSightWeavePersistentLastSeenRecord& Snapshot,
+		const FSightWeavePersistentSubjectRecord& Subject,
+		const FSightWeaveMemoryScopeKey& Scope)
+	{
+		FSightWeaveLastSeenSnapshotDescriptor Result;
+		Result.Identity = Subject.Identity;
+		Result.Scope = Scope;
+		Result.Policy = Subject.Policy;
+		Result.SnapshotRevision = Snapshot.SnapshotRevision;
+		Result.EligibilityRevision = Snapshot.EligibilityRevision;
+		Result.SourceLiveRevision = Snapshot.SourceLiveRevision;
+		Result.WorldTransform = Snapshot.WorldTransform;
+		Result.WorldBounds = Snapshot.WorldBounds;
+		Result.StaticMeshAsset = Snapshot.StaticMeshAsset;
+		Result.MaterialOverrides = Snapshot.MaterialOverrides;
+		Result.VisualVariantId = Snapshot.VisualVariantId;
+		Result.CaptureReason = Snapshot.CaptureReason;
+		Result.CaptureTransitionIdentity = Snapshot.CaptureTransitionIdentity;
+		Result.Validity = Snapshot.Validity;
+		return Result;
+	}
+
+	FString DomainDescription(const FSightWeaveProviderDomain& Domain)
+	{
+		switch (Domain.Type)
+		{
+		case ESightWeaveProviderDomainType::Subject:
+			return FString::Printf(TEXT("%s:subject:%s:%lld"),
+				*Domain.StableScopeId.ToString(),
+				*Domain.SubjectIdentity.StableId.ToString(),
+				Domain.SubjectIdentity.InstanceGeneration);
+		case ESightWeaveProviderDomainType::Region:
+			return FString::Printf(TEXT("%s:region:%d"),
+				*Domain.StableScopeId.ToString(),
+				static_cast<int32>(Domain.Region.Shape));
+		case ESightWeaveProviderDomainType::Semantic:
+			return FString::Printf(TEXT("%s:semantic:%s"),
+				*Domain.StableScopeId.ToString(),
+				*Domain.SemanticDomainId.ToString());
+		default:
+			return TEXT("invalid");
+		}
+	}
+
+	bool HasSubjectPayload(
+		const FSightWeaveCanonicalSnapshot& Snapshot,
+		const FName StableScopeId,
+		const FSightWeavePersistentSubjectRecord& Subject)
+	{
+		return Snapshot.ProviderPayloads.ContainsByPredicate(
+			[StableScopeId, &Subject](const FSightWeaveProviderPayloadRecord& Payload)
+			{
+				return Payload.ProviderId == Subject.CustomProviderId
+					&& Payload.SchemaVersion == Subject.CustomProviderVersion
+					&& Payload.Domain.Type == ESightWeaveProviderDomainType::Subject
+					&& Payload.Domain.StableScopeId == StableScopeId
+					&& Payload.Domain.SubjectIdentity.IsEquivalentTo(Subject.Identity);
+			});
+	}
+}
+
+bool FSightWeavePersistenceProviderRegistry::Register(
+	ISightWeaveSubjectSnapshotProvider& Provider)
+{
+	check(IsInGameThread());
+	const FName ProviderId = Provider.GetSightWeaveProviderName();
+	if (ProviderId.IsNone() || Provider.GetSightWeaveProviderVersion() == 0
+		|| Providers.Contains(ProviderId))
+	{
+		return false;
+	}
+	Providers.Add(ProviderId, &Provider);
+	return true;
+}
+
+bool FSightWeavePersistenceProviderRegistry::Unregister(const FName ProviderId)
+{
+	check(IsInGameThread());
+	return Providers.Remove(ProviderId) == 1;
+}
+
+void FSightWeavePersistenceProviderRegistry::Reset()
+{
+	check(IsInGameThread());
+	Providers.Reset();
+}
+
+const ISightWeaveSubjectSnapshotProvider*
+FSightWeavePersistenceProviderRegistry::Find(const FName ProviderId) const
+{
+	ISightWeaveSubjectSnapshotProvider* const* Found = Providers.Find(ProviderId);
+	return Found ? *Found : nullptr;
+}
+
+ISightWeaveSubjectSnapshotProvider*
+FSightWeavePersistenceProviderRegistry::FindMutable(const FName ProviderId) const
+{
+	ISightWeaveSubjectSnapshotProvider* const* Found = Providers.Find(ProviderId);
+	return Found ? *Found : nullptr;
+}
+
+void FSightWeavePersistenceProviderRegistry::GetProvidersCanonical(
+	TArray<ISightWeaveSubjectSnapshotProvider*>& OutProviders) const
+{
+	OutProviders.Reset();
+	Providers.GenerateValueArray(OutProviders);
+	OutProviders.Sort([](
+		const ISightWeaveSubjectSnapshotProvider& A,
+		const ISightWeaveSubjectSnapshotProvider& B)
+	{
+		return A.GetSightWeaveProviderName().ToString().ToLower()
+			< B.GetSightWeaveProviderName().ToString().ToLower();
+	});
+}
+
+bool FSightWeavePersistenceScopeBinding::IsValid() const
+{
+	return !StableScopeId.IsNone()
+		&& MemoryAuthority
+		&& MemoryAuthority->IsConfigured()
+		&& (!IsTargetAlive || IsTargetAlive());
+}
+
+FSightWeaveSnapshotDiagnostic FSightWeavePersistence::Capture(
+	const TConstArrayView<FSightWeavePersistenceScopeBinding> Bindings,
+	const FSightWeavePersistenceProviderRegistry& Providers,
+	FSightWeaveSnapshotBlob& OutBlob,
+	const FSightWeaveSnapshotLimits& Limits)
+{
+	using namespace SightWeavePersistenceAuthorityPrivate;
+	OutBlob.Bytes.Reset();
+	FSightWeaveSnapshotDiagnostic Diagnostic;
+	if (!IsInGameThread())
+	{
+		Diagnostic.Result = ESightWeaveSnapshotResult::CommitInvariantFailed;
+		Diagnostic.Detail = TEXT("Capture must run on the game thread.");
+		return Diagnostic;
+	}
+	const double StartSeconds = FPlatformTime::Seconds();
+	FSightWeaveCanonicalSnapshot Snapshot;
+	TSet<FName> StableScopeIds;
+	TSet<const FSightWeaveMemoryAuthority*> BoundMemoryAuthorities;
+	for (const FSightWeavePersistenceScopeBinding& Binding : Bindings)
+	{
+		if (!Binding.IsValid())
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::InvalidScope;
+			Diagnostic.PrimaryId = Binding.StableScopeId;
+			return Diagnostic;
+		}
+		if (StableScopeIds.Contains(Binding.StableScopeId)
+			|| BoundMemoryAuthorities.Contains(Binding.MemoryAuthority))
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::DuplicateScope;
+			Diagnostic.PrimaryId = Binding.StableScopeId;
+			return Diagnostic;
+		}
+		StableScopeIds.Add(Binding.StableScopeId);
+		BoundMemoryAuthorities.Add(Binding.MemoryAuthority);
+
+		FSightWeaveMemoryPersistentState MemoryState;
+		const ESightWeaveMemoryFailure MemoryFailure =
+			Binding.MemoryAuthority->ExportPersistentState(MemoryState);
+		if (MemoryFailure != ESightWeaveMemoryFailure::None)
+		{
+			Diagnostic.Result = MemoryFailure
+				== ESightWeaveMemoryFailure::DuplicatePersistentModifier
+				? ESightWeaveSnapshotResult::DuplicateModifierId
+				: ESightWeaveSnapshotResult::InvalidPersistentModifier;
+			Diagnostic.PrimaryId = Binding.StableScopeId;
+			return Diagnostic;
+		}
+		FSightWeaveSnapshotScopeRecord& ScopeRecord = Snapshot.Scopes.AddDefaulted_GetRef();
+		ScopeRecord.Scope = ToPersistentScope(Binding.StableScopeId, MemoryState.Scope);
+		ScopeRecord.MemoryTiles = MemoryState.Tiles;
+		for (const FSightWeaveMemoryModifierDescription& Modifier :
+			MemoryState.PersistentModifiers)
+		{
+			FSightWeavePersistentModifierRecord& Added =
+				ScopeRecord.PersistentModifiers.AddDefaulted_GetRef();
+			Added.StableId = Modifier.StablePersistenceId;
+			Added.Operation = Modifier.Operation;
+			Added.Region = ToPersistentRegion(Modifier.Region);
+		}
+		if (Binding.SubjectAuthority)
+		{
+			FSightWeaveSubjectPersistentState SubjectState;
+			if (!Binding.SubjectAuthority->ExportPersistentState(
+				MemoryState.Scope,
+				SubjectState))
+			{
+				Diagnostic.Result = ESightWeaveSnapshotResult::InvalidSubject;
+				Diagnostic.PrimaryId = Binding.StableScopeId;
+				return Diagnostic;
+			}
+			for (const FSightWeaveSubjectPersistentStateRecord& Subject : SubjectState.Records)
+			{
+				FSightWeavePersistentSubjectRecord& Added =
+					ScopeRecord.Subjects.AddDefaulted_GetRef();
+				Added.Identity = Subject.Registration.Identity;
+				Added.Policy = Subject.Registration.Policy;
+				Added.CustomProviderId = Subject.Registration.CustomProviderName;
+				Added.CustomProviderVersion = Subject.Registration.CustomProviderVersion;
+				if (Subject.Snapshot.IsSet())
+				{
+					Added.LastSeen = ToPersistentLastSeen(Subject.Snapshot.GetValue());
+				}
+			}
+		}
+	}
+
+	TArray<ISightWeaveSubjectSnapshotProvider*> CanonicalProviders;
+	Providers.GetProvidersCanonical(CanonicalProviders);
+	for (const ISightWeaveSubjectSnapshotProvider* Provider : CanonicalProviders)
+	{
+		if (!Provider || !Provider->SupportsSightWeavePersistence())
+		{
+			continue;
+		}
+		TArray<FSightWeaveProviderPayloadRecord> Payloads;
+		if (Provider->CaptureSightWeavePersistence(Payloads)
+			!= ESightWeavePersistenceProviderResult::Succeeded)
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::ProviderCaptureFailed;
+			Diagnostic.PrimaryId = Provider->GetSightWeaveProviderName();
+			return Diagnostic;
+		}
+		for (FSightWeaveProviderPayloadRecord& Payload : Payloads)
+		{
+			if (!Payload.IsValid()
+				|| Payload.ProviderId != Provider->GetSightWeaveProviderName()
+				|| Payload.SchemaVersion != Provider->GetSightWeaveProviderVersion()
+				|| !StableScopeIds.Contains(Payload.Domain.StableScopeId))
+			{
+				Diagnostic.Result = ESightWeaveSnapshotResult::InvalidProviderPayload;
+				Diagnostic.PrimaryId = Provider->GetSightWeaveProviderName();
+				return Diagnostic;
+			}
+			Snapshot.ProviderPayloads.Add(MoveTemp(Payload));
+		}
+	}
+	for (const FSightWeaveSnapshotScopeRecord& Scope : Snapshot.Scopes)
+	{
+		for (const FSightWeavePersistentSubjectRecord& Subject : Scope.Subjects)
+		{
+			if (Subject.Policy == ESightWeaveSubjectMemoryPolicy::Custom
+				&& !HasSubjectPayload(Snapshot, Scope.Scope.StableScopeId, Subject))
+			{
+				Diagnostic.Result = ESightWeaveSnapshotResult::ProviderCaptureFailed;
+				Diagnostic.PrimaryId = Subject.CustomProviderId;
+				Diagnostic.Detail = TEXT("Persistent Custom subject has no exact provider payload.");
+				return Diagnostic;
+			}
+		}
+	}
+	Diagnostic = BuildBlob(Snapshot, OutBlob, Limits);
+	Diagnostic.CaptureMicroseconds =
+		(FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
+	return Diagnostic;
+}
+
+FSightWeaveSnapshotDiagnostic FSightWeavePersistence::Restore(
+	const FSightWeaveSnapshotBlob& Blob,
+	const TConstArrayView<FSightWeavePersistenceScopeBinding> Bindings,
+	FSightWeavePersistenceProviderRegistry& Providers,
+	const FSightWeaveSnapshotLimits& Limits)
+{
+	using namespace SightWeavePersistenceAuthorityPrivate;
+	FSightWeaveSnapshotDiagnostic Diagnostic;
+	if (!IsInGameThread())
+	{
+		Diagnostic.Result = ESightWeaveSnapshotResult::CommitInvariantFailed;
+		Diagnostic.Detail = TEXT("Restore must run on the game thread.");
+		return Diagnostic;
+	}
+	const double PrepareStart = FPlatformTime::Seconds();
+	FSightWeaveCanonicalSnapshot Snapshot;
+	Diagnostic = ParseBlob(Blob, Snapshot, Limits);
+	if (!Diagnostic.Succeeded())
+	{
+		return Diagnostic;
+	}
+
+	struct FPreparedSubjectGroup
+	{
+		FSightWeaveSubjectMemoryAuthority* Target = nullptr;
+		FSightWeaveSubjectMemoryAuthority Prepared;
+		uint64 GuardRevision = 0;
+	};
+	struct FPreparedBinding
+	{
+		const FSightWeavePersistenceScopeBinding* Binding = nullptr;
+		FSightWeaveMemoryAuthority PreparedMemory;
+		FPreparedSubjectGroup* SubjectGroup = nullptr;
+		FSightWeaveMemoryScopeKey ExpectedScope;
+		uint64 MemoryGuardRevision = 0;
+		uint64 MemoryRevision = 0;
+		uint64 ModifierRevision = 0;
+	};
+	struct FPreparedProvider
+	{
+		ISightWeaveSubjectSnapshotProvider* Provider = nullptr;
+		TUniquePtr<ISightWeavePersistencePreparedPayload> Payload;
+	};
+
+	TArray<FPreparedSubjectGroup> SubjectGroups;
+	SubjectGroups.Reserve(Bindings.Num());
+	for (const FSightWeavePersistenceScopeBinding& Binding : Bindings)
+	{
+		if (Binding.SubjectAuthority
+			&& !SubjectGroups.ContainsByPredicate([&Binding](const FPreparedSubjectGroup& Group)
+			{
+				return Group.Target == Binding.SubjectAuthority;
+			}))
+		{
+			FPreparedSubjectGroup& Group = SubjectGroups.AddDefaulted_GetRef();
+			Group.Target = Binding.SubjectAuthority;
+			Group.Prepared = *Binding.SubjectAuthority;
+			Group.GuardRevision = Binding.SubjectAuthority->GetPersistenceGuardRevision();
+		}
+	}
+
+	TArray<FPreparedBinding> PreparedBindings;
+	PreparedBindings.Reserve(Snapshot.Scopes.Num());
+	TSet<FName> UsedBindings;
+	TSet<FSightWeaveMemoryAuthority*> UsedMemoryAuthorities;
+	for (const FSightWeaveSnapshotScopeRecord& ScopeRecord : Snapshot.Scopes)
+	{
+		const FSightWeavePersistenceScopeBinding* Binding = Bindings.FindByPredicate(
+			[&ScopeRecord](const FSightWeavePersistenceScopeBinding& Candidate)
+			{
+				return Candidate.StableScopeId == ScopeRecord.Scope.StableScopeId;
+			});
+		if (!Binding || !Binding->IsValid())
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::MissingTargetScope;
+			Diagnostic.PrimaryId = ScopeRecord.Scope.StableScopeId;
+			return Diagnostic;
+		}
+		if (UsedBindings.Contains(Binding->StableScopeId)
+			|| UsedMemoryAuthorities.Contains(Binding->MemoryAuthority)
+			|| !ScopeMatches(ScopeRecord.Scope, Binding->MemoryAuthority->GetScope()))
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::InvalidScope;
+			Diagnostic.PrimaryId = ScopeRecord.Scope.StableScopeId;
+			return Diagnostic;
+		}
+		UsedBindings.Add(Binding->StableScopeId);
+		UsedMemoryAuthorities.Add(Binding->MemoryAuthority);
+		FPreparedBinding& Prepared = PreparedBindings.AddDefaulted_GetRef();
+		Prepared.Binding = Binding;
+		Prepared.PreparedMemory = *Binding->MemoryAuthority;
+		Prepared.ExpectedScope = Binding->MemoryAuthority->GetScope();
+		Prepared.MemoryGuardRevision =
+			Binding->MemoryAuthority->GetPersistenceGuardRevision();
+		Prepared.MemoryRevision = Binding->MemoryAuthority->GetMemoryRevision();
+		Prepared.ModifierRevision = Binding->MemoryAuthority->GetModifierRevision();
+		Prepared.SubjectGroup = Binding->SubjectAuthority
+			? SubjectGroups.FindByPredicate([Binding](const FPreparedSubjectGroup& Group)
+				{
+					return Group.Target == Binding->SubjectAuthority;
+				})
+			: nullptr;
+
+		FSightWeaveMemoryPersistentState MemoryState;
+		MemoryState.Scope = Prepared.ExpectedScope;
+		MemoryState.Tiles = ScopeRecord.MemoryTiles;
+		for (FSightWeavePackedMemoryTile& Tile : MemoryState.Tiles)
+		{
+			Tile.Key.Scope = Prepared.ExpectedScope;
+		}
+		for (const FSightWeavePersistentModifierRecord& Modifier :
+			ScopeRecord.PersistentModifiers)
+		{
+			FSightWeaveMemoryModifierDescription& Added =
+				MemoryState.PersistentModifiers.AddDefaulted_GetRef();
+			Added.Operation = Modifier.Operation;
+			Added.Region = ToRuntimeRegion(Modifier.Region, Prepared.ExpectedScope);
+			Added.Persistence = ESightWeaveMemoryModifierPersistence::Persistent;
+			Added.StablePersistenceId = Modifier.StableId;
+		}
+		if (Prepared.PreparedMemory.PreparePersistentReplacement(MemoryState)
+			!= ESightWeaveMemoryFailure::None)
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::CommitInvariantFailed;
+			Diagnostic.PrimaryId = ScopeRecord.Scope.StableScopeId;
+			return Diagnostic;
+		}
+
+		if (!ScopeRecord.Subjects.IsEmpty() && !Prepared.SubjectGroup)
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::MissingTargetScope;
+			Diagnostic.PrimaryId = ScopeRecord.Scope.StableScopeId;
+			Diagnostic.Detail = TEXT("Snapshot scope contains subjects but no Subject authority is bound.");
+			return Diagnostic;
+		}
+		if (Prepared.SubjectGroup)
+		{
+			FSightWeaveSubjectPersistentState SubjectState;
+			SubjectState.Scope = Prepared.ExpectedScope;
+			for (const FSightWeavePersistentSubjectRecord& Subject : ScopeRecord.Subjects)
+			{
+				FSightWeaveSubjectPersistentStateRecord& Added =
+					SubjectState.Records.AddDefaulted_GetRef();
+				Added.Registration.Identity = Subject.Identity;
+				Added.Registration.Scope = Prepared.ExpectedScope;
+				Added.Registration.Policy = Subject.Policy;
+				Added.Registration.CustomProviderName = Subject.CustomProviderId;
+				Added.Registration.CustomProviderVersion = Subject.CustomProviderVersion;
+				if (Subject.LastSeen.IsSet())
+				{
+					Added.Snapshot = ToRuntimeLastSeen(
+						Subject.LastSeen.GetValue(),
+						Subject,
+						Prepared.ExpectedScope);
+				}
+			}
+			if (!Prepared.SubjectGroup->Prepared.PreparePersistentReplacement(SubjectState))
+			{
+				Diagnostic.Result = ESightWeaveSnapshotResult::InvalidSubject;
+				Diagnostic.PrimaryId = ScopeRecord.Scope.StableScopeId;
+				return Diagnostic;
+			}
+		}
+	}
+	if (UsedBindings.Num() != Bindings.Num())
+	{
+		Diagnostic.Result = ESightWeaveSnapshotResult::MissingTargetScope;
+		Diagnostic.Detail = TEXT("Binding set does not exactly match the snapshot scope set.");
+		return Diagnostic;
+	}
+
+	for (const FSightWeaveSnapshotScopeRecord& Scope : Snapshot.Scopes)
+	{
+		for (const FSightWeavePersistentSubjectRecord& Subject : Scope.Subjects)
+		{
+			if (Subject.Policy == ESightWeaveSubjectMemoryPolicy::Custom
+				&& !HasSubjectPayload(Snapshot, Scope.Scope.StableScopeId, Subject))
+			{
+				Diagnostic.Result = ESightWeaveSnapshotResult::InvalidReference;
+				Diagnostic.PrimaryId = Subject.CustomProviderId;
+				return Diagnostic;
+			}
+		}
+	}
+
+	TArray<FPreparedProvider> PreparedProviders;
+	for (const FSightWeaveProviderPayloadRecord& Payload : Snapshot.ProviderPayloads)
+	{
+		FPreparedBinding* PreparedBinding = PreparedBindings.FindByPredicate(
+			[&Payload](const FPreparedBinding& Candidate)
+			{
+				return Candidate.Binding->StableScopeId == Payload.Domain.StableScopeId;
+			});
+		if (!PreparedBinding)
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::InvalidReference;
+			Diagnostic.PrimaryId = Payload.ProviderId;
+			return Diagnostic;
+		}
+		ISightWeaveSubjectSnapshotProvider* Provider = Providers.FindMutable(Payload.ProviderId);
+		if (!Provider)
+		{
+			Diagnostic.MissingProviderIds.AddUnique(Payload.ProviderId);
+			Diagnostic.ProviderFallbackDomains.Add(DomainDescription(Payload.Domain));
+			if (Payload.Domain.Type == ESightWeaveProviderDomainType::Region)
+			{
+				const FSightWeaveMemoryRegion Region = ToRuntimeRegion(
+					Payload.Domain.Region,
+					PreparedBinding->ExpectedScope);
+				PreparedBinding->PreparedMemory.ClearMemory(Region);
+				if (PreparedBinding->SubjectGroup)
+				{
+					PreparedBinding->SubjectGroup->Prepared.ClearSnapshots(Region);
+				}
+			}
+			else if (Payload.Domain.Type == ESightWeaveProviderDomainType::Subject
+				&& PreparedBinding->SubjectGroup)
+			{
+				FSightWeaveSubjectPersistentState Current;
+				if (!PreparedBinding->SubjectGroup->Prepared.ExportPersistentState(
+					PreparedBinding->ExpectedScope,
+					Current))
+				{
+					Diagnostic.Result = ESightWeaveSnapshotResult::CommitInvariantFailed;
+					return Diagnostic;
+				}
+				for (FSightWeaveSubjectPersistentStateRecord& Record : Current.Records)
+				{
+					if (Record.Registration.Identity.IsEquivalentTo(
+						Payload.Domain.SubjectIdentity))
+					{
+						Record.Snapshot.Reset();
+					}
+				}
+				if (!PreparedBinding->SubjectGroup->Prepared.PreparePersistentReplacement(Current))
+				{
+					Diagnostic.Result = ESightWeaveSnapshotResult::CommitInvariantFailed;
+					return Diagnostic;
+				}
+			}
+			continue;
+		}
+		if (!Provider->SupportsSightWeavePersistence()
+			|| Provider->GetSightWeaveProviderVersion() != Payload.SchemaVersion)
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::ProviderVersionMismatch;
+			Diagnostic.PrimaryId = Payload.ProviderId;
+			return Diagnostic;
+		}
+		FPreparedProvider& PreparedProvider = PreparedProviders.AddDefaulted_GetRef();
+		PreparedProvider.Provider = Provider;
+		if (Provider->PrepareSightWeavePersistence(Payload, PreparedProvider.Payload)
+			!= ESightWeavePersistenceProviderResult::Succeeded
+			|| !PreparedProvider.Payload)
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::ProviderPrepareFailed;
+			Diagnostic.PrimaryId = Payload.ProviderId;
+			return Diagnostic;
+		}
+	}
+	for (FPreparedBinding& Prepared : PreparedBindings)
+	{
+		Prepared.PreparedMemory.FinalizePreparedPersistentReplacement(
+			Prepared.MemoryRevision,
+			Prepared.ModifierRevision,
+			Prepared.MemoryGuardRevision);
+	}
+	for (FPreparedSubjectGroup& Group : SubjectGroups)
+	{
+		Group.Prepared.FinalizePreparedPersistentReplacement(Group.GuardRevision);
+	}
+	Diagnostic.PrepareMicroseconds =
+		(FPlatformTime::Seconds() - PrepareStart) * 1000000.0;
+
+	const double ValidateStart = FPlatformTime::Seconds();
+	for (const FPreparedBinding& Prepared : PreparedBindings)
+	{
+		if (!Prepared.Binding->MemoryAuthority
+			|| Prepared.Binding->MemoryAuthority->GetPersistenceGuardRevision()
+				!= Prepared.MemoryGuardRevision
+			|| !Prepared.Binding->MemoryAuthority->GetScope().IsEquivalentTo(
+				Prepared.ExpectedScope)
+			|| (Prepared.Binding->IsTargetAlive
+				&& !Prepared.Binding->IsTargetAlive()))
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::TargetChanged;
+			Diagnostic.PrimaryId = Prepared.Binding->StableScopeId;
+			return Diagnostic;
+		}
+	}
+	for (const FPreparedSubjectGroup& Group : SubjectGroups)
+	{
+		if (!Group.Target
+			|| Group.Target->GetPersistenceGuardRevision() != Group.GuardRevision)
+		{
+			Diagnostic.Result = ESightWeaveSnapshotResult::TargetChanged;
+			return Diagnostic;
+		}
+	}
+	Diagnostic.ValidateMicroseconds =
+		(FPlatformTime::Seconds() - ValidateStart) * 1000000.0;
+
+	const double CommitStart = FPlatformTime::Seconds();
+	for (FPreparedBinding& Prepared : PreparedBindings)
+	{
+		*Prepared.Binding->MemoryAuthority = MoveTemp(Prepared.PreparedMemory);
+	}
+	for (FPreparedSubjectGroup& Group : SubjectGroups)
+	{
+		*Group.Target = MoveTemp(Group.Prepared);
+	}
+	for (FPreparedProvider& PreparedProvider : PreparedProviders)
+	{
+		PreparedProvider.Provider->CommitSightWeavePersistence(
+			MoveTemp(PreparedProvider.Payload));
+	}
+	Diagnostic.CommitMicroseconds =
+		(FPlatformTime::Seconds() - CommitStart) * 1000000.0;
+
+	const double PublishStart = FPlatformTime::Seconds();
+	for (const FPreparedBinding& Prepared : PreparedBindings)
+	{
+		if (Prepared.Binding->PublishDerivedState)
+		{
+			Prepared.Binding->PublishDerivedState();
+		}
+	}
+	Diagnostic.DerivedPublicationMicroseconds =
+		(FPlatformTime::Seconds() - PublishStart) * 1000000.0;
+	Diagnostic.Result = Diagnostic.MissingProviderIds.IsEmpty()
+		? ESightWeaveSnapshotResult::Succeeded
+		: ESightWeaveSnapshotResult::SucceededWithProviderFallback;
 	return Diagnostic;
 }

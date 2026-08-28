@@ -2339,6 +2339,57 @@ bool USightWeaveWorldSubsystem::IsMemoryPresentationSuppressedAtLocation(
 	return MemoryAuthority.IsMemoryPresentationSuppressed(WorldLocation);
 }
 
+FSightWeaveSnapshotDiagnostic USightWeaveWorldSubsystem::CapturePersistenceSnapshot(
+	const FName StableScopeId,
+	FSightWeaveSubjectMemoryAuthority* SubjectAuthority,
+	const FSightWeavePersistenceProviderRegistry& Providers,
+	FSightWeaveSnapshotBlob& OutBlob,
+	const FSightWeaveSnapshotLimits& Limits)
+{
+	check(IsInGameThread());
+	FSightWeavePersistenceScopeBinding Binding;
+	Binding.StableScopeId = StableScopeId;
+	Binding.MemoryAuthority = &MemoryAuthority;
+	Binding.SubjectAuthority = SubjectAuthority;
+	Binding.IsTargetAlive = [this]()
+	{
+		return ::IsValid(this) && bSightWeaveInitialized && GetWorld() != nullptr;
+	};
+	return FSightWeavePersistence::Capture(
+		MakeArrayView(&Binding, 1),
+		Providers,
+		OutBlob,
+		Limits);
+}
+
+FSightWeaveSnapshotDiagnostic USightWeaveWorldSubsystem::RestorePersistenceSnapshot(
+	const FSightWeaveSnapshotBlob& Blob,
+	const FName StableScopeId,
+	FSightWeaveSubjectMemoryAuthority* SubjectAuthority,
+	FSightWeavePersistenceProviderRegistry& Providers,
+	const FSightWeaveSnapshotLimits& Limits)
+{
+	check(IsInGameThread());
+	FSightWeavePersistenceScopeBinding Binding;
+	Binding.StableScopeId = StableScopeId;
+	Binding.MemoryAuthority = &MemoryAuthority;
+	Binding.SubjectAuthority = SubjectAuthority;
+	Binding.IsTargetAlive = [this]()
+	{
+		return ::IsValid(this) && bSightWeaveInitialized && GetWorld() != nullptr;
+	};
+	Binding.PublishDerivedState = [this]()
+	{
+		PublishMemoryAuthorityPacket(true);
+		PublishStaticEnvironmentPacket();
+	};
+	return FSightWeavePersistence::Restore(
+		Blob,
+		MakeArrayView(&Binding, 1),
+		Providers,
+		Limits);
+}
+
 void USightWeaveWorldSubsystem::PublishMemoryAuthorityPacket(const bool bForceFullRebuild)
 {
 	if (!MemoryAuthority.IsConfigured())

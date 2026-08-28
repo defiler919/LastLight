@@ -272,6 +272,13 @@ public:
 		ESightWeaveMemoryModifierOperation::BlockMemoryWrites;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	ESightWeaveMemoryModifierPersistence Persistence =
+		ESightWeaveMemoryModifierPersistence::Transient;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
+	FName StablePersistenceId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")
 	ESightWeaveMemoryRegionShape Shape = ESightWeaveMemoryRegionShape::Circle;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SightWeave|Memory")

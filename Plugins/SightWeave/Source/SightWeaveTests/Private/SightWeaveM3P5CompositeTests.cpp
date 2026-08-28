@@ -1,7 +1,10 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "DynamicRHI.h"
+#include "HAL/PlatformMemory.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/AutomationTest.h"
+#include "RenderingThread.h"
 #include "SightWeaveMemory.h"
 #include "SightWeaveMemoryPresentationTestReadback.h"
 #include "SightWeaveStaticEnvironment.h"
@@ -295,6 +298,122 @@ namespace SightWeaveM3P5CompositeTests
 		TArray<TSharedPtr<FContext>> Contexts;
 		FAutomationTestBase* Test = nullptr;
 	};
+
+	class FMemoryPresentationReadbackLifecycle final : public IAutomationLatentCommand
+	{
+	public:
+		FMemoryPresentationReadbackLifecycle(FFixture InFixture, FAutomationTestBase* InTest)
+			: Fixture(MoveTemp(InFixture))
+			, Test(InTest)
+		{
+		}
+
+		virtual bool Update() override
+		{
+			constexpr int32 CycleCount = 10;
+			if (!Test)
+			{
+				return true;
+			}
+			if (!bBaselineCaptured)
+			{
+				FlushRenderingCommands();
+				BaselineReservedVirtualBytes = GRHIGlobals.ReservedResources.VirtualSize;
+				BaselineMemory = FPlatformMemory::GetStats();
+				bBaselineCaptured = true;
+			}
+			if (!Request.IsValid())
+			{
+				StartSeconds = FPlatformTime::Seconds();
+				Request = FSightWeaveMemoryPresentationTestReadback::Start(
+					Fixture.LivePacket,
+					Fixture.Selection,
+					Fixture.MemoryPacket,
+					Fixture.StaticPacket,
+					{ FVector2f(200.0f, 200.0f), FVector2f(1000.0f, 1000.0f), FVector2f(3000.0f, 3000.0f) },
+					{ FVector4f(30.0f / 255.0f, 80.0f / 255.0f, 160.0f / 255.0f, 1.0f),
+						FVector4f(0.9f, 0.1f, 0.2f, 1.0f), FVector4f(0.2f, 0.1f, 0.9f, 1.0f) });
+				return false;
+			}
+
+			Request->Poll();
+			if (!Request->IsFinished())
+			{
+				if (FPlatformTime::Seconds() - StartSeconds > ReadbackTimeoutSeconds)
+				{
+					Test->AddError(FString::Printf(
+						TEXT("M4P2 memory presentation lifecycle cycle %d timed out"), CycleIndex));
+					return true;
+				}
+				return false;
+			}
+
+			FSightWeaveMemoryPresentationReadbackResult Result;
+			if (!Request->TryTakeResult(Result) || !Result.bComplete || !Result.Failure.IsEmpty())
+			{
+				Test->AddError(FString::Printf(
+					TEXT("M4P2 memory presentation lifecycle cycle %d failed: %s"),
+					CycleIndex, *Result.Failure));
+				return true;
+			}
+			Test->TestEqual(
+				*FString::Printf(TEXT("Memory presentation lifecycle cycle %d pixel count"), CycleIndex),
+				Result.Pixels.Num(),
+				3);
+			Test->TestEqual(
+				*FString::Printf(TEXT("Memory presentation lifecycle cycle %d static availability"), CycleIndex),
+				Result.StaticEnvironmentAvailability,
+				ESightWeaveRenderAvailability::Available);
+			Request.Reset();
+			FlushRenderingCommands();
+			const int64 ReservedVirtualBytes = GRHIGlobals.ReservedResources.VirtualSize;
+			const FPlatformMemoryStats Memory = FPlatformMemory::GetStats();
+			AppendSample(ReservedSamples, FString::Printf(TEXT("%lld"), ReservedVirtualBytes));
+			AppendSample(ProcessPhysicalSamples, FString::Printf(TEXT("%llu"), Memory.UsedPhysical));
+			AppendSample(ProcessVirtualSamples, FString::Printf(TEXT("%llu"), Memory.UsedVirtual));
+			Test->TestEqual(
+				*FString::Printf(TEXT("Memory presentation lifecycle cycle %d returns to reserved baseline"), CycleIndex),
+				ReservedVirtualBytes,
+				BaselineReservedVirtualBytes);
+			++CycleIndex;
+			if (CycleIndex < CycleCount)
+			{
+				return false;
+			}
+			Test->AddInfo(FString::Printf(
+				TEXT("M4P2_RESOURCE_LIFETIME kind=memory_static_readback cycles=%d baseline_reserved_virtual_bytes=%lld baseline_process_physical_bytes=%llu baseline_process_virtual_bytes=%llu reserved_virtual_samples=[%s] process_physical_samples=[%s] process_virtual_samples=[%s]"),
+				CycleCount,
+				BaselineReservedVirtualBytes,
+				BaselineMemory.UsedPhysical,
+				BaselineMemory.UsedVirtual,
+				*ReservedSamples,
+				*ProcessPhysicalSamples,
+				*ProcessVirtualSamples));
+			return true;
+		}
+
+	private:
+		static void AppendSample(FString& Samples, FString Sample)
+		{
+			if (!Samples.IsEmpty())
+			{
+				Samples += TEXT(",");
+			}
+			Samples += MoveTemp(Sample);
+		}
+
+		FFixture Fixture;
+		FAutomationTestBase* Test = nullptr;
+		TSharedPtr<FSightWeaveMemoryPresentationTestReadback, ESPMode::ThreadSafe> Request;
+		double StartSeconds = 0.0;
+		int32 CycleIndex = 0;
+		bool bBaselineCaptured = false;
+		int64 BaselineReservedVirtualBytes = 0;
+		FPlatformMemoryStats BaselineMemory;
+		FString ReservedSamples;
+		FString ProcessPhysicalSamples;
+		FString ProcessVirtualSamples;
+	};
 }
 
 namespace SightWeaveM3P5CompositeTests
@@ -390,6 +509,25 @@ bool FSightWeaveM3P5ThreeStateCompositeD3D12Test::RunTest(const FString& Paramet
 		Positions,
 		Colors);
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForReadbacks(MoveTemp(Contexts), this));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P2MemoryPresentationReadbackLifecycleTest,
+	"SightWeave.M4P2.ResourceLifetime.MemoryStaticReadbackCycles",
+	EAutomationTestFlags::EditorContext
+		| EAutomationTestFlags::NonNullRHI
+		| EAutomationTestFlags::EngineFilter)
+
+bool FSightWeaveM4P2MemoryPresentationReadbackLifecycleTest::RunTest(const FString& Parameters)
+{
+	FFixture Fixture;
+	if (!BuildFixture(this, Fixture))
+	{
+		AddError(TEXT("M4P2 memory presentation lifecycle fixture failed to build"));
+		return false;
+	}
+	ADD_LATENT_AUTOMATION_COMMAND(FMemoryPresentationReadbackLifecycle(MoveTemp(Fixture), this));
 	return true;
 }
 

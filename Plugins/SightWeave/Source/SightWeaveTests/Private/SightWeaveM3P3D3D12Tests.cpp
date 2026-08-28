@@ -1,8 +1,11 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Algo/AllOf.h"
+#include "DynamicRHI.h"
+#include "HAL/PlatformMemory.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/AutomationTest.h"
+#include "RenderingThread.h"
 #include "SightWeavePresentationBenchmark.h"
 #include "SightWeavePresentationTestReadback.h"
 
@@ -313,6 +316,117 @@ namespace SightWeave::M3P3::D3D12Tests
 	private:
 		TSharedPtr<FCaseContext> Context;
 		FAutomationTestBase* Test = nullptr;
+	};
+
+	class FPresentationReadbackLifecycle final : public IAutomationLatentCommand
+	{
+	public:
+		explicit FPresentationReadbackLifecycle(FAutomationTestBase* InTest)
+			: Test(InTest)
+		{
+		}
+
+		virtual bool Update() override
+		{
+			constexpr int32 CycleCount = 10;
+			if (!Test)
+			{
+				return true;
+			}
+			if (!bBaselineCaptured)
+			{
+				FlushRenderingCommands();
+				BaselineReservedVirtualBytes = GRHIGlobals.ReservedResources.VirtualSize;
+				BaselineMemory = FPlatformMemory::GetStats();
+				bBaselineCaptured = true;
+			}
+			if (!Context.IsValid())
+			{
+				Context = BuildCase(Test, TEXT("BasicHardComposite"));
+				if (!Context.IsValid() || !Context->Request.IsValid())
+				{
+					Test->AddError(TEXT("M4P2 presentation lifecycle could not start readback"));
+					return true;
+				}
+				return false;
+			}
+
+			Context->Request->Poll();
+			if (!Context->Request->IsFinished())
+			{
+				if (FPlatformTime::Seconds() - Context->StartSeconds > ReadbackTimeoutSeconds)
+				{
+					Test->AddError(FString::Printf(
+						TEXT("M4P2 presentation lifecycle cycle %d timed out"), CycleIndex));
+					return true;
+				}
+				return false;
+			}
+
+			FSightWeavePresentationReadbackResult Result;
+			if (!Context->Request->TryTakeResult(Result)
+				|| Result.Status != ESightWeavePresentationReadbackStatus::Complete)
+			{
+				Test->AddError(FString::Printf(
+					TEXT("M4P2 presentation lifecycle cycle %d failed: %s"),
+					CycleIndex, *Result.Failure));
+				return true;
+			}
+			Test->TestEqual(
+				*FString::Printf(TEXT("Presentation lifecycle cycle %d pixel count"), CycleIndex),
+				Result.Pixels.Num(),
+				3);
+			Test->TestEqual(
+				*FString::Printf(TEXT("Presentation lifecycle cycle %d page table stable"), CycleIndex),
+				Result.FinalPageTableUploadCount,
+				Result.InitialPageTableUploadCount);
+			Context.Reset();
+			FlushRenderingCommands();
+			const int64 ReservedVirtualBytes = GRHIGlobals.ReservedResources.VirtualSize;
+			const FPlatformMemoryStats Memory = FPlatformMemory::GetStats();
+			AppendSample(ReservedSamples, FString::Printf(TEXT("%lld"), ReservedVirtualBytes));
+			AppendSample(ProcessPhysicalSamples, FString::Printf(TEXT("%llu"), Memory.UsedPhysical));
+			AppendSample(ProcessVirtualSamples, FString::Printf(TEXT("%llu"), Memory.UsedVirtual));
+			Test->TestEqual(
+				*FString::Printf(TEXT("Presentation lifecycle cycle %d returns to reserved baseline"), CycleIndex),
+				ReservedVirtualBytes,
+				BaselineReservedVirtualBytes);
+			++CycleIndex;
+			if (CycleIndex < CycleCount)
+			{
+				return false;
+			}
+			Test->AddInfo(FString::Printf(
+				TEXT("M4P2_RESOURCE_LIFETIME kind=presentation_readback cycles=%d baseline_reserved_virtual_bytes=%lld baseline_process_physical_bytes=%llu baseline_process_virtual_bytes=%llu reserved_virtual_samples=[%s] process_physical_samples=[%s] process_virtual_samples=[%s]"),
+				CycleCount,
+				BaselineReservedVirtualBytes,
+				BaselineMemory.UsedPhysical,
+				BaselineMemory.UsedVirtual,
+				*ReservedSamples,
+				*ProcessPhysicalSamples,
+				*ProcessVirtualSamples));
+			return true;
+		}
+
+	private:
+		static void AppendSample(FString& Samples, FString Sample)
+		{
+			if (!Samples.IsEmpty())
+			{
+				Samples += TEXT(",");
+			}
+			Samples += MoveTemp(Sample);
+		}
+
+		FAutomationTestBase* Test = nullptr;
+		TSharedPtr<FCaseContext> Context;
+		int32 CycleIndex = 0;
+		bool bBaselineCaptured = false;
+		int64 BaselineReservedVirtualBytes = 0;
+		FPlatformMemoryStats BaselineMemory;
+		FString ReservedSamples;
+		FString ProcessPhysicalSamples;
+		FString ProcessVirtualSamples;
 	};
 
 	struct FBenchmarkContext
@@ -787,6 +901,18 @@ bool FSightWeaveM3P3D3D12PresentationReadbackTest::RunTest(const FString& Parame
 	using namespace SightWeave::M3P3::D3D12Tests;
 	const TSharedPtr<FCaseContext> Context = BuildCase(this, Parameters);
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForPresentationReadback(Context, this));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P2PresentationReadbackLifecycleTest,
+	"SightWeave.M4P2.ResourceLifetime.PresentationReadbackCycles",
+	SightWeave::M3P3::D3D12Tests::TestFlags)
+
+bool FSightWeaveM4P2PresentationReadbackLifecycleTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M3P3::D3D12Tests;
+	ADD_LATENT_AUTOMATION_COMMAND(FPresentationReadbackLifecycle(this));
 	return true;
 }
 

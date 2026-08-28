@@ -9,8 +9,10 @@
 #include "SightWeaveLabSupport.h"
 
 #include "HAL/FileManager.h"
+#include "HAL/PlatformMemory.h"
 #include "DynamicRHI.h"
 #include "RenderTimer.h"
+#include "RenderingThread.h"
 #include "UnrealClient.h"
 
 namespace SightWeave::M4P1::VisualLabTests
@@ -362,6 +364,142 @@ private:
 	TArray<double> GameThreadMilliseconds;
 	TArray<double> RenderThreadMilliseconds;
 	TArray<double> GPUMilliseconds;
+};
+
+struct FSightWeaveM4P2ViewLifecycleResourceState
+{
+	bool bBaselineCaptured = false;
+	int64 BaselineReservedVirtualBytes = 0;
+	FPlatformMemoryStats BaselineMemory;
+	FString ReservedSamples;
+	FString ProcessPhysicalSamples;
+	FString ProcessVirtualSamples;
+};
+
+class FSightWeaveM4P2CaptureViewLifecycleBaselineCommand final : public IAutomationLatentCommand
+{
+public:
+	FSightWeaveM4P2CaptureViewLifecycleBaselineCommand(
+		FAutomationTestBase* InTest,
+		TSharedPtr<FSightWeaveM4P2ViewLifecycleResourceState> InState)
+		: Test(InTest)
+		, State(MoveTemp(InState))
+	{
+	}
+
+	virtual bool Update() override
+	{
+		if (!Test || !State.IsValid())
+		{
+			return true;
+		}
+		FlushRenderingCommands();
+		State->BaselineReservedVirtualBytes = GRHIGlobals.ReservedResources.VirtualSize;
+		State->BaselineMemory = FPlatformMemory::GetStats();
+		State->bBaselineCaptured = true;
+		return true;
+	}
+
+private:
+	FAutomationTestBase* Test = nullptr;
+	TSharedPtr<FSightWeaveM4P2ViewLifecycleResourceState> State;
+};
+
+class FSightWeaveM4P2ValidateRealViewCommand final : public IAutomationLatentCommand
+{
+public:
+	FSightWeaveM4P2ValidateRealViewCommand(FAutomationTestBase* InTest, const int32 InCycleIndex)
+		: Test(InTest)
+		, CycleIndex(InCycleIndex)
+	{
+	}
+
+	virtual bool Update() override
+	{
+		const bool bHasViewport = GEngine
+			&& GEngine->GameViewport
+			&& GEngine->GameViewport->Viewport;
+		const FIntPoint Extent = bHasViewport
+			? GEngine->GameViewport->Viewport->GetSizeXY()
+			: FIntPoint::ZeroValue;
+		Test->TestTrue(
+			*FString::Printf(TEXT("Last-Seen cycle %d creates a real game viewport"), CycleIndex),
+			bHasViewport && Extent.X > 0 && Extent.Y > 0);
+		Test->TestTrue(
+			*FString::Printf(TEXT("Last-Seen cycle %d renders real-RHI view frames"), CycleIndex),
+			!GUsingNullRHI && RHIGetGPUFrameCycles() > 0);
+		return true;
+	}
+
+private:
+	FAutomationTestBase* Test = nullptr;
+	int32 CycleIndex = 0;
+};
+
+class FSightWeaveM4P2SampleViewLifecycleResourcesCommand final : public IAutomationLatentCommand
+{
+public:
+	FSightWeaveM4P2SampleViewLifecycleResourcesCommand(
+		FAutomationTestBase* InTest,
+		TSharedPtr<FSightWeaveM4P2ViewLifecycleResourceState> InState,
+		const int32 InCycleIndex,
+		const int32 InCycleCount)
+		: Test(InTest)
+		, State(MoveTemp(InState))
+		, CycleIndex(InCycleIndex)
+		, CycleCount(InCycleCount)
+	{
+	}
+
+	virtual bool Update() override
+	{
+		if (!Test || !State.IsValid() || !State->bBaselineCaptured)
+		{
+			if (Test)
+			{
+				Test->AddError(TEXT("M4P2 Last-Seen view lifecycle baseline is unavailable"));
+			}
+			return true;
+		}
+		FlushRenderingCommands();
+		const int64 ReservedVirtualBytes = GRHIGlobals.ReservedResources.VirtualSize;
+		const FPlatformMemoryStats Memory = FPlatformMemory::GetStats();
+		AppendSample(State->ReservedSamples, FString::Printf(TEXT("%lld"), ReservedVirtualBytes));
+		AppendSample(State->ProcessPhysicalSamples, FString::Printf(TEXT("%llu"), Memory.UsedPhysical));
+		AppendSample(State->ProcessVirtualSamples, FString::Printf(TEXT("%llu"), Memory.UsedVirtual));
+		Test->TestEqual(
+			*FString::Printf(TEXT("Last-Seen real-view cycle %d returns to reserved baseline"), CycleIndex),
+			ReservedVirtualBytes,
+			State->BaselineReservedVirtualBytes);
+		if (CycleIndex + 1 == CycleCount)
+		{
+			Test->AddInfo(FString::Printf(
+				TEXT("M4P2_RESOURCE_LIFETIME kind=last_seen_real_view cycles=%d baseline_reserved_virtual_bytes=%lld baseline_process_physical_bytes=%llu baseline_process_virtual_bytes=%llu reserved_virtual_samples=[%s] process_physical_samples=[%s] process_virtual_samples=[%s]"),
+				CycleCount,
+				State->BaselineReservedVirtualBytes,
+				State->BaselineMemory.UsedPhysical,
+				State->BaselineMemory.UsedVirtual,
+				*State->ReservedSamples,
+				*State->ProcessPhysicalSamples,
+				*State->ProcessVirtualSamples));
+		}
+		return true;
+	}
+
+private:
+	static void AppendSample(FString& Samples, FString Sample)
+	{
+		if (!Samples.IsEmpty())
+		{
+			Samples += TEXT(",");
+		}
+		Samples += MoveTemp(Sample);
+	}
+
+	FAutomationTestBase* Test = nullptr;
+	TSharedPtr<FSightWeaveM4P2ViewLifecycleResourceState> State;
+	int32 CycleIndex = 0;
+	int32 CycleCount = 0;
 };
 
 class FSightWeaveM4P1ValidateRememberedSequenceCommand final : public IAutomationLatentCommand
@@ -1103,6 +1241,49 @@ bool FSightWeaveM4P2LastSeenFramePerformanceTest::RunTest(const FString& Paramet
 	AddTiming(4, 5, TEXT("identity_reuse"));
 	AddTiming(3, 1, TEXT("page_tile_boundary"));
 	ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P2LastSeenRealViewLifecycleTest,
+	"SightWeave.M4P2.ResourceLifetime.LastSeenRealViewCycles",
+	SightWeave::M4P1::VisualLabTests::VisualFlags)
+
+bool FSightWeaveM4P2LastSeenRealViewLifecycleTest::RunTest(const FString& Parameters)
+{
+	if (GUsingNullRHI)
+	{
+		AddError(TEXT("M4P2 Last-Seen real-view lifecycle requires a real RHI."));
+		return true;
+	}
+	AddExpectedError(TEXT("Presentation composite state=fail-binding"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+	AddExpectedError(TEXT("Presentation composite state=submitted-feather"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+	AddExpectedError(
+		TEXT("Unable to find RecastNavMesh instance while trying to create UCrowdManager instance"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+	AddExpectedError(TEXT("Console variable 'r.MotionVectorSimulation' used in the render thread"),
+		EAutomationExpectedErrorFlags::Contains, -1);
+
+	constexpr int32 CycleCount = 10;
+	const TSharedPtr<FSightWeaveM4P2ViewLifecycleResourceState> State =
+		MakeShared<FSightWeaveM4P2ViewLifecycleResourceState>();
+	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(TEXT("/SightWeave/Maps/L_SightWeave_Lab")));
+	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
+	ADD_LATENT_AUTOMATION_COMMAND(FSightWeaveM4P2CaptureViewLifecycleBaselineCommand(this, State));
+	for (int32 CycleIndex = 0; CycleIndex < CycleCount; ++CycleIndex)
+	{
+		ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(TEXT("SightWeave.Lab.Mode 4")));
+		ADD_LATENT_AUTOMATION_COMMAND(FExecStringLatentCommand(TEXT("SightWeave.Lab.M4P1.State 1")));
+		ADD_LATENT_AUTOMATION_COMMAND(FStartPIECommand(false));
+		ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(1.0f));
+		ADD_LATENT_AUTOMATION_COMMAND(FSightWeaveM4P2ValidateRealViewCommand(this, CycleIndex));
+		ADD_LATENT_AUTOMATION_COMMAND(FEndPlayMapCommand());
+		ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.25f));
+		ADD_LATENT_AUTOMATION_COMMAND(FSightWeaveM4P2SampleViewLifecycleResourcesCommand(
+			this, State, CycleIndex, CycleCount));
+	}
 	return true;
 }
 

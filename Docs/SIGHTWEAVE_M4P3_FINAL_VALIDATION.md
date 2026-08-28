@@ -2,48 +2,49 @@
 
 ## Status
 
-**PARTIAL.** Product implementation and all M4P3-specific gates pass. The overall milestone cannot be called completed while one required frozen full-regression performance test fails and the complete requested resource/timing matrix remains unmeasured.
+**COMPLETED.** Every required correctness, deterministic-format, rollback, performance, timing, resource, regression, packaging, Shipping-isolation, severe-log, and Git/LFS gate passed. There are no open M4P3 gates.
 
 ## Validation matrix
 
-| Requirement | Result |
+| Requirement | Final result |
 | --- | --- |
-| Deterministic V1 raw/Zlib/BLAKE3 format | pass |
-| Checked 64 MiB bounds and malformed-input matrix | pass |
-| Persistent modifiers and five subject policies | pass |
-| Provider registry, exact versioning, localized fail-black fallback | pass |
-| Multi-scope validate-before-commit rollback | pass |
-| Teardown/revision drift rejection | pass |
-| 100 successful + 100 failed restore loops | pass for authority tiles/modifiers/revisions |
-| Two-world clear/reacquire/suppress/rebuild | pass |
-| Actual D3D12/SM6 full-rebuild GPU readback | pass |
+| Deterministic V1 raw/Zlib/BLAKE3 format and 64 MiB bounds | pass |
+| Persistent modifiers, five subject policies, exact provider versions | pass |
+| Local missing-provider fail-black and validate-before-commit rollback | pass |
+| Multi-scope, target lifetime/revision drift, teardown and reacquire | pass |
+| Batch512 five-process NullRHI + five-process D3D12 | 10/10 pass; worst p50/p95/p99 138.499/144.001/157.200 us |
+| Batch512 exact evidence | 100 distributions and 100,100 raw final samples; 300,300 including A/B |
+| Three-fixture, 13-phase timing matrix | 39 distributions x 100 raw samples; pass |
+| Six 100-loop resource matrices | pass |
+| D3D12 full rebuild/readback 100 | pass; 4,194,320 persistent GPU bytes stable |
+| M4P3 NullRHI / D3D12 | 15/15 and 16/16 |
 | M3P5 NullRHI / D3D12 | 16/16 and 26/26 |
 | M4P1 NullRHI / D3D12 | 9/9 and 12/12 |
-| M4P3 NullRHI / D3D12 | 15/15 and 16/16, counting expected-warning success |
+| Full SightWeave NullRHI / D3D12 | 191/191 and 283/283 |
 | DARKWELL NullRHI | 24/24 |
-| Full SightWeave NullRHI | 190/191 non-failing; old M2P2 performance gate failed |
-| Full SightWeave D3D12/SM6 | 282/283 non-failing; old M2P2 performance gate failed |
-| BuildEditor after final C++ checkpoint | pass |
-| BuildPlugin | pass |
-| Clean-host Editor/Development/Shipping | pass |
-| Runtime/Shipping Editor/Test leakage | zero found |
-| Asset/project/descriptor/shader/config changes | none |
-| Fatal/assert/ensure/shader/RDG/RHI/GPU/device-removal errors | zero |
+| Final Editor build | pass |
+| BuildPlugin | pass: 106/106, 33/33, 33/33 |
+| Fresh clean-host Editor/GameDev/Shipping | pass: 112/112, 45/45, 45/45 |
+| Shipping Runtime/Render object count | 20/13 |
+| Shipping Editor/Tests/DARKWELL/repository leakage | zero |
+| Fatal/assert/ensure/shader/RDG/RHI/GPU/device-removal scan | zero in authoritative logs |
+| Asset/project/descriptor/shader changes | none |
 
-## Open gates
+## Frozen-gate disposition
 
-1. `SightWeave.M2P2.Performance.Batch512Gate` requires medians at or below 150 us. This host reported worst medians of 155.799 us (NullRHI) and 158.399 us (D3D12); the isolated retry also failed. The test is outside the M4P3 path, but full regression is a required closure gate.
-2. The M4P3 test reports maximum-fixture aggregate restore percentiles and one D3D12 per-phase sample. It does not yet report small/typical/maximum per-phase percentiles or direct 100-loop before/after UObject, Render-resource, and GPU-resource counts.
+The previous Batch512 failure was not accepted as host noise. Exact A/B proved both the frozen baseline and pre-optimization head missed the same gate. The product optimization removes duplicate identical-geometry containment only inside the batch path and retains all authority checks. Ten fresh independent final processes pass all frozen percentile limits with no capacity growth, trimming, or outlier removal.
 
-Until both are closed, the correct milestone state is `PARTIAL`.
+The previous evidence gap is also closed: small, typical, and maximum fixtures emit p50/p95/p99/max and raw 100-sample arrays for all 13 required phases, plus successful restore, invalid rollback, missing-provider fallback, world lifetime, and actual D3D12 resource stability matrices. Exact values and retained attempt classifications are in the execution report.
 
 ## Evidence locations
 
 - Contract: `Docs/SIGHTWEAVE_M4P3_PERSISTENCE_RESTORE_CONTRACT.md`
 - Execution report: `Docs/SIGHTWEAVE_M4P3_EXECUTION_REPORT.md`
 - Handoff: `Docs/SIGHTWEAVE_M4P3_HANDOFF.md`
+- Raw logs: `Saved/Logs/SIGHTWEAVE_M4P3_*.log`
 - Automation reports: `Saved/AutomationReports/M4P3_Closure_*`
-- Logs: `Saved/Logs/SIGHTWEAVE_M4P3_CLOSURE_*`
-- Screenshots: `Saved/Screenshots/M3P5_PIE_*` and `Saved/Screenshots/M4P1/*`
+- Trace: `Saved/Profiling/SIGHTWEAVE_M4P3_BATCH512_OPTIMIZED_NULLRHI.utrace`
+- BuildPlugin: `C:\Users\defiler\AppData\Local\Temp\SightWeaveM4P3_Final_BuildPlugin_ad10f3a_20260829_0050`
+- Clean host: `C:\Users\defiler\AppData\Local\Temp\SightWeaveM4P3_Final_CleanHost_ad10f3a_20260829_0100`
 
-Generated evidence is intentionally ignored and untracked.
+Generated evidence remains ignored and untracked.

@@ -1,6 +1,6 @@
 # SightWeave M4P3 execution plan
 
-Status: **PARTIAL — implementation complete; two validation gates remain open**
+Status: **COMPLETED — all implementation and closure gates passed**
 
 Baseline: `902b192c2acc52d8817ccca0ee13cdb377eb600e`
 
@@ -121,9 +121,9 @@ Do not merge, rebase, force-push, reset, clean, stash, restore user changes, del
 
 ## 8. Closure disposition
 
-Checkpoints A through E were implemented and their focused correctness, rollback, deterministic-format, derived D3D12, BuildPlugin, clean-host, and Shipping-isolation gates passed. The milestone remains `PARTIAL` for two explicit reasons documented in the final reports:
+Checkpoints A through E are complete. The two former closure gaps were closed without weakening a contract or threshold:
 
-1. the frozen pre-M4P3 `SightWeave.M2P2.Performance.Batch512Gate` missed its 150 us median threshold in both full runs and an isolated retry on this host;
-2. the requested small/typical/maximum per-phase percentile matrix and direct 100-loop before/after UObject, Render-resource, and GPU-resource counts were not all instrumented by the completed M4P3 tests.
+1. exact five-process-per-RHI A/B evidence showed that the Batch512 miss existed at the frozen baseline. A deterministic product optimization now reuses already-evaluated identical vision geometry for illumination containment while keeping owner, capability, and policy checks authoritative. Five fresh NullRHI and five fresh D3D12/SM6 processes all pass the frozen p50/p95/p99 gates with 100,100 untrimmed samples.
+2. the M4P3 closure test now reports 100-sample raw distributions for 13 capture/restore phases on small, typical, and maximum fixtures, plus six 100-loop authority/provider/UObject/Render/GPU resource matrices.
 
-No product contract or old performance threshold was weakened to manufacture a completed verdict.
+Final complete M4P3, M3P5, M4P1, full SightWeave, DARKWELL, BuildPlugin, clean-host, Shipping-isolation, severe-log, and Git/LFS gates are recorded in the execution report and final validation document.

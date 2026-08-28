@@ -1093,6 +1093,7 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::BuildBlob(
 		Diagnostic.Result = ESightWeaveSnapshotResult::SizeLimitExceeded;
 		return Diagnostic;
 	}
+	const double OrderingStart = FPlatformTime::Seconds();
 	FSightWeaveCanonicalSnapshot Canonical = Snapshot;
 	if (!NormalizeAndValidate(Canonical, Diagnostic)) return Diagnostic;
 	FWriter PayloadWriter(Limits.MaximumCanonicalBytes);
@@ -1102,12 +1103,18 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::BuildBlob(
 		return Diagnostic;
 	}
 	const TArray<uint8>& CanonicalBytes = PayloadWriter.GetBytes();
+	Diagnostic.OrderingSerializationMicroseconds =
+		(FPlatformTime::Seconds() - OrderingStart) * 1000000.0;
 	if (CanonicalBytes.Num() > Limits.MaximumCanonicalBytes)
 	{
 		Diagnostic.Result = ESightWeaveSnapshotResult::SizeLimitExceeded;
 		return Diagnostic;
 	}
+	const double ChecksumStart = FPlatformTime::Seconds();
 	const FBlake3Hash Hash = FBlake3::HashBuffer(CanonicalBytes.GetData(), CanonicalBytes.Num());
+	Diagnostic.ChecksumMicroseconds =
+		(FPlatformTime::Seconds() - ChecksumStart) * 1000000.0;
+	const double CompressionStart = FPlatformTime::Seconds();
 	TArray<uint8> StoredBytes = CanonicalBytes;
 	ESightWeaveSnapshotCompressionMethod Method = ESightWeaveSnapshotCompressionMethod::None;
 	uint32 Flags = 0;
@@ -1142,6 +1149,8 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::BuildBlob(
 			Flags = CompressedFlag;
 		}
 	}
+	Diagnostic.CompressionMicroseconds =
+		(FPlatformTime::Seconds() - CompressionStart) * 1000000.0;
 	if (StoredBytes.Num() > Limits.MaximumStoredBlobBytes - SightWeave::Persistence::HeaderBytes)
 	{
 		Diagnostic.Result = ESightWeaveSnapshotResult::SizeLimitExceeded;
@@ -1181,6 +1190,7 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::ParseBlob(
 	using namespace SightWeavePersistencePrivate;
 	OutSnapshot = FSightWeaveCanonicalSnapshot();
 	FSightWeaveSnapshotDiagnostic Diagnostic;
+	const double EnvelopeStart = FPlatformTime::Seconds();
 	if (!Limits.IsValid())
 	{
 		Diagnostic.Result = ESightWeaveSnapshotResult::SizeLimitExceeded;
@@ -1290,6 +1300,9 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::ParseBlob(
 		Diagnostic.Result = ESightWeaveSnapshotResult::SizeMismatch;
 		return Diagnostic;
 	}
+	Diagnostic.EnvelopeParseMicroseconds =
+		(FPlatformTime::Seconds() - EnvelopeStart) * 1000000.0;
+	const double DecompressionStart = FPlatformTime::Seconds();
 	TArray<uint8> CanonicalBytes;
 	CanonicalBytes.SetNumUninitialized(static_cast<int32>(CanonicalSize));
 	const uint8* StoredPayload =
@@ -1312,14 +1325,20 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::ParseBlob(
 	{
 		FMemory::Memcpy(CanonicalBytes.GetData(), StoredPayload, CanonicalBytes.Num());
 	}
+	Diagnostic.DecompressionMicroseconds =
+		(FPlatformTime::Seconds() - DecompressionStart) * 1000000.0;
+	const double ChecksumStart = FPlatformTime::Seconds();
 	const FBlake3Hash ActualHash =
 		FBlake3::HashBuffer(CanonicalBytes.GetData(), CanonicalBytes.Num());
+	Diagnostic.ChecksumMicroseconds =
+		(FPlatformTime::Seconds() - ChecksumStart) * 1000000.0;
 	Diagnostic.CanonicalHashHex = BytesToHex(ActualHash.GetBytes(), 32).ToLower();
 	if (FMemory::Memcmp(Blob.Bytes.GetData() + 48, ActualHash.GetBytes(), 32) != 0)
 	{
 		Diagnostic.Result = ESightWeaveSnapshotResult::ChecksumMismatch;
 		return Diagnostic;
 	}
+	const double CoreValidationStart = FPlatformTime::Seconds();
 	FReader Reader(CanonicalBytes);
 	FSightWeaveCanonicalSnapshot Parsed;
 	if (!ReadPayload(Reader, Parsed))
@@ -1351,6 +1370,8 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::ParseBlob(
 		return Validation;
 	}
 	OutSnapshot = MoveTemp(Parsed);
+	Diagnostic.CoreValidationMicroseconds =
+		(FPlatformTime::Seconds() - CoreValidationStart) * 1000000.0;
 	Diagnostic.Result = ESightWeaveSnapshotResult::Succeeded;
 	return Diagnostic;
 }
@@ -1701,7 +1722,10 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::Capture(
 			}
 		}
 	}
+	const double CanonicalSnapshotBuildMicroseconds =
+		(FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 	Diagnostic = BuildBlob(Snapshot, OutBlob, Limits);
+	Diagnostic.CanonicalSnapshotBuildMicroseconds = CanonicalSnapshotBuildMicroseconds;
 	Diagnostic.CaptureMicroseconds =
 		(FPlatformTime::Seconds() - StartSeconds) * 1000000.0;
 	return Diagnostic;
@@ -1715,6 +1739,7 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::Restore(
 {
 	using namespace SightWeavePersistenceAuthorityPrivate;
 	FSightWeaveSnapshotDiagnostic Diagnostic;
+	const double RestoreStart = FPlatformTime::Seconds();
 	if (!IsInGameThread())
 	{
 		Diagnostic.Result = ESightWeaveSnapshotResult::CommitInvariantFailed;
@@ -1878,6 +1903,7 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::Restore(
 		return Diagnostic;
 	}
 
+	const double ProviderPrepareValidationStart = FPlatformTime::Seconds();
 	for (const FSightWeaveSnapshotScopeRecord& Scope : Snapshot.Scopes)
 	{
 		for (const FSightWeavePersistentSubjectRecord& Subject : Scope.Subjects)
@@ -1967,6 +1993,14 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::Restore(
 			return Diagnostic;
 		}
 	}
+	Diagnostic.ProviderPrepareValidationMicroseconds =
+		(FPlatformTime::Seconds() - ProviderPrepareValidationStart) * 1000000.0;
+	Diagnostic.PreparedBindingCount = PreparedBindings.Num();
+	Diagnostic.PreparedSubjectGroupCount = SubjectGroups.Num();
+	Diagnostic.PreparedProviderCount = PreparedProviders.Num();
+	Diagnostic.PreparedTemporaryCapacityBytes = PreparedBindings.GetAllocatedSize()
+		+ SubjectGroups.GetAllocatedSize() + PreparedProviders.GetAllocatedSize();
+	const double AuthorityRevisionUpdateStart = FPlatformTime::Seconds();
 	for (FPreparedBinding& Prepared : PreparedBindings)
 	{
 		Prepared.PreparedMemory.FinalizePreparedPersistentReplacement(
@@ -1978,6 +2012,8 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::Restore(
 	{
 		Group.Prepared.FinalizePreparedPersistentReplacement(Group.GuardRevision);
 	}
+	Diagnostic.AuthorityRevisionUpdateMicroseconds =
+		(FPlatformTime::Seconds() - AuthorityRevisionUpdateStart) * 1000000.0;
 	Diagnostic.PrepareMicroseconds =
 		(FPlatformTime::Seconds() - PrepareStart) * 1000000.0;
 
@@ -2036,8 +2072,11 @@ FSightWeaveSnapshotDiagnostic FSightWeavePersistence::Restore(
 	}
 	Diagnostic.DerivedPublicationMicroseconds =
 		(FPlatformTime::Seconds() - PublishStart) * 1000000.0;
+	Diagnostic.DerivedCpuRebuildMicroseconds = Diagnostic.DerivedPublicationMicroseconds;
 	Diagnostic.Result = Diagnostic.MissingProviderIds.IsEmpty()
 		? ESightWeaveSnapshotResult::Succeeded
 		: ESightWeaveSnapshotResult::SucceededWithProviderFallback;
+	Diagnostic.TotalRestoreMicroseconds =
+		(FPlatformTime::Seconds() - RestoreStart) * 1000000.0;
 	return Diagnostic;
 }

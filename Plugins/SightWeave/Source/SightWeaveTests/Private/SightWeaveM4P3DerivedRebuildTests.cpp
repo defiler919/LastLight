@@ -2,6 +2,7 @@
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "HAL/PlatformMemory.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/AutomationTest.h"
 #include "RenderingThread.h"
@@ -10,6 +11,7 @@
 #include "SightWeaveRenderWorldSubsystem.h"
 #include "SightWeaveWorldSubsystem.h"
 #include "UObject/Package.h"
+#include "UObject/UObjectIterator.h"
 #include "UObject/UObjectGlobals.h"
 
 namespace SightWeaveM4P3DerivedRebuildTests
@@ -94,6 +96,41 @@ namespace SightWeaveM4P3DerivedRebuildTests
 				ESightWeaveRenderPrecisionTier::Standard,
 				8)
 			&& OutRuntime->GetExplorationMemoryScope(OutScope);
+	}
+
+	struct FObjectResourceCounts
+	{
+		int32 TotalUObjects = 0;
+		int32 SightWeaveUObjects = 0;
+		int32 RootedUObjects = 0;
+		int32 Worlds = 0;
+		int32 RuntimeSubsystems = 0;
+		int32 RenderSubsystems = 0;
+		uint64 UsedPhysicalBytes = 0;
+		uint64 PeakUsedPhysicalBytes = 0;
+	};
+
+	FObjectResourceCounts GatherObjectResourceCounts()
+	{
+		FObjectResourceCounts Result;
+		for (TObjectIterator<UObject> It; It; ++It)
+		{
+			UObject* Object = *It;
+			if (!Object) continue;
+			++Result.TotalUObjects;
+			Result.RootedUObjects += Object->IsRooted();
+			Result.Worlds += Object->IsA<UWorld>();
+			Result.RuntimeSubsystems += Object->IsA<USightWeaveWorldSubsystem>();
+			Result.RenderSubsystems += Object->IsA<USightWeaveRenderWorldSubsystem>();
+			if (Object->GetClass()->GetOutermost()->GetName().Contains(TEXT("SightWeave")))
+			{
+				++Result.SightWeaveUObjects;
+			}
+		}
+		const FPlatformMemoryStats Memory = FPlatformMemory::GetStats();
+		Result.UsedPhysicalBytes = Memory.UsedPhysical;
+		Result.PeakUsedPhysicalBytes = Memory.PeakUsedPhysical;
+		return Result;
 	}
 
 	FVector TileCenter(const FSightWeaveMemoryScopeKey& Scope)
@@ -217,6 +254,7 @@ namespace SightWeaveM4P3DerivedRebuildTests
 		TSharedPtr<FSightWeaveMemoryTestReadback, ESPMode::ThreadSafe> Request;
 		double StartSeconds = FPlatformTime::Seconds();
 		int32 ExpectedWhiteTexels = 0;
+		int32 ExpectedUpdateCount = 1;
 	};
 
 	class FWaitForRestoredMirror final : public IAutomationLatentCommand
@@ -256,7 +294,8 @@ namespace SightWeaveM4P3DerivedRebuildTests
 				TEXT("Restored D3D12 mirror is available"),
 				Result.Availability,
 				ESightWeaveRenderAvailability::Available);
-			Test->TestEqual(TEXT("Restored mirror has one update"), Result.Updates.Num(), 1);
+			Test->TestEqual(TEXT("Restored mirror has every requested update"),
+				Result.Updates.Num(), Context->ExpectedUpdateCount);
 			Test->TestEqual(TEXT("Restored mirror remains binary"), Result.NonBinaryTexelCount, 0);
 			Test->TestEqual(
 				TEXT("Restored tile reconstructs with fail-black gutters and suppression"),
@@ -264,16 +303,47 @@ namespace SightWeaveM4P3DerivedRebuildTests
 				Context->ExpectedWhiteTexels);
 			if (!Result.Updates.IsEmpty())
 			{
-				Test->TestTrue(
-					TEXT("Restore creates GPU mirror work"),
-					Result.Updates[0].bProducedMirrorWork);
-				Test->TestTrue(
-					TEXT("Restore uploads the resident tile"),
-					Result.Updates[0].UploadDelta > 0);
-				Test->TestEqual(
-					TEXT("Restore creates exactly one resident GPU tile"),
-					Result.Updates[0].ResidentTileCount,
-					1);
+				bool bEveryUpdateProducedWork = true;
+				bool bEveryUpdateResidentBounded = true;
+				bool bGpuBytesStable = true;
+				TArray<double> DerivedRenderGpuMicroseconds;
+				FString RawSamples;
+				const uint64 StableGpuBytes = Result.Updates[0].PersistentGPUBytes;
+				for (int32 Index = 0; Index < Result.Updates.Num(); ++Index)
+				{
+					const FSightWeaveMemoryMirrorUpdateSample& Update = Result.Updates[Index];
+					bEveryUpdateProducedWork &= Update.bProducedMirrorWork && Update.UploadDelta > 0;
+					bEveryUpdateResidentBounded &= Update.ResidentTileCount == 1
+						&& Update.AllocatedPageCount == 1;
+					bGpuBytesStable &= Update.PersistentGPUBytes == StableGpuBytes;
+					DerivedRenderGpuMicroseconds.Add(
+						Update.RenderThreadTotalSetupMicroseconds
+						+ (Update.bGPUTimestampAvailable ? Update.GPUWorkMicroseconds : 0.0));
+					if (Index > 0) RawSamples += TEXT(",");
+					RawSamples += FString::Printf(TEXT("%.3f"), DerivedRenderGpuMicroseconds.Last());
+				}
+				DerivedRenderGpuMicroseconds.Sort();
+				auto Percentile = [&DerivedRenderGpuMicroseconds](const double Quantile)
+				{
+					return DerivedRenderGpuMicroseconds[FMath::Clamp(
+						FMath::CeilToInt(Quantile * DerivedRenderGpuMicroseconds.Num()) - 1,
+						0,
+						DerivedRenderGpuMicroseconds.Num() - 1)];
+				};
+				Test->TestTrue(TEXT("Every restore creates GPU mirror work"), bEveryUpdateProducedWork);
+				Test->TestTrue(TEXT("Every restore keeps one resident GPU tile/page"),
+					bEveryUpdateResidentBounded);
+				Test->TestTrue(TEXT("Persistent GPU bytes plateau across 100 restores"), bGpuBytesStable);
+				UE_LOG(LogTemp, Display,
+					TEXT("SIGHTWEAVE_M4P3_DERIVED_100 samples=%d p50_us=%.3f p95_us=%.3f p99_us=%.3f max_us=%.3f resource_generation_first=%llu resource_generation_last=%llu residency_generation_first=%llu residency_generation_last=%llu resident_tiles=1 allocated_pages=1 persistent_gpu_bytes=%llu raw_us=[%s]"),
+					DerivedRenderGpuMicroseconds.Num(),
+					Percentile(0.50), Percentile(0.95), Percentile(0.99), Percentile(1.0),
+					Result.Updates[0].ResourceGeneration,
+					Result.Updates.Last().ResourceGeneration,
+					Result.Updates[0].ResidencyGeneration,
+					Result.Updates.Last().ResidencyGeneration,
+					StableGpuBytes,
+					*RawSamples);
 			}
 			return true;
 		}
@@ -358,6 +428,53 @@ bool FSightWeaveM4P3WorldIsolationRestoreTest::RunTest(const FString& Parameters
 	TestTrue(TEXT("Restart remaps durable data to its own scope"),
 		Runtime->QueryHardMemoryAtLocation(TileCenter(Scope)));
 	FlushRenderingCommands();
+	CollectGarbage(RF_NoFlags, true);
+	const FObjectResourceCounts ResourceBefore = GatherObjectResourceCounts();
+	bool bAllTeardownCyclesSucceeded = true;
+	for (int32 CycleIndex = 0; CycleIndex < 100; ++CycleIndex)
+	{
+		{
+			FTestWorld CycleWorld(TEXT("SightWeaveM4P3TeardownCycle"));
+			USightWeaveWorldSubsystem* CycleRuntime = nullptr;
+			USightWeaveRenderWorldSubsystem* CycleRender = nullptr;
+			FSightWeaveMemoryScopeKey CycleScope;
+			bAllTeardownCyclesSucceeded &= ConfigureWorld(
+				CycleWorld, CycleRuntime, CycleRender, CycleScope);
+			FSightWeaveSnapshotBlob CycleBlob;
+			bAllTeardownCyclesSucceeded &= CycleRuntime
+				&& CaptureState(CycleScope, 0xff, CycleBlob)
+				&& RestoreState(*CycleRuntime, CycleBlob);
+		}
+		FlushRenderingCommands();
+		if ((CycleIndex + 1) % 20 == 0)
+		{
+			CollectGarbage(RF_NoFlags, true);
+		}
+	}
+	CollectGarbage(RF_NoFlags, true);
+	FlushRenderingCommands();
+	const FObjectResourceCounts ResourceAfter = GatherObjectResourceCounts();
+	TestTrue(TEXT("100 world teardown/rebuild cycles succeed"), bAllTeardownCyclesSucceeded);
+	TestEqual(TEXT("World count returns to the post-restart baseline"),
+		ResourceAfter.Worlds, ResourceBefore.Worlds);
+	TestEqual(TEXT("Runtime subsystem count returns to baseline"),
+		ResourceAfter.RuntimeSubsystems, ResourceBefore.RuntimeSubsystems);
+	TestEqual(TEXT("Render subsystem count returns to baseline"),
+		ResourceAfter.RenderSubsystems, ResourceBefore.RenderSubsystems);
+	TestTrue(TEXT("SightWeave UObject count does not grow after GC"),
+		ResourceAfter.SightWeaveUObjects <= ResourceBefore.SightWeaveUObjects);
+	TestTrue(TEXT("Total UObject count remains at a bounded plateau after GC"),
+		ResourceAfter.TotalUObjects <= ResourceBefore.TotalUObjects + 16);
+	UE_LOG(LogTemp, Display,
+		TEXT("SIGHTWEAVE_M4P3_WORLD_LIFECYCLE loops=100 gc_interval=20 render_flush_each=1 total_uobjects_before=%d total_uobjects_after=%d sightweave_uobjects_before=%d sightweave_uobjects_after=%d rooted_before=%d rooted_after=%d worlds_before=%d worlds_after=%d runtime_subsystems_before=%d runtime_subsystems_after=%d render_subsystems_before=%d render_subsystems_after=%d used_physical_before=%llu used_physical_after=%llu peak_used_physical_before=%llu peak_used_physical_after=%llu"),
+		ResourceBefore.TotalUObjects, ResourceAfter.TotalUObjects,
+		ResourceBefore.SightWeaveUObjects, ResourceAfter.SightWeaveUObjects,
+		ResourceBefore.RootedUObjects, ResourceAfter.RootedUObjects,
+		ResourceBefore.Worlds, ResourceAfter.Worlds,
+		ResourceBefore.RuntimeSubsystems, ResourceAfter.RuntimeSubsystems,
+		ResourceBefore.RenderSubsystems, ResourceAfter.RenderSubsystems,
+		ResourceBefore.UsedPhysicalBytes, ResourceAfter.UsedPhysicalBytes,
+		ResourceBefore.PeakUsedPhysicalBytes, ResourceAfter.PeakUsedPhysicalBytes);
 	return true;
 }
 
@@ -378,6 +495,8 @@ bool FSightWeaveM4P3D3D12DerivedRebuildTest::RunTest(const FString& Parameters)
 
 	FSightWeaveImmutableMemoryPacketPtr RestoredPacket;
 	FIntPoint SelectedLogicalTile = FIntPoint::ZeroValue;
+	TArray<FSightWeaveImmutableMemoryPacketPtr> Packets;
+	Packets.Reserve(100);
 	{
 		FTestWorld World(TEXT("SightWeaveM4P3D3D12Restore"));
 		USightWeaveWorldSubsystem* Runtime = nullptr;
@@ -395,8 +514,16 @@ bool FSightWeaveM4P3D3D12DerivedRebuildTest::RunTest(const FString& Parameters)
 			return false;
 		}
 		FSightWeaveSnapshotDiagnostic Diagnostic;
-		TestTrue(TEXT("D3D12 WorldSubsystem restore succeeds"),
-			RestoreState(*Runtime, Blob, &Diagnostic));
+		bool bEveryRestoreSucceeded = true;
+		for (int32 RestoreIndex = 0; RestoreIndex < 100; ++RestoreIndex)
+		{
+			bEveryRestoreSucceeded &= RestoreState(*Runtime, Blob, &Diagnostic);
+			const FSightWeaveImmutableMemoryPacketPtr Packet =
+				Runtime->AcquirePublishedMemoryPacket();
+			bEveryRestoreSucceeded &= Packet.IsValid() && Packet->IsFullRebuild();
+			Packets.Add(Packet);
+		}
+		TestTrue(TEXT("100 D3D12 WorldSubsystem restores succeed"), bEveryRestoreSucceeded);
 		TestTrue(TEXT("Restored CPU authority is immediately correct"),
 			Runtime->QueryHardMemoryAtLocation(TileCenter(Scope)));
 		RestoredPacket = Runtime->AcquirePublishedMemoryPacket();
@@ -428,9 +555,9 @@ bool FSightWeaveM4P3D3D12DerivedRebuildTest::RunTest(const FString& Parameters)
 	FSightWeaveMemoryTileKey SelectedTile;
 	SelectedTile.Scope = RestoredPacket->GetScope();
 	SelectedTile.LogicalCoordinate = SelectedLogicalTile;
-	TArray<FSightWeaveImmutableMemoryPacketPtr> Packets { RestoredPacket };
 	const TSharedPtr<FReadbackContext> Context = MakeShared<FReadbackContext>();
 	Context->ExpectedWhiteTexels = ExpectedPresentedTexelCount(*RestoredPacket);
+	Context->ExpectedUpdateCount = 100;
 	Context->Request = FSightWeaveMemoryTestReadback::StartSequence(
 		MoveTemp(Packets), SelectedTile);
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitForRestoredMirror(Context, this));

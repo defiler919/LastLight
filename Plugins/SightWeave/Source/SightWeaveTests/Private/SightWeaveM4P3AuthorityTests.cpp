@@ -1,4 +1,5 @@
 #include "Misc/AutomationTest.h"
+#include "HAL/PlatformMemory.h"
 
 #include "SightWeavePersistence.h"
 
@@ -115,8 +116,12 @@ namespace SightWeaveM4P3AuthorityTests
 	class FProvider final : public ISightWeaveSubjectSnapshotProvider
 	{
 	public:
-		FProvider(const FName InId, const FSightWeaveSubjectIdentity& InSubject, const uint8 InValue)
-			: Id(InId), Subject(InSubject), CaptureValue(InValue)
+		FProvider(
+			const FName InId,
+			const FSightWeaveSubjectIdentity& InSubject,
+			const uint8 InValue,
+			const FName InStableScopeId = FName(TEXT("scope.main")))
+			: Id(InId), Subject(InSubject), StableScopeId(InStableScopeId), CaptureValue(InValue)
 		{
 		}
 
@@ -145,7 +150,7 @@ namespace SightWeaveM4P3AuthorityTests
 			Payload.ProviderId = Id;
 			Payload.SchemaVersion = 1;
 			Payload.Domain.Type = ESightWeaveProviderDomainType::Subject;
-			Payload.Domain.StableScopeId = FName(TEXT("scope.main"));
+			Payload.Domain.StableScopeId = StableScopeId;
 			Payload.Domain.SubjectIdentity = Subject;
 			Payload.Payload = { CaptureValue };
 			return ESightWeavePersistenceProviderResult::Succeeded;
@@ -172,6 +177,7 @@ namespace SightWeaveM4P3AuthorityTests
 
 		FName Id;
 		FSightWeaveSubjectIdentity Subject;
+		FName StableScopeId;
 		uint8 CaptureValue = 0;
 		mutable int32 PrepareCount = 0;
 		int32 CommitCount = 0;
@@ -472,6 +478,34 @@ namespace SightWeaveM4P3AuthorityTests
 			Values.Num() - 1);
 		return Values[Index];
 	}
+
+	FString RawSamples(const TArray<double>& Values)
+	{
+		FString Result;
+		for (int32 Index = 0; Index < Values.Num(); ++Index)
+		{
+			if (Index > 0) Result += TEXT(",");
+			Result += FString::Printf(TEXT("%.3f"), Values[Index]);
+		}
+		return Result;
+	}
+
+	void LogStageDistribution(
+		const TCHAR* Fixture,
+		const TCHAR* Stage,
+		const TArray<double>& Values)
+	{
+		UE_LOG(LogTemp, Display,
+			TEXT("SIGHTWEAVE_M4P3_STAGE fixture=%s stage=%s samples=%d p50_us=%.3f p95_us=%.3f p99_us=%.3f max_us=%.3f raw_us=[%s]"),
+			Fixture,
+			Stage,
+			Values.Num(),
+			Percentile(Values, 0.50),
+			Percentile(Values, 0.95),
+			Percentile(Values, 0.99),
+			Percentile(Values, 1.0),
+			*RawSamples(Values));
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -655,62 +689,224 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FSightWeaveM4P3LifecycleTimingTest::RunTest(const FString& Parameters)
 {
 	using namespace SightWeaveM4P3AuthorityTests;
-	FSightWeaveMemoryAuthority Source;
-	Source.Configure(MakeScope(1001), 128);
-	Source.PreparePersistentReplacement(MakeMemoryStateCount(Source.GetScope(), 128));
-	Source.RegisterModifier(MakeModifier(
-		Source.GetScope(), ESightWeaveMemoryModifierPersistence::Persistent,
-		FName(TEXT("Persistent.Zone"))));
-	FSightWeavePersistenceProviderRegistry Providers;
-	FSightWeavePersistenceScopeBinding SourceBinding = MakeBinding(Source);
-	FSightWeaveSnapshotBlob Blob;
-	const FSightWeaveSnapshotDiagnostic Captured = FSightWeavePersistence::Capture(
-		MakeArrayView(&SourceBinding, 1), Providers, Blob);
-	TestTrue(TEXT("Lifecycle fixture captures"), Captured.Succeeded());
-	FSightWeaveMemoryAuthority Target;
-	Target.Configure(MakeScope(2001), 128);
-	FSightWeavePersistenceScopeBinding TargetBinding = MakeBinding(Target);
-	const uint64 InitialGuard = Target.GetPersistenceGuardRevision();
-	TArray<double> RestoreMicros;
-	for (int32 Index = 0; Index < 100; ++Index)
+	struct FFixtureDefinition
 	{
-		const FSightWeaveSnapshotDiagnostic Restored = FSightWeavePersistence::Restore(
-			Blob, MakeArrayView(&TargetBinding, 1), Providers);
-		TestTrue(*FString::Printf(TEXT("Successful restore loop %d"), Index), Restored.Succeeded());
-		RestoreMicros.Add(
-			Restored.PrepareMicroseconds + Restored.ValidateMicroseconds
-			+ Restored.CommitMicroseconds + Restored.DerivedPublicationMicroseconds);
-	}
-	TestEqual(TEXT("100 restores advance guard exactly 100"),
-		Target.GetPersistenceGuardRevision(), InitialGuard + 100);
-	TestEqual(TEXT("Resident tiles remain bounded"), Target.GetAllocatedTileCount(), 128);
-	TestEqual(TEXT("Persistent modifiers do not accumulate"), Target.GetModifierCount(), 1);
-	const uint64 GuardAfterSuccess = Target.GetPersistenceGuardRevision();
-	FSightWeaveSnapshotBlob Empty;
-	for (int32 Index = 0; Index < 100; ++Index)
+		const TCHAR* Name;
+		int32 Tiles;
+		int32 Subjects;
+		int32 Modifiers;
+		int32 Providers;
+	};
+	const FFixtureDefinition Fixtures[] = {
+		{ TEXT("small"), 1, 1, 0, 0 },
+		{ TEXT("typical"), 8, 8, 4, 2 },
+		{ TEXT("maximum"), 128, 32, 16, 8 }
+	};
+
+	for (int32 FixtureIndex = 0; FixtureIndex < UE_ARRAY_COUNT(Fixtures); ++FixtureIndex)
 	{
-		TestFalse(*FString::Printf(TEXT("Failed restore loop %d"), Index),
-			FSightWeavePersistence::Restore(
-				Empty, MakeArrayView(&TargetBinding, 1), Providers).Succeeded());
+		const FFixtureDefinition& Fixture = Fixtures[FixtureIndex];
+		const FName StableScopeId(*FString::Printf(TEXT("scope.perf.%s"), Fixture.Name));
+		const FSightWeaveMemoryScopeKey Scope = MakeScope(1001 + FixtureIndex);
+		FSightWeaveMemoryAuthority Source;
+		TestTrue(TEXT("Performance source configures"), Source.Configure(Scope, Fixture.Tiles));
+		TestEqual(TEXT("Performance source state seeds"),
+			Source.PreparePersistentReplacement(MakeMemoryStateCount(Scope, Fixture.Tiles)),
+			ESightWeaveMemoryFailure::None);
+		for (int32 ModifierIndex = 0; ModifierIndex < Fixture.Modifiers; ++ModifierIndex)
+		{
+			TestTrue(TEXT("Performance modifier registers"), Source.RegisterModifier(MakeModifier(
+				Scope,
+				ESightWeaveMemoryModifierPersistence::Persistent,
+				FName(*FString::Printf(TEXT("Persistent.Perf.%03d"), ModifierIndex)))).IsValid());
+		}
+
+		FSightWeaveSubjectMemoryAuthority SourceSubjects;
+		FSightWeaveSubjectPersistentState SubjectState;
+		SubjectState.Scope = Scope;
+		TArray<TUniquePtr<FProvider>> OwnedProviders;
+		FSightWeavePersistenceProviderRegistry Providers;
+		for (int32 SubjectIndex = 0; SubjectIndex < Fixture.Subjects; ++SubjectIndex)
+		{
+			const bool bCustom = SubjectIndex < Fixture.Providers;
+			const FName ProviderId = bCustom
+				? FName(*FString::Printf(TEXT("provider.perf.%03d"), SubjectIndex))
+				: NAME_None;
+			FSightWeaveSubjectPersistentStateRecord Record = MakeSubject(
+				Scope,
+				FName(*FString::Printf(TEXT("subject.perf.%03d"), SubjectIndex)),
+				bCustom ? ESightWeaveSubjectMemoryPolicy::Custom
+					: ESightWeaveSubjectMemoryPolicy::LastSeenSnapshot,
+				ProviderId,
+				static_cast<uint8>(SubjectIndex + 1));
+			SubjectState.Records.Add(Record);
+			if (bCustom)
+			{
+				TUniquePtr<FProvider>& Provider = OwnedProviders.Add_GetRef(MakeUnique<FProvider>(
+					ProviderId,
+					Record.Registration.Identity,
+					static_cast<uint8>(SubjectIndex + 1),
+					StableScopeId));
+				TestTrue(TEXT("Performance provider registers"), Providers.Register(*Provider));
+			}
+		}
+		TestTrue(TEXT("Performance subjects seed"),
+			SourceSubjects.PreparePersistentReplacement(SubjectState));
+
+		FSightWeavePersistenceScopeBinding SourceBinding;
+		SourceBinding.StableScopeId = StableScopeId;
+		SourceBinding.MemoryAuthority = &Source;
+		SourceBinding.SubjectAuthority = &SourceSubjects;
+		FSightWeaveMemoryAuthority Target;
+		TestTrue(TEXT("Performance target configures"), Target.Configure(MakeScope(2001 + FixtureIndex), Fixture.Tiles));
+		FSightWeaveSubjectMemoryAuthority TargetSubjects;
+		int32 DerivedCpuPublicationCount = 0;
+		FSightWeavePersistenceScopeBinding TargetBinding;
+		TargetBinding.StableScopeId = StableScopeId;
+		TargetBinding.MemoryAuthority = &Target;
+		TargetBinding.SubjectAuthority = &TargetSubjects;
+		TargetBinding.PublishDerivedState = [&DerivedCpuPublicationCount]()
+		{
+			++DerivedCpuPublicationCount;
+		};
+
+		FSightWeaveSnapshotBlob Blob;
+		const FPlatformMemoryStats MemoryBefore = FPlatformMemory::GetStats();
+		for (int32 WarmupIndex = 0; WarmupIndex < 5; ++WarmupIndex)
+		{
+			TestTrue(TEXT("Performance capture warmup succeeds"), FSightWeavePersistence::Capture(
+				MakeArrayView(&SourceBinding, 1), Providers, Blob).Succeeded());
+			TestTrue(TEXT("Performance restore warmup succeeds"), FSightWeavePersistence::Restore(
+				Blob, MakeArrayView(&TargetBinding, 1), Providers).Succeeded());
+		}
+
+		TArray<double> CanonicalBuild;
+		TArray<double> OrderingSerialization;
+		TArray<double> Checksum;
+		TArray<double> Compression;
+		TArray<double> EnvelopeParse;
+		TArray<double> Decompression;
+		TArray<double> CoreValidation;
+		TArray<double> ProviderPrepareValidation;
+		TArray<double> AtomicCommit;
+		TArray<double> AuthorityRevisionUpdate;
+		TArray<double> DerivedCpuRebuild;
+		TArray<double> DerivedRenderGpuRebuild;
+		TArray<double> TotalRestore;
+		FSightWeaveSnapshotDiagnostic LastCapture;
+		FSightWeaveSnapshotDiagnostic LastRestore;
+		bool bAllCapturesSucceeded = true;
+		bool bAllRestoresSucceeded = true;
+		const uint64 GuardBeforeFormal = Target.GetPersistenceGuardRevision();
+		for (int32 SampleIndex = 0; SampleIndex < 100; ++SampleIndex)
+		{
+			LastCapture = FSightWeavePersistence::Capture(
+				MakeArrayView(&SourceBinding, 1), Providers, Blob);
+			bAllCapturesSucceeded &= LastCapture.Succeeded();
+			LastRestore = FSightWeavePersistence::Restore(
+				Blob, MakeArrayView(&TargetBinding, 1), Providers);
+			const FSightWeaveSnapshotDiagnostic& Restored = LastRestore;
+			bAllRestoresSucceeded &= Restored.Succeeded();
+			CanonicalBuild.Add(LastCapture.CanonicalSnapshotBuildMicroseconds);
+			OrderingSerialization.Add(LastCapture.OrderingSerializationMicroseconds);
+			Checksum.Add(LastCapture.ChecksumMicroseconds + Restored.ChecksumMicroseconds);
+			Compression.Add(LastCapture.CompressionMicroseconds);
+			EnvelopeParse.Add(Restored.EnvelopeParseMicroseconds);
+			Decompression.Add(Restored.DecompressionMicroseconds);
+			CoreValidation.Add(Restored.CoreValidationMicroseconds);
+			ProviderPrepareValidation.Add(Restored.ProviderPrepareValidationMicroseconds);
+			AtomicCommit.Add(Restored.CommitMicroseconds);
+			AuthorityRevisionUpdate.Add(Restored.AuthorityRevisionUpdateMicroseconds);
+			DerivedCpuRebuild.Add(Restored.DerivedCpuRebuildMicroseconds);
+			DerivedRenderGpuRebuild.Add(Restored.DerivedRenderGpuRebuildMicroseconds);
+			TotalRestore.Add(Restored.TotalRestoreMicroseconds);
+		}
+		TestTrue(TEXT("All formal captures succeed"), bAllCapturesSucceeded);
+		TestTrue(TEXT("All formal restores succeed"), bAllRestoresSucceeded);
+		TestEqual(TEXT("Formal restores advance guard exactly 100"),
+			Target.GetPersistenceGuardRevision(), GuardBeforeFormal + 100);
+		TestEqual(TEXT("Resident tiles remain bounded"), Target.GetAllocatedTileCount(), Fixture.Tiles);
+		TestEqual(TEXT("Persistent modifiers do not accumulate"), Target.GetModifierCount(), Fixture.Modifiers);
+		TestEqual(TEXT("Subjects do not accumulate"), TargetSubjects.GetSubjectCount(), Fixture.Subjects);
+		TestEqual(TEXT("Derived CPU callback count includes warmups and formal restores"),
+			DerivedCpuPublicationCount, 105);
+
+		LogStageDistribution(Fixture.Name, TEXT("canonical_snapshot_build"), CanonicalBuild);
+		LogStageDistribution(Fixture.Name, TEXT("ordering_serialization"), OrderingSerialization);
+		LogStageDistribution(Fixture.Name, TEXT("checksum"), Checksum);
+		LogStageDistribution(Fixture.Name, TEXT("compression_or_raw"), Compression);
+		LogStageDistribution(Fixture.Name, TEXT("envelope_parse"), EnvelopeParse);
+		LogStageDistribution(Fixture.Name, TEXT("decompression"), Decompression);
+		LogStageDistribution(Fixture.Name, TEXT("core_validate"), CoreValidation);
+		LogStageDistribution(Fixture.Name, TEXT("provider_prepare_validate"), ProviderPrepareValidation);
+		LogStageDistribution(Fixture.Name, TEXT("atomic_commit"), AtomicCommit);
+		LogStageDistribution(Fixture.Name, TEXT("dirty_generation_revision_update"), AuthorityRevisionUpdate);
+		LogStageDistribution(Fixture.Name, TEXT("derived_cpu_rebuild"), DerivedCpuRebuild);
+		LogStageDistribution(Fixture.Name, TEXT("derived_render_gpu_rebuild_sync_boundary"), DerivedRenderGpuRebuild);
+		LogStageDistribution(Fixture.Name, TEXT("total_restore"), TotalRestore);
+		const double Ratio = LastCapture.CanonicalBytes > 0
+			? static_cast<double>(LastCapture.StoredBytes) / LastCapture.CanonicalBytes
+			: 0.0;
+		const FPlatformMemoryStats MemoryAfter = FPlatformMemory::GetStats();
+		UE_LOG(LogTemp, Display,
+			TEXT("SIGHTWEAVE_M4P3_FIXTURE fixture=%s scopes=1 resident_tiles=%d subjects=%d persistent_modifiers=%d providers=%d canonical_bytes=%lld stored_bytes=%lld ratio=%.6f compression=%d derived_cpu=true derived_render_gpu=false warmups=5 formal_samples=100 prepared_bindings=%u prepared_subject_groups=%u prepared_providers=%u prepared_capacity_bytes=%llu used_physical_before=%llu used_physical_after=%llu peak_used_physical_before=%llu peak_used_physical_after=%llu"),
+			Fixture.Name,
+			Fixture.Tiles,
+			Fixture.Subjects,
+			Fixture.Modifiers,
+			Fixture.Providers,
+			LastCapture.CanonicalBytes,
+			LastCapture.StoredBytes,
+			Ratio,
+			static_cast<int32>(LastCapture.CompressionMethod),
+			LastRestore.PreparedBindingCount,
+			LastRestore.PreparedSubjectGroupCount,
+			LastRestore.PreparedProviderCount,
+			LastRestore.PreparedTemporaryCapacityBytes,
+			MemoryBefore.UsedPhysical,
+			MemoryAfter.UsedPhysical,
+			MemoryBefore.PeakUsedPhysical,
+			MemoryAfter.PeakUsedPhysical);
+
+		const uint64 GuardAfterSuccess = Target.GetPersistenceGuardRevision();
+		FSightWeaveSnapshotBlob Empty;
+		bool bAllInvalidFailed = true;
+		for (int32 Index = 0; Index < 100; ++Index)
+		{
+			bAllInvalidFailed &= !FSightWeavePersistence::Restore(
+				Empty, MakeArrayView(&TargetBinding, 1), Providers).Succeeded();
+		}
+		TestTrue(TEXT("All 100 invalid restores fail"), bAllInvalidFailed);
+		TestEqual(TEXT("Invalid restores do not advance guard"),
+			Target.GetPersistenceGuardRevision(), GuardAfterSuccess);
+		TestEqual(TEXT("Invalid restores keep resident tiles bounded"),
+			Target.GetAllocatedTileCount(), Fixture.Tiles);
+
+		if (Fixture.Providers > 0)
+		{
+			FSightWeavePersistenceProviderRegistry MissingProviders;
+			int32 FallbackCount = 0;
+			for (int32 Index = 0; Index < 100; ++Index)
+			{
+				const FSightWeaveSnapshotDiagnostic Fallback = FSightWeavePersistence::Restore(
+					Blob, MakeArrayView(&TargetBinding, 1), MissingProviders);
+				FallbackCount += Fallback.Result
+					== ESightWeaveSnapshotResult::SucceededWithProviderFallback;
+			}
+			TestEqual(TEXT("Missing-provider fail-black executes 100 times"), FallbackCount, 100);
+			TestEqual(TEXT("Missing-provider loop remains resident bounded"),
+				Target.GetAllocatedTileCount(), Fixture.Tiles);
+		}
+		UE_LOG(LogTemp, Display,
+			TEXT("SIGHTWEAVE_M4P3_LIFECYCLE fixture=%s capture_loops=100 restore_loops=100 invalid_loops=100 missing_provider_loops=%d final_tiles=%d final_modifiers=%d final_subjects=%d guard=%llu derived_cpu_publications=%d"),
+			Fixture.Name,
+			Fixture.Providers > 0 ? 100 : 0,
+			Target.GetAllocatedTileCount(),
+			Target.GetModifierCount(),
+			TargetSubjects.GetSubjectCount(),
+			Target.GetPersistenceGuardRevision(),
+			DerivedCpuPublicationCount);
 	}
-	TestEqual(TEXT("100 failed restores do not advance guard"),
-		Target.GetPersistenceGuardRevision(), GuardAfterSuccess);
-	TestEqual(TEXT("Failed restores keep resident tiles bounded"),
-		Target.GetAllocatedTileCount(), 128);
-	const double Ratio = Captured.CanonicalBytes > 0
-		? static_cast<double>(Captured.StoredBytes) / Captured.CanonicalBytes
-		: 0.0;
-	UE_LOG(LogTemp, Display,
-		TEXT("SIGHTWEAVE_M4P3_PERF canonical=%lld stored=%lld ratio=%.6f capture_us=%.3f restore_p50_us=%.3f restore_p95_us=%.3f restore_p99_us=%.3f restore_max_us=%.3f tiles=%d loops=100 failed_loops=100"),
-		Captured.CanonicalBytes,
-		Captured.StoredBytes,
-		Ratio,
-		Captured.CaptureMicroseconds,
-		Percentile(RestoreMicros, 0.50),
-		Percentile(RestoreMicros, 0.95),
-		Percentile(RestoreMicros, 0.99),
-		Percentile(RestoreMicros, 1.0),
-		Target.GetAllocatedTileCount());
 	return true;
 }
 

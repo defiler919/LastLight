@@ -2,9 +2,9 @@
 
 ## 1. Status
 
-**IN PROGRESS — documentation checkpoint only**
+**PARTIAL — packaging/Shipping boundaries closed; existing performance gates remain unresolved**
 
-No BuildPlugin, clean-host, packaged smoke, automation, Shipping scan, or M4P2 performance result is claimed by this initial document.
+The authoritative 21-section result is in `SIGHTWEAVE_M4P2_EXECUTION_REPORT.md`. BuildPlugin, independent-host Editor/Game Development/Game Shipping, Shipping isolation, and package-after-install D3D12/SM6 coverage passed. M4P2 remains PARTIAL because the frozen Prepared4096 median gate failed, Batch512 failed under final NullRHI, the dedicated M3.4 1 ms row retained a failure despite later full-prefix success, and an actual Cooked/Staged Shipping game smoke remains outstanding.
 
 ## 2. Identity and audit baseline
 
@@ -35,40 +35,43 @@ The exact scope, matrices, thresholds, and verdict rules are in `SIGHTWEAVE_M4P2
 
 | Checkpoint | SHA | Remote | Evidence |
 | --- | --- | --- | --- |
-| `docs: start SightWeave M4P2 packaging closure` | pending this commit | pending push | baseline/roadmap audit and three planning documents |
+| `docs: start SightWeave M4P2 packaging closure` | `f246ce5` | pushed | baseline/roadmap audit and three planning documents |
+| `build: close SightWeave plugin packaging boundaries` | `f3bb4c7` | pushed | portable CustomDepth config and package boundary |
+| `test: refresh SightWeave packaging assertions` | `f33dd3f` | pushed | frozen-source assertion/fixture refresh |
+| `perf: expand SightWeave closure matrices` | `c57b774` | pushed | p50/p95/p99 and LastSeen matrix |
 
 ## 5. BuildPlugin
 
-Pending. Record exact command, output directory, start/end time, action counts, warnings, result, package inventory, descriptor validation, and retained failures.
+Passed: Editor Development 102 actions, Game Development 32, Game Shipping 32, UAT exit 0. Final 281-file output is `C:\Users\defiler919\AppData\Local\Temp\SightWeaveM4P2_BuildPlugin_Final_c57b774_20260828_153400`; inventories and portable Engine.ini SHA-256 match source.
 
 ## 6. Clean host
 
-Pending. Record independent topology and Editor Development, Game Development, and Game Shipping results, including proof that only packaged-plugin output was installed.
+Passed from source in a new external host: Editor 102, Development Game 32, Shipping Game 32. The host has only the final package, zero reparse points/repository paths, and no DARKWELL source.
 
 ## 7. Shipping isolation
 
-Pending. Record module/object inventory and exact dependency, import, binary-string, source-string, response-file, and COFF-symbol scan queries and hit classification.
+Passed: exactly Runtime 19 + Render 13 objects; test/editor/host metadata hits zero; Shipping macros correct; six guarded test objects contain zero forbidden COFF symbol rows.
 
-## 8. Packaged D3D12/SM6 smoke and lifecycle
+## 8. Package-after-install D3D12/SM6
 
-Pending. Record plugin load, world create/destroy, render-resource init/release, M3.4 feather, M3.5 static memory, M4P1 Last-Seen/reacquire, command draining, teardown, and exit evidence. SceneCapture is prohibited as the formal view.
+The independent host's final package passed 261/263 with one retained performance failure and one engine warning. M3.4 was 37/37, M3.5 26/26, M4P1 12/12, and severe GPU/RHI/shader/fatal scans were clean. An actual Cooked/Staged Shipping game smoke remains outstanding.
 
 ## 9. Automation matrix
 
-Pending. Counts will be recorded from current discovery and execution, never copied from historical reports.
+Final full results: SightWeave NullRHI 173/175, SightWeave D3D12/SM6 261 success + 1 warning + 1 failure out of 263, and DARKWELL NullRHI 24/24. Exact focused/Lab counts are in the execution report.
 
 ## 10. Performance and memory
 
-Pending. Record p50/p95/p99 for Game Thread, Render Thread, GPU, and GPU mirror/update; CPU snapshot memory, GPU persistent memory, worst plugin runtime memory; plus nonfinite, black-leak, stale-command, and binding-failure counts.
+Selected M3.5 10/25cm gates pass and all expanded p50/p95/p99/scaling rows are recorded. Prepared4096, NullRHI Batch512, and the dedicated M3.4 1ms row retain failures. Six LastSeen operations are baseline-only and correctness-clean.
 
 ## 11. Severe logs, warnings, and retained failures
 
-Pending. MSVC 14.51 versus preferred 14.50 and engine-header C4996 warnings may be retained only when they remain source-independent. Every new compiler, linker, shader, RDG, D3D12, RHI, GPU, fatal, assert, ensure, crash, or test failure is preserved and classified.
+No final fatal/assert/ensure/shader/RDG/GPU-crash/device-removal result. Retained evidence includes performance failures, one cumulative RHI 258/256GiB virtual-reservation warning, engine C4996 warnings, and the non-preferred MSVC version.
 
 ## 12. Final Git/LFS closure
 
-Pending. Final evidence must show local HEAD, upstream, and remote M4P2 SHA equality; no unuploaded LFS object; `git diff --check` and `git fsck --no-reflogs` success; only the known EngineAssociation GUID difference; and no tracked temporary output.
+Performed after the final documentation commit; the resulting SHA and command results are appended to the execution report and handoff.
 
 ## 13. Final disposition and recovery
 
-Pending. The final report will contain the authoritative status, all commits, unverified items, residual risks, evidence paths, and the next exact resume command.
+Authoritative detail: `SIGHTWEAVE_M4P2_EXECUTION_REPORT.md`. Resume on this M4P2 branch for gate investigation, controlled-clock confirmation, a Cooked/Staged Shipping host, and cumulative RHI reservation analysis.

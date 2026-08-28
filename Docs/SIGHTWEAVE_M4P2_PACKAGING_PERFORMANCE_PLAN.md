@@ -1,6 +1,6 @@
 # SightWeave M4P2 packaging and performance plan
 
-Status: **FROZEN FOR M4P2 EXECUTION**
+Status: **FROZEN AND EXECUTED — FINAL VERDICT PARTIAL**
 
 Frozen product baseline: M4P1 `93f156f552aa85ee9d30891508d439011c57c479`
 
@@ -190,3 +190,9 @@ Final closure runs the exact Git/LFS/object commands required by the task and re
 **COMPLETED** requires every BuildPlugin, clean-host, Shipping, packaged-smoke, automation, lifecycle, severe-log, threshold, Git, and LFS condition in this plan. Existing baseline-only rows may remain baseline-only only where the authority documents contain no threshold, and the final report must say so.
 
 **PARTIAL** is required when reliable plugin packaging exists but a manual/external packaged smoke, required environment, full matrix row, or existing gate remains unresolved or failed. **BLOCKED** is required for an unresolved architecture/roadmap conflict, true forbidden Shipping dependency, external authority that prevents progress, or a gate that can only be met by weakening a frozen contract.
+
+## 14. Execution disposition
+
+The plan was executed without weakening thresholds. BuildPlugin, fresh-host Editor/Game Development/Game Shipping, Shipping isolation, full D3D12/SM6 package-after-install correctness, all requested milestone/Lab prefixes, and expanded p50/p95/p99 baselines were completed. The authoritative numbers and evidence paths are in `SIGHTWEAVE_M4P2_EXECUTION_REPORT.md`.
+
+The applied verdict is **PARTIAL** because existing Prepared4096, NullRHI Batch512, and dedicated M3.4 performance evidence contains retained gate failures, and the blank BuildPlugin host was not Cooked/Staged into a runnable Shipping game. This status is a direct application of the frozen rules above, not a new exception.

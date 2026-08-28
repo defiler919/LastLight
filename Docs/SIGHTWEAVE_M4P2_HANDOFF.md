@@ -1,6 +1,6 @@
 # SightWeave M4P2 packaging and performance closure handoff
 
-Status: **IN PROGRESS — documentation checkpoint**
+Status: **PARTIAL — reliable package/Shipping boundary; retained performance gates and staged-game smoke remain**
 
 - Branch: `codex/m4p2-sightweave-packaging-performance-closure`
 - Frozen M4P1 baseline: `93f156f552aa85ee9d30891508d439011c57c479`
@@ -50,6 +50,10 @@ The complete matrix, thresholds, topology, scan rules, evidence paths, and verdi
 - a new timestamped BuildPlugin directory under the system temporary directory;
 - a separate new timestamped clean-host directory under the system temporary directory.
 
+Authoritative execution detail is now in `SIGHTWEAVE_M4P2_EXECUTION_REPORT.md`. Final BuildPlugin passed Editor 102, Game Development 32, Game Shipping 32, and UAT exit 0. A fresh source-isolated host passed the same three targets. Shipping contains exactly Runtime 19 + Render 13 objects with correct Shipping macros and zero forbidden COFF symbol rows.
+
+Final automation was SightWeave NullRHI 173/175, SightWeave D3D12/SM6 261 success + 1 warning + 1 failure out of 263, and DARKWELL NullRHI 24/24. M3.4 37/37, M3.5 26/26, and M4P1 12/12 passed in the final D3D12 prefix. M4P1 visual proxy counts remained 1936/1448/514 for the three formal proxy views, with nonfinite 0.
+
 ## Git checkpoint policy
 
 Every non-empty reliable checkpoint is built or validated in proportion to its content, committed, and immediately pushed normally. No force push, merge, rebase, reset, clean, empty commit, generated output, or `Darkwell.uproject` change is permitted. Planned checkpoints are:
@@ -66,6 +70,8 @@ Every non-empty reliable checkpoint is built or validated in proportion to its c
 - **PARTIAL** applies when core packaging is reliable but an honest external/manual packaged smoke or environment matrix remains, a retained run misses an existing threshold, or a required item has only baseline evidence.
 - **BLOCKED** applies to a roadmap conflict, an irreducible Shipping dependency boundary, unavailable required external authority/environment, or a performance gate that cannot be met without changing the frozen contract.
 
+Applied verdict: **PARTIAL**. Prepared4096 missed its `<1 ms` median gate under both final RHIs; Batch512 distribution 7 missed p99 under NullRHI; and the dedicated M3.4 repair retry retained a 1.169 ms p95 result against 1 ms even though the final full prefix later passed. A Cooked/Staged blank Shipping host must also replace the invalid direct launch of the non-staged BuildPlugin host. No threshold may be weakened to close these items.
+
 ## Resume
 
 ```powershell
@@ -73,3 +79,5 @@ cd D:\UE_projects\LastLight
 git switch codex/m4p2-sightweave-packaging-performance-closure
 git status --short --branch
 ```
+
+Next actions, in order: investigate Prepared4096/Batch512 variance; stabilize and re-authorize the M3.4 measurement under controlled clocks; Cook/Stage a blank Win64 Shipping host for D3D12/SM6 lifecycle smoke; then investigate the one cumulative 258/256 GiB RHI virtual-reservation warning from the full prefix.

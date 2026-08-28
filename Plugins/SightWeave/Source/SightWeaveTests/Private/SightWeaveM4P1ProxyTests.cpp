@@ -66,6 +66,12 @@ bool FSightWeaveM4P1ProxyLifecycleTest::RunTest(const FString& Parameters)
 		Proxy->PresentSnapshot(Snapshot, Presentation));
 	TestTrue(TEXT("Presented proxy visible"), Proxy->IsVisible());
 	TestTrue(TEXT("Presented proxy owns mesh only"), Proxy->GetStaticMesh() != nullptr);
+	TestFalse(TEXT("Proxy never renders into SceneColor"), Proxy->bRenderInMainPass);
+	TestFalse(TEXT("Proxy never writes the primary depth pass"), Proxy->bRenderInDepthPass);
+	TestTrue(TEXT("Visible proxy writes the reserved custom depth marker"),
+		Proxy->bRenderCustomDepth);
+	TestEqual(TEXT("Reserved proxy stencil is exact"), Proxy->CustomDepthStencilValue,
+		SightWeave::SubjectMemory::LastSeenProxyStencilValue);
 	TestEqual(TEXT("Presented revision retained"), Proxy->GetPresentedSnapshotRevision(), uint64(4));
 	TestEqual(TEXT("Frozen transform applied"), Proxy->GetComponentTransform().GetLocation(),
 		FVector(100.0, 200.0, 300.0));
@@ -76,6 +82,7 @@ bool FSightWeaveM4P1ProxyLifecycleTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Stale presentation revision fails closed"),
 		Proxy->PresentSnapshot(Snapshot, Presentation));
 	TestFalse(TEXT("Revision failure hides proxy"), Proxy->IsVisible());
+	TestFalse(TEXT("Revision failure disables custom depth"), Proxy->bRenderCustomDepth);
 	TestTrue(TEXT("Revision failure clears stale mesh"), Proxy->GetStaticMesh() == nullptr);
 
 	Presentation.SnapshotRevision = Snapshot.SnapshotRevision;

@@ -11,6 +11,7 @@ public class SightWeaveTests : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"ImageCore",
 			"UnrealEd",
 			"AssetRegistry",
 			"Projects",

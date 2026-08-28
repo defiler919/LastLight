@@ -522,7 +522,7 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 	bSuccess &= AddSubject(TEXT("SW_M4P1_CustomValid"), FVector(75500.0, 8200.0, 100.0),
 		0.0f, FVector(2.6, 2.6, 2.0), ESightWeaveSubjectMemoryPolicy::Custom,
 		15, true, true, false, false, false, false, false, false, true, false);
-	bSuccess &= AddSubject(TEXT("SW_M4P1_CustomInvalid"), FVector(77000.0, 8200.0, 100.0),
+	bSuccess &= AddSubject(TEXT("SW_M4P1_CustomInvalid"), FVector(81500.0, 10000.0, 100.0),
 		0.0f, FVector(2.6, 2.6, 2.0), ESightWeaveSubjectMemoryPolicy::Custom,
 		16, true, true, false, false, false, false, false, false, false, true);
 	bSuccess &= AddSubject(TEXT("SW_M4P1_Cleared"), FVector(78500.0, 8200.0, 100.0),

@@ -24,11 +24,16 @@ namespace SightWeave::M3P4::LabRepairTests
 		Scope.FloorOrigin = FVector2D(-8500.0, -6500.0);
 		Scope.PrecisionTier = ESightWeaveRenderPrecisionTier::Standard;
 		Scope.MaximumActiveTiles = SightWeave::SparseAtlas::StandardActiveTileCapacity;
+		FSightWeaveIlluminationCompatibilityProfile Compatibility;
+		Compatibility.AcceptedCapabilities.Add(FName(TEXT("Visible")));
+		const FSightWeaveRenderProfileIdentity CompatibilityProfile =
+			FSightWeaveRenderProfileIdentity::FromProfile(Compatibility);
 
 		FSightWeaveSparsePolygonInput& Overview = Scope.Polygons.AddDefaulted_GetRef();
 		Overview.StableSourceId = 1;
 		Overview.SourceRevision = 1;
 		Overview.Layer = ESightWeaveRenderMaskLayer::Bypass;
+		Overview.CompatibilityProfile = CompatibilityProfile;
 		Overview.WorldVertices = {
 			FVector2D(22500.0, -1300.0), FVector2D(39500.0, -1300.0),
 			FVector2D(39500.0, 15700.0), FVector2D(22500.0, 15700.0)
@@ -40,6 +45,7 @@ namespace SightWeave::M3P4::LabRepairTests
 		PageBoundary.StableSourceId = 2;
 		PageBoundary.SourceRevision = 1;
 		PageBoundary.Layer = ESightWeaveRenderMaskLayer::Bypass;
+		PageBoundary.CompatibilityProfile = CompatibilityProfile;
 		PageBoundary.WorldVertices = {
 			FVector2D(-8000.0, PageBoundaryY),
 			FVector2D(152000.0, PageBoundaryY - ConeHalfWidth),

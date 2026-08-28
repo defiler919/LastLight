@@ -105,8 +105,8 @@ bool FSightWeaveM3P3PackagingBoundariesTest::RunTest(const FString& Parameters)
 		&& ShaderSource.Contains(TEXT("SlotOrigin + int2(4, 4) + InteriorTexel")));
 	TestTrue(TEXT("HardLive branch still preserves the current Scene Color before later fallbacks"),
 		ShaderSource.Contains(TEXT("const bool bVisible = SightWeaveIsHardLive(TranslatedWorld.xy)"))
-		&& ShaderSource.Contains(TEXT("return bVisible"))
-		&& ShaderSource.Contains(TEXT("? SceneColorTexture.Load(int3(SceneColorPixel, 0))")));
+		&& ShaderSource.Contains(TEXT("if (bVisible)"))
+		&& ShaderSource.Contains(TEXT("return SceneColorTexture.Load(int3(SceneColorPixel, 0));")));
 	for (const TCHAR* Forbidden : {
 		TEXT("TemporalHistory"), TEXT("LastSeen"), TEXT("SceneCapture") })
 	{
@@ -205,13 +205,18 @@ bool FSightWeaveM3P4PackagingBoundariesTest::RunTest(const FString& Parameters)
 		&& RenderStateSource.Contains(TEXT("ReleaseFeatherResources_RenderThread()"))
 		&& RenderStateSource.Contains(TEXT("FSightWeaveHardMaskCompositePixelShader")));
 	for (const TCHAR* Forbidden : {
-		TEXT("SceneCapture"), TEXT("LastSeen"), TEXT("MemoryLayer"),
+		TEXT("SceneCapture"), TEXT("MemoryLayer"),
 		TEXT("TemporalHistory"), TEXT("DamageSourceReveal") })
 	{
 		Excludes(*this, TEXT("Production view extension"), ViewExtension, Forbidden);
 		Excludes(*this, TEXT("Production Feather render state"), RenderStateSource, Forbidden);
 		Excludes(*this, TEXT("Production Feather shader"), ShaderSource, Forbidden);
 	}
+	Excludes(*this, TEXT("Production view extension"), ViewExtension, TEXT("LastSeen"));
+	Excludes(*this, TEXT("Production Feather shader"), ShaderSource, TEXT("LastSeen"));
+	TestTrue(TEXT("M4P1 Last-Seen composition is the reserved production proxy path"),
+		RenderStateSource.Contains(TEXT("LastSeenProxyStencilValue"))
+		&& RenderStateSource.Contains(TEXT("LastSeenProxyNeutralIntensity")));
 	TestTrue(TEXT("Readback and benchmark C++ APIs remain development-only"),
 		ReadbackHeader.Contains(TEXT("#if WITH_DEV_AUTOMATION_TESTS"))
 		&& ReadbackSource.Contains(TEXT("#if WITH_DEV_AUTOMATION_TESTS"))

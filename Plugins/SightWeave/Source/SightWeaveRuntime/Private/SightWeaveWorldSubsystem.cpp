@@ -1450,6 +1450,8 @@ void USightWeaveWorldSubsystem::QueryEffectiveLiveValidated(
 	uint64 EvaluatedIlluminationMask = 0;
 	uint64 LegalIlluminationMask = 0;
 	uint64 ContributedIlluminationMask = 0;
+	uint64 EvaluatedVisionGeometryMask = 0;
+	uint64 ContainedVisionGeometryMask = 0;
 	auto HasLegalIllumination = [&](const int32 IlluminationIndex)
 	{
 		if (!Snapshot.IlluminationSources.IsValidIndex(IlluminationIndex))
@@ -1462,17 +1464,30 @@ void USightWeaveWorldSubsystem::QueryEffectiveLiveValidated(
 			return (LegalIlluminationMask & Bit) != 0;
 		}
 		const FSightWeaveIlluminationSnapshotEntry& Illumination = Snapshot.IlluminationSources[IlluminationIndex];
-		const bool bLegal = bUsePrefilteredBatchState
-			? Bit != 0
-				&& (PrefilteredIlluminationEligibilityMask & Bit) != 0
-				&& IsPointInIlluminationSnapshotEntry(Point2D, Illumination, Tolerances)
-			: Illumination.Description.bActive
+		bool bLegal = false;
+		if (bUsePrefilteredBatchState)
+		{
+			if (Bit != 0 && (PrefilteredIlluminationEligibilityMask & Bit) != 0)
+			{
+				const int32 SharedVisionIndex = Illumination.IdenticalVisionSourceIndex;
+				const uint64 SharedVisionBit = SharedVisionIndex >= 0 && SharedVisionIndex < 64
+					? uint64{1} << SharedVisionIndex
+					: 0;
+				bLegal = SharedVisionBit != 0 && (EvaluatedVisionGeometryMask & SharedVisionBit) != 0
+					? (ContainedVisionGeometryMask & SharedVisionBit) != 0
+					: IsPointInIlluminationSnapshotEntry(Point2D, Illumination, Tolerances);
+			}
+		}
+		else
+		{
+			bLegal = Illumination.Description.bActive
 				&& IsPointInHeightRange(
 					WorldLocation.Z,
 					Illumination.Description.HeightRange,
 					Tolerances.HeightOverlapEpsilon)
 				&& Illumination.Polygon.IsValid()
 				&& IsPointInIlluminationSnapshotEntry(Point2D, Illumination, Tolerances);
+		}
 		if (Bit != 0)
 		{
 			EvaluatedIlluminationMask |= Bit;
@@ -1500,8 +1515,23 @@ void USightWeaveWorldSubsystem::QueryEffectiveLiveValidated(
 				return;
 			}
 		}
-		if (!Entry.Polygon.IsValid()
-			|| !IsPointInVisionSnapshotEntry(Point2D, Entry, Tolerances))
+		const bool bPolygonValid = Entry.Polygon.IsValid();
+		const bool bContained = bPolygonValid
+			&& IsPointInVisionSnapshotEntry(Point2D, Entry, Tolerances);
+		if (bUsePrefilteredBatchState && bPolygonValid)
+		{
+			const int32 SnapshotVisionIndex = static_cast<int32>(&Entry - Snapshot.VisionSources.GetData());
+			if (SnapshotVisionIndex >= 0 && SnapshotVisionIndex < 64)
+			{
+				const uint64 VisionBit = uint64{1} << SnapshotVisionIndex;
+				EvaluatedVisionGeometryMask |= VisionBit;
+				if (bContained)
+				{
+					ContainedVisionGeometryMask |= VisionBit;
+				}
+			}
+		}
+		if (!bContained)
 		{
 			if (Entry.Description.Shape == ESightWeaveSourceShape::Radial)
 			{
@@ -3198,6 +3228,20 @@ void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 Sou
 
 void USightWeaveWorldSubsystem::ResolveSnapshotCompatibility(FSightWeaveFrameSnapshot& Snapshot) const
 {
+	for (FSightWeaveIlluminationSnapshotEntry& Illumination : Snapshot.IlluminationSources)
+	{
+		Illumination.IdenticalVisionSourceIndex = INDEX_NONE;
+		for (int32 VisionIndex = 0; VisionIndex < Snapshot.VisionSources.Num(); ++VisionIndex)
+		{
+			if (HasIdenticalVisionAndIlluminationGeometry(
+				Snapshot.VisionSources[VisionIndex],
+				Illumination.Description))
+			{
+				Illumination.IdenticalVisionSourceIndex = VisionIndex;
+				break;
+			}
+		}
+	}
 	for (FSightWeaveVisionSnapshotEntry& Vision : Snapshot.VisionSources)
 	{
 		Vision.CompatibleIlluminationSources.Reset();

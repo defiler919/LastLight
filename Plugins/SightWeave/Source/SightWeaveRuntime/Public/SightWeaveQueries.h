@@ -236,6 +236,13 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveIlluminationSnapshotEntry
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	TArray<int32> PolarAngleUpperBoundLut;
 
+	/**
+	 * Immutable index of the lowest stable vision entry with identical solved
+	 * geometry. QueryBatch uses it only as a containment-result cache key; it
+	 * never changes owner, capability, or illumination-policy authority.
+	 */
+	int32 IdenticalVisionSourceIndex = INDEX_NONE;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	double SolveTimeMicroseconds = 0.0;
 };

@@ -40,6 +40,7 @@ private:
 	void EnforceRenderOnlyConfiguration();
 
 	uint64 PresentedSnapshotRevision = 0;
+	TOptional<FSightWeaveLastSeenSnapshotDescriptor> PresentedSnapshot;
 };
 
 /** Applies one CPU-authoritative presentation result without changing gameplay state. */

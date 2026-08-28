@@ -4,6 +4,8 @@
 #include "SightWeaveSubjectMemory.h"
 
 class AActor;
+class UPrimitiveComponent;
+class USightWeaveLastSeenProxyComponent;
 class USightWeaveVisionSourceComponent;
 class UWorld;
 
@@ -27,6 +29,8 @@ public:
 private:
 	bool BuildCameras();
 	bool RebuildSubjects(int32 InState);
+	bool ApplyPrimaryState(int32 InState);
+	bool ResetPrimaryRegistration();
 	void DestroyActors(TArray<TWeakObjectPtr<AActor>>& Actors);
 
 	TWeakObjectPtr<UWorld> World;
@@ -35,7 +39,17 @@ private:
 	FSightWeaveSubjectMemoryAuthority Authority;
 	FSightWeaveMemoryScopeKey Scope;
 	TWeakObjectPtr<USightWeaveVisionSourceComponent> StaticEnvironmentCaptureSource;
+	TWeakObjectPtr<USightWeaveVisionSourceComponent> PresentationScopeAnchorSource;
+	TWeakObjectPtr<UPrimitiveComponent> PrimaryLivePresentation;
+	TWeakObjectPtr<USightWeaveLastSeenProxyComponent> PrimaryProxyPresentation;
+	TWeakObjectPtr<USightWeaveVisionSourceComponent> PrimaryLiveSource;
+	FSightWeaveSubjectRegistration PrimaryRegistration;
+	FSightWeaveBasicStaticMeshSnapshotCandidate PrimaryCandidate;
+	FSightWeaveSubjectHandle PrimaryHandle;
 	FVector StaticEnvironmentSampleLocation = FVector::ZeroVector;
+	uint64 PrimaryObservationRevision = 1;
+	uint64 PrimaryTransitionIdentity = 1001;
+	bool bPrimaryHardLive = false;
 	int32 AppliedState = INDEX_NONE;
 	int32 VisibleProxyCount = 0;
 	int32 VisibleLiveCount = 0;

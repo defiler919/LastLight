@@ -14,15 +14,28 @@ bool USightWeaveLastSeenProxyComponent::PresentSnapshot(
 	const FSightWeaveSubjectPresentationResult& Presentation)
 {
 	check(IsInGameThread());
-	HideAndClear();
 	if (Presentation.State != ESightWeaveSubjectPresentationState::LastSeenProxy
 		|| Presentation.Failure != ESightWeaveSubjectPresentationFailure::None
 		|| Presentation.SnapshotRevision == 0
 		|| Presentation.SnapshotRevision != Snapshot.SnapshotRevision
 		|| !Snapshot.IsValid())
 	{
+		HideAndClear();
 		return false;
 	}
+
+	// A snapshot revision is immutable. Re-applying the same descriptor must not
+	// recreate the component scene proxy or enqueue a fresh transform every tick.
+	if (PresentedSnapshot.IsSet()
+		&& PresentedSnapshot->IsEquivalentTo(Snapshot)
+		&& PresentedSnapshotRevision == Snapshot.SnapshotRevision
+		&& IsVisible()
+		&& bRenderCustomDepth)
+	{
+		return true;
+	}
+
+	HideAndClear();
 
 	UStaticMesh* LoadedStaticMesh = Cast<UStaticMesh>(Snapshot.StaticMeshAsset.TryLoad());
 	if (!LoadedStaticMesh)
@@ -53,6 +66,7 @@ bool USightWeaveLastSeenProxyComponent::PresentSnapshot(
 		nullptr,
 		ETeleportType::TeleportPhysics);
 	PresentedSnapshotRevision = Snapshot.SnapshotRevision;
+	PresentedSnapshot = Snapshot;
 	EnforceRenderOnlyConfiguration();
 	SetRenderCustomDepth(true);
 	SetVisibility(true, true);
@@ -69,6 +83,7 @@ void USightWeaveLastSeenProxyComponent::HideAndClear()
 	}
 	SetStaticMesh(nullptr);
 	PresentedSnapshotRevision = 0;
+	PresentedSnapshot.Reset();
 	EnforceRenderOnlyConfiguration();
 	SetRenderCustomDepth(false);
 }
@@ -141,23 +156,29 @@ bool FSightWeaveSubjectProxyPresentationBridge::Apply(
 		return false;
 	}
 
-	LivePresentation->SetVisibility(false, true);
-	ProxyPresentation->HideAndClear();
 	if (Presentation.Failure != ESightWeaveSubjectPresentationFailure::None)
 	{
+		LivePresentation->SetVisibility(false, true);
+		ProxyPresentation->HideAndClear();
 		return false;
 	}
 
 	switch (Presentation.State)
 	{
 	case ESightWeaveSubjectPresentationState::Live:
+		// Hide the render-only proxy first. GT -> RT commands preserve this order,
+		// so a reacquired live primitive can never share a frame with its proxy.
+		ProxyPresentation->HideAndClear();
 		LivePresentation->SetVisibility(true, true);
 		return true;
 	case ESightWeaveSubjectPresentationState::LastSeenProxy:
+		LivePresentation->SetVisibility(false, true);
 		return Snapshot && ProxyPresentation->PresentSnapshot(*Snapshot, Presentation);
 	case ESightWeaveSubjectPresentationState::Hidden:
 	case ESightWeaveSubjectPresentationState::StaticEnvironmentDelegated:
 	default:
+		LivePresentation->SetVisibility(false, true);
+		ProxyPresentation->HideAndClear();
 		return false;
 	}
 }

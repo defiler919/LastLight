@@ -2,11 +2,13 @@
 
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Components/SceneComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 #include "Materials/MaterialInterface.h"
 #include "SightWeaveComponents.h"
 #include "SightWeaveLastSeenProxyComponent.h"
@@ -207,7 +209,7 @@ bool FSightWeaveM4P1LabFixture::Initialize(UWorld* InWorld)
 bool FSightWeaveM4P1LabFixture::ApplyState(const int32 InState)
 {
 	const int32 ClampedState = FMath::Clamp(InState, MinimumState, MaximumState);
-	return bReady && (AppliedState == ClampedState || RebuildSubjects(ClampedState));
+	return bReady && (AppliedState == ClampedState || ApplyPrimaryState(ClampedState));
 }
 
 void FSightWeaveM4P1LabFixture::Tick()
@@ -233,7 +235,17 @@ void FSightWeaveM4P1LabFixture::Shutdown()
 	DestroyActors(CameraActors);
 	Scope = FSightWeaveMemoryScopeKey();
 	StaticEnvironmentCaptureSource.Reset();
+	PresentationScopeAnchorSource.Reset();
+	PrimaryLivePresentation.Reset();
+	PrimaryProxyPresentation.Reset();
+	PrimaryLiveSource.Reset();
+	PrimaryRegistration = FSightWeaveSubjectRegistration();
+	PrimaryCandidate = FSightWeaveBasicStaticMeshSnapshotCandidate();
+	PrimaryHandle = FSightWeaveSubjectHandle();
 	StaticEnvironmentSampleLocation = FVector::ZeroVector;
+	PrimaryObservationRevision = 1;
+	PrimaryTransitionIdentity = 1001;
+	bPrimaryHardLive = false;
 	World.Reset();
 	AppliedState = INDEX_NONE;
 	VisibleProxyCount = 0;
@@ -294,15 +306,20 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 		return false;
 	}
 
-	// A small off-camera source keeps the exact Local/Ground presentation scope resident.
+	// A small off-camera source in the primary tile keeps its memory page resident
+	// without revealing any part of the proxy. This stable lab
+	// precondition must not depend on rebuilding a capture source per state.
 	AActor* Anchor = SpawnRootedActor(
 		FixtureWorld,
 		TEXT("SW_M4P1_PresentationScopeAnchor"),
-		FVector(-8100.0, -6100.0, 100.0));
-	if (!Anchor || !AddVisionSource(Anchor, 300.0f, true))
+		FVector(72000.0, 9700.0, 100.0));
+	USightWeaveVisionSourceComponent* AnchorVision =
+		Anchor ? AddVisionSource(Anchor, 300.0f, true) : nullptr;
+	if (!Anchor || !AnchorVision)
 	{
 		return false;
 	}
+	PresentationScopeAnchorSource = AnchorVision;
 	SubjectActors.Add(Anchor);
 
 	auto AddSubject = [this, FixtureWorld, Cube, Material, InState](
@@ -464,6 +481,17 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 			Authority.EvaluatePresentation(Handle, Context);
 		FSightWeaveSubjectProxyPresentationBridge::Apply(
 			Presentation, Snapshot, Live, Proxy);
+		if (FStringView(Label) == TEXTVIEW("SW_M4P1_PrimaryTransition"))
+		{
+			PrimaryLivePresentation = Live;
+			PrimaryProxyPresentation = Proxy;
+			PrimaryRegistration = Registration;
+			PrimaryCandidate = Candidate;
+			PrimaryHandle = Handle;
+			PrimaryObservationRevision = InState == 2 ? 3 : (bSubmitNonLive ? 2 : 1);
+			PrimaryTransitionIdentity = 1001 + Generation;
+			bPrimaryHardLive = bContextLive;
+		}
 		VisibleLiveCount += Live->IsVisible() ? 1 : 0;
 		VisibleProxyCount += Proxy->IsVisible() ? 1 : 0;
 		return Proxy->HasRenderOnlyConfiguration();
@@ -488,7 +516,10 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 			FixtureWorld,
 			TEXT("SW_M4P1_PrimaryLiveSource"),
 			FVector(72000.0, 7500.0, 100.0));
-		bSuccess &= Source && AddVisionSource(Source, 650.0f, true);
+		USightWeaveVisionSourceComponent* Vision =
+			Source ? AddVisionSource(Source, 650.0f, true) : nullptr;
+		bSuccess &= Vision != nullptr;
+		PrimaryLiveSource = Vision;
 		if (Source)
 		{
 			SubjectActors.Add(Source);
@@ -598,6 +629,142 @@ bool FSightWeaveM4P1LabFixture::RebuildSubjects(const int32 InState)
 
 	AppliedState = bSuccess ? InState : INDEX_NONE;
 	return bSuccess;
+}
+
+bool FSightWeaveM4P1LabFixture::ResetPrimaryRegistration()
+{
+	if (PrimaryHandle.IsValid())
+	{
+		Authority.Unregister(PrimaryHandle);
+	}
+	PrimaryRegistration.Identity.InstanceGeneration = 1;
+	PrimaryHandle = Authority.Register(PrimaryRegistration);
+	PrimaryObservationRevision = 0;
+	PrimaryTransitionIdentity = 1001;
+	bPrimaryHardLive = false;
+	return PrimaryHandle.IsValid();
+}
+
+bool FSightWeaveM4P1LabFixture::ApplyPrimaryState(const int32 InState)
+{
+	UPrimitiveComponent* Live = PrimaryLivePresentation.Get();
+	USightWeaveLastSeenProxyComponent* Proxy = PrimaryProxyPresentation.Get();
+	USightWeaveVisionSourceComponent* Vision = PrimaryLiveSource.Get();
+	USightWeaveVisionSourceComponent* AnchorVision = PresentationScopeAnchorSource.Get();
+	if (!Live || !Proxy || !Vision || !AnchorVision || !PrimaryHandle.IsValid())
+	{
+		return false;
+	}
+
+	// Generation-reuse is deliberately terminal for that record. Re-entering
+	// another lab state creates a fresh authority record while retaining every
+	// render object, avoiding temporal-history invalidation.
+	if (PrimaryRegistration.Identity.InstanceGeneration != 1 && InState != 5
+		&& !ResetPrimaryRegistration())
+	{
+		return false;
+	}
+
+	const bool bWantsLive = InState == 0 || InState == 2;
+	const bool bWasHardLive = bPrimaryHardLive;
+	Vision->SetVisionSourceEnabled(false);
+	// This refresh is intentionally sequenced after the primary update. It gives
+	// the retained anchor the newest residency generation, so an older RT clear
+	// command cannot evict the presentation page after the falling edge.
+	AnchorVision->SetVisionSourceEnabled(false);
+	AnchorVision->SetVisionSourceEnabled(true);
+
+	auto Submit = [this](const bool bHardLive)
+	{
+		const uint64 Revision = ++PrimaryObservationRevision;
+		const uint64 Transition = bHardLive ? 0 : PrimaryTransitionIdentity++;
+		const FSightWeaveSubjectTransitionResult Result = Authority.SubmitObservation(
+			PrimaryHandle,
+			MakeObservation(PrimaryRegistration, PrimaryCandidate, Revision, bHardLive, Transition));
+		if (Result.Succeeded())
+		{
+			bPrimaryHardLive = bHardLive;
+		}
+		return Result.Succeeded();
+	};
+
+	if (bWantsLive)
+	{
+		if (!bPrimaryHardLive && !Submit(true))
+		{
+			return false;
+		}
+	}
+	else
+	{
+		// A cleared/reused record may have no prior live sample. Re-establish the
+		// frozen candidate in CPU authority, then consume exactly one legal edge.
+		if (!Authority.FindSnapshot(PrimaryHandle) && !bPrimaryHardLive && !Submit(true))
+		{
+			return false;
+		}
+		if (bPrimaryHardLive && !Submit(false))
+		{
+			return false;
+		}
+	}
+
+	const FSightWeaveLastSeenSnapshotDescriptor* Snapshot = Authority.FindSnapshot(PrimaryHandle);
+	if (InState == 4 && Snapshot)
+	{
+		FSightWeaveMemoryRegion Region;
+		Region.Scope = PrimaryRegistration.Scope;
+		Region.HeightRange = { 0.0f, 300.0f };
+		Region.Shape = ESightWeaveMemoryRegionShape::Circle;
+		Region.Center = FVector2D(
+			PrimaryCandidate.WorldTransform.GetLocation().X,
+			PrimaryCandidate.WorldTransform.GetLocation().Y);
+		Region.Radius = 700.0f;
+		Authority.ClearSnapshots(Region);
+		Snapshot = Authority.FindSnapshot(PrimaryHandle);
+	}
+	if (InState == 5)
+	{
+		FSightWeaveSubjectRegistration Reused = PrimaryRegistration;
+		Reused.Identity.InstanceGeneration = 2;
+		if (!Authority.Update(PrimaryHandle, Reused))
+		{
+			return false;
+		}
+		PrimaryRegistration = MoveTemp(Reused);
+		bPrimaryHardLive = false;
+		Snapshot = Authority.FindSnapshot(PrimaryHandle);
+	}
+
+	FSightWeaveSubjectPresentationContext Context =
+		MakeContext(PrimaryRegistration, Snapshot, bWantsLive);
+	Context.bSuppressMemoryPresentation = InState == 3;
+	Context.bBlockMemoryWrites = InState == 3;
+	const FSightWeaveSubjectPresentationResult Presentation =
+		Authority.EvaluatePresentation(PrimaryHandle, Context);
+
+	const bool bWasLiveVisible = Live->IsVisible();
+	const bool bWasProxyVisible = Proxy->IsVisible();
+	const bool bPresented = FSightWeaveSubjectProxyPresentationBridge::Apply(
+		Presentation, Snapshot, Live, Proxy);
+	if (bWantsLive && bPresented)
+	{
+		if (!bWasHardLive)
+		{
+			if (APlayerController* PlayerController = World->GetFirstPlayerController())
+			{
+				if (APlayerCameraManager* CameraManager = PlayerController->PlayerCameraManager)
+				{
+					CameraManager->SetGameCameraCutThisFrame();
+				}
+			}
+		}
+		Vision->SetVisionSourceEnabled(true);
+	}
+	VisibleLiveCount += (Live->IsVisible() ? 1 : 0) - (bWasLiveVisible ? 1 : 0);
+	VisibleProxyCount += (Proxy->IsVisible() ? 1 : 0) - (bWasProxyVisible ? 1 : 0);
+	AppliedState = InState;
+	return bPresented || Presentation.State == ESightWeaveSubjectPresentationState::Hidden;
 }
 
 void FSightWeaveM4P1LabFixture::DestroyActors(TArray<TWeakObjectPtr<AActor>>& Actors)

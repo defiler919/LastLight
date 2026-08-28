@@ -1,6 +1,6 @@
 # SightWeave M4P3 execution plan
 
-Status: **ACTIVE**
+Status: **PARTIAL — implementation complete; two validation gates remain open**
 
 Baseline: `902b192c2acc52d8817ccca0ee13cdb377eb600e`
 
@@ -118,3 +118,12 @@ Report `PARTIAL` rather than `COMPLETED` if any required correctness, rollback, 
 ## 7. Repository discipline
 
 Do not merge, rebase, force-push, reset, clean, stash, restore user changes, delete unknown files, or modify binary assets with filesystem commands. Never stage `Darkwell.uproject`. Each reliable nonempty checkpoint is built/tested in proportion to its contents, committed, and normally pushed immediately.
+
+## 8. Closure disposition
+
+Checkpoints A through E were implemented and their focused correctness, rollback, deterministic-format, derived D3D12, BuildPlugin, clean-host, and Shipping-isolation gates passed. The milestone remains `PARTIAL` for two explicit reasons documented in the final reports:
+
+1. the frozen pre-M4P3 `SightWeave.M2P2.Performance.Batch512Gate` missed its 150 us median threshold in both full runs and an isolated retry on this host;
+2. the requested small/typical/maximum per-phase percentile matrix and direct 100-loop before/after UObject, Render-resource, and GPU-resource counts were not all instrumented by the completed M4P3 tests.
+
+No product contract or old performance threshold was weakened to manufacture a completed verdict.

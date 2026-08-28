@@ -352,6 +352,20 @@ namespace SightWeave::M3P3::D3D12Tests
 				Samples.Num() - 1)];
 	}
 
+	FString FormatRawSamples(const TArray<double>& Samples)
+	{
+		FString Formatted;
+		for (int32 Index = 0; Index < Samples.Num(); ++Index)
+		{
+			if (Index > 0)
+			{
+				Formatted += TEXT(",");
+			}
+			Formatted += FString::Printf(TEXT("%.3f"), Samples[Index]);
+		}
+		return Formatted;
+	}
+
 	TSharedPtr<FBenchmarkContext> BuildBenchmarkCase(
 		FAutomationTestBase* Test,
 		const FString& Name,
@@ -581,6 +595,7 @@ namespace SightWeave::M3P3::D3D12Tests
 			const double GPUTotalP95 = Percentile95(WarmGPUTotal);
 			const double GPUTotalP50 = Percentile(WarmGPUTotal, 0.50);
 			const double GPUTotalP99 = Percentile(WarmGPUTotal, 0.99);
+			const double GPUTotalMax = Percentile(WarmGPUTotal, 1.00);
 			TArray<double> RTTotalSamples;
 			int32 RTTotalCount = Result.WarmRenderThreadPacketSubmitMicroseconds.Num();
 			RTTotalCount = FMath::Min(
@@ -703,7 +718,7 @@ namespace SightWeave::M3P3::D3D12Tests
 				Result.FinalFeatherTileDispatchCount,
 				Result.FinalResourceGeneration);
 			UE_LOG(LogTemp, Display,
-				TEXT("M4P2_PRESENTATION_PERCENTILES case=%s mode=%s resolution=%dx%d sources=%d residents=%d samples=%d gpu_warmup=%d gt_binding_p50_us=%.3f gt_binding_p95_us=%.3f gt_binding_p99_us=%.3f gt_packet_build_p50_us=%.3f gt_packet_build_p95_us=%.3f gt_packet_build_p99_us=%.3f rt_total_p50_us=%.3f rt_total_p95_us=%.3f rt_total_p99_us=%.3f gpu_total_p50_us=%.3f gpu_total_p95_us=%.3f gpu_total_p99_us=%.3f"),
+				TEXT("M4P2_PRESENTATION_PERCENTILES case=%s mode=%s resolution=%dx%d sources=%d residents=%d samples=%d gpu_warmup=%d gt_binding_p50_us=%.3f gt_binding_p95_us=%.3f gt_binding_p99_us=%.3f gt_packet_build_p50_us=%.3f gt_packet_build_p95_us=%.3f gt_packet_build_p99_us=%.3f rt_total_p50_us=%.3f rt_total_p95_us=%.3f rt_total_p99_us=%.3f gpu_total_p50_us=%.3f gpu_total_p95_us=%.3f gpu_total_p99_us=%.3f gpu_total_max_us=%.3f"),
 				*Context->Name,
 				*Context->UpdateMode,
 				Context->Extent.X,
@@ -723,7 +738,17 @@ namespace SightWeave::M3P3::D3D12Tests
 				RTTotalP99,
 				GPUTotalP50,
 				GPUTotalP95,
-				GPUTotalP99);
+				GPUTotalP99,
+				GPUTotalMax);
+			UE_LOG(LogTemp, Display,
+				TEXT("M4P2_PRESENTATION_GPU_RAW case=%s mode=%s warmup_count=%d all_total_us=[%s] stable_total_us=[%s] stable_feather_us=[%s] stable_composite_us=[%s]"),
+				*Context->Name,
+				*Context->UpdateMode,
+				PresentationGPUWarmupCount,
+				*FormatRawSamples(Result.WarmGPUTotalMicroseconds),
+				*FormatRawSamples(WarmGPUTotal),
+				*FormatRawSamples(WarmGPUFeather),
+				*FormatRawSamples(WarmGPUComposite));
 			return true;
 		}
 

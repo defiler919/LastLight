@@ -436,4 +436,312 @@ bool FSightWeaveM4P3RollbackTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace SightWeaveM4P3AuthorityTests
+{
+	FSightWeaveMemoryPersistentState MakeMemoryStateCount(
+		const FSightWeaveMemoryScopeKey& Scope,
+		const int32 TileCount)
+	{
+		FSightWeaveMemoryPersistentState State;
+		State.Scope = Scope;
+		for (int32 Index = 0; Index < TileCount; ++Index)
+		{
+			FSightWeavePackedMemoryTile& Tile = State.Tiles.AddDefaulted_GetRef();
+			Tile.Key.Scope = Scope;
+			Tile.Key.LogicalCoordinate = FIntPoint(Index - TileCount / 2, Index % 7);
+			Tile.PackedBits.SetNumZeroed(SightWeave::Memory::PackedBytesPerTile);
+			Tile.PackedBits[Index % Tile.PackedBits.Num()] = uint8(1u << (Index & 7));
+		}
+		return State;
+	}
+
+	void WriteHeaderU64(TArray<uint8>& Bytes, const int32 Offset, const uint64 Value)
+	{
+		for (int32 Index = 0; Index < 8; ++Index)
+		{
+			Bytes[Offset + Index] = static_cast<uint8>(Value >> (Index * 8));
+		}
+	}
+
+	double Percentile(TArray<double> Values, const double Quantile)
+	{
+		Values.Sort();
+		const int32 Index = FMath::Clamp(
+			FMath::CeilToInt(Quantile * Values.Num()) - 1,
+			0,
+			Values.Num() - 1);
+		return Values[Index];
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P3ScaleMultiScopeTest,
+	"SightWeave.M4P3.Persistence.Closure.ScaleAndMultiScope",
+	SightWeaveM4P3AuthorityTests::Flags)
+
+bool FSightWeaveM4P3ScaleMultiScopeTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeaveM4P3AuthorityTests;
+	FSightWeavePersistenceProviderRegistry Providers;
+	FSightWeaveSnapshotBlob EmptyBlob;
+	TestTrue(TEXT("Empty authority snapshot captures"), FSightWeavePersistence::Capture(
+		TConstArrayView<FSightWeavePersistenceScopeBinding>(), Providers, EmptyBlob).Succeeded());
+	TestTrue(TEXT("Empty authority snapshot restores"), FSightWeavePersistence::Restore(
+		EmptyBlob, TConstArrayView<FSightWeavePersistenceScopeBinding>(), Providers).Succeeded());
+
+	FSightWeaveMemoryScopeKey ScopeA = MakeScope(1001);
+	FSightWeaveMemoryScopeKey ScopeB = MakeScope(1002);
+	ScopeB.FloorId = FSightWeaveFloorId(FName(TEXT("Upper")));
+	ScopeB.FloorOrigin = FVector2D(5000.0, 5000.0);
+	FSightWeaveMemoryAuthority SourceA;
+	FSightWeaveMemoryAuthority SourceB;
+	SourceA.Configure(ScopeA, 128);
+	SourceB.Configure(ScopeB, 8);
+	SourceA.PreparePersistentReplacement(MakeMemoryStateCount(ScopeA, 128));
+	SourceB.PreparePersistentReplacement(MakeMemoryStateCount(ScopeB, 8));
+	FSightWeavePersistenceScopeBinding A = MakeBinding(SourceA);
+	A.StableScopeId = FName(TEXT("scope.a"));
+	FSightWeavePersistenceScopeBinding B = MakeBinding(SourceB);
+	B.StableScopeId = FName(TEXT("scope.b"));
+	TArray<FSightWeavePersistenceScopeBinding> Forward { A, B };
+	TArray<FSightWeavePersistenceScopeBinding> Reverse { B, A };
+	FSightWeaveSnapshotBlob ForwardBlob;
+	FSightWeaveSnapshotBlob ReverseBlob;
+	const FSightWeaveSnapshotDiagnostic ForwardCapture = FSightWeavePersistence::Capture(
+		Forward, Providers, ForwardBlob);
+	TestTrue(TEXT("1/8/128 and multi-scope fixture captures"), ForwardCapture.Succeeded());
+	TestTrue(TEXT("Reverse binding order captures"), FSightWeavePersistence::Capture(
+		Reverse, Providers, ReverseBlob).Succeeded());
+	TestEqual(TEXT("Binding order does not affect blob"), ForwardBlob.Bytes, ReverseBlob.Bytes);
+
+	FSightWeaveMemoryScopeKey TargetScopeA = ScopeA;
+	TargetScopeA.WorldIdentity = FSightWeaveRenderWorldIdentity { 2001 };
+	TargetScopeA.WorldGeneration = 2001;
+	FSightWeaveMemoryScopeKey TargetScopeB = ScopeB;
+	TargetScopeB.WorldIdentity = FSightWeaveRenderWorldIdentity { 2002 };
+	TargetScopeB.WorldGeneration = 2002;
+	FSightWeaveMemoryAuthority TargetA;
+	FSightWeaveMemoryAuthority TargetB;
+	TargetA.Configure(TargetScopeA, 128);
+	TargetB.Configure(TargetScopeB, 8);
+	FSightWeavePersistenceScopeBinding TargetAInput = MakeBinding(TargetA);
+	TargetAInput.StableScopeId = FName(TEXT("scope.a"));
+	FSightWeavePersistenceScopeBinding TargetBInput = MakeBinding(TargetB);
+	TargetBInput.StableScopeId = FName(TEXT("scope.b"));
+	TArray<FSightWeavePersistenceScopeBinding> Targets { TargetBInput, TargetAInput };
+	const uint64 ARevision = TargetA.GetMemoryRevision();
+	const uint64 BRevision = TargetB.GetMemoryRevision();
+	TestTrue(TEXT("Multi-scope restore succeeds"), FSightWeavePersistence::Restore(
+		ForwardBlob, Targets, Providers).Succeeded());
+	TestEqual(TEXT("128 resident tiles restored"), TargetA.GetAllocatedTileCount(), 128);
+	TestEqual(TEXT("8 resident tiles restored"), TargetB.GetAllocatedTileCount(), 8);
+	TestEqual(TEXT("Scope A revision advances once"), TargetA.GetMemoryRevision(), ARevision + 1);
+	TestEqual(TEXT("Scope B revision advances once"), TargetB.GetMemoryRevision(), BRevision + 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P3MalformedRollbackMatrixTest,
+	"SightWeave.M4P3.Persistence.Closure.MalformedRollbackMatrix",
+	SightWeaveM4P3AuthorityTests::Flags)
+
+bool FSightWeaveM4P3MalformedRollbackMatrixTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeaveM4P3AuthorityTests;
+	const FSightWeaveMemoryScopeKey SourceScope = MakeScope(1001);
+	FSightWeaveMemoryAuthority Source;
+	Source.Configure(SourceScope, 8);
+	Source.PreparePersistentReplacement(MakeMemoryState(SourceScope, 0x7f));
+	FSightWeavePersistenceProviderRegistry Providers;
+	FSightWeavePersistenceScopeBinding SourceBinding = MakeBinding(Source);
+	FSightWeaveSnapshotBlob Valid;
+	TestTrue(TEXT("Malformed fixture captures"), FSightWeavePersistence::Capture(
+		MakeArrayView(&SourceBinding, 1), Providers, Valid).Succeeded());
+
+	FSightWeaveSnapshotBlob Empty;
+	FSightWeaveSnapshotBlob Truncated = Valid;
+	Truncated.Bytes.SetNum(20);
+	FSightWeaveSnapshotBlob Magic = Valid;
+	Magic.Bytes[0] ^= 0xff;
+	FSightWeaveSnapshotBlob Legacy = Valid;
+	Legacy.Bytes[8] = 0;
+	Legacy.Bytes[9] = 0;
+	FSightWeaveSnapshotBlob Future = Valid;
+	Future.Bytes[8] = 2;
+	FSightWeaveSnapshotBlob InvalidFlagsBlob = Valid;
+	InvalidFlagsBlob.Bytes[12] |= 0x80;
+	FSightWeaveSnapshotBlob Method = Valid;
+	Method.Bytes[16] = 7;
+	FSightWeaveSnapshotBlob Oversize = Valid;
+	WriteHeaderU64(Oversize.Bytes, 24,
+		static_cast<uint64>(SightWeave::Persistence::DefaultMaximumCanonicalBytes + 1));
+	FSightWeaveSnapshotBlob Checksum = Valid;
+	Checksum.Bytes[48] ^= 1;
+	FSightWeaveSnapshotBlob BodyTruncated = Valid;
+	BodyTruncated.Bytes.Pop();
+	FSightWeaveSnapshotBlob Decompression = Valid;
+	Decompression.Bytes.Last() ^= 1;
+	AddExpectedError(
+		TEXT("FCompression::UncompressMemory - Failed to uncompress memory"),
+		EAutomationExpectedErrorFlags::Contains,
+		1);
+	TArray<FSightWeaveSnapshotBlob> InvalidBlobs {
+		Empty, Truncated, Magic, Legacy, Future, InvalidFlagsBlob, Method,
+		Oversize, Checksum, BodyTruncated, Decompression
+	};
+
+	const FSightWeaveMemoryScopeKey TargetScope = MakeScope(2001);
+	FSightWeaveMemoryAuthority Target;
+	Target.Configure(TargetScope, 8);
+	Target.PreparePersistentReplacement(MakeMemoryState(TargetScope, 0x01));
+	int32 Publications = 0;
+	FSightWeavePersistenceScopeBinding TargetBinding = MakeBinding(Target, nullptr, &Publications);
+	const uint64 Revision = Target.GetMemoryRevision();
+	const uint64 Guard = Target.GetPersistenceGuardRevision();
+	const int32 Tiles = Target.GetAllocatedTileCount();
+	for (int32 Index = 0; Index < InvalidBlobs.Num(); ++Index)
+	{
+		const FSightWeaveSnapshotDiagnostic Failed = FSightWeavePersistence::Restore(
+			InvalidBlobs[Index], MakeArrayView(&TargetBinding, 1), Providers);
+		TestFalse(*FString::Printf(TEXT("Invalid blob %d fails"), Index), Failed.Succeeded());
+		TestEqual(*FString::Printf(TEXT("Invalid blob %d keeps revision"), Index),
+			Target.GetMemoryRevision(), Revision);
+		TestEqual(*FString::Printf(TEXT("Invalid blob %d keeps guard"), Index),
+			Target.GetPersistenceGuardRevision(), Guard);
+		TestEqual(*FString::Printf(TEXT("Invalid blob %d keeps tiles"), Index),
+			Target.GetAllocatedTileCount(), Tiles);
+	}
+	TestEqual(TEXT("No malformed restore publishes"), Publications, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P3TargetLifetimeRollbackTest,
+	"SightWeave.M4P3.Persistence.Closure.TargetLifetimeRollback",
+	SightWeaveM4P3AuthorityTests::Flags)
+
+bool FSightWeaveM4P3TargetLifetimeRollbackTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeaveM4P3AuthorityTests;
+	FSightWeaveMemoryAuthority Source;
+	Source.Configure(MakeScope(1001), 8);
+	Source.PreparePersistentReplacement(MakeMemoryState(Source.GetScope(), 0xff));
+	FSightWeavePersistenceProviderRegistry Providers;
+	FSightWeavePersistenceScopeBinding SourceBinding = MakeBinding(Source);
+	FSightWeaveSnapshotBlob Blob;
+	FSightWeavePersistence::Capture(MakeArrayView(&SourceBinding, 1), Providers, Blob);
+	FSightWeaveMemoryAuthority Target;
+	Target.Configure(MakeScope(2001), 8);
+	Target.PreparePersistentReplacement(MakeMemoryState(Target.GetScope(), 0x01));
+	const uint64 Guard = Target.GetPersistenceGuardRevision();
+	int32 LifetimeChecks = 0;
+	int32 Publications = 0;
+	FSightWeavePersistenceScopeBinding TargetBinding = MakeBinding(Target, nullptr, &Publications);
+	TargetBinding.IsTargetAlive = [&LifetimeChecks]() { return ++LifetimeChecks == 1; };
+	const FSightWeaveSnapshotDiagnostic Failed = FSightWeavePersistence::Restore(
+		Blob, MakeArrayView(&TargetBinding, 1), Providers);
+	TestEqual(TEXT("Teardown before commit is structured"), Failed.Result,
+		ESightWeaveSnapshotResult::TargetChanged);
+	TestEqual(TEXT("Teardown keeps target guard"), Target.GetPersistenceGuardRevision(), Guard);
+	TestEqual(TEXT("Teardown publishes nothing"), Publications, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P3LifecycleTimingTest,
+	"SightWeave.M4P3.Persistence.Closure.Lifecycle100AndTiming",
+	SightWeaveM4P3AuthorityTests::Flags)
+
+bool FSightWeaveM4P3LifecycleTimingTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeaveM4P3AuthorityTests;
+	FSightWeaveMemoryAuthority Source;
+	Source.Configure(MakeScope(1001), 128);
+	Source.PreparePersistentReplacement(MakeMemoryStateCount(Source.GetScope(), 128));
+	Source.RegisterModifier(MakeModifier(
+		Source.GetScope(), ESightWeaveMemoryModifierPersistence::Persistent,
+		FName(TEXT("Persistent.Zone"))));
+	FSightWeavePersistenceProviderRegistry Providers;
+	FSightWeavePersistenceScopeBinding SourceBinding = MakeBinding(Source);
+	FSightWeaveSnapshotBlob Blob;
+	const FSightWeaveSnapshotDiagnostic Captured = FSightWeavePersistence::Capture(
+		MakeArrayView(&SourceBinding, 1), Providers, Blob);
+	TestTrue(TEXT("Lifecycle fixture captures"), Captured.Succeeded());
+	FSightWeaveMemoryAuthority Target;
+	Target.Configure(MakeScope(2001), 128);
+	FSightWeavePersistenceScopeBinding TargetBinding = MakeBinding(Target);
+	const uint64 InitialGuard = Target.GetPersistenceGuardRevision();
+	TArray<double> RestoreMicros;
+	for (int32 Index = 0; Index < 100; ++Index)
+	{
+		const FSightWeaveSnapshotDiagnostic Restored = FSightWeavePersistence::Restore(
+			Blob, MakeArrayView(&TargetBinding, 1), Providers);
+		TestTrue(*FString::Printf(TEXT("Successful restore loop %d"), Index), Restored.Succeeded());
+		RestoreMicros.Add(
+			Restored.PrepareMicroseconds + Restored.ValidateMicroseconds
+			+ Restored.CommitMicroseconds + Restored.DerivedPublicationMicroseconds);
+	}
+	TestEqual(TEXT("100 restores advance guard exactly 100"),
+		Target.GetPersistenceGuardRevision(), InitialGuard + 100);
+	TestEqual(TEXT("Resident tiles remain bounded"), Target.GetAllocatedTileCount(), 128);
+	TestEqual(TEXT("Persistent modifiers do not accumulate"), Target.GetModifierCount(), 1);
+	const uint64 GuardAfterSuccess = Target.GetPersistenceGuardRevision();
+	FSightWeaveSnapshotBlob Empty;
+	for (int32 Index = 0; Index < 100; ++Index)
+	{
+		TestFalse(*FString::Printf(TEXT("Failed restore loop %d"), Index),
+			FSightWeavePersistence::Restore(
+				Empty, MakeArrayView(&TargetBinding, 1), Providers).Succeeded());
+	}
+	TestEqual(TEXT("100 failed restores do not advance guard"),
+		Target.GetPersistenceGuardRevision(), GuardAfterSuccess);
+	TestEqual(TEXT("Failed restores keep resident tiles bounded"),
+		Target.GetAllocatedTileCount(), 128);
+	const double Ratio = Captured.CanonicalBytes > 0
+		? static_cast<double>(Captured.StoredBytes) / Captured.CanonicalBytes
+		: 0.0;
+	UE_LOG(LogTemp, Display,
+		TEXT("SIGHTWEAVE_M4P3_PERF canonical=%lld stored=%lld ratio=%.6f capture_us=%.3f restore_p50_us=%.3f restore_p95_us=%.3f restore_p99_us=%.3f restore_max_us=%.3f tiles=%d loops=100 failed_loops=100"),
+		Captured.CanonicalBytes,
+		Captured.StoredBytes,
+		Ratio,
+		Captured.CaptureMicroseconds,
+		Percentile(RestoreMicros, 0.50),
+		Percentile(RestoreMicros, 0.95),
+		Percentile(RestoreMicros, 0.99),
+		Percentile(RestoreMicros, 1.0),
+		Target.GetAllocatedTileCount());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM4P3IndependentFixtureTest,
+	"SightWeave.M4P3.Persistence.Closure.IndependentProcessFixture",
+	SightWeaveM4P3AuthorityTests::Flags)
+
+bool FSightWeaveM4P3IndependentFixtureTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeaveM4P3AuthorityTests;
+	FSightWeaveMemoryAuthority Source;
+	Source.Configure(MakeScope(4242), 8);
+	Source.PreparePersistentReplacement(MakeMemoryStateCount(Source.GetScope(), 8));
+	FSightWeavePersistenceProviderRegistry Providers;
+	FSightWeavePersistenceScopeBinding Binding = MakeBinding(Source);
+	FSightWeaveSnapshotBlob A;
+	FSightWeaveSnapshotBlob B;
+	const FSightWeaveSnapshotDiagnostic First = FSightWeavePersistence::Capture(
+		MakeArrayView(&Binding, 1), Providers, A);
+	const FSightWeaveSnapshotDiagnostic Second = FSightWeavePersistence::Capture(
+		MakeArrayView(&Binding, 1), Providers, B);
+	TestTrue(TEXT("Independent fixture captures"), First.Succeeded() && Second.Succeeded());
+	TestEqual(TEXT("No-change fixture blob stable"), A.Bytes, B.Bytes);
+	TestEqual(TEXT("No-change fixture hash stable"), First.CanonicalHashHex, Second.CanonicalHashHex);
+	UE_LOG(LogTemp, Display,
+		TEXT("SIGHTWEAVE_M4P3_DETERMINISM hash=%s canonical=%lld stored=%lld"),
+		*First.CanonicalHashHex,
+		First.CanonicalBytes,
+		First.StoredBytes);
+	return true;
+}
+
 #endif

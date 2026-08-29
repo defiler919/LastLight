@@ -61,7 +61,8 @@ namespace SightWeaveSparseAtlasRenderPrivate
 			"6 CustomDepth, 7 CustomStencil, 8 no occluder conservative sampling, "
 			"9 raw memory atlas, 10 raw static-attribute atlas, 11 Remembered surface "
 			"classification, 12 Remembered current SceneColor, 13 fixed-input gray filter, "
-			"14 post-TSR stable Remembered shading."),
+			"14 post-TSR stable Remembered shading, 15 pre-TSR B0 fixed surface/fixed gray "
+			"without CustomDepth or CustomStencil reads."),
 		ECVF_RenderThreadSafe);
 	TAutoConsoleVariable<int32> CVarDiagnosticStableDepthCoordinates(
 		TEXT("r.SightWeave.Diagnostic.StableDepthCoordinates"),
@@ -1640,9 +1641,9 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 	check(SceneColor.IsValid());
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	const int32 RequestedDiagnosticMode = FMath::Clamp(
-		CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 14);
+		CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 15);
 	const int32 DiagnosticMode = bPreTemporalUpscaleProof && RequestedDiagnosticMode == 0
-		? 13
+		? 15
 		: RequestedDiagnosticMode;
 	if (DiagnosticMode == 1)
 	{
@@ -1867,6 +1868,20 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	if (CVarDiagnosticLogFrames.GetValueOnRenderThread() != 0)
 	{
+		const IConsoleVariable* CustomDepthTemporalAAJitter =
+			IConsoleManager::Get().FindConsoleVariable(TEXT("r.CustomDepthTemporalAAJitter"));
+		const IConsoleVariable* CustomDepthMode =
+			IConsoleManager::Get().FindConsoleVariable(TEXT("r.CustomDepth"));
+		const int32 CustomDepthTemporalAAJitterValue = CustomDepthTemporalAAJitter
+			? CustomDepthTemporalAAJitter->GetInt()
+			: INDEX_NONE;
+		const int32 CustomDepthModeValue = CustomDepthMode
+			? CustomDepthMode->GetInt()
+			: INDEX_NONE;
+		const uint32 CustomDepthTemporalAAJitterSetBy = CustomDepthTemporalAAJitter
+			? static_cast<uint32>(CustomDepthTemporalAAJitter->GetFlags())
+				& static_cast<uint32>(ECVF_SetByMask)
+			: 0u;
 		const uint32 SubmittedTiles = LastMaskUpdateFrame == GFrameNumberRenderThread
 			? LastSubmittedTileCount : 0;
 		const TCHAR* UpdateMode = LastMaskUpdateFrame == GFrameNumberRenderThread
@@ -1877,7 +1892,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		UE_LOG(
 			LogSightWeaveRender,
 			Display,
-			TEXT("VisualRescue frame=%llu compositeStage=%s viewRect=(%d,%d %dx%d) sceneDepthExtent=(%d,%d) customDepthExtent=(%d,%d) output=(%d,%d %dx%d) sceneColor=(%d,%d %dx%d) sceneColorExtent=(%d,%d) jitterPixels=(%.4f,%.4f) viewOrigin=(%.3f,%.3f,%.3f) vp=(%.6f,%.6f,%.6f,%.6f,%.6f,%.6f) maskOrigin=(%.3f,%.3f) stateRevision=%llu featherRevision=%llu submittedTiles=%u bindingFailure=%d historyValid=0 update=%s staticClassVersion=%llu diagnosticMode=%d stableDepthCoordinates=%d"),
+			TEXT("VisualRescue frame=%llu compositeStage=%s viewRect=(%d,%d %dx%d) sceneDepthExtent=(%d,%d) customDepthExtent=(%d,%d) output=(%d,%d %dx%d) sceneColor=(%d,%d %dx%d) sceneColorExtent=(%d,%d) jitterPixels=(%.4f,%.4f) customDepthTemporalAAJitter=%d customDepthTemporalAAJitterSetBy=0x%08x customDepthMode=%d viewOrigin=(%.3f,%.3f,%.3f) vp=(%.6f,%.6f,%.6f,%.6f,%.6f,%.6f) maskOrigin=(%.3f,%.3f) stateRevision=%llu featherRevision=%llu submittedTiles=%u bindingFailure=%d historyValid=0 update=%s staticClassVersion=%llu diagnosticMode=%d stableDepthCoordinates=%d"),
 			GFrameNumberRenderThread,
 			bPreTemporalUpscaleProof ? TEXT("pre-tsr-proof") : TEXT("post-tonemap-control"),
 			View.UnscaledViewRect.Min.X, View.UnscaledViewRect.Min.Y,
@@ -1890,6 +1905,9 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 			SceneColor.ViewRect.Width(), SceneColor.ViewRect.Height(),
 			SceneColor.Texture->Desc.Extent.X, SceneColor.Texture->Desc.Extent.Y,
 			TemporalJitterPixels.X, TemporalJitterPixels.Y,
+			CustomDepthTemporalAAJitterValue,
+			CustomDepthTemporalAAJitterSetBy,
+			CustomDepthModeValue,
 			ViewOrigin.X, ViewOrigin.Y, ViewOrigin.Z,
 			ViewProjection.M[0][0], ViewProjection.M[0][1],
 			ViewProjection.M[1][0], ViewProjection.M[1][1],

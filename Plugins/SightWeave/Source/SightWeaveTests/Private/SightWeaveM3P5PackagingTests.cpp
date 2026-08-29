@@ -230,10 +230,15 @@ bool FSightWeaveM3P5RememberedTemporalSpaceTest::RunTest(const FString& Paramete
 		ViewExtension.Contains(TEXT("L_VisionIntegration"))
 		&& ViewExtension.Contains(TEXT("EPostProcessingPass::BeforeDOF"))
 		&& ViewExtension.Contains(TEXT("bAllowsPreTemporalUpscaleProof")));
-	TestTrue(TEXT("Pre-TSR proof forces the non-production fixed Remembered input"),
+	TestTrue(TEXT("Pre-TSR B0 forces the non-production fixed surface and gray input"),
 		ViewExtension.Contains(TEXT("bPreTemporalUpscaleProof"))
 		&& ShaderSource.Contains(TEXT("PreTemporalUpscaleProof"))
-		&& ShaderSource.Contains(TEXT("DiagnosticMode == 13")));
+		&& RenderState.Contains(TEXT("? 15"))
+		&& ShaderSource.Contains(TEXT("DiagnosticMode == 15"))
+		&& ShaderSource.Contains(TEXT("DiagnosticMode == 3 || DiagnosticMode == 15")));
+	TestTrue(TEXT("Pre-TSR B0 bypasses categorical surface and proxy stencil reads"),
+		ShaderSource.Contains(TEXT("DiagnosticMode != 15"))
+		&& ShaderSource.Contains(TEXT("if (DiagnosticMode == 15)")));
 	TestTrue(TEXT("Pre-TSR proof retains explicit resource-isolation diagnostics"),
 		RenderState.Contains(TEXT("RequestedDiagnosticMode"))
 		&& RenderState.Contains(TEXT("RequestedDiagnosticMode == 0")));

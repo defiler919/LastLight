@@ -608,13 +608,14 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 	uint SurfaceStencil;
 	bool bRememberedSurface = DiagnosticMode != 2
 		&& DiagnosticMode != 3
+		&& DiagnosticMode != 15
 		&& SightWeaveSampleRememberedSurface(
 			DepthPixel,
 			SceneSvPosition,
 			DeviceZ,
 			TranslatedSurfaceWorld,
 			SurfaceStencil);
-	if (DiagnosticMode == 3)
+	if (DiagnosticMode == 3 || DiagnosticMode == 15)
 	{
 		TranslatedSurfaceWorld = TranslatedWorld;
 		SurfaceStencil = StaticEnvironmentStencilValue;
@@ -642,6 +643,14 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 		return State == SIGHTWEAVE_STATE_LIVE
 			? 1.0f
 			: (State == SIGHTWEAVE_STATE_REMEMBERED ? 0.35f : 0.0f);
+	}
+	if (DiagnosticMode == 15)
+	{
+		return State == SIGHTWEAVE_STATE_LIVE
+			? SceneColorTexture.Load(int3(SceneColorPixel, 0))
+			: (State == SIGHTWEAVE_STATE_REMEMBERED
+				? float4(RememberedBrightness.xxx, 1.0f)
+				: 0.0f);
 	}
 	if (State == SIGHTWEAVE_STATE_LIVE)
 	{
@@ -806,13 +815,14 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 	uint SurfaceStencil;
 	bool bRememberedSurface = DiagnosticMode != 2
 		&& DiagnosticMode != 3
+		&& DiagnosticMode != 15
 		&& SightWeaveSampleRememberedSurface(
 			DepthPixel,
 			SceneSvPosition,
 			DeviceZ,
 			TranslatedSurfaceWorld,
 			SurfaceStencil);
-	if (DiagnosticMode == 3)
+	if (DiagnosticMode == 3 || DiagnosticMode == 15)
 	{
 		TranslatedSurfaceWorld = TranslatedWorld;
 		SurfaceStencil = StaticEnvironmentStencilValue;
@@ -840,6 +850,14 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 		return State == SIGHTWEAVE_STATE_LIVE
 			? 1.0f
 			: (State == SIGHTWEAVE_STATE_REMEMBERED ? 0.35f : 0.0f);
+	}
+	if (DiagnosticMode == 15)
+	{
+		return State == SIGHTWEAVE_STATE_LIVE
+			? SceneColorTexture.Load(int3(SceneColorPixel, 0))
+			: (State == SIGHTWEAVE_STATE_REMEMBERED
+				? float4(RememberedBrightness.xxx, 1.0f)
+				: 0.0f);
 	}
 	if (State != SIGHTWEAVE_STATE_LIVE)
 	{

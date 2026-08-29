@@ -188,9 +188,9 @@ bool FSightWeaveM3P4PackagingBoundariesTest::RunTest(const FString& Parameters)
 		PresentationHeader.Contains(TEXT("Presentation-only setting"))
 		&& PresentationHeader.Contains(TEXT("MaximumWidthCentimeters = 100.0f"))
 		&& PresentationHeader.Contains(TEXT("WidthCentimeters = 0.0f")));
-	TestTrue(TEXT("Production SVE derives Feather before the post-tonemap composite"),
+	TestTrue(TEXT("Production SVE derives Feather before the selected composite pass"),
 		ViewExtension.Contains(TEXT("ProcessVisualFeather_RenderThread(GraphBuilder)"))
-		&& ViewExtension.Contains(TEXT("PassId == EPostProcessingPass::Tonemap"))
+		&& ViewExtension.Contains(TEXT("PassId == SelectedPass"))
 		&& ViewExtension.Contains(TEXT("AddHardMaskComposite_RenderThread")));
 	TestTrue(TEXT("Production Feather resolves one state then blends from the lower-priority state"),
 		ShaderSource.Contains(TEXT("if (State != SIGHTWEAVE_STATE_LIVE)"))

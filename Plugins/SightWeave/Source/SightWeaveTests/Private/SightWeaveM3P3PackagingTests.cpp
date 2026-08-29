@@ -89,9 +89,9 @@ bool FSightWeaveM3P3PackagingBoundariesTest::RunTest(const FString& Parameters)
 		Excludes(*this, TEXT("Render module rules"), RenderRules, Forbidden);
 	}
 
-	TestTrue(TEXT("SVE injects through the supported Tonemap after-pass callback"),
-		ViewExtension.Contains(TEXT("PassId == EPostProcessingPass::Tonemap"))
-		&& ViewExtension.Contains(TEXT("PostProcessPassAfterTonemap_RenderThread"))
+	TestTrue(TEXT("SVE injects through the supported selected after-pass callback"),
+		ViewExtension.Contains(TEXT("PassId == SelectedPass"))
+		&& ViewExtension.Contains(TEXT("PostProcessComposite_RenderThread"))
 		&& ViewExtension.Contains(TEXT("AddHardMaskComposite_RenderThread")));
 	Excludes(*this, TEXT("Production SVE"), ViewExtension, TEXT("SceneCapture"));
 	TestTrue(TEXT("Production shader reconstructs translated world from scene depth"),

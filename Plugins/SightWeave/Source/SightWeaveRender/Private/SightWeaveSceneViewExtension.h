@@ -40,5 +40,6 @@ private:
 
 	FSightWeaveRenderWorldIdentity WorldIdentity;
 	TSharedRef<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe> RenderState;
+	bool bAllowsPreTemporalUpscaleProof = false;
 	bool bShutdown = false;
 };

@@ -135,6 +135,7 @@ int2 SceneColorRectSize;
 float2 TemporalProjectionJitter;
 uint DiagnosticMode;
 uint UseStableDepthCoordinates;
+uint PreTemporalUpscaleProof;
 float2 TranslatedFloorOrigin;
 float CentimetersPerTexel;
 uint PageTableCount;
@@ -517,13 +518,28 @@ void SightWeaveResolveDepthCoordinates(
 	SceneDepthPixel = StableDepthPixel;
 	if (UseStableDepthCoordinates != 0)
 	{
-		SceneSvPosition += float2(
+		const float2 JitterPixels = float2(
 			TemporalProjectionJitter.x * float(DepthRectSize.x) * 0.5f,
 			TemporalProjectionJitter.y * float(DepthRectSize.y) * -0.5f);
-		SceneDepthPixel = clamp(
-			int2(floor(SceneSvPosition)),
-			DepthRectMin,
-			DepthRectMin + DepthRectSize - 1);
+		if (PreTemporalUpscaleProof != 0)
+		{
+			// Before TSR the output pixel already addresses jittered SceneDepth. Match the
+			// unjittered CustomDepth/Stencil sample to that world ray by removing jitter.
+			StableDepthPixel = clamp(
+				int2(floor(SceneSvPosition - JitterPixels)),
+				DepthRectMin,
+				DepthRectMin + DepthRectSize - 1);
+		}
+		else
+		{
+			// After TSR the output pixel is stable. Move only SceneDepth into the current
+			// jittered primary buffer; CustomDepth/Stencil remain unjittered.
+			SceneSvPosition += JitterPixels;
+			SceneDepthPixel = clamp(
+				int2(floor(SceneSvPosition)),
+				DepthRectMin,
+				DepthRectMin + DepthRectSize - 1);
+		}
 	}
 }
 
@@ -852,10 +868,8 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 	const float VisualFeatherWeight = SightWeaveSampleVisualFeather(
 		VisibilityWorld - TranslatedFloorOrigin);
 	const float4 LowerPriorityState = bRememberedEligible
-		? (DiagnosticMode == 14
-			? SightWeaveRememberedSurfaceColor(
-				TranslatedSurfaceWorld,
-				SurfaceStencil)
+		? (DiagnosticMode == 13
+			? float4(RememberedBrightness.xxx, 1.0f)
 			: SightWeaveRememberedSurfaceColor(TranslatedSurfaceWorld, SurfaceStencil))
 		: 0.0f;
 	return lerp(

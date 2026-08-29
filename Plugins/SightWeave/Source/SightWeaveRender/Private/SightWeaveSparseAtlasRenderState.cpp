@@ -1630,7 +1630,8 @@ bool FSightWeaveSparseAtlasRenderState::PrepareScopePageTable_RenderThread(
 FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_RenderThread(
 	FRDGBuilder& GraphBuilder,
 	const FSceneView& View,
-	const FPostProcessMaterialInputs& Inputs)
+	const FPostProcessMaterialInputs& Inputs,
+	const bool bPreTemporalUpscaleProof)
 {
 	check(IsInRenderingThread());
 	const FScreenPassTexture SceneColor = FScreenPassTexture::CopyFromSlice(
@@ -1638,8 +1639,9 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		Inputs.GetInput(EPostProcessMaterialInput::SceneColor));
 	check(SceneColor.IsValid());
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	const int32 DiagnosticMode = FMath::Clamp(
-		CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 14);
+	const int32 DiagnosticMode = bPreTemporalUpscaleProof
+		? 13
+		: FMath::Clamp(CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 14);
 	if (DiagnosticMode == 1)
 	{
 		return SceneColor;
@@ -1647,6 +1649,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 	const bool bUseStableDepthCoordinates =
 		CVarDiagnosticStableDepthCoordinates.GetValueOnRenderThread() != 0;
 #else
+	check(!bPreTemporalUpscaleProof);
 	constexpr int32 DiagnosticMode = 0;
 	constexpr bool bUseStableDepthCoordinates = true;
 #endif
@@ -1813,11 +1816,13 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		bStaticEnvironmentReady,
 		TemporalProjectionJitterFloat,
 		DiagnosticMode,
-		bUseStableDepthCoordinates](auto* Parameters)
+		bUseStableDepthCoordinates,
+		bPreTemporalUpscaleProof](auto* Parameters)
 	{
 		Parameters->TemporalProjectionJitter = TemporalProjectionJitterFloat;
 		Parameters->DiagnosticMode = static_cast<uint32>(DiagnosticMode);
 		Parameters->UseStableDepthCoordinates = bUseStableDepthCoordinates ? 1u : 0u;
+		Parameters->PreTemporalUpscaleProof = bPreTemporalUpscaleProof ? 1u : 0u;
 		Parameters->MemoryPageTable = GraphBuilder.CreateSRV(MemoryPageTable);
 		Parameters->MemoryPage0 = MemoryPages[0];
 		Parameters->MemoryPage1 = MemoryPages[1];
@@ -1870,15 +1875,18 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		UE_LOG(
 			LogSightWeaveRender,
 			Display,
-			TEXT("VisualRescue frame=%llu viewRect=(%d,%d %dx%d) buffer=(%d,%d) output=(%d,%d %dx%d) sceneColor=(%d,%d %dx%d) jitterPixels=(%.4f,%.4f) viewOrigin=(%.3f,%.3f,%.3f) vp=(%.6f,%.6f,%.6f,%.6f,%.6f,%.6f) maskOrigin=(%.3f,%.3f) stateRevision=%llu featherRevision=%llu submittedTiles=%u bindingFailure=%d historyValid=0 update=%s staticClassVersion=%llu diagnosticMode=%d stableDepthCoordinates=%d"),
+			TEXT("VisualRescue frame=%llu compositeStage=%s viewRect=(%d,%d %dx%d) sceneDepthExtent=(%d,%d) customDepthExtent=(%d,%d) output=(%d,%d %dx%d) sceneColor=(%d,%d %dx%d) sceneColorExtent=(%d,%d) jitterPixels=(%.4f,%.4f) viewOrigin=(%.3f,%.3f,%.3f) vp=(%.6f,%.6f,%.6f,%.6f,%.6f,%.6f) maskOrigin=(%.3f,%.3f) stateRevision=%llu featherRevision=%llu submittedTiles=%u bindingFailure=%d historyValid=0 update=%s staticClassVersion=%llu diagnosticMode=%d stableDepthCoordinates=%d"),
 			GFrameNumberRenderThread,
+			bPreTemporalUpscaleProof ? TEXT("pre-tsr-proof") : TEXT("post-tonemap-control"),
 			View.UnscaledViewRect.Min.X, View.UnscaledViewRect.Min.Y,
 			View.UnscaledViewRect.Width(), View.UnscaledViewRect.Height(),
 			SceneDepth->Desc.Extent.X, SceneDepth->Desc.Extent.Y,
+			SubjectProxyDepth->Desc.Extent.X, SubjectProxyDepth->Desc.Extent.Y,
 			Output.ViewRect.Min.X, Output.ViewRect.Min.Y,
 			Output.ViewRect.Width(), Output.ViewRect.Height(),
 			SceneColor.ViewRect.Min.X, SceneColor.ViewRect.Min.Y,
 			SceneColor.ViewRect.Width(), SceneColor.ViewRect.Height(),
+			SceneColor.Texture->Desc.Extent.X, SceneColor.Texture->Desc.Extent.Y,
 			TemporalJitterPixels.X, TemporalJitterPixels.Y,
 			ViewOrigin.X, ViewOrigin.Y, ViewOrigin.Z,
 			ViewProjection.M[0][0], ViewProjection.M[0][1],

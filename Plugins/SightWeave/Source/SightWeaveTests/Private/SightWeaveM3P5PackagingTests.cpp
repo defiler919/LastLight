@@ -218,10 +218,18 @@ bool FSightWeaveM3P5RememberedTemporalSpaceTest::RunTest(const FString& Paramete
 	}
 	const FString Shading = ShaderSource.Mid(ShadingStart, ShadingEnd - ShadingStart);
 
-	TestTrue(TEXT("Formal pass remains post-TSR/post-tonemap by default"),
+	TestTrue(TEXT("Rejected formal control remains post-TSR/post-tonemap by default"),
 		ViewExtension.Contains(TEXT("EPostProcessingPass SelectedPass = EPostProcessingPass::Tonemap"))
 		&& ViewExtension.Contains(TEXT("r.SightWeave.Diagnostic.CompositePass"))
-		&& ViewExtension.Contains(TEXT("Development/Editor only")));
+		&& ViewExtension.Contains(TEXT("Development/Editor and L_VisionIntegration only")));
+	TestTrue(TEXT("Pre-TSR architecture proof is isolated to the integration map"),
+		ViewExtension.Contains(TEXT("L_VisionIntegration"))
+		&& ViewExtension.Contains(TEXT("EPostProcessingPass::BeforeDOF"))
+		&& ViewExtension.Contains(TEXT("bAllowsPreTemporalUpscaleProof")));
+	TestTrue(TEXT("Pre-TSR proof forces the non-production fixed Remembered input"),
+		ViewExtension.Contains(TEXT("bPreTemporalUpscaleProof"))
+		&& ShaderSource.Contains(TEXT("PreTemporalUpscaleProof"))
+		&& ShaderSource.Contains(TEXT("DiagnosticMode == 13")));
 	TestTrue(TEXT("Remembered shading uses immutable attribute and stencil class"),
 		Shading.Contains(TEXT("SightWeaveSampleStaticAttribute"))
 		&& Shading.Contains(TEXT("OccluderSurfaceStencilValue")));

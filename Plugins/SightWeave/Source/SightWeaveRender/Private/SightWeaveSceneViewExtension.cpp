@@ -1,5 +1,6 @@
 #include "SightWeaveSceneViewExtension.h"
 
+#include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "RenderingThread.h"
 #include "ScreenPass.h"
@@ -11,8 +12,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarSightWeaveDiagnosticCompositePass(
 		TEXT("r.SightWeave.Diagnostic.CompositePass"),
 		0,
-		TEXT("DARKWELL temporal-space A/B: 0 after Tonemap (current formal path), "
-			"1 BeforeDOF/pre-TSR. Development/Editor only."),
+		TEXT("DARKWELL temporal-space A/B: 0 after Tonemap (rejected control), "
+			"1 BeforeDOF/pre-TSR with fixed neutral Remembered proof input. "
+			"Development/Editor and L_VisionIntegration only."),
 		ECVF_RenderThreadSafe);
 #endif
 }
@@ -24,6 +26,8 @@ FSightWeaveSceneViewExtension::FSightWeaveSceneViewExtension(
 	: FWorldSceneViewExtension(AutoRegister, World)
 	, WorldIdentity(InWorldIdentity)
 	, RenderState(MakeShared<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe>(InWorldIdentity))
+	, bAllowsPreTemporalUpscaleProof(
+		World != nullptr && World->GetMapName().EndsWith(TEXT("L_VisionIntegration")))
 {
 }
 
@@ -129,7 +133,8 @@ void FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass(
 {
 	EPostProcessingPass SelectedPass = EPostProcessingPass::Tonemap;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	if (CVarSightWeaveDiagnosticCompositePass.GetValueOnRenderThread() == 1)
+	if (bAllowsPreTemporalUpscaleProof
+		&& CVarSightWeaveDiagnosticCompositePass.GetValueOnRenderThread() == 1)
 	{
 		SelectedPass = EPostProcessingPass::BeforeDOF;
 	}
@@ -148,5 +153,14 @@ FScreenPassTexture FSightWeaveSceneViewExtension::PostProcessComposite_RenderThr
 	const FSceneView& View,
 	const FPostProcessMaterialInputs& Inputs)
 {
-	return RenderState->AddHardMaskComposite_RenderThread(GraphBuilder, View, Inputs);
+	bool bPreTemporalUpscaleProof = false;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	bPreTemporalUpscaleProof = bAllowsPreTemporalUpscaleProof
+		&& CVarSightWeaveDiagnosticCompositePass.GetValueOnRenderThread() == 1;
+#endif
+	return RenderState->AddHardMaskComposite_RenderThread(
+		GraphBuilder,
+		View,
+		Inputs,
+		bPreTemporalUpscaleProof);
 }

@@ -51,7 +51,8 @@ public:
 	FScreenPassTexture AddHardMaskComposite_RenderThread(
 		FRDGBuilder& GraphBuilder,
 		const FSceneView& View,
-		const FPostProcessMaterialInputs& Inputs);
+		const FPostProcessMaterialInputs& Inputs,
+		bool bPreTemporalUpscaleProof);
 	void Release_RenderThread(FSightWeaveRenderWorldIdentity ExpectedWorldIdentity);
 
 	ESightWeaveRenderAvailability GetAvailability_RenderThread() const { return Availability; }

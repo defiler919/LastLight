@@ -1231,6 +1231,7 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 #endif
 
 	bool bAnyMaskWork = false;
+	TBitArray<> DirtyTileMask(false, Packet->GetTiles().Num());
 	auto ProcessDirtyTile = [this, &GraphBuilder, &Packet, &bAnyFeatherImpact, &bAnyMaskWork](
 		const int32 DirtyTileIndex)
 	{
@@ -1296,6 +1297,7 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 	{
 		for (int32 TileIndex = 0; TileIndex < Packet->GetTiles().Num(); ++TileIndex)
 		{
+			DirtyTileMask[TileIndex] = true;
 			ProcessDirtyTile(TileIndex);
 		}
 	}
@@ -1303,7 +1305,32 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 	{
 		for (const int32 DirtyTileIndex : Packet->GetDirtyTileIndices())
 		{
+			if (DirtyTileMask.IsValidIndex(DirtyTileIndex))
+			{
+				DirtyTileMask[DirtyTileIndex] = true;
+			}
 			ProcessDirtyTile(DirtyTileIndex);
+		}
+	}
+
+	for (int32 TileIndex = 0; TileIndex < Packet->GetTiles().Num(); ++TileIndex)
+	{
+		if (DirtyTileMask[TileIndex])
+		{
+			continue;
+		}
+		const FSightWeaveSparseRenderTile& Tile = Packet->GetTiles()[TileIndex];
+		FScopeState* Scope = FindScope_RenderThread(Tile.Identity.TileKey.Scope);
+		if (!Scope
+			|| Scope->Availability == ESightWeaveRenderAvailability::InvalidPacket
+			|| Scope->Availability == ESightWeaveRenderAvailability::ResourceAllocationFailed)
+		{
+			continue;
+		}
+		const FSightWeaveSparseResidencySlot* Slot = Scope->Residency.Find(Tile.Identity);
+		if (!Slot || !Scope->Residency.MarkApplied(Slot->Address, Packet->GetPacketRevision()))
+		{
+			FailScope_RenderThread(*Scope, ESightWeaveRenderAvailability::InvalidPacket);
 		}
 	}
 

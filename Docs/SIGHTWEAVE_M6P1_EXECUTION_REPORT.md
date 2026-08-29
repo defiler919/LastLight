@@ -1,8 +1,18 @@
 # SightWeave M6P1 execution report
 
+## Superseding user visual verdict — 2026-08-29
+
+**PARTIAL — USER_PIE VISUAL AND SEMANTIC ACCEPTANCE FAILED. M6P1 is not COMPLETED.**
+
+The implementation, automation, build, Cook, formal-View, readback, screenshot, log, and repository evidence recorded below is retained without deletion or concealment. The user's later real dynamic PIE inspection nevertheless overturned the prior visual-completion implication and established that the current picture is not usable in DARKWELL.
+
+The failure is architectural, not ordinary art tuning: edge reconstruction remains visibly stepped; player/camera motion produces crawling, jitter, and flicker; Width=50 feather blurs rather than removes the stair steps; Unknown/Remembered/Live layers have coordinate or sampling misalignment; Remembered is a flat-gray obstruction instead of recognizable filtered static-scene memory; and wall/surface classification incorrectly blacks out player-facing wall sides instead of beginning behind the occluder.
+
+The new highest-priority contract is `Docs/SIGHTWEAVE_DARKWELL_VISUAL_REQUIREMENTS.md`. Old screenshots, static pixel samples, readbacks, and green automation must not be cited as proof of visual acceptance. Only explicit user approval after real dynamic PIE under the new contract can restore `COMPLETED`. The first dynamic visual prototype is due within 48 hours, the hard deadline is 2026-09-05, and failure of any core requirement at that deadline unconditionally abandons SightWeave.
+
 ## Status
 
-**PARTIAL — READY_FOR_USER_PIE.** The DARKWELL-owned adapter vertical slice, dedicated integration map, automation, formal D3D12/SM6 View evidence, builds, isolated Cook, and repository checks are complete. Only the explicitly user-owned 3–5 minute PIE acceptance remains.
+**PARTIAL — USER_PIE VISUAL AND SEMANTIC ACCEPTANCE FAILED.** The DARKWELL-owned adapter vertical slice and its recorded engineering gates remain implemented and evidenced, but the required user-operated dynamic visual and semantic acceptance failed.
 
 Implementation branch: `codex/m6p1-sightweave-darkwell-adapter-vertical-slice`
 
@@ -159,6 +169,6 @@ Build warnings are limited to UE 5.8 deprecations and MSVC 14.51 being newer tha
 - no SaveGame persistence, damage-source reveal, lantern authority, Warden, multi-floor, dynamic-door, or broad game integration was started.
 - generated builds, Cook output, logs, automation reports, screenshots, and temporary scripts remain ignored and untracked.
 
-## Remaining user-owned gate
+## User gate result
 
-The user must run the dedicated map in PIE, perform the handoff checklist, stop PIE, run it a second time, and report the result. Until then, the milestone cannot be called COMPLETED.
+The user performed dynamic PIE and rejected the current visual and semantic result. The next phase may address only project-usability rescue under `Docs/SIGHTWEAVE_DARKWELL_VISUAL_REQUIREMENTS.md`; it must not treat the earlier green automation or screenshots as visual completion.

@@ -1,8 +1,18 @@
 # SightWeave M6P1 handoff
 
+## Superseding user visual verdict — 2026-08-29
+
+**PARTIAL — USER_PIE VISUAL AND SEMANTIC ACCEPTANCE FAILED. M6P1 is not COMPLETED.**
+
+The user has completed a real dynamic PIE inspection and rejected the current result as visually and semantically unusable for DARKWELL. All earlier automation, builds, Cook results, logs, readbacks, and screenshots below remain preserved as engineering evidence, but they no longer support a visual-completion claim.
+
+This is an architectural failure rather than a routine art-tuning issue. The unresolved areas are continuous edge reconstruction, temporal stability during movement and turning, exact Unknown/Remembered/Live coordinate and sampling alignment, recognizable static-scene memory with dynamic-information filtering, and correct 2.5D/3D surface classification so player-facing wall surfaces remain visible and black begins behind the wall. Width=50 feather has only blurred the visible stair steps; it has not removed them.
+
+`Docs/SIGHTWEAVE_DARKWELL_VISUAL_REQUIREMENTS.md` is now the highest-priority contract. Do not use the old screenshots or static/pixel automation to claim visual acceptance. Only a new user-operated real dynamic PIE session followed by the user's explicit approval can restore `COMPLETED`. The contract requires a real dynamic visual prototype within 48 hours and a final result by 2026-09-05; failure of any core requirement at that deadline unconditionally abandons SightWeave.
+
 ## Current state
 
-**PARTIAL — READY_FOR_USER_PIE.** The implementation and all agent-owned gates are complete. The sole remaining gate is the user's dedicated-map PIE acceptance.
+**PARTIAL — USER_PIE VISUAL AND SEMANTIC ACCEPTANCE FAILED.** The former pending user gate has been performed and failed; project-usability visual rescue is the only permitted next phase.
 
 Branch: `codex/m6p1-sightweave-darkwell-adapter-vertical-slice`
 
@@ -37,7 +47,9 @@ These controls come from `ADarkwellCharacter::AddDefaultInputMapping` and `ADark
 
 For M6P1, Torch equipped/on is the only long-range legal SightWeave light. Cycling to Lantern is the functional torch-off test; the lantern is deliberately not a SightWeave legal-light source in this milestone.
 
-## User PIE acceptance: 3–5 minutes
+## Historical M6P1 user PIE checklist — performed and failed
+
+This checklist is retained as historical evidence. It did not detect or close the product-level failures governed by the new visual rescue contract.
 
 1. In Unreal Editor, open `/Game/Maps/L_VisionIntegration` and start PIE. If the normal DARKWELL startup menu appears, click `NEW GAME`; the same map reloads with gameplay input enabled.
 2. Move with `W/A/S/D` and sweep the mouse cursor. Confirm the live cone follows character aim and the small close-range circle remains centered on the player.
@@ -49,14 +61,14 @@ For M6P1, Torch equipped/on is the only long-range legal SightWeave light. Cycli
 
 Report pass/fail for the checklist. A failure should include the exact step, screenshot if practical, and whether it reproduced on the second PIE session.
 
-## Frozen boundaries
+## Historical M6P1 boundaries
 
-Do not extend this handoff into SaveGame/persistence-slot wiring, damage reveal, lantern authority, Warden, multi-floor, dynamic doors, broad `L_Prototype` migration, or new SightWeave public/plugin work. Do not modify the frozen plugin, `Darkwell.uproject`, or `L_Prototype` while accepting M6P1.
+These original M6P1 boundaries remain historical context. The rescue phase is governed by `Docs/SIGHTWEAVE_DARKWELL_VISUAL_REQUIREMENTS.md`; this correction still does not authorize SaveGame, damage reveal, wider gameplay integration, `Darkwell.uproject`, or `L_Prototype` work.
 
 ## Resume command
 
-After the user reports PIE results, resume with:
+Resume the documentation-frozen rescue branch with:
 
-`git fetch origin; git switch codex/m6p1-sightweave-darkwell-adapter-vertical-slice; git pull --ff-only; git status --short --branch; git rev-parse HEAD; git rev-parse '@{upstream}'`
+`git fetch origin; git switch codex/sightweave-darkwell-visual-rescue; git pull --ff-only; git status --short --branch; git rev-parse HEAD; git rev-parse '@{upstream}'`
 
-If every PIE step passes, update M6P1 status to COMPLETED in a documentation-only checkpoint and push it. If a step fails, diagnose only that product integration defect without expanding milestone scope.
+The next phase may begin only the DARKWELL project-usability rescue defined by the new contract. Do not restore `COMPLETED` until the user explicitly approves a new real dynamic PIE result.

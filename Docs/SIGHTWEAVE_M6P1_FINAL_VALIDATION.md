@@ -1,8 +1,18 @@
 # SightWeave M6P1 final validation
 
+## Superseding user visual verdict — 2026-08-29
+
+**PARTIAL — USER_PIE VISUAL AND SEMANTIC ACCEPTANCE FAILED. M6P1 is not COMPLETED.**
+
+The automated, build, Cook, formal-View, pixel-readback, screenshot, and repository results below remain preserved as engineering evidence. They do not establish product visual acceptance. The user's subsequent real, dynamic PIE inspection overturned the earlier visual-completion implication: the current DARKWELL presentation is not project-usable.
+
+This failure is not ordinary art tuning. It exposes architectural defects in edge reconstruction, temporal stability during player/camera motion, shared Unknown/Remembered/Live coordinate and sampling alignment, static-scene memory representation and dynamic-information filtering, and 2.5D/3D surface classification at walls and other occluders. Confirmed symptoms include large stair-step edges, crawling/flicker while moving or turning, Width=50 feather merely blurring the steps, a flat-gray Remembered layer instead of recognizable static-scene memory, incorrect black coverage of player-facing wall surfaces, and extra black strips caused by state-layer misalignment.
+
+The highest-priority contract for all later work is `Docs/SIGHTWEAVE_DARKWELL_VISUAL_REQUIREMENTS.md`. No old screenshot, static pixel sample, readback, or green automation result may be cited as proof that the visual result passes. The status may return to `COMPLETED` only after the user operates a real dynamic PIE session and explicitly accepts the visual and semantic result under that contract. The rescue deadline is 2026-09-05, with the first real dynamic visual prototype due within 48 hours; failure of any core requirement at the deadline unconditionally ends SightWeave work as specified by the new contract.
+
 ## Status
 
-**PARTIAL — READY_FOR_USER_PIE.** All agent-owned product, automation, formal View, build, Cook, Shipping-isolation, severe-log, and Git/LFS gates are green. User PIE acceptance is deliberately not fabricated.
+**PARTIAL — USER_PIE VISUAL AND SEMANTIC ACCEPTANCE FAILED.** All previously recorded agent-owned gates remain historical engineering evidence, but the required user visual gate was performed and failed.
 
 ## Validation matrix
 
@@ -30,7 +40,7 @@
 | Shipping leakage | no project path, SightWeave Editor/Tests, or M6P1/Lab strings; no forbidden DARKWELL module dependency |
 | Severe logs | zero fatal/assert/ensure/low-level-fatal/access-violation findings in authoritative logs |
 | Plugin/project/frozen map changes | none |
-| User PIE | pending |
+| User PIE | **failed:** dynamic visual and semantic acceptance rejected by the user |
 
 ## Authoritative evidence
 
@@ -52,4 +62,4 @@ The initial offscreen D3D12 full-suite result (284/287) is retained as diagnosti
 
 ## Completion boundary
 
-The code and automated evidence are ready for acceptance. M6P1 becomes COMPLETED only after the user performs the dedicated-map PIE checklist in `Docs/SIGHTWEAVE_M6P1_HANDOFF.md` and explicitly reports success.
+The earlier automated evidence remains available for engineering regression, but the user has rejected the current dedicated-map result. M6P1 cannot become `COMPLETED` through the old checklist, screenshots, pixel readback, or automation. Completion can be reconsidered only after the rescue contract is satisfied and the user explicitly accepts a new real dynamic PIE result.

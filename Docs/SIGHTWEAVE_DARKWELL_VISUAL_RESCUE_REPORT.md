@@ -10,13 +10,13 @@ User-rejected candidate / this rescue baseline: `2439cfb0de843ab52b9c989439272f1
 
 Second user-rejected candidate baseline: `2883cd5d9f68044c71da785eaaa90f03fff4193c`
 
-Last validated implementation SHA: `eb2a827`
+Validated Remembered stabilization SHA: `bac0525`
 
 48-hour prototype checkpoint: 2026-08-31
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_FAILED / REMEMBERED TEMPORAL INSTABILITY**
+Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_3**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
 
@@ -51,6 +51,97 @@ pre-TSR primary-resolution SceneColor + SceneDepth + velocity
 `FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass` subscribes only to `EPostProcessingPass::Tonemap`. Unreal calls the delegate through `AddAfterPass(EPass::Tonemap, SceneColor)` after temporal upscaling and tonemapping. The SightWeave pass has no private temporal history, reports `historyValid=0`, and reconstructs Remembered surface position from the current frame's primary-resolution SceneDepth/CustomDepth while writing into the post-TSR output ViewRect. `SightWeaveRememberedSurfaceColor` then derives orientation with `ddx/ddy` and adds a high-frequency `frac` world-cell term. Thus state/memory may be stable while the visible Remembered content is regenerated after TSR from temporally jittered, lower-resolution geometry inputs. This mixed temporal/resolution space is the focused hypothesis for the second failure; it is not yet a completed root-cause claim until the required A/B matrix is recorded below.
 
 The rescue now freezes the already-passed unified three-state result, Ultra 2.5 cm/texel, line-leak rejection, seam correction, wall rule, `NeverRemember`, Stalker/HUD coupling, Torch/Lantern/Torch continuity, normal TSR, and current performance. This slice may change only the Remembered temporal composition path.
+
+## 0C. Remembered temporal rescue result
+
+The second failure was isolated to the visible Remembered shading generated after TSR. It was not state-mask churn, memory revision churn, static-surface classification, player/camera transform instability, a return of the tile-edge line, or a new black/gray offset.
+
+### Controlled A/B result
+
+- A — unified three-state Mask: stable world-space Live/Remembered/Unknown contours in the fixed-camera and slow-rotation captures.
+- B — Remembered surface-classification alpha: stable; the classified static silhouette does not reproduce the internal gray crawl.
+- C — current SceneColor inside Remembered: inherits current-frame content and temporal variation and would leak dynamic information; diagnostic only and rejected.
+- D — fixed pure-color static input: removes internal variation while retaining the state/classification contour; proves the grayscale arithmetic itself is not oscillating. It is not the formal solution because it destroys scene information.
+- E — freeze state/memory revision: a startup freeze can occur before valid authority and remains inconclusive as a visual pass. Independent logs show stable bindings and synchronized state/feather revisions; the A/B result does not attribute the defect to revision updates.
+- F — fixed player/camera: the standalone fixed-camera baseline is nearly static. The second user recording and the controlled rotation show that the objection is dominated by camera/aim movement, with the editor UI remaining stable.
+- G — normal TSR: reproduces the rejected post-TSR shading behavior under movement.
+- H — TSR off: reduces the temporal-sample interaction but restores unacceptable raster aliasing; diagnostic only and rejected.
+- I — compose BeforeDOF/pre-TSR: lets TSR filter the gray result but changes its tone/exposure and adds temporal grain. It also broadens the risk of temporal history carrying dynamic content across information-state transitions. It was rejected as the formal path.
+- J — post-TSR with stable immutable shading inputs: preserves the accepted state/classification, normal TSR, post-tonemap presentation value, static-scene silhouettes, wall rule, and enemy filtering while removing the unstable high-frequency generator. This is the selected formal path.
+
+### Accurate root cause
+
+`SightWeaveRememberedSurfaceColor` regenerated Remembered after TSR from the current frame's classified surface. Its tone included a normal inferred with `ddx/ddy(TranslatedSurfaceWorld)` and a discontinuous `frac` cell pattern at the configured world detail scale. Neither input had temporal history because the SightWeave callback runs after TSR. During camera follow or slow aim rotation, small current-depth/sample-footprint changes changed the derivative normal and crossed `frac` cusps, so internal floor/material values crawled relative to an otherwise stable world/state contour. Static frames could settle, but movement repeatedly reintroduced the error.
+
+The fix does not move the formal pass and does not add temporal blur. The formal Remembered color now uses only:
+
+- immutable static-attribute atlas value;
+- immutable static/occluder stencil class;
+- a continuous cosine detail term anchored to `MemoryTranslatedFloorOrigin` in world space;
+- the existing brightness, contrast, and deliberately low detail strength.
+
+The current-depth `ddx/ddy` normal and discontinuous `frac` pattern are removed. Actual three-dimensional SceneDepth/CustomDepth classification still supplies visible static-surface silhouettes, so walls, floor, doorway, and static objects remain recognizable. Remembered still never samples current SceneColor, lighting, dynamic shadow, particle, or enemy content.
+
+### Final frame data path and spaces
+
+The selected implementation is solution B and remains after TSR and after Tonemap:
+
+```text
+primary-resolution jittered SceneDepth
+    + primary-resolution unjittered CustomDepth/CustomStencil
+    -> ViewRect.Min/ViewRect-size mapped static-surface classification
+    -> stable world position / Ultra state, memory, static-attribute atlases
+    -> immutable stencil class + continuous world-anchored gray filtering
+
+pre-TSR SceneColor + depth + velocity -> normal TSR/history
+    -> secondary/full-resolution SceneColor -> Tonemap
+    -> SightWeave Tonemap after-pass
+       Live       = post-TSR/post-tonemap SceneColor
+       Remembered = classified immutable stable inputs above (no SceneColor/history)
+       Unknown    = black
+```
+
+SceneDepth alone receives the current temporal-jitter coordinate conversion; CustomDepth/Stencil retain their unjittered coordinate. Both use the current primary ViewRect including `ViewRect.Min`. Output and Live SceneColor use the post-TSR output/secondary ViewRect. The Remembered branch does not combine pre-TSR color/GBuffer with post-TSR color and does not read a previous-frame SightWeave history. The only current primary-resolution inputs retained in Remembered are the already A/B-proven stable static-surface identity/depth match; its visible information comes from one world-stable immutable space.
+
+The Development/Editor-only `r.SightWeave.Diagnostic.CompositePass` and composite modes 11–14 retain the A/B paths. Test and Shipping always select the formal Tonemap after-pass and normal stable shading.
+
+### Focused verification and evidence
+
+- `DarkwellEditor Win64 Development`: succeeded serially after the formal source change.
+- `SightWeave.M3P5.Packaging.RememberedTemporalSpace`: Success. It freezes the formal post-TSR default and forbids `ddx`, `ddy`, and `frac` in formal Remembered shading.
+- `SightWeave.M3P5.Composite.ThreeStateAndMemoryFailure.D3D12`: Success on D3D12/SM6.
+- `Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority`: Success, including Ultra shared scope, `NeverRemember`, Stalker/HUD authority, wall rule, Lantern transition, and Torch restoration.
+- No full historical regression, BuildPlugin, clean-host, Cook, Package, or performance matrix was run.
+
+Formal normal-TSR evidence is ignored under `Saved/SightWeaveVisualRescueEvidence/Dynamic`:
+
+- `Retest3Formal_1080p_Static10/static.mp4` — 10 seconds fixed camera/player.
+- `Retest3Formal_1080p_Rotate15/rotate.mp4` — 15 seconds slow aim rotation; `boundary_floor_10s.mp4` is the ten-second floor-boundary review segment.
+- `Retest3Formal_1080p_Wall15/wall.mp4` — 15 seconds translation/along-wall motion; `boundary_wall_static_10s.mp4` is the wall/static-object review segment.
+- `Retest3Formal_1080p_TorchCycle/torchcycle.mp4` — Torch/Lantern/Torch.
+- `Retest3Formal_1440p_Static10/static.mp4` — 10 seconds fixed camera/player.
+- `Retest3Formal_1440p_Rotate15/rotate.mp4` — 15 seconds slow aim rotation.
+
+All formal logs report D3D12/SM6, `diagnosticMode=0`, `stableDepthCoordinates=1`, `bindingFailure=0`, exact output ViewRects 1920x1080 or 2560x1440, and normal TSR primary buffers (1400x792 at the 1080p run and 1552x880 at the 1440p run). Contact sheets were opened for all six runs. They retain no gray horizontal line, no black/gray offset, wall surfaces with black behind, and no stuck-black tool transition. The severe scan found no fatal, assertion, ensure, GPU crash, device removal, DXGI, D3D12/RHI, SightWeave, or Darkwell error; the only pattern hit was the benign configuration line `r.GPUCrashDebugging:0`.
+
+### Remembered-specific ROI data
+
+Adjacent-frame MAD is reported in 8-bit channel-value units at 10 fps. It is supporting evidence, not visual acceptance:
+
+| Resolution | ROI | median | p95 | max |
+| --- | --- | ---: | ---: | ---: |
+| 1080p | Remembered static gray | 0.000000 | 0.000028 | 0.090839 |
+| 1080p | Remembered internal material | 0.000000 | 0.001034 | 0.095397 |
+| 1080p | Remembered static-object/transition edge | 0.048412 | 0.078237 | 0.295581 |
+| 1080p | Live control | 0.239873 | 0.375837 | 1.018358 |
+| 1080p | HUD control | 0.000000 | 0.065925 | 0.152223 |
+| 1440p | Remembered static gray | 0.000000 | 0.001262 | 0.064980 |
+| 1440p | Remembered internal material | 0.000000 | 0.001632 | 0.070602 |
+| 1440p | Remembered static-object/transition edge | 0.087935 | 0.104234 | 0.289404 |
+| 1440p | Live control | 0.474410 | 0.538756 | 1.183153 |
+| 1440p | HUD control | 0.000000 | 0.037798 | 0.085784 |
+
+The second user recording's editor-toolbar control ROI, measured separately at six fps because the formal agent captures are standalone game windows, is median/p95/max `0.001525/0.039182/0.039583`. This confirms the user's observation that editor chrome was stable; it is not presented as post-fix editor-UI evidence. Agent judgment is based on the opened consecutive frames and contact sheets, not full-screen average MAD.
 
 ## 0. User dynamic PIE rejection (2026-08-29)
 
@@ -261,7 +352,7 @@ The agent opened all key stills/contact sheets, two sheets of ten adjacent 30 fp
 - Only the user can determine long-duration dynamic PIE usability. Agent-side extracted frames cannot prove the absence of every transient crawl or subjective objection.
 - Pixel-scale raster/TSR grain remains at the transition. The rejected 25 cm block staircase is gone, but this is not a claim of mathematically analytic edges.
 - Remembered is a DARKWELL-specific filtered static greybox representation, not a general material snapshot or mutable-world solution.
-- The current agent evidence is sufficient only for `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST`. It does not authorize `COMPLETED` or `ACCEPTED — DARKWELL USABLE`.
+- The current agent evidence is sufficient only for `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_3`. It does not authorize `COMPLETED` or `ACCEPTED — DARKWELL USABLE`.
 - No SaveGame wiring, damage reveal, Warden, production `L_Prototype` switch, multi-floor support, plugin public-API cleanup, BuildPlugin, Cook, Package, clean-host, full NullRHI/D3D12 history, or performance matrix was run.
 - Earlier failed tool-cycle captures are retained as honest diagnostic evidence and are not final acceptance evidence.
 
@@ -277,12 +368,14 @@ The agent opened all key stills/contact sheets, two sheets of ten adjacent 30 fp
 - `800264e` `test: add DARKWELL fog A/B diagnostics`
 - `37c5f0c` `fix: align SightWeave depth classification with view jitter`
 - `eb2a827` `fix: remove remembered surface line leakage`
+- `434f21e` `test: isolate remembered temporal instability`
+- `bac0525` `render: stabilize DARKWELL remembered composition`
 
 The first documentation commit contained Markdown trailing whitespace because a PowerShell command sequence did not short-circuit on `git diff --check`; `c2c4d8f` corrected it without rewriting history. No source checkpoint was affected.
 
 ## 10. Decision gate
 
-The first candidate failed the user's dynamic PIE. The two-blocker rescue now has controlled A/B attribution, normal TAA/TSR restoration, targeted D3D12/SM6 dynamic evidence at 1080p and 1440p, and agent consecutive-frame inspection. Its highest permitted state is therefore `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST`; only the user's second real dynamic PIE can decide usability. No further implementation or deferred full matrix begins before that verdict. The final product decision remains exactly one of:
+The first and second candidates failed the user's dynamic PIE. The Remembered-only rescue now has controlled A/B attribution, normal TSR, targeted D3D12/SM6 dynamic evidence at 1080p and 1440p, Remembered-specific ROIs, and agent consecutive-frame inspection. Its highest permitted state is `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_3`; only the user's third real dynamic PIE can decide usability. No further implementation or deferred full matrix begins before that verdict. The final product decision remains exactly one of:
 
 - `ACCEPTED — DARKWELL USABLE`
 - `REJECTED — ABANDON SIGHTWEAVE`

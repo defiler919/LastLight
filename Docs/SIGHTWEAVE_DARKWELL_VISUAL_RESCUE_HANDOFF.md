@@ -8,13 +8,13 @@ User-rejected candidate baseline: `2439cfb0de843ab52b9c989439272f1e30727d1c`
 
 Second user-rejected candidate baseline: `2883cd5d9f68044c71da785eaaa90f03fff4193c`
 
-Last validated implementation SHA: `eb2a827`
+Validated Remembered stabilization SHA: `bac0525`
 
 Stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_FAILED / REMEMBERED TEMPORAL INSTABILITY**
+Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_3**
 
-The user's first real dynamic PIE rejected the prior candidate for whole-game shaking/flicker and multiple thin gray lines. The second real dynamic PIE at `2883cd5d9f68044c71da785eaaa90f03fff4193c` confirms that those lines and the black/gray offset are gone, flow is acceptable, and the large staircase has not returned. It nevertheless rejects the candidate because the Remembered gray scene continuously shakes while Live and editor UI are relatively stable. This file is no longer a ready-for-retest handoff and does not claim `COMPLETED` or visual acceptance.
+The user's first real dynamic PIE rejected the prior candidate for whole-game shaking/flicker and multiple thin gray lines. The second real dynamic PIE at `2883cd5d9f68044c71da785eaaa90f03fff4193c` confirms that those lines and the black/gray offset are gone, flow is acceptable, and the large staircase has not returned. It nevertheless rejects that candidate because the Remembered gray scene continuously shakes while Live and editor UI are relatively stable. That verdict remains recorded; the new candidate below is offered only for a third user retest and does not claim `COMPLETED` or visual acceptance.
 
 ## Second retest failure now in force
 
@@ -24,7 +24,25 @@ The user's first real dynamic PIE rejected the prior candidate for whole-game sh
 - Agent frame inspection: stable editor chrome, comparatively stable Live wedge, and changing Remembered floor-grid/static-object interior values across consecutive frames.
 - Preserved passes: no gray lines, no black/gray offset, no large staircase recurrence, acceptable flow, correct wall and enemy rules, and working Torch/Lantern/Torch recovery.
 
-The current composite is registered as a Tonemap after-pass. Unreal has already executed normal TSR before Tonemap, so SightWeave reads post-TSR/post-tonemap SceneColor while directly reading current pre-TSR SceneDepth and CustomDepth/Stencil. It then reconstructs and shades Remembered after TSR without its own history. The focused work is to A/B that mixed temporal/resolution path and select one coherent formal composition space. No overall performance work or unrelated feature work is authorized.
+The composite is registered as a Tonemap after-pass. Unreal has already executed normal TSR before Tonemap, so SightWeave reads post-TSR/post-tonemap SceneColor while directly reading current primary-resolution SceneDepth and CustomDepth/Stencil. Controlled A/B selected stable immutable post-TSR Remembered shading rather than moving the formal pass. No overall performance work or unrelated feature work was performed.
+
+## Remembered stabilization offered for third retest
+
+The state Mask and static-surface classification were stable. The rejected internal gray crawl came from the old post-TSR Remembered shading: it recomputed a depth-derivative normal and a discontinuous `frac` world grid every frame after TSR history had already completed. Camera follow and slow aim rotation therefore changed internal gray values while the state/surface contour stayed fixed.
+
+The formal pass remains post-TSR and post-tonemap. Remembered now uses only immutable static-attribute data, immutable stencil class, and a continuous cosine detail term anchored to the memory floor origin. It does not read current SceneColor, GBuffer lighting, dynamic shadows, particles, enemy data, or a SightWeave temporal history. No blur, mask expansion, resolution reduction, or TSR disable is part of the fix.
+
+Development/Editor A/B established:
+
+- unified state and surface-classification contours are stable;
+- fixed gray removes the internal crawl but is rejected as an information-destroying solution;
+- current SceneColor carries temporal/dynamic information and is rejected;
+- freezing revisions does not explain the failure and startup freeze remains inconclusive;
+- TSR-off is diagnostic only and restores unacceptable aliasing;
+- pre-TSR composition changes exposure and introduces temporal grain;
+- post-TSR stable immutable shading retains the accepted visual/information rules and is the chosen path.
+
+Focused build/tests succeeded: `DarkwellEditor Win64 Development`, `SightWeave.M3P5.Packaging.RememberedTemporalSpace`, `SightWeave.M3P5.Composite.ThreeStateAndMemoryFailure.D3D12`, and `Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority`. Formal D3D12/SM6 normal-TSR evidence was recorded at 1080p and 1440p. Static Remembered internal-material p95 adjacent-frame MAD is `0.001034` at 1080p and `0.001632` at 1440p. No severe log signature, gray horizontal line, black/gray offset, stuck-black tool transition, wall-rule regression, or enemy-filter regression was found.
 
 ## What was fixed
 
@@ -95,6 +113,14 @@ All recordings and logs remain under ignored `Saved/SightWeaveVisualRescueEviden
 - 1440p ten-second slow rotation: `Dynamic/1440p_rotate/rotate.mp4`
 - A/B captures and raw atlas views: `AB`
 - Targeted test logs: `TargetedMemoryLeakTest.log`, `TargetedVerticalSliceTest.log`
+- Second user failure: `UserDynamicPIERetest2Failure/Darkwell - 虚幻编辑器 2026-08-29 21-07-46.mp4`
+- Third-retest 1080p static: `Dynamic/Retest3Formal_1080p_Static10/static.mp4`
+- Third-retest 1080p rotation/floor boundary: `Dynamic/Retest3Formal_1080p_Rotate15/rotate.mp4` and `boundary_floor_10s.mp4`
+- Third-retest 1080p wall translation/static-object boundary: `Dynamic/Retest3Formal_1080p_Wall15/wall.mp4` and `boundary_wall_static_10s.mp4`
+- Third-retest 1080p Torch/Lantern/Torch: `Dynamic/Retest3Formal_1080p_TorchCycle/torchcycle.mp4`
+- Third-retest 1440p static: `Dynamic/Retest3Formal_1440p_Static10/static.mp4`
+- Third-retest 1440p rotation: `Dynamic/Retest3Formal_1440p_Rotate15/rotate.mp4`
+- Remembered temporal-space and final authority logs: `Retest2RememberedTemporalSpaceTest.log`, `Retest2RememberedCompositeD3D12.log`, and `Retest3VerticalSliceAuthority.log`
 
 ## User retest setup
 
@@ -110,19 +136,19 @@ All recordings and logs remain under ignored `Saved/SightWeaveVisualRescueEviden
 4. Use the normal D3D12/SM6 editor configuration with TAA/TSR enabled.
 5. Start normal PIE and choose `NEW GAME`.
 
-## Required second dynamic acceptance sequence
+## Required third dynamic acceptance sequence
 
-1. Watch the first five seconds after gameplay appears. Confirm no horizontal gray lines appear and the whole game View is stable while the editor UI also remains stable.
-2. Hold the player and camera still for at least five seconds. Check the circle, both cone edges, Remembered surfaces, walls, and doorway for flicker.
-3. Slowly sweep aim left and right for at least ten seconds. Confirm no edge shaking, jumping, crawl, or flash.
-4. Approach each wall head-on, then strafe along it. Confirm player-facing wall surfaces remain readable, Unknown begins behind them, and no ground line leaks through Unknown.
-5. Move through the doorway and around wall ends. Confirm no black/gray seam returns.
-6. Leave and re-enter explored areas. Confirm recognizable static Remembered structure and clean Remembered <-> Live transitions.
+1. Hold player and camera completely still for at least ten seconds. Compare editor UI, Live, Remembered floor detail, static-object outlines, and the Live/Remembered boundary. Confirm Remembered does not pulse or shake.
+2. Translate for at least fifteen seconds with camera follow. Confirm Remembered remains world anchored and does not slide relative to its static-object contours.
+3. Slowly rotate aim for at least fifteen seconds. Check the entire gray region, not only the boundary; confirm no internal crawl, jump, or flash.
+4. Sweep the boundary across floor for at least ten seconds, then across wall surfaces and static objects for at least ten seconds. Confirm no gray line, seam, or residual geometry appears in Unknown.
+5. Approach each wall head-on, then strafe along it. Confirm player-facing wall surfaces remain readable, Unknown begins behind them, and no ground line leaks through Unknown.
+6. Move through the doorway and around wall ends. Confirm no black/gray seam returns and Remembered remains a recognizable filtered static scene rather than a flat gray fill.
 7. Tap and release `E` to select Lantern, then repeat to restore Torch. Confirm no full-screen black frame or stuck fog.
 8. Aim toward and away from the Stalker. Confirm the Stalker and red threat HUD appear/disappear together and never leave a Remembered enemy image.
 9. Continue normal movement and turning for three to five minutes. This subjective duration test cannot be replaced by agent evidence.
 
-The user must explicitly confirm all of the following: no gray lines, no shaking, no flicker, acceptable circle/cone edges, and acceptable Remembered visuals. Until that confirmation, the status remains `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST`. On rejection, remain within DARKWELL project usability and apply the 2026-09-05 stop-loss rule; do not pivot to plugin generalization or Fab work.
+The user must explicitly confirm all of the following: no gray lines, no black/gray offset, no Remembered shaking or flicker, acceptable circle/cone edges, acceptable recognizable Remembered visuals, preserved wall rule, and preserved enemy filtering. Until that confirmation, the status remains `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_3`. On rejection, remain within DARKWELL project usability and apply the 2026-09-05 stop-loss rule; do not pivot to plugin generalization or Fab work.
 
 ## Evidence and implementation record
 
@@ -132,3 +158,5 @@ The user must explicitly confirm all of the following: no gray lines, no shaking
 - Diagnostic checkpoint: `800264e`
 - Temporal-coordinate fix: `37c5f0c`
 - Memory-line fix: `eb2a827`
+- Second failure capture: `434f21e`
+- Remembered stabilization: `bac0525`

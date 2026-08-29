@@ -12,7 +12,26 @@ Validated Remembered stabilization SHA: `bac0525`
 
 Stop-loss deadline: 2026-09-05
 
-Status: **BLOCKED — PRE_TSR_ARCHITECTURE_PROOF_FAILED**
+Status: **BLOCKED — CURRENT PRE_TSR PROTOTYPE FAILED / ROOT CAUSE ISOLATED TO TEMPORAL-INCOHERENT CUSTOMSTENCIL**
+
+## 2026-08-30 superseding interpretation
+
+The prior proof's files, metrics, failures, and stop decision are retained. Its B path was specifically:
+
+```text
+BeforeDOF
+    + jittered pre-TSR SceneColor / SceneDepth
+    + unjittered point-sampled CustomDepth / CustomStencil
+```
+
+Accordingly, `PRE_TSR_ARCHITECTURE_PROOF_FAILED` is no longer the controlling general conclusion. The accurate state is:
+
+```text
+CURRENT PRE_TSR PROTOTYPE FAILED
+PRE_TSR ARCHITECTURE NOT YET FALSIFIED
+```
+
+UE 5.8.1 source and project configuration explain the mismatch: the engine CVar defaults to temporal jitter enabled and is render-thread-safe, while both DARKWELL and the plugin currently set `r.CustomDepthTemporalAAJitter=0` for the older post-TAA consumer. With zero, CustomDepth and CustomStencil share an unjittered pass projection for both Nanite and non-Nanite paths. The continuation must first run B0 without any CustomStencil read, then run temporal-coherent B1 only if B0 is stable. No fourth user PIE candidate exists yet.
 
 The user's first real dynamic PIE rejected the prior candidate for whole-game shaking/flicker and multiple thin gray lines. The second real dynamic PIE at `2883cd5d9f68044c71da785eaaa90f03fff4193c` confirms that those lines and the black/gray offset are gone, flow is acceptable, and the large staircase has not returned. It nevertheless rejects that candidate because the Remembered gray scene continuously shakes while Live and editor UI are relatively stable. That verdict remains recorded; the new candidate below is offered only for a third user retest and does not claim `COMPLETED` or visual acceptance.
 

@@ -10,9 +10,33 @@ Frozen starting SHA: `f364f780904c7ced5d649e7d582c3d91a7d43baf`
 
 Final stop-loss deadline: 2026-09-05
 
-Current status: **PARTIAL — USER_PIE VISUAL AND SEMANTIC ACCEPTANCE FAILED**
+Current status: **BLOCKED — CURRENT PRE_TSR PROTOTYPE FAILED / ROOT CAUSE ISOLATED TO TEMPORAL-INCOHERENT CUSTOMSTENCIL**
 
 This plan is subordinate to `Docs/SIGHTWEAVE_DARKWELL_VISUAL_REQUIREMENTS.md`. It is a DARKWELL project rescue, not a general plugin, packaging, Fab, or publication milestone. The original automated evidence remains valid engineering evidence, but it cannot establish visual acceptance after the user's dynamic PIE rejection.
+
+## 0. 2026-08-30 pre-TSR proof qualification
+
+The failed proof at `e4d654b74e3557ebefa328986bb626dcbfde0301` used this exact path:
+
+```text
+BeforeDOF
+    + jittered pre-TSR SceneColor / SceneDepth
+    + unjittered point-sampled CustomDepth / CustomStencil
+```
+
+Its measurements and failure remain authoritative evidence. They prove that this temporally incoherent implementation fails; they do **not** prove that every pre-TSR architecture fails. The controlling interpretation is now:
+
+```text
+CURRENT PRE_TSR PROTOTYPE FAILED
+PRE_TSR ARCHITECTURE NOT YET FALSIFIED
+```
+
+UE 5.8.1 source defines `r.CustomDepthTemporalAAJitter` as render-thread-safe. When it is zero, the CustomDepth pass removes temporal projection jitter for both its depth and stencil output, including the View parameters used by Nanite and non-Nanite paths. DARKWELL and the plugin currently configure zero because the older product path consumed CustomDepth/Stencil after temporal resolve. The next proof must therefore separate two questions in order:
+
+1. **B0:** `BeforeDOF + jittered SceneColor/SceneDepth + normal TSR` with a deterministic fixed surface class and no CustomStencil read.
+2. **B1:** only if B0 is stable, enable temporal jitter for CustomDepth/Stencil and prove that SceneDepth, CustomDepth, CustomStencil and SceneColor share one primary-resolution temporal space.
+
+B0 or B1 failure triggers the stencil-free project-surface architecture evaluation. No further jitter-sign, blur, dilation, threshold, or post-TSR patch cycle is permitted.
 
 ## 1. Evidence reviewed
 

@@ -16,9 +16,30 @@ Validated Remembered stabilization SHA: `bac0525`
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **BLOCKED — PRE_TSR_ARCHITECTURE_PROOF_FAILED**
+Status: **BLOCKED — CURRENT PRE_TSR PROTOTYPE FAILED / ROOT CAUSE ISOLATED TO TEMPORAL-INCOHERENT CUSTOMSTENCIL**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
+
+## 0F. Qualification of the failed pre-TSR prototype (2026-08-30)
+
+The raw data and artifact inventory in section 0E remain unchanged. The interpretation is narrowed because the failed B path was not temporally coherent:
+
+```text
+BeforeDOF
+    + jittered pre-TSR SceneColor / SceneDepth
+    + unjittered point-sampled CustomDepth / CustomStencil
+```
+
+The old wording `PRE_TSR_ARCHITECTURE_PROOF_FAILED` overgeneralized that evidence. The corrected conclusion is:
+
+```text
+CURRENT PRE_TSR PROTOTYPE FAILED
+PRE_TSR ARCHITECTURE NOT YET FALSIFIED
+```
+
+UE 5.8.1 `CustomDepthRendering.cpp` defines `r.CustomDepthTemporalAAJitter` with engine default `1` and `ECVF_RenderThreadSafe`. DARKWELL `Config/DefaultEngine.ini` and `Plugins/SightWeave/Config/Engine.ini` both override it to `0`. At zero, `RenderCustomDepthPass` calls `CreateViewShaderParametersWithoutJitter`; the modified projection is used by the non-Nanite CustomDepth mesh pass and copied into the Nanite packed views. Depth and stencil share the same `PF_DepthStencil` target and therefore the same projection convention. This explains the observed unjittered categorical CustomStencil edge in the failed B path.
+
+The next controlled gate is B0, which removes CustomStencil and dynamic surface classification entirely. Only a stable B0 permits B1, where runtime diagnostics must prove `r.CustomDepthTemporalAAJitter=1` and common primary ViewRect/extent/projection conventions. These gates preserve the original failure evidence and do not claim a new visual candidate.
 
 ## 0D. Third user dynamic PIE rejection (2026-08-29)
 
@@ -37,15 +58,15 @@ The prior conclusion that immutable post-TSR Remembered shading was sufficient i
 
 The only permitted success state for that proof is `PARTIAL — PRE_TSR_ARCHITECTURE_PROVEN / READY_FOR_USER_DYNAMIC_PIE_RETEST_4`. If the pre-TSR path still visibly jitters under normal TSR, the required state is `BLOCKED — PRE_TSR_ARCHITECTURE_PROOF_FAILED` and the earliest changing input must be identified before work stops. Neither result is `COMPLETED`, and no formal production migration or full regression is authorized by this proof.
 
-## 0E. Pre-TSR composition architecture proof — failed
+## 0E. Temporal-incoherent pre-TSR composition prototype — failed
 
-The controlled proof at source checkpoint `12b1118` and diagnostic checkpoint `05d2f03` disproved the narrow hypothesis that moving the existing geometric semantic composite before TSR is sufficient by itself. The B path still changed at a completely static wall depth discontinuity under the project's normal D3D12/SM6 TSR configuration and was numerically worse than the rejected A control. The required disposition is therefore:
+The controlled proof at source checkpoint `12b1118` and diagnostic checkpoint `05d2f03` disproved the narrow hypothesis that moving the existing temporally incoherent geometric semantic composite before TSR is sufficient by itself. The B path still changed at a completely static wall depth discontinuity under the project's normal D3D12/SM6 TSR configuration and was numerically worse than the rejected A control. Its historical disposition was:
 
 ```text
-BLOCKED — PRE_TSR_ARCHITECTURE_PROOF_FAILED
+BLOCKED — CURRENT PRE_TSR PROTOTYPE FAILED
 ```
 
-This is not a fifth tuning candidate and is not ready for user PIE retest 4. No blur, feather increase, mask dilation, threshold change, Screen Percentage reduction, TSR disable, camera snap, wall hiding, or current-SceneColor memory route was used.
+This is not a fifth tuning candidate and is not ready for user PIE retest 4. It does not falsify a temporal-coherent pre-TSR architecture. No blur, feather increase, mask dilation, threshold change, Screen Percentage reduction, TSR disable, camera snap, wall hiding, or current-SceneColor memory route was used.
 
 ### Exact current and proof render order
 

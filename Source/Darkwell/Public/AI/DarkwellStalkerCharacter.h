@@ -47,6 +47,12 @@ public:
 	float GetAttackDamage() const { return AttackDamage; }
 	float GetAttackInterval() const { return AttackInterval; }
 	bool IsAlive() const;
+	void ApplySightWeaveVisibility(bool bVisible, uint64 AuthorityRevision);
+	uint64 GetAppliedVisibilityAuthorityRevision() const
+	{
+		return AppliedVisibilityAuthorityRevision;
+	}
+	bool IsVisibleBySightWeaveAuthority() const { return bVisibleBySightWeaveAuthority; }
 
 private:
 	void RefreshPresentation();
@@ -114,4 +120,6 @@ private:
 
 	UPROPERTY(VisibleInstanceOnly, Category = "Enemy")
 	FGameplayTag BehaviorState;
+	uint64 AppliedVisibilityAuthorityRevision = 0;
+	bool bVisibleBySightWeaveAuthority = true;
 };

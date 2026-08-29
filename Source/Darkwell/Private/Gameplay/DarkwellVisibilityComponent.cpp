@@ -156,12 +156,33 @@ void UDarkwellVisibilityComponent::TickComponent(
 	FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (!bAuthorityEnabled)
+	{
+		return;
+	}
 
 	RefreshTimeRemaining -= FMath::Max(0.0f, DeltaTime);
 	if (RefreshTimeRemaining <= 0.0f)
 	{
 		RefreshVisibility();
 	}
+}
+
+void UDarkwellVisibilityComponent::SetVisibilityAuthorityEnabled(const bool bEnabled)
+{
+	if (bAuthorityEnabled == bEnabled)
+	{
+		return;
+	}
+	bAuthorityEnabled = bEnabled;
+	SetComponentTickEnabled(bAuthorityEnabled);
+	RefreshTimeRemaining = 0.0f;
+	if (!bAuthorityEnabled)
+	{
+		VisibleCells.Reset();
+		return;
+	}
+	RefreshVisibility();
 }
 
 EDarkwellFogCellState UDarkwellVisibilityComponent::GetCellState(const FIntPoint& Cell) const
@@ -521,6 +542,10 @@ bool UDarkwellVisibilityComponent::RecordExploredPresentationCell(const FIntPoin
 
 void UDarkwellVisibilityComponent::RefreshVisibility()
 {
+	if (!bAuthorityEnabled)
+	{
+		return;
+	}
 	RefreshTimeRemaining = RefreshIntervalSeconds;
 	VisibleCells.Reset();
 
@@ -639,7 +664,7 @@ bool UDarkwellVisibilityComponent::HasLineOfSightToCell(
 
 void UDarkwellVisibilityComponent::UpdateFogSubjects()
 {
-	if (!GetWorld())
+	if (!bAuthorityEnabled || !GetWorld())
 	{
 		return;
 	}

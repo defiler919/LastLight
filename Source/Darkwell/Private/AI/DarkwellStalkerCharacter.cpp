@@ -8,6 +8,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Gameplay/DarkwellGameplayTags.h"
+#include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
 
 ADarkwellStalkerCharacter::ADarkwellStalkerCharacter()
@@ -75,7 +76,23 @@ void ADarkwellStalkerCharacter::BeginPlay()
 
 void ADarkwellStalkerCharacter::SetPlayerFogState(const EDarkwellFogCellState NewState)
 {
+	const UDarkwellSightWeaveWorldSubsystem* Adapter = GetWorld()
+		? GetWorld()->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>()
+		: nullptr;
+	if (Adapter && Adapter->IsSightWeaveAuthorityActive())
+	{
+		return;
+	}
 	SetActorHiddenInGame(NewState != EDarkwellFogCellState::Visible);
+}
+
+void ADarkwellStalkerCharacter::ApplySightWeaveVisibility(
+	const bool bVisible,
+	const uint64 AuthorityRevision)
+{
+	bVisibleBySightWeaveAuthority = bVisible;
+	AppliedVisibilityAuthorityRevision = AuthorityRevision;
+	SetActorHiddenInGame(!bVisible);
 }
 
 float ADarkwellStalkerCharacter::TakeDamage(

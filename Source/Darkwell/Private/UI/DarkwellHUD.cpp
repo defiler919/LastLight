@@ -26,6 +26,7 @@
 #include "Player/DarkwellPlayerMath.h"
 #include "Save/DarkwellSaveSubsystem.h"
 #include "World/DarkwellWorkbench.h"
+#include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
 
 namespace
@@ -113,6 +114,16 @@ ADarkwellHUD::ADarkwellHUD()
 	}
 }
 
+void ADarkwellHUD::SetLegacyFogAuthorityEnabled(const bool bEnabled)
+{
+	bLegacyFogAuthorityEnabled = bEnabled;
+	if (!bLegacyFogAuthorityEnabled)
+	{
+		SetFogCompositeWeight(nullptr, 0.0f);
+		FogUpdateTimeRemaining = 0.0f;
+	}
+}
+
 void ADarkwellHUD::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -124,7 +135,8 @@ void ADarkwellHUD::Tick(const float DeltaSeconds)
 	ADarkwellCharacter* Character = Cast<ADarkwellCharacter>(PlayerOwner->GetPawn());
 	const ADarkwellPlayerController* DarkwellController =
 		Cast<ADarkwellPlayerController>(PlayerOwner);
-	if (!Character || (DarkwellController && DarkwellController->IsMenuOpen()))
+	if (!Character || !bLegacyFogAuthorityEnabled
+		|| (DarkwellController && DarkwellController->IsMenuOpen()))
 	{
 		SetFogCompositeWeight(Character, 0.0f);
 		return;
@@ -224,11 +236,21 @@ void ADarkwellHUD::DrawHUD()
 	if (Font && GetWorld())
 	{
 		const UDarkwellVisibilityComponent* Visibility = Character->GetVisibilityComponent();
+		const UDarkwellSightWeaveWorldSubsystem* Adapter =
+			GetWorld()->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+		const bool bUseSightWeave = Adapter && Adapter->IsSightWeaveAuthorityActive();
 		int32 ThreatIndex = 0;
 		for (TActorIterator<ADarkwellStalkerCharacter> It(GetWorld()); It; ++It)
 		{
-			if (!It->IsAlive() || ThreatIndex >= 4
-				|| (Visibility && !Visibility->IsWorldLocationCurrentlyVisible(It->GetActorLocation())))
+			FDarkwellVisibilitySubjectSnapshot SightWeaveSnapshot;
+			const bool bThreatVisible = bUseSightWeave
+				? Adapter->TryGetSubjectSnapshot(It->GetPersistentId(), SightWeaveSnapshot)
+					&& SightWeaveSnapshot.bHardLive
+					&& SightWeaveSnapshot.AuthorityRevision
+						== It->GetAppliedVisibilityAuthorityRevision()
+				: (!Visibility
+					|| Visibility->IsWorldLocationCurrentlyVisible(It->GetActorLocation()));
+			if (!It->IsAlive() || ThreatIndex >= 4 || !bThreatVisible)
 			{
 				continue;
 			}

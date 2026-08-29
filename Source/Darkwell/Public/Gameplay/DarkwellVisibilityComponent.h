@@ -105,6 +105,8 @@ public:
 		float SavedPresentationCellSize = 0.0f);
 	bool RecordExploredPresentationCell(const FIntPoint& Cell);
 	void RefreshVisibility();
+	void SetVisibilityAuthorityEnabled(bool bEnabled);
+	bool IsVisibilityAuthorityEnabled() const { return bAuthorityEnabled; }
 
 private:
 	void AddActiveLocalLights(FDarkwellVisionPresentationState& OutState) const;
@@ -156,4 +158,5 @@ private:
 	TSet<FIntPoint> ExploredPresentationCells;
 	uint64 PresentationMemoryRevision = 0;
 	float RefreshTimeRemaining = 0.0f;
+	bool bAuthorityEnabled = true;
 };

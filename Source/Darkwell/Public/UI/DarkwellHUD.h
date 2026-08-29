@@ -18,6 +18,8 @@ public:
 	virtual void DrawHUD() override;
 	bool HandleMenuPointer(const FVector2D& ScreenPosition);
 	bool HandleInventoryPointer(const FVector2D& ScreenPosition, bool bSecondaryClick, bool bControlDown);
+	void SetLegacyFogAuthorityEnabled(bool bEnabled);
+	bool IsLegacyFogAuthorityEnabled() const { return bLegacyFogAuthorityEnabled; }
 
 private:
 	void UpdateFogOfWar(
@@ -68,4 +70,5 @@ private:
 	FVector FogMemoryWorldCorners[4]{};
 	uint64 FogMemoryRevision = ~uint64(0);
 	bool bFogMemoryProjectionValid = false;
+	bool bLegacyFogAuthorityEnabled = true;
 };

@@ -16,9 +16,26 @@ Validated Remembered stabilization SHA: `bac0525`
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_3**
+Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_3_FAILED / POST_TSR COMPOSITION ARCHITECTURE REJECTED**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
+
+## 0D. Third user dynamic PIE rejection (2026-08-29)
+
+The third real dynamic PIE rejected candidate `acd1c5b8ae9950423aa9575c639e034b9ce21dd7`. The authoritative disposition is:
+
+```text
+PARTIAL — USER_DYNAMIC_PIE_RETEST_3_FAILED
+POST_TSR COMPOSITION ARCHITECTURE REJECTED
+```
+
+The user confirmed that the gray horizontal lines remain gone, the black/gray offset remains gone, the large staircase is materially improved, Remembered is no longer a flat two-dimensional fill, enemy filtering remains correct, and frame rate/input responsiveness are acceptable. The blocking failure is narrower and architectural: wall edges still visibly shake with both the player and camera completely still, and the same wall edge still shakes after the wall enters Remembered.
+
+The third user recording is failure evidence, not acceptance evidence. The earlier agent ROI results sampled the interior of the gray layer and did not cover the wall depth discontinuity. They remain supporting measurements for the old internal-shading hypothesis but cannot override the user's dynamic verdict or establish wall-edge stability.
+
+The prior conclusion that immutable post-TSR Remembered shading was sufficient is therefore superseded. The formal callback still first creates the final Unknown/Remembered/Live screen boundary after normal TSR and after Tonemap. Normal scene geometry is temporally resolved inside TSR, but SightWeave then re-reads current-frame SceneDepth, CustomDepth/Stencil, and static attributes to create a new hard semantic boundary outside that history. The focused next step is a controlled pre-TSR architecture proof, not another blur, feather, threshold, dilation, resolution, or post-TSR jitter-compensation patch.
+
+The only permitted success state for that proof is `PARTIAL — PRE_TSR_ARCHITECTURE_PROVEN / READY_FOR_USER_DYNAMIC_PIE_RETEST_4`. If the pre-TSR path still visibly jitters under normal TSR, the required state is `BLOCKED — PRE_TSR_ARCHITECTURE_PROOF_FAILED` and the earliest changing input must be identified before work stops. Neither result is `COMPLETED`, and no formal production migration or full regression is authorized by this proof.
 
 ## 0B. Second user dynamic PIE rejection (2026-08-29)
 

@@ -12,9 +12,19 @@ Validated Remembered stabilization SHA: `bac0525`
 
 Stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_3**
+Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_3_FAILED / POST_TSR COMPOSITION ARCHITECTURE REJECTED**
 
 The user's first real dynamic PIE rejected the prior candidate for whole-game shaking/flicker and multiple thin gray lines. The second real dynamic PIE at `2883cd5d9f68044c71da785eaaa90f03fff4193c` confirms that those lines and the black/gray offset are gone, flow is acceptable, and the large staircase has not returned. It nevertheless rejects that candidate because the Remembered gray scene continuously shakes while Live and editor UI are relatively stable. That verdict remains recorded; the new candidate below is offered only for a third user retest and does not claim `COMPLETED` or visual acceptance.
+
+## Third retest failure now in force
+
+The third real dynamic PIE rejected candidate `acd1c5b8ae9950423aa9575c639e034b9ce21dd7`. The user confirmed that the gray horizontal-line repair, black/gray alignment, large-staircase improvement, three-dimensional Remembered scene, enemy filtering, and acceptable frame/input performance are preserved. However, wall edges still visibly shake when player and camera are completely still, and the same wall edges continue to shake in Remembered.
+
+The third recording is failure evidence. The prior gray-interior ROI did not include the wall depth discontinuity and cannot establish visual acceptance. The formal post-TSR/post-Tonemap architecture is rejected: deleting `ddx`/`ddy`/`frac` and stabilizing the internal gray values did not stabilize the hard semantic boundary that SightWeave creates after TSR history has already completed.
+
+The next and only authorized slice is `SightWeave pre-TSR composition architecture proof`. It must compare the rejected post-TSR path against a Development/Editor-controlled pre-TSR path in `/Game/Maps/L_VisionIntegration`, with D3D12/SM6, normal TSR and temporal jitter, at 1080p. The proof must measure the same Live and Remembered wall depth boundary rather than another gray-interior ROI. It may use a clearly isolated non-production fixed static gray input only to prove boundary stability; that input cannot satisfy the Remembered visual contract.
+
+Success is capped at `PARTIAL — PRE_TSR_ARCHITECTURE_PROVEN / READY_FOR_USER_DYNAMIC_PIE_RETEST_4`. A pre-TSR path that still visibly jitters requires `BLOCKED — PRE_TSR_ARCHITECTURE_PROOF_FAILED`, identification of the earliest changing input, and a stop rather than another local tuning patch. No production migration, full regression, or `COMPLETED` claim is authorized by either outcome.
 
 ## Second retest failure now in force
 

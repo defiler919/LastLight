@@ -16,7 +16,7 @@ Validated Remembered stabilization SHA: `bac0525`
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_3_FAILED / POST_TSR COMPOSITION ARCHITECTURE REJECTED**
+Status: **BLOCKED — PRE_TSR_ARCHITECTURE_PROOF_FAILED**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
 
@@ -36,6 +36,96 @@ The third user recording is failure evidence, not acceptance evidence. The earli
 The prior conclusion that immutable post-TSR Remembered shading was sufficient is therefore superseded. The formal callback still first creates the final Unknown/Remembered/Live screen boundary after normal TSR and after Tonemap. Normal scene geometry is temporally resolved inside TSR, but SightWeave then re-reads current-frame SceneDepth, CustomDepth/Stencil, and static attributes to create a new hard semantic boundary outside that history. The focused next step is a controlled pre-TSR architecture proof, not another blur, feather, threshold, dilation, resolution, or post-TSR jitter-compensation patch.
 
 The only permitted success state for that proof is `PARTIAL — PRE_TSR_ARCHITECTURE_PROVEN / READY_FOR_USER_DYNAMIC_PIE_RETEST_4`. If the pre-TSR path still visibly jitters under normal TSR, the required state is `BLOCKED — PRE_TSR_ARCHITECTURE_PROOF_FAILED` and the earliest changing input must be identified before work stops. Neither result is `COMPLETED`, and no formal production migration or full regression is authorized by this proof.
+
+## 0E. Pre-TSR composition architecture proof — failed
+
+The controlled proof at source checkpoint `12b1118` and diagnostic checkpoint `05d2f03` disproved the narrow hypothesis that moving the existing geometric semantic composite before TSR is sufficient by itself. The B path still changed at a completely static wall depth discontinuity under the project's normal D3D12/SM6 TSR configuration and was numerically worse than the rejected A control. The required disposition is therefore:
+
+```text
+BLOCKED — PRE_TSR_ARCHITECTURE_PROOF_FAILED
+```
+
+This is not a fifth tuning candidate and is not ready for user PIE retest 4. No blur, feather increase, mask dilation, threshold change, Screen Percentage reduction, TSR disable, camera snap, wall hiding, or current-SceneColor memory route was used.
+
+### Exact current and proof render order
+
+`FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass` in `Plugins/SightWeave/Source/SightWeaveRender/Private/SightWeaveSceneViewExtension.cpp` selects the pass. `PostProcessComposite_RenderThread` calls `FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_RenderThread`, which binds SceneColor, SceneDepth, CustomDepth/Stencil, the live/memory/static atlases, ViewRect data, and the temporal projection jitter. The screen boundary is first finalized in `SightWeaveHardMaskCompositePS` or `SightWeaveInwardFeatherCompositePS` in `Plugins/SightWeave/Shaders/Private/SightWeaveSingleTile.usf` after `SightWeaveResolvePresentationState`.
+
+Unreal 5.8.1 executes the relevant stages in `D:/UE_5.8/Engine/Source/Runtime/Renderer/Private/PostProcess/PostProcessing.cpp` as follows:
+
+```text
+BeforeDOF scene-view-extension chain (lines 893-899)
+    -> DOF / remaining pre-upscale processing
+    -> AddMainTemporalSuperResolutionPasses (lines 1154-1160)
+    -> full-resolution SceneColor
+    -> AddTonemapPass (line 1629)
+    -> Tonemap after-pass chain (line 1637)
+```
+
+A, the rejected control, remains `EPostProcessingPass::Tonemap`. In the project-normal 1080p run it receives post-TSR/post-Tonemap 1920x1080 SceneColor and output, while SceneDepth and unjittered CustomDepth/Stencil remain primary textures with 1400x792 extent. SightWeave therefore creates the final Unknown/Remembered/Live screen boundary after normal TSR history and after Tonemap.
+
+B selects `EPostProcessingPass::BeforeDOF` only in Development/Editor and only when the World map name ends in `L_VisionIntegration`. It receives pre-Tonemap HDR SceneColor at primary resolution; the recorded SceneColor texture extent is 1400x792 and its active output/ViewRect is 1400x788. SceneDepth and CustomDepth/Stencil use the same 1400x792 texture extent. The semantic boundary is formed at that primary stage, passed through normal TSR to 1920x1080, and then Tonemapped. There is no SightWeave-owned previous-frame history. The proof's default Remembered input is diagnostic mode 13, a fixed neutral value; current SceneColor, lighting, dynamic shadow, particle, and enemy content are not used for Remembered.
+
+`SightWeaveResolveDepthCoordinates` distinguishes the two temporal spaces. A starts with the stable secondary output pixel and moves only the SceneDepth coordinate into the current jittered primary buffer, leaving CustomDepth/Stencil in their unjittered convention. B starts from the current primary SceneDepth pixel and maps the point-sampled CustomDepth/Stencil coordinate back toward the unjittered convention. This is a private Shader parameter addition for the proof; no public Runtime/Adapter, CPU Mask, scope, revision, generation, persistence, `.uasset`, `.umap`, configuration, plugin descriptor, or `Darkwell.uproject` contract changed.
+
+### Static wall A/B evidence
+
+The authoritative comparison uses the project-normal TSR primary/secondary split above, not the initial native-resolution diagnostic where Screen Percentage was temporarily forced to 100. Values are adjacent-frame mean absolute differences in 8-bit channel-value units over the same narrow wall depth-discontinuity ROI. Each static sequence contains 300 consecutive 30 fps frames.
+
+| State / path | wall ROI MAD p50 | p95 | max | detected edge range | one-pixel flips |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Live A — post-Tonemap control, left wall | 0.018682 | 0.035442 | 0.382422 | 0 px | 0 |
+| Live B — BeforeDOF proof, left wall | 0.219052 | 0.540915 | 0.767966 | 3 px | 12 |
+| Live B — BeforeDOF proof, right wall | 0.221721 | 0.525111 | 0.755563 | 3 px | 34 |
+| Remembered A — post-Tonemap control, left wall | 0.074729 | 0.143064 | 0.530327 | 0 px | 0 |
+| Remembered B — BeforeDOF proof, left wall | 0.494033 | 1.119474 | 1.291636 | 2 px | 86 |
+
+These standalone A values do not overturn the user's embedded dynamic PIE rejection. They only establish that B is not clearly better than A in the controlled proof and fails the B success gate on its own. Contact sheets and adjacent-frame wall crops were opened directly; B shows the lower wall edge changing across otherwise fixed frames.
+
+The broad black/Live diagonal remained position-stable in the Live static detector for both paths, but that does not rescue B: the contract explicitly requires the wall depth discontinuity and Remembered wall boundary, both of which failed. The Remembered black-boundary detector also had a moving/ambiguous multi-edge ROI after the priming translation and is not used as a pass claim.
+
+### Earliest changing stage
+
+The fixed-camera/player diagnostic runs retained `stateRevision=8`, `featherRevision=8`, `staticClassVersion=4`, `submittedTiles=0`, `update=none`, and `bindingFailure=0` throughout the sampled frames. Thus the CPU authority Mask, GPU atlas revision, incremental tile submission, static-attribute revision, player Transform, camera Transform, and resource binding were not the source of the B wall change.
+
+The pre-TSR resource-isolation results for the same left-wall ROI were:
+
+| B diagnostic output | MAD p50 | p95 | edge range | one-pixel flips |
+| --- | ---: | ---: | ---: | ---: |
+| raw CustomDepth | 0.052669 | 0.086447 | 0 px | 0 |
+| raw CustomStencil | 0.289562 | 0.370186 | 1 px | 46 |
+| static attribute | 0.079612 | 0.143349 | 0 px | 0 |
+| remembered surface-classification alpha | 0.047752 | 0.071752 | 1 px | 2 |
+| unified presentation state | 0.022015 | 0.042403 | 4 px | 32 |
+| SceneDepth-reconstructed world-position diagnostic | 0.061813 | 0.129613 | 4 px | 50 |
+
+The earliest visible instability is therefore at the pre-TSR categorical CustomStencil/surface-classification and world-position-to-state boundary, before fixed gray filtering. This does not prove that the underlying CustomStencil allocation mutates. The evidence supports the narrower inference that directly point-sampling an unjittered categorical stencil/classification boundary into a jittered pre-TSR color buffer does not give that new semantic edge the same raster, velocity, rejection/reactive-mask, and history semantics as normal scene geometry. Normal TSR alone did not stabilize it. Trying alternate jitter signs or adding another compensation is explicitly prohibited and was not attempted.
+
+### Validation, evidence, and stop boundary
+
+- `DarkwellEditor Win64 Development`: succeeded twice, first for the proof and again for explicit diagnostic isolation.
+- `SightWeave.M3P5.Packaging.RememberedTemporalSpace`: Success after both source checkpoints.
+- `Darkwell.SightWeave.VisualRescue.PresentationState.TruthTable`: Success.
+- `Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority`: Success, retaining the wall rule, `NeverRemember`, Stalker/HUD shared authority, and Torch/Lantern/Torch authority transitions.
+- `SightWeave.M3P5.Composite.ThreeStateAndMemoryFailure.D3D12`: Success on D3D12/SM6.
+- Twelve proof logs were scanned. The only text match was the benign configuration line `r.GPUCrashDebugging:0`; there was no fatal, assertion, ensure, GPU crash, device removal, DXGI, D3D12/RHI, SightWeave, or Darkwell severe error.
+
+Ignored evidence is under `Saved/SightWeaveVisualRescueEvidence/Dynamic`:
+
+- `PreTSRProof_A_PostTonemap_ProjectTSR_LiveStatic10`
+- `PreTSRProof_B_BeforeDOF_ProjectTSR_LiveStatic10`
+- `PreTSRProof_A_PostTonemap_ProjectTSR_RememberedStatic10`
+- `PreTSRProof_B_BeforeDOF_ProjectTSR_RememberedStatic10`
+- `PreTSRProof_B_Diag_StateMask`
+- `PreTSRProof_B_Diag_WorldPosition`
+- `PreTSRProof_B_Diag_CustomDepth`
+- `PreTSRProof_B_Diag_CustomStencil`
+- `PreTSRProof_B_Diag_StaticAttribute`
+- `PreTSRProof_B_Diag_SurfaceClassification`
+
+Each critical A/B directory contains the H.264 recording, game log, 300 lossless PNG frame extractions, wall contact sheets, adjacent-frame crops where applicable, and `boundary_metrics.json`. These files are ignored and not committed. The initial `ScreenPercentage=100` A/B directories are retained as explicitly non-authoritative diagnostic history.
+
+No slow-rotation, along-wall translation, Torch cycle, or fourth user PIE candidate was produced after the static Live and Remembered B gates failed. Continuing that success matrix would contradict the explicit falsification stop rule. The previously passed gray-line, black/gray alignment, large-staircase, performance, wall, and enemy-authority work remains frozen, but this proof does not claim a new accepted visual candidate.
 
 ## 0B. Second user dynamic PIE rejection (2026-08-29)
 
@@ -387,6 +477,9 @@ The agent opened all key stills/contact sheets, two sheets of ten adjacent 30 fp
 - `eb2a827` `fix: remove remembered surface line leakage`
 - `434f21e` `test: isolate remembered temporal instability`
 - `bac0525` `render: stabilize DARKWELL remembered composition`
+- `5c0049f` `docs: record third DARKWELL visual retest failure`
+- `12b1118` `render: prototype pre-TSR DARKWELL fog composition`
+- `05d2f03` `test: prepare pre-TSR DARKWELL dynamic proof`
 
 The first documentation commit contained Markdown trailing whitespace because a PowerShell command sequence did not short-circuit on `git diff --check`; `c2c4d8f` corrected it without rewriting history. No source checkpoint was affected.
 

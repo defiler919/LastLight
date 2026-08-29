@@ -12,7 +12,7 @@ Validated Remembered stabilization SHA: `bac0525`
 
 Stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_3_FAILED / POST_TSR COMPOSITION ARCHITECTURE REJECTED**
+Status: **BLOCKED — PRE_TSR_ARCHITECTURE_PROOF_FAILED**
 
 The user's first real dynamic PIE rejected the prior candidate for whole-game shaking/flicker and multiple thin gray lines. The second real dynamic PIE at `2883cd5d9f68044c71da785eaaa90f03fff4193c` confirms that those lines and the black/gray offset are gone, flow is acceptable, and the large staircase has not returned. It nevertheless rejects that candidate because the Remembered gray scene continuously shakes while Live and editor UI are relatively stable. That verdict remains recorded; the new candidate below is offered only for a third user retest and does not claim `COMPLETED` or visual acceptance.
 
@@ -25,6 +25,22 @@ The third recording is failure evidence. The prior gray-interior ROI did not inc
 The next and only authorized slice is `SightWeave pre-TSR composition architecture proof`. It must compare the rejected post-TSR path against a Development/Editor-controlled pre-TSR path in `/Game/Maps/L_VisionIntegration`, with D3D12/SM6, normal TSR and temporal jitter, at 1080p. The proof must measure the same Live and Remembered wall depth boundary rather than another gray-interior ROI. It may use a clearly isolated non-production fixed static gray input only to prove boundary stability; that input cannot satisfy the Remembered visual contract.
 
 Success is capped at `PARTIAL — PRE_TSR_ARCHITECTURE_PROVEN / READY_FOR_USER_DYNAMIC_PIE_RETEST_4`. A pre-TSR path that still visibly jitters requires `BLOCKED — PRE_TSR_ARCHITECTURE_PROOF_FAILED`, identification of the earliest changing input, and a stop rather than another local tuning patch. No production migration, full regression, or `COMPLETED` claim is authorized by either outcome.
+
+## Pre-TSR architecture proof failed
+
+The B path moved the first final Unknown/Remembered/Live boundary from the Tonemap after-pass to the `BeforeDOF` scene-view-extension callback, before Unreal's normal `AddMainTemporalSuperResolutionPasses`. It was Development/Editor-only, limited to `L_VisionIntegration`, used normal D3D12/SM6 TSR, and forced a fixed neutral non-production Remembered input by default. It changed no CPU authority, Adapter, persistence, map, asset, configuration, plugin descriptor, or `Darkwell.uproject` contract.
+
+At project-normal 1080p TSR, A consumed 1920x1080 post-TSR/post-Tonemap SceneColor while depth/stencil remained 1400x792. B wrote the semantic result into a 1400x788 active primary rect backed by 1400x792 SceneColor/depth/stencil textures, then allowed TSR to produce 1920x1080 and Tonemap normally. This verified the intended ordering, but B still failed the static wall gate.
+
+The same left Live wall ROI measured MAD p95 `0.035442`, edge range `0 px`, and `0` one-pixel flips for A versus `0.540915`, `3 px`, and `12` flips for B. The right B wall recorded p95 `0.525111`, range `3 px`, and `34` flips. After priming the same wall into Remembered, A measured p95 `0.143064`, range `0 px`, and `0` flips; B measured p95 `1.119474`, range `2 px`, and `86` flips. These agent captures do not overrule the user's rejection of A; they prove only that B is not better and fails independently.
+
+Fixed camera/player logs held Mask and resource authority constant: `stateRevision=8`, `featherRevision=8`, `staticClassVersion=4`, no tile submission/update, and `bindingFailure=0`. Raw CustomDepth had zero detected edge movement. The first changing categorical stage was CustomStencil/surface classification: raw CustomStencil had a one-pixel range and 46 flips, surface-classification alpha had one-pixel range and 2 flips, and the unified state output retained 32 flips. The evidence therefore points to the interface where an unjittered point-sampled categorical classification boundary is written into a jittered pre-TSR color buffer without the complete raster/velocity/rejection/reactive-history semantics of normal geometry. No alternate jitter-sign experiment or tuning patch was attempted.
+
+Build and focused gates passed: two serial `DarkwellEditor Win64 Development` builds; pass-placement/temporal-space; three-state truth table; M6P1 wall, `NeverRemember`, Stalker/HUD and tool authority; and D3D12/SM6 three-state composite. Twelve dynamic proof logs had no severe error; the only text hit was `r.GPUCrashDebugging:0` configuration. Gray horizontal lines and black/gray offset were not observed in the opened proof contacts, and the targeted authority gate retains enemy filtering, but no fourth visual candidate is offered.
+
+Evidence is ignored under `Saved/SightWeaveVisualRescueEvidence/Dynamic/PreTSRProof_*`; the critical A/B directories contain video, 300 consecutive PNG frames, logs, wall contact sheets/crops, and boundary JSON. No evidence or generated directory is committed.
+
+The task stops here as required. There is no `READY_FOR_USER_DYNAMIC_PIE_RETEST_4` status and no fourth PIE checklist because no candidate passed the architecture proof. The next decision requires new user authorization beyond this stopped proof; it must not silently become another jitter-compensation, blur, threshold, or local patch cycle.
 
 ## Second retest failure now in force
 
@@ -170,3 +186,6 @@ The user must explicitly confirm all of the following: no gray lines, no black/g
 - Memory-line fix: `eb2a827`
 - Second failure capture: `434f21e`
 - Remembered stabilization: `bac0525`
+- Third user rejection record: `5c0049f`
+- Pre-TSR architecture prototype: `12b1118`
+- Pre-TSR diagnostic proof: `05d2f03`

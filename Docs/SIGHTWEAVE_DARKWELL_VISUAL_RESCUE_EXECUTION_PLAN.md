@@ -1,10 +1,15 @@
 # SightWeave DARKWELL Visual Rescue Execution Plan
 
-Date: 2026-08-29  
-Branch: `codex/sightweave-darkwell-visual-rescue`  
-Frozen starting SHA: `f364f780904c7ced5d649e7d582c3d91a7d43baf`  
-48-hour dynamic prototype checkpoint: 2026-08-31  
-Final stop-loss deadline: 2026-09-05  
+Date: 2026-08-29
+
+Branch: `codex/sightweave-darkwell-visual-rescue`
+
+Frozen starting SHA: `f364f780904c7ced5d649e7d582c3d91a7d43baf`
+
+48-hour dynamic prototype checkpoint: 2026-08-31
+
+Final stop-loss deadline: 2026-09-05
+
 Current status: **PARTIAL — USER_PIE VISUAL AND SEMANTIC ACCEPTANCE FAILED**
 
 This plan is subordinate to `Docs/SIGHTWEAVE_DARKWELL_VISUAL_REQUIREMENTS.md`. It is a DARKWELL project rescue, not a general plugin, packaging, Fab, or publication milestone. The original automated evidence remains valid engineering evidence, but it cannot establish visual acceptance after the user's dynamic PIE rejection.

@@ -191,11 +191,15 @@ bool FSightWeaveM3P5RememberedTemporalSpaceTest::RunTest(const FString& Paramete
 	}
 
 	FString ViewExtension;
+	FString RenderState;
 	FString ShaderSource;
 	const FString BaseDir = Plugin->GetBaseDir();
 	if (!Load(*this, BaseDir,
 			TEXT("Source/SightWeaveRender/Private/SightWeaveSceneViewExtension.cpp"),
 			ViewExtension)
+		|| !Load(*this, BaseDir,
+			TEXT("Source/SightWeaveRender/Private/SightWeaveSparseAtlasRenderState.cpp"),
+			RenderState)
 		|| !Load(*this, BaseDir,
 			TEXT("Shaders/Private/SightWeaveSingleTile.usf"),
 			ShaderSource))
@@ -230,6 +234,9 @@ bool FSightWeaveM3P5RememberedTemporalSpaceTest::RunTest(const FString& Paramete
 		ViewExtension.Contains(TEXT("bPreTemporalUpscaleProof"))
 		&& ShaderSource.Contains(TEXT("PreTemporalUpscaleProof"))
 		&& ShaderSource.Contains(TEXT("DiagnosticMode == 13")));
+	TestTrue(TEXT("Pre-TSR proof retains explicit resource-isolation diagnostics"),
+		RenderState.Contains(TEXT("RequestedDiagnosticMode"))
+		&& RenderState.Contains(TEXT("RequestedDiagnosticMode == 0")));
 	TestTrue(TEXT("Remembered shading uses immutable attribute and stencil class"),
 		Shading.Contains(TEXT("SightWeaveSampleStaticAttribute"))
 		&& Shading.Contains(TEXT("OccluderSurfaceStencilValue")));

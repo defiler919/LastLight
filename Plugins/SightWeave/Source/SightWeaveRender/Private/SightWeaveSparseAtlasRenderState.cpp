@@ -1639,9 +1639,11 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		Inputs.GetInput(EPostProcessMaterialInput::SceneColor));
 	check(SceneColor.IsValid());
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	const int32 DiagnosticMode = bPreTemporalUpscaleProof
+	const int32 RequestedDiagnosticMode = FMath::Clamp(
+		CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 14);
+	const int32 DiagnosticMode = bPreTemporalUpscaleProof && RequestedDiagnosticMode == 0
 		? 13
-		: FMath::Clamp(CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 14);
+		: RequestedDiagnosticMode;
 	if (DiagnosticMode == 1)
 	{
 		return SceneColor;

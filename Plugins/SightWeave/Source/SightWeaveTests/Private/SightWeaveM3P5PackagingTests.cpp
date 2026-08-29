@@ -193,6 +193,8 @@ bool FSightWeaveM3P5RememberedTemporalSpaceTest::RunTest(const FString& Paramete
 	FString ViewExtension;
 	FString RenderState;
 	FString ShaderSource;
+	FString PluginEngineConfig;
+	FString ProjectEngineConfig;
 	const FString BaseDir = Plugin->GetBaseDir();
 	if (!Load(*this, BaseDir,
 			TEXT("Source/SightWeaveRender/Private/SightWeaveSceneViewExtension.cpp"),
@@ -202,7 +204,10 @@ bool FSightWeaveM3P5RememberedTemporalSpaceTest::RunTest(const FString& Paramete
 			RenderState)
 		|| !Load(*this, BaseDir,
 			TEXT("Shaders/Private/SightWeaveSingleTile.usf"),
-			ShaderSource))
+			ShaderSource)
+		|| !Load(*this, BaseDir, TEXT("Config/Engine.ini"), PluginEngineConfig)
+		|| !FFileHelper::LoadFileToString(ProjectEngineConfig,
+			*FPaths::Combine(FPaths::ProjectConfigDir(), TEXT("DefaultEngine.ini"))))
 	{
 		return false;
 	}
@@ -244,6 +249,9 @@ bool FSightWeaveM3P5RememberedTemporalSpaceTest::RunTest(const FString& Paramete
 		&& ShaderSource.Contains(TEXT("CustomDepthUsesTemporalJitter == 0"))
 		&& ShaderSource.Contains(TEXT("share"))
 		&& RenderState.Contains(TEXT("CustomDepthTemporalAAJitterValue != 0")));
+	TestTrue(TEXT("DARKWELL owns the pre-TSR CustomDepth jitter policy"),
+		ProjectEngineConfig.Contains(TEXT("r.CustomDepthTemporalAAJitter=1"))
+		&& !PluginEngineConfig.Contains(TEXT("r.CustomDepthTemporalAAJitter=")));
 	TestTrue(TEXT("Pre-TSR proof retains explicit resource-isolation diagnostics"),
 		RenderState.Contains(TEXT("RequestedDiagnosticMode"))
 		&& RenderState.Contains(TEXT("RequestedDiagnosticMode == 0")));

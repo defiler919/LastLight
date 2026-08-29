@@ -108,12 +108,14 @@ namespace SightWeaveMemoryPrivate
 
 	void SetPackedRange(TArray<uint8>& Bits, const int32 Row, int32 FirstX, int32 LastX)
 	{
-		FirstX = FMath::Clamp(FirstX, 0, SightWeave::Memory::InteriorTileSize - 1);
-		LastX = FMath::Clamp(LastX, 0, SightWeave::Memory::InteriorTileSize - 1);
-		if (FirstX > LastX)
+		if (LastX < 0
+			|| FirstX >= SightWeave::Memory::InteriorTileSize
+			|| FirstX > LastX)
 		{
 			return;
 		}
+		FirstX = FMath::Clamp(FirstX, 0, SightWeave::Memory::InteriorTileSize - 1);
+		LastX = FMath::Clamp(LastX, 0, SightWeave::Memory::InteriorTileSize - 1);
 		const int32 RowOffset = Row * SightWeave::Memory::RowBytes;
 		const int32 FirstByte = FirstX >> 3;
 		const int32 LastByte = LastX >> 3;

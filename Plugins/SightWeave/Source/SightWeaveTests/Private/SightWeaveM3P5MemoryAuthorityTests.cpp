@@ -226,6 +226,38 @@ bool FSightWeaveM3P5FirstExplorationTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM3P5ConcaveTileEdgeLeakTest,
+	"SightWeave.M3P5.Memory.Authority.ConcavePolygonDoesNotLeakAtTileEdge",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSightWeaveM3P5ConcaveTileEdgeLeakTest::RunTest(const FString& Parameters)
+{
+	constexpr double Origin = -1000000.0;
+	const TArray<FVector> ConcaveCoverage = {
+		FVector(Origin + 100.0, Origin + 100.0, 100.0),
+		FVector(Origin + 4000.0, Origin + 100.0, 100.0),
+		FVector(Origin + 4000.0, Origin + 4000.0, 100.0),
+		FVector(Origin + 3000.0, Origin + 4000.0, 100.0),
+		FVector(Origin + 3000.0, Origin + 1000.0, 100.0),
+		FVector(Origin + 100.0, Origin + 1000.0, 100.0)
+	};
+	const FSightWeaveFrameSnapshot Snapshot = MakeSnapshot(1, true, ConcaveCoverage);
+	FSightWeaveMemoryAuthority Authority;
+	TestTrue(TEXT("Authority configures"), Configure(Authority, Snapshot));
+	TestTrue(TEXT("Concave coverage writes"), Authority.WriteEffectiveLive(Snapshot).Succeeded());
+	TestTrue(
+		TEXT("Upper right leg is remembered"),
+		Authority.QueryHardMemory2D(FVector2D(Origin + 3500.0, Origin + 3000.0)));
+	TestTrue(
+		TEXT("Lower cross-tile leg is remembered"),
+		Authority.QueryHardMemory2D(FVector2D(Origin + 1000.0, Origin + 500.0)));
+	TestFalse(
+		TEXT("Out-of-tile scanline interval does not clamp into a false edge texel"),
+		Authority.QueryHardMemory2D(FVector2D(Origin + 2475.0, Origin + 3000.0)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FSightWeaveM3P5CompatibilityAndSeamTest,
 	"SightWeave.M3P5.Memory.Authority.CompatibilitySeamDeterminism",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

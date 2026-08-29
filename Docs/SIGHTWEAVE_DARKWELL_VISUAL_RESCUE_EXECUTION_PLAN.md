@@ -6,11 +6,13 @@ Branch: `codex/sightweave-darkwell-visual-rescue`
 
 Frozen starting SHA: `f364f780904c7ced5d649e7d582c3d91a7d43baf`
 
+Unattended B0/B1 continuation starting SHA: `e4d654b74e3557ebefa328986bb626dcbfde0301`
+
 48-hour dynamic prototype checkpoint: 2026-08-31
 
 Final stop-loss deadline: 2026-09-05
 
-Current status: **BLOCKED — CURRENT PRE_TSR PROTOTYPE FAILED / ROOT CAUSE ISOLATED TO TEMPORAL-INCOHERENT CUSTOMSTENCIL**
+Current status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_4**
 
 This plan is subordinate to `Docs/SIGHTWEAVE_DARKWELL_VISUAL_REQUIREMENTS.md`. It is a DARKWELL project rescue, not a general plugin, packaging, Fab, or publication milestone. The original automated evidence remains valid engineering evidence, but it cannot establish visual acceptance after the user's dynamic PIE rejection.
 
@@ -168,3 +170,31 @@ Planned reliable checkpoints:
 Each source checkpoint must compile, pass its focused check, contain no unrelated/generated/binary changes, and be pushed normally before the next risky step. `Darkwell.uproject`, `L_Prototype`, Saved/Binaries/Intermediate/DDC/AutomationReports, merge, rebase, reset, clean, and force-push remain prohibited.
 
 If an obviously improved dynamic D3D12 prototype is not available by 2026-08-31, stop expanding implementation, retain honest evidence, push only reliable checkpoints, and mark the candidate BLOCKED or REJECTED_CANDIDATE. By 2026-09-05 the only final product decisions are `ACCEPTED — DARKWELL USABLE` or `REJECTED — ABANDON SIGHTWEAVE`; PARTIAL cannot be extended indefinitely.
+
+## 6. 2026-08-30 B0/B1 execution closure
+
+This section supersedes the earlier planned state without deleting its failure record.
+
+### Phase A — B0 completed
+
+Development diagnostic mode 15 used `BeforeDOF`, normal D3D12/SM6 TSR, the unified three-state mask, a deterministic SceneDepth/world-mask surface class, and fixed neutral Remembered color. It did not read CustomDepth/Stencil for the surface decision. Three independent processes per resolution covered static Live, static Remembered, rotation, wall motion, and a fog-off control. Opened contact sheets and adjacent wall crops showed no prior static wall jump. B0 is an architecture-isolation proof only; its fixed gray input is not product Remembered.
+
+### Phase B — B1 completed
+
+UE 5.8.1 source inspection established that `r.CustomDepthTemporalAAJitter` is render-thread-safe and that `RenderCustomDepthPass` removes jitter through `CreateViewShaderParametersWithoutJitter` only when the CVar is zero. CustomDepth and CustomStencil share one depth-stencil projection. The modified View parameters feed both the ordinary mesh pass and Nanite packed views. Runtime evidence then proved CVar value 1, matching SceneDepth/CustomDepth extents, diagnostic mode 13, and `bindingFailure=0` at 1080p and 1440p.
+
+B1 final output was visibly and numerically better than the rejected unjittered proof. Raw mode-7 CustomStencil retains the expected temporal one-pixel raster movement; final TSR absorbs it. The raw wall-edge ranges were one pixel at both resolutions, while the formal Remembered output has no visible one-pixel wall flashing in opened adjacent frames.
+
+### Phase C — formal DARKWELL migration completed
+
+`L_VisionIntegration` now selects `EPostProcessingPass::BeforeDOF` in Development, Test, and Shipping. SceneColor, SceneDepth, CustomDepth, and CustomStencil are sampled in the same jittered primary-resolution View space, and normal TSR resolves the semantic result. Diagnostic pass 1 retains B0; diagnostic pass 2 retains the rejected post-Tonemap control. These switches remain Development/Editor-only. Other SightWeave maps retain their post-Tonemap path.
+
+DARKWELL owns `r.CustomDepthTemporalAAJitter=1`; the plugin no longer overrides the host temporal policy. Runtime logs, rather than configuration text alone, prove the effective value and set-by source. Normal TSR, Ultra 2.5 cm/texel, unified state, 3D filtered Remembered, tile-edge rejection, wall classification, enemy filtering, and tool revision fixes remain enabled.
+
+No custom temporal blur, global camera cut, full-screen history clear, resolution reduction, mask growth, or TSR disable was introduced. Because the semantic composition now precedes TSR, UE's normal per-pixel temporal resolve and history rejection operate on the actual Unknown/Remembered/Live change. No separate SightWeave full-screen history exists.
+
+### Closed and deferred work
+
+The project candidate passed the DARKWELL visual gate and proceeds to user retest four. It does not claim plugin-wide D3D12 closure: three legacy M4P1 post-TSR Lab screenshot/proxy tests fail after the project changes CustomDepth jitter policy. Per the frozen priority, no compensating plugin-general solution was added. A separate Nanite wall was not present in the integration fixture, and doorway traversal was not independently scripted; engine-source parity and M6P1 doorway authority are recorded, but these two visual checks remain for the user retest.
+
+The controlling state is `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_4`. Only the user's dynamic PIE can promote the project to `ACCEPTED — DARKWELL USABLE`. The 2026-09-05 stop-loss remains unconditional.

@@ -12,11 +12,15 @@ Second user-rejected candidate baseline: `2883cd5d9f68044c71da785eaaa90f03fff419
 
 Validated Remembered stabilization SHA: `bac0525`
 
+Unattended B0/B1 continuation starting SHA: `e4d654b74e3557ebefa328986bb626dcbfde0301`
+
+Validated temporal-coherent project candidate SHA before final documentation: `4e50e44`
+
 48-hour prototype checkpoint: 2026-08-31
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **BLOCKED — CURRENT PRE_TSR PROTOTYPE FAILED / ROOT CAUSE ISOLATED TO TEMPORAL-INCOHERENT CUSTOMSTENCIL**
+Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_4**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
 
@@ -512,3 +516,100 @@ The first and second candidates failed the user's dynamic PIE. The Remembered-on
 - `REJECTED — ABANDON SIGHTWEAVE`
 
 `PARTIAL` cannot extend past the stop-loss decision.
+
+## 11. Temporal-coherent pre-TSR rescue result (2026-08-30)
+
+### 11.1 Root cause and corrected interpretation
+
+The third candidate did not disprove pre-TSR composition. Its exact failed B path combined jittered pre-TSR SceneColor/SceneDepth with unjittered, point-sampled CustomDepth/Stencil. That categorical boundary changed relative to the primary color sample before TSR. The accurate root cause is temporal-space incoherence at the CustomStencil surface-classification boundary.
+
+UE 5.8.1 defines `r.CustomDepthTemporalAAJitter` as render-thread-safe. With value zero, `RenderCustomDepthPass` builds View shader parameters without jitter; both CustomDepth and CustomStencil use the same depth-stencil target and projection. The adjusted View parameters are used by the non-Nanite mesh pass and Nanite packed views. No later DARKWELL code was found overriding the value. The plugin's own `Engine.ini` did override the host setting during the first formal recording attempt; that attempt is preserved as invalid configuration-authority evidence. The plugin override was removed, the project remains authoritative at value 1, and later runtime logs prove `customDepthTemporalAAJitter=1`, set-by project setting.
+
+### 11.2 B0, B1, and fog-off comparison
+
+All values below are adjacent-frame output-space measurements from ignored evidence. Raw pre-TSR jitter movement is not treated as final-output failure.
+
+| 1080p static left wall | MAD p50 | MAD p95 | max | edge range | one-pixel flips |
+|---|---:|---:|---:|---:|---:|
+| fog off | 0.026006 | 0.059748 | 0.746291 | 3 px | 40 |
+| B0 Live fixed class | 0.120449 | 0.204412 | 0.594505 | 0 px | 0 |
+| B0 Remembered fixed class | 0.181084 | 0.321798 | 0.742636 | 0 px | 0 |
+| B1 Live temporal-coherent class | 0.038682 | 0.064218 | 0.483562 | 2 px | 34 |
+| B1 Remembered temporal-coherent class | 0.167580 | 0.265042 | 0.691145 | 1 px | 27 |
+
+| 1440p static left wall | MAD p50 | MAD p95 | max | edge range | one-pixel flips |
+|---|---:|---:|---:|---:|---:|
+| fog off | 0.081396 | 0.154284 | 0.766694 | 2 px | 32 |
+| B0 Live fixed class | 0.167583 | 0.251606 | 0.648831 | 0 px | 0 |
+| B0 Remembered fixed class | 0.267981 | 0.392482 | 0.790909 | 0 px | 0 |
+| B1 Live temporal-coherent class | 0.037762 | 0.069319 | 0.632489 | 2 px | 26 |
+| B1 Remembered temporal-coherent class | 0.207119 | 0.325589 | 0.694089 | 3 px | 49 |
+
+The rejected unjittered B measured Remembered p95 `1.119474` with 86 flips at 1080p. B1 is materially lower. Opened B0/B1 contacts and adjacent crops showed no gray-line or black/gray-seam recurrence. B0 passed, then B1 passed the project visual gate; the stencil-free Phase D was therefore not entered.
+
+Raw mode-7 CustomStencil is expected to move with temporal jitter: at 1080p the two sampled wall boundaries had range 1 pixel with 162/160 flips; at 1440p they had range 1 pixel with 24/32 flips. The formal output does not use an unjittered categorical sample against jittered color. Final TSR, not raw primary input, is authoritative.
+
+### 11.3 Formal frame data path
+
+```text
+L_VisionIntegration primary View
+  -> jittered SceneColor + SceneDepth
+  -> jittered CustomDepth/CustomStencil, same primary ViewRect/extent
+  -> BeforeDOF SightWeave state/surface classification and filtered Remembered composite
+  -> normal UE 5.8 TSR/history rejection
+  -> Tonemap and final 1080p/1440p output
+```
+
+The selected pass is chosen in `FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass`; the callback is `PostProcessComposite_RenderThread`; RDG binding and runtime diagnostics are in `FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_RenderThread`; shader coordinate resolution and final state composition enter through `SightWeaveResolveDepthCoordinates` and the hard/feather composite entries in `SightWeaveSingleTile.usf`.
+
+At 1080p, runtime logs record a 1920x1080 output View with 1400x788 active primary color/depth in 1400x792 extents. At 1440p, output is 2560x1440 with 1552x873 active primary color/depth in 1552x880 extents. CustomDepth extent matches SceneDepth in both cases. `ViewRect.Min=(0,0)` for the standalone evidence, diagnostic mode is 0, and all logged formal frames have `bindingFailure=0`.
+
+The project does not combine post-TSR color with pre-TSR depth, does not apply a second unjitter operation, and does not sample a previous SightWeave history. Other plugin maps retain the older post-Tonemap callback and are explicitly outside this DARKWELL-first migration.
+
+### 11.4 Formal dynamic evidence and ROI
+
+Ignored evidence root: `Saved/SightWeaveVisualRescueEvidence`.
+
+- 1080p: `Dynamic/FormalJ1_1080_Run1_RememberedStatic20`, `Run2_Rotate30`, `Run3_Wall30`, `Run4_Startup20`, `Run5_LiveStatic20`, `Run6_TorchCycle`, and `Run7_Soak600`.
+- 1440p: `Dynamic/FormalJ1_1440_Run1_RememberedStatic20`, `Run2_Rotate30`, and `Run3_Wall30`.
+- raw stencil: `Dynamic/B1RawStencil_1080_Static10` and `Dynamic/B1RawStencil_1440_Static10`.
+- B0/B1/fog-off controls remain under their original `Dynamic/B0_*` and `Dynamic/B1_*` directories.
+
+The agent opened all six main static/rotation/wall contact sheets, the startup/Live/tool contacts, the 10-minute contact-by-minute sheet, and 1080p/1440p ten-adjacent-frame Remembered crops. The agent did not claim to watch each video in real time. The 600-second recording is verified by `ffprobe`, reaches render frame 53,796, and closes naturally.
+
+| formal static Remembered ROI | 1080p p95 | 1440p p95 |
+|---|---:|---:|
+| static gray interior | 0.118438 | 0.112972 |
+| internal material detail | 0.127614 | 0.127936 |
+| static-object edge | 0.165304 | 0.176164 |
+| Live control | 0.335713 | 0.375879 |
+| HUD control | 0.015497 | 0.014938 |
+
+Values are RGB mean absolute difference in 8-bit code values. The Remembered interior and edge are less active than the Live control. Opened adjacent crops show the gray wall/floor detail and boundary fixed in place; no whole-gray-layer shaking is visible. Startup has no horizontal gray lines. Torch/Lantern/Torch loses and restores legal cone illumination without a stuck-black terminal state. Rotation and wall contacts preserve the black/gray seam repair and do not show a return of the former large block staircase.
+
+### 11.5 Automation and builds
+
+- `DarkwellEditor Win64 Development`: succeeded after every source/test checkpoint. Final relevant builds were 10/10, 4/4, 9/9, and 4/4 actions.
+- temporal-space placement: 1/1 Success.
+- D3D12 three-state composite: 1/1 Success.
+- tile-edge regression: 1/1 Success.
+- M3.4: first run 7 Success / 1 Fail due stale Tonemap-only source-string expectation; after selected-pass contract correction, 8/8 Success.
+- M3.5 NullRHI group: 18/18 Success.
+- M6P1 group: 4/4 Success, including wall, doorway target authority, `NeverRemember`, Stalker/HUD shared revision, Lantern loss of legal cone light, and Torch restoration.
+- complete DARKWELL: 29/29 Success.
+- complete SightWeave NullRHI: two preserved runs were 197/198 because two stale selected-pass source-string expectations were corrected in sequence; final run is 198/198 Success.
+- complete SightWeave D3D12/SM6: 287 Success / 3 Fail out of 290. The failures are legacy M4P1 Lab screenshot/proxy pixel baselines (`Camera34Observability`, `ContinuousTransition`, `LastSeenLab`) on `L_SightWeave_Lab` after the host adopts jittered CustomDepth. They do not execute the DARKWELL pre-TSR map path. No threshold was relaxed and the failures remain recorded.
+- `Darkwell Win64 Development`: succeeded, 5/5 actions.
+- `Darkwell Win64 Shipping`: succeeded, 5/5 actions.
+
+Build warnings are the non-preferred MSVC 14.51 toolchain notice and UE 5.8 deprecations in `Character.h` and `AISystem.h`. D3D12 automation also records Epic telemetry network warnings, an intentional corrupted-zlib negative-test warning, and an RHI reserved-virtual-size warning of 258 GB versus a 256 GB budget. No candidate dynamic log contains a fatal, assert, unhandled exception, GPU crash, device removal, or binding failure.
+
+### 11.6 Preserved semantics and remaining limits
+
+Preserved: Ultra 2.5 cm/texel, unified Unknown/Remembered/Live state, recognizable three-dimensional filtered static memory, tile-edge empty-interval rejection, black/gray alignment, readable wall surfaces with black behind, `NeverRemember`, shared Stalker/HUD authority, and Torch/Lantern/Torch recovery.
+
+No user video, `Saved`, generated directory, asset, map, `L_Prototype`, or `Darkwell.uproject` was changed or committed. No SceneCapture, TSR-off formal path, blur increase, mask expansion, or resolution reduction was used.
+
+The integration fixture uses ordinary BasicShapes meshes; a separate Nanite wall visual comparison was not available. Engine source establishes shared jittered View construction for Nanite/non-Nanite CustomDepth, but this is not a fixture-level Nanite pass claim. A separate scripted doorway traversal was not captured; wall-end movement and M6P1 doorway authority passed, while subjective doorway visuals remain in retest four. The project relies on normal TSR's local history handling after pre-TSR semantic composition; no bespoke SightWeave reactive texture was added. The three legacy plugin-Lab D3D12 failures remain deferred under the explicit DARKWELL-first priority.
+
+The candidate is therefore `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_4`, not `COMPLETED`. User dynamic PIE remains the visual and semantic authority. Rejection triggers the 2026-09-05 stop-loss and SightWeave abandonment review; it does not authorize another local post-process compensation cycle.

@@ -10,9 +10,13 @@ Second user-rejected candidate baseline: `2883cd5d9f68044c71da785eaaa90f03fff419
 
 Validated Remembered stabilization SHA: `bac0525`
 
+Unattended B0/B1 continuation starting SHA: `e4d654b74e3557ebefa328986bb626dcbfde0301`
+
+Validated temporal-coherent project candidate SHA before final documentation: `4e50e44`
+
 Stop-loss deadline: 2026-09-05
 
-Status: **BLOCKED — CURRENT PRE_TSR PROTOTYPE FAILED / ROOT CAUSE ISOLATED TO TEMPORAL-INCOHERENT CUSTOMSTENCIL**
+Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_4**
 
 ## 2026-08-30 superseding interpretation
 
@@ -208,3 +212,61 @@ The user must explicitly confirm all of the following: no gray lines, no black/g
 - Third user rejection record: `5c0049f`
 - Pre-TSR architecture prototype: `12b1118`
 - Pre-TSR diagnostic proof: `05d2f03`
+
+## Fourth dynamic PIE handoff (2026-08-30)
+
+### Candidate state
+
+`PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_4`
+
+The selected project path is temporal-coherent B1 followed by formal pre-TSR migration. B0 first proved that `BeforeDOF + jittered SceneColor/SceneDepth + normal TSR` is stable without a Stencil read. B1 then enabled jittered CustomDepth/Stencil and showed a large improvement over the failed unjittered B. The stencil-free Phase D was not entered.
+
+The formal `L_VisionIntegration` pass now runs at `BeforeDOF`. SceneColor, SceneDepth, CustomDepth, and CustomStencil share the jittered primary View space; normal TSR stabilizes the final result. Runtime evidence proves `r.CustomDepthTemporalAAJitter=1` and `bindingFailure=0`. B0 fixed gray and the rejected post-Tonemap path remain only behind Development/Editor diagnostics. Shipping has no diagnostic selection path.
+
+### What the agent-side gate established
+
+- 20-second static Remembered, 30-second slow rotation, and 30-second wall movement at both 1080p and 1440p under D3D12/SM6 and normal TSR.
+- 20-second startup and Live wall controls, Torch/Lantern/Torch, and a verified 600-second continuous 1080p run.
+- opened contact sheets and adjacent-frame crops show no Remembered whole-layer shake, horizontal gray line, black/gray offset, or stuck-black tool state.
+- Remembered internal-material p95 adjacent-frame MAD is `0.127614/255` at 1080p and `0.127936/255` at 1440p; static-edge p95 is `0.165304/255` and `0.176164/255`.
+- full DARKWELL is 29/29; final full SightWeave NullRHI is 198/198; full SightWeave D3D12 is 287/290 with three retained legacy M4P1 Lab pixel-baseline failures.
+- Editor, Game Development, and Game Shipping builds succeeded.
+
+This evidence does not replace user PIE and does not justify `COMPLETED`.
+
+### Required user retest four
+
+1. Restore the branch with `git switch codex/sightweave-darkwell-visual-rescue; git pull --ff-only`.
+2. Open `D:\UE_pro\Darkwell\Darkwell.uproject` in UE 5.8.1 and load `/Game/Maps/L_VisionIntegration`.
+3. Use normal D3D12/SM6 and TSR. Do not set any `r.SightWeave.Diagnostic.*` CVar.
+4. Start normal PIE, select `NEW GAME`, and hold player and camera completely still for 20 seconds. Confirm Live walls, Remembered walls/floor, and their boundary do not shake or flash.
+5. Move laterally along both walls for 30 seconds, then slowly rotate left/right for 30 seconds. Confirm gray detail stays attached to geometry and no one-pixel wall flashing is visible.
+6. Cross the doorway and pass both wall ends. Confirm the wall surface remains readable, black begins behind it, and no gray line or black/gray seam appears.
+7. Sweep Live to Remembered to Live across the floor, wall, and static landmark. Look for ghosting, gray residue in Unknown, or loss of recognizable static structure.
+8. Switch Torch to Lantern and back to Torch. Confirm legal light disappears and returns without a stuck-black frame.
+9. Aim toward and away from the Stalker. Confirm Stalker and threat HUD appear/disappear together and no enemy image remains in Remembered.
+10. Repeat at 1080p and 1440p, then continue normal movement for at least five minutes.
+
+Accept only if the user explicitly confirms: no gray line, no black/gray offset, no Remembered shaking/flicker, acceptable circle/cone edge, acceptable static Remembered information, preserved wall rule, preserved enemy filtering, and acceptable flow. Otherwise stop under the 2026-09-05 abandonment rule; do not begin a fifth post-process patch cycle.
+
+### Evidence and known limits
+
+Primary ignored evidence is under `Saved/SightWeaveVisualRescueEvidence/Dynamic/FormalJ1_*`; raw Stencil proof is under `Dynamic/B1RawStencil_*`; B0/B1/fog-off controls remain under their named directories. The detailed metrics and complete pass/fail list are in `Docs/SIGHTWEAVE_DARKWELL_VISUAL_RESCUE_REPORT.md`.
+
+No separate Nanite wall existed in the integration fixture, and no independently scripted doorway capture was produced. Engine-source Nanite/non-Nanite View parity and the M6P1 doorway authority test are evidence, not substitutes for these visual checks. Three plugin-general M4P1 Lab D3D12 pixel-baseline failures remain deferred. These limits do not alter the project candidate's `PARTIAL` status.
+
+### Reliable continuation commits
+
+- `cc8ee8f` `docs: qualify DARKWELL pre-TSR proof failure`
+- `2236940` `test: isolate temporal-coherent fog classification`
+- `d10fd5f` `render: align DARKWELL custom stencil temporal space`
+- `8965a01` `render: migrate DARKWELL fog before temporal resolve`
+- `7b18882` `fix: let DARKWELL own custom depth jitter policy`
+- `84c910d` `test: prepare DARKWELL visual retest four`
+- `4e50e44` `test: align packaging contracts with selected pass`
+
+Next recovery command:
+
+```powershell
+git switch codex/sightweave-darkwell-visual-rescue; git pull --ff-only
+```

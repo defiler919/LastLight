@@ -199,9 +199,9 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 		return false;
 	}
 	if (!RuntimeSubsystem->ConfigureExplorationMemory(
-		KnowledgeOwnerId, FloorId, ESightWeaveRenderPrecisionTier::Coarse))
+		KnowledgeOwnerId, FloorId, ESightWeaveRenderPrecisionTier::Ultra))
 	{
-		RollbackToLegacy(TEXT("Coarse exploration memory configuration failed"), true);
+		RollbackToLegacy(TEXT("Ultra exploration memory configuration failed"), true);
 		return false;
 	}
 	for (const FSightWeaveStaticEnvironmentDescription& Description : StaticDescriptions)
@@ -235,7 +235,7 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 	}
 #if !UE_SERVER
 	if (!RenderSubsystem->SetPresentationScope(
-		KnowledgeOwnerId, FloorId, ESightWeaveRenderPrecisionTier::Coarse))
+		KnowledgeOwnerId, FloorId, ESightWeaveRenderPrecisionTier::Ultra))
 	{
 		RollbackToLegacy(TEXT("Render presentation-scope selection failed"), true);
 		return false;

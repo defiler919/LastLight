@@ -148,6 +148,10 @@ float MemoryTranslatedFloorPlaneZ;
 float MemoryCentimetersPerTexel;
 uint MemoryPresentationAvailable;
 
+static const uint SIGHTWEAVE_STATE_UNKNOWN = 0;
+static const uint SIGHTWEAVE_STATE_REMEMBERED = 1;
+static const uint SIGHTWEAVE_STATE_LIVE = 2;
+
 bool SightWeaveCoordinateLess(int2 A, int2 B)
 {
 	return A.x < B.x || (A.x == B.x && A.y < B.y);
@@ -318,6 +322,36 @@ float SightWeaveSampleStaticAttribute(float2 TranslatedWorld)
 		SlotOrigin + int2(4, 4) + InteriorTexel);
 }
 
+bool SightWeaveIsRememberedEligible(float2 TranslatedWorld)
+{
+	return MemoryPresentationAvailable != 0
+		&& MemoryPageTableCount != 0
+		&& StaticAttributePageTableCount != 0
+		&& SightWeaveSampleMemory(TranslatedWorld) >= 0.5f
+		&& SightWeaveSampleStaticAttribute(TranslatedWorld) > 0.0f;
+}
+
+uint SightWeaveResolvePresentationState(float2 TranslatedWorld)
+{
+	if (SightWeaveIsHardLive(TranslatedWorld))
+	{
+		return SIGHTWEAVE_STATE_LIVE;
+	}
+	return SightWeaveIsRememberedEligible(TranslatedWorld)
+		? SIGHTWEAVE_STATE_REMEMBERED
+		: SIGHTWEAVE_STATE_UNKNOWN;
+}
+
+float4 SightWeaveRememberedEnvironmentAtWorld(float2 TranslatedWorld)
+{
+	if (!SightWeaveIsRememberedEligible(TranslatedWorld))
+	{
+		return 0.0f;
+	}
+	const float Attribute = SightWeaveSampleStaticAttribute(TranslatedWorld);
+	return float4(Attribute.xxx, 1.0f);
+}
+
 bool SightWeaveIntersectFloorPlane(int2 DepthPixel, out float2 TranslatedFloorPosition)
 {
 	const float3 A = SvPositionToTranslatedWorld(
@@ -389,14 +423,16 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 	const float DeviceZ = SceneDepthTexture.Load(int3(DepthPixel, 0));
 	const float3 TranslatedWorld = SvPositionToTranslatedWorld(
 		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
-	const bool bVisible = SightWeaveIsHardLive(TranslatedWorld.xy);
-	if (bVisible)
+	const uint State = SightWeaveResolvePresentationState(TranslatedWorld.xy);
+	if (State == SIGHTWEAVE_STATE_LIVE)
 	{
 		return SceneColorTexture.Load(int3(SceneColorPixel, 0));
 	}
 	return SightWeaveIsVisibleSubjectProxy(DepthPixel, DeviceZ)
 		? SightWeaveSubjectProxyNeutral()
-		: SightWeaveRememberedEnvironment(DepthPixel);
+		: (State == SIGHTWEAVE_STATE_REMEMBERED
+			? SightWeaveRememberedEnvironmentAtWorld(TranslatedWorld.xy)
+			: 0.0f);
 }
 
 Texture2D<float> FeatherPage0;
@@ -528,15 +564,23 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 	const float DeviceZ = SceneDepthTexture.Load(int3(DepthPixel, 0));
 	const float3 TranslatedWorld = SvPositionToTranslatedWorld(
 		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
-	if (!SightWeaveIsHardLive(TranslatedWorld.xy))
+	const uint State = SightWeaveResolvePresentationState(TranslatedWorld.xy);
+	if (State != SIGHTWEAVE_STATE_LIVE)
 	{
 		return SightWeaveIsVisibleSubjectProxy(DepthPixel, DeviceZ)
 			? SightWeaveSubjectProxyNeutral()
-			: SightWeaveRememberedEnvironment(DepthPixel);
+			: (State == SIGHTWEAVE_STATE_REMEMBERED
+				? SightWeaveRememberedEnvironmentAtWorld(TranslatedWorld.xy)
+				: 0.0f);
 	}
 	const float VisualFeatherWeight = SightWeaveSampleVisualFeather(
 		TranslatedWorld.xy - TranslatedFloorOrigin);
-	return SceneColorTexture.Load(int3(SceneColorPixel, 0)) * VisualFeatherWeight;
+	const float4 LowerPriorityState = SightWeaveRememberedEnvironmentAtWorld(
+		TranslatedWorld.xy);
+	return lerp(
+		LowerPriorityState,
+		SceneColorTexture.Load(int3(SceneColorPixel, 0)),
+		VisualFeatherWeight);
 }
 
 StructuredBuffer<float2> TestTranslatedWorldPositions;
@@ -551,12 +595,12 @@ float4 SightWeaveMemoryPresentationTestPS(float4 Position : SV_POSITION) : SV_Ta
 		return 0.0f;
 	}
 	const float2 TranslatedWorld = TestTranslatedWorldPositions[SampleIndex];
-	if (SightWeaveIsHardLive(TranslatedWorld))
+	const uint State = SightWeaveResolvePresentationState(TranslatedWorld);
+	if (State == SIGHTWEAVE_STATE_LIVE)
 	{
 		return TestSceneColors[SampleIndex];
 	}
-	if (MemoryPresentationAvailable == 0
-		|| SightWeaveSampleMemory(TranslatedWorld) < 0.5f)
+	if (State != SIGHTWEAVE_STATE_REMEMBERED)
 	{
 		return 0.0f;
 	}

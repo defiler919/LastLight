@@ -22,6 +22,25 @@ enum class ESightWeavePresentationBindingFailure : uint8
 	WorldTeardown
 };
 
+/** Mutually exclusive final presentation state. Live always wins over accumulated memory. */
+enum class ESightWeavePresentationState : uint8
+{
+	Unknown = 0,
+	Remembered = 1,
+	Live = 2
+};
+
+constexpr ESightWeavePresentationState SightWeaveResolvePresentationState(
+	const bool bHardLive,
+	const bool bRememberedEligible)
+{
+	return bHardLive
+		? ESightWeavePresentationState::Live
+		: (bRememberedEligible
+			? ESightWeavePresentationState::Remembered
+			: ESightWeavePresentationState::Unknown);
+}
+
 namespace SightWeave::VisualFeather
 {
 	inline constexpr float MaximumWidthCentimeters = 100.0f;

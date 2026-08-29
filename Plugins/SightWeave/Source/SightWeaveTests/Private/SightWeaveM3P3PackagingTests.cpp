@@ -103,9 +103,9 @@ bool FSightWeaveM3P3PackagingBoundariesTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Production shader uses integer atlas loads and the four-texel gutter"),
 		ShaderSource.Contains(TEXT("AtlasPage0.Load"))
 		&& ShaderSource.Contains(TEXT("SlotOrigin + int2(4, 4) + InteriorTexel")));
-	TestTrue(TEXT("HardLive branch still preserves the current Scene Color before later fallbacks"),
-		ShaderSource.Contains(TEXT("const bool bVisible = SightWeaveIsHardLive(TranslatedWorld.xy)"))
-		&& ShaderSource.Contains(TEXT("if (bVisible)"))
+	TestTrue(TEXT("Unified Live state still preserves current Scene Color before later fallbacks"),
+		ShaderSource.Contains(TEXT("const uint State = SightWeaveResolvePresentationState(TranslatedWorld.xy)"))
+		&& ShaderSource.Contains(TEXT("if (State == SIGHTWEAVE_STATE_LIVE)"))
 		&& ShaderSource.Contains(TEXT("return SceneColorTexture.Load(int3(SceneColorPixel, 0));")));
 	for (const TCHAR* Forbidden : {
 		TEXT("TemporalHistory"), TEXT("LastSeen"), TEXT("SceneCapture") })
@@ -192,10 +192,11 @@ bool FSightWeaveM3P4PackagingBoundariesTest::RunTest(const FString& Parameters)
 		ViewExtension.Contains(TEXT("ProcessVisualFeather_RenderThread(GraphBuilder)"))
 		&& ViewExtension.Contains(TEXT("PassId == EPostProcessingPass::Tonemap"))
 		&& ViewExtension.Contains(TEXT("AddHardMaskComposite_RenderThread")));
-	TestTrue(TEXT("Production Feather composite hard-gates before continuous sampling"),
-		ShaderSource.Contains(TEXT("if (!SightWeaveIsHardLive(TranslatedWorld.xy))"))
-		&& ShaderSource.Contains(TEXT("return 0.0f;"))
-		&& ShaderSource.Contains(TEXT("SceneColorTexture.Load(int3(SceneColorPixel, 0)) * VisualFeatherWeight")));
+	TestTrue(TEXT("Production Feather resolves one state then blends from the lower-priority state"),
+		ShaderSource.Contains(TEXT("if (State != SIGHTWEAVE_STATE_LIVE)"))
+		&& ShaderSource.Contains(TEXT("const float4 LowerPriorityState"))
+		&& ShaderSource.Contains(TEXT("return lerp("))
+		&& !ShaderSource.Contains(TEXT("SceneColorTexture.Load(int3(SceneColorPixel, 0)) * VisualFeatherWeight")));
 	TestTrue(TEXT("Feather derives from logical page-table lookup rather than physical adjacency"),
 		ShaderSource.Contains(TEXT("SightWeaveFloorDiv(LogicalTexel.x, 248)"))
 		&& ShaderSource.Contains(TEXT("SightWeaveFindPageTableEntry(LogicalCoordinate)"))

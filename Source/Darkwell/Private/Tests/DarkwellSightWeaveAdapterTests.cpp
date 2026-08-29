@@ -8,6 +8,7 @@
 #include "Gameplay/DarkwellVisibilityComponent.h"
 #include "Misc/AutomationTest.h"
 #include "Player/DarkwellCharacter.h"
+#include "SightWeavePresentation.h"
 #include "SightWeaveStaticEnvironment.h"
 #include "SightWeaveWorldSubsystem.h"
 #include "UObject/Package.h"
@@ -76,6 +77,28 @@ namespace Darkwell::SightWeaveAdapterTests
 		}
 		return Actor;
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellVisualRescuePresentationStateTest,
+	"Darkwell.SightWeave.VisualRescue.PresentationState.TruthTable",
+	Darkwell::SightWeaveAdapterTests::TestFlags)
+
+bool FDarkwellVisualRescuePresentationStateTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("No live or memory resolves Unknown"),
+		SightWeaveResolvePresentationState(false, false),
+		ESightWeavePresentationState::Unknown);
+	TestEqual(TEXT("Eligible memory resolves Remembered"),
+		SightWeaveResolvePresentationState(false, true),
+		ESightWeavePresentationState::Remembered);
+	TestEqual(TEXT("Live without memory resolves Live"),
+		SightWeaveResolvePresentationState(true, false),
+		ESightWeavePresentationState::Live);
+	TestEqual(TEXT("Live has strict precedence over Remembered"),
+		SightWeaveResolvePresentationState(true, true),
+		ESightWeavePresentationState::Live);
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -200,6 +223,11 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 		Runtime->GetVisionSourceCount(), 2);
 	TestEqual(TEXT("Only the legal torch light is registered"),
 		Runtime->GetIlluminationSourceCount(), 1);
+	FSightWeaveMemoryScopeKey RescueScope;
+	TestTrue(TEXT("Visual-rescue memory scope is published"),
+		Runtime->GetExplorationMemoryScope(RescueScope));
+	TestEqual(TEXT("Live and Remembered use the Ultra 2.5 cm project scope"),
+		RescueScope.PrecisionTier, ESightWeaveRenderPrecisionTier::Ultra);
 	TestEqual(TEXT("One static occluder owner is registered"),
 		Runtime->GetOccluderCount(), 1);
 	TestTrue(TEXT("Duplicate request from the same fixture is idempotent"),

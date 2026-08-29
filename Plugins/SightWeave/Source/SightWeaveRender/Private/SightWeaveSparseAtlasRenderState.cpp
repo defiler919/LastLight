@@ -59,7 +59,9 @@ namespace SightWeaveSparseAtlasRenderPrivate
 		TEXT("DARKWELL visual-rescue A/B mode: 0 normal, 1 bypass, 2 no Remembered, "
 			"3 Remembered without CustomDepth/Stencil, 4 unified state, 5 SceneDepth world, "
 			"6 CustomDepth, 7 CustomStencil, 8 no occluder conservative sampling, "
-			"9 raw memory atlas, 10 raw static-attribute atlas."),
+			"9 raw memory atlas, 10 raw static-attribute atlas, 11 Remembered surface "
+			"classification, 12 Remembered current SceneColor, 13 fixed-input gray filter, "
+			"14 post-TSR stable Remembered shading."),
 		ECVF_RenderThreadSafe);
 	TAutoConsoleVariable<int32> CVarDiagnosticStableDepthCoordinates(
 		TEXT("r.SightWeave.Diagnostic.StableDepthCoordinates"),
@@ -1637,7 +1639,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 	check(SceneColor.IsValid());
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	const int32 DiagnosticMode = FMath::Clamp(
-		CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 10);
+		CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 14);
 	if (DiagnosticMode == 1)
 	{
 		return SceneColor;

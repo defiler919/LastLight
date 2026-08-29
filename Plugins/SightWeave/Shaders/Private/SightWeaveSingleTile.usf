@@ -432,26 +432,24 @@ float4 SightWeaveRememberedSurfaceColor(
 	float3 TranslatedSurfaceWorld,
 	uint SurfaceStencil)
 {
+	// The formal post-TSR path retains only immutable, world-stable shading inputs.
+	// Current-frame depth is allowed to classify the visible static 3D surface, but
+	// it does not feed a derivative normal or a discontinuous frac cell pattern.
 	const float Attribute = SightWeaveSampleStaticAttribute(TranslatedSurfaceWorld.xy);
-	const float3 Ddx = ddx(TranslatedSurfaceWorld);
-	const float3 Ddy = ddy(TranslatedSurfaceWorld);
-	const float3 SurfaceCross = cross(Ddx, Ddy);
-	const float SurfaceCrossLengthSquared = dot(SurfaceCross, SurfaceCross);
-	const float TopFacing = SurfaceCrossLengthSquared > 1.0e-8f
-		? abs(SurfaceCross.z) * rsqrt(SurfaceCrossLengthSquared)
-		: 1.0f;
 	const float OccluderClass = SurfaceStencil == OccluderSurfaceStencilValue
 		? 1.0f
 		: 0.0f;
-	const float2 StableWorld =
+	const float2 StablePhase =
 		(TranslatedSurfaceWorld.xy - MemoryTranslatedFloorOrigin)
-		/ max(RememberedDetailWorldScale, 1.0f);
-	const float2 Cell = abs(frac(StableWorld) - 0.5f);
-	const float CellDetail = (Cell.x + Cell.y) - 0.5f;
-	const float GeometryDetail = lerp(TopFacing - 0.5f, 0.5f - TopFacing, OccluderClass);
+		/ max(RememberedDetailWorldScale, 1.0f)
+		* 6.28318530718f;
+	const float SmoothWorldDetail =
+		(cos(StablePhase.x) + cos(StablePhase.y)) * 0.25f;
+	const float ClassDetail = lerp(0.25f, -0.25f, OccluderClass);
 	const float Neutral = RememberedBrightness
 		+ (Attribute - 0.5f) * RememberedContrast
-		+ (CellDetail * 0.65f + GeometryDetail * 0.35f) * RememberedDetailStrength;
+		+ (SmoothWorldDetail * 0.35f + ClassDetail * 0.65f)
+			* RememberedDetailStrength;
 	return float4(saturate(Neutral).xxx, 1.0f);
 }
 
@@ -606,6 +604,10 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 		SurfaceStencil = StaticEnvironmentStencilValue;
 		bRememberedSurface = true;
 	}
+	if (DiagnosticMode == 11)
+	{
+		return bRememberedSurface ? 1.0f : 0.0f;
+	}
 	const float2 VisibilityWorld = bRememberedSurface
 		? TranslatedSurfaceWorld.xy
 		: TranslatedWorld.xy;
@@ -628,6 +630,20 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 	if (State == SIGHTWEAVE_STATE_LIVE)
 	{
 		return SceneColorTexture.Load(int3(SceneColorPixel, 0));
+	}
+	if (State == SIGHTWEAVE_STATE_REMEMBERED && DiagnosticMode == 12)
+	{
+		return SceneColorTexture.Load(int3(SceneColorPixel, 0));
+	}
+	if (State == SIGHTWEAVE_STATE_REMEMBERED && DiagnosticMode == 13)
+	{
+		return float4(RememberedBrightness.xxx, 1.0f);
+	}
+	if (State == SIGHTWEAVE_STATE_REMEMBERED && DiagnosticMode == 14)
+	{
+		return SightWeaveRememberedSurfaceColor(
+			TranslatedSurfaceWorld,
+			SurfaceStencil);
 	}
 	return SightWeaveIsVisibleSubjectProxy(DepthPixel, DeviceZ)
 		? SightWeaveSubjectProxyNeutral()
@@ -786,6 +802,10 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 		SurfaceStencil = StaticEnvironmentStencilValue;
 		bRememberedSurface = true;
 	}
+	if (DiagnosticMode == 11)
+	{
+		return bRememberedSurface ? 1.0f : 0.0f;
+	}
 	const float2 VisibilityWorld = bRememberedSurface
 		? TranslatedSurfaceWorld.xy
 		: TranslatedWorld.xy;
@@ -807,6 +827,20 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 	}
 	if (State != SIGHTWEAVE_STATE_LIVE)
 	{
+		if (State == SIGHTWEAVE_STATE_REMEMBERED && DiagnosticMode == 12)
+		{
+			return SceneColorTexture.Load(int3(SceneColorPixel, 0));
+		}
+		if (State == SIGHTWEAVE_STATE_REMEMBERED && DiagnosticMode == 13)
+		{
+			return float4(RememberedBrightness.xxx, 1.0f);
+		}
+		if (State == SIGHTWEAVE_STATE_REMEMBERED && DiagnosticMode == 14)
+		{
+			return SightWeaveRememberedSurfaceColor(
+				TranslatedSurfaceWorld,
+				SurfaceStencil);
+		}
 		return SightWeaveIsVisibleSubjectProxy(DepthPixel, DeviceZ)
 			? SightWeaveSubjectProxyNeutral()
 			: (State == SIGHTWEAVE_STATE_REMEMBERED
@@ -818,7 +852,11 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 	const float VisualFeatherWeight = SightWeaveSampleVisualFeather(
 		VisibilityWorld - TranslatedFloorOrigin);
 	const float4 LowerPriorityState = bRememberedEligible
-		? SightWeaveRememberedSurfaceColor(TranslatedSurfaceWorld, SurfaceStencil)
+		? (DiagnosticMode == 14
+			? SightWeaveRememberedSurfaceColor(
+				TranslatedSurfaceWorld,
+				SurfaceStencil)
+			: SightWeaveRememberedSurfaceColor(TranslatedSurfaceWorld, SurfaceStencil))
 		: 0.0f;
 	return lerp(
 		LowerPriorityState,

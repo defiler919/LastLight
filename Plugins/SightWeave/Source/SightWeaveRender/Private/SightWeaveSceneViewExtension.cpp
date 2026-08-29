@@ -1,8 +1,21 @@
 #include "SightWeaveSceneViewExtension.h"
 
+#include "HAL/IConsoleManager.h"
 #include "RenderingThread.h"
 #include "ScreenPass.h"
 #include "SightWeaveSparseAtlasRenderState.h"
+
+namespace
+{
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	TAutoConsoleVariable<int32> CVarSightWeaveDiagnosticCompositePass(
+		TEXT("r.SightWeave.Diagnostic.CompositePass"),
+		0,
+		TEXT("DARKWELL temporal-space A/B: 0 after Tonemap (current formal path), "
+			"1 BeforeDOF/pre-TSR. Development/Editor only."),
+		ECVF_RenderThreadSafe);
+#endif
+}
 
 FSightWeaveSceneViewExtension::FSightWeaveSceneViewExtension(
 	const FAutoRegister& AutoRegister,
@@ -114,16 +127,23 @@ void FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass(
 	FAfterPassCallbackDelegateArray& InOutPassCallbacks,
 	const bool bIsPassEnabled)
 {
-	if (PassId == EPostProcessingPass::Tonemap
+	EPostProcessingPass SelectedPass = EPostProcessingPass::Tonemap;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (CVarSightWeaveDiagnosticCompositePass.GetValueOnRenderThread() == 1)
+	{
+		SelectedPass = EPostProcessingPass::BeforeDOF;
+	}
+#endif
+	if (PassId == SelectedPass
 		&& RenderState->IsPresentationEnabled_RenderThread())
 	{
 		InOutPassCallbacks.Add(FAfterPassCallbackDelegate::CreateRaw(
 			this,
-			&FSightWeaveSceneViewExtension::PostProcessPassAfterTonemap_RenderThread));
+			&FSightWeaveSceneViewExtension::PostProcessComposite_RenderThread));
 	}
 }
 
-FScreenPassTexture FSightWeaveSceneViewExtension::PostProcessPassAfterTonemap_RenderThread(
+FScreenPassTexture FSightWeaveSceneViewExtension::PostProcessComposite_RenderThread(
 	FRDGBuilder& GraphBuilder,
 	const FSceneView& View,
 	const FPostProcessMaterialInputs& Inputs)

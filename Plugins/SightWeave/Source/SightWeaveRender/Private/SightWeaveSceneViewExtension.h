@@ -33,7 +33,7 @@ public:
 		bool bIsPassEnabled) override;
 
 private:
-	FScreenPassTexture PostProcessPassAfterTonemap_RenderThread(
+	FScreenPassTexture PostProcessComposite_RenderThread(
 		FRDGBuilder& GraphBuilder,
 		const FSceneView& View,
 		const FPostProcessMaterialInputs& Inputs);

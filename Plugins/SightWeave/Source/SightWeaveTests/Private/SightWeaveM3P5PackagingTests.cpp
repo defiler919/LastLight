@@ -176,4 +176,64 @@ bool FSightWeaveM3P5PackagingBoundariesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FSightWeaveM3P5RememberedTemporalSpaceTest,
+	"SightWeave.M3P5.Packaging.RememberedTemporalSpace",
+	SightWeave::M3P5::PackagingTests::TestFlags)
+
+bool FSightWeaveM3P5RememberedTemporalSpaceTest::RunTest(const FString& Parameters)
+{
+	using namespace SightWeave::M3P5::PackagingTests;
+	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("SightWeave"));
+	if (!TestTrue(TEXT("SightWeave plugin is discoverable"), Plugin.IsValid()))
+	{
+		return false;
+	}
+
+	FString ViewExtension;
+	FString ShaderSource;
+	const FString BaseDir = Plugin->GetBaseDir();
+	if (!Load(*this, BaseDir,
+			TEXT("Source/SightWeaveRender/Private/SightWeaveSceneViewExtension.cpp"),
+			ViewExtension)
+		|| !Load(*this, BaseDir,
+			TEXT("Shaders/Private/SightWeaveSingleTile.usf"),
+			ShaderSource))
+	{
+		return false;
+	}
+
+	const int32 ShadingStart = ShaderSource.Find(
+		TEXT("float4 SightWeaveRememberedSurfaceColor("),
+		ESearchCase::CaseSensitive);
+	const int32 ShadingEnd = ShaderSource.Find(
+		TEXT("bool SightWeaveIntersectFloorPlane"),
+		ESearchCase::CaseSensitive,
+		ESearchDir::FromStart,
+		ShadingStart);
+	if (!TestTrue(TEXT("Formal Remembered shading function is bounded"),
+		ShadingStart != INDEX_NONE && ShadingEnd > ShadingStart))
+	{
+		return false;
+	}
+	const FString Shading = ShaderSource.Mid(ShadingStart, ShadingEnd - ShadingStart);
+
+	TestTrue(TEXT("Formal pass remains post-TSR/post-tonemap by default"),
+		ViewExtension.Contains(TEXT("EPostProcessingPass SelectedPass = EPostProcessingPass::Tonemap"))
+		&& ViewExtension.Contains(TEXT("r.SightWeave.Diagnostic.CompositePass"))
+		&& ViewExtension.Contains(TEXT("Development/Editor only")));
+	TestTrue(TEXT("Remembered shading uses immutable attribute and stencil class"),
+		Shading.Contains(TEXT("SightWeaveSampleStaticAttribute"))
+		&& Shading.Contains(TEXT("OccluderSurfaceStencilValue")));
+	TestTrue(TEXT("Remembered detail is continuous and world anchored"),
+		Shading.Contains(TEXT("MemoryTranslatedFloorOrigin"))
+		&& Shading.Contains(TEXT("cos(StablePhase.x)"))
+		&& Shading.Contains(TEXT("cos(StablePhase.y)")));
+	TestFalse(TEXT("Remembered shading does not derive a current-depth normal"),
+		Shading.Contains(TEXT("ddx(")) || Shading.Contains(TEXT("ddy(")));
+	TestFalse(TEXT("Remembered shading has no discontinuous frac cell pattern"),
+		Shading.Contains(TEXT("frac(")));
+	return true;
+}
+
 #endif

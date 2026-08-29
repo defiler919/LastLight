@@ -6,13 +6,25 @@ Branch: `codex/sightweave-darkwell-visual-rescue`
 
 User-rejected candidate baseline: `2439cfb0de843ab52b9c989439272f1e30727d1c`
 
-Validated implementation SHA: `eb2a827`
+Second user-rejected candidate baseline: `2883cd5d9f68044c71da785eaaa90f03fff4193c`
+
+Last validated implementation SHA: `eb2a827`
 
 Stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST**
+Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_FAILED / REMEMBERED TEMPORAL INSTABILITY**
 
-The user's first real dynamic PIE rejected the prior candidate for whole-game shaking/flicker and multiple thin gray lines. That verdict remains recorded. This handoff offers a new two-blocker candidate for the required second real dynamic PIE; it does not claim `COMPLETED` or visual acceptance.
+The user's first real dynamic PIE rejected the prior candidate for whole-game shaking/flicker and multiple thin gray lines. The second real dynamic PIE at `2883cd5d9f68044c71da785eaaa90f03fff4193c` confirms that those lines and the black/gray offset are gone, flow is acceptable, and the large staircase has not returned. It nevertheless rejects the candidate because the Remembered gray scene continuously shakes while Live and editor UI are relatively stable. This file is no longer a ready-for-retest handoff and does not claim `COMPLETED` or visual acceptance.
+
+## Second retest failure now in force
+
+- Recording: `Darkwell - 虚幻编辑器 2026-08-29 21-07-46.mp4`.
+- Ignored evidence copy: `Saved/SightWeaveVisualRescueEvidence/UserDynamicPIERetest2Failure`.
+- SHA-256: `974A5A879D693938BF4E5C52ECF279266A43DA00DB95BE2C53B2B60FB68BB989`.
+- Agent frame inspection: stable editor chrome, comparatively stable Live wedge, and changing Remembered floor-grid/static-object interior values across consecutive frames.
+- Preserved passes: no gray lines, no black/gray offset, no large staircase recurrence, acceptable flow, correct wall and enemy rules, and working Torch/Lantern/Torch recovery.
+
+The current composite is registered as a Tonemap after-pass. Unreal has already executed normal TSR before Tonemap, so SightWeave reads post-TSR/post-tonemap SceneColor while directly reading current pre-TSR SceneDepth and CustomDepth/Stencil. It then reconstructs and shades Remembered after TSR without its own history. The focused work is to A/B that mixed temporal/resolution path and select one coherent formal composition space. No overall performance work or unrelated feature work is authorized.
 
 ## What was fixed
 

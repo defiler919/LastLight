@@ -8,15 +8,49 @@ Frozen starting SHA: `f364f780904c7ced5d649e7d582c3d91a7d43baf`
 
 User-rejected candidate / this rescue baseline: `2439cfb0de843ab52b9c989439272f1e30727d1c`
 
-Validated implementation SHA: `eb2a827`
+Second user-rejected candidate baseline: `2883cd5d9f68044c71da785eaaa90f03fff4193c`
+
+Last validated implementation SHA: `eb2a827`
 
 48-hour prototype checkpoint: 2026-08-31
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST**
+Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_FAILED / REMEMBERED TEMPORAL INSTABILITY**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
+
+## 0B. Second user dynamic PIE rejection (2026-08-29)
+
+User recording: `Darkwell - 虚幻编辑器 2026-08-29 21-07-46.mp4`.
+
+The recording was copied to the ignored evidence directory `Saved/SightWeaveVisualRescueEvidence/UserDynamicPIERetest2Failure`. The source and ignored copy have SHA-256 `974A5A879D693938BF4E5C52ECF279266A43DA00DB95BE2C53B2B60FB68BB989`. The video, extracted frames, and analysis products are not repository artifacts and must not be committed.
+
+The second real dynamic PIE did not accept baseline `2883cd5d9f68044c71da785eaaa90f03fff4193c`. The user confirmed that the gray horizontal lines and black/gray offset are gone, overall flow is acceptable, and the large staircase did not return. Live and the editor UI are relatively stable. The remaining explicit blocker is continuous temporal shaking inside the Remembered gray scene. The user did not request additional frame-rate work.
+
+Agent inspection of 21 seconds of source video, a one-second overview, and consecutive six-frame-per-second crops agrees with that attribution: editor chrome is stable; the Live wedge is comparatively stable; the Remembered floor grid and static-object interior luminance change across consecutive frames. No horizontal gray-line signature or black/gray seam was found in the inspected frames. This is a new rejection, not a reopening of those passed fixes.
+
+### Current-frame data path at the rejected baseline
+
+The exact formal path at `2883cd5` is:
+
+```text
+pre-TSR primary-resolution SceneColor + SceneDepth + velocity
+    -> AddMainTemporalSuperResolutionPasses (normal TSR/history)
+    -> post-TSR full-resolution SceneColor
+    -> AddTonemapPass
+    -> EPostProcessingPass::Tonemap after-pass callback
+    -> FSightWeaveSceneViewExtension::PostProcessPassAfterTonemap_RenderThread
+    -> FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_RenderThread
+       inputs: post-TSR/post-tonemap SceneColor
+               pre-TSR SceneDepth and pre-TSR CustomDepth/CustomStencil
+               stable world-space state/memory/static-attribute atlases
+    -> SightWeaveInwardFeatherCompositePS or SightWeaveHardMaskCompositePS
+```
+
+`FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass` subscribes only to `EPostProcessingPass::Tonemap`. Unreal calls the delegate through `AddAfterPass(EPass::Tonemap, SceneColor)` after temporal upscaling and tonemapping. The SightWeave pass has no private temporal history, reports `historyValid=0`, and reconstructs Remembered surface position from the current frame's primary-resolution SceneDepth/CustomDepth while writing into the post-TSR output ViewRect. `SightWeaveRememberedSurfaceColor` then derives orientation with `ddx/ddy` and adds a high-frequency `frac` world-cell term. Thus state/memory may be stable while the visible Remembered content is regenerated after TSR from temporally jittered, lower-resolution geometry inputs. This mixed temporal/resolution space is the focused hypothesis for the second failure; it is not yet a completed root-cause claim until the required A/B matrix is recorded below.
+
+The rescue now freezes the already-passed unified three-state result, Ultra 2.5 cm/texel, line-leak rejection, seam correction, wall rule, `NeverRemember`, Stalker/HUD coupling, Torch/Lantern/Torch continuity, normal TSR, and current performance. This slice may change only the Remembered temporal composition path.
 
 ## 0. User dynamic PIE rejection (2026-08-29)
 

@@ -147,4 +147,3 @@ Automation treats any of these as failure: two authorities active, more than one
 M6P1 does not implement SaveGame/M4P3 blob binding, save-version changes, lantern, Warden, other enemies, damage-source reveal, player-attack reveal, camera, radar, remote sources/lights, blackout/region production wiring, gray-to-black production behavior, multiple floors, dynamic doors, `L_Prototype` adoption, legacy deletion, shader/plugin API changes, SceneCapture authority, or gameplay/AI/resource tuning.
 
 Rollback is loading `L_Prototype`, whose native default GameMode never requests SightWeave and therefore remains Legacy. No M6P1 data is persisted.
-

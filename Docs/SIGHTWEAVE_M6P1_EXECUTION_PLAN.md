@@ -118,4 +118,3 @@ Record actual symbols, values, revisions, exact counts, every retained warning/f
 ## 11. Stop conditions
 
 Stop and preserve reliable pushed work as `PARTIAL` or `BLOCKED` if single authority cannot be maintained, a required capability is absent from the current public SightWeave API, the only fix requires plugin/L_Prototype/Darkwell.uproject/another binary asset changes, map save/reopen is corrupt, or required D3D12/Cook/Shipping gates cannot be made reliable without weakening a frozen contract. Do not begin SaveGame, damage reveal, lantern, Warden, production-map acceptance, broader consumers/providers, or legacy deletion.
-

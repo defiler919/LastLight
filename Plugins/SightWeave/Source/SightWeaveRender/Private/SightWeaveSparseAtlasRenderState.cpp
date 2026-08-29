@@ -1739,6 +1739,20 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 	const FVector2f TemporalJitterPixels(
 		static_cast<float>(TemporalProjectionJitter.X * View.UnscaledViewRect.Width() * 0.5),
 		static_cast<float>(TemporalProjectionJitter.Y * View.UnscaledViewRect.Height() * -0.5));
+	const IConsoleVariable* CustomDepthTemporalAAJitter =
+		IConsoleManager::Get().FindConsoleVariable(TEXT("r.CustomDepthTemporalAAJitter"));
+	const IConsoleVariable* CustomDepthMode =
+		IConsoleManager::Get().FindConsoleVariable(TEXT("r.CustomDepth"));
+	const int32 CustomDepthTemporalAAJitterValue = CustomDepthTemporalAAJitter
+		? CustomDepthTemporalAAJitter->GetInt()
+		: INDEX_NONE;
+	const int32 CustomDepthModeValue = CustomDepthMode
+		? CustomDepthMode->GetInt()
+		: INDEX_NONE;
+	const uint32 CustomDepthTemporalAAJitterSetBy = CustomDepthTemporalAAJitter
+		? static_cast<uint32>(CustomDepthTemporalAAJitter->GetFlags())
+			& static_cast<uint32>(ECVF_SetByMask)
+		: 0u;
 	const bool bMemoryReady = MemoryMirror.IsValid()
 		&& MemoryMirror->Availability == ESightWeaveRenderAvailability::Available
 		&& MemoryMirror->AppliedPacket.IsValid()
@@ -1820,12 +1834,15 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		TemporalProjectionJitterFloat,
 		DiagnosticMode,
 		bUseStableDepthCoordinates,
-		bPreTemporalUpscaleProof](auto* Parameters)
+		bPreTemporalUpscaleProof,
+		CustomDepthTemporalAAJitterValue](auto* Parameters)
 	{
 		Parameters->TemporalProjectionJitter = TemporalProjectionJitterFloat;
 		Parameters->DiagnosticMode = static_cast<uint32>(DiagnosticMode);
 		Parameters->UseStableDepthCoordinates = bUseStableDepthCoordinates ? 1u : 0u;
 		Parameters->PreTemporalUpscaleProof = bPreTemporalUpscaleProof ? 1u : 0u;
+		Parameters->CustomDepthUsesTemporalJitter =
+			CustomDepthTemporalAAJitterValue != 0 ? 1u : 0u;
 		Parameters->MemoryPageTable = GraphBuilder.CreateSRV(MemoryPageTable);
 		Parameters->MemoryPage0 = MemoryPages[0];
 		Parameters->MemoryPage1 = MemoryPages[1];
@@ -1868,20 +1885,6 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	if (CVarDiagnosticLogFrames.GetValueOnRenderThread() != 0)
 	{
-		const IConsoleVariable* CustomDepthTemporalAAJitter =
-			IConsoleManager::Get().FindConsoleVariable(TEXT("r.CustomDepthTemporalAAJitter"));
-		const IConsoleVariable* CustomDepthMode =
-			IConsoleManager::Get().FindConsoleVariable(TEXT("r.CustomDepth"));
-		const int32 CustomDepthTemporalAAJitterValue = CustomDepthTemporalAAJitter
-			? CustomDepthTemporalAAJitter->GetInt()
-			: INDEX_NONE;
-		const int32 CustomDepthModeValue = CustomDepthMode
-			? CustomDepthMode->GetInt()
-			: INDEX_NONE;
-		const uint32 CustomDepthTemporalAAJitterSetBy = CustomDepthTemporalAAJitter
-			? static_cast<uint32>(CustomDepthTemporalAAJitter->GetFlags())
-				& static_cast<uint32>(ECVF_SetByMask)
-			: 0u;
 		const uint32 SubmittedTiles = LastMaskUpdateFrame == GFrameNumberRenderThread
 			? LastSubmittedTileCount : 0;
 		const TCHAR* UpdateMode = LastMaskUpdateFrame == GFrameNumberRenderThread

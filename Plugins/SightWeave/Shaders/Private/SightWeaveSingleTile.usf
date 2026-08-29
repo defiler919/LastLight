@@ -136,6 +136,7 @@ float2 TemporalProjectionJitter;
 uint DiagnosticMode;
 uint UseStableDepthCoordinates;
 uint PreTemporalUpscaleProof;
+uint CustomDepthUsesTemporalJitter;
 float2 TranslatedFloorOrigin;
 float CentimetersPerTexel;
 uint PageTableCount;
@@ -523,12 +524,17 @@ void SightWeaveResolveDepthCoordinates(
 			TemporalProjectionJitter.y * float(DepthRectSize.y) * -0.5f);
 		if (PreTemporalUpscaleProof != 0)
 		{
-			// Before TSR the output pixel already addresses jittered SceneDepth. Match the
-			// unjittered CustomDepth/Stencil sample to that world ray by removing jitter.
-			StableDepthPixel = clamp(
-				int2(floor(SceneSvPosition - JitterPixels)),
-				DepthRectMin,
-				DepthRectMin + DepthRectSize - 1);
+			if (CustomDepthUsesTemporalJitter == 0)
+			{
+				// Historical failed-B convention: the primary output and SceneDepth are
+				// jittered while CustomDepth/Stencil are not.
+				StableDepthPixel = clamp(
+					int2(floor(SceneSvPosition - JitterPixels)),
+					DepthRectMin,
+					DepthRectMin + DepthRectSize - 1);
+			}
+			// B1 convention: jittered primary SceneDepth and CustomDepth/Stencil share
+			// the same ViewRect pixel; no compensating offset is legal or required.
 		}
 		else
 		{

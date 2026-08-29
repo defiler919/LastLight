@@ -239,6 +239,11 @@ bool FSightWeaveM3P5RememberedTemporalSpaceTest::RunTest(const FString& Paramete
 	TestTrue(TEXT("Pre-TSR B0 bypasses categorical surface and proxy stencil reads"),
 		ShaderSource.Contains(TEXT("DiagnosticMode != 15"))
 		&& ShaderSource.Contains(TEXT("if (DiagnosticMode == 15)")));
+	TestTrue(TEXT("Pre-TSR B1 uses one pixel for temporally coherent depth and stencil"),
+		ShaderSource.Contains(TEXT("CustomDepthUsesTemporalJitter"))
+		&& ShaderSource.Contains(TEXT("CustomDepthUsesTemporalJitter == 0"))
+		&& ShaderSource.Contains(TEXT("share"))
+		&& RenderState.Contains(TEXT("CustomDepthTemporalAAJitterValue != 0")));
 	TestTrue(TEXT("Pre-TSR proof retains explicit resource-isolation diagnostics"),
 		RenderState.Contains(TEXT("RequestedDiagnosticMode"))
 		&& RenderState.Contains(TEXT("RequestedDiagnosticMode == 0")));

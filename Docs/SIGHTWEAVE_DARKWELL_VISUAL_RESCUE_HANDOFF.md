@@ -1,37 +1,90 @@
-# SightWeave DARKWELL Visual Rescue Failure Handoff
+# SightWeave DARKWELL Visual Rescue Retest Handoff
 
 Date: 2026-08-29
 
 Branch: `codex/sightweave-darkwell-visual-rescue`
 
-Frozen starting SHA: `f364f780904c7ced5d649e7d582c3d91a7d43baf`
+User-rejected candidate baseline: `2439cfb0de843ab52b9c989439272f1e30727d1c`
 
-Rejected candidate baseline: `2439cfb0de843ab52b9c989439272f1e30727d1c`
+Validated implementation SHA: `eb2a827`
 
-Status: **PARTIAL — USER_DYNAMIC_PIE_FAILED, BUT DIRECTION VALID**
+Stop-loss deadline: 2026-09-05
 
-The user's first real dynamic PIE rejected the candidate. The agent-side D3D12/SM6 runs, automation results, screenshots, and extracted frame sheets remain engineering evidence only; none of them may be used to claim visual acceptance. Do not run the deferred full regression while the two current visual blockers remain.
+Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST**
 
-## Rejection evidence
+The user's first real dynamic PIE rejected the prior candidate for whole-game shaking/flicker and multiple thin gray lines. That verdict remains recorded. This handoff offers a new two-blocker candidate for the required second real dynamic PIE; it does not claim `COMPLETED` or visual acceptance.
 
-- Recording: `Darkwell - 虚幻编辑器 2026-08-29 18-35-37.mp4`
-- Ignored analysis copy: `Saved/SightWeaveVisualRescueEvidence/UserDynamicPIEFailure`
-- SHA-256: `33298E98FB8B7AE52DA8C3F2F38794311338A5E44307FBEEEF2AA00DCC02CCD5`
-- Result: whole-game image shaking/flicker and multiple thin gray lines immediately after gameplay begins make the image unusable.
-- Direction retained: Ultra 2.5 cm/texel materially reduced the staircase; Remembered is three-dimensional; enemy filtering is correct.
+## What was fixed
 
-Initial consecutive-frame inspection shows stable editor chrome around an unstable embedded PIE game View. The gray lines shift on screen with camera motion but remain aligned with world-surface/wall-floor elevations. Exact attribution remains subject to the required A/B depth, stencil, jitter, ViewRect, update, and wall-sampling diagnostics.
+### Whole-View shaking and flicker
 
-## Current work restriction
+The formal post-process path mixed jittered SceneDepth reconstruction with unjittered CustomDepth/Stencil and stable post-TSR output coordinates. A fixed player and camera therefore still crossed surface and state boundaries as projection jitter changed.
 
-The next work is limited to:
+The composite now maps through the exact current `ViewRect.Min` and ViewRect size, applies the current temporal projection jitter to SceneDepth sampling/reconstruction, and keeps CustomDepth/Stencil on the unjittered coordinate required by `r.CustomDepthTemporalAAJitter=0`. This corrected path is the default with normal TAA/TSR in Development, Test, and Shipping. The legacy coordinate path is available only as a Development/Editor diagnostic A/B.
 
-1. remove whole-View shaking and flicker while restoring normal TAA/TSR for formal verification;
-2. remove gray-line and residual-geometry leakage by correcting its depth/coordinate/classification cause, not by hiding it with thresholds, mask expansion, color cover, or blur.
+### Gray lines and residual geometry leakage
 
-The following gains are frozen and must not regress: Ultra 2.5 cm/texel, one mutually exclusive Unknown/Remembered/Live state, three-dimensional Remembered, `NeverRemember` enemy filtering, wall-surface classification, black/gray alignment, and Torch/Lantern revision continuity.
+The gray lines were false Remembered authority, not SceneColor, a wall-color problem, CustomDepth noise, Stencil leakage, wall conservative sampling, or incremental update churn. The memory scanline rasterizer clamped a wholly out-of-tile interval before testing intersection, collapsing the empty interval into one permanent tile-edge texel. Across tiles, those texels became long world-aligned lines.
 
-## Retest setup (only after a new candidate is documented)
+The rasterizer now rejects non-intersecting intervals before clamping. A targeted concave cross-tile test freezes the exact failure. No black threshold, mask expansion, blur, color cover, or blanket wall suppression is part of the fix.
+
+## Controlled A/B result
+
+- Composite bypass: raw SceneColor is stable; the old gray line is absent.
+- Old coordinates: settled adjacent-frame MAD median `0.1544` for the scene and `1.2319` in the gray-line band.
+- Correct coordinates: `0.0134` and `0.0177` respectively.
+- Remove Remembered: line disappears.
+- Remove CustomDepth/Stencil: line remains.
+- Unified state: line is Remembered.
+- Raw memory: line present before the fix and absent after it.
+- Raw static attributes, CustomDepth, and CustomStencil: no matching false line.
+- Force full updates / disable wall bias: line remains before the memory fix.
+- AA-off and startup mask-freeze were diagnostic only and are not accepted formal paths; the mask freeze occurred before valid authority and was treated as inconclusive.
+
+## Preserved requirements
+
+The candidate retains all accepted improvements:
+
+- Ultra 2.5 cm/texel Live and Remembered scope;
+- one mutually exclusive Unknown / Remembered / Live state;
+- three-dimensional filtered Remembered scene;
+- `NeverRemember` Stalker filtering and shared Stalker/HUD authority;
+- wall-surface classification, readable player-facing wall surfaces, and black behind walls;
+- black/gray coordinate alignment;
+- Torch/Lantern revision continuity.
+
+No `.uasset`, `.umap`, `L_VisionIntegration`, `L_Prototype`, configuration, plugin descriptor, or `Darkwell.uproject` change is part of this candidate.
+
+## Verification completed
+
+- `DarkwellEditor Win64 Development`: succeeded serially after the final source changes.
+- `SightWeave.M3P5.Memory.Authority.ConcavePolygonDoesNotLeakAtTileEdge`: Success.
+- `Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority`: Success after the fixes, including Ultra scope, `NeverRemember`, Stalker/HUD shared authority, wall occlusion, Lantern transition, and Torch restoration.
+- Formal dynamic runs: D3D12/SM6 with normal TSR at exact 1920x1080 and 2560x1440 ViewRects.
+- Static five-second adjacent-frame MAD: 1080p median/p95 `0.0125/0.0197`; 1440p `0.0199/0.0245`.
+- Old isolated-horizontal-line signature: `409–410` pixels per rejected frame at 640x360 analysis resolution.
+- New startup/rotation/wall/tool-cycle evidence: 1,410 frames inspected; maximum `6` at 1080p and `2` at 1440p; zero frames at or above 300.
+- No full-black frame in startup, rotation, wall, or Torch/Lantern/Torch captures.
+- All formal logged frames use the corrected coordinate path and have `bindingFailure=0`.
+
+UE 5.8 emits pre-existing experimental Toolset/Python startup errors before gameplay. They are retained in the logs. After initialization there is no SightWeave/Darkwell error, fatal, assert, ensure, GPU crash, device removal, DXGI device error, or D3D12/RHI error.
+
+## Ignored evidence paths
+
+All recordings and logs remain under ignored `Saved/SightWeaveVisualRescueEvidence`; none are committed.
+
+- Original user failure: `UserDynamicPIEFailure/Darkwell - 虚幻编辑器 2026-08-29 18-35-37.mp4`
+- 1080p first five gameplay seconds: `Dynamic/1080p_startup/startup.mp4`
+- 1080p five-second static: `Dynamic/1080p_static/static.mp4`
+- 1080p ten-second slow rotation: `Dynamic/1080p_rotate/rotate.mp4`
+- 1080p ten-second controlled wall motion: `Dynamic/1080p_wall/wall.mp4`
+- 1080p Torch -> Lantern -> Torch: `Dynamic/1080p_torch_cycle/torchcycle.mp4`
+- 1440p five-second static: `Dynamic/1440p_static/static.mp4`
+- 1440p ten-second slow rotation: `Dynamic/1440p_rotate/rotate.mp4`
+- A/B captures and raw atlas views: `AB`
+- Targeted test logs: `TargetedMemoryLeakTest.log`, `TargetedVerticalSliceTest.log`
+
+## User retest setup
 
 1. Restore the pushed branch:
 
@@ -42,45 +95,28 @@ The following gains are frozen and must not regress: Ultra 2.5 cm/texel, one mut
 
 2. Open `D:\UE_pro\Darkwell\Darkwell.uproject` in Unreal Engine 5.8.1.
 3. Open `/Game/Maps/L_VisionIntegration`.
-4. Use the normal D3D12/SM6 editor configuration with TSR/TAA enabled. Do not disable AA, reduce resolution, or hold the camera still for acceptance.
-5. Start PIE through the normal player View and choose `NEW GAME` so the player begins at the integration fixture spawn.
+4. Use the normal D3D12/SM6 editor configuration with TAA/TSR enabled.
+5. Start normal PIE and choose `NEW GAME`.
 
 ## Required second dynamic acceptance sequence
 
-Perform the following in one continuous PIE session:
+1. Watch the first five seconds after gameplay appears. Confirm no horizontal gray lines appear and the whole game View is stable while the editor UI also remains stable.
+2. Hold the player and camera still for at least five seconds. Check the circle, both cone edges, Remembered surfaces, walls, and doorway for flicker.
+3. Slowly sweep aim left and right for at least ten seconds. Confirm no edge shaking, jumping, crawl, or flash.
+4. Approach each wall head-on, then strafe along it. Confirm player-facing wall surfaces remain readable, Unknown begins behind them, and no ground line leaks through Unknown.
+5. Move through the doorway and around wall ends. Confirm no black/gray seam returns.
+6. Leave and re-enter explored areas. Confirm recognizable static Remembered structure and clean Remembered <-> Live transitions.
+7. Tap and release `E` to select Lantern, then repeat to restore Torch. Confirm no full-screen black frame or stuck fog.
+8. Aim toward and away from the Stalker. Confirm the Stalker and red threat HUD appear/disappear together and never leave a Remembered enemy image.
+9. Continue normal movement and turning for three to five minutes. This subjective duration test cannot be replaced by agent evidence.
 
-1. At spawn, inspect the circular body radius and both diagonal Torch-cone edges at rest.
-2. Move with `W/A/S/D` while slowly aiming left and right with the mouse. Look specifically for grid jumps, crawling, flashing, and a blurred underlying staircase.
-3. Strafe along each wall and approach it head-on. Confirm the player-facing wall side/top remains visible and Unknown black begins behind the wall.
-4. Move through the doorway and around both wall ends. Confirm openings and corners do not gain an extra black strip.
-5. Leave a previously Live ground/wall area. Confirm it becomes a recognizable, dark, low-contrast static Remembered scene rather than a flat gray fill.
-6. Re-enter that area. Confirm `Remembered -> Live` has no gap, overlap, or black seam.
-7. Tap and release `E` once to cycle from Torch to Lantern. Confirm the Torch cone leaves Live, the body radius remains Live, and the former cone is only filtered static Remembered.
-8. Tap and release `E` again to restore Torch. Confirm the Live cone returns immediately without a full-screen black frame or stuck fog.
-9. Aim toward and then away from the Stalker. Confirm the Stalker and red threat HUD appear and disappear together, with no gray Stalker memory or current enemy-position leak.
-10. Continue moving, turning, following walls, and crossing the doorway for at least three to five minutes. This long-duration motion stability judgment cannot be replaced by screenshots or agent frame sheets.
-
-## Acceptance questions for the second user test
-
-Please answer only after the continuous test:
-
-- Is the moving edge visually usable at both the circle and cone?
-- Is Remembered recognizable as static scene structure without leaking dynamic information?
-- Are wall faces readable with black starting behind them?
-- Are Unknown, Remembered, and Live aligned without extra black bands?
-- Do the Stalker and threat HUD obey the same visibility transition?
-- Does Torch -> Lantern -> Torch recover without fail-black?
-
-If the result is usable, reply explicitly that the DARKWELL dynamic PIE visual is usable. That authorizes the deferred complete regression and final acceptance close; it does not retroactively make the rejected candidate complete.
-
-If any item fails, report the exact motion, location, transition, resolution, and whether the failure is constant or intermittent. A second rejection keeps work limited to DARKWELL project usability until the 2026-09-05 stop-loss decision.
+The user must explicitly confirm all of the following: no gray lines, no shaking, no flicker, acceptable circle/cone edges, and acceptable Remembered visuals. Until that confirmation, the status remains `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST`. On rejection, remain within DARKWELL project usability and apply the 2026-09-05 stop-loss rule; do not pivot to plugin generalization or Fab work.
 
 ## Evidence and implementation record
 
 - Frozen contract: `Docs/SIGHTWEAVE_DARKWELL_VISUAL_REQUIREMENTS.md`
-- Root cause and plan: `Docs/SIGHTWEAVE_DARKWELL_VISUAL_RESCUE_EXECUTION_PLAN.md`
-- Prototype report: `Docs/SIGHTWEAVE_DARKWELL_VISUAL_RESCUE_REPORT.md`
-- Ignored local dynamic evidence: `Saved/SightWeaveVisualRescueEvidence`
-- Evidence metadata: `Saved/SightWeaveVisualRescueEvidence/METADATA.md`
-
-No `.uasset`, `.umap`, `L_VisionIntegration`, `L_Prototype`, configuration, plugin descriptor, or `Darkwell.uproject` modification is part of this handoff.
+- Detailed report: `Docs/SIGHTWEAVE_DARKWELL_VISUAL_RESCUE_REPORT.md`
+- Failure capture checkpoint: `6d9e7db`
+- Diagnostic checkpoint: `800264e`
+- Temporal-coordinate fix: `37c5f0c`
+- Memory-line fix: `eb2a827`

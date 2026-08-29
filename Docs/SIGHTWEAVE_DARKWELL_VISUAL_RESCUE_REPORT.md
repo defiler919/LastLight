@@ -6,13 +6,15 @@ Branch: `codex/sightweave-darkwell-visual-rescue`
 
 Frozen starting SHA: `f364f780904c7ced5d649e7d582c3d91a7d43baf`
 
-Validated source SHA: `ce32d50`
+User-rejected candidate / this rescue baseline: `2439cfb0de843ab52b9c989439272f1e30727d1c`
+
+Validated implementation SHA: `eb2a827`
 
 48-hour prototype checkpoint: 2026-08-31
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — USER_DYNAMIC_PIE_FAILED, BUT DIRECTION VALID**
+Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
 
@@ -31,9 +33,29 @@ User-confirmed result:
 - enemy filtering is correct;
 - the direction is materially improved, but the image remains unusable for the game.
 
-Initial frame inspection establishes that the editor chrome remains stable while the embedded PIE game View changes, so the failure is inside the game View/render path rather than a whole-desktop capture displacement. The gray lines move in screen space with the camera while remaining correlated with world surfaces and wall/floor elevations. They are therefore being treated as surface-classification or depth-coordinate leakage until the controlled A/B diagnostics identify the exact source; they are not accepted as a color-tuning issue and may not be hidden with darker thresholds, mask expansion, or more blur.
+Initial frame inspection established that the editor chrome remained stable while the embedded PIE game View changed, so the failure was inside the game View/render path rather than a whole-desktop capture displacement. Controlled A/B diagnostics have now resolved both causes; the result is recorded below. The rejected video and verdict remain authoritative history and are not overwritten by the new candidate.
 
-The next rescue slice is restricted to two blockers: (A) whole-view shaking/flicker and (B) gray-line/residual-geometry leakage. It must preserve Ultra 2.5 cm/texel, the unified mutually exclusive three-state result, three-dimensional Remembered, `NeverRemember` enemy filtering, wall-surface classification, the black/gray alignment correction, and Torch/Lantern revision continuity.
+This rescue slice was restricted to two blockers: (A) whole-view shaking/flicker and (B) gray-line/residual-geometry leakage. It preserves Ultra 2.5 cm/texel, the unified mutually exclusive three-state result, three-dimensional Remembered, `NeverRemember` enemy filtering, wall-surface classification, the black/gray alignment correction, and Torch/Lantern revision continuity.
+
+## 0A. Two-blocker rescue result
+
+Both blocker causes were reproduced and corrected without adding blur, expanding the mask, changing the black threshold, disabling TAA/TSR, or weakening static-surface classification.
+
+### A/B attribution
+
+- Composite bypass removed SightWeave-specific instability; the raw SceneColor path remained stable.
+- With the rejected coordinate path, settled adjacent-frame mean absolute difference was `0.1544` for the scene and `1.2319` in the gray-line band. Jitter-compensated depth coordinates reduced those medians to `0.0134` and `0.0177` respectively.
+- Player Transform, camera Transform, ViewRect, mask origin, state/feather revisions, resource binding, and submitted tile count were stable during the fixed-camera comparison. Therefore the static flicker was not gameplay motion, camera motion, revision churn, incremental submission, or resource rebinding.
+- Removing Remembered removed the gray line. Removing CustomDepth/Stencil did not remove it. Removing wall-conservative sampling did not remove it. Forcing full mask rebuilds did not remove it.
+- Unified-state output classified the line as Remembered, not Live SceneColor. Raw CustomDepth and CustomStencil did not contain a matching line. Raw memory did contain the full line; raw static attributes did not.
+- Disabling AA was diagnostic only and was not accepted as a solution. Formal evidence below uses normal TSR. A startup mask freeze froze before valid authority was available and was explicitly treated as inconclusive rather than a pass.
+
+### Exact causes and fixes
+
+1. The post-process composite mapped stable output pixels to SceneDepth and CustomDepth as if both buffers shared the same temporal convention. SceneDepth reconstruction was jittered while CustomDepth is intentionally unjittered (`r.CustomDepthTemporalAAJitter=0`), so classification crossed mask and surface boundaries as the projection jitter changed. The formal path now maps through `ViewRect.Min` and ViewRect size, applies the current projection jitter only to SceneDepth sampling/reconstruction, and keeps CustomDepth/Stencil on their unjittered pixel coordinate. The corrected path is the default in Development, Test, and Shipping; the legacy path remains only as a Development/Editor A/B switch.
+2. `FSightWeaveMemoryAuthority` clamped a scanline interval to `[0,247]` before testing whether that interval intersected the logical tile. An interval wholly outside a candidate tile was therefore collapsed into one false edge texel. Monotonic memory preserved those texels as world-aligned horizontal or vertical strips. The rasterizer now rejects non-intersecting intervals before clamping. A cross-tile concave-polygon regression test freezes the failure.
+
+The old isolated-line detector reported `409–410` false horizontal pixels in every rejected settled frame at 640x360 analysis resolution. Across the new 1080p startup, rotation, wall, and Torch/Lantern/Torch sequences plus the 1440p rotation sequence (1,410 inspected frames), the maximum is `6` at 1080p and `2` at 1440p, with zero frames at or above 300.
 
 ## 1. Result
 
@@ -60,6 +82,8 @@ The detailed source attribution is frozen in `Docs/SIGHTWEAVE_DARKWELL_VISUAL_RE
 4. Remembered stored only a 2D footprint plus one intensity byte and intersected the floor plane. It could only produce flat gray and could not represent wall tops/sides or recognizable scene structure.
 5. A ground-only XY lookup could not distinguish a visible wall surface from the ground behind the wall.
 6. During tool cycling, Render treated a compatible but inactive illumination source as an invalid scope. A later incremental packet also advanced only dirty-tile revisions, causing stable resident tiles to fail feather residency checks with `FeatherUnavailable`.
+7. The player-View composite mixed stable output coordinates, jittered SceneDepth reconstruction, and unjittered CustomDepth/Stencil without the required projection-jitter conversion. That made static surface and three-state classification change with the temporal sample.
+8. The CPU memory scanline rasterizer clamped wholly out-of-tile intervals before rejecting them, turning empty intersections into permanent one-texel memory strips at logical tile edges.
 
 The CPU gameplay authority, owner/floor/source declarations, subject `NeverRemember` policy, revision/snapshot contract, memory eligibility, Stalker/HUD shared authority, and strict Legacy/SightWeave exclusion were retained.
 
@@ -84,7 +108,7 @@ Live and Remembered use:
 - the same formal ViewRect, SceneDepth reconstruction, pre-view translation, and camera data;
 - the same world-stable jump-flood feather reconstruction.
 
-The rescue did not add temporal history blur or camera-snapped origins. Stability comes from the stable world origin, tenfold finer source field, logical-neighbor-aware distance reconstruction, and correct carry-forward of unchanged atlas tiles. Feather remains presentation-only; gameplay queries retain the hard authority.
+The rescue did not add temporal history blur or camera-snapped origins. Stability comes from the stable world origin, tenfold finer source field, logical-neighbor-aware distance reconstruction, correct carry-forward of unchanged atlas tiles, and explicit jittered-SceneDepth/unjittered-CustomDepth coordinate separation. ViewRect offsets, including embedded PIE viewports, are applied before either depth lookup. Feather remains presentation-only; gameplay queries retain the hard authority.
 
 The former `SceneColor * VisualFeatherWeight` transition was replaced by a transition from the resolved lower state to Live SceneColor. This removes the extra black band between adjacent Live and Remembered regions.
 
@@ -123,14 +147,15 @@ All builds, Editor launches, shader compilation, and tests were run serially. No
 
 ### Build
 
-`Scripts/BuildEditor.ps1` completed successfully after each reliable C++ checkpoint, including the final `ce32d50` carry-forward fix. Target: `DarkwellEditor Win64 Development`.
+`Scripts/BuildEditor.ps1` completed successfully after each reliable C++ checkpoint, including the final two-blocker implementation at `eb2a827`. Target: `DarkwellEditor Win64 Development`.
 
 ### Focused NullRHI
 
 - `Darkwell.SightWeave.VisualRescue.PresentationState.TruthTable`: Success.
-- `Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority`: Success, including Ultra shared scope, `NeverRemember`, shared Stalker/HUD authority, static classifications, tool-cycle no-fail-closed assertion, and restored valid render packet.
+- `Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority`: rerun after the two fixes and succeeded, including Ultra shared scope, `NeverRemember`, shared Stalker/HUD authority, static classifications, tool-cycle no-fail-closed assertion, and restored valid render packet.
 - `SightWeave.M3P4.Packaging.InwardFeatherShippingBoundaries`: Success.
 - `SightWeave.M3P5.Packaging.StaticEnvironmentMemoryShippingBoundaries`: Success.
+- `SightWeave.M3P5.Memory.Authority.ConcavePolygonDoesNotLeakAtTileEdge`: Success; this is the targeted regression for the false tile-edge memory strip.
 
 One earlier command used an incorrect M3P5 test name and reported that no tests matched. It was not counted as a pass; the exact test above was rerun and succeeded.
 
@@ -141,11 +166,31 @@ One earlier command used an incorrect M3P5 test name and reported that no tests 
 - GPU: NVIDIA GeForce RTX 2070 SUPER.
 - No fatal, assert, ensure, GPU crash, device removal, DXGI device error, or D3D12/RHI error was found in the focused final logs.
 
-Unreal startup emits pre-existing experimental Toolset/Python and automation-registration noise in some launches. The exact focused tests still report `Result={Success}`; that startup noise is not presented as a visual or test pass.
+Unreal startup emits pre-existing UE 5.8 experimental Toolset/Python and automation-registration noise in these launches. The post-initialization scan found no SightWeave/Darkwell error, fatal, assert, ensure, GPU crash, device removal, DXGI device error, or D3D12/RHI error. The exact focused tests report `Result={Success}`; engine startup noise is recorded, not hidden or presented as a pass.
 
 ## 7. Dynamic formal-View evidence
 
 All evidence is under ignored `Saved/SightWeaveVisualRescueEvidence`; it is not committed. Exact metadata and limitations are in `Saved/SightWeaveVisualRescueEvidence/METADATA.md`.
+
+### Current two-blocker retest candidate (`eb2a827`)
+
+The formal path uses D3D12/SM6 and normal TSR. No final result relies on AA-off, diagnostic color output, a frozen mask, or a still screenshot alone.
+
+- 1080p startup, first five gameplay seconds: `Dynamic/1080p_startup/startup.mp4`
+- 1080p completely static, five seconds: `Dynamic/1080p_static/static.mp4`
+- 1080p slow aim rotation, ten seconds: `Dynamic/1080p_rotate/rotate.mp4`
+- 1080p wall approach and controlled along-wall motion, ten seconds: `Dynamic/1080p_wall/wall.mp4`
+- 1080p Torch -> Lantern -> Torch, twelve seconds: `Dynamic/1080p_torch_cycle/torchcycle.mp4`
+- 1440p completely static, five seconds: `Dynamic/1440p_static/static.mp4`
+- 1440p slow aim rotation, ten seconds: `Dynamic/1440p_rotate/rotate.mp4`
+
+Every run has a sibling `game.log`; contact sheets and representative stills are stored beside each recording. Exact ViewRects are 1920x1080 and 2560x1440. All logged formal frames have `stableDepthCoordinates=1` and `bindingFailure=0`. The 1080p and 1440p static adjacent-frame scene MAD medians are `0.0125` and `0.0199`; p95 values are `0.0197` and `0.0245`. No full-black frame occurs in startup, rotation, wall, or tool-cycle captures. The wall run keeps player Z at `90.2` while moving between Y `-108.0` and `108.0`; invalid out-of-fixture experiments are not used as evidence.
+
+The Torch-cycle HUD stills record Torch at t=1 s, Lantern `[BASE]` at t=4 s, and restored Torch at t=7 s and t=10 s. Render state/feather revisions advance together from 8 to 10 with no binding failure or stuck-black frame. The targeted VerticalSliceAuthority test separately confirms `NeverRemember`, Stalker/HUD shared authority, wall occlusion, Lantern removal of legal cone light, and Torch recovery.
+
+The agent opened all contact sheets and representative frames, computed adjacent-frame stability for both static resolutions, and ran the isolated-horizontal-line detector across every frame of the five motion/transition recordings. This is evidence for offering a retest, not a substitute for the user's real dynamic PIE judgment.
+
+### Historical first-candidate evidence
 
 ### 1080p
 
@@ -182,7 +227,7 @@ The agent opened all key stills/contact sheets, two sheets of ten adjacent 30 fp
 - Only the user can determine long-duration dynamic PIE usability. Agent-side extracted frames cannot prove the absence of every transient crawl or subjective objection.
 - Pixel-scale raster/TSR grain remains at the transition. The rejected 25 cm block staircase is gone, but this is not a claim of mathematically analytic edges.
 - Remembered is a DARKWELL-specific filtered static greybox representation, not a general material snapshot or mutable-world solution.
-- The 1080p edge/motion run predates the final tool-cycle carry-forward fix. That fix changes packet revision continuity, not state geometry or Remembered shading; final tool cycling was rerun at 1440p on `ce32d50`.
+- The current agent evidence is sufficient only for `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST`. It does not authorize `COMPLETED` or `ACCEPTED — DARKWELL USABLE`.
 - No SaveGame wiring, damage reveal, Warden, production `L_Prototype` switch, multi-floor support, plugin public-API cleanup, BuildPlugin, Cook, Package, clean-host, full NullRHI/D3D12 history, or performance matrix was run.
 - Earlier failed tool-cycle captures are retained as honest diagnostic evidence and are not final acceptance evidence.
 
@@ -194,12 +239,16 @@ The agent opened all key stills/contact sheets, two sheets of ten adjacent 30 fp
 - `278986f` `render: restore filtered static remembered scene`
 - `ad603e5` `fix: preserve DARKWELL fog across tool cycling`
 - `ce32d50` `fix: carry forward stable fog tile revisions`
+- `6d9e7db` `test: capture DARKWELL fog temporal failure`
+- `800264e` `test: add DARKWELL fog A/B diagnostics`
+- `37c5f0c` `fix: align SightWeave depth classification with view jitter`
+- `eb2a827` `fix: remove remembered surface line leakage`
 
 The first documentation commit contained Markdown trailing whitespace because a PowerShell command sequence did not short-circuit on `git diff --check`; `c2c4d8f` corrected it without rewriting history. No source checkpoint was affected.
 
 ## 10. Decision gate
 
-The first candidate failed the user's dynamic PIE. Continue only the two-blocker DARKWELL project-usability rescue within the 2026-09-05 stop-loss deadline. A new candidate may be offered only after controlled A/B attribution, normal TAA/TSR restoration, targeted D3D12/SM6 dynamic evidence at 1080p and 1440p, and agent consecutive-frame inspection. Even then, the highest permitted state is `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST`; only the user's second real dynamic PIE can decide usability. The final product decision remains exactly one of:
+The first candidate failed the user's dynamic PIE. The two-blocker rescue now has controlled A/B attribution, normal TAA/TSR restoration, targeted D3D12/SM6 dynamic evidence at 1080p and 1440p, and agent consecutive-frame inspection. Its highest permitted state is therefore `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST`; only the user's second real dynamic PIE can decide usability. No further implementation or deferred full matrix begins before that verdict. The final product decision remains exactly one of:
 
 - `ACCEPTED — DARKWELL USABLE`
 - `REJECTED — ABANDON SIGHTWEAVE`

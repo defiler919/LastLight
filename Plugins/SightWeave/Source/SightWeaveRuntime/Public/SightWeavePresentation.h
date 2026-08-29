@@ -41,6 +41,13 @@ constexpr ESightWeavePresentationState SightWeaveResolvePresentationState(
 			: ESightWeavePresentationState::Unknown);
 }
 
+namespace SightWeave::RememberedScene
+{
+	/** Reserved project-slice stencil classes; 246 remains reserved for LastSeen proxies. */
+	inline constexpr int32 StaticEnvironmentStencilValue = 240;
+	inline constexpr int32 OccluderSurfaceStencilValue = 245;
+}
+
 namespace SightWeave::VisualFeather
 {
 	inline constexpr float MaximumWidthCentimeters = 100.0f;

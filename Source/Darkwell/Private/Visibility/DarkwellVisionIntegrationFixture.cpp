@@ -6,6 +6,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/CollisionProfile.h"
+#include "SightWeavePresentation.h"
 #include "UObject/ConstructorHelpers.h"
 
 namespace Darkwell::VisionIntegrationFixture
@@ -31,6 +32,15 @@ namespace Darkwell::VisionIntegrationFixture
 			FVector2D(MinX, MaxY)
 		};
 	}
+
+	void ConfigureRememberedSceneSurface(
+		UStaticMeshComponent& Component,
+		const int32 StencilValue)
+	{
+		Component.SetRenderCustomDepth(true);
+		Component.SetCustomDepthStencilWriteMask(ERendererStencilMask::ERSM_Default);
+		Component.SetCustomDepthStencilValue(StencilValue);
+	}
 }
 
 ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
@@ -47,6 +57,9 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 	Ground->SetRelativeScale3D(FVector(30.0f, 20.0f, 1.0f));
 	Ground->SetMobility(EComponentMobility::Static);
 	Ground->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+	Darkwell::VisionIntegrationFixture::ConfigureRememberedSceneSurface(
+		*Ground,
+		SightWeave::RememberedScene::StaticEnvironmentStencilValue);
 
 	WallSouth = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WallSouth"));
 	WallSouth->SetupAttachment(SceneRoot);
@@ -54,6 +67,9 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 	WallSouth->SetRelativeScale3D(FVector(0.4f, 5.0f, 2.0f));
 	WallSouth->SetMobility(EComponentMobility::Static);
 	WallSouth->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+	Darkwell::VisionIntegrationFixture::ConfigureRememberedSceneSurface(
+		*WallSouth,
+		SightWeave::RememberedScene::OccluderSurfaceStencilValue);
 
 	WallNorth = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WallNorth"));
 	WallNorth->SetupAttachment(SceneRoot);
@@ -61,6 +77,9 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 	WallNorth->SetRelativeScale3D(FVector(0.4f, 5.0f, 2.0f));
 	WallNorth->SetMobility(EComponentMobility::Static);
 	WallNorth->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+	Darkwell::VisionIntegrationFixture::ConfigureRememberedSceneSurface(
+		*WallNorth,
+		SightWeave::RememberedScene::OccluderSurfaceStencilValue);
 
 	MemoryLandmark = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MemoryLandmark"));
 	MemoryLandmark->SetupAttachment(SceneRoot);
@@ -68,6 +87,9 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 	MemoryLandmark->SetRelativeScale3D(FVector(1.5f));
 	MemoryLandmark->SetMobility(EComponentMobility::Static);
 	MemoryLandmark->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+	Darkwell::VisionIntegrationFixture::ConfigureRememberedSceneSurface(
+		*MemoryLandmark,
+		SightWeave::RememberedScene::StaticEnvironmentStencilValue);
 
 	GreyboxKeyLight = CreateDefaultSubobject<UDirectionalLightComponent>(TEXT("GreyboxKeyLight"));
 	GreyboxKeyLight->SetupAttachment(SceneRoot);

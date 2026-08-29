@@ -3,6 +3,7 @@
 #include "Algo/Sort.h"
 #include "CommonRenderResources.h"
 #include "GlobalShader.h"
+#include "HAL/IConsoleManager.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/App.h"
 #include "RenderGraphBuilder.h"
@@ -14,11 +15,43 @@
 #include "ScreenPass.h"
 #include "SightWeaveRenderModule.h"
 #include "SightWeaveLastSeenProxyComponent.h"
+#include "SightWeavePresentation.h"
 #include "SightWeaveTileShaders.h"
 #include "SystemTextures.h"
 
 namespace SightWeaveSparseAtlasRenderPrivate
 {
+	TAutoConsoleVariable<float> CVarRememberedBrightness(
+		TEXT("r.SightWeave.RememberedBrightness"),
+		0.22f,
+		TEXT("Neutral brightness of the DARKWELL filtered static Remembered scene."),
+		ECVF_RenderThreadSafe);
+	TAutoConsoleVariable<float> CVarRememberedContrast(
+		TEXT("r.SightWeave.RememberedContrast"),
+		0.42f,
+		TEXT("Static class contrast retained by the DARKWELL Remembered scene."),
+		ECVF_RenderThreadSafe);
+	TAutoConsoleVariable<float> CVarRememberedDetailStrength(
+		TEXT("r.SightWeave.RememberedDetailStrength"),
+		0.055f,
+		TEXT("Stable low-information geometric detail in the DARKWELL Remembered scene."),
+		ECVF_RenderThreadSafe);
+	TAutoConsoleVariable<float> CVarRememberedDetailWorldScale(
+		TEXT("r.SightWeave.RememberedDetailWorldScale"),
+		160.0f,
+		TEXT("World-space centimeters per Remembered detail cell."),
+		ECVF_RenderThreadSafe);
+	TAutoConsoleVariable<float> CVarRememberedSurfaceDepthTolerance(
+		TEXT("r.SightWeave.RememberedSurfaceDepthToleranceCm"),
+		8.0f,
+		TEXT("Maximum SceneDepth/CustomDepth separation for immutable surface classification."),
+		ECVF_RenderThreadSafe);
+	TAutoConsoleVariable<float> CVarOccluderSurfaceBias(
+		TEXT("r.SightWeave.OccluderSurfaceBiasCm"),
+		7.5f,
+		TEXT("Conservative visibility bias applied only to classified occluder surfaces."),
+		ECVF_RenderThreadSafe);
+
 	uint32 MemoryScopeMismatchMask(
 		const FSightWeaveMemoryScopeKey& MemoryScope,
 		const FSightWeaveViewPresentationBinding& Binding)
@@ -1697,6 +1730,22 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		Parameters->MemoryCentimetersPerTexel = MemoryCentimetersPerTexel;
 		Parameters->MemoryPresentationAvailable =
 			bMemoryReady && bStaticEnvironmentReady ? 1u : 0u;
+		Parameters->StaticEnvironmentStencilValue =
+			SightWeave::RememberedScene::StaticEnvironmentStencilValue;
+		Parameters->OccluderSurfaceStencilValue =
+			SightWeave::RememberedScene::OccluderSurfaceStencilValue;
+		Parameters->RememberedBrightness = FMath::Clamp(
+			CVarRememberedBrightness.GetValueOnRenderThread(), 0.0f, 1.0f);
+		Parameters->RememberedContrast = FMath::Clamp(
+			CVarRememberedContrast.GetValueOnRenderThread(), 0.0f, 1.0f);
+		Parameters->RememberedDetailStrength = FMath::Clamp(
+			CVarRememberedDetailStrength.GetValueOnRenderThread(), 0.0f, 0.25f);
+		Parameters->RememberedDetailWorldScale = FMath::Max(
+			CVarRememberedDetailWorldScale.GetValueOnRenderThread(), 1.0f);
+		Parameters->RememberedSurfaceDepthToleranceCentimeters = FMath::Max(
+			CVarRememberedSurfaceDepthTolerance.GetValueOnRenderThread(), 0.1f);
+		Parameters->OccluderSurfaceBiasCentimeters = FMath::Clamp(
+			CVarOccluderSurfaceBias.GetValueOnRenderThread(), 0.0f, 25.0f);
 	};
 	const FVector2D TranslatedFloorOrigin = Binding->GetScopeKey().FloorOrigin
 		+ FVector2D(PreViewTranslation.X, PreViewTranslation.Y);

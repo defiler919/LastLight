@@ -2,6 +2,7 @@
 
 #include "AI/DarkwellStalkerCharacter.h"
 #include "Combat/DarkwellLoadoutComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Gameplay/DarkwellGameplayTags.h"
@@ -98,6 +99,13 @@ bool FDarkwellVisualRescuePresentationStateTest::RunTest(const FString& Paramete
 	TestEqual(TEXT("Live has strict precedence over Remembered"),
 		SightWeaveResolvePresentationState(true, true),
 		ESightWeavePresentationState::Live);
+	TestNotEqual(TEXT("Static and occluder stencils are distinct"),
+		SightWeave::RememberedScene::StaticEnvironmentStencilValue,
+		SightWeave::RememberedScene::OccluderSurfaceStencilValue);
+	TestNotEqual(TEXT("Static stencil does not collide with LastSeen proxy"),
+		SightWeave::RememberedScene::StaticEnvironmentStencilValue, 246);
+	TestNotEqual(TEXT("Occluder stencil does not collide with LastSeen proxy"),
+		SightWeave::RememberedScene::OccluderSurfaceStencilValue, 246);
 	return true;
 }
 
@@ -201,6 +209,25 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
+	TInlineComponentArray<UStaticMeshComponent*> FixtureMeshes;
+	Fixture->GetComponents(FixtureMeshes);
+	int32 StaticSurfaceCount = 0;
+	int32 OccluderSurfaceCount = 0;
+	for (const UStaticMeshComponent* Mesh : FixtureMeshes)
+	{
+		if (!Mesh || !Mesh->bRenderCustomDepth)
+		{
+			continue;
+		}
+		StaticSurfaceCount += Mesh->CustomDepthStencilValue
+			== SightWeave::RememberedScene::StaticEnvironmentStencilValue ? 1 : 0;
+		OccluderSurfaceCount += Mesh->CustomDepthStencilValue
+			== SightWeave::RememberedScene::OccluderSurfaceStencilValue ? 1 : 0;
+	}
+	TestEqual(TEXT("Ground and landmark are immutable Remembered surfaces"),
+		StaticSurfaceCount, 2);
+	TestEqual(TEXT("Both walls are independently classified occluder surfaces"),
+		OccluderSurfaceCount, 2);
 	Stalker->ConfigurePersistentId(FName(TEXT("Enemy.Stalker.VisionIntegration")));
 
 	UDarkwellSightWeaveWorldSubsystem* Adapter =

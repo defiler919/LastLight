@@ -125,16 +125,24 @@ bool FSightWeaveM3P5PackagingBoundariesTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Production SVE prepares Memory/static resources before composite"),
 		ViewExtension.Contains(TEXT("PrepareMemoryPresentationResources_RenderThread"))
 		&& ViewExtension.Contains(TEXT("AddHardMaskComposite_RenderThread")));
-	TestTrue(TEXT("Production composite orders HardLive before remembered Memory"),
-		ShaderSource.Contains(TEXT("const bool bVisible = SightWeaveIsHardLive(TranslatedWorld.xy)"))
-		&& ShaderSource.Contains(TEXT("if (bVisible)"))
+	TestTrue(TEXT("Production composite resolves mutually exclusive Live before Remembered"),
+		ShaderSource.Contains(TEXT("const bool bHardLive = SightWeaveIsHardLiveForSurface"))
+		&& ShaderSource.Contains(TEXT("const uint State = SightWeaveResolvePresentationState("))
+		&& ShaderSource.Contains(TEXT("if (State == SIGHTWEAVE_STATE_LIVE)"))
 		&& ShaderSource.Contains(TEXT("return SceneColorTexture.Load"))
-		&& ShaderSource.Contains(TEXT("SightWeaveRememberedEnvironment(DepthPixel)"))
+		&& ShaderSource.Contains(TEXT("SightWeaveRememberedSurfaceColor("))
 		&& ShaderSource.Contains(TEXT("SightWeaveIsVisibleSubjectProxy(DepthPixel, DeviceZ)")));
-	TestTrue(TEXT("Remembered branch requires Memory, eligibility, and fixed attribute"),
-		ShaderSource.Contains(TEXT("SightWeaveSampleMemory(TranslatedFloorPosition) < 0.5f"))
-		&& ShaderSource.Contains(TEXT("const float Attribute = SightWeaveSampleStaticAttribute"))
-		&& ShaderSource.Contains(TEXT("return Attribute > 0.0f ? float4(Attribute.xxx, 1.0f) : 0.0f")));
+	TestTrue(TEXT("Remembered branch requires immutable depth/stencil surface plus Memory eligibility"),
+		ShaderSource.Contains(TEXT("SightWeaveSampleRememberedSurface("))
+		&& ShaderSource.Contains(TEXT("SightWeaveIsRememberedEligibleForSurface("))
+		&& ShaderSource.Contains(TEXT("SurfaceStencil != StaticEnvironmentStencilValue"))
+		&& ShaderSource.Contains(TEXT("abs(SceneDepthCentimeters - SurfaceDepthCentimeters)"))
+		&& ShaderSource.Contains(TEXT("const float Attribute = SightWeaveSampleStaticAttribute")));
+	TestTrue(TEXT("Filtered static scene is parameterized and does not reuse current SceneColor"),
+		ShaderSource.Contains(TEXT("RememberedBrightness"))
+		&& ShaderSource.Contains(TEXT("RememberedContrast"))
+		&& ShaderSource.Contains(TEXT("RememberedDetailStrength"))
+		&& ShaderSource.Contains(TEXT("SightWeaveRememberedSurfaceColor")));
 	for (const TCHAR* Forbidden : {
 		TEXT("SceneCapture"), TEXT("TemporalHistory"), TEXT("LastSeen"),
 		TEXT("DamageSourceReveal") })

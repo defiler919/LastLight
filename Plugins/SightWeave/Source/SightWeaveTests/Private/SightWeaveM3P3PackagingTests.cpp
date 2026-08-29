@@ -104,7 +104,7 @@ bool FSightWeaveM3P3PackagingBoundariesTest::RunTest(const FString& Parameters)
 		ShaderSource.Contains(TEXT("AtlasPage0.Load"))
 		&& ShaderSource.Contains(TEXT("SlotOrigin + int2(4, 4) + InteriorTexel")));
 	TestTrue(TEXT("Unified Live state still preserves current Scene Color before later fallbacks"),
-		ShaderSource.Contains(TEXT("const uint State = SightWeaveResolvePresentationState(TranslatedWorld.xy)"))
+		ShaderSource.Contains(TEXT("const uint State = SightWeaveResolvePresentationState("))
 		&& ShaderSource.Contains(TEXT("if (State == SIGHTWEAVE_STATE_LIVE)"))
 		&& ShaderSource.Contains(TEXT("return SceneColorTexture.Load(int3(SceneColorPixel, 0));")));
 	for (const TCHAR* Forbidden : {

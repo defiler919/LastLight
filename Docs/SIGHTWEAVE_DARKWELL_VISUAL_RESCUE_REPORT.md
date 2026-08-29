@@ -12,9 +12,28 @@ Validated source SHA: `ce32d50`
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE**
+Status: **PARTIAL — USER_DYNAMIC_PIE_FAILED, BUT DIRECTION VALID**
 
-This is a DARKWELL project-use prototype, not a plugin-generalization, Fab, packaging, or publication result. The user has not accepted the visual result. `COMPLETED` is prohibited until the user performs real dynamic PIE and explicitly confirms that the result is usable.
+This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
+
+## 0. User dynamic PIE rejection (2026-08-29)
+
+User recording: `Darkwell - 虚幻编辑器 2026-08-29 18-35-37.mp4`.
+
+The recording was copied, without modification, to the ignored evidence directory `Saved/SightWeaveVisualRescueEvidence/UserDynamicPIEFailure`. The source and ignored copy both have SHA-256 `33298E98FB8B7AE52DA8C3F2F38794311338A5E44307FBEEEF2AA00DCC02CCD5`. The video is not a repository artifact and must not be committed.
+
+User-confirmed result:
+
+- the entire game image continuously shakes and flickers;
+- multiple thin gray lines span the game view immediately after gameplay begins;
+- the large edge staircase is materially smaller but residual aliasing remains;
+- Remembered is now a three-dimensional scene instead of a flat gray 2D fill;
+- enemy filtering is correct;
+- the direction is materially improved, but the image remains unusable for the game.
+
+Initial frame inspection establishes that the editor chrome remains stable while the embedded PIE game View changes, so the failure is inside the game View/render path rather than a whole-desktop capture displacement. The gray lines move in screen space with the camera while remaining correlated with world surfaces and wall/floor elevations. They are therefore being treated as surface-classification or depth-coordinate leakage until the controlled A/B diagnostics identify the exact source; they are not accepted as a color-tuning issue and may not be hidden with darker thresholds, mask expansion, or more blur.
+
+The next rescue slice is restricted to two blockers: (A) whole-view shaking/flicker and (B) gray-line/residual-geometry leakage. It must preserve Ultra 2.5 cm/texel, the unified mutually exclusive three-state result, three-dimensional Remembered, `NeverRemember` enemy filtering, wall-surface classification, the black/gray alignment correction, and Torch/Lantern revision continuity.
 
 ## 1. Result
 
@@ -29,7 +48,7 @@ The first dynamic rescue candidate is materially different from the rejected M6P
 - inactive compatible illumination no longer invalidates the entire render scope;
 - unchanged resident atlas tiles now carry their valid content into the next packet revision, preventing incremental feather fail-black during Torch/Lantern cycling.
 
-Agent inspection of the final frame sequences found no recurrence of the original large block staircase, blurred 25 cm staircase, Live/Remembered black seam, uniform gray fill, or whole-wall black consumption. Slow-motion adjacent frames did not show an obvious tile jump, crawl, or flash. This is an agent-side formal-player-View check, not final user PIE acceptance.
+Before the user test, agent inspection of selected extracted frame sequences found no recurrence of the original large block staircase, blurred 25 cm staircase, Live/Remembered black seam, uniform gray fill, or whole-wall black consumption. That limited inspection missed the continuous whole-View instability and thin gray-line leakage visible in the user's real dynamic PIE. It is retained only as historical engineering evidence and is superseded for visual acceptance by the user recording and verdict above.
 
 ## 2. Root causes and replaced paths
 
@@ -180,7 +199,7 @@ The first documentation commit contained Markdown trailing whitespace because a 
 
 ## 10. Decision gate
 
-The candidate is ready only for the user's dynamic PIE verdict. If the user finds the visuals usable, the next phase may run the deferred complete regression and final close. If the user rejects the visuals, continue only project-usability rescue within the 2026-09-05 stop-loss deadline. The final product decision remains exactly one of:
+The first candidate failed the user's dynamic PIE. Continue only the two-blocker DARKWELL project-usability rescue within the 2026-09-05 stop-loss deadline. A new candidate may be offered only after controlled A/B attribution, normal TAA/TSR restoration, targeted D3D12/SM6 dynamic evidence at 1080p and 1440p, and agent consecutive-frame inspection. Even then, the highest permitted state is `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST`; only the user's second real dynamic PIE can decide usability. The final product decision remains exactly one of:
 
 - `ACCEPTED — DARKWELL USABLE`
 - `REJECTED — ABANDON SIGHTWEAVE`

@@ -552,6 +552,18 @@ float4 SightWeaveDebugCustomStencil(int2 CustomDepthPixel)
 	return 0.0f;
 }
 
+float4 SightWeaveDebugMemory(float2 TranslatedWorld)
+{
+	const float Memory = SightWeaveSampleMemory(TranslatedWorld);
+	return float4(Memory.xxx, 1.0f);
+}
+
+float4 SightWeaveDebugStaticAttribute(float2 TranslatedWorld)
+{
+	const float Attribute = SightWeaveSampleStaticAttribute(TranslatedWorld);
+	return float4(Attribute.xxx, 1.0f);
+}
+
 float4 SightWeaveSubjectProxyNeutral()
 {
 	return float4(SubjectProxyNeutralIntensity.xxx, 1.0f);
@@ -576,6 +588,8 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 	if (DiagnosticMode == 5) return SightWeaveDebugWorldPosition(TranslatedWorld);
 	if (DiagnosticMode == 6) return SightWeaveDebugCustomDepth(DepthPixel);
 	if (DiagnosticMode == 7) return SightWeaveDebugCustomStencil(DepthPixel);
+	if (DiagnosticMode == 9) return SightWeaveDebugMemory(TranslatedWorld.xy);
+	if (DiagnosticMode == 10) return SightWeaveDebugStaticAttribute(TranslatedWorld.xy);
 	float3 TranslatedSurfaceWorld;
 	uint SurfaceStencil;
 	bool bRememberedSurface = DiagnosticMode != 2
@@ -754,6 +768,8 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 	if (DiagnosticMode == 5) return SightWeaveDebugWorldPosition(TranslatedWorld);
 	if (DiagnosticMode == 6) return SightWeaveDebugCustomDepth(DepthPixel);
 	if (DiagnosticMode == 7) return SightWeaveDebugCustomStencil(DepthPixel);
+	if (DiagnosticMode == 9) return SightWeaveDebugMemory(TranslatedWorld.xy);
+	if (DiagnosticMode == 10) return SightWeaveDebugStaticAttribute(TranslatedWorld.xy);
 	float3 TranslatedSurfaceWorld;
 	uint SurfaceStencil;
 	bool bRememberedSurface = DiagnosticMode != 2

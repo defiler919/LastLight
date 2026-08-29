@@ -58,13 +58,14 @@ namespace SightWeaveSparseAtlasRenderPrivate
 		0,
 		TEXT("DARKWELL visual-rescue A/B mode: 0 normal, 1 bypass, 2 no Remembered, "
 			"3 Remembered without CustomDepth/Stencil, 4 unified state, 5 SceneDepth world, "
-			"6 CustomDepth, 7 CustomStencil, 8 no occluder conservative sampling."),
+			"6 CustomDepth, 7 CustomStencil, 8 no occluder conservative sampling, "
+			"9 raw memory atlas, 10 raw static-attribute atlas."),
 		ECVF_RenderThreadSafe);
 	TAutoConsoleVariable<int32> CVarDiagnosticStableDepthCoordinates(
 		TEXT("r.SightWeave.Diagnostic.StableDepthCoordinates"),
-		0,
-		TEXT("Use jitter-compensated SceneDepth coordinates with unjittered CustomDepth. "
-			"Diagnostic-only until the temporal rescue result is frozen."),
+		1,
+		TEXT("Use the formal jitter-compensated SceneDepth coordinates with unjittered "
+			"CustomDepth. Set to 0 only for Development/Editor legacy-path A/B diagnosis."),
 		ECVF_RenderThreadSafe);
 	TAutoConsoleVariable<int32> CVarDiagnosticFreezeMaskUpdates(
 		TEXT("r.SightWeave.Diagnostic.FreezeMaskUpdates"),
@@ -1636,7 +1637,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 	check(SceneColor.IsValid());
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	const int32 DiagnosticMode = FMath::Clamp(
-		CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 8);
+		CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 10);
 	if (DiagnosticMode == 1)
 	{
 		return SceneColor;
@@ -1645,7 +1646,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		CVarDiagnosticStableDepthCoordinates.GetValueOnRenderThread() != 0;
 #else
 	constexpr int32 DiagnosticMode = 0;
-	constexpr bool bUseStableDepthCoordinates = false;
+	constexpr bool bUseStableDepthCoordinates = true;
 #endif
 
 	FScreenPassRenderTarget Output = Inputs.OverrideOutput;

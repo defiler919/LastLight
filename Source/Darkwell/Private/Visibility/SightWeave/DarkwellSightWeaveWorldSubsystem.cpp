@@ -3,10 +3,12 @@
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 
 #include "AI/DarkwellStalkerCharacter.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Combat/DarkwellLoadoutComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/IConsoleManager.h"
 #include "Gameplay/DarkwellVisibilityComponent.h"
 #include "Player/DarkwellCharacter.h"
 #include "SightWeaveQueries.h"
@@ -27,6 +29,12 @@ namespace Darkwell::SightWeaveAdapter
 	const FName OwnerName(TEXT("Local"));
 	const FName FloorName(TEXT("Darkwell.Integration.Ground"));
 	const FName TorchCapability(TEXT("Darkwell.Visible.Torch"));
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	TAutoConsoleVariable<int32> CVarDiagnosticLogGameTransforms(
+		TEXT("r.SightWeave.Diagnostic.LogGameTransforms"),
+		0,
+		TEXT("Emit one player/camera transform record per game frame for visual rescue."));
+#endif
 
 	FTransform BuildSourceTransform(const ADarkwellCharacter& Character)
 	{
@@ -101,6 +109,27 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 	}
 	UpdateDynamicAuthority();
 	UpdateSubjectAuthority();
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (Darkwell::SightWeaveAdapter::CVarDiagnosticLogGameTransforms.GetValueOnGameThread() != 0)
+	{
+		const APlayerController* Controller = GetWorld()
+			? GetWorld()->GetFirstPlayerController() : nullptr;
+		const APlayerCameraManager* Camera = Controller ? Controller->PlayerCameraManager : nullptr;
+		const FVector PlayerLocation = Player->GetActorLocation();
+		const FRotator PlayerRotation = Player->GetActorRotation();
+		const FVector CameraLocation = Camera ? Camera->GetCameraLocation() : FVector::ZeroVector;
+		const FRotator CameraRotation = Camera ? Camera->GetCameraRotation() : FRotator::ZeroRotator;
+		UE_LOG(
+			LogDarkwellSightWeave,
+			Display,
+			TEXT("VisualRescueTransform frame=%llu player=(%.3f,%.3f,%.3f %.3f,%.3f,%.3f) camera=(%.3f,%.3f,%.3f %.3f,%.3f,%.3f)"),
+			GFrameCounter,
+			PlayerLocation.X, PlayerLocation.Y, PlayerLocation.Z,
+			PlayerRotation.Pitch, PlayerRotation.Yaw, PlayerRotation.Roll,
+			CameraLocation.X, CameraLocation.Y, CameraLocation.Z,
+			CameraRotation.Pitch, CameraRotation.Yaw, CameraRotation.Roll);
+	}
+#endif
 }
 
 TStatId UDarkwellSightWeaveWorldSubsystem::GetStatId() const

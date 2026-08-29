@@ -244,6 +244,11 @@ private:
 	bool bFeatherUpdateIncomplete = false;
 	bool bReleased = false;
 	int32 LastCompositeDiagnosticCode = INDEX_NONE;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	uint64 LastMaskUpdateFrame = MAX_uint64;
+	uint32 LastSubmittedTileCount = 0;
+	bool bLastMaskUpdateWasFullRebuild = false;
+#endif
 	struct FMemoryPresentationDiagnosticSnapshot
 	{
 		int32 CompositeDiagnosticCode = INDEX_NONE;

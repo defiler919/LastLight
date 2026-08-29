@@ -52,6 +52,37 @@ namespace SightWeaveSparseAtlasRenderPrivate
 		TEXT("Conservative visibility bias applied only to classified occluder surfaces."),
 		ECVF_RenderThreadSafe);
 
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	TAutoConsoleVariable<int32> CVarDiagnosticCompositeMode(
+		TEXT("r.SightWeave.Diagnostic.CompositeMode"),
+		0,
+		TEXT("DARKWELL visual-rescue A/B mode: 0 normal, 1 bypass, 2 no Remembered, "
+			"3 Remembered without CustomDepth/Stencil, 4 unified state, 5 SceneDepth world, "
+			"6 CustomDepth, 7 CustomStencil, 8 no occluder conservative sampling."),
+		ECVF_RenderThreadSafe);
+	TAutoConsoleVariable<int32> CVarDiagnosticStableDepthCoordinates(
+		TEXT("r.SightWeave.Diagnostic.StableDepthCoordinates"),
+		0,
+		TEXT("Use jitter-compensated SceneDepth coordinates with unjittered CustomDepth. "
+			"Diagnostic-only until the temporal rescue result is frozen."),
+		ECVF_RenderThreadSafe);
+	TAutoConsoleVariable<int32> CVarDiagnosticFreezeMaskUpdates(
+		TEXT("r.SightWeave.Diagnostic.FreezeMaskUpdates"),
+		0,
+		TEXT("Freeze live mask revisions after the first accepted packet."),
+		ECVF_RenderThreadSafe);
+	TAutoConsoleVariable<int32> CVarDiagnosticForceFullMaskRebuild(
+		TEXT("r.SightWeave.Diagnostic.ForceFullMaskRebuild"),
+		0,
+		TEXT("Force every accepted live mask packet through a stable full rebuild."),
+		ECVF_RenderThreadSafe);
+	TAutoConsoleVariable<int32> CVarDiagnosticLogFrames(
+		TEXT("r.SightWeave.Diagnostic.LogFrames"),
+		0,
+		TEXT("Emit one concise visual-rescue render diagnostic record per frame."),
+		ECVF_RenderThreadSafe);
+#endif
+
 	uint32 MemoryScopeMismatchMask(
 		const FSightWeaveMemoryScopeKey& MemoryScope,
 		const FSightWeaveViewPresentationBinding& Binding)
@@ -525,6 +556,13 @@ void FSightWeaveSparseAtlasRenderState::SubmitPacket_RenderThread(
 #endif
 		return;
 	}
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (CVarDiagnosticFreezeMaskUpdates.GetValueOnRenderThread() != 0
+		&& DesiredRevision != 0)
+	{
+		return;
+	}
+#endif
 	if (Packet->GetPacketRevision() < DesiredRevision)
 	{
 		++StalePacketCount;
@@ -1162,7 +1200,14 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 #endif
 	const TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe> Packet = MoveTemp(PendingPacket);
 	const bool bForceBlack = bPendingForceBlack;
-	const bool bForceFullRebuild = bPendingRequiresFullRebuild;
+	const bool bForceFullRebuild = bPendingRequiresFullRebuild
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+		|| CVarDiagnosticForceFullMaskRebuild.GetValueOnRenderThread() != 0
+#endif
+		;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	const uint64 DirtyTileDispatchCountBefore = DirtyTileDispatchCount;
+#endif
 	bPendingForceBlack = false;
 	bPendingRequiresFullRebuild = false;
 	if (bForceBlack
@@ -1350,6 +1395,13 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 	AppliedRevision = Packet->GetPacketRevision();
 	Availability = ESightWeaveRenderAvailability::Available;
 	AppliedPacket = Packet;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	LastMaskUpdateFrame = GFrameNumberRenderThread;
+	LastSubmittedTileCount = static_cast<uint32>(FMath::Min<uint64>(
+		DirtyTileDispatchCount - DirtyTileDispatchCountBefore,
+		MAX_uint32));
+	bLastMaskUpdateWasFullRebuild = bForceFullRebuild;
+#endif
 	if (PresentationSelection.IsEnabled()
 		&& PresentationSelection.GetVisualFeather().IsEnabled()
 		&& bAnyFeatherImpact)
@@ -1582,6 +1634,19 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		GraphBuilder,
 		Inputs.GetInput(EPostProcessMaterialInput::SceneColor));
 	check(SceneColor.IsValid());
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	const int32 DiagnosticMode = FMath::Clamp(
+		CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 8);
+	if (DiagnosticMode == 1)
+	{
+		return SceneColor;
+	}
+	const bool bUseStableDepthCoordinates =
+		CVarDiagnosticStableDepthCoordinates.GetValueOnRenderThread() != 0;
+#else
+	constexpr int32 DiagnosticMode = 0;
+	constexpr bool bUseStableDepthCoordinates = false;
+#endif
 
 	FScreenPassRenderTarget Output = Inputs.OverrideOutput;
 	if (!Output.IsValid())
@@ -1660,6 +1725,11 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		}
 	}
 	const FVector PreViewTranslation = View.ViewMatrices.GetPreViewTranslation();
+	const FVector2D TemporalProjectionJitter = View.ViewMatrices.GetTemporalAAJitter();
+	const FVector2f TemporalProjectionJitterFloat(TemporalProjectionJitter);
+	const FVector2f TemporalJitterPixels(
+		static_cast<float>(TemporalProjectionJitter.X * View.UnscaledViewRect.Width() * 0.5),
+		static_cast<float>(TemporalProjectionJitter.Y * View.UnscaledViewRect.Height() * -0.5));
 	const bool bMemoryReady = MemoryMirror.IsValid()
 		&& MemoryMirror->Availability == ESightWeaveRenderAvailability::Available
 		&& MemoryMirror->AppliedPacket.IsValid()
@@ -1737,8 +1807,14 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		MemoryTranslatedFloorPlaneZ,
 		MemoryCentimetersPerTexel,
 		bMemoryReady,
-		bStaticEnvironmentReady](auto* Parameters)
+		bStaticEnvironmentReady,
+		TemporalProjectionJitterFloat,
+		DiagnosticMode,
+		bUseStableDepthCoordinates](auto* Parameters)
 	{
+		Parameters->TemporalProjectionJitter = TemporalProjectionJitterFloat;
+		Parameters->DiagnosticMode = static_cast<uint32>(DiagnosticMode);
+		Parameters->UseStableDepthCoordinates = bUseStableDepthCoordinates ? 1u : 0u;
 		Parameters->MemoryPageTable = GraphBuilder.CreateSRV(MemoryPageTable);
 		Parameters->MemoryPage0 = MemoryPages[0];
 		Parameters->MemoryPage1 = MemoryPages[1];
@@ -1771,11 +1847,53 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 			CVarRememberedDetailWorldScale.GetValueOnRenderThread(), 1.0f);
 		Parameters->RememberedSurfaceDepthToleranceCentimeters = FMath::Max(
 			CVarRememberedSurfaceDepthTolerance.GetValueOnRenderThread(), 0.1f);
-		Parameters->OccluderSurfaceBiasCentimeters = FMath::Clamp(
-			CVarOccluderSurfaceBias.GetValueOnRenderThread(), 0.0f, 25.0f);
+		Parameters->OccluderSurfaceBiasCentimeters = DiagnosticMode == 8
+			? 0.0f
+			: FMath::Clamp(
+				CVarOccluderSurfaceBias.GetValueOnRenderThread(), 0.0f, 25.0f);
 	};
 	const FVector2D TranslatedFloorOrigin = Binding->GetScopeKey().FloorOrigin
 		+ FVector2D(PreViewTranslation.X, PreViewTranslation.Y);
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (CVarDiagnosticLogFrames.GetValueOnRenderThread() != 0)
+	{
+		const uint32 SubmittedTiles = LastMaskUpdateFrame == GFrameNumberRenderThread
+			? LastSubmittedTileCount : 0;
+		const TCHAR* UpdateMode = LastMaskUpdateFrame == GFrameNumberRenderThread
+			? (bLastMaskUpdateWasFullRebuild ? TEXT("full") : TEXT("incremental"))
+			: TEXT("none");
+		const FVector ViewOrigin = View.ViewMatrices.GetViewOrigin();
+		const FMatrix ViewProjection = View.ViewMatrices.GetWorldToClip();
+		UE_LOG(
+			LogSightWeaveRender,
+			Display,
+			TEXT("VisualRescue frame=%llu viewRect=(%d,%d %dx%d) buffer=(%d,%d) output=(%d,%d %dx%d) sceneColor=(%d,%d %dx%d) jitterPixels=(%.4f,%.4f) viewOrigin=(%.3f,%.3f,%.3f) vp=(%.6f,%.6f,%.6f,%.6f,%.6f,%.6f) maskOrigin=(%.3f,%.3f) stateRevision=%llu featherRevision=%llu submittedTiles=%u bindingFailure=%d historyValid=0 update=%s staticClassVersion=%llu diagnosticMode=%d stableDepthCoordinates=%d"),
+			GFrameNumberRenderThread,
+			View.UnscaledViewRect.Min.X, View.UnscaledViewRect.Min.Y,
+			View.UnscaledViewRect.Width(), View.UnscaledViewRect.Height(),
+			SceneDepth->Desc.Extent.X, SceneDepth->Desc.Extent.Y,
+			Output.ViewRect.Min.X, Output.ViewRect.Min.Y,
+			Output.ViewRect.Width(), Output.ViewRect.Height(),
+			SceneColor.ViewRect.Min.X, SceneColor.ViewRect.Min.Y,
+			SceneColor.ViewRect.Width(), SceneColor.ViewRect.Height(),
+			TemporalJitterPixels.X, TemporalJitterPixels.Y,
+			ViewOrigin.X, ViewOrigin.Y, ViewOrigin.Z,
+			ViewProjection.M[0][0], ViewProjection.M[0][1],
+			ViewProjection.M[1][0], ViewProjection.M[1][1],
+			ViewProjection.M[2][0], ViewProjection.M[2][1],
+			Binding->GetScopeKey().FloorOrigin.X,
+			Binding->GetScopeKey().FloorOrigin.Y,
+			AppliedRevision,
+			Scope->FeatherAppliedRevision,
+			SubmittedTiles,
+			static_cast<int32>(PresentationBindingFailure),
+			UpdateMode,
+			StaticAttributeMirror.IsValid()
+				? StaticAttributeMirror->AppliedEligibilityRevision : 0,
+			DiagnosticMode,
+			bUseStableDepthCoordinates ? 1 : 0);
+	}
+#endif
 	if (Binding->GetVisualFeather().IsEnabled())
 	{
 		if (bFeatherUpdateIncomplete

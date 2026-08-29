@@ -132,6 +132,9 @@ int2 OutputRectMin;
 int2 OutputRectSize;
 int2 SceneColorRectMin;
 int2 SceneColorRectSize;
+float2 TemporalProjectionJitter;
+uint DiagnosticMode;
+uint UseStableDepthCoordinates;
 float2 TranslatedFloorOrigin;
 float CentimetersPerTexel;
 uint PageTableCount;
@@ -353,12 +356,13 @@ uint SightWeaveResolvePresentationState(
 }
 
 bool SightWeaveSampleRememberedSurface(
-	int2 DepthPixel,
+	int2 CustomDepthPixel,
+	float2 SceneSvPosition,
 	float SceneDeviceZ,
 	out float3 TranslatedSurfaceWorld,
 	out uint SurfaceStencil)
 {
-	SurfaceStencil = SubjectProxyStencilTexture.Load(int3(DepthPixel, 0))
+	SurfaceStencil = SubjectProxyStencilTexture.Load(int3(CustomDepthPixel, 0))
 		STENCIL_COMPONENT_SWIZZLE;
 	if (SurfaceStencil != StaticEnvironmentStencilValue
 		&& SurfaceStencil != OccluderSurfaceStencilValue)
@@ -366,7 +370,7 @@ bool SightWeaveSampleRememberedSurface(
 		TranslatedSurfaceWorld = 0.0f;
 		return false;
 	}
-	const float SurfaceDeviceZ = SubjectProxyDepthTexture.Load(int3(DepthPixel, 0));
+	const float SurfaceDeviceZ = SubjectProxyDepthTexture.Load(int3(CustomDepthPixel, 0));
 	const float SceneDepthCentimeters = ConvertFromDeviceZ(SceneDeviceZ);
 	const float SurfaceDepthCentimeters = ConvertFromDeviceZ(SurfaceDeviceZ);
 	if (!isfinite(SceneDepthCentimeters)
@@ -378,7 +382,7 @@ bool SightWeaveSampleRememberedSurface(
 		return false;
 	}
 	TranslatedSurfaceWorld = SvPositionToTranslatedWorld(
-		float4(float2(DepthPixel) + 0.5f, SurfaceDeviceZ, 1.0f));
+		float4(SceneSvPosition, SurfaceDeviceZ, 1.0f));
 	return all(isfinite(TranslatedSurfaceWorld));
 }
 
@@ -486,17 +490,66 @@ float4 SightWeaveRememberedEnvironment(int2 DepthPixel)
 	return Attribute > 0.0f ? float4(Attribute.xxx, 1.0f) : 0.0f;
 }
 
-bool SightWeaveIsVisibleSubjectProxy(int2 DepthPixel, float SceneDeviceZ)
+bool SightWeaveIsVisibleSubjectProxy(int2 CustomDepthPixel, float SceneDeviceZ)
 {
-	const uint Stencil = SubjectProxyStencilTexture.Load(int3(DepthPixel, 0))
+	const uint Stencil = SubjectProxyStencilTexture.Load(int3(CustomDepthPixel, 0))
 		STENCIL_COMPONENT_SWIZZLE;
 	if (Stencil != SubjectProxyStencilValue)
 	{
 		return false;
 	}
-	const float ProxyDeviceZ = SubjectProxyDepthTexture.Load(int3(DepthPixel, 0));
+	const float ProxyDeviceZ = SubjectProxyDepthTexture.Load(int3(CustomDepthPixel, 0));
 	// Unreal's reversed-Z device depth is larger for geometry closer to the camera.
 	return ProxyDeviceZ + 1.0e-6f >= SceneDeviceZ;
+}
+
+void SightWeaveResolveDepthCoordinates(
+	float2 ViewUv,
+	out int2 StableDepthPixel,
+	out int2 SceneDepthPixel,
+	out float2 SceneSvPosition)
+{
+	const int2 DepthRectMin = int2(View.ViewRectMinAndSize.xy);
+	const int2 DepthRectSize = int2(View.ViewRectMinAndSize.zw);
+	StableDepthPixel = clamp(
+		DepthRectMin + int2(ViewUv * float2(DepthRectSize)),
+		DepthRectMin,
+		DepthRectMin + DepthRectSize - 1);
+	SceneSvPosition = float2(StableDepthPixel) + 0.5f;
+	SceneDepthPixel = StableDepthPixel;
+	if (UseStableDepthCoordinates != 0)
+	{
+		SceneSvPosition += float2(
+			TemporalProjectionJitter.x * float(DepthRectSize.x) * 0.5f,
+			TemporalProjectionJitter.y * float(DepthRectSize.y) * -0.5f);
+		SceneDepthPixel = clamp(
+			int2(floor(SceneSvPosition)),
+			DepthRectMin,
+			DepthRectMin + DepthRectSize - 1);
+	}
+}
+
+float4 SightWeaveDebugWorldPosition(float3 TranslatedWorld)
+{
+	const float3 Stable = abs(frac(TranslatedWorld / 250.0f) - 0.5f) * 2.0f;
+	return float4(Stable, 1.0f);
+}
+
+float4 SightWeaveDebugCustomDepth(int2 CustomDepthPixel)
+{
+	const float DeviceZ = SubjectProxyDepthTexture.Load(int3(CustomDepthPixel, 0));
+	const float LinearDepth = ConvertFromDeviceZ(DeviceZ);
+	return float4((1.0f - saturate(LinearDepth / 5000.0f)).xxx, 1.0f);
+}
+
+float4 SightWeaveDebugCustomStencil(int2 CustomDepthPixel)
+{
+	const uint Stencil = SubjectProxyStencilTexture.Load(int3(CustomDepthPixel, 0))
+		STENCIL_COMPONENT_SWIZZLE;
+	if (Stencil == StaticEnvironmentStencilValue) return float4(0.15f, 0.45f, 1.0f, 1.0f);
+	if (Stencil == OccluderSurfaceStencilValue) return float4(1.0f, 0.45f, 0.1f, 1.0f);
+	if (Stencil == SubjectProxyStencilValue) return float4(1.0f, 0.0f, 0.75f, 1.0f);
+	return 0.0f;
 }
 
 float4 SightWeaveSubjectProxyNeutral()
@@ -513,22 +566,32 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 		SceneColorRectMin + int2(ViewUv * float2(SceneColorRectSize)),
 		SceneColorRectMin,
 		SceneColorRectMin + SceneColorRectSize - 1);
-	const int2 DepthRectMin = int2(View.ViewRectMinAndSize.xy);
-	const int2 DepthRectSize = int2(View.ViewRectMinAndSize.zw);
-	const int2 DepthPixel = clamp(
-		DepthRectMin + int2(ViewUv * float2(DepthRectSize)),
-		DepthRectMin,
-		DepthRectMin + DepthRectSize - 1);
-	const float DeviceZ = SceneDepthTexture.Load(int3(DepthPixel, 0));
+	int2 DepthPixel;
+	int2 SceneDepthPixel;
+	float2 SceneSvPosition;
+	SightWeaveResolveDepthCoordinates(ViewUv, DepthPixel, SceneDepthPixel, SceneSvPosition);
+	const float DeviceZ = SceneDepthTexture.Load(int3(SceneDepthPixel, 0));
 	const float3 TranslatedWorld = SvPositionToTranslatedWorld(
-		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
+		float4(SceneSvPosition, DeviceZ, 1.0f));
+	if (DiagnosticMode == 5) return SightWeaveDebugWorldPosition(TranslatedWorld);
+	if (DiagnosticMode == 6) return SightWeaveDebugCustomDepth(DepthPixel);
+	if (DiagnosticMode == 7) return SightWeaveDebugCustomStencil(DepthPixel);
 	float3 TranslatedSurfaceWorld;
 	uint SurfaceStencil;
-	const bool bRememberedSurface = SightWeaveSampleRememberedSurface(
-		DepthPixel,
-		DeviceZ,
-		TranslatedSurfaceWorld,
-		SurfaceStencil);
+	bool bRememberedSurface = DiagnosticMode != 2
+		&& DiagnosticMode != 3
+		&& SightWeaveSampleRememberedSurface(
+			DepthPixel,
+			SceneSvPosition,
+			DeviceZ,
+			TranslatedSurfaceWorld,
+			SurfaceStencil);
+	if (DiagnosticMode == 3)
+	{
+		TranslatedSurfaceWorld = TranslatedWorld;
+		SurfaceStencil = StaticEnvironmentStencilValue;
+		bRememberedSurface = true;
+	}
 	const float2 VisibilityWorld = bRememberedSurface
 		? TranslatedSurfaceWorld.xy
 		: TranslatedWorld.xy;
@@ -542,6 +605,12 @@ float4 SightWeaveHardMaskCompositePS(float4 Position : SV_POSITION) : SV_Target0
 	const uint State = SightWeaveResolvePresentationState(
 		bHardLive,
 		bRememberedEligible);
+	if (DiagnosticMode == 4)
+	{
+		return State == SIGHTWEAVE_STATE_LIVE
+			? 1.0f
+			: (State == SIGHTWEAVE_STATE_REMEMBERED ? 0.35f : 0.0f);
+	}
 	if (State == SIGHTWEAVE_STATE_LIVE)
 	{
 		return SceneColorTexture.Load(int3(SceneColorPixel, 0));
@@ -675,22 +744,32 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 		SceneColorRectMin + int2(ViewUv * float2(SceneColorRectSize)),
 		SceneColorRectMin,
 		SceneColorRectMin + SceneColorRectSize - 1);
-	const int2 DepthRectMin = int2(View.ViewRectMinAndSize.xy);
-	const int2 DepthRectSize = int2(View.ViewRectMinAndSize.zw);
-	const int2 DepthPixel = clamp(
-		DepthRectMin + int2(ViewUv * float2(DepthRectSize)),
-		DepthRectMin,
-		DepthRectMin + DepthRectSize - 1);
-	const float DeviceZ = SceneDepthTexture.Load(int3(DepthPixel, 0));
+	int2 DepthPixel;
+	int2 SceneDepthPixel;
+	float2 SceneSvPosition;
+	SightWeaveResolveDepthCoordinates(ViewUv, DepthPixel, SceneDepthPixel, SceneSvPosition);
+	const float DeviceZ = SceneDepthTexture.Load(int3(SceneDepthPixel, 0));
 	const float3 TranslatedWorld = SvPositionToTranslatedWorld(
-		float4(float2(DepthPixel) + 0.5f, DeviceZ, 1.0f));
+		float4(SceneSvPosition, DeviceZ, 1.0f));
+	if (DiagnosticMode == 5) return SightWeaveDebugWorldPosition(TranslatedWorld);
+	if (DiagnosticMode == 6) return SightWeaveDebugCustomDepth(DepthPixel);
+	if (DiagnosticMode == 7) return SightWeaveDebugCustomStencil(DepthPixel);
 	float3 TranslatedSurfaceWorld;
 	uint SurfaceStencil;
-	const bool bRememberedSurface = SightWeaveSampleRememberedSurface(
-		DepthPixel,
-		DeviceZ,
-		TranslatedSurfaceWorld,
-		SurfaceStencil);
+	bool bRememberedSurface = DiagnosticMode != 2
+		&& DiagnosticMode != 3
+		&& SightWeaveSampleRememberedSurface(
+			DepthPixel,
+			SceneSvPosition,
+			DeviceZ,
+			TranslatedSurfaceWorld,
+			SurfaceStencil);
+	if (DiagnosticMode == 3)
+	{
+		TranslatedSurfaceWorld = TranslatedWorld;
+		SurfaceStencil = StaticEnvironmentStencilValue;
+		bRememberedSurface = true;
+	}
 	const float2 VisibilityWorld = bRememberedSurface
 		? TranslatedSurfaceWorld.xy
 		: TranslatedWorld.xy;
@@ -704,6 +783,12 @@ float4 SightWeaveInwardFeatherCompositePS(float4 Position : SV_POSITION) : SV_Ta
 	const uint State = SightWeaveResolvePresentationState(
 		bHardLive,
 		bRememberedEligible);
+	if (DiagnosticMode == 4)
+	{
+		return State == SIGHTWEAVE_STATE_LIVE
+			? 1.0f
+			: (State == SIGHTWEAVE_STATE_REMEMBERED ? 0.35f : 0.0f);
+	}
 	if (State != SIGHTWEAVE_STATE_LIVE)
 	{
 		return SightWeaveIsVisibleSubjectProxy(DepthPixel, DeviceZ)

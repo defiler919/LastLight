@@ -10,6 +10,7 @@
 #include "Misc/AutomationTest.h"
 #include "Player/DarkwellCharacter.h"
 #include "SightWeavePresentation.h"
+#include "SightWeaveRenderWorldSubsystem.h"
 #include "SightWeaveStaticEnvironment.h"
 #include "SightWeaveWorldSubsystem.h"
 #include "UObject/Package.h"
@@ -234,8 +235,11 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 		World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
 	USightWeaveWorldSubsystem* Runtime =
 		World->GetSubsystem<USightWeaveWorldSubsystem>();
+	USightWeaveRenderWorldSubsystem* Render =
+		World->GetSubsystem<USightWeaveRenderWorldSubsystem>();
 	if (!TestNotNull(TEXT("Adapter exists"), Adapter)
-		|| !TestNotNull(TEXT("Runtime exists"), Runtime))
+		|| !TestNotNull(TEXT("Runtime exists"), Runtime)
+		|| !TestNotNull(TEXT("Render bridge exists"), Render))
 	{
 		return false;
 	}
@@ -269,6 +273,7 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Stalker and HUD-facing snapshot share the same revision"),
 		Stalker->GetAppliedVisibilityAuthorityRevision(), Snapshot.AuthorityRevision);
 
+	const uint64 FailClosedBeforeToolCycle = Render->GetDiagnostics().FailClosedClearCount;
 	TestTrue(TEXT("Lantern can replace the right-hand torch"),
 		Player->GetLoadoutComponent()->EquipRightHandItem(
 			DarkwellGameplayTags::Equipment_Right_Lantern));
@@ -279,6 +284,10 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 		Snapshot.bHardLive);
 	TestTrue(TEXT("NeverRemember Stalker hides after losing HardLive"),
 		Stalker->IsHidden());
+	TestEqual(TEXT("An inactive compatible torch is an empty legal-light set, not an invalid scope"),
+		Render->GetDiagnostics().FailClosedClearCount, FailClosedBeforeToolCycle);
+	TestEqual(TEXT("Tool cycling preserves a valid render packet"),
+		Render->GetDiagnostics().LastBuildFailure, ESightWeaveSparsePacketFailure::None);
 
 	Stalker->SetActorLocation(FVector(-570.0, 0.0, 92.0), false, nullptr,
 		ETeleportType::TeleportPhysics);
@@ -290,6 +299,9 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Torch can be restored"),
 		Player->GetLoadoutComponent()->EquipRightHandItem(
 			DarkwellGameplayTags::Equipment_Right_Torch));
+	Adapter->Tick(0.0f);
+	TestEqual(TEXT("Restoring the torch keeps the render packet valid"),
+		Render->GetDiagnostics().LastBuildFailure, ESightWeaveSparsePacketFailure::None);
 	Player->SetActorLocation(FVector(-650.0, -400.0, 92.0), false, nullptr,
 		ETeleportType::TeleportPhysics);
 	Stalker->SetActorLocation(FVector(550.0, -400.0, 92.0), false, nullptr,

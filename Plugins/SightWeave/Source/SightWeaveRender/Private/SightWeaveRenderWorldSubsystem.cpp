@@ -281,12 +281,15 @@ void USightWeaveRenderWorldSubsystem::BuildAndSubmitPacket(
 			}
 			const FSightWeaveIlluminationSnapshotEntry& Illumination =
 				Snapshot->IlluminationSources[IlluminationIndex];
-			if (!Illumination.Description.bActive
-				|| Illumination.Description.KnowledgeOwnerId != OwnerId
+			if (Illumination.Description.KnowledgeOwnerId != OwnerId
 				|| Illumination.Description.FloorId != FloorId)
 			{
 				SubmitFailClosedClear(SnapshotRevision, ESightWeaveSparsePacketFailure::InvalidScope);
 				return;
+			}
+			if (!Illumination.Description.bActive)
+			{
+				continue;
 			}
 			const int64 IlluminationId = Illumination.Handle.GetValue();
 			if (ContainsIlluminationForProfile(*Scope, IlluminationId, Profile))

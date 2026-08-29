@@ -135,7 +135,7 @@ int2 SceneColorRectSize;
 float2 TemporalProjectionJitter;
 uint DiagnosticMode;
 uint UseStableDepthCoordinates;
-uint PreTemporalUpscaleProof;
+uint PreTemporalUpscaleComposition;
 uint CustomDepthUsesTemporalJitter;
 float2 TranslatedFloorOrigin;
 float CentimetersPerTexel;
@@ -522,7 +522,7 @@ void SightWeaveResolveDepthCoordinates(
 		const float2 JitterPixels = float2(
 			TemporalProjectionJitter.x * float(DepthRectSize.x) * 0.5f,
 			TemporalProjectionJitter.y * float(DepthRectSize.y) * -0.5f);
-		if (PreTemporalUpscaleProof != 0)
+		if (PreTemporalUpscaleComposition != 0)
 		{
 			if (CustomDepthUsesTemporalJitter == 0)
 			{
@@ -545,6 +545,10 @@ void SightWeaveResolveDepthCoordinates(
 				int2(floor(SceneSvPosition)),
 				DepthRectMin,
 				DepthRectMin + DepthRectSize - 1);
+			if (CustomDepthUsesTemporalJitter != 0)
+			{
+				StableDepthPixel = SceneDepthPixel;
+			}
 		}
 	}
 }

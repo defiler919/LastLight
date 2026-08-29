@@ -12,8 +12,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarSightWeaveDiagnosticCompositePass(
 		TEXT("r.SightWeave.Diagnostic.CompositePass"),
 		0,
-		TEXT("DARKWELL temporal-space A/B: 0 after Tonemap (rejected control), "
-			"1 BeforeDOF/pre-TSR with fixed neutral Remembered proof input. "
+		TEXT("DARKWELL temporal-space A/B: 0 formal (BeforeDOF on L_VisionIntegration), "
+			"1 BeforeDOF/pre-TSR B0 with fixed surface/gray when CompositeMode is zero, "
+			"2 rejected post-Tonemap control. "
 			"Development/Editor and L_VisionIntegration only."),
 		ECVF_RenderThreadSafe);
 #endif
@@ -26,7 +27,7 @@ FSightWeaveSceneViewExtension::FSightWeaveSceneViewExtension(
 	: FWorldSceneViewExtension(AutoRegister, World)
 	, WorldIdentity(InWorldIdentity)
 	, RenderState(MakeShared<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe>(InWorldIdentity))
-	, bAllowsPreTemporalUpscaleProof(
+	, bUsesDarkwellPreTemporalComposition(
 		World != nullptr && World->GetMapName().EndsWith(TEXT("L_VisionIntegration")))
 {
 }
@@ -131,14 +132,17 @@ void FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass(
 	FAfterPassCallbackDelegateArray& InOutPassCallbacks,
 	const bool bIsPassEnabled)
 {
-	EPostProcessingPass SelectedPass = EPostProcessingPass::Tonemap;
+	bool bUsePreTemporalComposition = bUsesDarkwellPreTemporalComposition;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	if (bAllowsPreTemporalUpscaleProof
-		&& CVarSightWeaveDiagnosticCompositePass.GetValueOnRenderThread() == 1)
+	if (bUsesDarkwellPreTemporalComposition)
 	{
-		SelectedPass = EPostProcessingPass::BeforeDOF;
+		const int32 DiagnosticPass = CVarSightWeaveDiagnosticCompositePass.GetValueOnRenderThread();
+		bUsePreTemporalComposition = DiagnosticPass != 2;
 	}
 #endif
+	const EPostProcessingPass SelectedPass = bUsePreTemporalComposition
+		? EPostProcessingPass::BeforeDOF
+		: EPostProcessingPass::Tonemap;
 	if (PassId == SelectedPass
 		&& RenderState->IsPresentationEnabled_RenderThread())
 	{
@@ -153,14 +157,20 @@ FScreenPassTexture FSightWeaveSceneViewExtension::PostProcessComposite_RenderThr
 	const FSceneView& View,
 	const FPostProcessMaterialInputs& Inputs)
 {
-	bool bPreTemporalUpscaleProof = false;
+	bool bPreTemporalUpscaleComposition = bUsesDarkwellPreTemporalComposition;
+	bool bForcePreTemporalB0 = false;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	bPreTemporalUpscaleProof = bAllowsPreTemporalUpscaleProof
-		&& CVarSightWeaveDiagnosticCompositePass.GetValueOnRenderThread() == 1;
+	if (bUsesDarkwellPreTemporalComposition)
+	{
+		const int32 DiagnosticPass = CVarSightWeaveDiagnosticCompositePass.GetValueOnRenderThread();
+		bPreTemporalUpscaleComposition = DiagnosticPass != 2;
+		bForcePreTemporalB0 = DiagnosticPass == 1;
+	}
 #endif
 	return RenderState->AddHardMaskComposite_RenderThread(
 		GraphBuilder,
 		View,
 		Inputs,
-		bPreTemporalUpscaleProof);
+		bPreTemporalUpscaleComposition,
+		bForcePreTemporalB0);
 }

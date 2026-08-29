@@ -222,17 +222,17 @@ bool FSightWeaveM3P5RememberedTemporalSpaceTest::RunTest(const FString& Paramete
 	}
 	const FString Shading = ShaderSource.Mid(ShadingStart, ShadingEnd - ShadingStart);
 
-	TestTrue(TEXT("Rejected formal control remains post-TSR/post-tonemap by default"),
-		ViewExtension.Contains(TEXT("EPostProcessingPass SelectedPass = EPostProcessingPass::Tonemap"))
+	TestTrue(TEXT("DARKWELL formal composition is before temporal resolve"),
+		ViewExtension.Contains(TEXT("bUsePreTemporalComposition"))
+		&& ViewExtension.Contains(TEXT("EPostProcessingPass::BeforeDOF"))
 		&& ViewExtension.Contains(TEXT("r.SightWeave.Diagnostic.CompositePass"))
 		&& ViewExtension.Contains(TEXT("Development/Editor and L_VisionIntegration only")));
-	TestTrue(TEXT("Pre-TSR architecture proof is isolated to the integration map"),
+	TestTrue(TEXT("Pre-TSR composition is isolated to the integration map"),
 		ViewExtension.Contains(TEXT("L_VisionIntegration"))
-		&& ViewExtension.Contains(TEXT("EPostProcessingPass::BeforeDOF"))
-		&& ViewExtension.Contains(TEXT("bAllowsPreTemporalUpscaleProof")));
+		&& ViewExtension.Contains(TEXT("bUsesDarkwellPreTemporalComposition")));
 	TestTrue(TEXT("Pre-TSR B0 forces the non-production fixed surface and gray input"),
-		ViewExtension.Contains(TEXT("bPreTemporalUpscaleProof"))
-		&& ShaderSource.Contains(TEXT("PreTemporalUpscaleProof"))
+		ViewExtension.Contains(TEXT("bForcePreTemporalB0"))
+		&& ShaderSource.Contains(TEXT("PreTemporalUpscaleComposition"))
 		&& RenderState.Contains(TEXT("? 15"))
 		&& ShaderSource.Contains(TEXT("DiagnosticMode == 15"))
 		&& ShaderSource.Contains(TEXT("DiagnosticMode == 3 || DiagnosticMode == 15")));

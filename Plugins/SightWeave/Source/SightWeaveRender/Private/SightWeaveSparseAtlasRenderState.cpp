@@ -1632,7 +1632,8 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 	FRDGBuilder& GraphBuilder,
 	const FSceneView& View,
 	const FPostProcessMaterialInputs& Inputs,
-	const bool bPreTemporalUpscaleProof)
+	const bool bPreTemporalUpscaleComposition,
+	const bool bForcePreTemporalB0)
 {
 	check(IsInRenderingThread());
 	const FScreenPassTexture SceneColor = FScreenPassTexture::CopyFromSlice(
@@ -1642,7 +1643,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	const int32 RequestedDiagnosticMode = FMath::Clamp(
 		CVarDiagnosticCompositeMode.GetValueOnRenderThread(), 0, 15);
-	const int32 DiagnosticMode = bPreTemporalUpscaleProof && RequestedDiagnosticMode == 0
+	const int32 DiagnosticMode = bForcePreTemporalB0 && RequestedDiagnosticMode == 0
 		? 15
 		: RequestedDiagnosticMode;
 	if (DiagnosticMode == 1)
@@ -1652,7 +1653,7 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 	const bool bUseStableDepthCoordinates =
 		CVarDiagnosticStableDepthCoordinates.GetValueOnRenderThread() != 0;
 #else
-	check(!bPreTemporalUpscaleProof);
+	check(!bForcePreTemporalB0);
 	constexpr int32 DiagnosticMode = 0;
 	constexpr bool bUseStableDepthCoordinates = true;
 #endif
@@ -1834,13 +1835,14 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 		TemporalProjectionJitterFloat,
 		DiagnosticMode,
 		bUseStableDepthCoordinates,
-		bPreTemporalUpscaleProof,
+		bPreTemporalUpscaleComposition,
 		CustomDepthTemporalAAJitterValue](auto* Parameters)
 	{
 		Parameters->TemporalProjectionJitter = TemporalProjectionJitterFloat;
 		Parameters->DiagnosticMode = static_cast<uint32>(DiagnosticMode);
 		Parameters->UseStableDepthCoordinates = bUseStableDepthCoordinates ? 1u : 0u;
-		Parameters->PreTemporalUpscaleProof = bPreTemporalUpscaleProof ? 1u : 0u;
+		Parameters->PreTemporalUpscaleComposition =
+			bPreTemporalUpscaleComposition ? 1u : 0u;
 		Parameters->CustomDepthUsesTemporalJitter =
 			CustomDepthTemporalAAJitterValue != 0 ? 1u : 0u;
 		Parameters->MemoryPageTable = GraphBuilder.CreateSRV(MemoryPageTable);
@@ -1897,7 +1899,9 @@ FScreenPassTexture FSightWeaveSparseAtlasRenderState::AddHardMaskComposite_Rende
 			Display,
 			TEXT("VisualRescue frame=%llu compositeStage=%s viewRect=(%d,%d %dx%d) sceneDepthExtent=(%d,%d) customDepthExtent=(%d,%d) output=(%d,%d %dx%d) sceneColor=(%d,%d %dx%d) sceneColorExtent=(%d,%d) jitterPixels=(%.4f,%.4f) customDepthTemporalAAJitter=%d customDepthTemporalAAJitterSetBy=0x%08x customDepthMode=%d viewOrigin=(%.3f,%.3f,%.3f) vp=(%.6f,%.6f,%.6f,%.6f,%.6f,%.6f) maskOrigin=(%.3f,%.3f) stateRevision=%llu featherRevision=%llu submittedTiles=%u bindingFailure=%d historyValid=0 update=%s staticClassVersion=%llu diagnosticMode=%d stableDepthCoordinates=%d"),
 			GFrameNumberRenderThread,
-			bPreTemporalUpscaleProof ? TEXT("pre-tsr-proof") : TEXT("post-tonemap-control"),
+			bPreTemporalUpscaleComposition
+				? (bForcePreTemporalB0 ? TEXT("pre-tsr-b0") : TEXT("pre-tsr-formal"))
+				: TEXT("post-tonemap-control"),
 			View.UnscaledViewRect.Min.X, View.UnscaledViewRect.Min.Y,
 			View.UnscaledViewRect.Width(), View.UnscaledViewRect.Height(),
 			SceneDepth->Desc.Extent.X, SceneDepth->Desc.Extent.Y,

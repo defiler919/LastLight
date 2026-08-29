@@ -52,7 +52,8 @@ public:
 		FRDGBuilder& GraphBuilder,
 		const FSceneView& View,
 		const FPostProcessMaterialInputs& Inputs,
-		bool bPreTemporalUpscaleProof);
+		bool bPreTemporalUpscaleComposition,
+		bool bForcePreTemporalB0);
 	void Release_RenderThread(FSightWeaveRenderWorldIdentity ExpectedWorldIdentity);
 
 	ESightWeaveRenderAvailability GetAvailability_RenderThread() const { return Availability; }

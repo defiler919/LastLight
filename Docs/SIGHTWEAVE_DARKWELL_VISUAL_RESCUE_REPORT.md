@@ -705,6 +705,8 @@ The M6P1 adapter remains authoritative for the `NeverRemember` Stalker and threa
 
 Ignored evidence root is `Saved/SightWeaveVisualRescueEvidence`. The formal horizontal/vertical candidate directories are `Dynamic/SurfaceFinal1080Horizontal`, `SurfaceFinal1080Vertical`, `SurfaceFinal1440Horizontal`, and `SurfaceFinal1440Vertical`; each contains an exact 30-second, 900-frame video, log, adjacent frames/contact sheet, and `metrics.json`. Their matched same-material fog-off controls are the corresponding `Dynamic/SurfaceFogOff*Horizontal` and `*Vertical` directories.
 
+The four directional fog-off videos were recorded before the later wall-CPD conservative-sampling checkpoint. This does not affect their control output: `SurfaceFogOff` returns the same master graph's original material attributes before any state or wall sample is applied, and the CPD change only affects the fog-on wall-state lookup. Static/rotation/wall/doorway/tool fog-off controls were recorded after the final source checkpoint.
+
 Motion-compensated half-resolution metrics over all 899 adjacent-frame pairs are:
 
 | resolution / direction | Surface bright MAD p50 / p95 / max | fog-off p50 / p95 / max | Surface black-edge XOR p95 | fog-off XOR p95 | Surface minus fog-off XOR p95 |

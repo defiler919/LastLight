@@ -7,6 +7,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/CollisionProfile.h"
+#include "HAL/IConsoleManager.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "SightWeavePresentation.h"
@@ -45,6 +46,16 @@ namespace Darkwell::VisionIntegrationFixture
 		Component.SetCustomDepthStencilValue(StencilValue);
 	}
 }
+
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+namespace
+{
+	TAutoConsoleVariable<int32> CVarDiagnosticSurfaceCoverageView(
+		TEXT("r.Darkwell.SightWeave.Diagnostic.SurfaceCoverageView"),
+		0,
+		TEXT("Show material-facing surface authority from the runtime state texture."));
+}
+#endif
 
 FVector2D FDarkwellSightWeaveSurfaceMath::ResolveSurfaceSampleWorldPosition(
 	const FVector2D WorldPosition,
@@ -186,14 +197,25 @@ bool ADarkwellVisionIntegrationFixture::EnableSightWeaveSurfaceMaterial(
 	{
 		return false;
 	}
-	UMaterialInterface* GroundParent = LoadObject<UMaterialInterface>(
-		nullptr, TEXT("/Game/Darkwell/Vision/Materials/MI_DarkwellSightWeaveFloor.MI_DarkwellSightWeaveFloor"));
-	UMaterialInterface* WallParent = LoadObject<UMaterialInterface>(
-		nullptr, TEXT("/Game/Darkwell/Vision/Materials/MI_DarkwellSightWeaveWall.MI_DarkwellSightWeaveWall"));
-	UMaterialInterface* StaticParent = LoadObject<UMaterialInterface>(
-		nullptr, TEXT("/Game/Darkwell/Vision/Materials/MI_DarkwellSightWeaveStatic.MI_DarkwellSightWeaveStatic"));
-	if (!GroundParent || !WallParent || !StaticParent)
+	UMaterialInterface* SurfaceParent = LoadObject<UMaterialInterface>(
+		nullptr, TEXT("/Game/Darkwell/Vision/Materials/M_DarkwellSightWeaveSurface.M_DarkwellSightWeaveSurface"));
+	if (!SurfaceParent)
 	{
+		return false;
+	}
+	TArray<FMaterialParameterInfo> TextureParameterInfos;
+	TArray<FGuid> TextureParameterGuids;
+	SurfaceParent->GetAllTextureParameterInfo(TextureParameterInfos, TextureParameterGuids);
+	const FMaterialParameterInfo* StateTextureParameter = TextureParameterInfos.FindByPredicate(
+		[](const FMaterialParameterInfo& Info)
+		{
+			return Info.Name == TEXT("SightWeaveStateTexture");
+		});
+	if (!StateTextureParameter)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("SightWeave surface master has no compiled SightWeaveStateTexture parameter (textureParameters=%d)"),
+			TextureParameterInfos.Num());
 		return false;
 	}
 
@@ -204,16 +226,37 @@ bool ADarkwellVisionIntegrationFixture::EnableSightWeaveSurfaceMaterial(
 		OriginalWallNorthMaterial = WallNorth->GetMaterial(0);
 		OriginalStaticMaterial = MemoryLandmark->GetMaterial(0);
 		bSurfaceMaterialOverrideCaptured = true;
-		SurfaceGroundMaterial = UMaterialInstanceDynamic::Create(GroundParent, this);
-		SurfaceWallMaterial = UMaterialInstanceDynamic::Create(WallParent, this);
-		SurfaceStaticMaterial = UMaterialInstanceDynamic::Create(StaticParent, this);
+		SurfaceGroundMaterial = UMaterialInstanceDynamic::Create(SurfaceParent, this);
+		SurfaceWallMaterial = UMaterialInstanceDynamic::Create(SurfaceParent, this);
+		SurfaceStaticMaterial = UMaterialInstanceDynamic::Create(SurfaceParent, this);
 	}
 	if (!SurfaceGroundMaterial || !SurfaceWallMaterial || !SurfaceStaticMaterial)
 	{
 		DisableSightWeaveSurfaceMaterial();
 		return false;
 	}
+	// Attach the MIDs before updating dynamic parameters so every setter
+	// invalidates an active primitive's uniform-expression cache.
+	Ground->SetMaterial(0, SurfaceGroundMaterial);
+	WallSouth->SetMaterial(0, SurfaceWallMaterial);
+	WallNorth->SetMaterial(0, SurfaceWallMaterial);
+	MemoryLandmark->SetMaterial(0, SurfaceStaticMaterial);
+	SurfaceGroundMaterial->SetScalarParameterValue(TEXT("OriginalUVScale"), 18.0f);
+	SurfaceGroundMaterial->SetVectorParameterValue(
+		TEXT("OriginalBaseColorTint"), FLinearColor(0.62f, 0.72f, 0.78f, 1.0f));
+	SurfaceWallMaterial->SetScalarParameterValue(TEXT("OriginalUVScale"), 6.0f);
+	SurfaceWallMaterial->SetVectorParameterValue(
+		TEXT("OriginalBaseColorTint"), FLinearColor(0.55f, 0.58f, 0.62f, 1.0f));
+	SurfaceStaticMaterial->SetScalarParameterValue(TEXT("OriginalUVScale"), 3.0f);
+	SurfaceStaticMaterial->SetVectorParameterValue(
+		TEXT("OriginalBaseColorTint"), FLinearColor(0.78f, 0.46f, 0.24f, 1.0f));
 
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	const int32 CoverageDiagnosticMode =
+		CVarDiagnosticSurfaceCoverageView.GetValueOnGameThread();
+#else
+	constexpr int32 CoverageDiagnosticMode = 0;
+#endif
 	const FLinearColor WorldMinParameter(
 		static_cast<float>(WorldMin.X), static_cast<float>(WorldMin.Y), 0.0f, 0.0f);
 	const FLinearColor WorldInvExtentParameter(
@@ -221,17 +264,36 @@ bool ADarkwellVisionIntegrationFixture::EnableSightWeaveSurfaceMaterial(
 	for (UMaterialInstanceDynamic* Material : {
 		SurfaceGroundMaterial.Get(), SurfaceWallMaterial.Get(), SurfaceStaticMaterial.Get() })
 	{
-		Material->SetTextureParameterValue(TEXT("SightWeaveStateTexture"), StateTexture);
+		Material->SetTextureParameterValueByInfo(*StateTextureParameter, StateTexture);
+		if (Material->K2_GetTextureParameterValueByInfo(*StateTextureParameter) != StateTexture)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("SightWeave surface material rejected its state-texture binding: %s"),
+				*GetNameSafe(Material));
+			DisableSightWeaveSurfaceMaterial();
+			return false;
+		}
 		Material->SetVectorParameterValue(TEXT("SightWeaveWorldMin"), WorldMinParameter);
 		Material->SetVectorParameterValue(TEXT("SightWeaveWorldInvExtent"), WorldInvExtentParameter);
 		Material->SetScalarParameterValue(
 			TEXT("SightWeaveDiagnosticFogOff"),
 			bDiagnosticFogOff ? 1.0f : 0.0f);
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+		Material->SetScalarParameterValue(
+			TEXT("SightWeaveDiagnosticCoverageView"),
+			CoverageDiagnosticMode != 0 ? 1.0f : 0.0f);
+		if (CoverageDiagnosticMode != 0)
+		{
+			UE_LOG(LogTemp, Display,
+				TEXT("SightWeaveCoverageBinding material=%s texture=%s coverage=%.3f worldMin=(%.6f,%.6f) invExtent=(%.9f,%.9f)"),
+				*GetNameSafe(Material),
+				*GetNameSafe(Material->K2_GetTextureParameterValue(TEXT("SightWeaveStateTexture"))),
+				Material->K2_GetScalarParameterValue(TEXT("SightWeaveDiagnosticCoverageView")),
+				WorldMinParameter.R, WorldMinParameter.G,
+				WorldInvExtentParameter.R, WorldInvExtentParameter.G);
+		}
+#endif
 	}
-	Ground->SetMaterial(0, SurfaceGroundMaterial);
-	WallSouth->SetMaterial(0, SurfaceWallMaterial);
-	WallNorth->SetMaterial(0, SurfaceWallMaterial);
-	MemoryLandmark->SetMaterial(0, SurfaceStaticMaterial);
 	return true;
 }
 

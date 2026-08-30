@@ -75,13 +75,13 @@ def make_binary(owner, klass, a, b, x, y, function=False):
     return node
 
 
-def make_mask(owner, source, channels, x, y, function=False):
+def make_mask(owner, source, channels, x, y, function=False, source_output=""):
     node = expr(owner, unreal.MaterialExpressionComponentMask, x, y, function)
     node.set_editor_property("r", "r" in channels)
     node.set_editor_property("g", "g" in channels)
     node.set_editor_property("b", "b" in channels)
     node.set_editor_property("a", "a" in channels)
-    connect(source, "", node, "")
+    connect(source, source_output, node, "")
     return node
 
 
@@ -105,8 +105,17 @@ def create_function(asset_tools):
         -1800,
         -600,
     )
-    state_center = function_input(
-        function, "StateCenter", unreal.FunctionInputType.FUNCTION_INPUT_VECTOR4, -1800, -350
+    authority_state = function_input(
+        function, "AuthorityState", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, -450
+    )
+    live_coverage_raw = function_input(
+        function, "LiveCoverage", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, -350
+    )
+    known_coverage_raw = function_input(
+        function, "KnownCoverage", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, -250
+    )
+    valid_a = function_input(
+        function, "ScopeValidity", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, -150
     )
     category = function_input(
         function, "SurfaceCategory", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, 0
@@ -123,12 +132,12 @@ def create_function(asset_tools):
     diagnostic_fog_off = function_input(
         function, "DiagnosticFogOff", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, 800
     )
+    diagnostic_coverage_view = function_input(
+        function, "DiagnosticCoverageView", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, 950
+    )
 
     # R remains the discrete authority debug channel. The formal visual weights
     # use only continuous G=LiveCoverage and B=KnownCoverage.
-    live_coverage_raw = make_mask(function, state_center, "g", -800, -150, True)
-    known_coverage_raw = make_mask(function, state_center, "b", -800, 0, True)
-    valid_a = make_mask(function, state_center, "a", -800, 150, True)
     live_coverage = expr(
         function, unreal.MaterialExpressionSaturate, -550, -150, function=True
     )
@@ -276,7 +285,28 @@ def create_function(asset_tools):
     connect(make_attrs, "", diagnostic_blend, "A")
     connect(attrs, "", diagnostic_blend, "B")
     connect(diagnostic_fog_off, "", diagnostic_blend, "Alpha")
-    function_output(function, "MaterialAttributes", diagnostic_blend, "", 2550, -500)
+    diagnostic_state_rg = expr(
+        function, unreal.MaterialExpressionAppendVector, 1900, -250, function=True
+    )
+    connect(authority_state, "", diagnostic_state_rg, "A")
+    connect(live_coverage_raw, "", diagnostic_state_rg, "B")
+    diagnostic_state_rgb = expr(
+        function, unreal.MaterialExpressionAppendVector, 2050, -250, function=True
+    )
+    connect(diagnostic_state_rg, "", diagnostic_state_rgb, "A")
+    connect(known_coverage_raw, "", diagnostic_state_rgb, "B")
+    diagnostic_attrs = expr(
+        function, unreal.MaterialExpressionMakeMaterialAttributes, 2300, -200, function=True
+    )
+    connect(diagnostic_state_rgb, "", diagnostic_attrs, "EmissiveColor")
+    connect(one, "", diagnostic_attrs, "Roughness")
+    coverage_blend = expr(
+        function, unreal.MaterialExpressionBlendMaterialAttributes, 2550, -450, function=True
+    )
+    connect(diagnostic_blend, "", coverage_blend, "A")
+    connect(diagnostic_attrs, "", coverage_blend, "B")
+    connect(diagnostic_coverage_view, "", coverage_blend, "Alpha")
+    function_output(function, "MaterialAttributes", coverage_blend, "", 2800, -450)
 
     unreal.MaterialEditingLibrary.update_material_function(function, None)
     unreal.EditorAssetLibrary.save_asset(full_path, only_if_is_dirty=False)
@@ -302,9 +332,13 @@ def state_sample(material, texture, uv, x, y):
     node.set_editor_property("parameter_name", "SightWeaveStateTexture")
     node.set_editor_property("texture", texture)
     node.set_editor_property(
-        "sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_MASKS
+        "sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR
+    )
+    node.set_editor_property(
+        "mip_value_mode", unreal.TextureMipValueMode.TMVM_MIP_LEVEL
     )
     connect(uv, "", node, "Coordinates")
+    connect(scalar(material, 0.0, x - 200, y + 150), "", node, "Level")
     return node
 
 
@@ -372,8 +406,22 @@ def create_master(asset_tools, function):
     local_world = make_binary(
         material, unreal.MaterialExpressionSubtract, world_xy, world_min, -1550, 50
     )
+    # AbsoluteWorldPosition is an LWC value in UE5. Keep the subtraction in LWC
+    # space for precision, then explicitly demote the small local coordinate before
+    # it becomes a texture UV. Feeding an LWC expression directly into a texture
+    # sample can compile a different coordinate representation than the displayed
+    # float value and collapse runtime RT sampling to the wrong texel.
+    local_world_float = expr(
+        material, unreal.MaterialExpressionTruncateLWC, -1425, 50
+    )
+    connect(local_world, "", local_world_float, "")
     center_uv = make_binary(
-        material, unreal.MaterialExpressionMultiply, local_world, world_inv_extent, -1300, 50
+        material,
+        unreal.MaterialExpressionMultiply,
+        local_world_float,
+        world_inv_extent,
+        -1200,
+        50,
     )
     category = scalar_parameter(material, "SightWeaveSurfaceCategory", 0.0, -550, 750)
     category.set_editor_property("use_custom_primitive_data", True)
@@ -412,8 +460,24 @@ def create_master(asset_tools, function):
     )
     vertical_weight = expr(material, unreal.MaterialExpressionSaturate, -550, 700)
     connect(vertical_scaled, "", vertical_weight, "")
-    normal_xy_normalized = expr(material, unreal.MaterialExpressionNormalize, -1300, 500)
-    connect(normal_xy, "", normal_xy_normalized, "")
+    normal_xy_length = expr(material, unreal.MaterialExpressionLength, -1300, 500)
+    connect(normal_xy, "", normal_xy_length, "")
+    normal_xy_safe_length = make_binary(
+        material,
+        unreal.MaterialExpressionMax,
+        normal_xy_length,
+        scalar(material, 0.0001, -1300, 600),
+        -1050,
+        500,
+    )
+    normal_xy_normalized = make_binary(
+        material,
+        unreal.MaterialExpressionDivide,
+        normal_xy,
+        normal_xy_safe_length,
+        -800,
+        500,
+    )
     surface_sample_distance = scalar_parameter(
         material, "SightWeaveSurfaceSampleDistanceCm", 7.5, -550, 850
     )
@@ -441,12 +505,25 @@ def create_master(asset_tools, function):
     surface_uv = make_binary(
         material, unreal.MaterialExpressionAdd, center_uv, bias_uv, -800, 400
     )
-    # The default must be a linear/mask texture so the graph compiles against the
-    # non-sRGB runtime render target before a MID binds the real state texture.
+    # The default must match the RGBA16F runtime render target's linear-color
+    # sampler type. A Masks sampler can leave the dynamic RT override present on
+    # the MID while the render proxy falls back to this compile-time texture.
     empty_state = unreal.load_asset(
-        "/Engine/EngineMaterials/DefaultDiffuse_TC_Masks.DefaultDiffuse_TC_Masks"
+        "/Engine/EngineMaterials/DefaultBloomKernel.DefaultBloomKernel"
     )
     surface_state = state_sample(material, empty_state, surface_uv, -550, 0)
+    surface_authority = make_mask(
+        material, surface_state, "r", -300, -100, source_output="RGBA"
+    )
+    surface_live = make_mask(
+        material, surface_state, "g", -300, 0, source_output="RGBA"
+    )
+    surface_known = make_mask(
+        material, surface_state, "b", -300, 100, source_output="RGBA"
+    )
+    surface_valid = make_mask(
+        material, surface_state, "a", -300, 200, source_output="RGBA"
+    )
 
     memory_saturation = scalar_parameter(material, "RememberedSaturation", 0.10, -300, 750)
     memory_brightness = scalar_parameter(material, "RememberedBrightness", 0.46, -300, 850)
@@ -454,18 +531,59 @@ def create_master(asset_tools, function):
     diagnostic_fog_off = scalar_parameter(
         material, "SightWeaveDiagnosticFogOff", 0.0, -300, 1050
     )
+    diagnostic_coverage_view = scalar_parameter(
+        material, "SightWeaveDiagnosticCoverageView", 0.0, -300, 1150
+    )
 
     call = expr(material, unreal.MaterialExpressionMaterialFunctionCall, 0, 0)
     call.set_material_function(function)
     connect(make_attrs, "", call, "OriginalMaterialAttributes")
-    connect(surface_state, "RGBA", call, "StateCenter")
+    connect(surface_authority, "", call, "AuthorityState")
+    connect(surface_live, "", call, "LiveCoverage")
+    connect(surface_known, "", call, "KnownCoverage")
+    connect(surface_valid, "", call, "ScopeValidity")
     connect(category, "", call, "SurfaceCategory")
     connect(memory_saturation, "", call, "MemorySaturation")
     connect(memory_brightness, "", call, "MemoryBrightness")
     connect(memory_contrast, "", call, "MemoryContrast")
     connect(diagnostic_fog_off, "", call, "DiagnosticFogOff")
+    connect(diagnostic_coverage_view, "", call, "DiagnosticCoverageView")
+    master_diagnostic_authority = make_mask(
+        material, surface_state, "r", 250, 250, source_output="RGBA"
+    )
+    master_diagnostic_inverse = make_binary(
+        material,
+        unreal.MaterialExpressionSubtract,
+        scalar(material, 1.0, 250, 350),
+        master_diagnostic_authority,
+        500,
+        300,
+    )
+    master_diagnostic_rg = expr(
+        material, unreal.MaterialExpressionAppendVector, 700, 250
+    )
+    connect(master_diagnostic_authority, "", master_diagnostic_rg, "A")
+    connect(master_diagnostic_inverse, "", master_diagnostic_rg, "B")
+    master_diagnostic_rgb = expr(
+        material, unreal.MaterialExpressionAppendVector, 900, 250
+    )
+    connect(master_diagnostic_rg, "", master_diagnostic_rgb, "A")
+    connect(scalar(material, 0.0, 700, 400), "", master_diagnostic_rgb, "B")
+    master_diagnostic_attrs = expr(
+        material, unreal.MaterialExpressionMakeMaterialAttributes, 500, 200
+    )
+    connect(master_diagnostic_rgb, "", master_diagnostic_attrs, "EmissiveColor")
+    connect(scalar(material, 1.0, 250, 400), "", master_diagnostic_attrs, "Roughness")
+    master_diagnostic_blend = expr(
+        material, unreal.MaterialExpressionBlendMaterialAttributes, 750, 0
+    )
+    connect(call, "MaterialAttributes", master_diagnostic_blend, "A")
+    connect(master_diagnostic_attrs, "", master_diagnostic_blend, "B")
+    connect(diagnostic_coverage_view, "", master_diagnostic_blend, "Alpha")
     if not unreal.MaterialEditingLibrary.connect_material_property(
-        call, "MaterialAttributes", unreal.MaterialProperty.MP_MATERIAL_ATTRIBUTES
+        master_diagnostic_blend,
+        "",
+        unreal.MaterialProperty.MP_MATERIAL_ATTRIBUTES,
     ):
         raise RuntimeError("Could not connect surface attributes to the material")
 

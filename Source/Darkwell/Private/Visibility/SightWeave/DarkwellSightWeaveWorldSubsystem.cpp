@@ -17,6 +17,7 @@
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 #if !UE_SERVER
 #include "Engine/TextureRenderTarget2D.h"
+#include "UnrealClient.h"
 #include "SightWeavePresentation.h"
 #include "SightWeaveRenderWorldSubsystem.h"
 #endif
@@ -53,6 +54,10 @@ namespace Darkwell::SightWeaveAdapter
 		0,
 		TEXT("Development-only architecture isolation: 0=Gameplay, 1=AuthorityFrozen, "
 			"2=CameraFrozen while visibility authority continues."));
+	TAutoConsoleVariable<int32> CVarDiagnosticSurfaceCoverageReadback(
+		TEXT("r.Darkwell.SightWeave.Diagnostic.SurfaceCoverageReadback"),
+		0,
+		TEXT("Development-only one-shot GPU readback of the SurfaceMaterial state texture."));
 #endif
 
 	FTransform BuildSourceTransform(const ADarkwellCharacter& Character)
@@ -208,6 +213,129 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 			CameraLocation.X, CameraLocation.Y, CameraLocation.Z,
 			CameraRotation.Pitch, CameraRotation.Yaw, CameraRotation.Roll);
 	}
+#if !UE_SERVER
+	if (Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceCoverageReadback.GetValueOnGameThread() != 0)
+	{
+		++DiagnosticCoverageReadbackFrameCount;
+		if (DiagnosticCoverageReadbackFrameCount == 1)
+		{
+			UE_LOG(LogDarkwellSightWeave, Display,
+				TEXT("SurfaceCoverageReadback armed frame=%llu"), GFrameCounter);
+		}
+		if (!bDiagnosticCoverageReadbackComplete && DiagnosticCoverageReadbackFrameCount >= 60
+			&& RenderSubsystem && RenderSubsystem->GetSurfaceStateTexture())
+		{
+			UTextureRenderTarget2D* SurfaceStateTexture = RenderSubsystem->GetSurfaceStateTexture();
+			FTextureRenderTargetResource* Resource =
+				SurfaceStateTexture->GameThread_GetRenderTargetResource();
+			TArray<FFloat16Color> Pixels;
+			const bool bReadSucceeded = Resource
+				&& Resource->ReadFloat16Pixels(Pixels, FReadSurfaceDataFlags(RCM_MinMax));
+			const int32 ExpectedPixelCount = SurfaceStateTexture->SizeX * SurfaceStateTexture->SizeY;
+			if (bReadSucceeded && Pixels.Num() == ExpectedPixelCount && Pixels.Num() > 0)
+			{
+				FLinearColor Min(FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX);
+				FLinearColor Max(-FLT_MAX, -FLT_MAX, -FLT_MAX, -FLT_MAX);
+				FLinearColor Sum = FLinearColor::Transparent;
+				int64 ValidCount = 0;
+				int64 UnknownCount = 0;
+				int64 RememberedCount = 0;
+				int64 LiveCount = 0;
+				for (const FFloat16Color& Pixel : Pixels)
+				{
+					const FLinearColor Value = Pixel.GetFloats();
+					Min.R = FMath::Min(Min.R, Value.R);
+					Min.G = FMath::Min(Min.G, Value.G);
+					Min.B = FMath::Min(Min.B, Value.B);
+					Min.A = FMath::Min(Min.A, Value.A);
+					Max.R = FMath::Max(Max.R, Value.R);
+					Max.G = FMath::Max(Max.G, Value.G);
+					Max.B = FMath::Max(Max.B, Value.B);
+					Max.A = FMath::Max(Max.A, Value.A);
+					Sum += Value;
+					ValidCount += Value.A > 0.5f ? 1 : 0;
+					UnknownCount += Value.R < 0.25f ? 1 : 0;
+					RememberedCount += Value.R >= 0.25f && Value.R < 0.75f ? 1 : 0;
+					LiveCount += Value.R >= 0.75f ? 1 : 0;
+				}
+				const FLinearColor Mean = Sum / static_cast<float>(Pixels.Num());
+				const auto SampleAt = [&Pixels, SurfaceStateTexture](const int32 X, const int32 Y)
+				{
+					return Pixels[Y * SurfaceStateTexture->SizeX + X].GetFloats();
+				};
+				const FLinearColor Center = SampleAt(
+					SurfaceStateTexture->SizeX / 2, SurfaceStateTexture->SizeY / 2);
+				const FLinearColor Quarter = SampleAt(
+					SurfaceStateTexture->SizeX / 4, SurfaceStateTexture->SizeY / 4);
+				const FSightWeaveSurfaceTextureMapping& Mapping =
+					RenderSubsystem->GetSurfaceTextureMapping();
+				const FVector PlayerWorld = Player->GetActorLocation();
+				const FVector2D PlayerUV = Mapping.WorldToUV(FVector2D(PlayerWorld.X, PlayerWorld.Y));
+				const int32 PlayerX = FMath::Clamp(
+					FMath::FloorToInt(PlayerUV.X * SurfaceStateTexture->SizeX),
+					0,
+					SurfaceStateTexture->SizeX - 1);
+				const int32 PlayerY = FMath::Clamp(
+					FMath::FloorToInt(PlayerUV.Y * SurfaceStateTexture->SizeY),
+					0,
+					SurfaceStateTexture->SizeY - 1);
+				const int32 PlayerYFlipped = SurfaceStateTexture->SizeY - 1 - PlayerY;
+				const FLinearColor PlayerSample = SampleAt(PlayerX, PlayerY);
+				const FLinearColor PlayerSampleFlipped = SampleAt(PlayerX, PlayerYFlipped);
+				int32 PlayerNeighborhoodLive = 0;
+				int32 PlayerNeighborhoodLiveFlipped = 0;
+				constexpr int32 NeighborhoodRadius = 32;
+				for (int32 OffsetY = -NeighborhoodRadius; OffsetY <= NeighborhoodRadius; ++OffsetY)
+				{
+					for (int32 OffsetX = -NeighborhoodRadius; OffsetX <= NeighborhoodRadius; ++OffsetX)
+					{
+						const int32 X = FMath::Clamp(PlayerX + OffsetX, 0, SurfaceStateTexture->SizeX - 1);
+						const int32 Y = FMath::Clamp(PlayerY + OffsetY, 0, SurfaceStateTexture->SizeY - 1);
+						const int32 YFlipped = FMath::Clamp(
+							PlayerYFlipped + OffsetY, 0, SurfaceStateTexture->SizeY - 1);
+						PlayerNeighborhoodLive += SampleAt(X, Y).R >= 0.75f ? 1 : 0;
+						PlayerNeighborhoodLiveFlipped += SampleAt(X, YFlipped).R >= 0.75f ? 1 : 0;
+					}
+				}
+				UE_LOG(LogDarkwellSightWeave, Display,
+					TEXT("SurfaceCoverageReadback extent=%dx%d pixels=%d "
+						"min=(%.4f,%.4f,%.4f,%.4f) max=(%.4f,%.4f,%.4f,%.4f) "
+						"mean=(%.4f,%.4f,%.4f,%.4f) center=(%.4f,%.4f,%.4f,%.4f) "
+						"quarter=(%.4f,%.4f,%.4f,%.4f) "
+						"playerWorld=(%.3f,%.3f) playerUV=(%.6f,%.6f) playerTexel=(%d,%d) "
+						"player=(%.4f,%.4f,%.4f,%.4f) flippedY=%d flipped=(%.4f,%.4f,%.4f,%.4f) "
+						"neighborhoodLive=%d neighborhoodLiveFlipped=%d "
+						"valid=%lld unknown=%lld remembered=%lld live=%lld"),
+					SurfaceStateTexture->SizeX, SurfaceStateTexture->SizeY, Pixels.Num(),
+					Min.R, Min.G, Min.B, Min.A, Max.R, Max.G, Max.B, Max.A,
+					Mean.R, Mean.G, Mean.B, Mean.A,
+					Center.R, Center.G, Center.B, Center.A,
+					Quarter.R, Quarter.G, Quarter.B, Quarter.A,
+					PlayerWorld.X, PlayerWorld.Y, PlayerUV.X, PlayerUV.Y, PlayerX, PlayerY,
+					PlayerSample.R, PlayerSample.G, PlayerSample.B, PlayerSample.A,
+					PlayerYFlipped,
+					PlayerSampleFlipped.R, PlayerSampleFlipped.G,
+					PlayerSampleFlipped.B, PlayerSampleFlipped.A,
+					PlayerNeighborhoodLive, PlayerNeighborhoodLiveFlipped,
+					ValidCount, UnknownCount, RememberedCount, LiveCount);
+			}
+			else
+			{
+				UE_LOG(LogDarkwellSightWeave, Error,
+					TEXT("SurfaceCoverageReadback failed success=%d pixels=%d expected=%d format=%d"),
+					bReadSucceeded ? 1 : 0,
+					Pixels.Num(), ExpectedPixelCount,
+					static_cast<int32>(SurfaceStateTexture->GetFormat()));
+			}
+			bDiagnosticCoverageReadbackComplete = true;
+		}
+	}
+	else
+	{
+		DiagnosticCoverageReadbackFrameCount = 0;
+		bDiagnosticCoverageReadbackComplete = false;
+	}
+#endif
 #endif
 }
 

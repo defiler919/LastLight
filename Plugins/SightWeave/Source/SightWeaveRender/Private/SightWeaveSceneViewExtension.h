@@ -27,6 +27,7 @@ public:
 		UTextureRenderTarget2D* Texture,
 		const FSightWeaveSurfaceTextureMapping& Mapping);
 	void ClearSurfaceMaterialTarget();
+	void SetProcessingSuppressed(bool bSuppressed);
 	void Shutdown(FSightWeaveRenderWorldIdentity ExpectedWorldIdentity);
 
 	virtual void PreRenderViewFamily_RenderThread(
@@ -48,5 +49,6 @@ private:
 	TSharedRef<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe> RenderState;
 	bool bUsesDarkwellPreTemporalComposition = false;
 	FThreadSafeBool bSurfaceMaterialMode = false;
+	FThreadSafeBool bProcessingSuppressed = false;
 	bool bShutdown = false;
 };

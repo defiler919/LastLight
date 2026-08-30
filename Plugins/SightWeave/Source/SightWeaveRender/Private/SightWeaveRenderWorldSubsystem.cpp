@@ -170,6 +170,7 @@ void USightWeaveRenderWorldSubsystem::Deinitialize()
 	MemoryPresentationFloor = FSightWeaveFloorId();
 	MemoryPresentationPrecision = ESightWeaveRenderPrecisionTier::Standard;
 	bHasMemoryPresentationScope = false;
+	bPresentationSuppressed = false;
 	WorldIdentity = FSightWeaveRenderWorldIdentity();
 	Super::Deinitialize();
 }
@@ -254,6 +255,10 @@ void USightWeaveRenderWorldSubsystem::DisableSurfaceMaterialPresentation()
 void USightWeaveRenderWorldSubsystem::HandleMemoryPacketPublished(
 	TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe> Packet)
 {
+	if (bPresentationSuppressed)
+	{
+		return;
+	}
 	const bool bNewScopeValid = Packet.IsValid()
 		&& Packet->IsValid()
 		&& Packet->GetScope().IsValid()
@@ -293,6 +298,10 @@ void USightWeaveRenderWorldSubsystem::HandleMemoryPacketPublished(
 void USightWeaveRenderWorldSubsystem::HandleStaticEnvironmentPacketPublished(
 	TSharedPtr<const FSightWeaveStaticEnvironmentPacket, ESPMode::ThreadSafe> Packet)
 {
+	if (bPresentationSuppressed)
+	{
+		return;
+	}
 	if (SceneViewExtension.IsValid())
 	{
 		SceneViewExtension->SubmitStaticEnvironmentPacket(MoveTemp(Packet));
@@ -302,6 +311,14 @@ void USightWeaveRenderWorldSubsystem::HandleStaticEnvironmentPacketPublished(
 void USightWeaveRenderWorldSubsystem::HandleSnapshotPublished(
 	TSharedPtr<const FSightWeaveFrameSnapshot, ESPMode::ThreadSafe> Snapshot)
 {
+	if (bPresentationSuppressed)
+	{
+		if (Snapshot.IsValid() && Snapshot->bPublished)
+		{
+			UpdateDefaultPresentationSelection(*Snapshot);
+		}
+		return;
+	}
 	BuildAndSubmitPacket(Snapshot);
 }
 
@@ -581,10 +598,52 @@ void USightWeaveRenderWorldSubsystem::ClearPresentationScope()
 	PublishPresentationSelection();
 }
 
+void USightWeaveRenderWorldSubsystem::SetPresentationSuppressed(const bool bSuppressed)
+{
+	check(IsInGameThread());
+	if (bPresentationSuppressed == bSuppressed)
+	{
+		return;
+	}
+	bPresentationSuppressed = bSuppressed;
+	if (SceneViewExtension.IsValid())
+	{
+		SceneViewExtension->SetProcessingSuppressed(bPresentationSuppressed);
+	}
+	if (bPresentationSuppressed)
+	{
+		DisableSurfaceMaterialPresentation();
+		PresentationSelection = FSightWeaveViewPresentationSelection::Disabled(
+			WorldIdentity,
+			NextPresentationRevision++);
+		PublishPresentationSelection();
+		return;
+	}
+	if (UWorld* World = GetWorld())
+	{
+		if (USightWeaveWorldSubsystem* Runtime =
+			World->GetSubsystem<USightWeaveWorldSubsystem>())
+		{
+			BuildAndSubmitPacket(Runtime->AcquirePublishedSnapshot());
+		}
+	}
+}
+
 void USightWeaveRenderWorldSubsystem::UpdateDefaultPresentationSelection(
 	const FSightWeaveFrameSnapshot& Snapshot)
 {
 	check(IsInGameThread());
+	if (bPresentationSuppressed)
+	{
+		if (!PresentationSelection.IsValid() || PresentationSelection.IsEnabled())
+		{
+			PresentationSelection = FSightWeaveViewPresentationSelection::Disabled(
+				WorldIdentity,
+				NextPresentationRevision++);
+			PublishPresentationSelection();
+		}
+		return;
+	}
 	FSightWeaveKnowledgeOwnerId DesiredOwner;
 	FSightWeaveFloorId DesiredFloor;
 	ESightWeaveRenderPrecisionTier DesiredPrecision = ESightWeaveRenderPrecisionTier::Standard;

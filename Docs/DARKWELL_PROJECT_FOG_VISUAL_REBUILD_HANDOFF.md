@@ -6,7 +6,7 @@ Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — P0 CONTRACT FROZEN**
+Status: **PARTIAL — P1 CONTINUOUS LIVE COVERAGE PROVEN / P2 AUTHORIZED**
 
 Deadline: 2026-09-05
 
@@ -16,13 +16,23 @@ The user rejected the final SightWeave SurfaceMaterial visual candidate. The rej
 
 This branch starts a DARKWELL-owned presentation rebuild. SightWeave remains the authority backend; its rejected visual paths stay as historical source but may not register or run in the formal candidate. The first implemented policy is `RememberedFromStart`, with gray static scene everywhere outside continuous Live coverage and no black Unknown.
 
+## Proven checkpoint
+
+P1 has passed its first reliable implementation attempt. The DARKWELL project presentation consumes continuous authoritative body/cone geometry, evaluates analytic fractional coverage in a project-owned 1400x1000 linear `R16F` target at 2.5 cm/texel, and binds it to the real tile BaseColor in `L_VisionIntegration`. The rejected SightWeave render/composite path is explicitly suppressed while the candidate is active.
+
+The ignored P1 index is:
+
+```text
+Saved/DarkwellProjectFogVisualRebuild/P1/p1_evidence_index.json
+```
+
+It records 15/15 validated D3D12/SM6/normal-TSR cases, 0 severe hits, 3/3 continuous-coverage automation results and 1/1 vertical-slice result. Raw X/Y/diagonal centroid motion matches 0.25/0.5/1.0 texel input and all samples contain fractional edge values. The 20-second fixed and four 30-second motion captures were opened as contact sheets and adjacent-frame strips; no periodic whole-grid step or large jagged recurrence was observed.
+
 ## Immediate next gate
 
-Audit the exact backend seam and old visual activation points, then implement only P1: a no-wall high-contrast floor, body circle and one cone using genuinely continuous world-space coverage under 1080p D3D12/SM6 and normal TSR.
+Implement P2 continuous free-space occlusion only. Restore the proof fixture walls through the existing Unreal-owned fixture path, cache stable 2D occluder geometry, produce continuous nearest-hit visibility clipped by the legal circle/cone, and prove that behind-wall free space remains Remembered.
 
-Required P1 evidence is 20 seconds fixed; 30 seconds each horizontal, vertical, diagonal and rotation; plus raw 0.25/0.5/1.0 texel translations. P1 must show intermediate coverage values and smooth edge displacement without discrete plateaus, periodic teeth or blur dependence.
-
-Do not begin occlusion, walls or dynamic objects until P1 passes. If P1 fails twice, record and push `BLOCKED — CONTINUOUS LIVE COVERAGE PROOF FAILED` and stop.
+Do not begin P3 wall/object surface coverage until raw P2 occlusion passes. Dynamic subjects, Torch/Lantern/Torch and HUD restoration remain P4 work.
 
 ## Protected results and prohibitions
 

@@ -87,6 +87,15 @@ public:
 		FVector2D InvWorldExtent,
 		bool bDiagnosticFogOff = false);
 	void DisableSightWeaveSurfaceMaterial();
+	bool EnableDarkwellProjectFogP1(
+		UTexture* LiveCoverageTexture,
+		FVector2D WorldMin,
+		FVector2D InvWorldExtent);
+	void DisableDarkwellProjectFog();
+	bool IsDarkwellProjectFogEnabled() const
+	{
+		return ProjectFogGroundMaterial != nullptr;
+	}
 	bool IsSightWeaveSurfaceMaterialEnabled() const
 	{
 		return SurfaceGroundMaterial != nullptr
@@ -140,4 +149,21 @@ private:
 	TObjectPtr<UMaterialInterface> OriginalStaticMaterial;
 
 	bool bSurfaceMaterialOverrideCaptured = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> ProjectFogGroundMaterial;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> ProjectFogOriginalGroundMaterial;
+
+	bool bProjectFogOverrideCaptured = false;
+	bool bProjectFogOriginalWallSouthHidden = false;
+	bool bProjectFogOriginalWallNorthHidden = false;
+	bool bProjectFogOriginalLandmarkHidden = false;
+	ECollisionEnabled::Type ProjectFogOriginalWallSouthCollision =
+		ECollisionEnabled::QueryAndPhysics;
+	ECollisionEnabled::Type ProjectFogOriginalWallNorthCollision =
+		ECollisionEnabled::QueryAndPhysics;
+	ECollisionEnabled::Type ProjectFogOriginalLandmarkCollision =
+		ECollisionEnabled::QueryAndPhysics;
 };

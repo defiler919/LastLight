@@ -141,6 +141,12 @@ void FSightWeaveSceneViewExtension::ClearSurfaceMaterialTarget()
 		});
 }
 
+void FSightWeaveSceneViewExtension::SetProcessingSuppressed(const bool bSuppressed)
+{
+	check(IsInGameThread());
+	bProcessingSuppressed = bSuppressed;
+}
+
 void FSightWeaveSceneViewExtension::Shutdown(
 	const FSightWeaveRenderWorldIdentity ExpectedWorldIdentity)
 {
@@ -162,6 +168,10 @@ void FSightWeaveSceneViewExtension::PreRenderViewFamily_RenderThread(
 	FRDGBuilder& GraphBuilder,
 	FSceneViewFamily& ViewFamily)
 {
+	if (bProcessingSuppressed)
+	{
+		return;
+	}
 	RenderState->ProcessPending_RenderThread(GraphBuilder);
 	RenderState->ProcessMemoryPending_RenderThread(GraphBuilder);
 	RenderState->ProcessStaticEnvironmentPending_RenderThread(GraphBuilder);
@@ -180,6 +190,10 @@ void FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass(
 	FAfterPassCallbackDelegateArray& InOutPassCallbacks,
 	const bool bIsPassEnabled)
 {
+	if (bProcessingSuppressed)
+	{
+		return;
+	}
 	bool bUsePreTemporalComposition = bUsesDarkwellPreTemporalComposition;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	if (bUsesDarkwellPreTemporalComposition)

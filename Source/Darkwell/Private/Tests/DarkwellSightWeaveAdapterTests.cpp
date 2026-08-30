@@ -18,6 +18,7 @@
 #include "UObject/UObjectGlobals.h"
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
+#include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 
 namespace Darkwell::SightWeaveAdapterTests
 {
@@ -238,9 +239,12 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 		World->GetSubsystem<USightWeaveWorldSubsystem>();
 	USightWeaveRenderWorldSubsystem* Render =
 		World->GetSubsystem<USightWeaveRenderWorldSubsystem>();
+	UDarkwellFogVisualSubsystem* ProjectFog =
+		World->GetSubsystem<UDarkwellFogVisualSubsystem>();
 	if (!TestNotNull(TEXT("Adapter exists"), Adapter)
 		|| !TestNotNull(TEXT("Runtime exists"), Runtime)
-		|| !TestNotNull(TEXT("Render bridge exists"), Render))
+		|| !TestNotNull(TEXT("Render bridge exists"), Render)
+		|| !TestNotNull(TEXT("DARKWELL fog presentation exists"), ProjectFog))
 	{
 		return false;
 	}
@@ -248,15 +252,25 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 		Adapter->RequestSightWeaveAuthority(Fixture));
 	TestTrue(TEXT("SightWeave becomes the only active authority"),
 		Adapter->IsSightWeaveAuthorityActive());
-	UTextureRenderTarget2D* SurfaceState = Render->GetSurfaceStateTexture();
-	TestNotNull(TEXT("Surface presentation target exists"), SurfaceState);
-	if (SurfaceState)
+	TestTrue(TEXT("Old SightWeave visual processing is suppressed"),
+		Render->IsPresentationSuppressed());
+	TestNull(TEXT("Rejected SightWeave SurfaceMaterial target is absent"),
+		Render->GetSurfaceStateTexture());
+	UTextureRenderTarget2D* LiveCoverage = ProjectFog->GetLiveCoverageTexture();
+	TestNotNull(TEXT("Project continuous LiveCoverage target exists"), LiveCoverage);
+	if (LiveCoverage)
 	{
-		TestEqual(TEXT("Continuous presentation target uses half-float precision"),
-			SurfaceState->RenderTargetFormat, ETextureRenderTargetFormat::RTF_RGBA16f);
-		TestTrue(TEXT("Continuous presentation target is bilinear"),
-			SurfaceState->Filter == TextureFilter::TF_Bilinear);
+		TestEqual(TEXT("Continuous presentation target uses single-channel half float"),
+			LiveCoverage->RenderTargetFormat, ETextureRenderTargetFormat::RTF_R16f);
+		TestTrue(TEXT("Continuous presentation target is bilinear and clamped"),
+			LiveCoverage->Filter == TextureFilter::TF_Bilinear
+				&& LiveCoverage->AddressX == TextureAddress::TA_Clamp
+				&& LiveCoverage->AddressY == TextureAddress::TA_Clamp);
 	}
+	TestTrue(TEXT("Project fog is active on the P1 fixture"),
+		Fixture->IsDarkwellProjectFogEnabled());
+	TestEqual(TEXT("Project coverage remains Ultra-equivalent 2.5 cm per texel"),
+		ProjectFog->GetMapping().CentimetersPerTexel, 2.5f);
 	TestFalse(TEXT("Legacy visibility writes are disabled"),
 		Player->GetVisibilityComponent()->IsVisibilityAuthorityEnabled());
 	TestEqual(TEXT("Exactly one floor is registered"), Runtime->GetFloorCount(), 1);

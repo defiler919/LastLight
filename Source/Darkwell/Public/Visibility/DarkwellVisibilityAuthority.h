@@ -74,4 +74,5 @@ struct DARKWELL_API FDarkwellVisibilityAuthorityDiagnostics
 	bool bLegacyWritesEnabled = true;
 	bool bLegacyPresentationEnabled = true;
 	bool bSightWeavePresentationEnabled = false;
+	bool bProjectFogPresentationEnabled = false;
 };

@@ -6,7 +6,7 @@ Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — P0 CONTRACT FROZEN**
+Status: **PARTIAL — P1 CONTINUOUS LIVE COVERAGE PROVEN / P2 AUTHORIZED**
 
 24-hour P1 gate: 2026-08-31
 
@@ -44,14 +44,67 @@ The old post-/pre-TSR composite, CustomDepth/Stencil composite, discrete Surface
 - froze the project-owned continuous coverage contract and gated execution plan;
 - made no source, shader, asset, map, config or project-file change in P0.
 
-## 4. Architecture and phase findings
+## 4. Architecture and activation result
 
-Not started at this checkpoint. The next work is the read-only activation/interface audit, followed by P1 no-wall continuous coverage only. P2 wall/occlusion work is forbidden until P1 passes.
+The smallest project seam keeps SightWeave as the CPU authority and replaces only presentation:
 
-## 5. Evidence ledger
+1. `UDarkwellSightWeaveWorldSubsystem::RequestSightWeaveAuthority` suppresses the rejected SightWeave renderer before the first floor publication and continues registering floors, legal sources, lights, occluders, static memory and subjects.
+2. `UDarkwellSightWeaveWorldSubsystem::BuildFogVisualSourceSnapshot` converts the authoritative body/cone/light state into immutable continuous world geometry. It does not consume the tile-state texture.
+3. `UDarkwellFogVisualSubsystem::UpdateSource` updates parameters only when the source snapshot changes; `DrawCoverage` renders analytic circle/cone coverage to the project-owned linear `R16F` target.
+4. `ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP1` binds that target and its world mapping to the DARKWELL floor material. The material computes `Known=1`, `Live=coverage`, `Remembered=1-coverage` and uses filtered real static BaseColor for Remembered.
+5. `USightWeaveRenderWorldSubsystem::SetPresentationSuppressed` prevents the old scene-view composite, tile render packet and default presentation selection from registering/running while the project candidate is active. Rollback restores the prior subsystem state.
 
-The ignored evidence root will be `Saved/DarkwellProjectFogVisualRebuild`. It must contain per-phase logs, raw coverage, extracted frames, adjacent strips, contacts and metrics. Nothing below `Saved` is committed.
+P1 deliberately hides walls, the landmark and the dynamic threat in the no-wall fixture only. That is a phase isolation mechanism, not the wall solution. P2 must restore proof geometry and establish continuous free-space occlusion before P3 surface classification.
 
-## 6. Current limitations
+## 5. P1 continuous-coverage result
 
-No new visual implementation or visual pass is claimed at P0. `RememberedFromStart`, continuous coverage, occlusion, wall surface coverage, dynamic subjects and final 1080p/1440p proof remain pending. The current state is not ready for user PIE.
+P1 passed its first reliable implementation attempt on 2026-08-30.
+
+- coverage target: `1400 x 1000`, linear `R16F`, 2.5 cm/texel, bilinear/clamped, normal derivative/mip selection;
+- formal rendering: 1920x1080, D3D12/SM6, normal TSR (`r.AntiAliasingMethod=4`);
+- fixed evidence: 20 seconds;
+- motion evidence: 30 seconds each horizontal, vertical, diagonal and slow rotation;
+- direct adjacent-frame inspection: no periodic whole-texel plateau/jump, large stair-step recurrence, black Unknown, or blur-dependent edge was observed;
+- old presentation registration: suppressed in every formal log;
+- severe scan: 0 candidate errors.
+
+GPU raw-coverage centroid displacement relative to the base sample, in coverage texels:
+
+| Translation | Measured X | Measured Y |
+| --- | ---: | ---: |
+| X 0.25 | 0.248937 | -0.000017 |
+| X 0.50 | 0.500743 | -0.000003 |
+| X 1.00 | 1.000004 | -0.000001 |
+| Y 0.25 | -0.000050 | 0.246789 |
+| Y 0.50 | 0.000963 | 0.499993 |
+| Y 1.00 | 0.000000 | 0.999998 |
+| diagonal 0.25 | 0.250004 | 0.250179 |
+| diagonal 0.50 | 0.498644 | 0.499995 |
+| diagonal 1.00 | 1.000006 | 0.999997 |
+
+Every raw target contained values strictly between 0 and 1 (1998–2050 intermediate texels). This proves that the edge is evaluated as fractional continuous coverage rather than a float-formatted copy of discrete state.
+
+Targeted validation:
+
+- `Darkwell.FogVisual.P1`: 3/3 Success;
+- `Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority`: 1/1 Success;
+- `Scripts/BuildEditor.ps1 -Configuration Development`: Success, `DarkwellEditor Win64 Development` up to date;
+- matrix: `P1_MATRIX_SUCCESS cases=15 severe=0`.
+
+## 6. Evidence ledger
+
+The ignored evidence root is `Saved/DarkwellProjectFogVisualRebuild/P1`.
+
+- machine-readable index: `p1_evidence_index.json`;
+- empty severe scan: `p1_severe_scan.txt`;
+- targeted automation: `MatrixAutomation`;
+- raw and formal D3D12 captures: `Dynamic`;
+- each formal capture contains its source video, log, contact sheet and 20-frame adjacent strip.
+
+The matrix preserves earlier invalid/failed samples under their original names, but the index references only the 15 validated cases. Nothing below `Saved` is committed.
+
+## 7. Current limitations and next gate
+
+P1 proves only unoccluded body-circle/cone coverage on the strict no-wall floor. Continuous occlusion, doorway/wall-end/concave/intersection geometry, wall/object surface coverage, restored Live-only subjects, Torch/Lantern/Torch, 1440p and the final soak remain pending. The current state is not ready for user PIE.
+
+P2 is now authorized. Its hard gate is continuous free-space occlusion with behind-wall space remaining Remembered. P3 surface work may not begin until that raw occlusion proof passes.

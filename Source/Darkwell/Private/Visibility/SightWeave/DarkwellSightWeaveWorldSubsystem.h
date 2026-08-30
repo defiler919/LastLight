@@ -15,6 +15,8 @@ class ADarkwellStalkerCharacter;
 class ADarkwellVisionIntegrationFixture;
 class USightWeaveRenderWorldSubsystem;
 class USightWeaveWorldSubsystem;
+class UDarkwellFogVisualSubsystem;
+struct FDarkwellFogVisualSourceSnapshot;
 
 /** DARKWELL-owned, world-scoped boundary between gameplay and SightWeave. */
 UCLASS()
@@ -67,6 +69,7 @@ private:
 		FString& OutFailure) const;
 	void UpdateDynamicAuthority();
 	void UpdateSubjectAuthority();
+	FDarkwellFogVisualSourceSnapshot BuildFogVisualSourceSnapshot() const;
 	void SetLegacyConsumersEnabled(bool bEnabled);
 	void RollbackToLegacy(const FString& FailureReason, bool bRestoreConsumers);
 	void ResetToLegacy();
@@ -76,6 +79,8 @@ private:
 
 	/** Render is a non-Server private module seam and is never reflected/serialized. */
 	USightWeaveRenderWorldSubsystem* RenderSubsystem = nullptr;
+	UPROPERTY(Transient)
+	TObjectPtr<UDarkwellFogVisualSubsystem> FogVisualSubsystem;
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<ADarkwellVisionIntegrationFixture> RequestedFixture;

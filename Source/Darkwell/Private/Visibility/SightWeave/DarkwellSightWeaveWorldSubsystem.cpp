@@ -8,6 +8,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Controller.h"
 #include "HAL/IConsoleManager.h"
 #include "Gameplay/DarkwellVisibilityComponent.h"
 #include "Player/DarkwellCharacter.h"
@@ -15,6 +16,7 @@
 #include "SightWeaveWorldSubsystem.h"
 #include "UI/DarkwellHUD.h"
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
+#include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #if !UE_SERVER
 #include "Engine/TextureRenderTarget2D.h"
 #include "UnrealClient.h"
@@ -58,6 +60,23 @@ namespace Darkwell::SightWeaveAdapter
 		TEXT("r.Darkwell.SightWeave.Diagnostic.SurfaceCoverageReadback"),
 		0,
 		TEXT("Development-only one-shot GPU readback of the SurfaceMaterial state texture."));
+	TAutoConsoleVariable<int32> CVarDiagnosticFogTrajectory(
+		TEXT("r.Darkwell.FogVisual.Diagnostic.Trajectory"),
+		0,
+		TEXT("P1 deterministic source motion: 0=off, 1=+X, 2=-Y, 3=diagonal +X+Y, "
+			"4=+Y, 5=rotate yaw."));
+	TAutoConsoleVariable<float> CVarDiagnosticFogTrajectorySpeed(
+		TEXT("r.Darkwell.FogVisual.Diagnostic.TrajectorySpeed"),
+		15.0f,
+		TEXT("Centimeters per second for the P1 continuous-coverage trajectory."));
+	TAutoConsoleVariable<float> CVarDiagnosticFogSourceOffsetTexelsX(
+		TEXT("r.Darkwell.FogVisual.Diagnostic.SourceOffsetTexelsX"),
+		0.0f,
+		TEXT("P1 raw-coverage proof offset in 2.5 cm presentation texels."));
+	TAutoConsoleVariable<float> CVarDiagnosticFogSourceOffsetTexelsY(
+		TEXT("r.Darkwell.FogVisual.Diagnostic.SourceOffsetTexelsY"),
+		0.0f,
+		TEXT("P1 raw-coverage proof offset in 2.5 cm presentation texels."));
 #endif
 
 	FTransform BuildSourceTransform(const ADarkwellCharacter& Character)
@@ -83,6 +102,8 @@ void UDarkwellSightWeaveWorldSubsystem::Initialize(FSubsystemCollectionBase& Col
 #if !UE_SERVER
 	RenderSubsystem = GetWorld()
 		? GetWorld()->GetSubsystem<USightWeaveRenderWorldSubsystem>() : nullptr;
+	FogVisualSubsystem = GetWorld()
+		? GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>() : nullptr;
 	Diagnostics.bRenderServiceAvailable = RenderSubsystem != nullptr;
 #else
 	Diagnostics.bRenderServiceAvailable = false;
@@ -106,6 +127,7 @@ void UDarkwellSightWeaveWorldSubsystem::Deinitialize()
 #if !UE_SERVER
 	RenderSubsystem = nullptr;
 #endif
+	FogVisualSubsystem = nullptr;
 	RuntimeSubsystem = nullptr;
 	Super::Deinitialize();
 }
@@ -132,12 +154,17 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 		return;
 	}
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	const int32 DiagnosticTrajectory =
-		Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceTrajectory.GetValueOnGameThread();
+	const int32 ProjectTrajectory =
+		Darkwell::SightWeaveAdapter::CVarDiagnosticFogTrajectory.GetValueOnGameThread();
+	const int32 DiagnosticTrajectory = ProjectTrajectory != 0
+		? ProjectTrajectory
+		: Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceTrajectory.GetValueOnGameThread();
 	if (DiagnosticTrajectory >= 1 && DiagnosticTrajectory <= 5)
 	{
 		const float Speed = FMath::Clamp(
-			Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceTrajectorySpeed.GetValueOnGameThread(),
+			ProjectTrajectory != 0
+				? Darkwell::SightWeaveAdapter::CVarDiagnosticFogTrajectorySpeed.GetValueOnGameThread()
+				: Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceTrajectorySpeed.GetValueOnGameThread(),
 			0.0f,
 			100.0f);
 		if (DiagnosticTrajectory == 5)
@@ -150,12 +177,14 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 		{
 			const FVector Direction = DiagnosticTrajectory == 2
 				? FVector(0.0, -1.0, 0.0)
+				: DiagnosticTrajectory == 3
+					? FVector(1.0, 1.0, 0.0).GetSafeNormal()
 				: DiagnosticTrajectory == 4
 					? FVector(0.0, 1.0, 0.0)
 					: FVector(1.0, 0.0, 0.0);
 			FVector NextLocation = Player->GetActorLocation()
 				+ Direction * Speed * FMath::Max(DeltaTime, 0.0f);
-			if (DiagnosticTrajectory == 3)
+			if (ProjectTrajectory == 0 && DiagnosticTrajectory == 3)
 			{
 				NextLocation.Y = 0.0;
 			}
@@ -191,6 +220,16 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 	{
 		UpdateDynamicAuthority();
 		UpdateSubjectAuthority();
+	}
+	if (ADarkwellStalkerCharacter* P1Subject = Stalker.Get())
+	{
+		P1Subject->SetActorHiddenInGame(true);
+	}
+	if (FogVisualSubsystem
+		&& !FogVisualSubsystem->UpdateSource(BuildFogVisualSourceSnapshot()))
+	{
+		RollbackToLegacy(TEXT("DARKWELL continuous fog source update failed"), true);
+		return;
 	}
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	if (Darkwell::SightWeaveAdapter::CVarDiagnosticLogGameTransforms.GetValueOnGameThread() != 0)
@@ -389,7 +428,6 @@ bool UDarkwellSightWeaveWorldSubsystem::TryGetSubjectSnapshot(
 
 bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 {
-	bool bSurfaceFogOffDiagnostic = false;
 	if (Diagnostics.State != EDarkwellVisibilityAuthorityState::SightWeaveRequested
 		|| !RequestedFixture.IsValid())
 	{
@@ -413,12 +451,24 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 
 	Player = FoundPlayer;
 	Stalker = FoundStalker;
+	// P1 is intentionally a no-dynamic-object visual proof. Keep the subject
+	// registered for authority checks but prevent its controller from attacking
+	// or moving the player during the long coverage captures.
+	if (AController* StalkerController = FoundStalker->GetController())
+	{
+		StalkerController->SetActorTickEnabled(false);
+	}
 	FloorId = Floor.FloorId;
 	KnowledgeOwnerId = Body.KnowledgeOwnerId;
 	BodyDescription = Body;
 	ConeDescription = Cone;
 	TorchDescription = Torch;
 	SetLegacyConsumersEnabled(false);
+#if !UE_SERVER
+	// Suppress before the first floor publication so the SightWeave default-scope
+	// path never registers its old composite or tile presentation for this candidate.
+	RenderSubsystem->SetPresentationSuppressed(true);
+#endif
 	if (!RuntimeSubsystem->RegisterFloor(Floor, RequestedFixture.Get()))
 	{
 		RollbackToLegacy(TEXT("Floor registration failed"), true);
@@ -471,33 +521,12 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 		return false;
 	}
 #if !UE_SERVER
-	if (!RenderSubsystem->SetPresentationScope(
-		KnowledgeOwnerId, FloorId, ESightWeaveRenderPrecisionTier::Ultra))
+	if (!FogVisualSubsystem
+		|| !FogVisualSubsystem->ActivateP1(
+			RequestedFixture.Get(),
+			BuildFogVisualSourceSnapshot()))
 	{
-		RollbackToLegacy(TEXT("Render presentation-scope selection failed"), true);
-		return false;
-	}
-	const FBox2D SurfaceBounds = RequestedFixture->GetSightWeaveFloorBounds();
-	if (!RenderSubsystem->EnableSurfaceMaterialPresentation(
-			SurfaceBounds,
-			ESightWeaveRenderPrecisionTier::Ultra))
-	{
-		RollbackToLegacy(TEXT("Surface-material state texture activation failed"), true);
-		return false;
-	}
-	const FSightWeaveSurfaceTextureMapping& SurfaceMapping =
-		RenderSubsystem->GetSurfaceTextureMapping();
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	bSurfaceFogOffDiagnostic =
-		Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceFogOff.GetValueOnGameThread() != 0;
-#endif
-	if (!RequestedFixture->EnableSightWeaveSurfaceMaterial(
-			RenderSubsystem->GetSurfaceStateTexture(),
-			SurfaceMapping.WorldMin,
-			SurfaceMapping.InvWorldExtent,
-			bSurfaceFogOffDiagnostic))
-	{
-		RollbackToLegacy(TEXT("Surface-material fixture binding failed"), true);
+		RollbackToLegacy(TEXT("DARKWELL P1 continuous fog activation failed"), true);
 		return false;
 	}
 #endif
@@ -512,12 +541,13 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 	Diagnostics.SubjectCount = 1;
 	Diagnostics.bLegacyWritesEnabled = false;
 	Diagnostics.bLegacyPresentationEnabled = false;
-	Diagnostics.bSightWeavePresentationEnabled = true;
+	Diagnostics.bSightWeavePresentationEnabled = false;
+	Diagnostics.bProjectFogPresentationEnabled = true;
 	UpdateSubjectAuthority();
+	FoundStalker->SetActorHiddenInGame(true);
 	UE_LOG(LogDarkwellSightWeave, Log,
-		TEXT("World=%s authority=SightWeave active surface=%s floor=%s vision=2 light=1 occluder=1 static=%d subject=%s"),
+		TEXT("World=%s authority=SightWeave active visual=DarkwellContinuousP1 oldSightWeaveVisual=Suppressed floor=%s vision=2 light=1 occluder=1 static=%d subject=%s"),
 		*Diagnostics.WorldName.ToString(),
-		bSurfaceFogOffDiagnostic ? TEXT("NativeFogOffControl") : TEXT("SurfaceMaterial"),
 		*FloorId.GetValue().ToString(),
 		StaticEnvironmentHandles.Num(), *FoundStalker->GetPersistentId().ToString());
 	return true;
@@ -769,6 +799,34 @@ void UDarkwellSightWeaveWorldSubsystem::UpdateSubjectAuthority()
 	Diagnostics.RuntimeSnapshotRevision = Snapshot.SourceSnapshotRevision;
 }
 
+FDarkwellFogVisualSourceSnapshot
+UDarkwellSightWeaveWorldSubsystem::BuildFogVisualSourceSnapshot() const
+{
+	FDarkwellFogVisualSourceSnapshot Result;
+	const FVector BodyLocation = BodyDescription.Transform.GetLocation();
+	const FVector ConeLocation = ConeDescription.Transform.GetLocation();
+	const FVector Forward3D = ConeDescription.Transform.GetUnitAxis(EAxis::X);
+	Result.BodyCenter = FVector2D(BodyLocation.X, BodyLocation.Y);
+	Result.ConeOrigin = FVector2D(ConeLocation.X, ConeLocation.Y);
+	Result.ConeForward = FVector2D(Forward3D.X, Forward3D.Y).GetSafeNormal();
+	Result.BodyRadiusCentimeters = BodyDescription.Range;
+	Result.ConeRangeCentimeters = FMath::Min(ConeDescription.Range, TorchDescription.Range);
+	Result.ConeHalfAngleDegrees = ConeDescription.HalfAngleDegrees;
+	Result.bConeLegallyLive = ConeDescription.bActive && TorchDescription.bActive;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	const FVector2D DiagnosticOffset = FVector2D(
+		Darkwell::SightWeaveAdapter::CVarDiagnosticFogSourceOffsetTexelsX.GetValueOnGameThread(),
+		Darkwell::SightWeaveAdapter::CVarDiagnosticFogSourceOffsetTexelsY.GetValueOnGameThread())
+		* 2.5;
+	Result.BodyCenter += DiagnosticOffset;
+	Result.ConeOrigin += DiagnosticOffset;
+#endif
+	Result.AuthorityRevision = RuntimeSubsystem
+		? static_cast<uint64>(FMath::Max<int64>(0, RuntimeSubsystem->GetRevision().GetValue()))
+		: 0;
+	return Result;
+}
+
 void UDarkwellSightWeaveWorldSubsystem::SetLegacyConsumersEnabled(const bool bEnabled)
 {
 	if (ADarkwellCharacter* Character = Player.Get())
@@ -794,6 +852,10 @@ void UDarkwellSightWeaveWorldSubsystem::RollbackToLegacy(
 	const FString& FailureReason,
 	const bool bRestoreConsumers)
 {
+	if (FogVisualSubsystem)
+	{
+		FogVisualSubsystem->Deactivate();
+	}
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	if (bDiagnosticProofCameraActive)
 	{
@@ -845,12 +907,17 @@ void UDarkwellSightWeaveWorldSubsystem::RollbackToLegacy(
 	{
 		RenderSubsystem->DisableSurfaceMaterialPresentation();
 		RenderSubsystem->ClearPresentationScope();
+		RenderSubsystem->SetPresentationSuppressed(false);
 	}
 #endif
 	if (bRestoreConsumers)
 	{
 		if (ADarkwellStalkerCharacter* Subject = Stalker.Get())
 		{
+			if (AController* StalkerController = Subject->GetController())
+			{
+				StalkerController->SetActorTickEnabled(true);
+			}
 			Subject->ApplySightWeaveVisibility(true, 0);
 		}
 		SetLegacyConsumersEnabled(true);
@@ -894,7 +961,9 @@ bool UDarkwellSightWeaveWorldSubsystem::HasRequiredSightWeaveServices() const
 #if UE_SERVER
 	return true;
 #else
-	return Diagnostics.bRenderServiceAvailable && RenderSubsystem;
+	return Diagnostics.bRenderServiceAvailable
+		&& RenderSubsystem
+		&& FogVisualSubsystem;
 #endif
 }
 
@@ -915,4 +984,5 @@ void UDarkwellSightWeaveWorldSubsystem::ResetToLegacy()
 	Diagnostics.bLegacyWritesEnabled = true;
 	Diagnostics.bLegacyPresentationEnabled = true;
 	Diagnostics.bSightWeavePresentationEnabled = false;
+	Diagnostics.bProjectFogPresentationEnabled = false;
 }

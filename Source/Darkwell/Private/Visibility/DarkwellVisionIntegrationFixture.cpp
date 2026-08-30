@@ -54,6 +54,10 @@ namespace
 		TEXT("r.Darkwell.SightWeave.Diagnostic.SurfaceCoverageView"),
 		0,
 		TEXT("Show material-facing surface authority from the runtime state texture."));
+	TAutoConsoleVariable<int32> CVarDarkwellFogDiagnosticRawCoverageView(
+		TEXT("r.Darkwell.FogVisual.Diagnostic.RawCoverageView"),
+		0,
+		TEXT("Development-only view of the project-owned raw LiveCoverage field."));
 }
 #endif
 
@@ -323,6 +327,107 @@ void ADarkwellVisionIntegrationFixture::DisableSightWeaveSurfaceMaterial()
 	OriginalWallNorthMaterial = nullptr;
 	OriginalStaticMaterial = nullptr;
 	bSurfaceMaterialOverrideCaptured = false;
+}
+
+bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP1(
+	UTexture* LiveCoverageTexture,
+	const FVector2D WorldMin,
+	const FVector2D InvWorldExtent)
+{
+	if (!LiveCoverageTexture
+		|| !FMath::IsFinite(WorldMin.X)
+		|| !FMath::IsFinite(WorldMin.Y)
+		|| !FMath::IsFinite(InvWorldExtent.X)
+		|| !FMath::IsFinite(InvWorldExtent.Y)
+		|| InvWorldExtent.X <= 0.0
+		|| InvWorldExtent.Y <= 0.0)
+	{
+		return false;
+	}
+	UMaterialInterface* SurfaceParent = LoadObject<UMaterialInterface>(
+		nullptr,
+		TEXT("/Game/Darkwell/Vision/ProjectFog/M_DarkwellFogSurface.M_DarkwellFogSurface"));
+	if (!SurfaceParent)
+	{
+		UE_LOG(LogTemp, Error, TEXT("DARKWELL project fog surface material is missing"));
+		return false;
+	}
+	if (!bProjectFogOverrideCaptured)
+	{
+		ProjectFogOriginalGroundMaterial = Ground->GetMaterial(0);
+		bProjectFogOriginalWallSouthHidden = WallSouth->bHiddenInGame;
+		bProjectFogOriginalWallNorthHidden = WallNorth->bHiddenInGame;
+		bProjectFogOriginalLandmarkHidden = MemoryLandmark->bHiddenInGame;
+		ProjectFogOriginalWallSouthCollision = WallSouth->GetCollisionEnabled();
+		ProjectFogOriginalWallNorthCollision = WallNorth->GetCollisionEnabled();
+		ProjectFogOriginalLandmarkCollision = MemoryLandmark->GetCollisionEnabled();
+		bProjectFogOverrideCaptured = true;
+	}
+	ProjectFogGroundMaterial = UMaterialInstanceDynamic::Create(SurfaceParent, this);
+	if (!ProjectFogGroundMaterial)
+	{
+		DisableDarkwellProjectFog();
+		return false;
+	}
+	Ground->SetMaterial(0, ProjectFogGroundMaterial);
+	ProjectFogGroundMaterial->SetTextureParameterValue(
+		TEXT("DarkwellLiveCoverageTexture"),
+		LiveCoverageTexture);
+	ProjectFogGroundMaterial->SetVectorParameterValue(
+		TEXT("FogWorldMin"),
+		FLinearColor(
+			static_cast<float>(WorldMin.X),
+			static_cast<float>(WorldMin.Y), 0.0f, 0.0f));
+	ProjectFogGroundMaterial->SetVectorParameterValue(
+		TEXT("FogWorldInvExtent"),
+		FLinearColor(
+			static_cast<float>(InvWorldExtent.X),
+			static_cast<float>(InvWorldExtent.Y), 0.0f, 0.0f));
+	ProjectFogGroundMaterial->SetScalarParameterValue(TEXT("OriginalUVScale"), 18.0f);
+	ProjectFogGroundMaterial->SetVectorParameterValue(
+		TEXT("OriginalBaseColorTint"),
+		FLinearColor(0.62f, 0.72f, 0.78f, 1.0f));
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	ProjectFogGroundMaterial->SetScalarParameterValue(
+		TEXT("DiagnosticRawCoverageView"),
+		CVarDarkwellFogDiagnosticRawCoverageView.GetValueOnGameThread() != 0
+			? 1.0f
+			: 0.0f);
+#endif
+	if (ProjectFogGroundMaterial->K2_GetTextureParameterValue(
+		TEXT("DarkwellLiveCoverageTexture")) != LiveCoverageTexture)
+	{
+		UE_LOG(LogTemp, Error, TEXT("DARKWELL project fog rejected coverage texture binding"));
+		DisableDarkwellProjectFog();
+		return false;
+	}
+
+	// P1 is a strict no-wall proof. These primitives and their collision are restored
+	// when the project presentation deactivates; P2 owns their explicit return.
+	WallSouth->SetHiddenInGame(true);
+	WallNorth->SetHiddenInGame(true);
+	MemoryLandmark->SetHiddenInGame(true);
+	WallSouth->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	WallNorth->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	MemoryLandmark->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	return true;
+}
+
+void ADarkwellVisionIntegrationFixture::DisableDarkwellProjectFog()
+{
+	if (bProjectFogOverrideCaptured)
+	{
+		Ground->SetMaterial(0, ProjectFogOriginalGroundMaterial);
+		WallSouth->SetHiddenInGame(bProjectFogOriginalWallSouthHidden);
+		WallNorth->SetHiddenInGame(bProjectFogOriginalWallNorthHidden);
+		MemoryLandmark->SetHiddenInGame(bProjectFogOriginalLandmarkHidden);
+		WallSouth->SetCollisionEnabled(ProjectFogOriginalWallSouthCollision);
+		WallNorth->SetCollisionEnabled(ProjectFogOriginalWallNorthCollision);
+		MemoryLandmark->SetCollisionEnabled(ProjectFogOriginalLandmarkCollision);
+	}
+	ProjectFogGroundMaterial = nullptr;
+	ProjectFogOriginalGroundMaterial = nullptr;
+	bProjectFogOverrideCaptured = false;
 }
 
 FBox2D ADarkwellVisionIntegrationFixture::GetSightWeaveFloorBounds() const

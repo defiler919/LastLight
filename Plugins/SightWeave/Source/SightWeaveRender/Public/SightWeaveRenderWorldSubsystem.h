@@ -80,6 +80,9 @@ public:
 		FSightWeaveFloorId FloorId,
 		ESightWeaveRenderPrecisionTier PrecisionTier = ESightWeaveRenderPrecisionTier::Standard);
 	void ClearPresentationScope();
+	/** Disable all SightWeave visual processing while a project-owned renderer presents authority. */
+	void SetPresentationSuppressed(bool bSuppressed);
+	bool IsPresentationSuppressed() const { return bPresentationSuppressed; }
 	bool EnableSurfaceMaterialPresentation(
 		const FBox2D& WorldBounds,
 		ESightWeaveRenderPrecisionTier PrecisionTier);
@@ -126,6 +129,7 @@ private:
 	ESightWeaveRenderPrecisionTier MemoryPresentationPrecision =
 		ESightWeaveRenderPrecisionTier::Standard;
 	bool bHasMemoryPresentationScope = false;
+	bool bPresentationSuppressed = false;
 	FDelegateHandle SnapshotPublishedHandle;
 	FDelegateHandle MemoryPacketPublishedHandle;
 	FDelegateHandle StaticEnvironmentPacketPublishedHandle;

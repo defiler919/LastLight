@@ -116,6 +116,8 @@ private:
 	bool bDiagnosticLastSubjectHardLive = false;
 	double DiagnosticToolCycleElapsedSeconds = 0.0;
 	int32 LastDiagnosticToolCyclePhase = INDEX_NONE;
+	double DiagnosticPropCycleElapsedSeconds = 0.0;
+	int32 LastDiagnosticPropCyclePhase = INDEX_NONE;
 	int32 DiagnosticCoverageReadbackFrameCount = 0;
 	bool bDiagnosticCoverageReadbackComplete = false;
 #endif

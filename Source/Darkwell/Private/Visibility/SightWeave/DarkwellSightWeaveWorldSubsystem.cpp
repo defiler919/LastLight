@@ -5,6 +5,7 @@
 #include "AI/DarkwellStalkerCharacter.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Combat/DarkwellLoadoutComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
@@ -86,6 +87,10 @@ namespace Darkwell::SightWeaveAdapter
 		TEXT("r.Darkwell.FogVisual.Diagnostic.ToolCycle"),
 		0,
 		TEXT("Development-only P4 proof: cycle Torch/Lantern/Torch every six seconds through the real loadout API."));
+	TAutoConsoleVariable<int32> CVarDiagnosticRememberedPropCycle(
+		TEXT("r.Darkwell.ProjectFogVisual.Diagnostic.PropCycle"),
+		0,
+		TEXT("Development-only five-stage A->B last-observed prop proof."));
 #endif
 
 	FTransform BuildSourceTransform(const ADarkwellCharacter& Character)
@@ -297,6 +302,46 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 						*Tool.ToString());
 				}
 			}
+		}
+	}
+	if (Darkwell::SightWeaveAdapter::CVarDiagnosticRememberedPropCycle.GetValueOnGameThread() != 0)
+	{
+		DiagnosticPropCycleElapsedSeconds += FMath::Max(DeltaTime, 0.0f);
+		const int32 PropPhase = FMath::FloorToInt(
+			FMath::Fmod(DiagnosticPropCycleElapsedSeconds, 30.0) / 6.0);
+		const FVector FixtureOrigin = RequestedFixture->GetActorLocation();
+		const FVector A = FixtureOrigin + FVector(900.0, -700.0, 60.0);
+		const FVector B = FixtureOrigin + FVector(-1200.0, 900.0, 60.0);
+		const FVector HiddenPlayer = FixtureOrigin + FVector(0.0, -1000.0, 92.0);
+		if (UStaticMeshComponent* Prop = RequestedFixture->GetRememberablePropProof())
+		{
+			Prop->SetWorldLocation(PropPhase == 0 ? A : B, false, nullptr,
+				ETeleportType::TeleportPhysics);
+		}
+		const FVector PlayerLocation = PropPhase == 0 || PropPhase == 2
+			? FVector(A.X, A.Y, 92.0)
+			: PropPhase == 3 ? FVector(B.X, B.Y, 92.0) : HiddenPlayer;
+		Player->SetActorLocationAndRotation(
+			PlayerLocation,
+			PropPhase == 1 || PropPhase == 4
+				? FRotator(0.0f, -90.0f, 0.0f) : FRotator::ZeroRotator,
+			false,
+			nullptr,
+			ETeleportType::TeleportPhysics);
+		if (PropPhase != LastDiagnosticPropCyclePhase)
+		{
+			LastDiagnosticPropCyclePhase = PropPhase;
+			UE_LOG(LogDarkwellSightWeave, Display,
+				TEXT("RememberedPropCycle phase=%d semantic=%s prop=(%.1f,%.1f) player=(%.1f,%.1f)"),
+				PropPhase,
+				PropPhase == 0 ? TEXT("SeeA")
+					: PropPhase == 1 ? TEXT("MoveAtoBOutOfSight")
+					: PropPhase == 2 ? TEXT("ReobserveEmptyA")
+					: PropPhase == 3 ? TEXT("SeeB") : TEXT("LeaveB"),
+				PropPhase == 0 ? A.X : B.X,
+				PropPhase == 0 ? A.Y : B.Y,
+				PlayerLocation.X,
+				PlayerLocation.Y);
 		}
 	}
 #else
@@ -1093,5 +1138,7 @@ void UDarkwellSightWeaveWorldSubsystem::ResetToLegacy()
 	bDiagnosticLastSubjectHardLive = false;
 	DiagnosticToolCycleElapsedSeconds = 0.0;
 	LastDiagnosticToolCyclePhase = INDEX_NONE;
+	DiagnosticPropCycleElapsedSeconds = 0.0;
+	LastDiagnosticPropCyclePhase = INDEX_NONE;
 #endif
 }

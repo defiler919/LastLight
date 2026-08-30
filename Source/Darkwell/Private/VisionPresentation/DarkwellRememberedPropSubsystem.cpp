@@ -254,6 +254,28 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 		{
 			Proxy->SetActorHiddenInGame(!Decision.bShowProxy);
 		}
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+		if (!Record.bDiagnosticStateValid
+			|| Record.bDiagnosticLastLive != Decision.bShowCurrent
+			|| Record.bDiagnosticLastProxy != Decision.bShowProxy
+			|| Record.bDiagnosticLastSnapshotValid != Decision.bSnapshotValid)
+		{
+			Record.bDiagnosticStateValid = true;
+			Record.bDiagnosticLastLive = Decision.bShowCurrent;
+			Record.bDiagnosticLastProxy = Decision.bShowProxy;
+			Record.bDiagnosticLastSnapshotValid = Decision.bSnapshotValid;
+			const FVector SnapshotLocation = Record.State.SnapshotTransform.GetLocation();
+			UE_LOG(LogDarkwellRememberedProp, Display,
+				TEXT("RememberedPropState id=%s currentLive=%d proxy=%d snapshotValid=%d snapshot=(%.1f,%.1f,%.1f)"),
+				*Pair.Key.ToString(),
+				Decision.bShowCurrent ? 1 : 0,
+				Decision.bShowProxy ? 1 : 0,
+				Decision.bSnapshotValid ? 1 : 0,
+				SnapshotLocation.X,
+				SnapshotLocation.Y,
+				SnapshotLocation.Z);
+		}
+#endif
 		Diagnostics.LiveCount += Decision.bShowCurrent ? 1 : 0;
 		Diagnostics.ProxyCount += Decision.bShowProxy ? 1 : 0;
 		Diagnostics.RetainedDestroyedCount += !bCurrentExists

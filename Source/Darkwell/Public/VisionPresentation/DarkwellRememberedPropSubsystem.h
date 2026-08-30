@@ -93,6 +93,10 @@ private:
 		TArray<FPrimitiveSnapshot> Primitives;
 		FLinearColor Tint = FLinearColor::Gray;
 		float UVScale = 5.0f;
+		bool bDiagnosticStateValid = false;
+		bool bDiagnosticLastLive = false;
+		bool bDiagnosticLastProxy = false;
+		bool bDiagnosticLastSnapshotValid = false;
 	};
 
 	void RefreshRecords();

@@ -26,9 +26,26 @@ Final architecture source candidate SHA before final documentation: `96183a2258f
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — READY_FOR_USER_FINAL_ARCHITECTURE_PIE**
+Status: **BLOCKED — USER_FINAL_ARCHITECTURE_PIE_FAILED / SIGHTWEAVE VISUAL PRESENTATION REJECTED**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
+
+## 0I. Final architecture PIE rejection and project-owned rebuild (2026-08-30)
+
+The user rejected the final SurfaceMaterial architecture candidate at pushed baseline `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`. This verdict supersedes every earlier `READY_FOR_USER_FINAL_ARCHITECTURE_PIE` statement. The candidate is not usable and no automated evidence in this report may be cited as visual acceptance.
+
+The user observed world/tile-grid stepping, periodic jaggies and flicker. Although the presentation texture was `RGBA16F`, its coverage still came from discrete tile state, so filtering did not create genuinely continuous visibility. The per-rendered-face outward wall sample also assigned opposite states to faces of the same physical wall and produced north/south asymmetry. The required rule is instead object-local and view-independent: when either legally observable side sees a local wall cross-section, that cross-section is Live while free space behind the wall remains non-Live. Remembered texture quality improved but did not rescue the rejected architecture.
+
+The reliable SightWeave CPU authority, legal illumination, occlusion inputs, subject policy, `NeverRemember`, static-memory ownership, snapshots, persistence/restore, world lifecycle and gameplay tests remain retained. The rejected post-/pre-TSR composites, CustomDepth/Stencil composite, discrete SurfaceMaterial coverage, per-face wall sampling and visual tile mirror are frozen as historical evidence only and must not register or run in the new formal candidate.
+
+Continuation moved to `codex/darkwell-project-fog-visual-rebuild`. The controlling contracts are:
+
+- `Docs/DARKWELL_PROJECT_FOG_VISUAL_REBUILD_CONTRACT.md`;
+- `Docs/DARKWELL_PROJECT_FOG_VISUAL_REBUILD_EXECUTION_PLAN.md`;
+- `Docs/DARKWELL_PROJECT_FOG_VISUAL_REBUILD_REPORT.md`;
+- `Docs/DARKWELL_PROJECT_FOG_VISUAL_REBUILD_HANDOFF.md`.
+
+This is a DARKWELL-module presentation rebuild, not a SightWeave plugin rewrite, plugin-generalization effort, Fab task or deletion of historical evidence. Its first gate is a no-wall, normal-TSR proof of truly continuous Live coverage. Failure of that gate twice requires `BLOCKED — CONTINUOUS LIVE COVERAGE PROOF FAILED`; wall work must not begin.
 
 ## 0H. Fifth user dynamic PIE rejection and final architecture-proof gate (2026-08-30)
 

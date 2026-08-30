@@ -22,7 +22,15 @@ Final architecture source candidate SHA before final documentation: `96183a2258f
 
 Stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — READY_FOR_USER_FINAL_ARCHITECTURE_PIE**
+Status: **BLOCKED — USER_FINAL_ARCHITECTURE_PIE_FAILED / SIGHTWEAVE VISUAL PRESENTATION REJECTED**
+
+## Final architecture PIE disposition (2026-08-30)
+
+The user rejected final candidate `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`. The visible Live boundary still exposed discrete world/tile-grid stepping, periodic jaggies and flicker. `RGBA16F` storage did not make coverage continuous because its source remained discrete tile state. Per-face outward-normal wall sampling produced opposite classifications on faces of the same wall and north/south asymmetry. Improved gray static texture was not sufficient for acceptance.
+
+Every earlier readiness statement in this handoff is historical. The current candidate is not `COMPLETED`, not ready for another user PIE, and must not receive another blur, threshold, mask expansion, resolution reduction, TSR-disable or screen-space compensation cycle.
+
+Reliable SightWeave CPU authority and gameplay rules remain available as a backend. Its rejected visual presentation paths remain in source history but must not register or run in the new candidate. Work continues on branch `codex/darkwell-project-fog-visual-rebuild` under `Docs/DARKWELL_PROJECT_FOG_VISUAL_REBUILD_CONTRACT.md`, beginning with a no-wall proof of genuinely continuous project-owned Live coverage. The new work does not generalize or republish SightWeave and does not rewrite its authority backend.
 
 ## Fifth user dynamic PIE disposition (2026-08-30)
 
@@ -431,13 +439,13 @@ git switch codex/sightweave-darkwell-visual-rescue; git pull --ff-only
 
 ## Current-state footer
 
-The authoritative end state of this document is `PARTIAL — READY_FOR_USER_FINAL_ARCHITECTURE_PIE` at the final pushed documentation SHA. The older fifth-candidate section immediately above is retained only as rejected historical evidence. The user must perform the final architecture PIE sequence defined in this handoff; automated evidence cannot promote the result to `COMPLETED`.
+The authoritative end state of this document is `BLOCKED — USER_FINAL_ARCHITECTURE_PIE_FAILED / SIGHTWEAVE VISUAL PRESENTATION REJECTED`. Every earlier readiness section is retained only as historical engineering evidence. The final SurfaceMaterial candidate failed user PIE and must not be offered again. Continuation is the project-owned rebuild on `codex/darkwell-project-fog-visual-rebuild`; automated evidence cannot promote either effort to `COMPLETED`.
 
 Recovery command:
 
 ```powershell
 cd D:\UE_pro\Darkwell
 git fetch origin
-git switch codex/sightweave-darkwell-visual-rescue
+git switch codex/darkwell-project-fog-visual-rebuild
 git pull --ff-only
 ```

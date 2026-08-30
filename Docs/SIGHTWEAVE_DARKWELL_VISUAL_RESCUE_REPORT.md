@@ -22,9 +22,32 @@ SurfaceMaterial source candidate SHA before final documentation: `8daed357e26aa8
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5**
+Status: **BLOCKED — USER_DYNAMIC_PIE_RETEST_5_FAILED**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
+
+## 0H. Fifth user dynamic PIE rejection and final architecture-proof gate (2026-08-30)
+
+The fifth user dynamic PIE rejected the SurfaceMaterial candidate at baseline `011fcbd3ce53704b14a89fd0d293995d52f2b427`. The controlling state is:
+
+```text
+BLOCKED — USER_DYNAMIC_PIE_RETEST_5_FAILED
+```
+
+The moving gray boundary still visibly shakes. Remembered is too flat and its real texture is almost invisible, so the current result neither meets the static-scene-memory information contract nor provides a trustworthy interior-flicker assessment. Wall classification is directionally incorrect: one view direction becomes wholly black while the opposite direction becomes wholly bright. The fixed wall custom-primitive-data direction and two-sided maximum sampling are therefore not an acceptable rendered-surface rule.
+
+The user also confirmed that the gray horizontal lines and black/gray offset did not recur and that performance remains acceptable. Those passed results, together with unified three-state authority, Ultra 2.5 cm/texel, tile-edge empty-interval rejection, `NeverRemember`, Stalker/HUD synchronization, Torch/Lantern/Torch recovery, CPU authority/persistence, and the useful parts of the SurfaceMaterial direction, remain frozen. They do not establish visual acceptance.
+
+The final authorized project-specific proof is limited to 48 hours and to `L_VisionIntegration`. It must replace fixed wall directions with the actual stable world geometric surface normal, retain recognizable real static BaseColor, and separate discrete Known/Live authority from continuous world-anchored presentation coverage. It must prove fixed-authority camera motion, fixed-camera visibility-source motion, four wall directions, doorway and cube faces, then normal 1080p/1440p D3D12/SM6 TSR gameplay. No screen-space composite revival, blur or mask expansion, resolution reduction, TSR disable, or plugin-generalization work is authorized.
+
+Success is capped at `PARTIAL — READY_FOR_USER_FINAL_ARCHITECTURE_PIE`. If that controlled proof fails, the required stop state is:
+
+```text
+BLOCKED — SURFACE MATERIAL ARCHITECTURE PROOF FAILED
+SIGHTWEAVE VISUAL LAYER ABANDONED
+```
+
+No prior `READY_FOR_USER_DYNAMIC_PIE_RETEST_5` statement remains current. Historical automated evidence is retained only as engineering evidence and cannot overrule this user verdict.
 
 ## 0G. Fourth user dynamic PIE rejection (2026-08-30)
 

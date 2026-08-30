@@ -18,7 +18,17 @@ SurfaceMaterial source candidate SHA before final documentation: `8daed357e26aa8
 
 Stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5**
+Status: **BLOCKED — USER_DYNAMIC_PIE_RETEST_5_FAILED**
+
+## Fifth user dynamic PIE disposition (2026-08-30)
+
+Retest 5 rejected SurfaceMaterial candidate `011fcbd3ce53704b14a89fd0d293995d52f2b427`. The moving gray boundary still shakes; Remembered is too flat for the real floor texture and major static-scene blocks to remain plainly recognizable; and wall handling is directionally wrong, producing an all-black result from one direction and an all-bright result from the opposite direction. The current fixed CPD wall direction and maximum-of-both-sides sampling are rejected as a formal surface-visibility rule.
+
+The gray horizontal-line repair, black/gray alignment, acceptable flow, unified three-state authority, Ultra 2.5 cm/texel, tile-edge empty-interval rejection, wall-behind black intent, `NeverRemember`, Stalker/HUD synchronization, Torch/Lantern/Torch recovery, CPU authority/persistence/tests, and the useful SurfaceMaterial progress remain frozen. They must not be traded away in the next proof, but they do not make the current candidate usable.
+
+The only remaining authorized construction is a final, at-most-48-hour DARKWELL architecture proof in `L_VisionIntegration`: use the actual stable world geometric rendered-surface normal for wall-face sampling; preserve a recognizable filtered real static BaseColor; and derive continuous world-anchored Known/Live presentation coverage from the discrete authority without screen-space history or jitter compensation. Required controls are authority frozen with camera/player motion, camera frozen with visibility-source motion, and normal gameplay, followed by four-direction wall/cube/doorway checks and 1080p/1440p D3D12/SM6 normal-TSR evidence.
+
+The highest possible handoff is `PARTIAL — READY_FOR_USER_FINAL_ARCHITECTURE_PIE`. Proof failure requires `BLOCKED — SURFACE MATERIAL ARCHITECTURE PROOF FAILED / SIGHTWEAVE VISUAL LAYER ABANDONED`. There is no current `READY_FOR_USER_DYNAMIC_PIE_RETEST_5` state and no automated result may replace the user's final visual verdict.
 
 ## Fourth user dynamic PIE disposition (2026-08-30)
 

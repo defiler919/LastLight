@@ -2,8 +2,10 @@
 
 #include "Misc/AutomationTest.h"
 #include "Materials/Material.h"
+#if WITH_EDITOR
 #include "Materials/MaterialExpressionEyeAdaptationInverse.h"
 #include "Materials/MaterialExpressionGIReplace.h"
+#endif
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
 
@@ -197,6 +199,7 @@ bool FDarkwellFogGrayUnlitMaterialContractTest::RunTest(const FString& Parameter
 	{
 		return false;
 	}
+#if WITH_EDITOR
 	int32 EyeAdaptationInverseCount = 0;
 	int32 GIReplaceCount = 0;
 	for (const UMaterialExpression* Expression :
@@ -211,6 +214,7 @@ bool FDarkwellFogGrayUnlitMaterialContractTest::RunTest(const FString& Parameter
 		EyeAdaptationInverseCount, 1);
 	TestEqual(TEXT("Gray display has one GI replacement boundary"),
 		GIReplaceCount, 1);
+#endif
 
 	TArray<FMaterialParameterInfo> ScalarInfos;
 	TArray<FGuid> ScalarIds;

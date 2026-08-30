@@ -14,9 +14,11 @@ Unattended B0/B1 continuation starting SHA: `e4d654b74e3557ebefa328986bb626dcbfd
 
 Validated temporal-coherent project candidate SHA before final documentation: `4e50e44`
 
+SurfaceMaterial source candidate SHA before final documentation: `8daed357e26aa8fa41be0892d63e906bc153317e`
+
 Stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_4_FAILED / SCREEN_SPACE COMPOSITION REJECTED FOR PRODUCTION**
+Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5**
 
 ## Fourth user dynamic PIE disposition (2026-08-30)
 
@@ -272,6 +274,75 @@ No separate Nanite wall existed in the integration fixture, and no independently
 - `7b18882` `fix: let DARKWELL own custom depth jitter policy`
 - `84c910d` `test: prepare DARKWELL visual retest four`
 - `4e50e44` `test: align packaging contracts with selected pass`
+
+Next recovery command:
+
+```powershell
+git switch codex/sightweave-darkwell-visual-rescue; git pull --ff-only
+```
+
+## Fifth dynamic PIE handoff — SurfaceMaterial candidate (2026-08-30)
+
+### Candidate state
+
+```text
+PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5
+```
+
+This section supersedes the previous retest-4 readiness section, while preserving the fourth user rejection as the final verdict on screen-space composition. It does not claim `COMPLETED`.
+
+The pushed source candidate before this documentation is `8daed357e26aa8fa41be0892d63e906bc153317e`. `L_VisionIntegration` now uses a project-only stencil-free surface-material path: SightWeave's Ultra 2.5 cm/texel live/feather/memory GPU mirrors incrementally update a persistent RGBA8 world-state texture, and real primitives sample it with `AbsoluteWorldPosition.xy`. Their normal geometry coverage, depth, velocity, and normal TSR produce the visible edges. The old pre-TSR and post-TSR full-screen formal composites are not registered while the surface target is active; CustomDepth/Stencil does not determine the candidate's scene outlines.
+
+The fixture's original floor/walls/landmark were non-Nanite Engine Cubes with `WorldGridMaterial` and no source textures or project master. The vertical slice therefore introduces one matched real sampled tile BaseColor baseline and preserves it through the Remembered filter. It does not claim to restore an absent project art texture. Added assets are:
+
+- `/Game/Darkwell/Vision/Materials/MF_DarkwellSightWeaveSurface`;
+- `/Game/Darkwell/Vision/Materials/M_DarkwellSightWeaveSurface`;
+- `/Game/Darkwell/Vision/Materials/MI_DarkwellSightWeaveFloor`;
+- `/Game/Darkwell/Vision/Materials/MI_DarkwellSightWeaveWall`;
+- `/Game/Darkwell/Vision/Materials/MI_DarkwellSightWeaveStatic`.
+
+All five are Git LFS objects. No map asset, `L_Prototype`, external asset, or `Darkwell.uproject` was modified. CPD indices are `[0]=category`, `[1]=wall direction X`, `[2]=wall direction Y`, `[3]=wall distance cm`; fixture walls use `(+1,0,27.5 cm)`.
+
+### What the bounded agent gate established
+
+- Editor Development serial build succeeded after the final source checkpoint.
+- Bounded automation is 11/11 Success: SurfaceMaterial 3, M6P1 authority 1, M3.4 3, M3.5 2, M4P1 NeverRemember policy 1, D3D12/SM6 composite 1.
+- 1080p/1440p horizontal and vertical candidate/fog-off pairs are each 30 seconds/900 frames with normal TSR. Candidate compensated bright-region MAD p95 is lower than fog-off in all four pairs. Worst extra black-edge XOR p95 is `0.000487`.
+- Remembered/fog-off texture correlation is `0.830543` to `0.977992`; fixed Remembered ROI MAD p95 is `0.038452` at 1080p and `0.050425` at 1440p. Unknown ROI remains exactly black across 600 frames at both resolutions.
+- Independent 1080p/1440p Static, Rotate, Wall, Doorway, and TorchCycle candidate and matched fog-off processes completed. A fixed 1080p Remembered soak completed 300 seconds/9000 frames and remained valid through Torch depletion.
+- 31 formal dynamic logs and six bounded automation logs are severe-clean. The agent opened the required contacts and adjacent frames and observed no gray-line/black-gray-seam recurrence, no old directional whole-edge oscillation, recognizable Remembered floor texture, readable facing walls with black behind, continuous doorway coverage, and preserved HUD/tool behavior.
+
+The ignored evidence root is `Saved/SightWeaveVisualRescueEvidence`. Primary candidate directories begin with `Dynamic/SurfaceFinal*`; matched controls begin with `Dynamic/SurfaceFogOff*`; bounded test logs are under `SurfaceFinalTests`. The `Dynamic/SurfaceFinal1080Continuous300` moving sample is explicitly invalid and excluded because the test input drove the actor out of the fixture and through the floor. The valid long sample is `Dynamic/SurfaceFinal1080StaticSoak300`.
+
+### Required fifth user dynamic PIE sequence
+
+1. Restore the branch:
+
+   ```powershell
+   git switch codex/sightweave-darkwell-visual-rescue
+   git pull --ff-only
+   ```
+
+2. Open `D:\UE_pro\Darkwell\Darkwell.uproject` in Unreal Engine 5.8.1, load `/Game/Maps/L_VisionIntegration`, and use normal D3D12/SM6 with project-normal TSR. Do not set any `r.Darkwell.SightWeave.Diagnostic.*` or `r.SightWeave.Diagnostic.*` CVar.
+3. Start normal PIE and select `NEW GAME`. Hold the player and camera completely still for 20 seconds. Confirm the textured Remembered floor, wall faces, Live boundary, and Unknown remain stable and there are no gray lines or black/gray seams.
+4. Move horizontally for 30 seconds while keeping cube/wall left-right edges visible; then move vertically for 30 seconds while keeping top-bottom edges visible. Confirm there is no direction-correlated edge oscillation, side-surface shake, crawl, or trail beyond the native fog-off scene.
+5. Slowly rotate aim for 30 seconds. Confirm the Remembered texture remains attached to the world and its internal detail does not slide or pulse.
+6. Strafe along each wall for 30 seconds, approach it head-on, and pass both ends. Confirm the facing surface is readable and Unknown begins behind it rather than swallowing the wall or leaking gray geometry.
+7. Cross the doorway in both directions. Confirm the opening, wall sides, and black-behind-wall rule stay continuous without a seam.
+8. Sweep a static floor region and the landmark through Live -> Remembered -> Live. Confirm the tile texture and static silhouette remain recognizable, while no Stalker, dynamic shadow, or stale change enters Remembered.
+9. Switch Torch -> Lantern -> Torch. Confirm the legal cone disappears/restores without a stuck-black state. Aim toward and away from the Stalker and confirm the actor and red threat HUD appear/disappear on the same revision with no remembered enemy image.
+10. Repeat the core static/horizontal/vertical/rotation/wall/door checks at both 1920x1080 and 2560x1440, then play normally for at least five minutes.
+
+Accept only if the user explicitly confirms: no directional shaking, no gray lines, no black/gray offset, acceptable circle/cone edges, recognizable filtered static Remembered texture, Unknown black, preserved wall/door rule, preserved enemy filtering, Torch/Lantern/Torch recovery, and acceptable game usability. On rejection, set `BLOCKED — SURFACE MATERIAL VISUAL PROTOTYPE FAILED / SIGHTWEAVE ABANDONMENT REVIEW REQUIRED` and apply the 2026-09-05 stop-loss. Do not resume screen-space patching.
+
+### SurfaceMaterial continuation commits
+
+- `ee04e10` `docs: record fourth DARKWELL visual retest failure`
+- `cfb1543` `render: add DARKWELL surface fog vertical slice`
+- `0bd1fb9` `test: add matched native surface fog control`
+- `703eff4` `test: add directional DARKWELL fog motion gate`
+- `8e3ccb1` `fix: preserve DARKWELL wall surface coverage`
+- `8daed35` `test: add DARKWELL doorway motion gate`
 
 Next recovery command:
 

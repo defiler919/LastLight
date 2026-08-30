@@ -6,7 +6,7 @@
 **需求冻结日期：** 2026-08-29
 **补救硬截止日期：** 2026-09-05
 **当前失败证据基线：** `30366ecd0e38c969fc58537eafa6a9fa0e2cd47e`
-**当前判定：** `PARTIAL — USER_DYNAMIC_PIE_RETEST_4_FAILED / SCREEN_SPACE COMPOSITION REJECTED FOR PRODUCTION`
+**当前判定：** `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5`
 
 ---
 
@@ -30,6 +30,8 @@ PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5
 ```
 
 若 surface-material 原型不能满足本合同，则必须进入 `BLOCKED — SURFACE MATERIAL VISUAL PROTOTYPE FAILED / SIGHTWEAVE ABANDONMENT REVIEW REQUIRED`，不得返回第五套屏幕空间补丁。
+
+截至 2026-08-30，项目专用 stencil-free `SurfaceMaterial` vertical slice 已完成 agent-side 最小门禁并推送；这只把状态提升到 `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5`。第四轮用户失败仍是被替换的 screen-space 路径的最终裁决，新的 surface 候选尚未获得用户动态 PIE 认可，绝不等于 `COMPLETED`。
 
 ---
 

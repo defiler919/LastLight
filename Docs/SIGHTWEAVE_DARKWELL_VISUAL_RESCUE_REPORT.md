@@ -16,11 +16,13 @@ Unattended B0/B1 continuation starting SHA: `e4d654b74e3557ebefa328986bb626dcbfd
 
 Validated temporal-coherent project candidate SHA before final documentation: `4e50e44`
 
+SurfaceMaterial source candidate SHA before final documentation: `8daed357e26aa8fa41be0892d63e906bc153317e`
+
 48-hour prototype checkpoint: 2026-08-31
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_4_FAILED / SCREEN_SPACE COMPOSITION REJECTED FOR PRODUCTION**
+Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
 
@@ -628,3 +630,129 @@ No user video, `Saved`, generated directory, asset, map, `L_Prototype`, or `Dark
 The integration fixture uses ordinary BasicShapes meshes; a separate Nanite wall visual comparison was not available. Engine source establishes shared jittered View construction for Nanite/non-Nanite CustomDepth, but this is not a fixture-level Nanite pass claim. A separate scripted doorway traversal was not captured; wall-end movement and M6P1 doorway authority passed, while subjective doorway visuals remain in retest four. The project relies on normal TSR's local history handling after pre-TSR semantic composition; no bespoke SightWeave reactive texture was added. The three legacy plugin-Lab D3D12 failures remain deferred under the explicit DARKWELL-first priority.
 
 The candidate is therefore `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_4`, not `COMPLETED`. User dynamic PIE remains the visual and semantic authority. Rejection triggers the 2026-09-05 stop-loss and SightWeave abandonment review; it does not authorize another local post-process compensation cycle.
+
+## 12. Stencil-free SurfaceMaterial vertical slice (2026-08-30)
+
+### 12.1 Superseding disposition and asset audit
+
+The fourth user failure remains authoritative for every screen-space candidate. This section supersedes only the old retest-4 readiness statement and records a new architecture at source candidate `8daed357e26aa8fa41be0892d63e906bc153317e`:
+
+```text
+PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5
+```
+
+This is not `COMPLETED` and is not user visual acceptance.
+
+The read-only Asset Registry audit found that the `L_VisionIntegration` fixture used `/Engine/BasicShapes/Cube` for ground, both walls, and the landmark; all were non-Nanite and used `/Engine/EngineMaterials/WorldGridMaterial`. No project master material, Material Layers stack, or BaseColor/Normal/Roughness/AO source texture was present. The fixture Stalker had no skeletal mesh assignment. Consequently, the vertical slice could not inherit a missing project floor texture. It establishes a matched real sampled texture baseline using `/Engine/Engine_MI_Shaders/T_Base_Tile_Diffuse`, then uses that same BaseColor source in Live, Remembered, and fog-off paths. This is not a `frac` grid, scanline, noise injection, SceneCapture, or SceneColor snapshot.
+
+Five project assets were created through Unreal Editor Python and saved normally under `/Game/Darkwell/Vision/Materials`:
+
+- `MF_DarkwellSightWeaveSurface`;
+- `M_DarkwellSightWeaveSurface`;
+- `MI_DarkwellSightWeaveFloor`;
+- `MI_DarkwellSightWeaveWall`;
+- `MI_DarkwellSightWeaveStatic`.
+
+All five are Git LFS objects. Both walls share one material instance. No map asset needed modification because the existing integration fixture applies and restores the overrides at runtime. `L_VisionIntegration`, `L_Prototype`, external/Fab assets, and `Darkwell.uproject` remain unchanged.
+
+### 12.2 Formal state-texture and frame path
+
+`USightWeaveRenderWorldSubsystem::EnableSurfaceMaterialPresentation` owns a cross-frame-stable `UTextureRenderTarget2D` in `RTF_RGBA8`, nearest/clamp, with no mip generation. It is allocated for the active Ultra scope and reused until texture extent or world mapping changes. `FSightWeaveSceneViewExtension::ConfigureSurfaceMaterialTarget` transfers the texture RHI and mapping to the render thread. `FSightWeaveSparseAtlasRenderState::ProcessSurfaceMaterialState_RenderThread` registers the persistent target with RDG and updates only the dirty logical tiles, or performs the explicit full update required by a new resource/scope. It reads the existing live, feather, and exploration-memory GPU mirrors directly; there is no GPU-to-CPU readback. Static scene appearance comes from the bound surface material rather than the old neutral-intensity static atlas.
+
+The pixel contract emitted by `SightWeaveSurfaceStatePS` in `SightWeaveSingleTile.usf` is:
+
+```text
+R = mutually exclusive state / 2        (Unknown=0, Remembered=0.5, Live=1)
+G = Live visual feather coverage
+B = Remembered validity
+A = world/scope validity
+```
+
+Material UV comes only from `(AbsoluteWorldPosition.xy - WorldMin) / WorldExtent` using the Ultra 2.5 cm/texel mapping. Scope/resource replacement updates the texture and transform as one adapter operation; teardown clears the scene-view target and UObject reference.
+
+The formal visual path is now:
+
+```text
+SightWeave CPU authority
+  -> sparse live/feather/exploration-memory GPU mirrors
+  -> persistent dirty-tile RGBA8 world-state texture
+  -> real primitive rasterization + project surface material
+  -> normal depth / coverage / velocity
+  -> normal D3D12 SM6 TSR
+  -> UI
+```
+
+When the surface target is active, `FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass` does not register the old post-TSR or pre-TSR full-screen formal composite. CustomDepth/Stencil is not sampled by the new material and does not determine ground, wall, landmark, or doorway coverage. Development-only `r.Darkwell.SightWeave.Diagnostic.SurfaceFogOff` changes the same material graph to its matched original attributes for A/B evidence; it is not a Shipping product setting.
+
+### 12.3 Material semantics and primitive categories
+
+Live returns the material's original texture/attributes. Remembered derives from the original sampled BaseColor, retains recognizable luminance structure and a controlled amount of color, reduces saturation/contrast/brightness, raises roughness, suppresses metallic/specular response, and uses stable emissive information rather than current dynamic lighting. Unknown writes black with no emissive, metallic, or specular leakage. State priority remains `Live > Remembered > Unknown`; visual feather does not change gameplay authority.
+
+Custom Primitive Data is frozen as:
+
+| index | meaning |
+|---:|---|
+| 0 | surface category: 0 ground, 1 wall/side, 2 rememberable static, 3 excluded |
+| 1 | stable wall sample direction X |
+| 2 | stable wall sample direction Y |
+| 3 | wall sample distance in cm |
+
+The two 40 cm-thick fixture walls use direction `(+1,0)` and distance `27.5 cm`: 20 cm half-thickness plus the contract's 7.5 cm bias. Ground samples the exact surface point. Wall/side category takes the highest valid state from the center and stable bidirectional offset samples. Other non-ground static surfaces use their pixel normal with the 7.5 cm bias. This preserves the facing wall surface while keeping Unknown behind it; it does not dilate the global mask or hide all walls.
+
+The M6P1 adapter remains authoritative for the `NeverRemember` Stalker and threat HUD. They consume the same hard-Live snapshot/revision and do not rely on a gray overlay or Stencil erase. Torch/Lantern/Torch resource revisions, tile-edge empty-interval rejection, unified three-state authority, Ultra precision, and black/gray alignment remain unchanged.
+
+### 12.4 Directional, texture, static, and matched-control evidence
+
+Ignored evidence root is `Saved/SightWeaveVisualRescueEvidence`. The formal horizontal/vertical candidate directories are `Dynamic/SurfaceFinal1080Horizontal`, `SurfaceFinal1080Vertical`, `SurfaceFinal1440Horizontal`, and `SurfaceFinal1440Vertical`; each contains an exact 30-second, 900-frame video, log, adjacent frames/contact sheet, and `metrics.json`. Their matched same-material fog-off controls are the corresponding `Dynamic/SurfaceFogOff*Horizontal` and `*Vertical` directories.
+
+Motion-compensated half-resolution metrics over all 899 adjacent-frame pairs are:
+
+| resolution / direction | Surface bright MAD p50 / p95 / max | fog-off p50 / p95 / max | Surface black-edge XOR p95 | fog-off XOR p95 | Surface minus fog-off XOR p95 |
+|---|---:|---:|---:|---:|---:|
+| 1080p horizontal | 0.688155 / 1.565711 / 1.865470 | 1.616708 / 2.821813 / 3.521747 | 0.001732 | 0.001245 | +0.000487 |
+| 1080p vertical | 1.446203 / 1.989685 / 2.184379 | 1.903431 / 3.215450 / 3.451829 | 0.000805 | 0.000806 | -0.000001 |
+| 1440p horizontal | 0.835623 / 1.933627 / 2.297000 | 2.387048 / 3.069116 / 3.609929 | 0.001335 | 0.000975 | +0.000360 |
+| 1440p vertical | 1.984994 / 2.234265 / 2.485494 | 2.950415 / 3.300202 / 3.921712 | 0.000810 | 0.000620 | +0.000190 |
+
+The worst additional black-edge occupancy is 0.000487, about 0.049% of the analyzed ROI. The compensated bright-region p95 is lower than fog-off by 1.065937 to 1.256102 code values. No one-pixel alignment correction was selected at 1080p; the 1440p candidate selected a one-pixel correction on 3/899 horizontal and 8/899 vertical pairs, versus 13/899 and 10/899 for fog-off. Leading/trailing p95 fractions remain below 0.001053. These measurements support, but do not replace, the opened adjacent frames or user PIE.
+
+At the matched 10-second texture ROI, Remembered-to-fog-off luminance spatial correlation is `0.977992`/`0.869252` at 1080p horizontal/vertical and `0.830543`/`0.884501` at 1440p. Surface local variance is `3688.39`, `169.37`, `4081.62`, and `180.49`; edge energy is `12.006`, `12.793`, `11.349`, and `12.156`. The two lower-variance directional ROIs sample a comparatively uniform portion of the texture, but correlation remains high. No noise was added to inflate variance.
+
+Dedicated fixed-frame static ROIs over 600 frames report:
+
+| ROI | 1080p adjacent MAD p50 / p95 / max | 1440p p50 / p95 / max |
+|---|---:|---:|
+| Remembered floor | 0.016697 / 0.038452 / 0.370881 | 0.025502 / 0.050425 / 0.383874 |
+| Live floor control | 0.023570 / 0.051438 / 0.423150 | 0.041574 / 0.067611 / 0.444861 |
+| HUD control | 0 / 0.001083 / 0.115542 | 0.000372 / 0.002468 / 0.065517 |
+| Unknown control | 0 / 0 / 0 | 0 / 0 / 0 |
+
+Unknown mid-frame mean and variance are both exactly zero at both resolutions. Remembered mid-frame variance is `2504.59` at 1080p and `2697.69` at 1440p, which rules out a uniform gray fill for these ROIs.
+
+Additional candidate evidence exists under `Dynamic/SurfaceFinal{1080,1440}{LiveStatic,RememberedStatic,Rotate,Wall,Doorway,TorchCycle}`. Matched fog-off controls exist for Static, Rotate, Wall, Doorway, and TorchCycle at both resolutions. The 1080p fixed `SurfaceFinal1080StaticSoak300` is exactly 300 seconds/9000 frames. At 150/180 seconds the HUD records Torch 25%/11%; by 270 seconds it records Torch 0% `[EMPTY]`. Player and camera transforms remain fixed. The expected Live-to-Remembered transition retains the sampled floor pattern instead of failing black. The earlier `SurfaceFinal1080Continuous300` is excluded: alternating input drove the fixture character outside the floor and down to approximately Z=-1,046,000 cm, making it a harness failure rather than valid render evidence.
+
+### 12.5 Agent visual inspection
+
+The agent opened the 1080p and 1440p Live and Remembered static sheets; rotation, wall, doorway, and tool sheets; matched fog-off rotation/wall/doorway sheets; 1080p and 1440p horizontal/vertical adjacent frames; full-resolution doorway frames; and the fixed-soak sheet plus 150/180/270-second frames. The opened evidence shows a recognizable sampled floor texture in Remembered, black Unknown, readable facing wall surfaces with black behind, continuous doorway coverage, and no recurrence of the horizontal gray line or black/gray offset. Directional adjacent frames do not show the old left/right or top/bottom whole-edge oscillation. The tool sheet also shows the wheel/UI after fog and the expected legal-light changes.
+
+The agent did not claim to watch every video in real time and cannot substitute for the user's fifth dynamic PIE. Contact-sheet downscaling can make the 2.5 cm state boundary look toothier than the opened full-resolution frame; the full-resolution adjacent frames are the governing agent inspection evidence.
+
+### 12.6 Minimal build, automation, logs, and exclusions
+
+- `Scripts/BuildEditor.ps1`: `DarkwellEditor Win64 Development` succeeded after the doorway trajectory source change (5/5 actions; compile, module compile, library link, DLL link, metadata). Warnings are the non-preferred MSVC 14.51 toolchain and existing UE deprecations.
+- Surface state truth/mapping/wall/CPD: 3/3 Success.
+- M6P1 vertical-slice authority, including shared Stalker/HUD revision, `NeverRemember`, and Torch/Lantern/Torch authority: 1/1 Success.
+- M3.4 presentation/feather: 3/3 Success.
+- M3.5 static-environment memory: 2/2 Success.
+- M4P1 `NeverRemember` subject policy matrix: 1/1 Success.
+- D3D12/SM6 three-state composite smoke: 1/1 Success on RTX 2070 SUPER, forced SM6, shader model 6.7 support.
+- Total bounded automation: 11/11 Success. Every automation log is severe-clean.
+- Formal dynamic severe scan: 31/31 logs have zero fatal/assert/ensure/GPU-crash/device-removal/device-hung/critical-error hits.
+
+No complete SightWeave regression, complete DARKWELL regression, BuildPlugin, clean-host, Cook, Package, Staged Shipping, performance matrix, Fab compatibility pass, game Development/Shipping build, or `L_Prototype` acceptance was run. The broad historical results in section 11 are retained as history and were not rerun for this vertical slice.
+
+### 12.7 Remaining authority and stop rule
+
+The project-side agent gate supports `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5`; it does not establish subjective production usability. The fixture is intentionally small, non-Nanite, and lacks particle/dynamic-VFX consumers. The Stalker fixture has no skeletal mesh and is therefore validated as whole-actor authority/filtering, not per-pixel skeletal coverage. The texture baseline is a project prototype texture because the fixture had no original art texture. These are disclosed limits, not claims of plugin generality.
+
+The user must retest normal PIE at 1080p and 1440p with D3D12/SM6 and normal TSR. If the user rejects motion stability, texture readability, wall/door coverage, enemy filtering, or tool recovery, the required state is `BLOCKED — SURFACE MATERIAL VISUAL PROTOTYPE FAILED / SIGHTWEAVE ABANDONMENT REVIEW REQUIRED`. The response must not return to a fifth screen-space patch. The 2026-09-05 stop-loss remains unconditional.

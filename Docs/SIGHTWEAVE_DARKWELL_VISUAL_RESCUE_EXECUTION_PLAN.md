@@ -12,7 +12,7 @@ Unattended B0/B1 continuation starting SHA: `e4d654b74e3557ebefa328986bb626dcbfd
 
 Final stop-loss deadline: 2026-09-05
 
-Current status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_4_FAILED / SCREEN_SPACE COMPOSITION REJECTED FOR PRODUCTION**
+Current status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5**
 
 This plan is subordinate to `Docs/SIGHTWEAVE_DARKWELL_VISUAL_REQUIREMENTS.md`. It is a DARKWELL project rescue, not a general plugin, packaging, Fab, or publication milestone. The original automated evidence remains valid engineering evidence, but it cannot establish visual acceptance after the user's dynamic PIE rejection.
 
@@ -25,6 +25,18 @@ The sole authorized next construction path is a DARKWELL project-first, stencil-
 The candidate must use world-space surface sampling, a cross-frame-stable GPU state texture binding, project-owned material assets, primitive/material-stage surface categories, and conservative wall sampling. It must disable both post-TSR and pre-TSR full-screen production fog composition in SurfaceMaterial mode. No screen-space UV, stencil offset, blur, feather, threshold, mask dilation, SceneCapture, SceneColor snapshot, artificial grid, or derivative-normal patch is an acceptable substitute.
 
 The highest possible result remains `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5`; failure requires `BLOCKED — SURFACE MATERIAL VISUAL PROTOTYPE FAILED / SIGHTWEAVE ABANDONMENT REVIEW REQUIRED`.
+
+## 0B. SurfaceMaterial vertical slice execution result (2026-08-30)
+
+The source candidate at `8daed357e26aa8fa41be0892d63e906bc153317e` implements the authorized path and has passed the bounded agent-side gate. SightWeave authority and its Ultra 2.5 cm/texel sparse GPU mirrors now incrementally populate a persistent RGBA8 world-space surface-state texture. DARKWELL binds that texture to project-owned surface materials and disables the old full-screen formal composite while this mode is active. No CustomDepth/Stencil sample determines final scene-object coverage.
+
+The integration fixture had no project master material or source BaseColor/Normal/Roughness/AO texture set: floor, walls, and landmark used non-Nanite Engine Cube meshes and `WorldGridMaterial`. The vertical slice therefore establishes a matched textured surface baseline from a real sampled engine BaseColor texture, then preserves that same texture through the Remembered filter. It does not claim to have recovered a pre-existing DARKWELL floor texture that was absent from this fixture.
+
+Implemented CPD allocation is `[0]=surface category`, `[1]=stable wall direction X`, `[2]=stable wall direction Y`, `[3]=wall sample distance cm`. Fixture walls use direction `(+1,0)` and `27.5 cm`, equal to their 20 cm half-thickness plus the frozen 7.5 cm bias. Ground samples the exact world position. The material chooses the highest of the conservative wall samples without expanding visibility behind the wall.
+
+The bounded validation comprises 10/10 NullRHI tests, 1/1 D3D12/SM6 composite test, a successful serial Editor Development build, 31 severe-clean formal dynamic logs, 1080p/1440p horizontal and vertical matched fog-off comparisons, static/rotation/wall/doorway/tool evidence, and a valid 300-second fixed Remembered soak. The earlier 300-second alternating-input sample is explicitly excluded because its harness drove the player outside the fixture and through the floor.
+
+No full historical regression, BuildPlugin, clean-host, Cook, Package, performance matrix, game Development/Shipping build, or `L_Prototype` validation was run. Those remain forbidden until the user's fifth dynamic PIE accepts the candidate.
 
 ## 0. 2026-08-30 pre-TSR proof qualification
 

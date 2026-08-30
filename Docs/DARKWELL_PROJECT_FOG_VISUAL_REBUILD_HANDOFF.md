@@ -1,12 +1,12 @@
 # DARKWELL Project Fog Visual Rebuild Handoff
 
-Date: 2026-08-30
+Date: 2026-08-31
 
 Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — READY_FOR_USER_GRAY_LIVE_PIE**
+Status: **PARTIAL — READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE**
 
 Deadline: 2026-09-05
 
@@ -106,10 +106,48 @@ Build and tests remain serial and bounded. Do not run BuildPlugin, Fab, clean-ho
 Even after every phase passes, the highest possible agent state is:
 
 ```text
-PARTIAL — READY_FOR_USER_GRAY_LIVE_PIE
+PARTIAL — READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE
 ```
 
 Only the user's dynamic PIE can accept gray/live usability. Unknown/exploration history is a later independent phase and must not begin automatically.
+
+## Gray-unlit memory handoff (current)
+
+Current task baseline: `24a047039f157d2bcc090049898ea8b49f7a3301`.
+
+The current candidate adds two bounded project-only results without replacing the proven P1-P5 backend:
+
+1. Remembered world surfaces use filtered BaseColor as exposure-stable gray presentation. They have no real-time diffuse/specular/AO/shadow response, and `GIReplace` blocks static/dynamic indirect-light injection. The project camera uses fixed manual exposure only while this presentation is active; rollback restores its complete previous post-process settings.
+2. Rememberable movable objects have stable identity and object-level maximum-coverage hysteresis. Their last observed transform is rendered by a transient, non-colliding, non-shadowing, non-GI, non-navigation proxy. Observing an old location empty clears it; `NeverRemember` enemies never create one.
+
+Final evidence root:
+
+```text
+Saved/DarkwellProjectFogVisualRebuild/GrayUnlitMemory
+```
+
+Final evidence summary:
+
+- 1080p gray ROI: range `0.000453`, adjacent MAD `0.000102`, spatial std `0.052654`, Live local-light P99.5 range `0.328413`;
+- 1440p gray ROI: range `0.000325`, adjacent MAD `0.000226`, spatial std `0.054720`, Live local-light P99.5 range `0.290513`;
+- 9/9 final D3D12/SM6/normal-TSR dynamic cases passed their hard log/duration/resolution gates;
+- complete `Darkwell.` automation: 40/40 Success, 0 failed;
+- Editor Development, Game Development and Game Shipping builds: Success;
+- dynamic severe scan: 0.
+
+V1 and V2 failures remain preserved as ignored evidence. They must not be cited as final. Runtime A-to-B snapshot behavior is proven; SaveGame serialization/restoration for movable residual snapshots is not yet implemented or verified.
+
+### Required user PIE
+
+On the exact pushed SHA, verify:
+
+1. move and rotate while watching a gray floor/wall/object: its texture must remain readable and must not react to Torch, Lantern, shadows, specular, AO or exposure;
+2. observe a rememberable cabinet at A, let it move to B out of sight, and confirm A remains; observe empty A and confirm the residual clears; see B, leave, and confirm B remains;
+3. confirm the residual has no collision, navigation, shadow, GI or gameplay effect;
+4. confirm Stalker/HUD remain Live-only and leave no residual;
+5. confirm wall visibility, behind-wall gray, seamless gray/Live edge, normal TSR and Torch/Lantern/Torch remain intact at 1080p and 1440p.
+
+Do not start black Unknown, exploration history, SightWeave generalization or Fab work. The highest permitted state remains `PARTIAL — READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE`; only the user's real dynamic PIE can advance acceptance.
 
 ## Recovery command
 

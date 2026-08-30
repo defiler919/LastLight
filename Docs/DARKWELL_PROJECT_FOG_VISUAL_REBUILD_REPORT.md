@@ -1,12 +1,12 @@
 # DARKWELL Project Fog Visual Rebuild Report
 
-Date: 2026-08-30
+Date: 2026-08-31
 
 Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — READY_FOR_USER_GRAY_LIVE_PIE**
+Status: **PARTIAL — READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE**
 
 24-hour P1 gate: 2026-08-31
 
@@ -211,6 +211,54 @@ The validated P5 index is `Saved/DarkwellProjectFogVisualRebuild/P5/p5_evidence_
 
 ## 11. Remaining acceptance gate
 
-The agent gates are complete, but this is not `COMPLETED`. The current maximum state is `PARTIAL — READY_FOR_USER_GRAY_LIVE_PIE`.
+The P1-P5 agent gates were complete at this historical checkpoint, but it was not `COMPLETED`. The subsequent gray-unlit and movable-memory checkpoint below supersedes this readiness label.
 
 The user must run real dynamic PIE and judge project usability: continuous movement and rotation, gray/live readability, four-direction wall behavior, enemy/HUD filtering and Torch/Lantern/Torch recovery. Only that user verdict can accept this gray/live phase. Black Unknown, exploration history and `UnknownUntilExplored` remain explicitly out of scope and must not begin automatically.
+
+## 12. Gray-unlit and movable-prop memory checkpoint
+
+Task baseline: `24a047039f157d2bcc090049898ea8b49f7a3301`.
+
+The user accepted the project-only continuous coverage direction and object-level rule (seeing any legal corner makes the whole object Live), but required two further contracts: gray scene surfaces must be recognizable while completely independent of current lighting, and rememberable movable props must retain their last observed transform without gameplay authority.
+
+### Gray-unlit implementation and root cause
+
+- Remembered uses filtered original BaseColor: luminance/desaturation, fixed display brightness `1.2`, zero lit BaseColor contribution, roughness `1`, specular `0` and AO `0`.
+- `EyeAdaptationInverse` is present exactly once. `GIReplace` feeds zero to static and dynamic indirect paths, so the gray emissive presentation cannot inject into Lumen or Lightmass.
+- The remaining temporal drift was exposure-history pumping: V2 gray content was geometrically stable but changed display luminance at tool/camera phase boundaries. While the project presentation is active, the player camera now uses manual exposure with physical-camera exposure disabled and bias zero. Rollback restores the complete original post-process settings.
+- Failed V1 (too dark and an unrelated enemy death) and V2 (gray mean ranges `0.06078` at 1080p and `0.07753` at 1440p) remain preserved under the ignored evidence root. They are not counted as final evidence.
+
+Final fixed-camera Torch/Lantern/Torch ROI results use the same gray ROI at 10 samples/second over 36 seconds. The Live control is a player-centered patch that is guaranteed Live; its local-light gate uses per-pixel temporal range P99.5 rather than whole-patch mean, because fixed exposure intentionally removes the global pumping that made the old mean metric large.
+
+| Resolution | Gray mean range | Gray adjacent MAD | Gray spatial std | Live local range P99.5 |
+| --- | ---: | ---: | ---: | ---: |
+| 1920x1080 | 0.000453 | 0.000102 | 0.052654 | 0.328413 |
+| 2560x1440 | 0.000325 | 0.000226 | 0.054720 | 0.290513 |
+
+Both resolutions pass the fixed gates: gray mean range `<= 0.020`, adjacent MAD `<= 0.005`, spatial std `>= 0.050`, and Live local-light P99.5 range `>= 0.200`.
+
+### Movable A-to-B memory lifecycle
+
+- `UDarkwellRememberablePropComponent` supplies a durable stable ID, observation transform, appearance revision, remembered tint/UV scale and the complete primitive set for one object.
+- `UDarkwellRememberedPropSubsystem` evaluates maximum object coverage with enter/exit hysteresis. Live current geometry hides its proxy; leaving sight retains the last observed snapshot; observing the old position empty invalidates A; seeing B records B; leaving B displays B.
+- The proxy is transient presentation only: no collision, navigation, shadow, dynamic GI, distance-field lighting, ray tracing, CustomDepth, decals, AI or gameplay authority.
+- Duplicate stable IDs fail closed. `NeverRemember` enemies do not register and cannot receive residual proxies.
+- The current implementation preserves stable identity and runtime snapshots within the active world. SaveGame serialization/restoration of movable residual snapshots has not been implemented or verified and remains a recorded limitation, not an implied success.
+
+### Final validation
+
+- builds, strictly serial: `DarkwellEditor Win64 Development`, `Darkwell Win64 Development`, and `Darkwell Win64 Shipping`: Success;
+- targeted gray-unlit and remembered-prop tests: Success;
+- protected P1, P2, P3 and vertical-slice tests: Success;
+- complete `Darkwell.` automation: 40/40 Success (36 clean and 4 with known world-teardown warnings), 0 failed;
+- final dynamic matrix: 9/9 D3D12/SM6 captures with normal TSR, including 1080p static/horizontal/rotation/wall/doorway/tool/A-to-B and 1440p tool/A-to-B;
+- dynamic severe scan: 0;
+- Agent opened the final 1080p tool contact, its 20 adjacent frames, the A-to-B contact and the 1440p evidence. Gray texture remained stable, local Live lighting changed, and no gray line, black/gray offset, wall regression or enemy-memory leak was observed.
+
+Evidence is ignored and uncommitted under:
+
+```text
+Saved/DarkwellProjectFogVisualRebuild/GrayUnlitMemory
+```
+
+The current maximum state is `PARTIAL — READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE`. This is not `COMPLETED`. The user must verify gray lighting independence, texture readability, A-to-B residual behavior, enemy filtering, walls, and Torch/Lantern/Torch in real dynamic PIE. Black Unknown/exploration and any plugin/Fab work remain out of scope.

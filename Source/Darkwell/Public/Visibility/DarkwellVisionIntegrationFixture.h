@@ -10,6 +10,7 @@ class UDirectionalLightComponent;
 class UCameraComponent;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
+class UDarkwellRememberablePropComponent;
 class USceneComponent;
 class UStaticMeshComponent;
 class UTexture;
@@ -114,6 +115,11 @@ public:
 			&& SurfaceWallMaterial != nullptr
 			&& SurfaceStaticMaterial != nullptr;
 	}
+	UStaticMeshComponent* GetRememberablePropProof() const { return RememberablePropProof; }
+	UDarkwellRememberablePropComponent* GetRememberablePropComponent() const
+	{
+		return RememberablePropComponent;
+	}
 
 private:
 	bool EnableDarkwellProjectFog(
@@ -142,6 +148,13 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Integration")
 	TObjectPtr<UStaticMeshComponent> MemoryLandmark;
+
+	/** Movable environment-object proof; never registered as a SightWeave occluder. */
+	UPROPERTY(VisibleAnywhere, Category = "Integration")
+	TObjectPtr<UStaticMeshComponent> RememberablePropProof;
+
+	UPROPERTY(VisibleAnywhere, Category = "Integration")
+	TObjectPtr<UDarkwellRememberablePropComponent> RememberablePropComponent;
 
 	UPROPERTY(VisibleAnywhere, Category = "Integration")
 	TObjectPtr<UStaticMeshComponent> RotatedWall;

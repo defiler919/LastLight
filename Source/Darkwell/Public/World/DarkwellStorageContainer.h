@@ -9,6 +9,7 @@
 #include "DarkwellStorageContainer.generated.h"
 
 class UDarkwellInventoryComponent;
+class UDarkwellRememberablePropComponent;
 class UPointLightComponent;
 class USceneComponent;
 class UStaticMeshComponent;
@@ -40,6 +41,10 @@ public:
 	UDarkwellInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
 	const FText& GetDisplayName() const { return DisplayName; }
 	FName GetPersistentId() const { return PersistentId; }
+	UDarkwellRememberablePropComponent* GetRememberablePropComponent() const
+	{
+		return RememberablePropComponent;
+	}
 	bool HasLoot() const;
 	bool IsContainerOpen() const { return bContainerOpen; }
 	void SetContainerOpen(bool bShouldOpen);
@@ -76,6 +81,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Storage")
 	TObjectPtr<UDarkwellInventoryComponent> InventoryComponent;
+
+	UPROPERTY(VisibleAnywhere, Category = "Fog Memory")
+	TObjectPtr<UDarkwellRememberablePropComponent> RememberablePropComponent;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "Storage")
 	FText DisplayName;

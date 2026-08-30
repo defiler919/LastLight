@@ -1,7 +1,11 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialExpressionEyeAdaptationInverse.h"
+#include "Materials/MaterialExpressionGIReplace.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
+#include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
 
 namespace Darkwell::FogVisualTests
 {
@@ -176,6 +180,101 @@ bool FDarkwellFogWallSurfaceCoverageTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Four-sided box uses the maximum exterior Live coverage"),
 		FDarkwellFogSurfaceCoverageMath::CombineBoxSides(0.0f, 0.25f, 0.75f, 0.5f),
 		0.75f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellFogGrayUnlitMaterialContractTest,
+	"Darkwell.FogVisual.GrayUnlit.MaterialContract",
+	Darkwell::FogVisualTests::Flags)
+
+bool FDarkwellFogGrayUnlitMaterialContractTest::RunTest(const FString& Parameters)
+{
+	UMaterial* Material = LoadObject<UMaterial>(
+		nullptr,
+		TEXT("/Game/Darkwell/Vision/ProjectFog/M_DarkwellFogSurface.M_DarkwellFogSurface"));
+	if (!TestNotNull(TEXT("Project fog surface material exists"), Material))
+	{
+		return false;
+	}
+	int32 EyeAdaptationInverseCount = 0;
+	int32 GIReplaceCount = 0;
+	for (const UMaterialExpression* Expression :
+		Material->GetExpressionCollection().Expressions)
+	{
+		EyeAdaptationInverseCount += (Expression
+			&& Expression->IsA<UMaterialExpressionEyeAdaptationInverse>()) ? 1 : 0;
+		GIReplaceCount += (Expression
+			&& Expression->IsA<UMaterialExpressionGIReplace>()) ? 1 : 0;
+	}
+	TestEqual(TEXT("Gray display compensates EyeAdaptation exactly once"),
+		EyeAdaptationInverseCount, 1);
+	TestEqual(TEXT("Gray display has one GI replacement boundary"),
+		GIReplaceCount, 1);
+
+	TArray<FMaterialParameterInfo> ScalarInfos;
+	TArray<FGuid> ScalarIds;
+	Material->GetAllScalarParameterInfo(ScalarInfos, ScalarIds);
+	for (const FName Required : {
+		FName(TEXT("ForceRemembered")),
+		FName(TEXT("OriginalRoughness")),
+		FName(TEXT("OriginalSpecular")),
+		FName(TEXT("RememberedBrightness")),
+		FName(TEXT("RememberedSaturation"))})
+	{
+		TestTrue(*FString::Printf(TEXT("Material retains %s"), *Required.ToString()),
+			ScalarInfos.ContainsByPredicate(
+				[Required](const FMaterialParameterInfo& Info)
+				{
+					return Info.Name == Required;
+				}));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellRememberedPropAtoBPolicyTest,
+	"Darkwell.FogVisual.RememberedProp.AtoBPolicy",
+	Darkwell::FogVisualTests::Flags)
+
+bool FDarkwellRememberedPropAtoBPolicyTest::RunTest(const FString& Parameters)
+{
+	const FTransform A(FRotator::ZeroRotator, FVector(100.0f, 200.0f, 50.0f));
+	const FTransform B(FRotator(0.0f, 90.0f, 0.0f), FVector(700.0f, -300.0f, 50.0f));
+	FDarkwellRememberedPropState State;
+	State.Initialize(A, 1);
+
+	FDarkwellRememberedPropDecision Decision = State.Observe(true, A, 1.0f, 1.0f, 1);
+	TestTrue(TEXT("A enters Live as one whole object"), Decision.bShowCurrent);
+	TestFalse(TEXT("Live current suppresses its memory proxy"), Decision.bShowProxy);
+
+	Decision = State.Observe(true, B, 0.0f, 0.0f, 2);
+	TestFalse(TEXT("Out-of-sight B never leaks current geometry"), Decision.bShowCurrent);
+	TestTrue(TEXT("A remains as the last-observed proxy"), Decision.bShowProxy);
+	TestTrue(TEXT("Snapshot identity remains at A"),
+		State.SnapshotTransform.GetLocation().Equals(A.GetLocation()));
+
+	Decision = State.Observe(true, B, 0.0f, 1.0f, 2);
+	TestFalse(TEXT("Observing empty A invalidates the entire old proxy"),
+		Decision.bShowProxy || Decision.bSnapshotValid);
+
+	Decision = State.Observe(true, B, 1.0f, 0.0f, 2);
+	TestTrue(TEXT("Seeing stable identity at B reveals the whole current object"),
+		Decision.bShowCurrent);
+	TestTrue(TEXT("B becomes the only snapshot"),
+		State.SnapshotTransform.GetLocation().Equals(B.GetLocation()));
+
+	Decision = State.Observe(true, B, 0.0f, 0.0f, 2);
+	TestTrue(TEXT("Leaving B creates one B proxy"), Decision.bShowProxy);
+	Decision = State.Observe(false, FTransform::Identity, 0.0f, 0.0f, 0);
+	TestTrue(TEXT("Out-of-sight destruction retains the B proxy"), Decision.bShowProxy);
+	Decision = State.Observe(false, FTransform::Identity, 0.0f, 1.0f, 0);
+	TestFalse(TEXT("Re-observing destroyed B removes the proxy"), Decision.bShowProxy);
+
+	TestFalse(TEXT("Object does not enter at the exit threshold from hidden"),
+		FDarkwellRememberedPropState::ResolveObjectLive(false, 0.25f));
+	TestTrue(TEXT("Object remains Live at the exit threshold once admitted"),
+		FDarkwellRememberedPropState::ResolveObjectLive(true, 0.25f));
 	return true;
 }
 

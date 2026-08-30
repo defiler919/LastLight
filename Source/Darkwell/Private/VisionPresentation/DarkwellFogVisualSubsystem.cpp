@@ -351,6 +351,54 @@ bool UDarkwellFogVisualSubsystem::UpdateSource(
 	return true;
 }
 
+float UDarkwellFogVisualSubsystem::EvaluateLiveCoverageAtWorldPoint(
+	const FVector2D& WorldPosition) const
+{
+	if (!Diagnostics.bActive || !LastSource.IsValid()
+		|| !FMath::IsFinite(WorldPosition.X) || !FMath::IsFinite(WorldPosition.Y))
+	{
+		return 0.0f;
+	}
+
+	const float BodySignedDistance = LastSource.BodyRadiusCentimeters
+		- FVector2D::Distance(WorldPosition, LastSource.BodyCenter);
+	float BodyCoverage = Darkwell::FogVisual::SignedLinearCoverage(
+		BodySignedDistance,
+		Darkwell::FogVisual::CoverageTransitionWidthCentimeters);
+	if (FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
+		LastSource.BodyCenter,
+		WorldPosition,
+		CachedOccluderSegments))
+	{
+		BodyCoverage = 0.0f;
+	}
+	if (!LastSource.bConeLegallyLive)
+	{
+		return BodyCoverage;
+	}
+
+	const FVector2D Forward = LastSource.ConeForward.GetSafeNormal();
+	const FVector2D Relative = WorldPosition - LastSource.ConeOrigin;
+	const float Along = FVector2D::DotProduct(Relative, Forward);
+	const float Cross = FMath::Abs(Relative.X * Forward.Y - Relative.Y * Forward.X);
+	const float HalfAngleRadians = FMath::DegreesToRadians(
+		LastSource.ConeHalfAngleDegrees);
+	const float SideSignedDistance = Along * FMath::Sin(HalfAngleRadians)
+		- Cross * FMath::Cos(HalfAngleRadians);
+	const float RadialSignedDistance = LastSource.ConeRangeCentimeters - Relative.Size();
+	float ConeCoverage = Darkwell::FogVisual::SignedLinearCoverage(
+		FMath::Min(SideSignedDistance, RadialSignedDistance),
+		Darkwell::FogVisual::CoverageTransitionWidthCentimeters);
+	if (FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
+		LastSource.ConeOrigin,
+		WorldPosition,
+		CachedOccluderSegments))
+	{
+		ConeCoverage = 0.0f;
+	}
+	return FMath::Max(BodyCoverage, ConeCoverage);
+}
+
 void UDarkwellFogVisualSubsystem::Deactivate()
 {
 	if (ADarkwellVisionIntegrationFixture* Fixture = ActiveFixture.Get())

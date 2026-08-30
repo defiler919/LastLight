@@ -12,6 +12,7 @@
 #include "Materials/MaterialInterface.h"
 #include "SightWeavePresentation.h"
 #include "UObject/ConstructorHelpers.h"
+#include "VisionPresentation/DarkwellRememberablePropComponent.h"
 
 namespace Darkwell::VisionIntegrationFixture
 {
@@ -204,6 +205,22 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 		Darkwell::SightWeaveSurface::WallSampleDistanceCustomPrimitiveDataIndex,
 		Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters);
 
+	RememberablePropProof = CreateDefaultSubobject<UStaticMeshComponent>(
+		TEXT("RememberablePropProof"));
+	RememberablePropProof->SetupAttachment(SceneRoot);
+	RememberablePropProof->SetRelativeLocation(FVector(900.0f, -700.0f, 60.0f));
+	RememberablePropProof->SetRelativeScale3D(FVector(1.2f, 0.9f, 1.2f));
+	RememberablePropProof->SetMobility(EComponentMobility::Movable);
+	RememberablePropProof->SetCollisionProfileName(UCollisionProfile::BlockAllDynamic_ProfileName);
+	RememberablePropProof->SetCustomPrimitiveDataFloat(
+		Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex,
+		Darkwell::SightWeaveSurface::RememberableStaticCategory);
+	RememberablePropComponent = CreateDefaultSubobject<UDarkwellRememberablePropComponent>(
+		TEXT("RememberablePropComponent"));
+	RememberablePropComponent->AddMemoryPrimitive(RememberablePropProof);
+	RememberablePropComponent->ConfigureStableId(
+		FName(TEXT("Fixture.RememberableProp.Cabinet")));
+
 	RotatedWall = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotatedWall"));
 	Darkwell::VisionIntegrationFixture::ConfigureFixtureOccluder(
 		*RotatedWall,
@@ -283,6 +300,7 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 		WallSouth->SetStaticMesh(CubeMesh.Object);
 		WallNorth->SetStaticMesh(CubeMesh.Object);
 		MemoryLandmark->SetStaticMesh(CubeMesh.Object);
+		RememberablePropProof->SetStaticMesh(CubeMesh.Object);
 		RotatedWall->SetStaticMesh(CubeMesh.Object);
 		ConcaveWallVertical->SetStaticMesh(CubeMesh.Object);
 		ConcaveWallHorizontal->SetStaticMesh(CubeMesh.Object);

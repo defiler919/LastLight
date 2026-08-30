@@ -135,6 +135,8 @@ public:
 		TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments);
 	bool UpdateSource(const FDarkwellFogVisualSourceSnapshot& Source);
 	void Deactivate();
+	/** CPU query matching the formal analytic body/cone and segment occlusion path. */
+	float EvaluateLiveCoverageAtWorldPoint(const FVector2D& WorldPosition) const;
 
 	bool IsActive() const { return Diagnostics.bActive; }
 	UTextureRenderTarget2D* GetLiveCoverageTexture() const { return LiveCoverageTexture; }

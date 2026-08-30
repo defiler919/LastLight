@@ -10,6 +10,7 @@
 #include "Player/DarkwellCharacter.h"
 #include "Player/DarkwellPlayerController.h"
 #include "UObject/ConstructorHelpers.h"
+#include "VisionPresentation/DarkwellRememberablePropComponent.h"
 
 ADarkwellStorageContainer::ADarkwellStorageContainer()
 {
@@ -47,6 +48,12 @@ ADarkwellStorageContainer::ADarkwellStorageContainer()
 
 	InventoryComponent = CreateDefaultSubobject<UDarkwellInventoryComponent>(TEXT("InventoryComponent"));
 	InventoryComponent->InitializeInventory(8);
+	RememberablePropComponent = CreateDefaultSubobject<UDarkwellRememberablePropComponent>(
+		TEXT("RememberablePropComponent"));
+	RememberablePropComponent->AddMemoryPrimitive(StorageBody);
+	RememberablePropComponent->AddMemoryPrimitive(MovingPanel);
+	RememberablePropComponent->AddLiveOnlyComponent(StatusMarker);
+	RememberablePropComponent->AddLiveOnlyComponent(StorageLight);
 	DisplayName = NSLOCTEXT("Darkwell", "StorageDefaultName", "Storage");
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
@@ -107,6 +114,7 @@ void ADarkwellStorageContainer::ConfigureStorage(
 	const EDarkwellStorageStyle InStyle)
 {
 	PersistentId = InPersistentId;
+	RememberablePropComponent->ConfigureStableId(InPersistentId);
 	DisplayName = InDisplayName;
 	StorageStyle = InStyle;
 	ApplyStorageStyle();

@@ -19,6 +19,8 @@
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
+#include "VisionPresentation/DarkwellRememberablePropComponent.h"
+#include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
 
 namespace Darkwell::SightWeaveAdapterTests
 {
@@ -543,7 +545,8 @@ bool FDarkwellSurfaceMaterialPrimitiveCategoryTest::RunTest(const FString& Param
 				Data[Darkwell::SightWeaveSurface::WallSampleDistanceCustomPrimitiveDataIndex], 27.5f);
 		}
 	}
-	TestEqual(TEXT("Exactly one static landmark uses CPD[0]=2"), StaticCount, 1);
+	TestEqual(TEXT("Landmark and movable proof prop use memory-eligible CPD[0]=2"),
+		StaticCount, 2);
 	Fixture->DisableSightWeaveSurfaceMaterial();
 	for (const TPair<UStaticMeshComponent*, UMaterialInterface*>& Initial : InitialMaterials)
 	{
@@ -551,6 +554,103 @@ bool FDarkwellSurfaceMaterialPrimitiveCategoryTest::RunTest(const FString& Param
 			TEXT("Rollback before activation preserves the fixture material"),
 			Initial.Key->GetMaterial(0) == Initial.Value);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellProjectFogRememberedPropRuntimeTest,
+	"Darkwell.FogVisual.RememberedProp.RuntimeAtoB",
+	Darkwell::SightWeaveAdapterTests::TestFlags)
+
+bool FDarkwellProjectFogRememberedPropRuntimeTest::RunTest(const FString& Parameters)
+{
+	using namespace Darkwell::SightWeaveAdapterTests;
+	FTestWorld TestWorld(TEXT("DarkwellRememberedPropRuntime"));
+	UWorld* World = TestWorld.Get();
+	ADarkwellVisionIntegrationFixture* Fixture =
+		Spawn<ADarkwellVisionIntegrationFixture>(*World, FVector::ZeroVector);
+	ADarkwellCharacter* Player = Spawn<ADarkwellCharacter>(
+		*World, FVector(900.0f, -700.0f, 92.0f));
+	ADarkwellStalkerCharacter* Stalker = Spawn<ADarkwellStalkerCharacter>(
+		*World, FVector::ZeroVector);
+	Stalker->ConfigurePersistentId(FName(TEXT("Enemy.Stalker.MemoryIsolation")));
+	UDarkwellSightWeaveWorldSubsystem* Adapter =
+		World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+	UDarkwellRememberedPropSubsystem* Memory =
+		World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+	if (!Fixture || !Player || !Stalker || !Adapter || !Memory
+		|| !Fixture->GetRememberablePropProof())
+	{
+		AddError(TEXT("RememberedProp runtime setup failed"));
+		return false;
+	}
+	TestTrue(TEXT("Project authority activates"),
+		Adapter->RequestSightWeaveAuthority(Fixture));
+	Memory->RefreshNowForTesting();
+
+	const FName StableId(TEXT("Fixture.RememberableProp.Cabinet"));
+	bool bCurrentLive = false;
+	bool bSnapshotValid = false;
+	FVector SnapshotLocation = FVector::ZeroVector;
+	AActor* Proxy = nullptr;
+	TestTrue(TEXT("Stable remembered-prop record exists"),
+		Memory->TryGetRecordForTesting(
+			StableId, bCurrentLive, bSnapshotValid, SnapshotLocation, Proxy));
+	TestTrue(TEXT("Seeing one admitted sample reveals the whole proof prop"),
+		bCurrentLive && Fixture->GetRememberablePropProof()->IsVisible());
+
+	if (Proxy)
+	{
+		TestFalse(TEXT("Memory proxy has no Actor collision"),
+			Proxy->GetActorEnableCollision());
+		TInlineComponentArray<UStaticMeshComponent*> ProxyMeshes(Proxy);
+		for (const UStaticMeshComponent* Mesh : ProxyMeshes)
+		{
+			TestEqual(TEXT("Memory proxy mesh has no collision"),
+				Mesh->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+			TestFalse(TEXT("Memory proxy mesh casts no shadow"), Mesh->CastShadow);
+			TestFalse(TEXT("Memory proxy mesh contributes no dynamic GI"),
+				Mesh->bAffectDynamicIndirectLighting);
+			TestFalse(TEXT("Memory proxy mesh affects no distance-field lighting"),
+				Mesh->bAffectDistanceFieldLighting);
+			TestFalse(TEXT("Memory proxy mesh writes no CustomDepth"),
+				Mesh->bRenderCustomDepth);
+			TestFalse(TEXT("Memory proxy mesh never affects navigation"),
+				Mesh->CanEverAffectNavigation());
+		}
+	}
+
+	const FVector B(-1200.0f, 900.0f, 60.0f);
+	Fixture->GetRememberablePropProof()->SetWorldLocation(B);
+	Memory->RefreshNowForTesting();
+	Memory->TryGetRecordForTesting(
+		StableId, bCurrentLive, bSnapshotValid, SnapshotLocation, Proxy);
+	TestFalse(TEXT("Out-of-sight B remains hidden"), bCurrentLive);
+	TestFalse(TEXT("Observing empty A invalidates the entire old proxy"),
+		bSnapshotValid);
+
+	Player->SetActorLocation(FVector(B.X, B.Y, 92.0f), false, nullptr,
+		ETeleportType::TeleportPhysics);
+	Adapter->Tick(0.0f);
+	Memory->RefreshNowForTesting();
+	Memory->TryGetRecordForTesting(
+		StableId, bCurrentLive, bSnapshotValid, SnapshotLocation, Proxy);
+	TestTrue(TEXT("Same stable identity becomes wholly Live at B"), bCurrentLive);
+	TestTrue(TEXT("The only snapshot moves to B"),
+		bSnapshotValid && SnapshotLocation.Equals(FVector(B.X, B.Y, B.Z), 1.0f));
+
+	Player->SetActorLocation(FVector::ZeroVector, false, nullptr,
+		ETeleportType::TeleportPhysics);
+	Adapter->Tick(0.0f);
+	Memory->RefreshNowForTesting();
+	Memory->TryGetRecordForTesting(
+		StableId, bCurrentLive, bSnapshotValid, SnapshotLocation, Proxy);
+	TestTrue(TEXT("Leaving B hides current and retains exactly one B proxy"),
+		!bCurrentLive && bSnapshotValid && Proxy && !Proxy->IsHidden());
+	TestEqual(TEXT("Only the fixture prop is registered; Stalker is NeverRemember"),
+		Memory->GetDiagnostics().RegisteredCount, 1);
+	TestEqual(TEXT("Exactly one remembered proxy is visible"),
+		Memory->GetDiagnostics().ProxyCount, 1);
 	return true;
 }
 

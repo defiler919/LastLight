@@ -11,7 +11,13 @@ def expr(material, klass, x, y):
 
 
 def connect(source, output_name, target, input_name):
-    aliases = {"Coordinates": ["UVs"]}
+    aliases = {
+        "Coordinates": ["UVs"],
+        "LightValue": ["Light Value", "LightValueInput"],
+        "Alpha": ["AlphaInput"],
+        "StaticIndirect": ["Static Indirect"],
+        "DynamicIndirect": ["Dynamic Indirect"],
+    }
     for candidate in [input_name] + aliases.get(input_name, []):
         if unreal.MaterialEditingLibrary.connect_material_expressions(
             source, output_name, target, candidate
@@ -653,15 +659,32 @@ def create_surface(asset_tools):
         300,
         -420,
     )
+    # Surface emissive is display-only. EyeAdaptationInverse keeps a fully
+    # Remembered surface at a fixed display brightness while the player moves a
+    # Torch or switches tools. GIReplace supplies zero to both static and
+    # dynamic indirect-light captures, so this presentation value cannot become
+    # a Lumen/Lightmass light source.
+    exposure_stable_memory = expr(
+        material, unreal.MaterialExpressionEyeAdaptationInverse, 520, -470
+    )
+    connect(normal_emissive, "", exposure_stable_memory, "LightValue")
+    connect(scalar(material, 1.0, 300, -540), "", exposure_stable_memory, "Alpha")
+    display_only_memory = expr(
+        material, unreal.MaterialExpressionGIReplace, 760, -430
+    )
+    connect(exposure_stable_memory, "", display_only_memory, "Default")
+    zero_indirect = scalar(material, 0.0, 520, -290)
+    connect(zero_indirect, "", display_only_memory, "StaticIndirect")
+    connect(zero_indirect, "", display_only_memory, "DynamicIndirect")
     diagnostic_emissive = binary(
         material, unreal.MaterialExpressionMultiply, effective_coverage, diagnostic, 300, -220
     )
     final_emissive = binary(
         material,
         unreal.MaterialExpressionAdd,
-        normal_emissive,
+        display_only_memory,
         diagnostic_emissive,
-        550,
+        1000,
         -320,
     )
 
@@ -671,9 +694,33 @@ def create_surface(asset_tools):
     ]:
         if not unreal.MaterialEditingLibrary.connect_material_property(source, "", prop):
             raise RuntimeError(f"Could not connect material property {prop}")
-    roughness = scalar_parameter(material, "OriginalRoughness", 0.72, 550, -50)
+    original_roughness = scalar_parameter(
+        material, "OriginalRoughness", 0.72, 550, -50
+    )
+    roughness = expr(material, unreal.MaterialExpressionLinearInterpolate, 800, -50)
+    connect(scalar(material, 1.0, 550, 20), "", roughness, "A")
+    connect(original_roughness, "", roughness, "B")
+    connect(effective_coverage, "", roughness, "Alpha")
     unreal.MaterialEditingLibrary.connect_material_property(
         roughness, "", unreal.MaterialProperty.MP_ROUGHNESS
+    )
+    original_specular = scalar_parameter(
+        material, "OriginalSpecular", 0.5, 550, 90
+    )
+    live_specular = binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        original_specular,
+        effective_coverage,
+        800,
+        90,
+    )
+    unreal.MaterialEditingLibrary.connect_material_property(
+        live_specular, "", unreal.MaterialProperty.MP_SPECULAR
+    )
+    # Gray has no lit AO channel; Live retains the normal material response.
+    unreal.MaterialEditingLibrary.connect_material_property(
+        effective_coverage, "", unreal.MaterialProperty.MP_AMBIENT_OCCLUSION
     )
     unreal.MaterialEditingLibrary.recompile_material(material)
     unreal.EditorAssetLibrary.save_asset(path, only_if_is_dirty=False)

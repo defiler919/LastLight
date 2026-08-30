@@ -39,6 +39,14 @@ namespace Darkwell::SightWeaveAdapter
 		TEXT("r.Darkwell.SightWeave.Diagnostic.SurfaceFogOff"),
 		0,
 		TEXT("Development-only native-material control for SurfaceMaterial visual evidence."));
+	TAutoConsoleVariable<int32> CVarDiagnosticSurfaceTrajectory(
+		TEXT("r.Darkwell.SightWeave.Diagnostic.SurfaceTrajectory"),
+		0,
+		TEXT("Development-only deterministic motion: 0=off, 1=world +X, 2=world -Y."));
+	TAutoConsoleVariable<float> CVarDiagnosticSurfaceTrajectorySpeed(
+		TEXT("r.Darkwell.SightWeave.Diagnostic.SurfaceTrajectorySpeed"),
+		15.0f,
+		TEXT("Centimeters per second for the deterministic SurfaceMaterial trajectory."));
 #endif
 
 	FTransform BuildSourceTransform(const ADarkwellCharacter& Character)
@@ -112,6 +120,25 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 		RollbackToLegacy(TEXT("An authoritative integration actor was destroyed"), true);
 		return;
 	}
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	const int32 DiagnosticTrajectory =
+		Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceTrajectory.GetValueOnGameThread();
+	if (DiagnosticTrajectory == 1 || DiagnosticTrajectory == 2)
+	{
+		const float Speed = FMath::Clamp(
+			Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceTrajectorySpeed.GetValueOnGameThread(),
+			0.0f,
+			100.0f);
+		const FVector Direction = DiagnosticTrajectory == 1
+			? FVector(1.0, 0.0, 0.0)
+			: FVector(0.0, -1.0, 0.0);
+		Player->SetActorLocation(
+			Player->GetActorLocation() + Direction * Speed * FMath::Max(DeltaTime, 0.0f),
+			false,
+			nullptr,
+			ETeleportType::TeleportPhysics);
+	}
+#endif
 	UpdateDynamicAuthority();
 	UpdateSubjectAuthority();
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)

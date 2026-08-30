@@ -367,4 +367,119 @@ bool FDarkwellM6P1DuplicateFixtureRollbackTest::RunTest(const FString& Parameter
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellSurfaceMaterialStateTruthTableTest,
+	"Darkwell.SightWeave.VisualRescue.SurfaceMaterial.StateTruthTable",
+	Darkwell::SightWeaveAdapterTests::TestFlags)
+
+bool FDarkwellSurfaceMaterialStateTruthTableTest::RunTest(const FString& Parameters)
+{
+	const FDarkwellSightWeaveSurfaceWeights Unknown =
+		FDarkwellSightWeaveSurfaceMath::ResolveWeights(0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+	TestEqual(TEXT("Unknown has no Live weight"), Unknown.Live, 0.0f);
+	TestEqual(TEXT("Unknown has no Remembered weight"), Unknown.Remembered, 0.0f);
+	TestEqual(TEXT("Unknown is fully black"), Unknown.Unknown, 1.0f);
+
+	const FDarkwellSightWeaveSurfaceWeights Remembered =
+		FDarkwellSightWeaveSurfaceMath::ResolveWeights(0.5f, 0.0f, 1.0f, 1.0f, 0.0f);
+	TestEqual(TEXT("Remembered is mutually exclusive from Live"), Remembered.Live, 0.0f);
+	TestEqual(TEXT("Remembered retains the static surface"), Remembered.Remembered, 1.0f);
+	TestEqual(TEXT("Remembered is mutually exclusive from Unknown"), Remembered.Unknown, 0.0f);
+
+	const FDarkwellSightWeaveSurfaceWeights Live =
+		FDarkwellSightWeaveSurfaceMath::ResolveWeights(1.0f, 1.0f, 1.0f, 1.0f, 0.0f);
+	TestEqual(TEXT("Live wins over Remembered"), Live.Live, 1.0f);
+	TestEqual(TEXT("Live suppresses Remembered"), Live.Remembered, 0.0f);
+	TestEqual(TEXT("Live suppresses Unknown"), Live.Unknown, 0.0f);
+
+	const FDarkwellSightWeaveSurfaceWeights InvalidScope =
+		FDarkwellSightWeaveSurfaceMath::ResolveWeights(1.0f, 1.0f, 1.0f, 0.0f, 0.0f);
+	TestEqual(TEXT("Invalid scope fails closed"), InvalidScope.Unknown, 1.0f);
+	const FDarkwellSightWeaveSurfaceWeights NeverRemember =
+		FDarkwellSightWeaveSurfaceMath::ResolveWeights(0.5f, 0.0f, 1.0f, 1.0f, 3.0f);
+	TestEqual(TEXT("Category 3 never enters Remembered"), NeverRemember.Remembered, 0.0f);
+	TestEqual(TEXT("Category 3 non-Live fails black"), NeverRemember.Unknown, 1.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellSurfaceMaterialMappingAndWallTest,
+	"Darkwell.SightWeave.VisualRescue.SurfaceMaterial.MappingAndWallSampling",
+	Darkwell::SightWeaveAdapterTests::TestFlags)
+
+bool FDarkwellSurfaceMaterialMappingAndWallTest::RunTest(const FString& Parameters)
+{
+	FSightWeaveSurfaceTextureMapping Mapping;
+	Mapping.WorldMin = FVector2D(-1750.0, -1250.0);
+	Mapping.WorldExtent = FVector2D(3500.0, 2500.0);
+	Mapping.InvWorldExtent = FVector2D(1.0 / 3500.0, 1.0 / 2500.0);
+	Mapping.TextureExtent = FIntPoint(1400, 1000);
+	Mapping.CentimetersPerTexel = 2.5f;
+	TestTrue(TEXT("Ultra mapping is valid"), Mapping.IsValid());
+	TestTrue(TEXT("World minimum maps to UV zero"),
+		Mapping.WorldToUV(Mapping.WorldMin).Equals(FVector2D::ZeroVector));
+	TestTrue(TEXT("World maximum maps to UV one"),
+		Mapping.WorldToUV(Mapping.WorldMin + Mapping.WorldExtent).Equals(FVector2D(1.0, 1.0)));
+	TestEqual(TEXT("Ground uses its center sample"),
+		FDarkwellSightWeaveSurfaceMath::ResolveConservativeState(0.0f, 1.0f, 0.5f, 0.0f),
+		0.0f);
+	TestEqual(TEXT("Wall uses the highest normal-offset state"),
+		FDarkwellSightWeaveSurfaceMath::ResolveConservativeState(0.0f, 1.0f, 0.5f, 1.0f),
+		1.0f);
+	TestEqual(TEXT("Wall conservative bias remains frozen at 7.5 cm"),
+		Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters,
+		7.5f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellSurfaceMaterialPrimitiveCategoryTest,
+	"Darkwell.SightWeave.VisualRescue.SurfaceMaterial.PrimitiveCategories",
+	Darkwell::SightWeaveAdapterTests::TestFlags)
+
+bool FDarkwellSurfaceMaterialPrimitiveCategoryTest::RunTest(const FString& Parameters)
+{
+	using namespace Darkwell::SightWeaveAdapterTests;
+	FTestWorld TestWorld(TEXT("DarkwellSurfacePrimitiveCategories"));
+	ADarkwellVisionIntegrationFixture* Fixture = Spawn<ADarkwellVisionIntegrationFixture>(
+		*TestWorld.Get(), FVector::ZeroVector);
+	if (!Fixture)
+	{
+		AddError(TEXT("Could not create the integration fixture"));
+		return false;
+	}
+	TInlineComponentArray<UStaticMeshComponent*> Meshes;
+	Fixture->GetComponents(Meshes);
+	int32 GroundCount = 0;
+	int32 WallCount = 0;
+	int32 StaticCount = 0;
+	TArray<TPair<UStaticMeshComponent*, UMaterialInterface*>> InitialMaterials;
+	for (const UStaticMeshComponent* Mesh : Meshes)
+	{
+		InitialMaterials.Emplace(
+			const_cast<UStaticMeshComponent*>(Mesh),
+			Mesh->GetMaterial(0));
+		const TArray<float>& Data = Mesh->GetCustomPrimitiveData().Data;
+		if (!Data.IsValidIndex(Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex))
+		{
+			continue;
+		}
+		const float Category = Data[Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex];
+		GroundCount += Category == Darkwell::SightWeaveSurface::GroundCategory ? 1 : 0;
+		WallCount += Category == Darkwell::SightWeaveSurface::WallOrCubeSideCategory ? 1 : 0;
+		StaticCount += Category == Darkwell::SightWeaveSurface::RememberableStaticCategory ? 1 : 0;
+	}
+	TestEqual(TEXT("Exactly one ground primitive uses CPD[0]=0"), GroundCount, 1);
+	TestEqual(TEXT("Both wall primitives use CPD[0]=1"), WallCount, 2);
+	TestEqual(TEXT("Exactly one static landmark uses CPD[0]=2"), StaticCount, 1);
+	Fixture->DisableSightWeaveSurfaceMaterial();
+	for (const TPair<UStaticMeshComponent*, UMaterialInterface*>& Initial : InitialMaterials)
+	{
+		TestTrue(
+			TEXT("Rollback before activation preserves the fixture material"),
+			Initial.Key->GetMaterial(0) == Initial.Value);
+	}
+	return true;
+}
+
 #endif

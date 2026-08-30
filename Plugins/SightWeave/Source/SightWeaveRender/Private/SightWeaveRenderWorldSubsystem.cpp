@@ -1,5 +1,6 @@
 #include "SightWeaveRenderWorldSubsystem.h"
 
+#include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "HAL/ThreadSafeCounter64.h"
 #include "SceneViewExtension.h"
@@ -83,6 +84,32 @@ namespace
 	}
 }
 
+bool FSightWeaveSurfaceTextureMapping::IsValid() const
+{
+	return FMath::IsFinite(WorldMin.X)
+		&& FMath::IsFinite(WorldMin.Y)
+		&& FMath::IsFinite(WorldExtent.X)
+		&& FMath::IsFinite(WorldExtent.Y)
+		&& FMath::IsFinite(InvWorldExtent.X)
+		&& FMath::IsFinite(InvWorldExtent.Y)
+		&& FMath::IsFinite(CentimetersPerTexel)
+		&& WorldExtent.X > 0.0
+		&& WorldExtent.Y > 0.0
+		&& InvWorldExtent.X > 0.0
+		&& InvWorldExtent.Y > 0.0
+		&& TextureExtent.X > 0
+		&& TextureExtent.Y > 0
+		&& CentimetersPerTexel > 0.0f;
+}
+
+FVector2D FSightWeaveSurfaceTextureMapping::WorldToUV(
+	const FVector2D& WorldPosition) const
+{
+	return IsValid()
+		? (WorldPosition - WorldMin) * InvWorldExtent
+		: FVector2D::ZeroVector;
+}
+
 void USightWeaveRenderWorldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -118,6 +145,7 @@ void USightWeaveRenderWorldSubsystem::Initialize(FSubsystemCollectionBase& Colle
 
 void USightWeaveRenderWorldSubsystem::Deinitialize()
 {
+	DisableSurfaceMaterialPresentation();
 	if (UWorld* World = GetWorld())
 	{
 		if (USightWeaveWorldSubsystem* Runtime = World->GetSubsystem<USightWeaveWorldSubsystem>())
@@ -144,6 +172,79 @@ void USightWeaveRenderWorldSubsystem::Deinitialize()
 	bHasMemoryPresentationScope = false;
 	WorldIdentity = FSightWeaveRenderWorldIdentity();
 	Super::Deinitialize();
+}
+
+bool USightWeaveRenderWorldSubsystem::EnableSurfaceMaterialPresentation(
+	const FBox2D& WorldBounds,
+	const ESightWeaveRenderPrecisionTier PrecisionTier)
+{
+	check(IsInGameThread());
+	const float CentimetersPerTexel = SightWeaveCentimetersPerTexel(PrecisionTier);
+	if (!SceneViewExtension.IsValid()
+		|| !WorldBounds.bIsValid
+		|| !FMath::IsFinite(WorldBounds.Min.X)
+		|| !FMath::IsFinite(WorldBounds.Min.Y)
+		|| !FMath::IsFinite(WorldBounds.Max.X)
+		|| !FMath::IsFinite(WorldBounds.Max.Y)
+		|| CentimetersPerTexel <= 0.0f)
+	{
+		return false;
+	}
+
+	FSightWeaveSurfaceTextureMapping Desired;
+	Desired.WorldMin = WorldBounds.Min;
+	Desired.TextureExtent = FIntPoint(
+		FMath::CeilToInt(WorldBounds.GetSize().X / CentimetersPerTexel),
+		FMath::CeilToInt(WorldBounds.GetSize().Y / CentimetersPerTexel));
+	Desired.CentimetersPerTexel = CentimetersPerTexel;
+	Desired.WorldExtent = FVector2D(
+		Desired.TextureExtent.X * CentimetersPerTexel,
+		Desired.TextureExtent.Y * CentimetersPerTexel);
+	Desired.InvWorldExtent = FVector2D(
+		1.0 / Desired.WorldExtent.X,
+		1.0 / Desired.WorldExtent.Y);
+	if (!Desired.IsValid())
+	{
+		return false;
+	}
+
+	const bool bCanReuse = SurfaceStateTexture
+		&& SurfaceTextureMapping.TextureExtent == Desired.TextureExtent
+		&& SurfaceTextureMapping.WorldMin == Desired.WorldMin
+		&& SurfaceTextureMapping.CentimetersPerTexel == Desired.CentimetersPerTexel;
+	if (!bCanReuse)
+	{
+		DisableSurfaceMaterialPresentation();
+		SurfaceStateTexture = NewObject<UTextureRenderTarget2D>(this);
+		if (!SurfaceStateTexture)
+		{
+			return false;
+		}
+		SurfaceStateTexture->RenderTargetFormat = ETextureRenderTargetFormat::RTF_RGBA8;
+		SurfaceStateTexture->ClearColor = FLinearColor::Transparent;
+		SurfaceStateTexture->Filter = TextureFilter::TF_Nearest;
+		SurfaceStateTexture->AddressX = TextureAddress::TA_Clamp;
+		SurfaceStateTexture->AddressY = TextureAddress::TA_Clamp;
+		SurfaceStateTexture->bAutoGenerateMips = false;
+		SurfaceStateTexture->InitAutoFormat(Desired.TextureExtent.X, Desired.TextureExtent.Y);
+		SurfaceStateTexture->UpdateResourceImmediate(true);
+	}
+	SurfaceTextureMapping = Desired;
+	SceneViewExtension->ConfigureSurfaceMaterialTarget(
+		SurfaceStateTexture,
+		SurfaceTextureMapping);
+	return true;
+}
+
+void USightWeaveRenderWorldSubsystem::DisableSurfaceMaterialPresentation()
+{
+	check(IsInGameThread());
+	if (SceneViewExtension.IsValid())
+	{
+		SceneViewExtension->ClearSurfaceMaterialTarget();
+	}
+	SurfaceStateTexture = nullptr;
+	SurfaceTextureMapping = FSightWeaveSurfaceTextureMapping();
 }
 
 void USightWeaveRenderWorldSubsystem::HandleMemoryPacketPublished(

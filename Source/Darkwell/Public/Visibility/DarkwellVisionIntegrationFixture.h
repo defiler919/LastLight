@@ -7,8 +7,45 @@
 #include "DarkwellVisionIntegrationFixture.generated.h"
 
 class UDirectionalLightComponent;
+class UMaterialInstanceDynamic;
+class UMaterialInterface;
 class USceneComponent;
 class UStaticMeshComponent;
+class UTexture;
+
+namespace Darkwell::SightWeaveSurface
+{
+	inline constexpr int32 SurfaceCategoryCustomPrimitiveDataIndex = 0;
+	inline constexpr float GroundCategory = 0.0f;
+	inline constexpr float WallOrCubeSideCategory = 1.0f;
+	inline constexpr float RememberableStaticCategory = 2.0f;
+	inline constexpr float NeverRememberCategory = 3.0f;
+	inline constexpr float WallConservativeSampleBiasCentimeters = 7.5f;
+}
+
+struct DARKWELL_API FDarkwellSightWeaveSurfaceWeights
+{
+	float Live = 0.0f;
+	float Remembered = 0.0f;
+	float Unknown = 1.0f;
+};
+
+/** CPU oracle for the project surface material's state precedence and wall sampling. */
+class DARKWELL_API FDarkwellSightWeaveSurfaceMath final
+{
+public:
+	static float ResolveConservativeState(
+		float Center,
+		float PositiveNormal,
+		float NegativeNormal,
+		float SurfaceCategory);
+	static FDarkwellSightWeaveSurfaceWeights ResolveWeights(
+		float EncodedState,
+		float LiveFeather,
+		float RememberedValidity,
+		float ScopeValidity,
+		float SurfaceCategory);
+};
 
 struct DARKWELL_API FDarkwellVisionIntegrationSegment
 {
@@ -38,6 +75,17 @@ public:
 		TArray<FDarkwellVisionIntegrationSegment>& OutSegments) const;
 	void BuildSightWeaveStaticSurfaces(
 		TArray<FDarkwellVisionIntegrationSurface>& OutSurfaces) const;
+	bool EnableSightWeaveSurfaceMaterial(
+		UTexture* StateTexture,
+		FVector2D WorldMin,
+		FVector2D InvWorldExtent);
+	void DisableSightWeaveSurfaceMaterial();
+	bool IsSightWeaveSurfaceMaterialEnabled() const
+	{
+		return SurfaceGroundMaterial != nullptr
+			&& SurfaceWallMaterial != nullptr
+			&& SurfaceStaticMaterial != nullptr;
+	}
 
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Integration")
@@ -58,4 +106,27 @@ private:
 	/** Rendered illumination only; it is never a legal-light authority. */
 	UPROPERTY(VisibleAnywhere, Category = "Integration")
 	TObjectPtr<UDirectionalLightComponent> GreyboxKeyLight;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> SurfaceGroundMaterial;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> SurfaceWallMaterial;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> SurfaceStaticMaterial;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> OriginalGroundMaterial;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> OriginalWallSouthMaterial;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> OriginalWallNorthMaterial;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> OriginalStaticMaterial;
+
+	bool bSurfaceMaterialOverrideCaptured = false;
 };

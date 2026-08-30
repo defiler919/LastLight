@@ -1,10 +1,12 @@
 #include "SightWeaveSceneViewExtension.h"
 
+#include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "RenderingThread.h"
 #include "ScreenPass.h"
 #include "SightWeaveSparseAtlasRenderState.h"
+#include "SightWeaveRenderWorldSubsystem.h"
 
 namespace
 {
@@ -96,6 +98,49 @@ void FSightWeaveSceneViewExtension::SubmitPresentationSelection(
 		});
 }
 
+void FSightWeaveSceneViewExtension::ConfigureSurfaceMaterialTarget(
+	UTextureRenderTarget2D* Texture,
+	const FSightWeaveSurfaceTextureMapping& Mapping)
+{
+	check(IsInGameThread());
+	if (bShutdown || !Texture || !Mapping.IsValid())
+	{
+		return;
+	}
+	FTextureRenderTargetResource* Resource = Texture->GameThread_GetRenderTargetResource();
+	if (!Resource)
+	{
+		return;
+	}
+	bSurfaceMaterialMode = true;
+	const TSharedRef<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe> State = RenderState;
+	ENQUEUE_RENDER_COMMAND(SightWeaveConfigureSurfaceMaterialTarget)(
+		[State, Resource, Mapping](FRHICommandListImmediate& RHICmdList)
+		{
+			State->ConfigureSurfaceMaterialTarget_RenderThread(
+				Resource->GetRenderTargetTexture(),
+				Mapping.TextureExtent,
+				Mapping.WorldMin,
+				Mapping.CentimetersPerTexel);
+		});
+}
+
+void FSightWeaveSceneViewExtension::ClearSurfaceMaterialTarget()
+{
+	check(IsInGameThread());
+	bSurfaceMaterialMode = false;
+	if (bShutdown)
+	{
+		return;
+	}
+	const TSharedRef<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe> State = RenderState;
+	ENQUEUE_RENDER_COMMAND(SightWeaveClearSurfaceMaterialTarget)(
+		[State](FRHICommandListImmediate& RHICmdList)
+		{
+			State->ClearSurfaceMaterialTarget_RenderThread();
+		});
+}
+
 void FSightWeaveSceneViewExtension::Shutdown(
 	const FSightWeaveRenderWorldIdentity ExpectedWorldIdentity)
 {
@@ -124,6 +169,9 @@ void FSightWeaveSceneViewExtension::PreRenderViewFamily_RenderThread(
 	RenderState->PrepareMemoryPresentationResources_RenderThread(GraphBuilder);
 	RenderState->PrepareStaticEnvironmentPresentationResources_RenderThread(GraphBuilder);
 	RenderState->ProcessVisualFeather_RenderThread(GraphBuilder);
+	RenderState->ProcessSurfaceMaterialState_RenderThread(
+		GraphBuilder,
+		ViewFamily.GetFeatureLevel());
 }
 
 void FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass(
@@ -143,7 +191,8 @@ void FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass(
 	const EPostProcessingPass SelectedPass = bUsePreTemporalComposition
 		? EPostProcessingPass::BeforeDOF
 		: EPostProcessingPass::Tonemap;
-	if (PassId == SelectedPass
+	if (!bSurfaceMaterialMode
+		&& PassId == SelectedPass
 		&& RenderState->IsPresentationEnabled_RenderThread())
 	{
 		InOutPassCallbacks.Add(FAfterPassCallbackDelegate::CreateRaw(

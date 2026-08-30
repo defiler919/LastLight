@@ -700,6 +700,10 @@ int FeatherJumpStep;
 uint FeatherWorkSize;
 float FeatherWidthCentimeters;
 
+float2 SurfaceTextureWorldMin;
+int2 SurfaceTextureExtent;
+uint SurfaceScopeValid;
+
 float SightWeaveLoadFeatherAtlas(int PageIndex, int2 Texel)
 {
 	switch (PageIndex)
@@ -740,6 +744,26 @@ float SightWeaveSampleVisualFeather(float2 LocalPosition)
 	const float W01 = SightWeaveLoadFeatherLogicalTexel(Base + int2(0, 1));
 	const float W11 = SightWeaveLoadFeatherLogicalTexel(Base + int2(1, 1));
 	return saturate(lerp(lerp(W00, W10, Fraction.x), lerp(W01, W11, Fraction.x), Fraction.y));
+}
+
+float4 SightWeaveSurfaceStatePS(float4 Position : SV_POSITION) : SV_Target0
+{
+	const int2 Pixel = clamp(int2(Position.xy), int2(0, 0), SurfaceTextureExtent - 1);
+	const float2 WorldPosition = SurfaceTextureWorldMin
+		+ (float2(Pixel) + 0.5f) * CentimetersPerTexel;
+	if (SurfaceScopeValid == 0)
+	{
+		return 0.0f;
+	}
+	const bool HardLive = SightWeaveIsHardLive(WorldPosition);
+	const float Remembered = MemoryPageTableCount != 0
+		? SightWeaveSampleMemory(WorldPosition)
+		: 0.0f;
+	const float Feather = FeatherWidthCentimeters > 0.0f
+		? SightWeaveSampleVisualFeather(WorldPosition - TranslatedFloorOrigin)
+		: (HardLive ? 1.0f : 0.0f);
+	const uint State = SightWeaveResolvePresentationState(HardLive, Remembered >= 0.5f);
+	return float4(float(State) * 0.5f, saturate(Feather), Remembered, 1.0f);
 }
 
 float2 SightWeaveFeatherSeedPS(float4 Position : SV_POSITION) : SV_Target0

@@ -162,6 +162,12 @@ namespace SightWeaveSparseAtlasRenderPrivate
 		RDG_TEXTURE_ACCESS(Texture, ERHIAccess::CopyDest)
 	END_SHADER_PARAMETER_STRUCT()
 
+	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeaveSurfaceStatePassParameters, )
+		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveFullscreenVertexShader::FParameters, VertexShader)
+		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveSurfaceStatePixelShader::FParameters, PixelShader)
+		RENDER_TARGET_BINDING_SLOTS()
+	END_SHADER_PARAMETER_STRUCT()
+
 #if WITH_DEV_AUTOMATION_TESTS
 	BEGIN_SHADER_PARAMETER_STRUCT(FSightWeaveMemoryPresentationTestPassParameters, )
 		SHADER_PARAMETER_STRUCT_INCLUDE(FSightWeaveFullscreenVertexShader::FParameters, VertexShader)
@@ -538,6 +544,39 @@ FSightWeaveSparseAtlasRenderState::FSightWeaveSparseAtlasRenderState(
 }
 
 FSightWeaveSparseAtlasRenderState::~FSightWeaveSparseAtlasRenderState() = default;
+
+void FSightWeaveSparseAtlasRenderState::ConfigureSurfaceMaterialTarget_RenderThread(
+	FTextureRHIRef Texture,
+	const FIntPoint TextureExtent,
+	const FVector2D WorldMin,
+	const float CentimetersPerTexel)
+{
+	check(IsInRenderingThread());
+	if (bReleased || !Texture.IsValid() || TextureExtent.X <= 0 || TextureExtent.Y <= 0
+		|| !FMath::IsFinite(WorldMin.X) || !FMath::IsFinite(WorldMin.Y)
+		|| !FMath::IsFinite(CentimetersPerTexel) || CentimetersPerTexel <= 0.0f)
+	{
+		ClearSurfaceMaterialTarget_RenderThread();
+		return;
+	}
+	SurfaceStateTexture = MoveTemp(Texture);
+	SurfaceStateTextureExtent = TextureExtent;
+	SurfaceStateWorldMin = WorldMin;
+	SurfaceStateCentimetersPerTexel = CentimetersPerTexel;
+	SurfaceStateDirtyTiles.Reset();
+	bSurfaceStateFullUpdatePending = true;
+}
+
+void FSightWeaveSparseAtlasRenderState::ClearSurfaceMaterialTarget_RenderThread()
+{
+	check(IsInRenderingThread());
+	SurfaceStateTexture.SafeRelease();
+	SurfaceStateTextureExtent = FIntPoint::ZeroValue;
+	SurfaceStateWorldMin = FVector2D::ZeroVector;
+	SurfaceStateCentimetersPerTexel = 0.0f;
+	SurfaceStateDirtyTiles.Reset();
+	bSurfaceStateFullUpdatePending = false;
+}
 
 void FSightWeaveSparseAtlasRenderState::SubmitPacket_RenderThread(
 	const TSharedPtr<const FSightWeaveSparseRenderPacket, ESPMode::ThreadSafe>& Packet)
@@ -991,6 +1030,10 @@ bool FSightWeaveSparseAtlasRenderState::ProcessMemoryPending_RenderThread(
 	MemoryMirror->AppliedMemoryRevision = Packet->GetMemoryRevision();
 	MemoryMirror->AppliedModifierRevision = Packet->GetModifierRevision();
 	MemoryMirror->Availability = ESightWeaveRenderAvailability::Available;
+	for (const FIntPoint Coordinate : ChangedCoordinates)
+	{
+		SurfaceStateDirtyTiles.AddUnique(Coordinate);
+	}
 	return bUploaded;
 }
 
@@ -1264,6 +1307,7 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 		}
 		for (const FSightWeaveSparseTileIdentity& Identity : Releases)
 		{
+			SurfaceStateDirtyTiles.AddUnique(Identity.TileKey.LogicalCoordinate);
 			MarkFeatherDirtyAround_RenderThread(Identity.TileKey);
 			bAnyFeatherImpact = true;
 			if (!Scope->Residency.Release(Identity))
@@ -1285,6 +1329,7 @@ bool FSightWeaveSparseAtlasRenderState::ProcessPending_RenderThread(FRDGBuilder&
 		const int32 DirtyTileIndex)
 	{
 		const FSightWeaveSparseRenderTile& Tile = Packet->GetTiles()[DirtyTileIndex];
+		SurfaceStateDirtyTiles.AddUnique(Tile.Identity.TileKey.LogicalCoordinate);
 		MarkFeatherDirtyAround_RenderThread(Tile.Identity.TileKey);
 		bAnyFeatherImpact = true;
 		FScopeState* Scope = FindScope_RenderThread(Tile.Identity.TileKey.Scope);
@@ -2277,6 +2322,7 @@ void FSightWeaveSparseAtlasRenderState::Release_RenderThread(
 	{
 		return;
 	}
+	ClearSurfaceMaterialTarget_RenderThread();
 	bReleased = true;
 	PendingPacket.Reset();
 	bPendingRequiresFullRebuild = false;
@@ -3083,6 +3129,7 @@ bool FSightWeaveSparseAtlasRenderState::ProcessVisualFeather_RenderThread(
 
 	for (const FSightWeaveSparseRenderTile* Tile : TilesToDerive)
 	{
+		SurfaceStateDirtyTiles.AddUnique(Tile->Identity.TileKey.LogicalCoordinate);
 		const FSightWeaveSparseResidencySlot* Slot = Scope->Residency.Find(Tile->Identity);
 		if (!Slot || Slot->AppliedRevision != AppliedRevision
 			|| !AddFeatherTilePasses_RenderThread(GraphBuilder, *Scope, *Tile, Slot->Address))
@@ -3100,6 +3147,206 @@ bool FSightWeaveSparseAtlasRenderState::ProcessVisualFeather_RenderThread(
 	bFeatherUpdateIncomplete = false;
 	RefreshPresentationBinding_RenderThread();
 	return !TilesToDerive.IsEmpty();
+}
+
+bool FSightWeaveSparseAtlasRenderState::ProcessSurfaceMaterialState_RenderThread(
+	FRDGBuilder& GraphBuilder,
+	const ERHIFeatureLevel::Type FeatureLevel)
+{
+	check(IsInRenderingThread());
+	if (bReleased || !SurfaceStateTexture.IsValid()
+		|| SurfaceStateTextureExtent.X <= 0 || SurfaceStateTextureExtent.Y <= 0)
+	{
+		return false;
+	}
+
+	FRDGTextureRef Output = RegisterExternalTexture(
+		GraphBuilder,
+		SurfaceStateTexture.GetReference(),
+		TEXT("SightWeave.SurfaceStateTexture"));
+	if (!Output)
+	{
+		return false;
+	}
+	auto FinishAccess = [&GraphBuilder, Output]()
+	{
+		GraphBuilder.SetTextureAccessFinal(Output, ERHIAccess::SRVMask);
+	};
+	auto FailClosed = [this, &GraphBuilder, Output, &FinishAccess]()
+	{
+		AddClearRenderTargetPass(GraphBuilder, Output, FLinearColor::Transparent);
+		FinishAccess();
+		bSurfaceStateFullUpdatePending = true;
+	};
+
+	const TSharedPtr<const FSightWeaveViewPresentationBinding, ESPMode::ThreadSafe> Binding =
+		PresentationBinding;
+	if (!Binding.IsValid() || !Binding->IsValid()
+		|| Binding->GetResourceGeneration() != ResourceGeneration
+		|| Binding->GetResidencyGeneration() != ResidencyGeneration
+		|| Binding->GetPacketRevision() != AppliedRevision
+		|| Binding->GetScopeKey().FloorOrigin != SurfaceStateWorldMin
+		|| SightWeaveCentimetersPerTexel(Binding->GetScopeKey().PrecisionTier)
+			!= SurfaceStateCentimetersPerTexel)
+	{
+		FailClosed();
+		return false;
+	}
+	FScopeState* Scope = FindScope_RenderThread(Binding->GetScopeKey());
+	if (!Scope || Scope->Availability != ESightWeaveRenderAvailability::Available
+		|| !Scope->CurrentPageTable || Scope->PageTableEntryCount <= 0)
+	{
+		FailClosed();
+		return false;
+	}
+	for (const FSightWeaveSparseResidencySlot& Slot : Scope->Residency.GetSlots())
+	{
+		if (Slot.bOccupied && Slot.Address.PageIndex >= 4)
+		{
+			FailClosed();
+			return false;
+		}
+	}
+
+	const bool bMemoryReady = MemoryMirror.IsValid()
+		&& MemoryMirror->Availability == ESightWeaveRenderAvailability::Available
+		&& MemoryMirror->AppliedPacket.IsValid()
+		&& MemoryMirror->CurrentPageTable
+		&& MemoryScopeMatchesPresentationBinding(MemoryMirror->Scope, *Binding);
+	FRDGTextureRef DummyPage = GSystemTextures.GetBlackDummy(GraphBuilder);
+	FRDGTextureRef AtlasPages[4] = { DummyPage, DummyPage, DummyPage, DummyPage };
+	FRDGTextureRef FeatherPages[4] = { DummyPage, DummyPage, DummyPage, DummyPage };
+	FRDGTextureRef MemoryPages[2] = { DummyPage, DummyPage };
+	for (int32 PageIndex = 0; PageIndex < Scope->Pages.Num() && PageIndex < 4; ++PageIndex)
+	{
+		if (Scope->Pages[PageIndex].IsValid())
+		{
+			AtlasPages[PageIndex] = GraphBuilder.RegisterExternalTexture(
+				Scope->Pages[PageIndex], TEXT("SightWeave.SurfaceState.AtlasPage"));
+		}
+		if (Scope->FeatherPages.IsValidIndex(PageIndex)
+			&& Scope->FeatherPages[PageIndex].IsValid())
+		{
+			FeatherPages[PageIndex] = GraphBuilder.RegisterExternalTexture(
+				Scope->FeatherPages[PageIndex], TEXT("SightWeave.SurfaceState.FeatherPage"));
+		}
+	}
+	if (bMemoryReady)
+	{
+		for (int32 PageIndex = 0;
+			PageIndex < MemoryMirror->Pages.Num() && PageIndex < 2;
+			++PageIndex)
+		{
+			if (MemoryMirror->Pages[PageIndex].IsValid())
+			{
+				MemoryPages[PageIndex] = GraphBuilder.RegisterExternalTexture(
+					MemoryMirror->Pages[PageIndex], TEXT("SightWeave.SurfaceState.MemoryPage"));
+			}
+		}
+	}
+
+	TArray<FIntRect> DirtyRects;
+	if (bSurfaceStateFullUpdatePending)
+	{
+		DirtyRects.Add(FIntRect(FIntPoint::ZeroValue, SurfaceStateTextureExtent));
+	}
+	else
+	{
+		for (const FIntPoint Coordinate : SurfaceStateDirtyTiles)
+		{
+			const FIntPoint Min = Coordinate * SightWeave::SparseAtlas::InteriorTileSize;
+			const FIntPoint Max = Min + FIntPoint(
+				SightWeave::SparseAtlas::InteriorTileSize,
+				SightWeave::SparseAtlas::InteriorTileSize);
+			const FIntRect Rect(
+				FIntPoint(FMath::Max(Min.X, 0), FMath::Max(Min.Y, 0)),
+				FIntPoint(
+					FMath::Min(Max.X, SurfaceStateTextureExtent.X),
+					FMath::Min(Max.Y, SurfaceStateTextureExtent.Y)));
+			if (Rect.Area() > 0)
+			{
+				DirtyRects.AddUnique(Rect);
+			}
+		}
+	}
+	if (DirtyRects.IsEmpty())
+	{
+		FinishAccess();
+		return false;
+	}
+
+	TShaderMapRef<FSightWeaveFullscreenVertexShader> VertexShader(
+		GetGlobalShaderMap(FeatureLevel));
+	TShaderMapRef<FSightWeaveSurfaceStatePixelShader> PixelShader(
+		GetGlobalShaderMap(FeatureLevel));
+	for (const FIntRect& DirtyRect : DirtyRects)
+	{
+		FSightWeaveSurfaceStatePassParameters* PassParameters =
+			GraphBuilder.AllocParameters<FSightWeaveSurfaceStatePassParameters>();
+		auto& Parameters = PassParameters->PixelShader;
+		Parameters.PageTable = GraphBuilder.CreateSRV(Scope->CurrentPageTable);
+		Parameters.AtlasPage0 = AtlasPages[0];
+		Parameters.AtlasPage1 = AtlasPages[1];
+		Parameters.AtlasPage2 = AtlasPages[2];
+		Parameters.AtlasPage3 = AtlasPages[3];
+		Parameters.FeatherPage0 = FeatherPages[0];
+		Parameters.FeatherPage1 = FeatherPages[1];
+		Parameters.FeatherPage2 = FeatherPages[2];
+		Parameters.FeatherPage3 = FeatherPages[3];
+		Parameters.TranslatedFloorOrigin = FVector2f(Binding->GetScopeKey().FloorOrigin);
+		Parameters.CentimetersPerTexel = SurfaceStateCentimetersPerTexel;
+		Parameters.FeatherWidthCentimeters =
+			Binding->GetVisualFeather().IsEnabled()
+				? Binding->GetVisualFeather().WidthCentimeters : 0.0f;
+		Parameters.PageTableCount = static_cast<uint32>(Scope->PageTableEntryCount);
+		Parameters.MemoryPageTable = GraphBuilder.CreateSRV(
+			bMemoryReady ? MemoryMirror->CurrentPageTable : Scope->CurrentPageTable);
+		Parameters.MemoryPage0 = MemoryPages[0];
+		Parameters.MemoryPage1 = MemoryPages[1];
+		Parameters.MemoryPageTableCount = bMemoryReady
+			? static_cast<uint32>(MemoryMirror->PageTableEntryCount) : 0u;
+		Parameters.MemoryTranslatedFloorOrigin = bMemoryReady
+			? FVector2f(MemoryMirror->Scope.FloorOrigin) : FVector2f::ZeroVector;
+		Parameters.MemoryCentimetersPerTexel = bMemoryReady
+			? SightWeaveCentimetersPerTexel(MemoryMirror->Scope.PrecisionTier) : 1.0f;
+		Parameters.SurfaceTextureWorldMin = FVector2f(SurfaceStateWorldMin);
+		Parameters.SurfaceTextureExtent = SurfaceStateTextureExtent;
+		Parameters.SurfaceScopeValid = 1u;
+		PassParameters->RenderTargets[0] = FRenderTargetBinding(
+			Output, ERenderTargetLoadAction::ELoad);
+		GraphBuilder.AddPass(
+			RDG_EVENT_NAME("SightWeave.SurfaceState.Update"),
+			PassParameters,
+			ERDGPassFlags::Raster | ERDGPassFlags::NeverCull,
+			[PassParameters, VertexShader, PixelShader, DirtyRect](
+				FRDGAsyncTask,
+				FRHICommandList& RHICmdList)
+			{
+				ConfigureViewport(RHICmdList, DirtyRect);
+				FGraphicsPipelineStateInitializer GraphicsPSOInit;
+				RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
+				GraphicsPSOInit.BlendState = TStaticBlendState<>::GetRHI();
+				GraphicsPSOInit.RasterizerState = TStaticRasterizerState<FM_Solid, CM_None>::GetRHI();
+				GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
+				GraphicsPSOInit.PrimitiveType = PT_TriangleList;
+				GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI =
+					GEmptyVertexDeclaration.VertexDeclarationRHI;
+				GraphicsPSOInit.BoundShaderState.VertexShaderRHI = VertexShader.GetVertexShader();
+				GraphicsPSOInit.BoundShaderState.PixelShaderRHI = PixelShader.GetPixelShader();
+				SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit, 0);
+				SetShaderParameters(
+					RHICmdList,
+					PixelShader,
+					PixelShader.GetPixelShader(),
+					PassParameters->PixelShader);
+				RHICmdList.SetStreamSource(0, nullptr, 0);
+				RHICmdList.DrawPrimitive(0, 1, 1);
+			});
+	}
+	SurfaceStateDirtyTiles.Reset();
+	bSurfaceStateFullUpdatePending = false;
+	FinishAccess();
+	return true;
 }
 
 FSightWeaveSparseAtlasRenderState::FScopeState*

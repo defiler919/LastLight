@@ -7,6 +7,8 @@
 #include "SightWeaveStaticEnvironment.h"
 
 class FSightWeaveSparseAtlasRenderState;
+class UTextureRenderTarget2D;
+struct FSightWeaveSurfaceTextureMapping;
 
 class FSightWeaveSceneViewExtension final : public FWorldSceneViewExtension
 {
@@ -21,6 +23,10 @@ public:
 	void SubmitStaticEnvironmentPacket(
 		TSharedPtr<const FSightWeaveStaticEnvironmentPacket, ESPMode::ThreadSafe> Packet);
 	void SubmitPresentationSelection(const FSightWeaveViewPresentationSelection& Selection);
+	void ConfigureSurfaceMaterialTarget(
+		UTextureRenderTarget2D* Texture,
+		const FSightWeaveSurfaceTextureMapping& Mapping);
+	void ClearSurfaceMaterialTarget();
 	void Shutdown(FSightWeaveRenderWorldIdentity ExpectedWorldIdentity);
 
 	virtual void PreRenderViewFamily_RenderThread(
@@ -41,5 +47,6 @@ private:
 	FSightWeaveRenderWorldIdentity WorldIdentity;
 	TSharedRef<FSightWeaveSparseAtlasRenderState, ESPMode::ThreadSafe> RenderState;
 	bool bUsesDarkwellPreTemporalComposition = false;
+	FThreadSafeBool bSurfaceMaterialMode = false;
 	bool bShutdown = false;
 };

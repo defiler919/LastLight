@@ -16,6 +16,7 @@
 #include "UI/DarkwellHUD.h"
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 #if !UE_SERVER
+#include "Engine/TextureRenderTarget2D.h"
 #include "SightWeavePresentation.h"
 #include "SightWeaveRenderWorldSubsystem.h"
 #endif
@@ -267,6 +268,24 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 		KnowledgeOwnerId, FloorId, ESightWeaveRenderPrecisionTier::Ultra))
 	{
 		RollbackToLegacy(TEXT("Render presentation-scope selection failed"), true);
+		return false;
+	}
+	const FBox2D SurfaceBounds = RequestedFixture->GetSightWeaveFloorBounds();
+	if (!RenderSubsystem->EnableSurfaceMaterialPresentation(
+			SurfaceBounds,
+			ESightWeaveRenderPrecisionTier::Ultra))
+	{
+		RollbackToLegacy(TEXT("Surface-material state texture activation failed"), true);
+		return false;
+	}
+	const FSightWeaveSurfaceTextureMapping& SurfaceMapping =
+		RenderSubsystem->GetSurfaceTextureMapping();
+	if (!RequestedFixture->EnableSightWeaveSurfaceMaterial(
+			RenderSubsystem->GetSurfaceStateTexture(),
+			SurfaceMapping.WorldMin,
+			SurfaceMapping.InvWorldExtent))
+	{
+		RollbackToLegacy(TEXT("Surface-material fixture binding failed"), true);
 		return false;
 	}
 #endif
@@ -561,6 +580,10 @@ void UDarkwellSightWeaveWorldSubsystem::RollbackToLegacy(
 	const FString& FailureReason,
 	const bool bRestoreConsumers)
 {
+	if (ADarkwellVisionIntegrationFixture* Fixture = RequestedFixture.Get())
+	{
+		Fixture->DisableSightWeaveSurfaceMaterial();
+	}
 	if (RuntimeSubsystem)
 	{
 		for (int32 Index = StaticEnvironmentHandles.Num() - 1; Index >= 0; --Index)
@@ -595,6 +618,7 @@ void UDarkwellSightWeaveWorldSubsystem::RollbackToLegacy(
 #if !UE_SERVER
 	if (RenderSubsystem)
 	{
+		RenderSubsystem->DisableSurfaceMaterialPresentation();
 		RenderSubsystem->ClearPresentationScope();
 	}
 #endif

@@ -174,6 +174,44 @@ public:
 	}
 };
 
+/** Material-facing dense state mirror. It is written from the sparse GPU mirrors only. */
+class FSightWeaveSurfaceStatePixelShader final : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSightWeaveSurfaceStatePixelShader);
+	SHADER_USE_PARAMETER_STRUCT(FSightWeaveSurfaceStatePixelShader, FGlobalShader);
+
+public:
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, PageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage1)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage2)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, AtlasPage3)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FeatherPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FeatherPage1)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FeatherPage2)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FeatherPage3)
+		SHADER_PARAMETER(FVector2f, TranslatedFloorOrigin)
+		SHADER_PARAMETER(float, CentimetersPerTexel)
+		SHADER_PARAMETER(float, FeatherWidthCentimeters)
+		SHADER_PARAMETER(uint32, PageTableCount)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<int4>, MemoryPageTable)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, MemoryPage0)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, MemoryPage1)
+		SHADER_PARAMETER(uint32, MemoryPageTableCount)
+		SHADER_PARAMETER(FVector2f, MemoryTranslatedFloorOrigin)
+		SHADER_PARAMETER(float, MemoryCentimetersPerTexel)
+		SHADER_PARAMETER(FVector2f, SurfaceTextureWorldMin)
+		SHADER_PARAMETER(FIntPoint, SurfaceTextureExtent)
+		SHADER_PARAMETER(uint32, SurfaceScopeValid)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return Parameters.Platform == SP_PCD3D_SM6;
+	}
+};
+
 class FSightWeaveFeatherSeedPixelShader final : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FSightWeaveFeatherSeedPixelShader);

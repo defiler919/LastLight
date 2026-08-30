@@ -10,7 +10,21 @@
 class FSightWeaveSceneViewExtension;
 class FSightWeaveMemoryPacket;
 class FSightWeaveStaticEnvironmentPacket;
+class UTextureRenderTarget2D;
 struct FSightWeaveFrameSnapshot;
+
+/** Stable world-space mapping for the project-owned surface-material state texture. */
+struct SIGHTWEAVERENDER_API FSightWeaveSurfaceTextureMapping
+{
+	FVector2D WorldMin = FVector2D::ZeroVector;
+	FVector2D WorldExtent = FVector2D::ZeroVector;
+	FVector2D InvWorldExtent = FVector2D::ZeroVector;
+	FIntPoint TextureExtent = FIntPoint::ZeroValue;
+	float CentimetersPerTexel = 0.0f;
+
+	bool IsValid() const;
+	FVector2D WorldToUV(const FVector2D& WorldPosition) const;
+};
 
 enum class ESightWeaveRenderAvailability : uint8
 {
@@ -66,6 +80,19 @@ public:
 		FSightWeaveFloorId FloorId,
 		ESightWeaveRenderPrecisionTier PrecisionTier = ESightWeaveRenderPrecisionTier::Standard);
 	void ClearPresentationScope();
+	bool EnableSurfaceMaterialPresentation(
+		const FBox2D& WorldBounds,
+		ESightWeaveRenderPrecisionTier PrecisionTier);
+	void DisableSurfaceMaterialPresentation();
+	bool IsSurfaceMaterialPresentationEnabled() const
+	{
+		return SurfaceStateTexture != nullptr && SurfaceTextureMapping.IsValid();
+	}
+	UTextureRenderTarget2D* GetSurfaceStateTexture() const { return SurfaceStateTexture; }
+	const FSightWeaveSurfaceTextureMapping& GetSurfaceTextureMapping() const
+	{
+		return SurfaceTextureMapping;
+	}
 
 private:
 	void HandleSnapshotPublished(
@@ -103,5 +130,8 @@ private:
 	FDelegateHandle MemoryPacketPublishedHandle;
 	FDelegateHandle StaticEnvironmentPacketPublishedHandle;
 	TSharedPtr<FSightWeaveSceneViewExtension, ESPMode::ThreadSafe> SceneViewExtension;
+	UPROPERTY(Transient)
+	TObjectPtr<UTextureRenderTarget2D> SurfaceStateTexture;
+	FSightWeaveSurfaceTextureMapping SurfaceTextureMapping;
 	FSightWeaveRenderWorldDiagnostics Diagnostics;
 };

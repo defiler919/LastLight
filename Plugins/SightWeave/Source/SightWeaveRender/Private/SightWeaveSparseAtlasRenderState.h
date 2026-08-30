@@ -6,6 +6,7 @@
 #include "SightWeaveRenderWorldSubsystem.h"
 #include "SightWeaveSparseAtlas.h"
 #include "SightWeaveStaticEnvironment.h"
+#include "RHIResources.h"
 
 class FRDGBuilder;
 class FSceneView;
@@ -41,10 +42,19 @@ public:
 		const TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe>& Packet);
 	void SubmitStaticEnvironmentPacket_RenderThread(
 		const TSharedPtr<const FSightWeaveStaticEnvironmentPacket, ESPMode::ThreadSafe>& Packet);
+	void ConfigureSurfaceMaterialTarget_RenderThread(
+		FTextureRHIRef Texture,
+		FIntPoint TextureExtent,
+		FVector2D WorldMin,
+		float CentimetersPerTexel);
+	void ClearSurfaceMaterialTarget_RenderThread();
 	bool ProcessPending_RenderThread(FRDGBuilder& GraphBuilder);
 	bool ProcessMemoryPending_RenderThread(FRDGBuilder& GraphBuilder);
 	bool ProcessStaticEnvironmentPending_RenderThread(FRDGBuilder& GraphBuilder);
 	bool ProcessVisualFeather_RenderThread(FRDGBuilder& GraphBuilder);
+	bool ProcessSurfaceMaterialState_RenderThread(
+		FRDGBuilder& GraphBuilder,
+		ERHIFeatureLevel::Type FeatureLevel);
 	void PreparePresentationResources_RenderThread(FRDGBuilder& GraphBuilder);
 	void PrepareMemoryPresentationResources_RenderThread(FRDGBuilder& GraphBuilder);
 	void PrepareStaticEnvironmentPresentationResources_RenderThread(FRDGBuilder& GraphBuilder);
@@ -222,6 +232,12 @@ private:
 	TRefCountPtr<IPooledRenderTarget> SuppressionScratch;
 	TRefCountPtr<IPooledRenderTarget> FeatherScratchA;
 	TRefCountPtr<IPooledRenderTarget> FeatherScratchB;
+	FTextureRHIRef SurfaceStateTexture;
+	FIntPoint SurfaceStateTextureExtent = FIntPoint::ZeroValue;
+	FVector2D SurfaceStateWorldMin = FVector2D::ZeroVector;
+	float SurfaceStateCentimetersPerTexel = 0.0f;
+	TArray<FIntPoint> SurfaceStateDirtyTiles;
+	bool bSurfaceStateFullUpdatePending = false;
 	TArray<FSightWeaveSparseTileKey> FeatherDirtyCenters;
 	uint64 DesiredRevision = 0;
 	uint64 DesiredHash = 0;

@@ -71,6 +71,23 @@ public:
 		TConstArrayView<FDarkwellFogVisualSegment> Segments);
 };
 
+/** CPU oracle for the project wall/box material's stable object-local sampling. */
+class DARKWELL_API FDarkwellFogSurfaceCoverageMath final
+{
+public:
+	static bool ResolveWallSideSamples(
+		const FVector2D& SurfaceWorldPosition,
+		const FVector2D& WallOrigin,
+		const FVector2D& WallNormal,
+		const FVector2D& WallTangent,
+		float HalfThicknessCentimeters,
+		float ExteriorEpsilonCentimeters,
+		FVector2D& OutSideA,
+		FVector2D& OutSideB);
+	static float CombineWallSides(float SideA, float SideB);
+	static float CombineBoxSides(float PositiveX, float NegativeX, float PositiveY, float NegativeY);
+};
+
 struct DARKWELL_API FDarkwellFogVisualDiagnostics
 {
 	EDarkwellInitialKnowledgePolicy InitialKnowledgePolicy =
@@ -84,6 +101,7 @@ struct DARKWELL_API FDarkwellFogVisualDiagnostics
 	bool bActive = false;
 	bool bOldSightWeavePresentationSuppressed = false;
 	bool bP1NoOcclusion = true;
+	bool bP3SurfaceCoverage = false;
 	int32 CachedOccluderSegmentCount = 0;
 };
 
@@ -106,6 +124,10 @@ public:
 		ADarkwellVisionIntegrationFixture* Fixture,
 		const FDarkwellFogVisualSourceSnapshot& Source,
 		TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments);
+	bool ActivateP3(
+		ADarkwellVisionIntegrationFixture* Fixture,
+		const FDarkwellFogVisualSourceSnapshot& Source,
+		TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments);
 	bool UpdateSource(const FDarkwellFogVisualSourceSnapshot& Source);
 	void Deactivate();
 
@@ -119,7 +141,7 @@ private:
 		ADarkwellVisionIntegrationFixture* Fixture,
 		const FDarkwellFogVisualSourceSnapshot& Source,
 		TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments,
-		bool bP1NoOcclusion);
+		int32 PresentationPhase);
 	bool CreateResources(const FBox2D& WorldBounds);
 	bool DrawCoverage(const FDarkwellFogVisualSourceSnapshot& Source);
 	void UpdateMaterialParameters(const FDarkwellFogVisualSourceSnapshot& Source);

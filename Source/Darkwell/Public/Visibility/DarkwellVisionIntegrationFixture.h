@@ -95,6 +95,10 @@ public:
 		UTexture* LiveCoverageTexture,
 		FVector2D WorldMin,
 		FVector2D InvWorldExtent);
+	bool EnableDarkwellProjectFogP3(
+		UTexture* LiveCoverageTexture,
+		FVector2D WorldMin,
+		FVector2D InvWorldExtent);
 	void DisableDarkwellProjectFog();
 	bool IsDarkwellProjectFogEnabled() const
 	{
@@ -112,7 +116,12 @@ private:
 		UTexture* LiveCoverageTexture,
 		FVector2D WorldMin,
 		FVector2D InvWorldExtent,
-		bool bShowOcclusionFixture);
+		bool bShowOcclusionFixture,
+		bool bEnableSurfaceCoverage);
+	void ConfigureProjectFogSurfaceMaterial(
+		UMaterialInstanceDynamic& Material,
+		int32 OccluderIndex,
+		bool bEnableSurfaceCoverage) const;
 	TArray<UStaticMeshComponent*> GetProjectFogOccluderComponents() const;
 
 	UPROPERTY(VisibleAnywhere, Category = "Integration")
@@ -180,7 +189,7 @@ private:
 	TObjectPtr<UMaterialInstanceDynamic> ProjectFogGroundMaterial;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UMaterialInstanceDynamic> ProjectFogRememberedMaterial;
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> ProjectFogOccluderMaterials;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> ProjectFogOriginalGroundMaterial;

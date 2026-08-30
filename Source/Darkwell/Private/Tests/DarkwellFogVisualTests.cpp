@@ -144,4 +144,39 @@ bool FDarkwellFogContinuousSegmentOcclusionTest::RunTest(const FString& Paramete
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellFogWallSurfaceCoverageTest,
+	"Darkwell.FogVisual.P3.ObjectLocalSurfaceCoverage",
+	Darkwell::FogVisualTests::Flags)
+
+bool FDarkwellFogWallSurfaceCoverageTest::RunTest(const FString& Parameters)
+{
+	FVector2D NorthFaceA;
+	FVector2D NorthFaceB;
+	FVector2D SouthFaceA;
+	FVector2D SouthFaceB;
+	const FVector2D Origin(0.0, 100.0);
+	const FVector2D Normal(1.0, 0.0);
+	const FVector2D Tangent(0.0, 1.0);
+	TestTrue(TEXT("North rendered face resolves stable wall samples"),
+		FDarkwellFogSurfaceCoverageMath::ResolveWallSideSamples(
+			FVector2D(20.0, 160.0), Origin, Normal, Tangent,
+			20.0f, 7.5f, NorthFaceA, NorthFaceB));
+	TestTrue(TEXT("South rendered face resolves stable wall samples"),
+		FDarkwellFogSurfaceCoverageMath::ResolveWallSideSamples(
+			FVector2D(-20.0, 160.0), Origin, Normal, Tangent,
+			20.0f, 7.5f, SouthFaceA, SouthFaceB));
+	TestTrue(TEXT("Opposite rendered faces share the same local cross-section samples"),
+		NorthFaceA.Equals(SouthFaceA, 1.0e-4)
+			&& NorthFaceB.Equals(SouthFaceB, 1.0e-4));
+	TestTrue(TEXT("Wall state is symmetric when either legal side is Live"),
+		FMath::IsNearlyEqual(
+			FDarkwellFogSurfaceCoverageMath::CombineWallSides(1.0f, 0.0f),
+			FDarkwellFogSurfaceCoverageMath::CombineWallSides(0.0f, 1.0f)));
+	TestEqual(TEXT("Four-sided box uses the maximum exterior Live coverage"),
+		FDarkwellFogSurfaceCoverageMath::CombineBoxSides(0.0f, 0.25f, 0.75f, 0.5f),
+		0.75f);
+	return true;
+}
+
 #endif

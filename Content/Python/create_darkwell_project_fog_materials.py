@@ -89,6 +89,28 @@ def custom_expression(material, code, named_inputs, x, y, description):
     return node
 
 
+def sample_live_coverage(
+    material, world_point, world_min, world_inv, fallback_texture, x, y
+):
+    local = binary(
+        material, unreal.MaterialExpressionSubtract, world_point, world_min, x, y
+    )
+    uv = binary(
+        material, unreal.MaterialExpressionMultiply, local, world_inv, x + 220, y
+    )
+    sample = expr(
+        material, unreal.MaterialExpressionTextureSampleParameter2D, x + 440, y
+    )
+    sample.set_editor_property("parameter_name", "DarkwellLiveCoverageTexture")
+    sample.set_editor_property("texture", fallback_texture)
+    sample.set_editor_property(
+        "sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR
+    )
+    connect(uv, "", sample, "Coordinates")
+    red = mask(material, sample, "r", x + 660, y, source_output="RGBA")
+    return saturate(material, red, x + 820, y)
+
+
 def make_asset(asset_tools, name):
     path = f"{ASSET_PATH}/{name}"
     if unreal.EditorAssetLibrary.does_asset_exist(path):
@@ -346,6 +368,8 @@ def create_surface(asset_tools):
 
     world_position = expr(material, unreal.MaterialExpressionWorldPosition, -2200, -50)
     world_xy = mask(material, world_position, "rg", -1950, -50)
+    world_float = expr(material, unreal.MaterialExpressionTruncateLWC, -1700, -50)
+    connect(world_xy, "", world_float, "")
     world_min_param = vector_parameter(
         material, "FogWorldMin", unreal.LinearColor(0, 0, 0, 0), -2200, 100
     )
@@ -358,56 +382,217 @@ def create_surface(asset_tools):
     )
     world_min = mask(material, world_min_param, "rg", -1950, 100)
     world_inv = mask(material, world_inv_param, "rg", -1950, 230)
-    local_lwc = binary(
-        material, unreal.MaterialExpressionSubtract, world_xy, world_min, -1700, 20
+    # Every sample deliberately uses the implicit derivative/mip path.
+    ground_coverage = sample_live_coverage(
+        material, world_float, world_min, world_inv, fallback_texture, -1500, 0
     )
-    local_float = expr(material, unreal.MaterialExpressionTruncateLWC, -1450, 20)
-    connect(local_lwc, "", local_float, "")
-    coverage_uv = binary(
-        material, unreal.MaterialExpressionMultiply, local_float, world_inv, -1200, 20
+
+    surface_origin_param = vector_parameter(
+        material, "SurfaceOrigin", unreal.LinearColor(0, 0, 0, 0), -2200, 420
     )
-    coverage_sample = expr(
-        material, unreal.MaterialExpressionTextureSampleParameter2D, -950, 0
+    surface_normal_param = vector_parameter(
+        material, "SurfaceNormal", unreal.LinearColor(1, 0, 0, 0), -2200, 540
     )
-    coverage_sample.set_editor_property(
-        "parameter_name", "DarkwellLiveCoverageTexture"
+    surface_tangent_param = vector_parameter(
+        material, "SurfaceTangent", unreal.LinearColor(0, 1, 0, 0), -2200, 660
     )
-    coverage_sample.set_editor_property("texture", fallback_texture)
-    coverage_sample.set_editor_property(
-        "sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR
+    surface_origin = mask(material, surface_origin_param, "rg", -1950, 420)
+    surface_normal = mask(material, surface_normal_param, "rg", -1950, 540)
+    surface_tangent = mask(material, surface_tangent_param, "rg", -1950, 660)
+    surface_relative = binary(
+        material,
+        unreal.MaterialExpressionSubtract,
+        world_float,
+        surface_origin,
+        -1700,
+        520,
     )
-    # Deliberately leave mip_value_mode at the implicit derivative default.
-    connect(coverage_uv, "", coverage_sample, "Coordinates")
-    coverage_r = mask(
-        material, coverage_sample, "r", -700, 0, source_output="RGBA"
+    along_tangent = expr(material, unreal.MaterialExpressionDotProduct, -1450, 520)
+    connect(surface_relative, "", along_tangent, "A")
+    connect(surface_tangent, "", along_tangent, "B")
+    tangent_offset = binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        surface_tangent,
+        along_tangent,
+        -1200,
+        520,
     )
-    coverage = saturate(material, coverage_r, -450, 0)
+    centerline_point = binary(
+        material,
+        unreal.MaterialExpressionAdd,
+        surface_origin,
+        tangent_offset,
+        -950,
+        520,
+    )
+    wall_sample_distance = scalar_parameter(
+        material, "WallSampleDistance", 27.5, -1200, 680
+    )
+    normal_offset = binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        surface_normal,
+        wall_sample_distance,
+        -950,
+        680,
+    )
+    wall_side_a = binary(
+        material,
+        unreal.MaterialExpressionAdd,
+        centerline_point,
+        normal_offset,
+        -700,
+        500,
+    )
+    wall_side_b = binary(
+        material,
+        unreal.MaterialExpressionSubtract,
+        centerline_point,
+        normal_offset,
+        -700,
+        660,
+    )
+    wall_coverage_a = sample_live_coverage(
+        material, wall_side_a, world_min, world_inv, fallback_texture, -450, 460
+    )
+    wall_coverage_b = sample_live_coverage(
+        material, wall_side_b, world_min, world_inv, fallback_texture, -450, 700
+    )
+    wall_coverage = binary(
+        material,
+        unreal.MaterialExpressionMax,
+        wall_coverage_a,
+        wall_coverage_b,
+        500,
+        580,
+    )
+
+    box_sample_names = (
+        "BoxSamplePositiveX",
+        "BoxSampleNegativeX",
+        "BoxSamplePositiveY",
+        "BoxSampleNegativeY",
+    )
+    box_coverages = []
+    for index, name in enumerate(box_sample_names):
+        parameter = vector_parameter(
+            material,
+            name,
+            unreal.LinearColor(0, 0, 0, 0),
+            -2200,
+            900 + index * 110,
+        )
+        point = mask(material, parameter, "rg", -1950, 900 + index * 110)
+        box_coverages.append(
+            sample_live_coverage(
+                material,
+                point,
+                world_min,
+                world_inv,
+                fallback_texture,
+                -1700,
+                880 + index * 220,
+            )
+        )
+    box_max_x = binary(
+        material,
+        unreal.MaterialExpressionMax,
+        box_coverages[0],
+        box_coverages[1],
+        -600,
+        1020,
+    )
+    box_max_y = binary(
+        material,
+        unreal.MaterialExpressionMax,
+        box_coverages[2],
+        box_coverages[3],
+        -600,
+        1320,
+    )
+    box_coverage = binary(
+        material, unreal.MaterialExpressionMax, box_max_x, box_max_y, -350, 1170
+    )
+
+    ground_weight = scalar_parameter(
+        material, "GroundCoverageWeight", 1.0, 700, 0
+    )
+    wall_weight = scalar_parameter(
+        material, "WallCoverageWeight", 0.0, 700, 120
+    )
+    box_weight = scalar_parameter(material, "BoxCoverageWeight", 0.0, 700, 240)
+    weighted_ground = binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        ground_coverage,
+        ground_weight,
+        950,
+        0,
+    )
+    weighted_wall = binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        wall_coverage,
+        wall_weight,
+        950,
+        120,
+    )
+    weighted_box = binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        box_coverage,
+        box_weight,
+        950,
+        240,
+    )
+    surface_sum = binary(
+        material,
+        unreal.MaterialExpressionAdd,
+        weighted_ground,
+        weighted_wall,
+        1200,
+        80,
+    )
+    surface_coverage = saturate(
+        material,
+        binary(
+            material,
+            unreal.MaterialExpressionAdd,
+            surface_sum,
+            weighted_box,
+            1450,
+            140,
+        ),
+        1650,
+        140,
+    )
     force_remembered = scalar_parameter(
-        material, "ForceRemembered", 0.0, -450, 100
+        material, "ForceRemembered", 0.0, 1200, 320
     )
     allow_live = binary(
         material,
         unreal.MaterialExpressionSubtract,
-        scalar(material, 1.0, -450, 200),
+        scalar(material, 1.0, 1200, 420),
         force_remembered,
-        -200,
-        100,
+        1450,
+        360,
     )
     effective_coverage = binary(
         material,
         unreal.MaterialExpressionMultiply,
-        coverage,
+        surface_coverage,
         allow_live,
-        50,
-        0,
+        1800,
+        220,
     )
     one_minus_coverage = binary(
         material,
         unreal.MaterialExpressionSubtract,
-        scalar(material, 1.0, -200, 200),
+        scalar(material, 1.0, 1800, 420),
         effective_coverage,
-        300,
-        100,
+        2050,
+        320,
     )
 
     luminance_weights = vector_parameter(

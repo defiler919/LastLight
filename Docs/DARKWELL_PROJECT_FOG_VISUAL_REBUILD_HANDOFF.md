@@ -6,7 +6,7 @@ Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — P2 CONTINUOUS OCCLUSION PROVEN / P3 AUTHORIZED**
+Status: **PARTIAL — P3 WALL/OBJECT SURFACE COVERAGE PROVEN / P4 AUTHORIZED**
 
 Deadline: 2026-09-05
 
@@ -40,11 +40,21 @@ Saved/DarkwellProjectFogVisualRebuild/P2/p2_evidence_index.json
 
 The first shader-input failure remains under `P2/FailedAttempts`; it is not part of the formal index.
 
+## P3 checkpoint
+
+P3 leaves ground on `FreeSpaceLiveCoverage` and classifies only the owning static surface. Walls use the maximum of two stable object-local exterior samples; the cube uses four. The sample frames are bound from native component transforms, so opposing rendered faces and camera directions cannot select contradictory states.
+
+The validated index is:
+
+```text
+Saved/DarkwellProjectFogVisualRebuild/P3/p3_evidence_index.json
+```
+
+It records 7/7 D3D12/SM6/normal-TSR cases, 0 severe hits, 1/1 P3 automation and 1/1 vertical-slice validation. The four opposing views plus 30-second along-wall and doorway strips were opened and checked frame by frame: wall top/sides, cube sides and doorway surfaces did not reverse or flicker, while behind-wall ground remained gray. The P2 raw probe and all 5,662 fractional edge pixels remained intact.
+
 ## Immediate next gate
 
-Implement P3 object-local wall surface coverage. Ground must continue using only `FreeSpaceLiveCoverage`. Each wall segment must sample both stable local exterior sides and use their maximum only for that local wall material, with tangent-local bounds. Cubes require four exterior samples. Validate north/south/east/west, top/side agreement, doorway, wall ends and no free-space leak.
-
-Dynamic subjects, Torch/Lantern/Torch and HUD restoration remain P4 work.
+Implement P4 dynamic-subject and legal-source restoration. Remove the P1/P2/P3 fixture-only Stalker suppression, apply authoritative subject snapshots so `NeverRemember` enemies are visible only while Live, keep HUD visibility on the same revision, and prove Torch/Lantern/Torch recovery. Do not change the proven continuous ground edge, P2 occlusion or P3 static-surface rules.
 
 ## Protected results and prohibitions
 

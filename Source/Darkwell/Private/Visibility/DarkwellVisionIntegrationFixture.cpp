@@ -440,6 +440,7 @@ bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP1(
 		LiveCoverageTexture,
 		WorldMin,
 		InvWorldExtent,
+		false,
 		false);
 }
 
@@ -452,6 +453,20 @@ bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP2(
 		LiveCoverageTexture,
 		WorldMin,
 		InvWorldExtent,
+		true,
+		false);
+}
+
+bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP3(
+	UTexture* LiveCoverageTexture,
+	const FVector2D WorldMin,
+	const FVector2D InvWorldExtent)
+{
+	return EnableDarkwellProjectFog(
+		LiveCoverageTexture,
+		WorldMin,
+		InvWorldExtent,
+		true,
 		true);
 }
 
@@ -474,7 +489,8 @@ bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFog(
 	UTexture* LiveCoverageTexture,
 	const FVector2D WorldMin,
 	const FVector2D InvWorldExtent,
-	const bool bShowOcclusionFixture)
+	const bool bShowOcclusionFixture,
+	const bool bEnableSurfaceCoverage)
 {
 	if (!LiveCoverageTexture
 		|| !FMath::IsFinite(WorldMin.X)
@@ -509,15 +525,26 @@ bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFog(
 		bProjectFogOverrideCaptured = true;
 	}
 	ProjectFogGroundMaterial = UMaterialInstanceDynamic::Create(SurfaceParent, this);
-	ProjectFogRememberedMaterial = UMaterialInstanceDynamic::Create(SurfaceParent, this);
-	if (!ProjectFogGroundMaterial || !ProjectFogRememberedMaterial)
+	ProjectFogOccluderMaterials.Reset();
+	for (int32 Index = 0; Index < GetProjectFogOccluderComponents().Num(); ++Index)
+	{
+		ProjectFogOccluderMaterials.Add(
+			UMaterialInstanceDynamic::Create(SurfaceParent, this));
+	}
+	if (!ProjectFogGroundMaterial
+		|| ProjectFogOccluderMaterials.ContainsByPredicate(
+			[](const UMaterialInstanceDynamic* Material) { return Material == nullptr; }))
 	{
 		DisableDarkwellProjectFog();
 		return false;
 	}
 	Ground->SetMaterial(0, ProjectFogGroundMaterial);
-	for (UMaterialInstanceDynamic* Material : {
-		ProjectFogGroundMaterial.Get(), ProjectFogRememberedMaterial.Get() })
+	TArray<UMaterialInstanceDynamic*> Materials{ProjectFogGroundMaterial.Get()};
+	for (UMaterialInstanceDynamic* Material : ProjectFogOccluderMaterials)
+	{
+		Materials.Add(Material);
+	}
+	for (UMaterialInstanceDynamic* Material : Materials)
 	{
 		Material->SetTextureParameterValue(
 			TEXT("DarkwellLiveCoverageTexture"),
@@ -538,22 +565,35 @@ bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFog(
 		TEXT("OriginalBaseColorTint"),
 		FLinearColor(0.62f, 0.72f, 0.78f, 1.0f));
 	ProjectFogGroundMaterial->SetScalarParameterValue(TEXT("ForceRemembered"), 0.0f);
-	ProjectFogRememberedMaterial->SetScalarParameterValue(TEXT("OriginalUVScale"), 6.0f);
-	ProjectFogRememberedMaterial->SetVectorParameterValue(
-		TEXT("OriginalBaseColorTint"),
-		FLinearColor(0.58f, 0.62f, 0.66f, 1.0f));
-	ProjectFogRememberedMaterial->SetScalarParameterValue(TEXT("ForceRemembered"), 1.0f);
+	ProjectFogGroundMaterial->SetScalarParameterValue(TEXT("GroundCoverageWeight"), 1.0f);
+	ProjectFogGroundMaterial->SetScalarParameterValue(TEXT("WallCoverageWeight"), 0.0f);
+	ProjectFogGroundMaterial->SetScalarParameterValue(TEXT("BoxCoverageWeight"), 0.0f);
+	for (int32 Index = 0; Index < ProjectFogOccluderMaterials.Num(); ++Index)
+	{
+		UMaterialInstanceDynamic* Material = ProjectFogOccluderMaterials[Index];
+		Material->SetScalarParameterValue(TEXT("OriginalUVScale"), 6.0f);
+		Material->SetVectorParameterValue(
+			TEXT("OriginalBaseColorTint"),
+			FLinearColor(0.58f, 0.62f, 0.66f, 1.0f));
+		ConfigureProjectFogSurfaceMaterial(*Material, Index, bEnableSurfaceCoverage);
+	}
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	ProjectFogGroundMaterial->SetScalarParameterValue(
-		TEXT("DiagnosticRawCoverageView"),
-		CVarDarkwellFogDiagnosticRawCoverageView.GetValueOnGameThread() != 0
-			? 1.0f
-			: 0.0f);
+	for (UMaterialInstanceDynamic* Material : Materials)
+	{
+		Material->SetScalarParameterValue(
+			TEXT("DiagnosticRawCoverageView"),
+			CVarDarkwellFogDiagnosticRawCoverageView.GetValueOnGameThread() != 0
+				? 1.0f
+				: 0.0f);
+	}
 #endif
-	if (ProjectFogGroundMaterial->K2_GetTextureParameterValue(
-			TEXT("DarkwellLiveCoverageTexture")) != LiveCoverageTexture
-		|| ProjectFogRememberedMaterial->K2_GetTextureParameterValue(
-			TEXT("DarkwellLiveCoverageTexture")) != LiveCoverageTexture)
+	bool bTextureBindingRejected = false;
+	for (UMaterialInstanceDynamic* Material : Materials)
+	{
+		bTextureBindingRejected |= Material->K2_GetTextureParameterValue(
+			TEXT("DarkwellLiveCoverageTexture")) != LiveCoverageTexture;
+	}
+	if (bTextureBindingRejected)
 	{
 		UE_LOG(LogTemp, Error, TEXT("DARKWELL project fog rejected coverage texture binding"));
 		DisableDarkwellProjectFog();
@@ -570,10 +610,78 @@ bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFog(
 			: ECollisionEnabled::NoCollision);
 		if (bShowOcclusionFixture)
 		{
-			Component->SetMaterial(0, ProjectFogRememberedMaterial);
+			Component->SetMaterial(0, ProjectFogOccluderMaterials[Index]);
 		}
 	}
 	return true;
+}
+
+void ADarkwellVisionIntegrationFixture::ConfigureProjectFogSurfaceMaterial(
+	UMaterialInstanceDynamic& Material,
+	const int32 OccluderIndex,
+	const bool bEnableSurfaceCoverage) const
+{
+	Material.SetScalarParameterValue(
+		TEXT("ForceRemembered"),
+		bEnableSurfaceCoverage ? 0.0f : 1.0f);
+	Material.SetScalarParameterValue(TEXT("GroundCoverageWeight"), 0.0f);
+	Material.SetScalarParameterValue(TEXT("WallCoverageWeight"), 0.0f);
+	Material.SetScalarParameterValue(TEXT("BoxCoverageWeight"), 0.0f);
+	const TArray<UStaticMeshComponent*> Components = GetProjectFogOccluderComponents();
+	if (!bEnableSurfaceCoverage || !Components.IsValidIndex(OccluderIndex))
+	{
+		return;
+	}
+	const UStaticMeshComponent* Component = Components[OccluderIndex];
+	const FVector Location3D = Component->GetComponentLocation();
+	const FVector2D Origin(Location3D.X, Location3D.Y);
+	if (OccluderIndex == 2)
+	{
+		const FVector Scale = Component->GetComponentScale();
+		const float OutsideX = FMath::Abs(Scale.X) * 50.0f
+			+ Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters;
+		const float OutsideY = FMath::Abs(Scale.Y) * 50.0f
+			+ Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters;
+		Material.SetScalarParameterValue(TEXT("BoxCoverageWeight"), 1.0f);
+		Material.SetVectorParameterValue(TEXT("BoxSamplePositiveX"),
+			FLinearColor(Origin.X + OutsideX, Origin.Y, 0.0f, 0.0f));
+		Material.SetVectorParameterValue(TEXT("BoxSampleNegativeX"),
+			FLinearColor(Origin.X - OutsideX, Origin.Y, 0.0f, 0.0f));
+		Material.SetVectorParameterValue(TEXT("BoxSamplePositiveY"),
+			FLinearColor(Origin.X, Origin.Y + OutsideY, 0.0f, 0.0f));
+		Material.SetVectorParameterValue(TEXT("BoxSampleNegativeY"),
+			FLinearColor(Origin.X, Origin.Y - OutsideY, 0.0f, 0.0f));
+		UE_LOG(LogTemp, Display,
+			TEXT("P3SurfaceBinding index=%d type=Box origin=(%.3f,%.3f) outside=(%.3f,%.3f)"),
+			OccluderIndex, Origin.X, Origin.Y, OutsideX, OutsideY);
+		return;
+	}
+
+	const bool bHorizontal = OccluderIndex == 5 || OccluderIndex == 7;
+	const FVector Normal3D = Component->GetComponentTransform().GetUnitAxis(
+		bHorizontal ? EAxis::Y : EAxis::X);
+	const FVector Tangent3D = Component->GetComponentTransform().GetUnitAxis(
+		bHorizontal ? EAxis::X : EAxis::Y);
+	const FVector Scale = Component->GetComponentScale();
+	const float HalfThickness = FMath::Abs(bHorizontal ? Scale.Y : Scale.X) * 50.0f;
+	Material.SetScalarParameterValue(TEXT("WallCoverageWeight"), 1.0f);
+	Material.SetVectorParameterValue(TEXT("SurfaceOrigin"),
+		FLinearColor(Origin.X, Origin.Y, 0.0f, 0.0f));
+	Material.SetVectorParameterValue(TEXT("SurfaceNormal"),
+		FLinearColor(Normal3D.X, Normal3D.Y, 0.0f, 0.0f));
+	Material.SetVectorParameterValue(TEXT("SurfaceTangent"),
+		FLinearColor(Tangent3D.X, Tangent3D.Y, 0.0f, 0.0f));
+	Material.SetScalarParameterValue(
+		TEXT("WallSampleDistance"),
+		HalfThickness
+			+ Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters);
+	UE_LOG(LogTemp, Display,
+		TEXT("P3SurfaceBinding index=%d type=Wall origin=(%.3f,%.3f) normal=(%.6f,%.6f) tangent=(%.6f,%.6f) sampleDistance=%.3f"),
+		OccluderIndex,
+		Origin.X, Origin.Y,
+		Normal3D.X, Normal3D.Y,
+		Tangent3D.X, Tangent3D.Y,
+		HalfThickness + Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters);
 }
 
 void ADarkwellVisionIntegrationFixture::DisableDarkwellProjectFog()
@@ -590,7 +698,7 @@ void ADarkwellVisionIntegrationFixture::DisableDarkwellProjectFog()
 		}
 	}
 	ProjectFogGroundMaterial = nullptr;
-	ProjectFogRememberedMaterial = nullptr;
+	ProjectFogOccluderMaterials.Reset();
 	ProjectFogOriginalGroundMaterial = nullptr;
 	ProjectFogOriginalOccluderMaterials.Reset();
 	ProjectFogOriginalOccluderHidden.Reset();

@@ -64,7 +64,7 @@ namespace Darkwell::SightWeaveAdapter
 		TEXT("r.Darkwell.FogVisual.Diagnostic.Trajectory"),
 		0,
 		TEXT("P1 deterministic source motion: 0=off, 1=+X, 2=-Y, 3=diagonal +X+Y, "
-			"4=+Y, 5=rotate yaw."));
+			"4=+Y, 5=rotate yaw, 6/7/8/9=fixed west/east/south/north P3 views."));
 	TAutoConsoleVariable<float> CVarDiagnosticFogTrajectorySpeed(
 		TEXT("r.Darkwell.FogVisual.Diagnostic.TrajectorySpeed"),
 		15.0f,
@@ -159,7 +159,7 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 	const int32 DiagnosticTrajectory = ProjectTrajectory != 0
 		? ProjectTrajectory
 		: Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceTrajectory.GetValueOnGameThread();
-	if (DiagnosticTrajectory >= 1 && DiagnosticTrajectory <= 5)
+	if (DiagnosticTrajectory >= 1 && DiagnosticTrajectory <= 9)
 	{
 		const float Speed = FMath::Clamp(
 			ProjectTrajectory != 0
@@ -167,7 +167,34 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 				: Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceTrajectorySpeed.GetValueOnGameThread(),
 			0.0f,
 			100.0f);
-		if (DiagnosticTrajectory == 5)
+		if (DiagnosticTrajectory >= 6)
+		{
+			const FVector FixtureOrigin = RequestedFixture->GetActorLocation();
+			FVector FixedLocation = FixtureOrigin + FVector(-650.0, -400.0, 92.0);
+			float FixedYaw = 0.0f;
+			if (DiagnosticTrajectory == 7)
+			{
+				FixedLocation = FixtureOrigin + FVector(650.0, -400.0, 92.0);
+				FixedYaw = 180.0f;
+			}
+			else if (DiagnosticTrajectory == 8)
+			{
+				FixedLocation = FixtureOrigin + FVector(-20.0, -850.0, 92.0);
+				FixedYaw = 90.0f;
+			}
+			else if (DiagnosticTrajectory == 9)
+			{
+				FixedLocation = FixtureOrigin + FVector(-20.0, 850.0, 92.0);
+				FixedYaw = -90.0f;
+			}
+			Player->SetActorLocationAndRotation(
+				FixedLocation,
+				FRotator(0.0f, FixedYaw, 0.0f),
+				false,
+				nullptr,
+				ETeleportType::TeleportPhysics);
+		}
+		else if (DiagnosticTrajectory == 5)
 		{
 			FRotator NextRotation = Player->GetActorRotation();
 			NextRotation.Yaw += Speed * FMath::Max(DeltaTime, 0.0f);
@@ -530,12 +557,12 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 		FogSegment.B = Segment.B;
 	}
 	if (!FogVisualSubsystem
-		|| !FogVisualSubsystem->ActivateP2(
+		|| !FogVisualSubsystem->ActivateP3(
 			RequestedFixture.Get(),
 			BuildFogVisualSourceSnapshot(),
 			FogVisualSegments))
 	{
-		RollbackToLegacy(TEXT("DARKWELL P2 continuous occlusion activation failed"), true);
+		RollbackToLegacy(TEXT("DARKWELL P3 wall surface activation failed"), true);
 		return false;
 	}
 #endif
@@ -555,7 +582,7 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 	UpdateSubjectAuthority();
 	FoundStalker->SetActorHiddenInGame(true);
 	UE_LOG(LogDarkwellSightWeave, Log,
-		TEXT("World=%s authority=SightWeave active visual=DarkwellContinuousP2 segments=%d oldSightWeaveVisual=Suppressed floor=%s vision=2 light=1 occluder=1 static=%d subject=%s"),
+		TEXT("World=%s authority=SightWeave active visual=DarkwellContinuousP3 segments=%d oldSightWeaveVisual=Suppressed floor=%s vision=2 light=1 occluder=1 static=%d subject=%s"),
 		*Diagnostics.WorldName.ToString(),
 		FogVisualSegments.Num(),
 		*FloorId.GetValue().ToString(),

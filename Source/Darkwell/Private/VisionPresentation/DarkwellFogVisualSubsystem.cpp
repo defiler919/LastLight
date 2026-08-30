@@ -164,6 +164,56 @@ bool FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
 	return false;
 }
 
+bool FDarkwellFogSurfaceCoverageMath::ResolveWallSideSamples(
+	const FVector2D& SurfaceWorldPosition,
+	const FVector2D& WallOrigin,
+	const FVector2D& WallNormal,
+	const FVector2D& WallTangent,
+	const float HalfThicknessCentimeters,
+	const float ExteriorEpsilonCentimeters,
+	FVector2D& OutSideA,
+	FVector2D& OutSideB)
+{
+	const FVector2D Normal = WallNormal.GetSafeNormal();
+	const FVector2D Tangent = WallTangent.GetSafeNormal();
+	if (Normal.IsNearlyZero() || Tangent.IsNearlyZero()
+		|| FMath::Abs(FVector2D::DotProduct(Normal, Tangent)) > KINDA_SMALL_NUMBER
+		|| HalfThicknessCentimeters <= 0.0f
+		|| ExteriorEpsilonCentimeters < 0.0f)
+	{
+		return false;
+	}
+	const float Along = FVector2D::DotProduct(
+		SurfaceWorldPosition - WallOrigin,
+		Tangent);
+	const FVector2D CenterlinePoint = WallOrigin + Tangent * Along;
+	const FVector2D ExteriorOffset = Normal
+		* (HalfThicknessCentimeters + ExteriorEpsilonCentimeters);
+	OutSideA = CenterlinePoint + ExteriorOffset;
+	OutSideB = CenterlinePoint - ExteriorOffset;
+	return true;
+}
+
+float FDarkwellFogSurfaceCoverageMath::CombineWallSides(
+	const float SideA,
+	const float SideB)
+{
+	return FMath::Max(
+		FMath::Clamp(SideA, 0.0f, 1.0f),
+		FMath::Clamp(SideB, 0.0f, 1.0f));
+}
+
+float FDarkwellFogSurfaceCoverageMath::CombineBoxSides(
+	const float PositiveX,
+	const float NegativeX,
+	const float PositiveY,
+	const float NegativeY)
+{
+	return FMath::Max(
+		CombineWallSides(PositiveX, NegativeX),
+		CombineWallSides(PositiveY, NegativeY));
+}
+
 void UDarkwellFogVisualSubsystem::Deinitialize()
 {
 	Deactivate();
@@ -174,7 +224,7 @@ bool UDarkwellFogVisualSubsystem::ActivateP1(
 	ADarkwellVisionIntegrationFixture* Fixture,
 	const FDarkwellFogVisualSourceSnapshot& Source)
 {
-	return Activate(Fixture, Source, {}, true);
+	return Activate(Fixture, Source, {}, 1);
 }
 
 bool UDarkwellFogVisualSubsystem::ActivateP2(
@@ -182,20 +232,32 @@ bool UDarkwellFogVisualSubsystem::ActivateP2(
 	const FDarkwellFogVisualSourceSnapshot& Source,
 	const TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments)
 {
-	return Activate(Fixture, Source, OccluderSegments, false);
+	return Activate(Fixture, Source, OccluderSegments, 2);
+}
+
+bool UDarkwellFogVisualSubsystem::ActivateP3(
+	ADarkwellVisionIntegrationFixture* Fixture,
+	const FDarkwellFogVisualSourceSnapshot& Source,
+	const TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments)
+{
+	return Activate(Fixture, Source, OccluderSegments, 3);
 }
 
 bool UDarkwellFogVisualSubsystem::Activate(
 	ADarkwellVisionIntegrationFixture* Fixture,
 	const FDarkwellFogVisualSourceSnapshot& Source,
 	const TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments,
-	const bool bP1NoOcclusion)
+	const int32 PresentationPhase)
 {
 	if (!Fixture || Fixture->GetWorld() != GetWorld() || !Source.IsValid())
 	{
 		return false;
 	}
-	if (!bP1NoOcclusion
+	if (PresentationPhase < 1 || PresentationPhase > 3)
+	{
+		return false;
+	}
+	if (PresentationPhase != 1
 		&& (OccluderSegments.IsEmpty()
 			|| OccluderSegments.Num() > Darkwell::FogVisual::MaxOccluderSegments))
 	{
@@ -215,11 +277,22 @@ bool UDarkwellFogVisualSubsystem::Activate(
 		Deactivate();
 		return false;
 	}
-	const bool bFixtureEnabled = bP1NoOcclusion
-		? Fixture->EnableDarkwellProjectFogP1(
-			LiveCoverageTexture, Mapping.WorldMin, Mapping.InvWorldExtent)
-		: Fixture->EnableDarkwellProjectFogP2(
+	bool bFixtureEnabled = false;
+	if (PresentationPhase == 1)
+	{
+		bFixtureEnabled = Fixture->EnableDarkwellProjectFogP1(
 			LiveCoverageTexture, Mapping.WorldMin, Mapping.InvWorldExtent);
+	}
+	else if (PresentationPhase == 2)
+	{
+		bFixtureEnabled = Fixture->EnableDarkwellProjectFogP2(
+			LiveCoverageTexture, Mapping.WorldMin, Mapping.InvWorldExtent);
+	}
+	else
+	{
+		bFixtureEnabled = Fixture->EnableDarkwellProjectFogP3(
+			LiveCoverageTexture, Mapping.WorldMin, Mapping.InvWorldExtent);
+	}
 	if (!bFixtureEnabled)
 	{
 		Deactivate();
@@ -229,7 +302,8 @@ bool UDarkwellFogVisualSubsystem::Activate(
 	Diagnostics = FDarkwellFogVisualDiagnostics();
 	Diagnostics.bActive = true;
 	Diagnostics.bOldSightWeavePresentationSuppressed = true;
-	Diagnostics.bP1NoOcclusion = bP1NoOcclusion;
+	Diagnostics.bP1NoOcclusion = PresentationPhase == 1;
+	Diagnostics.bP3SurfaceCoverage = PresentationPhase == 3;
 	Diagnostics.CachedOccluderSegmentCount = CachedOccluderSegments.Num();
 	Diagnostics.ActivationRevision = Source.AuthorityRevision;
 	if (!DrawCoverage(Source))
@@ -239,7 +313,7 @@ bool UDarkwellFogVisualSubsystem::Activate(
 	}
 	UE_LOG(LogDarkwellFogVisual, Log,
 		TEXT("%s active policy=RememberedFromStart extent=%dx%d cmPerTexel=%.3f cachedSegments=%d oldSightWeaveVisual=Suppressed"),
-		bP1NoOcclusion ? TEXT("P1") : TEXT("P2"),
+		*FString::Printf(TEXT("P%d"), PresentationPhase),
 		Mapping.TextureExtent.X,
 		Mapping.TextureExtent.Y,
 		Mapping.CentimetersPerTexel,

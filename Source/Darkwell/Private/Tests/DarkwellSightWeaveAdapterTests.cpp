@@ -267,10 +267,12 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 				&& LiveCoverage->AddressX == TextureAddress::TA_Clamp
 				&& LiveCoverage->AddressY == TextureAddress::TA_Clamp);
 	}
-	TestTrue(TEXT("Project fog is active on the P2 fixture"),
+	TestTrue(TEXT("Project fog is active on the P3 fixture"),
 		Fixture->IsDarkwellProjectFogEnabled());
 	TestFalse(TEXT("Project coverage uses continuous P2 occlusion"),
 		ProjectFog->GetDiagnostics().bP1NoOcclusion);
+	TestTrue(TEXT("Project presentation enables object-local P3 surface coverage"),
+		ProjectFog->GetDiagnostics().bP3SurfaceCoverage);
 	TestEqual(TEXT("Project presentation caches all fixture occluder segments"),
 		ProjectFog->GetDiagnostics().CachedOccluderSegmentCount, 11);
 	TestEqual(TEXT("Project coverage remains Ultra-equivalent 2.5 cm per texel"),

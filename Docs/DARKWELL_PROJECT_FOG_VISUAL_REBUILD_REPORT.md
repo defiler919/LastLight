@@ -6,7 +6,7 @@ Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — P2 CONTINUOUS OCCLUSION PROVEN / P3 AUTHORIZED**
+Status: **PARTIAL — P3 WALL/OBJECT SURFACE COVERAGE PROVEN / P4 AUTHORIZED**
 
 24-hour P1 gate: 2026-08-31
 
@@ -54,7 +54,7 @@ The smallest project seam keeps SightWeave as the CPU authority and replaces onl
 4. `ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP1` binds that target and its world mapping to the DARKWELL floor material. The material computes `Known=1`, `Live=coverage`, `Remembered=1-coverage` and uses filtered real static BaseColor for Remembered.
 5. `USightWeaveRenderWorldSubsystem::SetPresentationSuppressed` prevents the old scene-view composite, tile render packet and default presentation selection from registering/running while the project candidate is active. Rollback restores the prior subsystem state.
 
-P1 deliberately hides walls, the landmark and the dynamic threat in the no-wall fixture only. That is a phase isolation mechanism, not the wall solution. P2 must restore proof geometry and establish continuous free-space occlusion before P3 surface classification.
+P1 deliberately hid walls, the landmark and the dynamic threat in the no-wall fixture only. P2 restored proof geometry and continuous free-space occlusion. P3 now classifies each static proof surface from stable object-local exterior samples while leaving ground/free-space coverage unchanged. Dynamic-subject restoration remains isolated to P4.
 
 ## 5. P1 continuous-coverage result
 
@@ -136,8 +136,33 @@ The first dynamic attempt is preserved in `Saved/DarkwellProjectFogVisualRebuild
 
 The validated P2 index is `Saved/DarkwellProjectFogVisualRebuild/P2/p2_evidence_index.json`.
 
-## 8. Current limitations and next gate
+## 8. P3 wall/object surface-coverage result
 
-P1 proves only unoccluded body-circle/cone coverage on the strict no-wall floor. Continuous occlusion, doorway/wall-end/concave/intersection geometry, wall/object surface coverage, restored Live-only subjects, Torch/Lantern/Torch, 1440p and the final soak remain pending. The current state is not ready for user PIE.
+P3 passed its bounded matrix on 2026-08-30.
 
-P3 is now authorized. It must add a separate object-local `WallSurfaceLiveCoverage` without writing it back to ground/free-space coverage. It must prove stable two-sided wall sampling, tangent-local limits, cube four-side semantics, north/south/east/west agreement and no behind-wall leak before P4 may restore dynamic subjects.
+Implementation:
+
+- ground continues to use only `FreeSpaceLiveCoverage`; surface classification never writes Live back into free space;
+- every wall material reconstructs a stable object-local centerline and evaluates the maximum coverage of its two exterior-side samples;
+- the cube uses the maximum of four stable exterior samples;
+- tangent and normal data are derived from the owning native component transform, not the current camera or rendered face;
+- the doorway pair, rotated wall, exposed ends, concave obstacle, T-junction and cube keep independent material instances and bindings;
+- the formal material continues using derivative-selected, bilinear/clamped `R16F` sampling and normal TSR. No blur, forced mip zero, threshold expansion or screen-space face heuristic was introduced.
+
+Validation:
+
+- `Darkwell.FogVisual.P3.ObjectLocalSurfaceCoverage`: 1/1 Success;
+- updated vertical slice: 1/1 Success with P3 presentation active;
+- 7/7 D3D12/SM6/normal-TSR cases: raw, west, east, south, north, 30-second along-wall and 30-second doorway;
+- raw coverage retained `min=0`, `max=1`, 5,662 fractional pixels and the P2 occlusion probe `front=1`, `behind=0`, `doorway=1`;
+- all eight expected wall/box bindings were recorded with stable world origin, normal/tangent or four-side extent;
+- direct inspection of four opposing contacts and every 20-frame strip found no face-state reversal, direction-dependent wall classification, contact-edge flicker, doorway closure or behind-wall ground leak;
+- severe scan: 0.
+
+The validated P3 index is `Saved/DarkwellProjectFogVisualRebuild/P3/p3_evidence_index.json`. All videos, contacts, frame strips, logs and automation reports remain ignored under `Saved`.
+
+## 9. Current limitations and next gate
+
+P1 continuous coverage, P2 free-space occlusion and P3 object-local wall/object surface coverage are proven only as agent checkpoints. Restored Live-only dynamic subjects, `NeverRemember` runtime behavior, Stalker/HUD synchronization, Torch/Lantern/Torch transitions, 1440p and the final soak remain pending. The current state is not ready for user PIE.
+
+P4 is now authorized. It may reconnect dynamic subjects and legal source transitions without changing the proven ground, occlusion or static-surface rules. P4 must preserve normal TSR, gray/live continuity, doorway and wall behavior, and must keep enemies from ever entering Remembered.

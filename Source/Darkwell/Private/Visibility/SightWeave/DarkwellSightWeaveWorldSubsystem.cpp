@@ -35,6 +35,10 @@ namespace Darkwell::SightWeaveAdapter
 		TEXT("r.SightWeave.Diagnostic.LogGameTransforms"),
 		0,
 		TEXT("Emit one player/camera transform record per game frame for visual rescue."));
+	TAutoConsoleVariable<int32> CVarDiagnosticSurfaceFogOff(
+		TEXT("r.Darkwell.SightWeave.Diagnostic.SurfaceFogOff"),
+		0,
+		TEXT("Development-only native-material control for SurfaceMaterial visual evidence."));
 #endif
 
 	FTransform BuildSourceTransform(const ADarkwellCharacter& Character)
@@ -183,6 +187,7 @@ bool UDarkwellSightWeaveWorldSubsystem::TryGetSubjectSnapshot(
 
 bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 {
+	bool bSurfaceFogOffDiagnostic = false;
 	if (Diagnostics.State != EDarkwellVisibilityAuthorityState::SightWeaveRequested
 		|| !RequestedFixture.IsValid())
 	{
@@ -280,10 +285,15 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 	}
 	const FSightWeaveSurfaceTextureMapping& SurfaceMapping =
 		RenderSubsystem->GetSurfaceTextureMapping();
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	bSurfaceFogOffDiagnostic =
+		Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceFogOff.GetValueOnGameThread() != 0;
+#endif
 	if (!RequestedFixture->EnableSightWeaveSurfaceMaterial(
 			RenderSubsystem->GetSurfaceStateTexture(),
 			SurfaceMapping.WorldMin,
-			SurfaceMapping.InvWorldExtent))
+			SurfaceMapping.InvWorldExtent,
+			bSurfaceFogOffDiagnostic))
 	{
 		RollbackToLegacy(TEXT("Surface-material fixture binding failed"), true);
 		return false;
@@ -303,8 +313,10 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 	Diagnostics.bSightWeavePresentationEnabled = true;
 	UpdateSubjectAuthority();
 	UE_LOG(LogDarkwellSightWeave, Log,
-		TEXT("World=%s authority=SightWeave active floor=%s vision=2 light=1 occluder=1 static=%d subject=%s"),
-		*Diagnostics.WorldName.ToString(), *FloorId.GetValue().ToString(),
+		TEXT("World=%s authority=SightWeave active surface=%s floor=%s vision=2 light=1 occluder=1 static=%d subject=%s"),
+		*Diagnostics.WorldName.ToString(),
+		bSurfaceFogOffDiagnostic ? TEXT("NativeFogOffControl") : TEXT("SurfaceMaterial"),
+		*FloorId.GetValue().ToString(),
 		StaticEnvironmentHandles.Num(), *FoundStalker->GetPersistentId().ToString());
 	return true;
 }

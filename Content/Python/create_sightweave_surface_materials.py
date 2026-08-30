@@ -126,6 +126,9 @@ def create_function(asset_tools):
     memory_contrast = function_input(
         function, "MemoryContrast", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, 650
     )
+    diagnostic_fog_off = function_input(
+        function, "DiagnosticFogOff", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, 800
+    )
 
     state_max_a = make_binary(
         function, unreal.MaterialExpressionMax, state_center, state_positive, -1500, -200, True
@@ -273,7 +276,13 @@ def create_function(asset_tools):
     connect(final_emissive, "", make_attrs, "EmissiveColor")
     connect(break_attrs, "Normal", make_attrs, "Normal")
     connect(break_attrs, "AmbientOcclusion", make_attrs, "AmbientOcclusion")
-    function_output(function, "MaterialAttributes", make_attrs, "", 2300, -500)
+    diagnostic_blend = expr(
+        function, unreal.MaterialExpressionBlendMaterialAttributes, 2300, -500, function=True
+    )
+    connect(make_attrs, "", diagnostic_blend, "A")
+    connect(attrs, "", diagnostic_blend, "B")
+    connect(diagnostic_fog_off, "", diagnostic_blend, "Alpha")
+    function_output(function, "MaterialAttributes", diagnostic_blend, "", 2550, -500)
 
     unreal.MaterialEditingLibrary.update_material_function(function, None)
     unreal.EditorAssetLibrary.save_asset(full_path, only_if_is_dirty=False)
@@ -404,6 +413,9 @@ def create_master(asset_tools, function):
     memory_saturation = scalar_parameter(material, "RememberedSaturation", 0.18, -300, 750)
     memory_brightness = scalar_parameter(material, "RememberedBrightness", 0.32, -300, 850)
     memory_contrast = scalar_parameter(material, "RememberedContrast", 0.68, -300, 950)
+    diagnostic_fog_off = scalar_parameter(
+        material, "SightWeaveDiagnosticFogOff", 0.0, -300, 1050
+    )
 
     call = expr(material, unreal.MaterialExpressionMaterialFunctionCall, 0, 0)
     call.set_material_function(function)
@@ -415,6 +427,7 @@ def create_master(asset_tools, function):
     connect(memory_saturation, "", call, "MemorySaturation")
     connect(memory_brightness, "", call, "MemoryBrightness")
     connect(memory_contrast, "", call, "MemoryContrast")
+    connect(diagnostic_fog_off, "", call, "DiagnosticFogOff")
     if not unreal.MaterialEditingLibrary.connect_material_property(
         call, "MaterialAttributes", unreal.MaterialProperty.MP_MATERIAL_ATTRIBUTES
     ):

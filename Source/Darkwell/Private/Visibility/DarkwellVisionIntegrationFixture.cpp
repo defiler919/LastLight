@@ -159,7 +159,8 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 bool ADarkwellVisionIntegrationFixture::EnableSightWeaveSurfaceMaterial(
 	UTexture* StateTexture,
 	const FVector2D WorldMin,
-	const FVector2D InvWorldExtent)
+	const FVector2D InvWorldExtent,
+	const bool bDiagnosticFogOff)
 {
 	if (!StateTexture || !FMath::IsFinite(WorldMin.X) || !FMath::IsFinite(WorldMin.Y)
 		|| !FMath::IsFinite(InvWorldExtent.X) || !FMath::IsFinite(InvWorldExtent.Y)
@@ -208,6 +209,9 @@ bool ADarkwellVisionIntegrationFixture::EnableSightWeaveSurfaceMaterial(
 		Material->SetScalarParameterValue(
 			TEXT("SightWeaveWallSampleBiasCm"),
 			Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters);
+		Material->SetScalarParameterValue(
+			TEXT("SightWeaveDiagnosticFogOff"),
+			bDiagnosticFogOff ? 1.0f : 0.0f);
 	}
 	Ground->SetMaterial(0, SurfaceGroundMaterial);
 	WallSouth->SetMaterial(0, SurfaceWallMaterial);

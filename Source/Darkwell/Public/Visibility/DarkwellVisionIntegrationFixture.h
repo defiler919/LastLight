@@ -78,7 +78,8 @@ public:
 	bool EnableSightWeaveSurfaceMaterial(
 		UTexture* StateTexture,
 		FVector2D WorldMin,
-		FVector2D InvWorldExtent);
+		FVector2D InvWorldExtent,
+		bool bDiagnosticFogOff = false);
 	void DisableSightWeaveSurfaceMaterial();
 	bool IsSightWeaveSurfaceMaterialEnabled() const
 	{

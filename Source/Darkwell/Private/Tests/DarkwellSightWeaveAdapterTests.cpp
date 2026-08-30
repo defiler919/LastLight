@@ -229,8 +229,8 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("Ground and landmark are immutable Remembered surfaces"),
 		StaticSurfaceCount, 2);
-	TestEqual(TEXT("Both walls are independently classified occluder surfaces"),
-		OccluderSurfaceCount, 2);
+	TestEqual(TEXT("P2 proof walls are explicitly classified occluder surfaces"),
+		OccluderSurfaceCount, 7);
 	Stalker->ConfigurePersistentId(FName(TEXT("Enemy.Stalker.VisionIntegration")));
 
 	UDarkwellSightWeaveWorldSubsystem* Adapter =
@@ -267,8 +267,12 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 				&& LiveCoverage->AddressX == TextureAddress::TA_Clamp
 				&& LiveCoverage->AddressY == TextureAddress::TA_Clamp);
 	}
-	TestTrue(TEXT("Project fog is active on the P1 fixture"),
+	TestTrue(TEXT("Project fog is active on the P2 fixture"),
 		Fixture->IsDarkwellProjectFogEnabled());
+	TestFalse(TEXT("Project coverage uses continuous P2 occlusion"),
+		ProjectFog->GetDiagnostics().bP1NoOcclusion);
+	TestEqual(TEXT("Project presentation caches all fixture occluder segments"),
+		ProjectFog->GetDiagnostics().CachedOccluderSegmentCount, 11);
 	TestEqual(TEXT("Project coverage remains Ultra-equivalent 2.5 cm per texel"),
 		ProjectFog->GetMapping().CentimetersPerTexel, 2.5f);
 	TestFalse(TEXT("Legacy visibility writes are disabled"),

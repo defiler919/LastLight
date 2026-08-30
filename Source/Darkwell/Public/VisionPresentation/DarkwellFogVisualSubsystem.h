@@ -10,6 +10,15 @@ class ADarkwellVisionIntegrationFixture;
 class UMaterialInstanceDynamic;
 class UTextureRenderTarget2D;
 
+/** Cached continuous 2D occluder geometry supplied by the project adapter. */
+struct DARKWELL_API FDarkwellFogVisualSegment
+{
+	FVector2D A = FVector2D::ZeroVector;
+	FVector2D B = FVector2D::ZeroVector;
+
+	bool IsValid() const;
+};
+
 /** Extensible initial-knowledge policy. The current rebuild implements only RememberedFromStart. */
 UENUM()
 enum class EDarkwellInitialKnowledgePolicy : uint8
@@ -56,6 +65,10 @@ public:
 		const FDarkwellFogVisualSourceSnapshot& Source,
 		const FVector2D& WorldPosition,
 		float TransitionWidthCentimeters);
+	static bool IsBlockedBySegments(
+		const FVector2D& SourceOrigin,
+		const FVector2D& WorldPosition,
+		TConstArrayView<FDarkwellFogVisualSegment> Segments);
 };
 
 struct DARKWELL_API FDarkwellFogVisualDiagnostics
@@ -71,6 +84,7 @@ struct DARKWELL_API FDarkwellFogVisualDiagnostics
 	bool bActive = false;
 	bool bOldSightWeavePresentationSuppressed = false;
 	bool bP1NoOcclusion = true;
+	int32 CachedOccluderSegmentCount = 0;
 };
 
 /**
@@ -88,6 +102,10 @@ public:
 	bool ActivateP1(
 		ADarkwellVisionIntegrationFixture* Fixture,
 		const FDarkwellFogVisualSourceSnapshot& Source);
+	bool ActivateP2(
+		ADarkwellVisionIntegrationFixture* Fixture,
+		const FDarkwellFogVisualSourceSnapshot& Source,
+		TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments);
 	bool UpdateSource(const FDarkwellFogVisualSourceSnapshot& Source);
 	void Deactivate();
 
@@ -97,9 +115,15 @@ public:
 	const FDarkwellFogVisualDiagnostics& GetDiagnostics() const { return Diagnostics; }
 
 private:
+	bool Activate(
+		ADarkwellVisionIntegrationFixture* Fixture,
+		const FDarkwellFogVisualSourceSnapshot& Source,
+		TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments,
+		bool bP1NoOcclusion);
 	bool CreateResources(const FBox2D& WorldBounds);
 	bool DrawCoverage(const FDarkwellFogVisualSourceSnapshot& Source);
 	void UpdateMaterialParameters(const FDarkwellFogVisualSourceSnapshot& Source);
+	bool UpdateOccluderParameters(TConstArrayView<FDarkwellFogVisualSegment> Segments);
 	void TryDiagnosticReadback();
 
 	UPROPERTY(Transient)
@@ -113,6 +137,7 @@ private:
 
 	FDarkwellFogVisualMapping Mapping;
 	FDarkwellFogVisualSourceSnapshot LastSource;
+	TArray<FDarkwellFogVisualSegment> CachedOccluderSegments;
 	FDarkwellFogVisualDiagnostics Diagnostics;
 	int32 DiagnosticReadbackFrameCount = 0;
 };

@@ -6,7 +6,7 @@ Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — P1 CONTINUOUS LIVE COVERAGE PROVEN / P2 AUTHORIZED**
+Status: **PARTIAL — P2 CONTINUOUS OCCLUSION PROVEN / P3 AUTHORIZED**
 
 Deadline: 2026-09-05
 
@@ -28,11 +28,23 @@ Saved/DarkwellProjectFogVisualRebuild/P1/p1_evidence_index.json
 
 It records 15/15 validated D3D12/SM6/normal-TSR cases, 0 severe hits, 3/3 continuous-coverage automation results and 1/1 vertical-slice result. Raw X/Y/diagonal centroid motion matches 0.25/0.5/1.0 texel input and all samples contain fractional edge values. The 20-second fixed and four 30-second motion captures were opened as contact sheets and adjacent-frame strips; no periodic whole-grid step or large jagged recurrence was observed.
 
+## P2 checkpoint
+
+P2 now caches and evaluates 11 continuous world-space segments for the doorway, rotated wall, cube, wall ends, concave obstacle and T-junction. The normal D3D12/SM6/TSR raw probe measured `front=1`, `behind=0`, `doorway=1`, with 5,662 fractional pixels. Five formal evidence cases passed with zero severe hits and were opened as full contacts and adjacent-frame strips.
+
+The validated index is:
+
+```text
+Saved/DarkwellProjectFogVisualRebuild/P2/p2_evidence_index.json
+```
+
+The first shader-input failure remains under `P2/FailedAttempts`; it is not part of the formal index.
+
 ## Immediate next gate
 
-Implement P2 continuous free-space occlusion only. Restore the proof fixture walls through the existing Unreal-owned fixture path, cache stable 2D occluder geometry, produce continuous nearest-hit visibility clipped by the legal circle/cone, and prove that behind-wall free space remains Remembered.
+Implement P3 object-local wall surface coverage. Ground must continue using only `FreeSpaceLiveCoverage`. Each wall segment must sample both stable local exterior sides and use their maximum only for that local wall material, with tangent-local bounds. Cubes require four exterior samples. Validate north/south/east/west, top/side agreement, doorway, wall ends and no free-space leak.
 
-Do not begin P3 wall/object surface coverage until raw P2 occlusion passes. Dynamic subjects, Torch/Lantern/Torch and HUD restoration remain P4 work.
+Dynamic subjects, Torch/Lantern/Torch and HUD restoration remain P4 work.
 
 ## Protected results and prohibitions
 

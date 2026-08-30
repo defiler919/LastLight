@@ -22,6 +22,21 @@ namespace Darkwell::VisionIntegrationFixture
 	constexpr double WallSouthMaxY = -150.0;
 	constexpr double WallNorthMinY = 150.0;
 	constexpr double WallNorthMaxY = 650.0;
+	constexpr double RotatedWallCenterX = 350.0;
+	constexpr double RotatedWallCenterY = -420.0;
+	constexpr double RotatedWallHalfLength = 250.0;
+	constexpr double RotatedWallYawDegrees = 32.0;
+	constexpr double LandmarkCenterX = 650.0;
+	constexpr double LandmarkCenterY = 500.0;
+	constexpr double LandmarkHalfExtent = 75.0;
+	constexpr double ConcaveX = 520.0;
+	constexpr double ConcaveCornerY = 250.0;
+	constexpr double ConcaveTopY = 550.0;
+	constexpr double ConcaveRightX = 820.0;
+	constexpr double JunctionX = 1050.0;
+	constexpr double JunctionMinY = -250.0;
+	constexpr double JunctionMaxY = 250.0;
+	constexpr double JunctionRightX = 1350.0;
 
 	TArray<FVector2D> Rectangle(
 		const double MinX,
@@ -44,6 +59,30 @@ namespace Darkwell::VisionIntegrationFixture
 		Component.SetRenderCustomDepth(true);
 		Component.SetCustomDepthStencilWriteMask(ERendererStencilMask::ERSM_Default);
 		Component.SetCustomDepthStencilValue(StencilValue);
+	}
+
+	void ConfigureFixtureOccluder(
+		UStaticMeshComponent& Component,
+		USceneComponent& Parent,
+		const FVector& Location,
+		const FVector& Scale,
+		const FRotator& Rotation = FRotator::ZeroRotator)
+	{
+		Component.SetupAttachment(&Parent);
+		Component.SetRelativeLocation(Location);
+		Component.SetRelativeRotation(Rotation);
+		Component.SetRelativeScale3D(Scale);
+		Component.SetMobility(EComponentMobility::Static);
+		Component.SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+		ConfigureRememberedSceneSurface(
+			Component,
+			SightWeave::RememberedScene::OccluderSurfaceStencilValue);
+		Component.SetCustomPrimitiveDataFloat(
+			Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex,
+			Darkwell::SightWeaveSurface::WallOrCubeSideCategory);
+		Component.SetCustomPrimitiveDataFloat(
+			Darkwell::SightWeaveSurface::WallSampleDistanceCustomPrimitiveDataIndex,
+			Darkwell::SightWeaveSurface::FixtureWallSampleDistanceCentimeters);
 	}
 }
 
@@ -165,6 +204,64 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 		Darkwell::SightWeaveSurface::WallSampleDistanceCustomPrimitiveDataIndex,
 		Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters);
 
+	RotatedWall = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RotatedWall"));
+	Darkwell::VisionIntegrationFixture::ConfigureFixtureOccluder(
+		*RotatedWall,
+		*SceneRoot,
+		FVector(
+			Darkwell::VisionIntegrationFixture::RotatedWallCenterX,
+			Darkwell::VisionIntegrationFixture::RotatedWallCenterY,
+			100.0f),
+		FVector(0.4f, 5.0f, 2.0f),
+		FRotator(0.0f, Darkwell::VisionIntegrationFixture::RotatedWallYawDegrees, 0.0f));
+
+	ConcaveWallVertical = CreateDefaultSubobject<UStaticMeshComponent>(
+		TEXT("ConcaveWallVertical"));
+	Darkwell::VisionIntegrationFixture::ConfigureFixtureOccluder(
+		*ConcaveWallVertical,
+		*SceneRoot,
+		FVector(
+			Darkwell::VisionIntegrationFixture::ConcaveX,
+			(Darkwell::VisionIntegrationFixture::ConcaveCornerY
+				+ Darkwell::VisionIntegrationFixture::ConcaveTopY) * 0.5,
+			100.0f),
+		FVector(0.4f, 3.0f, 2.0f));
+
+	ConcaveWallHorizontal = CreateDefaultSubobject<UStaticMeshComponent>(
+		TEXT("ConcaveWallHorizontal"));
+	Darkwell::VisionIntegrationFixture::ConfigureFixtureOccluder(
+		*ConcaveWallHorizontal,
+		*SceneRoot,
+		FVector(
+			(Darkwell::VisionIntegrationFixture::ConcaveX
+				+ Darkwell::VisionIntegrationFixture::ConcaveRightX) * 0.5,
+			Darkwell::VisionIntegrationFixture::ConcaveCornerY,
+			100.0f),
+		FVector(3.0f, 0.4f, 2.0f));
+
+	JunctionWallVertical = CreateDefaultSubobject<UStaticMeshComponent>(
+		TEXT("JunctionWallVertical"));
+	Darkwell::VisionIntegrationFixture::ConfigureFixtureOccluder(
+		*JunctionWallVertical,
+		*SceneRoot,
+		FVector(
+			Darkwell::VisionIntegrationFixture::JunctionX,
+			0.0f,
+			100.0f),
+		FVector(0.4f, 5.0f, 2.0f));
+
+	JunctionWallHorizontal = CreateDefaultSubobject<UStaticMeshComponent>(
+		TEXT("JunctionWallHorizontal"));
+	Darkwell::VisionIntegrationFixture::ConfigureFixtureOccluder(
+		*JunctionWallHorizontal,
+		*SceneRoot,
+		FVector(
+			(Darkwell::VisionIntegrationFixture::JunctionX
+				+ Darkwell::VisionIntegrationFixture::JunctionRightX) * 0.5,
+			0.0f,
+			100.0f),
+		FVector(3.0f, 0.4f, 2.0f));
+
 	GreyboxKeyLight = CreateDefaultSubobject<UDirectionalLightComponent>(TEXT("GreyboxKeyLight"));
 	GreyboxKeyLight->SetupAttachment(SceneRoot);
 	GreyboxKeyLight->SetRelativeRotation(FRotator(-55.0f, -35.0f, 0.0f));
@@ -186,6 +283,11 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 		WallSouth->SetStaticMesh(CubeMesh.Object);
 		WallNorth->SetStaticMesh(CubeMesh.Object);
 		MemoryLandmark->SetStaticMesh(CubeMesh.Object);
+		RotatedWall->SetStaticMesh(CubeMesh.Object);
+		ConcaveWallVertical->SetStaticMesh(CubeMesh.Object);
+		ConcaveWallHorizontal->SetStaticMesh(CubeMesh.Object);
+		JunctionWallVertical->SetStaticMesh(CubeMesh.Object);
+		JunctionWallHorizontal->SetStaticMesh(CubeMesh.Object);
 	}
 }
 
@@ -334,6 +436,46 @@ bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP1(
 	const FVector2D WorldMin,
 	const FVector2D InvWorldExtent)
 {
+	return EnableDarkwellProjectFog(
+		LiveCoverageTexture,
+		WorldMin,
+		InvWorldExtent,
+		false);
+}
+
+bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP2(
+	UTexture* LiveCoverageTexture,
+	const FVector2D WorldMin,
+	const FVector2D InvWorldExtent)
+{
+	return EnableDarkwellProjectFog(
+		LiveCoverageTexture,
+		WorldMin,
+		InvWorldExtent,
+		true);
+}
+
+TArray<UStaticMeshComponent*>
+ADarkwellVisionIntegrationFixture::GetProjectFogOccluderComponents() const
+{
+	return {
+		WallSouth,
+		WallNorth,
+		MemoryLandmark,
+		RotatedWall,
+		ConcaveWallVertical,
+		ConcaveWallHorizontal,
+		JunctionWallVertical,
+		JunctionWallHorizontal
+	};
+}
+
+bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFog(
+	UTexture* LiveCoverageTexture,
+	const FVector2D WorldMin,
+	const FVector2D InvWorldExtent,
+	const bool bShowOcclusionFixture)
+{
 	if (!LiveCoverageTexture
 		|| !FMath::IsFinite(WorldMin.X)
 		|| !FMath::IsFinite(WorldMin.Y)
@@ -355,38 +497,52 @@ bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP1(
 	if (!bProjectFogOverrideCaptured)
 	{
 		ProjectFogOriginalGroundMaterial = Ground->GetMaterial(0);
-		bProjectFogOriginalWallSouthHidden = WallSouth->bHiddenInGame;
-		bProjectFogOriginalWallNorthHidden = WallNorth->bHiddenInGame;
-		bProjectFogOriginalLandmarkHidden = MemoryLandmark->bHiddenInGame;
-		ProjectFogOriginalWallSouthCollision = WallSouth->GetCollisionEnabled();
-		ProjectFogOriginalWallNorthCollision = WallNorth->GetCollisionEnabled();
-		ProjectFogOriginalLandmarkCollision = MemoryLandmark->GetCollisionEnabled();
+		ProjectFogOriginalOccluderMaterials.Reset();
+		ProjectFogOriginalOccluderHidden.Reset();
+		ProjectFogOriginalOccluderCollision.Reset();
+		for (UStaticMeshComponent* Component : GetProjectFogOccluderComponents())
+		{
+			ProjectFogOriginalOccluderMaterials.Add(Component->GetMaterial(0));
+			ProjectFogOriginalOccluderHidden.Add(Component->bHiddenInGame);
+			ProjectFogOriginalOccluderCollision.Add(Component->GetCollisionEnabled());
+		}
 		bProjectFogOverrideCaptured = true;
 	}
 	ProjectFogGroundMaterial = UMaterialInstanceDynamic::Create(SurfaceParent, this);
-	if (!ProjectFogGroundMaterial)
+	ProjectFogRememberedMaterial = UMaterialInstanceDynamic::Create(SurfaceParent, this);
+	if (!ProjectFogGroundMaterial || !ProjectFogRememberedMaterial)
 	{
 		DisableDarkwellProjectFog();
 		return false;
 	}
 	Ground->SetMaterial(0, ProjectFogGroundMaterial);
-	ProjectFogGroundMaterial->SetTextureParameterValue(
-		TEXT("DarkwellLiveCoverageTexture"),
-		LiveCoverageTexture);
-	ProjectFogGroundMaterial->SetVectorParameterValue(
-		TEXT("FogWorldMin"),
-		FLinearColor(
-			static_cast<float>(WorldMin.X),
-			static_cast<float>(WorldMin.Y), 0.0f, 0.0f));
-	ProjectFogGroundMaterial->SetVectorParameterValue(
-		TEXT("FogWorldInvExtent"),
-		FLinearColor(
-			static_cast<float>(InvWorldExtent.X),
-			static_cast<float>(InvWorldExtent.Y), 0.0f, 0.0f));
+	for (UMaterialInstanceDynamic* Material : {
+		ProjectFogGroundMaterial.Get(), ProjectFogRememberedMaterial.Get() })
+	{
+		Material->SetTextureParameterValue(
+			TEXT("DarkwellLiveCoverageTexture"),
+			LiveCoverageTexture);
+		Material->SetVectorParameterValue(
+			TEXT("FogWorldMin"),
+			FLinearColor(
+				static_cast<float>(WorldMin.X),
+				static_cast<float>(WorldMin.Y), 0.0f, 0.0f));
+		Material->SetVectorParameterValue(
+			TEXT("FogWorldInvExtent"),
+			FLinearColor(
+				static_cast<float>(InvWorldExtent.X),
+				static_cast<float>(InvWorldExtent.Y), 0.0f, 0.0f));
+	}
 	ProjectFogGroundMaterial->SetScalarParameterValue(TEXT("OriginalUVScale"), 18.0f);
 	ProjectFogGroundMaterial->SetVectorParameterValue(
 		TEXT("OriginalBaseColorTint"),
 		FLinearColor(0.62f, 0.72f, 0.78f, 1.0f));
+	ProjectFogGroundMaterial->SetScalarParameterValue(TEXT("ForceRemembered"), 0.0f);
+	ProjectFogRememberedMaterial->SetScalarParameterValue(TEXT("OriginalUVScale"), 6.0f);
+	ProjectFogRememberedMaterial->SetVectorParameterValue(
+		TEXT("OriginalBaseColorTint"),
+		FLinearColor(0.58f, 0.62f, 0.66f, 1.0f));
+	ProjectFogRememberedMaterial->SetScalarParameterValue(TEXT("ForceRemembered"), 1.0f);
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	ProjectFogGroundMaterial->SetScalarParameterValue(
 		TEXT("DiagnosticRawCoverageView"),
@@ -395,21 +551,28 @@ bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP1(
 			: 0.0f);
 #endif
 	if (ProjectFogGroundMaterial->K2_GetTextureParameterValue(
-		TEXT("DarkwellLiveCoverageTexture")) != LiveCoverageTexture)
+			TEXT("DarkwellLiveCoverageTexture")) != LiveCoverageTexture
+		|| ProjectFogRememberedMaterial->K2_GetTextureParameterValue(
+			TEXT("DarkwellLiveCoverageTexture")) != LiveCoverageTexture)
 	{
 		UE_LOG(LogTemp, Error, TEXT("DARKWELL project fog rejected coverage texture binding"));
 		DisableDarkwellProjectFog();
 		return false;
 	}
 
-	// P1 is a strict no-wall proof. These primitives and their collision are restored
-	// when the project presentation deactivates; P2 owns their explicit return.
-	WallSouth->SetHiddenInGame(true);
-	WallNorth->SetHiddenInGame(true);
-	MemoryLandmark->SetHiddenInGame(true);
-	WallSouth->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	WallNorth->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	MemoryLandmark->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	const TArray<UStaticMeshComponent*> Components = GetProjectFogOccluderComponents();
+	for (int32 Index = 0; Index < Components.Num(); ++Index)
+	{
+		UStaticMeshComponent* Component = Components[Index];
+		Component->SetHiddenInGame(!bShowOcclusionFixture);
+		Component->SetCollisionEnabled(bShowOcclusionFixture
+			? ProjectFogOriginalOccluderCollision[Index]
+			: ECollisionEnabled::NoCollision);
+		if (bShowOcclusionFixture)
+		{
+			Component->SetMaterial(0, ProjectFogRememberedMaterial);
+		}
+	}
 	return true;
 }
 
@@ -418,15 +581,20 @@ void ADarkwellVisionIntegrationFixture::DisableDarkwellProjectFog()
 	if (bProjectFogOverrideCaptured)
 	{
 		Ground->SetMaterial(0, ProjectFogOriginalGroundMaterial);
-		WallSouth->SetHiddenInGame(bProjectFogOriginalWallSouthHidden);
-		WallNorth->SetHiddenInGame(bProjectFogOriginalWallNorthHidden);
-		MemoryLandmark->SetHiddenInGame(bProjectFogOriginalLandmarkHidden);
-		WallSouth->SetCollisionEnabled(ProjectFogOriginalWallSouthCollision);
-		WallNorth->SetCollisionEnabled(ProjectFogOriginalWallNorthCollision);
-		MemoryLandmark->SetCollisionEnabled(ProjectFogOriginalLandmarkCollision);
+		const TArray<UStaticMeshComponent*> Components = GetProjectFogOccluderComponents();
+		for (int32 Index = 0; Index < Components.Num(); ++Index)
+		{
+			Components[Index]->SetMaterial(0, ProjectFogOriginalOccluderMaterials[Index]);
+			Components[Index]->SetHiddenInGame(ProjectFogOriginalOccluderHidden[Index]);
+			Components[Index]->SetCollisionEnabled(ProjectFogOriginalOccluderCollision[Index]);
+		}
 	}
 	ProjectFogGroundMaterial = nullptr;
+	ProjectFogRememberedMaterial = nullptr;
 	ProjectFogOriginalGroundMaterial = nullptr;
+	ProjectFogOriginalOccluderMaterials.Reset();
+	ProjectFogOriginalOccluderHidden.Reset();
+	ProjectFogOriginalOccluderCollision.Reset();
 	bProjectFogOverrideCaptured = false;
 }
 
@@ -444,17 +612,54 @@ void ADarkwellVisionIntegrationFixture::BuildSightWeaveOccluderSegments(
 {
 	using namespace Darkwell::VisionIntegrationFixture;
 	const FVector Origin = GetActorLocation();
-	OutSegments.Reset(2);
-	FDarkwellVisionIntegrationSegment& South = OutSegments.AddDefaulted_GetRef();
-	South.A = FVector2D(Origin.X + WallX, Origin.Y + WallSouthMinY);
-	South.B = FVector2D(Origin.X + WallX, Origin.Y + WallSouthMaxY);
-	South.ZMin = Origin.Z - 10.0f;
-	South.ZMax = Origin.Z + 250.0f;
-	FDarkwellVisionIntegrationSegment& North = OutSegments.AddDefaulted_GetRef();
-	North.A = FVector2D(Origin.X + WallX, Origin.Y + WallNorthMinY);
-	North.B = FVector2D(Origin.X + WallX, Origin.Y + WallNorthMaxY);
-	North.ZMin = South.ZMin;
-	North.ZMax = South.ZMax;
+	OutSegments.Reset(11);
+	const auto AddSegment = [&OutSegments, &Origin](
+		const double AX,
+		const double AY,
+		const double BX,
+		const double BY)
+	{
+		FDarkwellVisionIntegrationSegment& Segment = OutSegments.AddDefaulted_GetRef();
+		Segment.A = FVector2D(Origin.X + AX, Origin.Y + AY);
+		Segment.B = FVector2D(Origin.X + BX, Origin.Y + BY);
+		Segment.ZMin = Origin.Z - 10.0f;
+		Segment.ZMax = Origin.Z + 250.0f;
+	};
+	AddSegment(WallX, WallSouthMinY, WallX, WallSouthMaxY);
+	AddSegment(WallX, WallNorthMinY, WallX, WallNorthMaxY);
+
+	const double Yaw = FMath::DegreesToRadians(RotatedWallYawDegrees);
+	const FVector2D Tangent(-FMath::Sin(Yaw), FMath::Cos(Yaw));
+	const FVector2D RotatedCenter(RotatedWallCenterX, RotatedWallCenterY);
+	const FVector2D RotatedA = RotatedCenter - Tangent * RotatedWallHalfLength;
+	const FVector2D RotatedB = RotatedCenter + Tangent * RotatedWallHalfLength;
+	AddSegment(RotatedA.X, RotatedA.Y, RotatedB.X, RotatedB.Y);
+
+	AddSegment(
+		LandmarkCenterX - LandmarkHalfExtent,
+		LandmarkCenterY - LandmarkHalfExtent,
+		LandmarkCenterX + LandmarkHalfExtent,
+		LandmarkCenterY - LandmarkHalfExtent);
+	AddSegment(
+		LandmarkCenterX + LandmarkHalfExtent,
+		LandmarkCenterY - LandmarkHalfExtent,
+		LandmarkCenterX + LandmarkHalfExtent,
+		LandmarkCenterY + LandmarkHalfExtent);
+	AddSegment(
+		LandmarkCenterX + LandmarkHalfExtent,
+		LandmarkCenterY + LandmarkHalfExtent,
+		LandmarkCenterX - LandmarkHalfExtent,
+		LandmarkCenterY + LandmarkHalfExtent);
+	AddSegment(
+		LandmarkCenterX - LandmarkHalfExtent,
+		LandmarkCenterY + LandmarkHalfExtent,
+		LandmarkCenterX - LandmarkHalfExtent,
+		LandmarkCenterY - LandmarkHalfExtent);
+
+	AddSegment(ConcaveX, ConcaveCornerY, ConcaveX, ConcaveTopY);
+	AddSegment(ConcaveX, ConcaveCornerY, ConcaveRightX, ConcaveCornerY);
+	AddSegment(JunctionX, JunctionMinY, JunctionX, JunctionMaxY);
+	AddSegment(JunctionX, 0.0, JunctionRightX, 0.0);
 }
 
 void ADarkwellVisionIntegrationFixture::BuildSightWeaveStaticSurfaces(

@@ -91,6 +91,10 @@ public:
 		UTexture* LiveCoverageTexture,
 		FVector2D WorldMin,
 		FVector2D InvWorldExtent);
+	bool EnableDarkwellProjectFogP2(
+		UTexture* LiveCoverageTexture,
+		FVector2D WorldMin,
+		FVector2D InvWorldExtent);
 	void DisableDarkwellProjectFog();
 	bool IsDarkwellProjectFogEnabled() const
 	{
@@ -104,6 +108,13 @@ public:
 	}
 
 private:
+	bool EnableDarkwellProjectFog(
+		UTexture* LiveCoverageTexture,
+		FVector2D WorldMin,
+		FVector2D InvWorldExtent,
+		bool bShowOcclusionFixture);
+	TArray<UStaticMeshComponent*> GetProjectFogOccluderComponents() const;
+
 	UPROPERTY(VisibleAnywhere, Category = "Integration")
 	TObjectPtr<USceneComponent> SceneRoot;
 
@@ -118,6 +129,21 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Integration")
 	TObjectPtr<UStaticMeshComponent> MemoryLandmark;
+
+	UPROPERTY(VisibleAnywhere, Category = "Integration")
+	TObjectPtr<UStaticMeshComponent> RotatedWall;
+
+	UPROPERTY(VisibleAnywhere, Category = "Integration")
+	TObjectPtr<UStaticMeshComponent> ConcaveWallVertical;
+
+	UPROPERTY(VisibleAnywhere, Category = "Integration")
+	TObjectPtr<UStaticMeshComponent> ConcaveWallHorizontal;
+
+	UPROPERTY(VisibleAnywhere, Category = "Integration")
+	TObjectPtr<UStaticMeshComponent> JunctionWallVertical;
+
+	UPROPERTY(VisibleAnywhere, Category = "Integration")
+	TObjectPtr<UStaticMeshComponent> JunctionWallHorizontal;
 
 	/** Rendered illumination only; it is never a legal-light authority. */
 	UPROPERTY(VisibleAnywhere, Category = "Integration")
@@ -154,16 +180,15 @@ private:
 	TObjectPtr<UMaterialInstanceDynamic> ProjectFogGroundMaterial;
 
 	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> ProjectFogRememberedMaterial;
+
+	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> ProjectFogOriginalGroundMaterial;
 
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMaterialInterface>> ProjectFogOriginalOccluderMaterials;
+
 	bool bProjectFogOverrideCaptured = false;
-	bool bProjectFogOriginalWallSouthHidden = false;
-	bool bProjectFogOriginalWallNorthHidden = false;
-	bool bProjectFogOriginalLandmarkHidden = false;
-	ECollisionEnabled::Type ProjectFogOriginalWallSouthCollision =
-		ECollisionEnabled::QueryAndPhysics;
-	ECollisionEnabled::Type ProjectFogOriginalWallNorthCollision =
-		ECollisionEnabled::QueryAndPhysics;
-	ECollisionEnabled::Type ProjectFogOriginalLandmarkCollision =
-		ECollisionEnabled::QueryAndPhysics;
+	TArray<bool> ProjectFogOriginalOccluderHidden;
+	TArray<ECollisionEnabled::Type> ProjectFogOriginalOccluderCollision;
 };

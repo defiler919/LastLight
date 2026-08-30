@@ -15,6 +15,7 @@ namespace Darkwell::FogVisual
 {
 	constexpr float CentimetersPerTexel = 2.5f;
 	constexpr float CoverageTransitionWidthCentimeters = 2.5f;
+	constexpr int32 MaxOccluderSegments = 16;
 	constexpr TCHAR CoverageMaterialPath[] =
 		TEXT("/Game/Darkwell/Vision/ProjectFog/M_DarkwellFogCoverage.M_DarkwellFogCoverage");
 
@@ -29,6 +30,15 @@ namespace Darkwell::FogVisual
 	{
 		return FMath::Clamp(0.5f + SignedDistance / FMath::Max(Width, 0.001f), 0.0f, 1.0f);
 	}
+}
+
+bool FDarkwellFogVisualSegment::IsValid() const
+{
+	return FMath::IsFinite(A.X)
+		&& FMath::IsFinite(A.Y)
+		&& FMath::IsFinite(B.X)
+		&& FMath::IsFinite(B.Y)
+		&& !A.Equals(B, KINDA_SMALL_NUMBER);
 }
 
 bool FDarkwellFogVisualSourceSnapshot::IsValid() const
@@ -119,6 +129,41 @@ float FDarkwellContinuousVisibilityBuilder::EvaluateNoOcclusionCoverage(
 	return FMath::Max(BodyCoverage, ConeCoverage);
 }
 
+bool FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
+	const FVector2D& SourceOrigin,
+	const FVector2D& WorldPosition,
+	const TConstArrayView<FDarkwellFogVisualSegment> Segments)
+{
+	const FVector2D Ray = WorldPosition - SourceOrigin;
+	if (Ray.IsNearlyZero())
+	{
+		return false;
+	}
+	for (const FDarkwellFogVisualSegment& Segment : Segments)
+	{
+		if (!Segment.IsValid())
+		{
+			continue;
+		}
+		const FVector2D Edge = Segment.B - Segment.A;
+		const FVector2D RelativeA = Segment.A - SourceOrigin;
+		const double Denominator = Ray.X * Edge.Y - Ray.Y * Edge.X;
+		if (FMath::IsNearlyZero(Denominator, 1.0e-9))
+		{
+			continue;
+		}
+		const double T = (RelativeA.X * Edge.Y - RelativeA.Y * Edge.X)
+			/ Denominator;
+		const double U = (RelativeA.X * Ray.Y - RelativeA.Y * Ray.X)
+			/ Denominator;
+		if (T > 0.0 && T < 1.0 && U >= 0.0 && U <= 1.0)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void UDarkwellFogVisualSubsystem::Deinitialize()
 {
 	Deactivate();
@@ -129,8 +174,35 @@ bool UDarkwellFogVisualSubsystem::ActivateP1(
 	ADarkwellVisionIntegrationFixture* Fixture,
 	const FDarkwellFogVisualSourceSnapshot& Source)
 {
+	return Activate(Fixture, Source, {}, true);
+}
+
+bool UDarkwellFogVisualSubsystem::ActivateP2(
+	ADarkwellVisionIntegrationFixture* Fixture,
+	const FDarkwellFogVisualSourceSnapshot& Source,
+	const TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments)
+{
+	return Activate(Fixture, Source, OccluderSegments, false);
+}
+
+bool UDarkwellFogVisualSubsystem::Activate(
+	ADarkwellVisionIntegrationFixture* Fixture,
+	const FDarkwellFogVisualSourceSnapshot& Source,
+	const TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments,
+	const bool bP1NoOcclusion)
+{
 	if (!Fixture || Fixture->GetWorld() != GetWorld() || !Source.IsValid())
 	{
+		return false;
+	}
+	if (!bP1NoOcclusion
+		&& (OccluderSegments.IsEmpty()
+			|| OccluderSegments.Num() > Darkwell::FogVisual::MaxOccluderSegments))
+	{
+		UE_LOG(LogDarkwellFogVisual, Error,
+			TEXT("P2 requires 1..%d valid cached segments (received %d)"),
+			Darkwell::FogVisual::MaxOccluderSegments,
+			OccluderSegments.Num());
 		return false;
 	}
 	Deactivate();
@@ -138,10 +210,17 @@ bool UDarkwellFogVisualSubsystem::ActivateP1(
 	{
 		return false;
 	}
-	if (!Fixture->EnableDarkwellProjectFogP1(
-		LiveCoverageTexture,
-		Mapping.WorldMin,
-		Mapping.InvWorldExtent))
+	if (!UpdateOccluderParameters(OccluderSegments))
+	{
+		Deactivate();
+		return false;
+	}
+	const bool bFixtureEnabled = bP1NoOcclusion
+		? Fixture->EnableDarkwellProjectFogP1(
+			LiveCoverageTexture, Mapping.WorldMin, Mapping.InvWorldExtent)
+		: Fixture->EnableDarkwellProjectFogP2(
+			LiveCoverageTexture, Mapping.WorldMin, Mapping.InvWorldExtent);
+	if (!bFixtureEnabled)
 	{
 		Deactivate();
 		return false;
@@ -150,6 +229,8 @@ bool UDarkwellFogVisualSubsystem::ActivateP1(
 	Diagnostics = FDarkwellFogVisualDiagnostics();
 	Diagnostics.bActive = true;
 	Diagnostics.bOldSightWeavePresentationSuppressed = true;
+	Diagnostics.bP1NoOcclusion = bP1NoOcclusion;
+	Diagnostics.CachedOccluderSegmentCount = CachedOccluderSegments.Num();
 	Diagnostics.ActivationRevision = Source.AuthorityRevision;
 	if (!DrawCoverage(Source))
 	{
@@ -157,10 +238,12 @@ bool UDarkwellFogVisualSubsystem::ActivateP1(
 		return false;
 	}
 	UE_LOG(LogDarkwellFogVisual, Log,
-		TEXT("P1 active policy=RememberedFromStart extent=%dx%d cmPerTexel=%.3f oldSightWeaveVisual=Suppressed"),
+		TEXT("%s active policy=RememberedFromStart extent=%dx%d cmPerTexel=%.3f cachedSegments=%d oldSightWeaveVisual=Suppressed"),
+		bP1NoOcclusion ? TEXT("P1") : TEXT("P2"),
 		Mapping.TextureExtent.X,
 		Mapping.TextureExtent.Y,
-		Mapping.CentimetersPerTexel);
+		Mapping.CentimetersPerTexel,
+		CachedOccluderSegments.Num());
 	return true;
 }
 
@@ -191,8 +274,44 @@ void UDarkwellFogVisualSubsystem::Deactivate()
 	CoverageMaterial = nullptr;
 	Mapping = FDarkwellFogVisualMapping();
 	LastSource = FDarkwellFogVisualSourceSnapshot();
+	CachedOccluderSegments.Reset();
 	Diagnostics = FDarkwellFogVisualDiagnostics();
 	DiagnosticReadbackFrameCount = 0;
+}
+
+bool UDarkwellFogVisualSubsystem::UpdateOccluderParameters(
+	const TConstArrayView<FDarkwellFogVisualSegment> Segments)
+{
+	if (!CoverageMaterial || Segments.Num() > Darkwell::FogVisual::MaxOccluderSegments)
+	{
+		return false;
+	}
+	CachedOccluderSegments.Reset(Segments.Num());
+	for (const FDarkwellFogVisualSegment& Segment : Segments)
+	{
+		if (!Segment.IsValid())
+		{
+			return false;
+		}
+		CachedOccluderSegments.Add(Segment);
+	}
+	CoverageMaterial->SetScalarParameterValue(
+		TEXT("OccluderSegmentCount"),
+		static_cast<float>(CachedOccluderSegments.Num()));
+	for (int32 Index = 0; Index < Darkwell::FogVisual::MaxOccluderSegments; ++Index)
+	{
+		const FDarkwellFogVisualSegment Segment = CachedOccluderSegments.IsValidIndex(Index)
+			? CachedOccluderSegments[Index]
+			: FDarkwellFogVisualSegment();
+		CoverageMaterial->SetVectorParameterValue(
+			*FString::Printf(TEXT("OccluderSegment%d"), Index),
+			FLinearColor(
+				static_cast<float>(Segment.A.X),
+				static_cast<float>(Segment.A.Y),
+				static_cast<float>(Segment.B.X),
+				static_cast<float>(Segment.B.Y)));
+	}
+	return true;
 }
 
 bool UDarkwellFogVisualSubsystem::CreateResources(const FBox2D& WorldBounds)
@@ -352,5 +471,37 @@ void UDarkwellFogVisualSubsystem::TryDiagnosticReadback()
 		CentroidY,
 		Diagnostics.CoverageDrawCount,
 		Diagnostics.LastAuthorityRevision);
+	if (!Diagnostics.bP1NoOcclusion && CachedOccluderSegments.Num() >= 2)
+	{
+		const auto SampleCoverage = [this, &Pixels](const FVector2D& WorldPosition)
+		{
+			const FVector2D UV = Mapping.WorldToUV(WorldPosition);
+			const int32 X = FMath::Clamp(
+				FMath::FloorToInt(UV.X * Mapping.TextureExtent.X),
+				0,
+				Mapping.TextureExtent.X - 1);
+			const int32 Y = FMath::Clamp(
+				FMath::FloorToInt(UV.Y * Mapping.TextureExtent.Y),
+				0,
+				Mapping.TextureExtent.Y - 1);
+			return Pixels[Y * Mapping.TextureExtent.X + X].R;
+		};
+		const FVector2D WallMidpoint =
+			(CachedOccluderSegments[1].A + CachedOccluderSegments[1].B) * 0.5;
+		const FVector2D TowardWall = WallMidpoint - LastSource.BodyCenter;
+		const FVector2D FrontPoint = LastSource.BodyCenter + TowardWall * 0.75;
+		const FVector2D BehindPoint = LastSource.BodyCenter + TowardWall * 1.5;
+		const FVector2D DoorwayPoint = LastSource.BodyCenter
+			+ LastSource.ConeForward.GetSafeNormal()
+				* FMath::Min(1000.0f, LastSource.ConeRangeCentimeters * 0.8f);
+		UE_LOG(LogDarkwellFogVisual, Display,
+			TEXT("P2OcclusionProbe front=%.6f behind=%.6f doorway=%.6f frontWorld=(%.3f,%.3f) behindWorld=(%.3f,%.3f) doorwayWorld=(%.3f,%.3f)"),
+			SampleCoverage(FrontPoint),
+			SampleCoverage(BehindPoint),
+			SampleCoverage(DoorwayPoint),
+			FrontPoint.X, FrontPoint.Y,
+			BehindPoint.X, BehindPoint.Y,
+			DoorwayPoint.X, DoorwayPoint.Y);
+	}
 #endif
 }

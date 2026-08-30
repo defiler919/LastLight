@@ -71,6 +71,24 @@ def saturate(material, source, x, y):
     return node
 
 
+def custom_expression(material, code, named_inputs, x, y, description):
+    node = expr(material, unreal.MaterialExpressionCustom, x, y)
+    inputs = []
+    for item in named_inputs:
+        name = item[0]
+        custom_input = unreal.CustomInput()
+        custom_input.set_editor_property("input_name", name)
+        inputs.append(custom_input)
+    node.set_editor_property("inputs", inputs)
+    node.set_editor_property("code", code)
+    node.set_editor_property("description", description)
+    for item in named_inputs:
+        name, source = item[0], item[1]
+        source_output = item[2] if len(item) > 2 else ""
+        connect(source, source_output, node, name)
+    return node
+
+
 def make_asset(asset_tools, name):
     path = f"{ASSET_PATH}/{name}"
     if unreal.EditorAssetLibrary.does_asset_exist(path):
@@ -192,8 +210,94 @@ def create_coverage(asset_tools):
         1550,
         300,
     )
+    segment_count = scalar_parameter(
+        material, "OccluderSegmentCount", 0.0, 1050, 650
+    )
+    segment_parameters = []
+    for index in range(16):
+        segment_parameters.append(
+            vector_parameter(
+                material,
+                f"OccluderSegment{index}",
+                unreal.LinearColor(0, 0, 0, 0),
+                800 + (index % 4) * 220,
+                850 + (index // 4) * 120,
+            )
+        )
+    segment_array = ", ".join(f"OccluderSegment{i}" for i in range(16))
+    occlusion_code = f"""
+float2 Ray = WorldXY - SourceXY;
+float RayLengthSquared = dot(Ray, Ray);
+if (RayLengthSquared < 1.0e-6)
+{{
+    return 1.0;
+}}
+float4 Segments[16] = {{ {segment_array} }};
+float Visibility = 1.0;
+[unroll]
+for (int Index = 0; Index < 16; ++Index)
+{{
+    float Enabled = step((float)Index + 0.5, OccluderSegmentCount);
+    float2 A = Segments[Index].xy;
+    float2 Edge = Segments[Index].zw - A;
+    float2 RelativeA = A - SourceXY;
+    float Denominator = Ray.x * Edge.y - Ray.y * Edge.x;
+    float ValidDenominator = step(1.0e-5, abs(Denominator));
+    float SafeDenominator = Denominator >= 0.0
+        ? max(Denominator, 1.0e-5)
+        : min(Denominator, -1.0e-5);
+    float T = (RelativeA.x * Edge.y - RelativeA.y * Edge.x) / SafeDenominator;
+    float U = (RelativeA.x * Ray.y - RelativeA.y * Ray.x) / SafeDenominator;
+    float IntersectionMargin = min(min(T, 1.0 - T), min(U, 1.0 - U));
+    float AntialiasWidth = max(fwidth(IntersectionMargin), 1.0e-4);
+    float Blocked = smoothstep(
+        -AntialiasWidth,
+        AntialiasWidth,
+        IntersectionMargin) * ValidDenominator * Enabled;
+    Visibility *= 1.0 - Blocked;
+}}
+return saturate(Visibility);
+"""
+    shared_occlusion_inputs = [("OccluderSegmentCount", segment_count)] + [
+        (f"OccluderSegment{index}", parameter, "RGBA")
+        for index, parameter in enumerate(segment_parameters)
+    ]
+    body_visibility = custom_expression(
+        material,
+        occlusion_code,
+        [("WorldXY", world), ("SourceXY", body_center)]
+        + shared_occlusion_inputs,
+        1550,
+        -650,
+        "Continuous body line-segment visibility",
+    )
+    cone_visibility = custom_expression(
+        material,
+        occlusion_code,
+        [("WorldXY", world), ("SourceXY", cone_origin)]
+        + shared_occlusion_inputs,
+        1800,
+        400,
+        "Continuous cone line-segment visibility",
+    )
+    visible_body = binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        body_coverage,
+        body_visibility,
+        2050,
+        -550,
+    )
+    visible_cone = binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        cone_coverage,
+        cone_visibility,
+        2050,
+        250,
+    )
     live_coverage = binary(
-        material, unreal.MaterialExpressionMax, body_coverage, cone_coverage, 1800, -150
+        material, unreal.MaterialExpressionMax, visible_body, visible_cone, 2300, -150
     )
     if not unreal.MaterialEditingLibrary.connect_material_property(
         live_coverage, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR
@@ -278,12 +382,31 @@ def create_surface(asset_tools):
         material, coverage_sample, "r", -700, 0, source_output="RGBA"
     )
     coverage = saturate(material, coverage_r, -450, 0)
+    force_remembered = scalar_parameter(
+        material, "ForceRemembered", 0.0, -450, 100
+    )
+    allow_live = binary(
+        material,
+        unreal.MaterialExpressionSubtract,
+        scalar(material, 1.0, -450, 200),
+        force_remembered,
+        -200,
+        100,
+    )
+    effective_coverage = binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        coverage,
+        allow_live,
+        50,
+        0,
+    )
     one_minus_coverage = binary(
         material,
         unreal.MaterialExpressionSubtract,
-        scalar(material, 1.0, -450, 150),
-        coverage,
-        -200,
+        scalar(material, 1.0, -200, 200),
+        effective_coverage,
+        300,
         100,
     )
 
@@ -315,7 +438,7 @@ def create_surface(asset_tools):
     )
 
     live_base = binary(
-        material, unreal.MaterialExpressionMultiply, original, coverage, 50, -650
+        material, unreal.MaterialExpressionMultiply, original, effective_coverage, 50, -650
     )
     memory_emissive = binary(
         material,
@@ -346,7 +469,7 @@ def create_surface(asset_tools):
         -420,
     )
     diagnostic_emissive = binary(
-        material, unreal.MaterialExpressionMultiply, coverage, diagnostic, 300, -220
+        material, unreal.MaterialExpressionMultiply, effective_coverage, diagnostic, 300, -220
     )
     final_emissive = binary(
         material,

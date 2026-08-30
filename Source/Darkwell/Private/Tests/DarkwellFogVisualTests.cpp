@@ -116,4 +116,32 @@ bool FDarkwellFogSubTexelCoverageTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDarkwellFogContinuousSegmentOcclusionTest,
+	"Darkwell.FogVisual.P2.ContinuousSegmentOcclusion",
+	Darkwell::FogVisualTests::Flags)
+
+bool FDarkwellFogContinuousSegmentOcclusionTest::RunTest(const FString& Parameters)
+{
+	const FDarkwellFogVisualSegment Wall{
+		FVector2D(0.0, -100.0),
+		FVector2D(0.0, 100.0)
+	};
+	const TArray<FDarkwellFogVisualSegment> Segments{Wall};
+	TestTrue(TEXT("Finite non-degenerate segment is valid"), Wall.IsValid());
+	TestTrue(TEXT("Free space directly behind the wall is blocked"),
+		FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
+			FVector2D(-200.0, 0.0), FVector2D(200.0, 0.0), Segments));
+	TestFalse(TEXT("Free space before the wall remains Live"),
+		FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
+			FVector2D(-200.0, 0.0), FVector2D(-50.0, 0.0), Segments));
+	TestFalse(TEXT("A ray past the wall end remains Live"),
+		FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
+			FVector2D(-200.0, 0.0), FVector2D(200.0, 250.0), Segments));
+	TestTrue(TEXT("The same wall blocks from the opposite legal side"),
+		FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
+			FVector2D(200.0, 0.0), FVector2D(-200.0, 0.0), Segments));
+	return true;
+}
+
 #endif

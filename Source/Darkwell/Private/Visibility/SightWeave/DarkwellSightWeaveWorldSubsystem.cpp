@@ -521,12 +521,21 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 		return false;
 	}
 #if !UE_SERVER
-	if (!FogVisualSubsystem
-		|| !FogVisualSubsystem->ActivateP1(
-			RequestedFixture.Get(),
-			BuildFogVisualSourceSnapshot()))
+	TArray<FDarkwellFogVisualSegment> FogVisualSegments;
+	FogVisualSegments.Reserve(Segments.Num());
+	for (const FSightWeaveSegment2D& Segment : Segments)
 	{
-		RollbackToLegacy(TEXT("DARKWELL P1 continuous fog activation failed"), true);
+		FDarkwellFogVisualSegment& FogSegment = FogVisualSegments.AddDefaulted_GetRef();
+		FogSegment.A = Segment.A;
+		FogSegment.B = Segment.B;
+	}
+	if (!FogVisualSubsystem
+		|| !FogVisualSubsystem->ActivateP2(
+			RequestedFixture.Get(),
+			BuildFogVisualSourceSnapshot(),
+			FogVisualSegments))
+	{
+		RollbackToLegacy(TEXT("DARKWELL P2 continuous occlusion activation failed"), true);
 		return false;
 	}
 #endif
@@ -546,8 +555,9 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 	UpdateSubjectAuthority();
 	FoundStalker->SetActorHiddenInGame(true);
 	UE_LOG(LogDarkwellSightWeave, Log,
-		TEXT("World=%s authority=SightWeave active visual=DarkwellContinuousP1 oldSightWeaveVisual=Suppressed floor=%s vision=2 light=1 occluder=1 static=%d subject=%s"),
+		TEXT("World=%s authority=SightWeave active visual=DarkwellContinuousP2 segments=%d oldSightWeaveVisual=Suppressed floor=%s vision=2 light=1 occluder=1 static=%d subject=%s"),
 		*Diagnostics.WorldName.ToString(),
+		FogVisualSegments.Num(),
 		*FloorId.GetValue().ToString(),
 		StaticEnvironmentHandles.Num(), *FoundStalker->GetPersistentId().ToString());
 	return true;
@@ -683,9 +693,12 @@ bool UDarkwellSightWeaveWorldSubsystem::ValidateAndBuildDescriptions(
 	}
 
 	if (!OutFloor.IsValid() || !OutBody.IsValid() || !OutCone.IsValid()
-		|| !OutTorch.IsValid() || OutSegments.Num() != 2 || OutStatic.Num() != 4)
+		|| !OutTorch.IsValid() || OutSegments.Num() != 11 || OutStatic.Num() != 4)
 	{
-		OutFailure = TEXT("One or more frozen M6P1 declarations are invalid");
+		OutFailure = FString::Printf(
+			TEXT("One or more project-fog declarations are invalid (segments=%d static=%d)"),
+			OutSegments.Num(),
+			OutStatic.Num());
 		return false;
 	}
 	for (const FSightWeaveSegment2D& Segment : OutSegments)

@@ -111,6 +111,11 @@ private:
 	uint64 NextObservationRevision = 1;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	bool bDiagnosticProofCameraActive = false;
+	bool bDiagnosticSubjectControllerSuppressed = false;
+	bool bDiagnosticLastSubjectStateValid = false;
+	bool bDiagnosticLastSubjectHardLive = false;
+	double DiagnosticToolCycleElapsedSeconds = 0.0;
+	int32 LastDiagnosticToolCyclePhase = INDEX_NONE;
 	int32 DiagnosticCoverageReadbackFrameCount = 0;
 	bool bDiagnosticCoverageReadbackComplete = false;
 #endif

@@ -243,6 +243,14 @@ bool UDarkwellFogVisualSubsystem::ActivateP3(
 	return Activate(Fixture, Source, OccluderSegments, 3);
 }
 
+bool UDarkwellFogVisualSubsystem::ActivateP4(
+	ADarkwellVisionIntegrationFixture* Fixture,
+	const FDarkwellFogVisualSourceSnapshot& Source,
+	const TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments)
+{
+	return Activate(Fixture, Source, OccluderSegments, 4);
+}
+
 bool UDarkwellFogVisualSubsystem::Activate(
 	ADarkwellVisionIntegrationFixture* Fixture,
 	const FDarkwellFogVisualSourceSnapshot& Source,
@@ -253,7 +261,7 @@ bool UDarkwellFogVisualSubsystem::Activate(
 	{
 		return false;
 	}
-	if (PresentationPhase < 1 || PresentationPhase > 3)
+	if (PresentationPhase < 1 || PresentationPhase > 4)
 	{
 		return false;
 	}
@@ -288,9 +296,14 @@ bool UDarkwellFogVisualSubsystem::Activate(
 		bFixtureEnabled = Fixture->EnableDarkwellProjectFogP2(
 			LiveCoverageTexture, Mapping.WorldMin, Mapping.InvWorldExtent);
 	}
-	else
+	else if (PresentationPhase == 3)
 	{
 		bFixtureEnabled = Fixture->EnableDarkwellProjectFogP3(
+			LiveCoverageTexture, Mapping.WorldMin, Mapping.InvWorldExtent);
+	}
+	else
+	{
+		bFixtureEnabled = Fixture->EnableDarkwellProjectFogP4(
 			LiveCoverageTexture, Mapping.WorldMin, Mapping.InvWorldExtent);
 	}
 	if (!bFixtureEnabled)
@@ -303,7 +316,8 @@ bool UDarkwellFogVisualSubsystem::Activate(
 	Diagnostics.bActive = true;
 	Diagnostics.bOldSightWeavePresentationSuppressed = true;
 	Diagnostics.bP1NoOcclusion = PresentationPhase == 1;
-	Diagnostics.bP3SurfaceCoverage = PresentationPhase == 3;
+	Diagnostics.bP3SurfaceCoverage = PresentationPhase >= 3;
+	Diagnostics.bP4DynamicSubjects = PresentationPhase == 4;
 	Diagnostics.CachedOccluderSegmentCount = CachedOccluderSegments.Num();
 	Diagnostics.ActivationRevision = Source.AuthorityRevision;
 	if (!DrawCoverage(Source))

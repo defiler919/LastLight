@@ -99,6 +99,10 @@ public:
 		UTexture* LiveCoverageTexture,
 		FVector2D WorldMin,
 		FVector2D InvWorldExtent);
+	bool EnableDarkwellProjectFogP4(
+		UTexture* LiveCoverageTexture,
+		FVector2D WorldMin,
+		FVector2D InvWorldExtent);
 	void DisableDarkwellProjectFog();
 	bool IsDarkwellProjectFogEnabled() const
 	{

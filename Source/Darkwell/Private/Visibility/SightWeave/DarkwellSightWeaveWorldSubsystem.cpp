@@ -11,6 +11,7 @@
 #include "GameFramework/Controller.h"
 #include "HAL/IConsoleManager.h"
 #include "Gameplay/DarkwellVisibilityComponent.h"
+#include "Gameplay/DarkwellGameplayTags.h"
 #include "Player/DarkwellCharacter.h"
 #include "SightWeaveQueries.h"
 #include "SightWeaveWorldSubsystem.h"
@@ -77,6 +78,14 @@ namespace Darkwell::SightWeaveAdapter
 		TEXT("r.Darkwell.FogVisual.Diagnostic.SourceOffsetTexelsY"),
 		0.0f,
 		TEXT("P1 raw-coverage proof offset in 2.5 cm presentation texels."));
+	TAutoConsoleVariable<int32> CVarDiagnosticFogSubjectProof(
+		TEXT("r.Darkwell.FogVisual.Diagnostic.SubjectProof"),
+		0,
+		TEXT("Development-only P4 proof: keep the Stalker at a stable cone target and pause only its controller."));
+	TAutoConsoleVariable<int32> CVarDiagnosticFogToolCycle(
+		TEXT("r.Darkwell.FogVisual.Diagnostic.ToolCycle"),
+		0,
+		TEXT("Development-only P4 proof: cycle Torch/Lantern/Torch every six seconds through the real loadout API."));
 #endif
 
 	FTransform BuildSourceTransform(const ADarkwellCharacter& Character)
@@ -240,6 +249,56 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 			bDiagnosticProofCameraActive = false;
 		}
 	}
+	const bool bSubjectProof =
+		Darkwell::SightWeaveAdapter::CVarDiagnosticFogSubjectProof.GetValueOnGameThread() != 0;
+	if (ADarkwellStalkerCharacter* DiagnosticSubject = Stalker.Get())
+	{
+		if (AController* SubjectController = DiagnosticSubject->GetController())
+		{
+			if (bSubjectProof && !bDiagnosticSubjectControllerSuppressed)
+			{
+				SubjectController->SetActorTickEnabled(false);
+				bDiagnosticSubjectControllerSuppressed = true;
+			}
+			else if (!bSubjectProof && bDiagnosticSubjectControllerSuppressed)
+			{
+				SubjectController->SetActorTickEnabled(true);
+				bDiagnosticSubjectControllerSuppressed = false;
+			}
+		}
+		if (bSubjectProof)
+		{
+			DiagnosticSubject->SetActorLocation(
+				RequestedFixture->GetActorLocation() + FVector(550.0, 0.0, 92.0),
+				false,
+				nullptr,
+				ETeleportType::TeleportPhysics);
+		}
+	}
+	if (Darkwell::SightWeaveAdapter::CVarDiagnosticFogToolCycle.GetValueOnGameThread() != 0)
+	{
+		DiagnosticToolCycleElapsedSeconds += FMath::Max(DeltaTime, 0.0f);
+		const int32 ToolPhase = FMath::FloorToInt(
+			FMath::Fmod(DiagnosticToolCycleElapsedSeconds, 18.0) / 6.0);
+		if (ToolPhase != LastDiagnosticToolCyclePhase)
+		{
+			if (UDarkwellLoadoutComponent* Loadout = Player->GetLoadoutComponent())
+			{
+				const FGameplayTag Tool = ToolPhase == 1
+					? DarkwellGameplayTags::Equipment_Right_Lantern.GetTag()
+					: DarkwellGameplayTags::Equipment_Right_Torch.GetTag();
+				if (Loadout->EquipRightHandItem(Tool))
+				{
+					LastDiagnosticToolCyclePhase = ToolPhase;
+					UE_LOG(LogDarkwellSightWeave, Display,
+						TEXT("P4ToolCycle phase=%s tool=%s"),
+						ToolPhase == 0 ? TEXT("TorchInitial")
+							: ToolPhase == 1 ? TEXT("Lantern") : TEXT("TorchRestored"),
+						*Tool.ToString());
+				}
+			}
+		}
+	}
 #else
 	constexpr int32 SurfaceProofMode = 0;
 #endif
@@ -247,10 +306,6 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 	{
 		UpdateDynamicAuthority();
 		UpdateSubjectAuthority();
-	}
-	if (ADarkwellStalkerCharacter* P1Subject = Stalker.Get())
-	{
-		P1Subject->SetActorHiddenInGame(true);
 	}
 	if (FogVisualSubsystem
 		&& !FogVisualSubsystem->UpdateSource(BuildFogVisualSourceSnapshot()))
@@ -478,13 +533,6 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 
 	Player = FoundPlayer;
 	Stalker = FoundStalker;
-	// P1 is intentionally a no-dynamic-object visual proof. Keep the subject
-	// registered for authority checks but prevent its controller from attacking
-	// or moving the player during the long coverage captures.
-	if (AController* StalkerController = FoundStalker->GetController())
-	{
-		StalkerController->SetActorTickEnabled(false);
-	}
 	FloorId = Floor.FloorId;
 	KnowledgeOwnerId = Body.KnowledgeOwnerId;
 	BodyDescription = Body;
@@ -557,12 +605,12 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 		FogSegment.B = Segment.B;
 	}
 	if (!FogVisualSubsystem
-		|| !FogVisualSubsystem->ActivateP3(
+		|| !FogVisualSubsystem->ActivateP4(
 			RequestedFixture.Get(),
 			BuildFogVisualSourceSnapshot(),
 			FogVisualSegments))
 	{
-		RollbackToLegacy(TEXT("DARKWELL P3 wall surface activation failed"), true);
+		RollbackToLegacy(TEXT("DARKWELL P4 dynamic-subject activation failed"), true);
 		return false;
 	}
 #endif
@@ -580,9 +628,8 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 	Diagnostics.bSightWeavePresentationEnabled = false;
 	Diagnostics.bProjectFogPresentationEnabled = true;
 	UpdateSubjectAuthority();
-	FoundStalker->SetActorHiddenInGame(true);
 	UE_LOG(LogDarkwellSightWeave, Log,
-		TEXT("World=%s authority=SightWeave active visual=DarkwellContinuousP3 segments=%d oldSightWeaveVisual=Suppressed floor=%s vision=2 light=1 occluder=1 static=%d subject=%s"),
+		TEXT("World=%s authority=SightWeave active visual=DarkwellContinuousP4 segments=%d oldSightWeaveVisual=Suppressed floor=%s vision=2 light=1 occluder=1 static=%d subject=%s"),
 		*Diagnostics.WorldName.ToString(),
 		FogVisualSegments.Num(),
 		*FloorId.GetValue().ToString(),
@@ -835,6 +882,21 @@ void UDarkwellSightWeaveWorldSubsystem::UpdateSubjectAuthority()
 	Snapshot.bHardLive = bHardLive;
 	SubjectSnapshots.Add(Snapshot.StableSubjectId, Snapshot);
 	Subject->ApplySightWeaveVisibility(bHardLive, Snapshot.AuthorityRevision);
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (!bDiagnosticLastSubjectStateValid
+		|| bDiagnosticLastSubjectHardLive != bHardLive)
+	{
+		bDiagnosticLastSubjectStateValid = true;
+		bDiagnosticLastSubjectHardLive = bHardLive;
+		UE_LOG(LogDarkwellSightWeave, Display,
+			TEXT("P4Subject state=%s actorHidden=%d authorityRevision=%llu sourceRevision=%lld hudSharedRevision=%llu NeverRemember=1"),
+			bHardLive ? TEXT("Live") : TEXT("Hidden"),
+			Subject->IsHidden() ? 1 : 0,
+			Snapshot.AuthorityRevision,
+			Snapshot.SourceSnapshotRevision,
+			Subject->GetAppliedVisibilityAuthorityRevision());
+	}
+#endif
 	Diagnostics.AuthorityRevision = Snapshot.AuthorityRevision;
 	Diagnostics.RuntimeSnapshotRevision = Snapshot.SourceSnapshotRevision;
 }
@@ -1025,4 +1087,11 @@ void UDarkwellSightWeaveWorldSubsystem::ResetToLegacy()
 	Diagnostics.bLegacyPresentationEnabled = true;
 	Diagnostics.bSightWeavePresentationEnabled = false;
 	Diagnostics.bProjectFogPresentationEnabled = false;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	bDiagnosticSubjectControllerSuppressed = false;
+	bDiagnosticLastSubjectStateValid = false;
+	bDiagnosticLastSubjectHardLive = false;
+	DiagnosticToolCycleElapsedSeconds = 0.0;
+	LastDiagnosticToolCyclePhase = INDEX_NONE;
+#endif
 }

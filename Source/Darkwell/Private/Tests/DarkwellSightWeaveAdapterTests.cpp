@@ -267,12 +267,14 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 				&& LiveCoverage->AddressX == TextureAddress::TA_Clamp
 				&& LiveCoverage->AddressY == TextureAddress::TA_Clamp);
 	}
-	TestTrue(TEXT("Project fog is active on the P3 fixture"),
+	TestTrue(TEXT("Project fog is active on the P4 fixture"),
 		Fixture->IsDarkwellProjectFogEnabled());
 	TestFalse(TEXT("Project coverage uses continuous P2 occlusion"),
 		ProjectFog->GetDiagnostics().bP1NoOcclusion);
 	TestTrue(TEXT("Project presentation enables object-local P3 surface coverage"),
 		ProjectFog->GetDiagnostics().bP3SurfaceCoverage);
+	TestTrue(TEXT("Project presentation enables P4 dynamic subjects"),
+		ProjectFog->GetDiagnostics().bP4DynamicSubjects);
 	TestEqual(TEXT("Project presentation caches all fixture occluder segments"),
 		ProjectFog->GetDiagnostics().CachedOccluderSegmentCount, 11);
 	TestEqual(TEXT("Project coverage remains Ultra-equivalent 2.5 cm per texel"),
@@ -300,6 +302,7 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Doorway target has one authoritative subject snapshot"),
 		Adapter->TryGetSubjectSnapshot(Stalker->GetPersistentId(), Snapshot));
 	TestTrue(TEXT("Torch enables the directional-cone target"), Snapshot.bHardLive);
+	TestFalse(TEXT("HardLive NeverRemember Stalker is rendered"), Stalker->IsHidden());
 	TestEqual(TEXT("Stalker and HUD-facing snapshot share the same revision"),
 		Stalker->GetAppliedVisibilityAuthorityRevision(), Snapshot.AuthorityRevision);
 
@@ -325,6 +328,7 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Body radius bypass remains visible without legal light"),
 		Adapter->TryGetSubjectSnapshot(Stalker->GetPersistentId(), Snapshot)
 			&& Snapshot.bHardLive);
+	TestFalse(TEXT("Body-live NeverRemember Stalker is rendered"), Stalker->IsHidden());
 
 	TestTrue(TEXT("Torch can be restored"),
 		Player->GetLoadoutComponent()->EquipRightHandItem(
@@ -340,6 +344,9 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Occluded state still produces an authoritative decision"),
 		Adapter->TryGetSubjectSnapshot(Stalker->GetPersistentId(), Snapshot));
 	TestFalse(TEXT("Frozen wall segment occludes both body samples"), Snapshot.bHardLive);
+	TestTrue(TEXT("Occluded NeverRemember Stalker is hidden"), Stalker->IsHidden());
+	TestEqual(TEXT("Hidden actor and HUD predicate retain one revision"),
+		Stalker->GetAppliedVisibilityAuthorityRevision(), Snapshot.AuthorityRevision);
 
 	const FSightWeaveImmutableStaticEnvironmentPacketPtr StaticPacket =
 		Runtime->AcquirePublishedStaticEnvironmentPacket();

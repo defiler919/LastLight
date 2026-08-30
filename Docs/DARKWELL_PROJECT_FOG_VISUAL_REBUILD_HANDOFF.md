@@ -6,7 +6,7 @@ Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — P3 WALL/OBJECT SURFACE COVERAGE PROVEN / P4 AUTHORIZED**
+Status: **PARTIAL — P4 DYNAMIC SUBJECT AUTHORITY PROVEN / P5 AUTHORIZED**
 
 Deadline: 2026-09-05
 
@@ -52,9 +52,21 @@ Saved/DarkwellProjectFogVisualRebuild/P3/p3_evidence_index.json
 
 It records 7/7 D3D12/SM6/normal-TSR cases, 0 severe hits, 1/1 P3 automation and 1/1 vertical-slice validation. The four opposing views plus 30-second along-wall and doorway strips were opened and checked frame by frame: wall top/sides, cube sides and doorway surfaces did not reverse or flicker, while behind-wall ground remained gray. The P2 raw probe and all 5,662 fractional edge pixels remained intact.
 
+## P4 checkpoint
+
+P4 removed the leftover P1 forced-hidden/controller-paused override from the normal candidate. The Stalker Actor and threat HUD now consume the same authoritative `NeverRemember` snapshot and exact revision. The real loadout path was captured through Torch/Lantern/Torch: Lantern hid both subject and threat label; restoring Torch restored both. A separate 30-second sample ran with the normal Stalker controller enabled.
+
+The validated index is:
+
+```text
+Saved/DarkwellProjectFogVisualRebuild/P4/p4_evidence_index.json
+```
+
+It records 1/1 updated vertical-slice automation, 2/2 D3D12/SM6/normal-TSR captures and 0 severe hits. Three complete tool cycles produced matching `Live actorHidden=0`, `Hidden actorHidden=1`, and restored-Live transitions; every HUD revision equaled the Actor authority revision.
+
 ## Immediate next gate
 
-Implement P4 dynamic-subject and legal-source restoration. Remove the P1/P2/P3 fixture-only Stalker suppression, apply authoritative subject snapshots so `NeverRemember` enemies are visible only while Live, keep HUD visibility on the same revision, and prove Torch/Lantern/Torch recovery. Do not change the proven continuous ground edge, P2 occlusion or P3 static-surface rules.
+Run the bounded P5 final matrix: 1080p/1440p normal-TSR dynamics, the retained P1-P4 visual cases, gray-layer texture correlation/contrast, Stalker/HUD and Torch transitions, severe scan and the ten-minute soak. Do not run the historical SightWeave regression or change visual rules to improve metrics.
 
 ## Protected results and prohibitions
 

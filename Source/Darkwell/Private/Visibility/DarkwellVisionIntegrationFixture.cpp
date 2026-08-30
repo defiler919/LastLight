@@ -470,6 +470,19 @@ bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP3(
 		true);
 }
 
+bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFogP4(
+	UTexture* LiveCoverageTexture,
+	const FVector2D WorldMin,
+	const FVector2D InvWorldExtent)
+{
+	return EnableDarkwellProjectFog(
+		LiveCoverageTexture,
+		WorldMin,
+		InvWorldExtent,
+		true,
+		true);
+}
+
 TArray<UStaticMeshComponent*>
 ADarkwellVisionIntegrationFixture::GetProjectFogOccluderComponents() const
 {

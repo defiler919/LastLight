@@ -102,6 +102,7 @@ struct DARKWELL_API FDarkwellFogVisualDiagnostics
 	bool bOldSightWeavePresentationSuppressed = false;
 	bool bP1NoOcclusion = true;
 	bool bP3SurfaceCoverage = false;
+	bool bP4DynamicSubjects = false;
 	int32 CachedOccluderSegmentCount = 0;
 };
 
@@ -125,6 +126,10 @@ public:
 		const FDarkwellFogVisualSourceSnapshot& Source,
 		TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments);
 	bool ActivateP3(
+		ADarkwellVisionIntegrationFixture* Fixture,
+		const FDarkwellFogVisualSourceSnapshot& Source,
+		TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments);
+	bool ActivateP4(
 		ADarkwellVisionIntegrationFixture* Fixture,
 		const FDarkwellFogVisualSourceSnapshot& Source,
 		TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments);

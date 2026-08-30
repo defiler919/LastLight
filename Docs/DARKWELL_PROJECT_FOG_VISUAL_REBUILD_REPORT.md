@@ -6,7 +6,7 @@ Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — P3 WALL/OBJECT SURFACE COVERAGE PROVEN / P4 AUTHORIZED**
+Status: **PARTIAL — P4 DYNAMIC SUBJECT AUTHORITY PROVEN / P5 AUTHORIZED**
 
 24-hour P1 gate: 2026-08-31
 
@@ -161,8 +161,29 @@ Validation:
 
 The validated P3 index is `Saved/DarkwellProjectFogVisualRebuild/P3/p3_evidence_index.json`. All videos, contacts, frame strips, logs and automation reports remain ignored under `Saved`.
 
-## 9. Current limitations and next gate
+## 9. P4 dynamic-subject and legal-source result
+
+P4 passed on 2026-08-30.
+
+The failure was a phase-isolation override, not a SightWeave subject-policy failure: P1 still forced the Stalker hidden every frame and disabled its controller after the project presentation had already applied the correct authority result. P4 removes those overrides. `ApplySightWeaveVisibility` now controls Actor presentation directly from the authoritative `NeverRemember` snapshot, and the HUD continues to require the same stable ID, `bHardLive` state and exact authority revision.
+
+The normal candidate leaves the Stalker controller enabled. Two Development-only diagnostics exist solely for bounded evidence: one holds the subject at a stable cone target and pauses only its controller; the other cycles the real loadout API through Torch/Lantern/Torch at six-second intervals. Neither diagnostic is compiled into Shipping/Test behavior or enabled by default.
+
+Validation:
+
+- `DarkwellEditor Win64 Development`: Success;
+- updated `Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority`: 1/1 Success, including visible, hidden, body-bypass, wall-occluded and revision-equality assertions;
+- 36-second D3D12/SM6/normal-TSR Torch/Lantern/Torch evidence: Success;
+- 30-second D3D12/SM6/normal-TSR normal-controller gameplay evidence: Success;
+- tool sequence was observed three times in order; every Lantern transition produced `Hidden actorHidden=1`, every restored Torch transition produced `Live actorHidden=0`;
+- every logged subject transition had `hudSharedRevision == authorityRevision` and `NeverRemember=1`;
+- direct contact and adjacent-strip inspection confirmed the threat label disappears with the hidden subject and returns with the Live subject, without changing the proven gray/live edge or P3 wall behavior;
+- severe scan: 0.
+
+The validated P4 index is `Saved/DarkwellProjectFogVisualRebuild/P4/p4_evidence_index.json`.
+
+## 10. Current limitations and next gate
 
 P1 continuous coverage, P2 free-space occlusion and P3 object-local wall/object surface coverage are proven only as agent checkpoints. Restored Live-only dynamic subjects, `NeverRemember` runtime behavior, Stalker/HUD synchronization, Torch/Lantern/Torch transitions, 1440p and the final soak remain pending. The current state is not ready for user PIE.
 
-P4 is now authorized. It may reconnect dynamic subjects and legal source transitions without changing the proven ground, occlusion or static-surface rules. P4 must preserve normal TSR, gray/live continuity, doorway and wall behavior, and must keep enemies from ever entering Remembered.
+P5 is now authorized. It must run only the bounded final matrix at 1080p and 1440p with normal D3D12/SM6/TSR, recheck the proven trajectories and walls, measure fog-off versus gray-layer texture correlation/contrast, include Torch/Lantern/Torch and Stalker/HUD, scan severe logs and complete the ten-minute soak. It may not change visual thresholds to satisfy evidence.

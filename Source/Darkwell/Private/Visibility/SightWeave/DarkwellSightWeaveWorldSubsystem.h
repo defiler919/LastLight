@@ -104,4 +104,7 @@ private:
 	double RequestAgeSeconds = 0.0;
 	uint64 NextAuthorityRevision = 1;
 	uint64 NextObservationRevision = 1;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	bool bDiagnosticProofCameraActive = false;
+#endif
 };

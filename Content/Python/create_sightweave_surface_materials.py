@@ -108,14 +108,8 @@ def create_function(asset_tools):
     state_center = function_input(
         function, "StateCenter", unreal.FunctionInputType.FUNCTION_INPUT_VECTOR4, -1800, -350
     )
-    state_positive = function_input(
-        function, "StatePositive", unreal.FunctionInputType.FUNCTION_INPUT_VECTOR4, -1800, -200
-    )
-    state_negative = function_input(
-        function, "StateNegative", unreal.FunctionInputType.FUNCTION_INPUT_VECTOR4, -1800, -50
-    )
     category = function_input(
-        function, "SurfaceCategory", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, 150
+        function, "SurfaceCategory", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, 0
     )
     memory_saturation = function_input(
         function, "MemorySaturation", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, 350
@@ -130,51 +124,32 @@ def create_function(asset_tools):
         function, "DiagnosticFogOff", unreal.FunctionInputType.FUNCTION_INPUT_SCALAR, -1800, 800
     )
 
-    state_max_a = make_binary(
-        function, unreal.MaterialExpressionMax, state_center, state_positive, -1500, -200, True
+    # R remains the discrete authority debug channel. The formal visual weights
+    # use only continuous G=LiveCoverage and B=KnownCoverage.
+    live_coverage_raw = make_mask(function, state_center, "g", -800, -150, True)
+    known_coverage_raw = make_mask(function, state_center, "b", -800, 0, True)
+    valid_a = make_mask(function, state_center, "a", -800, 150, True)
+    live_coverage = expr(
+        function, unreal.MaterialExpressionSaturate, -550, -150, function=True
     )
-    state_max = make_binary(
-        function, unreal.MaterialExpressionMax, state_max_a, state_negative, -1300, -150, True
+    connect(live_coverage_raw, "", live_coverage, "")
+    known_coverage_sat = expr(
+        function, unreal.MaterialExpressionSaturate, -550, 0, function=True
     )
-    category_saturate = expr(
-        function, unreal.MaterialExpressionSaturate, -1500, 100, function=True
-    )
-    connect(category, "", category_saturate, "")
-    conservative_state = expr(
-        function, unreal.MaterialExpressionLinearInterpolate, -1050, -150, function=True
-    )
-    connect(state_center, "", conservative_state, "A")
-    connect(state_max, "", conservative_state, "B")
-    connect(category_saturate, "", conservative_state, "Alpha")
-
-    state_r = make_mask(function, conservative_state, "r", -800, -250, True)
-    feather_g = make_mask(function, conservative_state, "g", -800, -100, True)
-    memory_b = make_mask(function, conservative_state, "b", -800, 50, True)
-    valid_a = make_mask(function, conservative_state, "a", -800, 200, True)
-
-    threshold_live = scalar(function, 0.75, -800, -400, True)
-    one = scalar(function, 1.0, -800, 350, True)
-    zero = scalar(function, 0.0, -800, 450, True)
-    live_threshold_delta = make_binary(
-        function, unreal.MaterialExpressionSubtract, state_r, threshold_live, -550, -350, True
-    )
-    live_threshold_scale = scalar(function, 10000.0, -550, -450, True)
-    live_threshold_ramp = make_binary(
+    connect(known_coverage_raw, "", known_coverage_sat, "")
+    known_coverage = make_binary(
         function,
-        unreal.MaterialExpressionMultiply,
-        live_threshold_delta,
-        live_threshold_scale,
+        unreal.MaterialExpressionMax,
+        known_coverage_sat,
+        live_coverage,
         -300,
-        -350,
+        0,
         True,
     )
-    live_if = expr(function, unreal.MaterialExpressionSaturate, -100, -350, function=True)
-    connect(live_threshold_ramp, "", live_if, "")
-    live_max = make_binary(
-        function, unreal.MaterialExpressionMax, live_if, feather_g, -300, -200, True
-    )
+
+    one = scalar(function, 1.0, -800, 350, True)
     live_weight = make_binary(
-        function, unreal.MaterialExpressionMultiply, live_max, valid_a, -50, -200, True
+        function, unreal.MaterialExpressionMultiply, live_coverage, valid_a, -50, -200, True
     )
 
     category_limit = scalar(function, 2.5, -800, 600, True)
@@ -193,17 +168,36 @@ def create_function(asset_tools):
     )
     memory_eligible = expr(function, unreal.MaterialExpressionSaturate, -100, 500, function=True)
     connect(memory_category_ramp, "", memory_eligible, "")
-    memory_valid = make_binary(
-        function, unreal.MaterialExpressionMultiply, memory_b, memory_eligible, -300, 300, True
+    remembered_coverage_raw = make_binary(
+        function,
+        unreal.MaterialExpressionSubtract,
+        known_coverage,
+        live_coverage,
+        -50,
+        100,
+        True,
     )
-    inverse_live = make_binary(
-        function, unreal.MaterialExpressionSubtract, one, live_weight, -50, 100, True
+    remembered_coverage = expr(
+        function, unreal.MaterialExpressionSaturate, 200, 100, function=True
     )
-    memory_not_live = make_binary(
-        function, unreal.MaterialExpressionMultiply, memory_valid, inverse_live, 200, 250, True
+    connect(remembered_coverage_raw, "", remembered_coverage, "")
+    memory_eligible_coverage = make_binary(
+        function,
+        unreal.MaterialExpressionMultiply,
+        remembered_coverage,
+        memory_eligible,
+        200,
+        250,
+        True,
     )
     memory_weight = make_binary(
-        function, unreal.MaterialExpressionMultiply, memory_not_live, valid_a, 450, 250, True
+        function,
+        unreal.MaterialExpressionMultiply,
+        memory_eligible_coverage,
+        valid_a,
+        450,
+        250,
+        True,
     )
 
     break_attrs = expr(
@@ -384,95 +378,79 @@ def create_master(asset_tools, function):
     category = scalar_parameter(material, "SightWeaveSurfaceCategory", 0.0, -550, 750)
     category.set_editor_property("use_custom_primitive_data", True)
     category.set_editor_property("primitive_data_index", 0)
-    normal = expr(material, unreal.MaterialExpressionPixelNormalWS, -2050, 500)
-    normal_xy = make_mask(material, normal, "rg", -1800, 500)
-    stable_wall_x = scalar_parameter(material, "SightWeaveWallDirectionX", 0.0, -2050, 620)
-    stable_wall_x.set_editor_property("use_custom_primitive_data", True)
-    stable_wall_x.set_editor_property("primitive_data_index", 1)
-    stable_wall_y = scalar_parameter(material, "SightWeaveWallDirectionY", 0.0, -2050, 720)
-    stable_wall_y.set_editor_property("use_custom_primitive_data", True)
-    stable_wall_y.set_editor_property("primitive_data_index", 2)
-    stable_wall_direction = expr(material, unreal.MaterialExpressionAppendVector, -1800, 650)
-    connect(stable_wall_x, "", stable_wall_direction, "A")
-    connect(stable_wall_y, "", stable_wall_direction, "B")
-
-    category_minus_wall = make_binary(
-        material,
-        unreal.MaterialExpressionSubtract,
-        category,
-        scalar(material, 1.0, -1550, 780),
-        -1550,
-        720,
-    )
-    category_distance = expr(material, unreal.MaterialExpressionAbs, -1350, 720)
-    connect(category_minus_wall, "", category_distance, "")
-    category_distance_scaled = make_binary(
+    # Interpolated geometric normal is stable and is not perturbed by normal maps.
+    # TwoSidedSign corrects the winding sign without consulting ViewDirection.
+    geometric_normal = expr(material, unreal.MaterialExpressionVertexNormalWS, -2050, 500)
+    two_sided_sign = expr(material, unreal.MaterialExpressionTwoSidedSign, -2050, 650)
+    signed_geometric_normal = make_binary(
         material,
         unreal.MaterialExpressionMultiply,
-        category_distance,
-        scalar(material, 10000.0, -1350, 820),
-        -1150,
-        720,
+        geometric_normal,
+        two_sided_sign,
+        -1800,
+        500,
     )
-    wall_weight_raw = make_binary(
+    normal_xy = make_mask(material, signed_geometric_normal, "rg", -1550, 500)
+    normal_z = make_mask(material, signed_geometric_normal, "b", -1550, 650)
+    normal_z_abs = expr(material, unreal.MaterialExpressionAbs, -1300, 700)
+    connect(normal_z, "", normal_z_abs, "")
+    vertical_delta = make_binary(
         material,
         unreal.MaterialExpressionSubtract,
-        scalar(material, 1.0, -1150, 820),
-        category_distance_scaled,
-        -950,
-        720,
+        scalar(material, 0.75, -1300, 850),
+        normal_z_abs,
+        -1050,
+        700,
     )
-    wall_weight = expr(material, unreal.MaterialExpressionSaturate, -750, 720)
-    connect(wall_weight_raw, "", wall_weight, "")
-    sample_direction = expr(
-        material, unreal.MaterialExpressionLinearInterpolate, -1550, 500
+    vertical_scaled = make_binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        vertical_delta,
+        scalar(material, 10000.0, -1050, 850),
+        -800,
+        700,
     )
-    connect(normal_xy, "", sample_direction, "A")
-    connect(stable_wall_direction, "", sample_direction, "B")
-    connect(wall_weight, "", sample_direction, "Alpha")
+    vertical_weight = expr(material, unreal.MaterialExpressionSaturate, -550, 700)
+    connect(vertical_scaled, "", vertical_weight, "")
     normal_xy_normalized = expr(material, unreal.MaterialExpressionNormalize, -1300, 500)
-    connect(sample_direction, "", normal_xy_normalized, "")
-    wall_bias = scalar_parameter(material, "SightWeaveWallSampleBiasCm", 7.5, -1550, 650)
-    fixture_wall_distance = scalar_parameter(
-        material, "SightWeaveWallSampleDistanceCm", 27.5, -1300, 880
+    connect(normal_xy, "", normal_xy_normalized, "")
+    surface_sample_distance = scalar_parameter(
+        material, "SightWeaveSurfaceSampleDistanceCm", 7.5, -550, 850
     )
-    fixture_wall_distance.set_editor_property("use_custom_primitive_data", True)
-    fixture_wall_distance.set_editor_property("primitive_data_index", 3)
-    sample_distance = expr(
-        material, unreal.MaterialExpressionLinearInterpolate, -1100, 600
+    surface_sample_distance.set_editor_property("use_custom_primitive_data", True)
+    surface_sample_distance.set_editor_property("primitive_data_index", 3)
+    vertical_distance = make_binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        surface_sample_distance,
+        vertical_weight,
+        -300,
+        700,
     )
-    connect(wall_bias, "", sample_distance, "A")
-    connect(fixture_wall_distance, "", sample_distance, "B")
-    connect(wall_weight, "", sample_distance, "Alpha")
     bias_world = make_binary(
         material,
         unreal.MaterialExpressionMultiply,
         normal_xy_normalized,
-        sample_distance,
+        vertical_distance,
         -900,
         500,
     )
     bias_uv = make_binary(
         material, unreal.MaterialExpressionMultiply, bias_world, world_inv_extent, -1050, 500
     )
-    positive_uv = make_binary(
+    surface_uv = make_binary(
         material, unreal.MaterialExpressionAdd, center_uv, bias_uv, -800, 400
-    )
-    negative_uv = make_binary(
-        material, unreal.MaterialExpressionSubtract, center_uv, bias_uv, -800, 550
     )
     # The default must be a linear/mask texture so the graph compiles against the
     # non-sRGB runtime render target before a MID binds the real state texture.
     empty_state = unreal.load_asset(
         "/Engine/EngineMaterials/DefaultDiffuse_TC_Masks.DefaultDiffuse_TC_Masks"
     )
-    center_state = state_sample(material, empty_state, center_uv, -550, 0)
-    positive_state = state_sample(material, empty_state, positive_uv, -550, 250)
-    negative_state = state_sample(material, empty_state, negative_uv, -550, 500)
+    surface_state = state_sample(material, empty_state, surface_uv, -550, 0)
 
-    memory_saturation = scalar_parameter(material, "RememberedSaturation", 0.18, -300, 750)
-    memory_brightness = scalar_parameter(material, "RememberedBrightness", 0.32, -300, 850)
-    memory_contrast = scalar_parameter(material, "RememberedContrast", 0.68, -300, 950)
+    memory_saturation = scalar_parameter(material, "RememberedSaturation", 0.10, -300, 750)
+    memory_brightness = scalar_parameter(material, "RememberedBrightness", 0.46, -300, 850)
+    memory_contrast = scalar_parameter(material, "RememberedContrast", 0.90, -300, 950)
     diagnostic_fog_off = scalar_parameter(
         material, "SightWeaveDiagnosticFogOff", 0.0, -300, 1050
     )
@@ -480,9 +458,7 @@ def create_master(asset_tools, function):
     call = expr(material, unreal.MaterialExpressionMaterialFunctionCall, 0, 0)
     call.set_material_function(function)
     connect(make_attrs, "", call, "OriginalMaterialAttributes")
-    connect(center_state, "RGBA", call, "StateCenter")
-    connect(positive_state, "RGBA", call, "StatePositive")
-    connect(negative_state, "RGBA", call, "StateNegative")
+    connect(surface_state, "RGBA", call, "StateCenter")
     connect(category, "", call, "SurfaceCategory")
     connect(memory_saturation, "", call, "MemorySaturation")
     connect(memory_brightness, "", call, "MemoryBrightness")

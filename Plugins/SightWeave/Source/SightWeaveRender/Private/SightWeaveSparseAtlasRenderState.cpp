@@ -3245,6 +3245,7 @@ bool FSightWeaveSparseAtlasRenderState::ProcessSurfaceMaterialState_RenderThread
 		}
 	}
 
+	const bool bSurfaceFullUpdate = bSurfaceStateFullUpdatePending;
 	TArray<FIntRect> DirtyRects;
 	if (bSurfaceStateFullUpdatePending)
 	{
@@ -3269,6 +3270,27 @@ bool FSightWeaveSparseAtlasRenderState::ProcessSurfaceMaterialState_RenderThread
 			}
 		}
 	}
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (CVarDiagnosticLogFrames.GetValueOnRenderThread() != 0)
+	{
+		UE_LOG(
+			LogSightWeaveRender,
+			Display,
+			TEXT("SurfaceProof frame=%llu extent=(%d,%d) worldMin=(%.3f,%.3f) cmPerTexel=%.3f stateRevision=%llu memoryRevision=%llu featherRevision=%llu dirtyRects=%d update=%s format=RGBA16F filter=bilinear"),
+			GFrameNumberRenderThread,
+			SurfaceStateTextureExtent.X,
+			SurfaceStateTextureExtent.Y,
+			SurfaceStateWorldMin.X,
+			SurfaceStateWorldMin.Y,
+			SurfaceStateCentimetersPerTexel,
+			AppliedRevision,
+			bMemoryReady ? MemoryMirror->AppliedMemoryRevision : 0,
+			Scope->FeatherAppliedRevision,
+			DirtyRects.Num(),
+			bSurfaceFullUpdate ? TEXT("full")
+				: DirtyRects.IsEmpty() ? TEXT("reuse") : TEXT("incremental"));
+	}
+#endif
 	if (DirtyRects.IsEmpty())
 	{
 		FinishAccess();

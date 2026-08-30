@@ -220,9 +220,11 @@ bool USightWeaveRenderWorldSubsystem::EnableSurfaceMaterialPresentation(
 		{
 			return false;
 		}
-		SurfaceStateTexture->RenderTargetFormat = ETextureRenderTargetFormat::RTF_RGBA8;
+		// R keeps the discrete authority value for diagnostics. G/B are continuous
+		// Live/Known presentation coverage and must not be quantized or point sampled.
+		SurfaceStateTexture->RenderTargetFormat = ETextureRenderTargetFormat::RTF_RGBA16f;
 		SurfaceStateTexture->ClearColor = FLinearColor::Transparent;
-		SurfaceStateTexture->Filter = TextureFilter::TF_Nearest;
+		SurfaceStateTexture->Filter = TextureFilter::TF_Bilinear;
 		SurfaceStateTexture->AddressX = TextureAddress::TA_Clamp;
 		SurfaceStateTexture->AddressY = TextureAddress::TA_Clamp;
 		SurfaceStateTexture->bAutoGenerateMips = false;

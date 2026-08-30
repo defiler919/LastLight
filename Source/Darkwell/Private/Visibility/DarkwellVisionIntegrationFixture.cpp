@@ -2,6 +2,7 @@
 
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 
+#include "Camera/CameraComponent.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -45,35 +46,37 @@ namespace Darkwell::VisionIntegrationFixture
 	}
 }
 
-float FDarkwellSightWeaveSurfaceMath::ResolveConservativeState(
-	const float Center,
-	const float PositiveNormal,
-	const float NegativeNormal,
-	const float SurfaceCategory)
+FVector2D FDarkwellSightWeaveSurfaceMath::ResolveSurfaceSampleWorldPosition(
+	const FVector2D WorldPosition,
+	const FVector GeometricNormalWS,
+	const float SampleDistanceCentimeters)
 {
-	const float CenterState = FMath::Clamp(Center, 0.0f, 1.0f);
-	return SurfaceCategory >= 0.5f
-		? FMath::Max3(
-			CenterState,
-			FMath::Clamp(PositiveNormal, 0.0f, 1.0f),
-			FMath::Clamp(NegativeNormal, 0.0f, 1.0f))
-		: CenterState;
+	if (FMath::Abs(GeometricNormalWS.Z)
+		>= Darkwell::SightWeaveSurface::VerticalSurfaceNormalZThreshold)
+	{
+		return WorldPosition;
+	}
+	const FVector2D OutwardXY(GeometricNormalWS.X, GeometricNormalWS.Y);
+	return WorldPosition + OutwardXY.GetSafeNormal()
+		* FMath::Max(0.0f, SampleDistanceCentimeters);
 }
 
 FDarkwellSightWeaveSurfaceWeights FDarkwellSightWeaveSurfaceMath::ResolveWeights(
-	const float EncodedState,
-	const float LiveFeather,
-	const float RememberedValidity,
+	const float KnownCoverage,
+	const float LiveCoverage,
 	const float ScopeValidity,
 	const float SurfaceCategory)
 {
 	FDarkwellSightWeaveSurfaceWeights Result;
 	const float Valid = FMath::Clamp(ScopeValidity, 0.0f, 1.0f);
-	const float HardLive = EncodedState >= 0.75f ? 1.0f : 0.0f;
-	Result.Live = FMath::Max(HardLive, FMath::Clamp(LiveFeather, 0.0f, 1.0f)) * Valid;
+	const float FilteredLive = FMath::Clamp(LiveCoverage, 0.0f, 1.0f);
+	Result.Live = FilteredLive * Valid;
+	const float Known = FMath::Max(
+		FMath::Clamp(KnownCoverage, 0.0f, 1.0f),
+		FilteredLive);
 	const float MemoryEligible = SurfaceCategory < 2.5f ? 1.0f : 0.0f;
-	Result.Remembered = FMath::Clamp(RememberedValidity, 0.0f, 1.0f)
-		* MemoryEligible * (1.0f - Result.Live) * Valid;
+	Result.Remembered = FMath::Clamp(Known - FilteredLive, 0.0f, 1.0f)
+		* MemoryEligible * Valid;
 	Result.Unknown = FMath::Clamp(1.0f - Result.Live - Result.Remembered, 0.0f, 1.0f);
 	return Result;
 }
@@ -112,10 +115,6 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 		Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex,
 		Darkwell::SightWeaveSurface::WallOrCubeSideCategory);
 	WallSouth->SetCustomPrimitiveDataFloat(
-		Darkwell::SightWeaveSurface::WallSampleDirectionXCustomPrimitiveDataIndex, 1.0f);
-	WallSouth->SetCustomPrimitiveDataFloat(
-		Darkwell::SightWeaveSurface::WallSampleDirectionYCustomPrimitiveDataIndex, 0.0f);
-	WallSouth->SetCustomPrimitiveDataFloat(
 		Darkwell::SightWeaveSurface::WallSampleDistanceCustomPrimitiveDataIndex,
 		Darkwell::SightWeaveSurface::FixtureWallSampleDistanceCentimeters);
 
@@ -132,10 +131,6 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 		Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex,
 		Darkwell::SightWeaveSurface::WallOrCubeSideCategory);
 	WallNorth->SetCustomPrimitiveDataFloat(
-		Darkwell::SightWeaveSurface::WallSampleDirectionXCustomPrimitiveDataIndex, 1.0f);
-	WallNorth->SetCustomPrimitiveDataFloat(
-		Darkwell::SightWeaveSurface::WallSampleDirectionYCustomPrimitiveDataIndex, 0.0f);
-	WallNorth->SetCustomPrimitiveDataFloat(
 		Darkwell::SightWeaveSurface::WallSampleDistanceCustomPrimitiveDataIndex,
 		Darkwell::SightWeaveSurface::FixtureWallSampleDistanceCentimeters);
 
@@ -151,6 +146,9 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 	MemoryLandmark->SetCustomPrimitiveDataFloat(
 		Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex,
 		Darkwell::SightWeaveSurface::RememberableStaticCategory);
+	MemoryLandmark->SetCustomPrimitiveDataFloat(
+		Darkwell::SightWeaveSurface::WallSampleDistanceCustomPrimitiveDataIndex,
+		Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters);
 
 	GreyboxKeyLight = CreateDefaultSubobject<UDirectionalLightComponent>(TEXT("GreyboxKeyLight"));
 	GreyboxKeyLight->SetupAttachment(SceneRoot);
@@ -158,6 +156,12 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 	GreyboxKeyLight->SetIntensity(4.0f);
 	GreyboxKeyLight->SetLightColor(FLinearColor(0.78f, 0.84f, 1.0f));
 	GreyboxKeyLight->SetMobility(EComponentMobility::Stationary);
+
+	ProofCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("ProofCamera"));
+	ProofCamera->SetupAttachment(SceneRoot);
+	ProofCamera->SetRelativeLocation(FVector(-1600.0f, -1600.0f, 1800.0f));
+	ProofCamera->SetRelativeRotation(FRotator(-38.5f, 45.0f, 0.0f));
+	ProofCamera->SetFieldOfView(70.0f);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(
 		TEXT("/Engine/BasicShapes/Cube.Cube"));
@@ -220,9 +224,6 @@ bool ADarkwellVisionIntegrationFixture::EnableSightWeaveSurfaceMaterial(
 		Material->SetTextureParameterValue(TEXT("SightWeaveStateTexture"), StateTexture);
 		Material->SetVectorParameterValue(TEXT("SightWeaveWorldMin"), WorldMinParameter);
 		Material->SetVectorParameterValue(TEXT("SightWeaveWorldInvExtent"), WorldInvExtentParameter);
-		Material->SetScalarParameterValue(
-			TEXT("SightWeaveWallSampleBiasCm"),
-			Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters);
 		Material->SetScalarParameterValue(
 			TEXT("SightWeaveDiagnosticFogOff"),
 			bDiagnosticFogOff ? 1.0f : 0.0f);

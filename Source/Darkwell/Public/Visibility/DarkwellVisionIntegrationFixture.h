@@ -7,6 +7,7 @@
 #include "DarkwellVisionIntegrationFixture.generated.h"
 
 class UDirectionalLightComponent;
+class UCameraComponent;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class USceneComponent;
@@ -16,8 +17,8 @@ class UTexture;
 namespace Darkwell::SightWeaveSurface
 {
 	inline constexpr int32 SurfaceCategoryCustomPrimitiveDataIndex = 0;
-	inline constexpr int32 WallSampleDirectionXCustomPrimitiveDataIndex = 1;
-	inline constexpr int32 WallSampleDirectionYCustomPrimitiveDataIndex = 2;
+	// CPD[1]/[2] are intentionally unused. A primitive-wide direction cannot
+	// represent the independently rendered faces of a wall or six-sided mesh.
 	inline constexpr int32 WallSampleDistanceCustomPrimitiveDataIndex = 3;
 	inline constexpr float GroundCategory = 0.0f;
 	inline constexpr float WallOrCubeSideCategory = 1.0f;
@@ -27,6 +28,7 @@ namespace Darkwell::SightWeaveSurface
 	inline constexpr float FixtureWallHalfThicknessCentimeters = 20.0f;
 	inline constexpr float FixtureWallSampleDistanceCentimeters =
 		FixtureWallHalfThicknessCentimeters + WallConservativeSampleBiasCentimeters;
+	inline constexpr float VerticalSurfaceNormalZThreshold = 0.75f;
 }
 
 struct DARKWELL_API FDarkwellSightWeaveSurfaceWeights
@@ -40,15 +42,13 @@ struct DARKWELL_API FDarkwellSightWeaveSurfaceWeights
 class DARKWELL_API FDarkwellSightWeaveSurfaceMath final
 {
 public:
-	static float ResolveConservativeState(
-		float Center,
-		float PositiveNormal,
-		float NegativeNormal,
-		float SurfaceCategory);
+	static FVector2D ResolveSurfaceSampleWorldPosition(
+		FVector2D WorldPosition,
+		FVector GeometricNormalWS,
+		float SampleDistanceCentimeters);
 	static FDarkwellSightWeaveSurfaceWeights ResolveWeights(
-		float EncodedState,
-		float LiveFeather,
-		float RememberedValidity,
+		float KnownCoverage,
+		float LiveCoverage,
 		float ScopeValidity,
 		float SurfaceCategory);
 };
@@ -113,6 +113,10 @@ private:
 	/** Rendered illumination only; it is never a legal-light authority. */
 	UPROPERTY(VisibleAnywhere, Category = "Integration")
 	TObjectPtr<UDirectionalLightComponent> GreyboxKeyLight;
+
+	/** Development proof camera used only when the project diagnostic mode selects it. */
+	UPROPERTY(VisibleAnywhere, Category = "Integration")
+	TObjectPtr<UCameraComponent> ProofCamera;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> SurfaceGroundMaterial;

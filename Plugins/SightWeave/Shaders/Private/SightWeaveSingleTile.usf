@@ -763,7 +763,15 @@ float4 SightWeaveSurfaceStatePS(float4 Position : SV_POSITION) : SV_Target0
 		? SightWeaveSampleVisualFeather(WorldPosition - TranslatedFloorOrigin)
 		: (HardLive ? 1.0f : 0.0f);
 	const uint State = SightWeaveResolvePresentationState(HardLive, Remembered >= 0.5f);
-	return float4(float(State) * 0.5f, saturate(Feather), Remembered, 1.0f);
+	// Discrete authority remains in R for diagnostics. Presentation consumes only
+	// the continuous world-anchored fields in G/B: LiveCoverage and KnownCoverage.
+	// Live is always known even if exploration memory publication trails this frame.
+	const float KnownCoverage = max(Remembered, HardLive ? 1.0f : 0.0f);
+	return float4(
+		float(State) * 0.5f,
+		saturate(Feather),
+		saturate(KnownCoverage),
+		1.0f);
 }
 
 float2 SightWeaveFeatherSeedPS(float4 Position : SV_POSITION) : SV_Target0

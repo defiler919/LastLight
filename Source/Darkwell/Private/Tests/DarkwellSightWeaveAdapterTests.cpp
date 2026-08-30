@@ -4,6 +4,7 @@
 #include "Combat/DarkwellLoadoutComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Engine.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "Gameplay/DarkwellGameplayTags.h"
 #include "Gameplay/DarkwellVisibilityComponent.h"
@@ -247,6 +248,15 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 		Adapter->RequestSightWeaveAuthority(Fixture));
 	TestTrue(TEXT("SightWeave becomes the only active authority"),
 		Adapter->IsSightWeaveAuthorityActive());
+	UTextureRenderTarget2D* SurfaceState = Render->GetSurfaceStateTexture();
+	TestNotNull(TEXT("Surface presentation target exists"), SurfaceState);
+	if (SurfaceState)
+	{
+		TestEqual(TEXT("Continuous presentation target uses half-float precision"),
+			SurfaceState->RenderTargetFormat, ETextureRenderTargetFormat::RTF_RGBA16f);
+		TestTrue(TEXT("Continuous presentation target is bilinear"),
+			SurfaceState->Filter == TextureFilter::TF_Bilinear);
+	}
 	TestFalse(TEXT("Legacy visibility writes are disabled"),
 		Player->GetVisibilityComponent()->IsVisibilityAuthorityEnabled());
 	TestEqual(TEXT("Exactly one floor is registered"), Runtime->GetFloorCount(), 1);
@@ -375,30 +385,37 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FDarkwellSurfaceMaterialStateTruthTableTest::RunTest(const FString& Parameters)
 {
 	const FDarkwellSightWeaveSurfaceWeights Unknown =
-		FDarkwellSightWeaveSurfaceMath::ResolveWeights(0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+		FDarkwellSightWeaveSurfaceMath::ResolveWeights(0.0f, 0.0f, 1.0f, 0.0f);
 	TestEqual(TEXT("Unknown has no Live weight"), Unknown.Live, 0.0f);
 	TestEqual(TEXT("Unknown has no Remembered weight"), Unknown.Remembered, 0.0f);
 	TestEqual(TEXT("Unknown is fully black"), Unknown.Unknown, 1.0f);
 
 	const FDarkwellSightWeaveSurfaceWeights Remembered =
-		FDarkwellSightWeaveSurfaceMath::ResolveWeights(0.5f, 0.0f, 1.0f, 1.0f, 0.0f);
+		FDarkwellSightWeaveSurfaceMath::ResolveWeights(1.0f, 0.0f, 1.0f, 0.0f);
 	TestEqual(TEXT("Remembered is mutually exclusive from Live"), Remembered.Live, 0.0f);
 	TestEqual(TEXT("Remembered retains the static surface"), Remembered.Remembered, 1.0f);
 	TestEqual(TEXT("Remembered is mutually exclusive from Unknown"), Remembered.Unknown, 0.0f);
 
 	const FDarkwellSightWeaveSurfaceWeights Live =
-		FDarkwellSightWeaveSurfaceMath::ResolveWeights(1.0f, 1.0f, 1.0f, 1.0f, 0.0f);
+		FDarkwellSightWeaveSurfaceMath::ResolveWeights(1.0f, 1.0f, 1.0f, 0.0f);
 	TestEqual(TEXT("Live wins over Remembered"), Live.Live, 1.0f);
 	TestEqual(TEXT("Live suppresses Remembered"), Live.Remembered, 0.0f);
 	TestEqual(TEXT("Live suppresses Unknown"), Live.Unknown, 0.0f);
 
 	const FDarkwellSightWeaveSurfaceWeights InvalidScope =
-		FDarkwellSightWeaveSurfaceMath::ResolveWeights(1.0f, 1.0f, 1.0f, 0.0f, 0.0f);
+		FDarkwellSightWeaveSurfaceMath::ResolveWeights(1.0f, 1.0f, 0.0f, 0.0f);
 	TestEqual(TEXT("Invalid scope fails closed"), InvalidScope.Unknown, 1.0f);
 	const FDarkwellSightWeaveSurfaceWeights NeverRemember =
-		FDarkwellSightWeaveSurfaceMath::ResolveWeights(0.5f, 0.0f, 1.0f, 1.0f, 3.0f);
+		FDarkwellSightWeaveSurfaceMath::ResolveWeights(1.0f, 0.0f, 1.0f, 3.0f);
 	TestEqual(TEXT("Category 3 never enters Remembered"), NeverRemember.Remembered, 0.0f);
 	TestEqual(TEXT("Category 3 non-Live fails black"), NeverRemember.Unknown, 1.0f);
+	const FDarkwellSightWeaveSurfaceWeights Continuous =
+		FDarkwellSightWeaveSurfaceMath::ResolveWeights(0.6f, 0.25f, 1.0f, 0.0f);
+	TestEqual(TEXT("Continuous Live coverage remains 0.25"), Continuous.Live, 0.25f);
+	TestTrue(TEXT("Remembered is Known minus Live"),
+		FMath::IsNearlyEqual(Continuous.Remembered, 0.35f, 1.0e-5f));
+	TestTrue(TEXT("Unknown is one minus Known"),
+		FMath::IsNearlyEqual(Continuous.Unknown, 0.4f, 1.0e-5f));
 	return true;
 }
 
@@ -420,12 +437,22 @@ bool FDarkwellSurfaceMaterialMappingAndWallTest::RunTest(const FString& Paramete
 		Mapping.WorldToUV(Mapping.WorldMin).Equals(FVector2D::ZeroVector));
 	TestTrue(TEXT("World maximum maps to UV one"),
 		Mapping.WorldToUV(Mapping.WorldMin + Mapping.WorldExtent).Equals(FVector2D(1.0, 1.0)));
-	TestEqual(TEXT("Ground uses its center sample"),
-		FDarkwellSightWeaveSurfaceMath::ResolveConservativeState(0.0f, 1.0f, 0.5f, 0.0f),
-		0.0f);
-	TestEqual(TEXT("Wall uses the highest normal-offset state"),
-		FDarkwellSightWeaveSurfaceMath::ResolveConservativeState(0.0f, 1.0f, 0.5f, 1.0f),
-		1.0f);
+	const FVector2D SurfacePoint(100.0, 200.0);
+	TestTrue(TEXT("+X face samples its own outward free space"),
+		FDarkwellSightWeaveSurfaceMath::ResolveSurfaceSampleWorldPosition(
+			SurfacePoint, FVector(1.0, 0.0, 0.0), 27.5f).Equals(FVector2D(127.5, 200.0)));
+	TestTrue(TEXT("-X face samples its own outward free space"),
+		FDarkwellSightWeaveSurfaceMath::ResolveSurfaceSampleWorldPosition(
+			SurfacePoint, FVector(-1.0, 0.0, 0.0), 27.5f).Equals(FVector2D(72.5, 200.0)));
+	TestTrue(TEXT("+Y face samples its own outward free space"),
+		FDarkwellSightWeaveSurfaceMath::ResolveSurfaceSampleWorldPosition(
+			SurfacePoint, FVector(0.0, 1.0, 0.0), 27.5f).Equals(FVector2D(100.0, 227.5)));
+	TestTrue(TEXT("-Y face samples its own outward free space"),
+		FDarkwellSightWeaveSurfaceMath::ResolveSurfaceSampleWorldPosition(
+			SurfacePoint, FVector(0.0, -1.0, 0.0), 27.5f).Equals(FVector2D(100.0, 172.5)));
+	TestTrue(TEXT("Floor and cube top keep the current world position"),
+		FDarkwellSightWeaveSurfaceMath::ResolveSurfaceSampleWorldPosition(
+			SurfacePoint, FVector(0.0, 0.0, 1.0), 27.5f).Equals(SurfacePoint));
 	TestEqual(TEXT("Wall conservative bias remains frozen at 7.5 cm"),
 		Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters,
 		7.5f);
@@ -481,10 +508,10 @@ bool FDarkwellSurfaceMaterialPrimitiveCategoryTest::RunTest(const FString& Param
 			&& Data[Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex]
 				== Darkwell::SightWeaveSurface::WallOrCubeSideCategory)
 		{
-			TestEqual(TEXT("Wall CPD[1] provides stable world X direction"),
-				Data[Darkwell::SightWeaveSurface::WallSampleDirectionXCustomPrimitiveDataIndex], 1.0f);
-			TestEqual(TEXT("Wall CPD[2] provides stable world Y direction"),
-				Data[Darkwell::SightWeaveSurface::WallSampleDirectionYCustomPrimitiveDataIndex], 0.0f);
+			TestEqual(TEXT("Wall CPD[1] is unused; rendered geometry owns X direction"),
+				Data[1], 0.0f);
+			TestEqual(TEXT("Wall CPD[2] is unused; rendered geometry owns Y direction"),
+				Data[2], 0.0f);
 			TestEqual(TEXT("Wall CPD[3] crosses the fixture half thickness"),
 				Data[Darkwell::SightWeaveSurface::WallSampleDistanceCustomPrimitiveDataIndex], 27.5f);
 		}

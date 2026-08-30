@@ -42,11 +42,17 @@ namespace Darkwell::SightWeaveAdapter
 	TAutoConsoleVariable<int32> CVarDiagnosticSurfaceTrajectory(
 		TEXT("r.Darkwell.SightWeave.Diagnostic.SurfaceTrajectory"),
 		0,
-		TEXT("Development-only deterministic motion: 0=off, 1=world +X, 2=world -Y, 3=doorway lane +X."));
+		TEXT("Development-only deterministic motion: 0=off, 1=world +X, 2=world -Y, "
+			"3=doorway lane +X, 4=world +Y, 5=rotate yaw."));
 	TAutoConsoleVariable<float> CVarDiagnosticSurfaceTrajectorySpeed(
 		TEXT("r.Darkwell.SightWeave.Diagnostic.SurfaceTrajectorySpeed"),
 		15.0f,
 		TEXT("Centimeters per second for the deterministic SurfaceMaterial trajectory."));
+	TAutoConsoleVariable<int32> CVarDiagnosticSurfaceProofMode(
+		TEXT("r.Darkwell.SightWeave.Diagnostic.SurfaceProofMode"),
+		0,
+		TEXT("Development-only architecture isolation: 0=Gameplay, 1=AuthorityFrozen, "
+			"2=CameraFrozen while visibility authority continues."));
 #endif
 
 	FTransform BuildSourceTransform(const ADarkwellCharacter& Character)
@@ -123,29 +129,64 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	const int32 DiagnosticTrajectory =
 		Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceTrajectory.GetValueOnGameThread();
-	if (DiagnosticTrajectory >= 1 && DiagnosticTrajectory <= 3)
+	if (DiagnosticTrajectory >= 1 && DiagnosticTrajectory <= 5)
 	{
 		const float Speed = FMath::Clamp(
 			Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceTrajectorySpeed.GetValueOnGameThread(),
 			0.0f,
 			100.0f);
-		const FVector Direction = DiagnosticTrajectory == 2
-			? FVector(0.0, -1.0, 0.0)
-			: FVector(1.0, 0.0, 0.0);
-		FVector NextLocation = Player->GetActorLocation() + Direction * Speed * FMath::Max(DeltaTime, 0.0f);
-		if (DiagnosticTrajectory == 3)
+		if (DiagnosticTrajectory == 5)
 		{
-			NextLocation.Y = 0.0;
+			FRotator NextRotation = Player->GetActorRotation();
+			NextRotation.Yaw += Speed * FMath::Max(DeltaTime, 0.0f);
+			Player->SetActorRotation(NextRotation, ETeleportType::TeleportPhysics);
 		}
-		Player->SetActorLocation(
-			NextLocation,
-			false,
-			nullptr,
-			ETeleportType::TeleportPhysics);
+		else
+		{
+			const FVector Direction = DiagnosticTrajectory == 2
+				? FVector(0.0, -1.0, 0.0)
+				: DiagnosticTrajectory == 4
+					? FVector(0.0, 1.0, 0.0)
+					: FVector(1.0, 0.0, 0.0);
+			FVector NextLocation = Player->GetActorLocation()
+				+ Direction * Speed * FMath::Max(DeltaTime, 0.0f);
+			if (DiagnosticTrajectory == 3)
+			{
+				NextLocation.Y = 0.0;
+			}
+			Player->SetActorLocation(
+				NextLocation,
+				false,
+				nullptr,
+				ETeleportType::TeleportPhysics);
+		}
 	}
+	const int32 SurfaceProofMode = FMath::Clamp(
+		Darkwell::SightWeaveAdapter::CVarDiagnosticSurfaceProofMode.GetValueOnGameThread(),
+		0,
+		2);
+	if (APlayerController* Controller = GetWorld()
+		? GetWorld()->GetFirstPlayerController() : nullptr)
+	{
+		if (SurfaceProofMode == 2 && !bDiagnosticProofCameraActive)
+		{
+			Controller->SetViewTarget(RequestedFixture.Get());
+			bDiagnosticProofCameraActive = true;
+		}
+		else if (SurfaceProofMode != 2 && bDiagnosticProofCameraActive)
+		{
+			Controller->SetViewTarget(Player.Get());
+			bDiagnosticProofCameraActive = false;
+		}
+	}
+#else
+	constexpr int32 SurfaceProofMode = 0;
 #endif
-	UpdateDynamicAuthority();
-	UpdateSubjectAuthority();
+	if (SurfaceProofMode != 1)
+	{
+		UpdateDynamicAuthority();
+		UpdateSubjectAuthority();
+	}
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	if (Darkwell::SightWeaveAdapter::CVarDiagnosticLogGameTransforms.GetValueOnGameThread() != 0)
 	{
@@ -159,8 +200,9 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 		UE_LOG(
 			LogDarkwellSightWeave,
 			Display,
-			TEXT("VisualRescueTransform frame=%llu player=(%.3f,%.3f,%.3f %.3f,%.3f,%.3f) camera=(%.3f,%.3f,%.3f %.3f,%.3f,%.3f)"),
+			TEXT("VisualRescueTransform frame=%llu proofMode=%d player=(%.3f,%.3f,%.3f %.3f,%.3f,%.3f) camera=(%.3f,%.3f,%.3f %.3f,%.3f,%.3f)"),
 			GFrameCounter,
+			SurfaceProofMode,
 			PlayerLocation.X, PlayerLocation.Y, PlayerLocation.Z,
 			PlayerRotation.Pitch, PlayerRotation.Yaw, PlayerRotation.Roll,
 			CameraLocation.X, CameraLocation.Y, CameraLocation.Z,
@@ -624,6 +666,17 @@ void UDarkwellSightWeaveWorldSubsystem::RollbackToLegacy(
 	const FString& FailureReason,
 	const bool bRestoreConsumers)
 {
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (bDiagnosticProofCameraActive)
+	{
+		if (APlayerController* Controller = GetWorld()
+			? GetWorld()->GetFirstPlayerController() : nullptr)
+		{
+			Controller->SetViewTarget(Player.Get());
+		}
+		bDiagnosticProofCameraActive = false;
+	}
+#endif
 	if (ADarkwellVisionIntegrationFixture* Fixture = RequestedFixture.Get())
 	{
 		Fixture->DisableSightWeaveSurfaceMaterial();

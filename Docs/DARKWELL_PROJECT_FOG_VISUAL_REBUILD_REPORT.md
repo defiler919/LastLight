@@ -6,7 +6,7 @@ Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — P4 DYNAMIC SUBJECT AUTHORITY PROVEN / P5 AUTHORIZED**
+Status: **PARTIAL — READY_FOR_USER_GRAY_LIVE_PIE**
 
 24-hour P1 gate: 2026-08-31
 
@@ -182,8 +182,35 @@ Validation:
 
 The validated P4 index is `Saved/DarkwellProjectFogVisualRebuild/P4/p4_evidence_index.json`.
 
-## 10. Current limitations and next gate
+## 10. P5 bounded formal result
 
-P1 continuous coverage, P2 free-space occlusion and P3 object-local wall/object surface coverage are proven only as agent checkpoints. Restored Live-only dynamic subjects, `NeverRemember` runtime behavior, Stalker/HUD synchronization, Torch/Lantern/Torch transitions, 1440p and the final soak remain pending. The current state is not ready for user PIE.
+P5 passed on 2026-08-30 without changing the coverage, occlusion, surface, filtering or authority rules.
 
-P5 is now authorized. It must run only the bounded final matrix at 1080p and 1440p with normal D3D12/SM6/TSR, recheck the proven trajectories and walls, measure fog-off versus gray-layer texture correlation/contrast, include Torch/Lantern/Torch and Stalker/HUD, scan severe logs and complete the ten-minute soak. It may not change visual thresholds to satisfy evidence.
+Formal matrix:
+
+- 5/5 `Darkwell.FogVisual` automation tests: Success;
+- 1/1 updated vertical-slice automation: Success;
+- 19/19 D3D12/SM6 captures with normal TSR and exact video dimension/duration checks: Success;
+- 1080p: static, horizontal, vertical, diagonal, slow rotation, along-wall, doorway, west/east/south/north, Torch/Lantern/Torch, normal-controller gameplay and 600-second soak;
+- 1440p: static, horizontal, slow rotation, along-wall and Torch/Lantern/Torch;
+- severe scan across every formal log: 0;
+- no task Unreal, ffmpeg or build process remained after the matrix.
+
+Gray-layer readability used the same fixed world-space floor ROI in a Torch Live reference frame and a Lantern Remembered frame. No diagnostic material, fog-off override or metric-specific visual change was used.
+
+| Resolution | Live mean | Remembered mean | Live std | Remembered std | Correlation | Std retention | RMS contrast retention |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1920x1080 | 0.70172 | 0.62808 | 0.04317 | 0.03754 | 0.97934 | 86.97% | 97.17% |
+| 2560x1440 | 0.70093 | 0.63279 | 0.04443 | 0.03908 | 0.97732 | 87.95% | 97.42% |
+
+Both resolutions exceed the frozen minimums of correlation `>= 0.80` and standard-deviation retention `>= 35%`. Directly opened ROI images retain the same recognizable mid-frequency floor texture after desaturation and darkening.
+
+Agent inspection opened the key 1080p and 1440p contacts, every required adjacent-frame strip, all four opposing wall views, both tool-cycle contacts, both ROI pairs, a five-point 120-second soak contact and a mid-soak 20-frame strip. No periodic tile stepping, large jagged recurrence, wall-face reversal, doorway closure, black Unknown layer, behind-wall Live leak or dynamic-subject memory leak was observed. The 600-second normal gameplay sample remained responsive and completed naturally.
+
+The validated P5 index is `Saved/DarkwellProjectFogVisualRebuild/P5/p5_evidence_index.json`. The complete evidence remains ignored under `Saved` and is not committed.
+
+## 11. Remaining acceptance gate
+
+The agent gates are complete, but this is not `COMPLETED`. The current maximum state is `PARTIAL — READY_FOR_USER_GRAY_LIVE_PIE`.
+
+The user must run real dynamic PIE and judge project usability: continuous movement and rotation, gray/live readability, four-direction wall behavior, enemy/HUD filtering and Torch/Lantern/Torch recovery. Only that user verdict can accept this gray/live phase. Black Unknown, exploration history and `UnknownUntilExplored` remain explicitly out of scope and must not begin automatically.

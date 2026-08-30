@@ -6,7 +6,7 @@ Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — P4 DYNAMIC SUBJECT AUTHORITY PROVEN / P5 AUTHORIZED**
+Status: **PARTIAL — READY_FOR_USER_GRAY_LIVE_PIE**
 
 Deadline: 2026-09-05
 
@@ -64,9 +64,36 @@ Saved/DarkwellProjectFogVisualRebuild/P4/p4_evidence_index.json
 
 It records 1/1 updated vertical-slice automation, 2/2 D3D12/SM6/normal-TSR captures and 0 severe hits. Three complete tool cycles produced matching `Live actorHidden=0`, `Hidden actorHidden=1`, and restored-Live transitions; every HUD revision equaled the Actor authority revision.
 
-## Immediate next gate
+## P5 final agent checkpoint
 
-Run the bounded P5 final matrix: 1080p/1440p normal-TSR dynamics, the retained P1-P4 visual cases, gray-layer texture correlation/contrast, Stalker/HUD and Torch transitions, severe scan and the ten-minute soak. Do not run the historical SightWeave regression or change visual rules to improve metrics.
+The bounded P5 matrix passed 19/19 normal D3D12/SM6/TSR captures and 6/6 targeted automation tests with zero severe log hits. It includes the complete 1080p movement/wall/tool/gameplay set, 1440p static/horizontal/rotation/wall/tool evidence and a 600-second normal gameplay soak.
+
+The validated index is:
+
+```text
+Saved/DarkwellProjectFogVisualRebuild/P5/p5_evidence_index.json
+```
+
+Gray-layer metrics passed at both resolutions:
+
+- 1080p: correlation `0.97934`, standard-deviation retention `86.97%`, RMS contrast retention `97.17%`;
+- 1440p: correlation `0.97732`, standard-deviation retention `87.95%`, RMS contrast retention `97.42%`.
+
+The agent opened the key contacts, 20-frame strips, opposing wall views, tool-cycle transitions, ROI pairs and soak contacts. No periodic tile stepping, large jagged recurrence, direction-dependent wall reversal, doorway closure, black Unknown layer, behind-wall leak or NeverRemember subject leak was observed.
+
+## User acceptance next
+
+Run a real dynamic PIE on this exact branch and verify:
+
+1. static, horizontal, vertical and diagonal movement remain smooth;
+2. slow rotation does not show periodic grid teeth or crawling;
+3. walls are consistent from north, south, east and west while space behind stays gray;
+4. gray floor, wall and object textures remain readable at normal play scale;
+5. enemies and the threat HUD appear only in Live and never remain in gray;
+6. Torch/Lantern/Torch restores the cone without sticking or leaking;
+7. the gray/live mode is usable as a DARKWELL gameplay presentation.
+
+Do not accept or reject this phase from screenshots alone. The user dynamic PIE verdict is the remaining gate. Do not start black Unknown/exploration history automatically.
 
 ## Protected results and prohibitions
 

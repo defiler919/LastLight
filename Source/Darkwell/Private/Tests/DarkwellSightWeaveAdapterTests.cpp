@@ -545,7 +545,7 @@ bool FDarkwellSurfaceMaterialPrimitiveCategoryTest::RunTest(const FString& Param
 		StaticCount += Category == Darkwell::SightWeaveSurface::RememberableStaticCategory ? 1 : 0;
 	}
 	TestEqual(TEXT("Exactly one ground primitive uses CPD[0]=0"), GroundCount, 1);
-	TestEqual(TEXT("Both wall primitives use CPD[0]=1"), WallCount, 2);
+	TestEqual(TEXT("All seven P3 wall proof primitives use CPD[0]=1"), WallCount, 7);
 	for (const UStaticMeshComponent* Mesh : Meshes)
 	{
 		const TArray<float>& Data = Mesh->GetCustomPrimitiveData().Data;

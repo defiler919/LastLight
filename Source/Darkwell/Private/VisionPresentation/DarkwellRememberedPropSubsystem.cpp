@@ -124,7 +124,7 @@ bool UDarkwellRememberedPropSubsystem::RegisterProp(
 		if (Existing->Component.IsValid() && Existing->Component.Get() != Component)
 		{
 			++Diagnostics.DuplicateStableIdRejectCount;
-			UE_LOG(LogDarkwellRememberedProp, Error,
+			UE_LOG(LogDarkwellRememberedProp, Warning,
 				TEXT("Duplicate RememberableProp stable id rejected: %s"),
 				*StableId.ToString());
 			return false;

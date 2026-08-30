@@ -1,6 +1,6 @@
 # SightWeave DARKWELL Visual Rescue Prototype Report
 
-Date: 2026-08-29
+Date: 2026-08-30
 
 Branch: `codex/sightweave-darkwell-visual-rescue`
 
@@ -18,11 +18,15 @@ Validated temporal-coherent project candidate SHA before final documentation: `4
 
 SurfaceMaterial source candidate SHA before final documentation: `8daed357e26aa8fa41be0892d63e906bc153317e`
 
+Final architecture proof starting SHA: `011fcbd3ce53704b14a89fd0d293995d52f2b427`
+
+Final architecture source candidate SHA before final documentation: `96183a2258fa2b79e9991f140b76f28ffac6fdd8`
+
 48-hour prototype checkpoint: 2026-08-31
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **BLOCKED — USER_DYNAMIC_PIE_RETEST_5_FAILED**
+Status: **PARTIAL — READY_FOR_USER_FINAL_ARCHITECTURE_PIE**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
 
@@ -781,3 +785,132 @@ No complete SightWeave regression, complete DARKWELL regression, BuildPlugin, cl
 The project-side agent gate supports `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5`; it does not establish subjective production usability. The fixture is intentionally small, non-Nanite, and lacks particle/dynamic-VFX consumers. The Stalker fixture has no skeletal mesh and is therefore validated as whole-actor authority/filtering, not per-pixel skeletal coverage. The texture baseline is a project prototype texture because the fixture had no original art texture. These are disclosed limits, not claims of plugin generality.
 
 The user must retest normal PIE at 1080p and 1440p with D3D12/SM6 and normal TSR. If the user rejects motion stability, texture readability, wall/door coverage, enemy filtering, or tool recovery, the required state is `BLOCKED — SURFACE MATERIAL VISUAL PROTOTYPE FAILED / SIGHTWEAVE ABANDONMENT REVIEW REQUIRED`. The response must not return to a fifth screen-space patch. The 2026-09-05 stop-loss remains unconditional.
+
+## 13. Final 48-hour SurfaceMaterial architecture proof (2026-08-30)
+
+### 13.1 Disposition and source checkpoints
+
+The fifth user dynamic PIE rejection at `011fcbd3ce53704b14a89fd0d293995d52f2b427` remains the controlling verdict on the previous candidate. It was recorded without weakening the visual contract in `1303b4c12c8032ed4089e898023846fba4c28784`. The final project-only architecture was introduced in `e4120cc4ecc82873c0d9d72967cc21079499d921`, and the horizontal-surface sampling correction was built, tested, and pushed in `96183a2258fa2b79e9991f140b76f28ffac6fdd8`.
+
+The agent-side architecture gate now supports only:
+
+```text
+PARTIAL — READY_FOR_USER_FINAL_ARCHITECTURE_PIE
+```
+
+This does not supersede the user's fifth rejection with a success claim and is not `COMPLETED`. A user-operated final dynamic PIE is still mandatory. If that PIE rejects the candidate, the required terminal state remains:
+
+```text
+BLOCKED — SURFACE MATERIAL ARCHITECTURE PROOF FAILED
+SIGHTWEAVE VISUAL LAYER ABANDONED
+```
+
+No post-TSR/pre-TSR full-screen patch, SceneCapture, SceneColor history, jitter compensation, enlarged blur, mask expansion, TSR disable, resolution reduction, `L_Prototype` change, or plugin/Fab generalization was introduced.
+
+### 13.2 Confirmed roots and the new surface contract
+
+The rejected contract used one primitive-wide `(+1,0)` wall direction in CPD `[1]/[2]`, then selected center/both-side samples. A cube or thick wall cannot use one direction for all rendered faces. The formal replacement uses the stable interpolated `VertexNormalWS`, corrected by `TwoSidedSign`, projects that geometric normal into world XY, and samples only the current rendered face's outward free space. It never uses `ViewDirection` and never takes the maximum of both wall sides. CPD `[0]` remains the surface category and CPD `[3]` remains the surface sampling distance; CPD `[1]/[2]` no longer decide formal wall direction. Horizontal floor/top faces use the exact `AbsoluteWorldPosition.xy`.
+
+The last blocking floor failure had a separate, exact cause. `Normalize(GeometricNormalWS.xy)` was evaluated for every pixel before its wall-only distance was applied. A horizontal face supplies `(0,0)` in XY; the generated material produced a non-finite value, and multiplying that value by zero did not recover a valid UV. Controlled A/B established that a known-white texture and a uniform-white runtime RT both bound correctly, and that a direct computed world-UV threshold bisected the floor correctly, while an RT half-plane affected walls but not the floor. The fix computes `length(N.xy)`, divides by `max(length, 0.0001)`, and then applies the wall-only distance. The corrected RT half-plane exactly matched the direct UV threshold on the ground.
+
+The same material now subtracts `SightWeaveWorldMin` in LWC space and explicitly truncates the small local coordinate to float before converting to UV. It samples the persistent state RT at explicit mip 0. The runtime RT is linear `RTF_RGBA16f`, bilinear, clamp-addressed, and reused across frames. These choices remove the prior RGBA8 hard-threshold presentation and prevent sampler/default-texture ambiguity.
+
+The final state texture contract is:
+
+```text
+R = discrete Unknown / Remembered / Live authority divided by 2 (diagnostics only)
+G = continuous world-anchored LiveCoverage
+B = continuous world-anchored KnownCoverage
+A = scope/resource validity
+```
+
+The material computes `LiveWeight = saturate(G) * A`, `KnownWeight = max(saturate(B), LiveWeight)`, `RememberedWeight = saturate(KnownWeight - LiveWeight) * memory eligibility * A`, and `UnknownWeight = saturate(1 - LiveWeight - RememberedWeight)`. Thus CPU gameplay authority remains discrete while the visible edge uses independent continuous coverage. `NeverRemember` remains a category/authority rule rather than a color erase.
+
+Remembered is derived from the real sampled static BaseColor: luminance-preserving desaturation, contrast `0.90`, brightness `0.46`, saturation `0.10`, high roughness, and no live metallic/specular contribution. It does not sample current SceneColor, GBuffer lighting, dynamic shadow, particle, Stalker, SceneCapture, temporal history, `frac` grid, or time noise. Unknown has no BaseColor/emissive/specular leakage. The SurfaceMaterial is rendered with ordinary primitive depth/coverage/velocity before the project's normal D3D12/SM6 TSR. While the surface target is active, `FSightWeaveSceneViewExtension::SubscribeToPostProcessingPass` registers neither the post-TSR nor pre-TSR formal composite.
+
+The concrete path is:
+
+```text
+CPU hard authority + exploration memory
+  -> live / visual-feather / memory GPU mirrors
+  -> FSightWeaveSparseAtlasRenderState::ProcessSurfaceMaterialState_RenderThread
+  -> persistent RGBA16F KnownCoverage/LiveCoverage world texture
+  -> ADarkwellVisionIntegrationFixture surface MIDs
+  -> MF_DarkwellSightWeaveSurface / M_DarkwellSightWeaveSurface
+  -> ordinary primitive depth, coverage and velocity
+  -> normal project TSR
+  -> HUD
+```
+
+Relevant implementation entries are `USightWeaveRenderWorldSubsystem::EnableSurfaceMaterialPresentation`, `FSightWeaveSceneViewExtension::ConfigureSurfaceMaterialTarget`, `FSightWeaveSceneViewExtension::PreRenderViewFamily_RenderThread`, `FSightWeaveSparseAtlasRenderState::ProcessSurfaceMaterialState_RenderThread`, shader entry `SightWeaveSurfaceStatePS`, and the project material generator `Content/Python/create_sightweave_surface_materials.py`.
+
+### 13.3 E1 — fixed state and fixed camera
+
+Formal 20-second Live and Remembered static samples and matched fog-off controls were recorded at 1080p; the Remembered pair was repeated at 1440p. A Development authority-color sample selected a fully Remembered, non-boundary floor ROI before measurement. The authoritative source and camera were fixed for all 600 frames.
+
+| Output | Remembered mean | Remembered std | Remembered RMS contrast | fog-off mean / std / RMS | std retained | luminance correlation | Remembered adjacent MAD p95 | Unknown MAD p95 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1920x1080 | 177.523990 | 5.744403 | 0.032358 | 178.820707 / 8.424842 / 0.047113 | 68.1841% | 0.947743 | 0.044192 | 0 |
+| 2560x1440 | 177.883358 | 6.027118 | 0.033882 | 178.988372 / 8.808064 / 0.049210 | 68.4273% | 0.963518 | 0.058503 | 0 |
+
+Both resolutions exceed correlation `0.80` and contrast/std retention `35%`. The opened full-size frames show the real mid-frequency floor pattern at normal scale, readable wall/door/static-object structure, and truly black Unknown. The agent did not infer texture retention from correlation alone.
+
+The native mapping test proves face samples at `+X/-X/+Y/-Y`, verifies that floor/top keep their exact world position, and freezes the 27.5 cm thick-wall sample distance. The authority view and the E2/E3 wall/door contacts visually cover both wall faces and wall ends. No primitive-wide fixed direction remains in the formal path.
+
+### 13.4 E2 — authority frozen, camera/player moving
+
+Development-only `SurfaceProofMode=1` froze authority while deterministic 15–20 cm/s trajectories moved the player and following camera. Each fog-on path had an equivalent same-material fog-off process. Horizontal, vertical, slow rotation, along-wall, and doorway runs are each exactly 30 seconds / 900 frames at 1920x1080, D3D12/SM6, normal TSR.
+
+| E2 motion | aligned bright MAD p95 | black-edge XOR p95 | leading p95 | trailing p95 | one-pixel alignment count / 899 |
+|---|---:|---:|---:|---:|---:|
+| horizontal | 3.12 | 0.00 | 0.00 | 0.00 | 1 |
+| vertical | 3.45 | 0.00 | 0.00 | 0.00 | 0 |
+| slow rotation | 0.03 | 0.00 | 0.00 | 0.00 | 0 |
+| along wall | 2.81 | 0.00 | 0.00 | 0.00 | 0 |
+| doorway | 3.13 | 0.00 | 0.00 | 0.00 | 0 |
+
+The agent opened all five ten-frame contacts and all five twenty-adjacent-frame strips. The fixed world boundary moves continuously with the camera; no old left/right or top/bottom whole-edge oscillation, gray line, black/gray seam, wall-direction black/bright inversion, or discontinuous doorway strip is visible.
+
+### 13.5 E3 — camera frozen, source moving
+
+Development-only `SurfaceProofMode=2` fixed the fixture proof camera while the visibility source translated at 20 cm/s and rotated through a full slow sweep. Each run and its fog-off control is 30 seconds / 900 frames at 1080p, D3D12/SM6, normal TSR. Translation covers new Live, Live-to-Remembered trail, and Known-to-Unknown boundary movement; the full source rotation sweeps previously known floor through Remembered-to-Live and Live-to-Remembered without view motion.
+
+Translation aligned bright MAD p95 is `0.25`; rotation is `0.05`. Black-edge XOR, leading, and trailing p95 round to `0.00` in both. Opened contacts and adjacent strips show coverage moving across the textured floor, two thick walls, doorway, landmark, and NeverRemember actor without tile-edge lines or coordinate jumps.
+
+### 13.6 E4 — normal gameplay, resolution, tools, and soak
+
+`SurfaceProofMode=0` normal gameplay samples were recorded with updating authority, camera follow, presentation revisions, D3D12/SM6, normal TSR and temporal jitter. The 1080p and 1440p translation pairs are each 30 seconds / 900 frames. Their aligned bright MAD p95 is `2.18` and `2.22`; black-edge XOR/leading/trailing p95 is `0.00` for both. Torch-to-Lantern-to-Torch candidate/control pairs are 12 seconds / 360 frames at both resolutions; MAD p95 is `0.21` and `0.25`, with zero black-edge XOR/leading/trailing p95. The opened sheets show the legal cone being removed and restored without a stuck-black result. M6P1 authority independently retains same-revision Stalker/HUD visibility and `NeverRemember`.
+
+The final normal-gameplay soak and matched fog-off control are each exactly `600.000` seconds, `18,000` frames, 1920x1080 and 30 fps. The fog-on player range was `X=-650`, `Y=-791.084..425.910`, `Z=90.150`; control range was `X=-650`, `Y=-207.091..833.598`, `Z=90.150`. Both remain on the 3000x2000 cm floor and close naturally. The agent opened every-minute contacts and mid-run twenty-adjacent-frame strips. The normal Torch depletion later in the run changes legal Live to textured Remembered; it does not fail black, introduce a line, or erase the static texture.
+
+### 13.7 Automation, logs, evidence, and retained warnings
+
+The serial `DarkwellEditor Win64 Development` build succeeded after the final material/source checkpoint. Post-proof automation is:
+
+- SurfaceMaterial mapping/wall/category/state: 3/3 Success;
+- M6P1 vertical-slice authority: 1/1 Success;
+- M3.4 presentation/feather: 3/3 Success;
+- M3.5 static environment memory: 2/2 Success;
+- M4P1 NeverRemember policy: 1/1 Success;
+- D3D12/SM6 three-state composite: 1/1 Success;
+- bounded total: 11/11 Success;
+- complete DARKWELL: 32/32 Success.
+
+All seven final automation logs have zero test failure and zero fatal/assert/ensure/GPU-crash/device-removal/DARKWELL-or-SightWeave error hit. All 31 E1-E4 dynamic logs have zero candidate-path fatal, assert, GPU crash, device removal, binding failure, or DARKWELL/SightWeave error. They do retain known UE 5.8.1 startup noise in every process: three `UE::UnifiedErrorTest` example errors, thirteen `LogAutomationTest: Error: Condition failed` self-test lines, and Experimental Toolsets Python import errors for missing `AgentSkill`, `ToolsetDefinition`, and `PythonTestRunner`. These happen before map activation, reproduce in fog-on and fog-off, and are not hidden or counted as candidate-path success.
+
+Primary ignored evidence is under `Saved/SightWeaveVisualRescueEvidence`:
+
+- `Dynamic/E1_Final_*`: 1080p/1440p Live, Remembered, authority map, fog-off, frame and ROI data;
+- `Dynamic/E2_Final_*`: authority-frozen motion/control videos, contacts, strips and metrics;
+- `Dynamic/E3_Final_*`: camera-frozen source sweeps and controls;
+- `Dynamic/E4_Final_*`: gameplay resolution/tool/control videos and both 600-second soaks;
+- `FinalArchitectureProof/Tests`: final build/test logs and reports;
+- `Dynamic/FinalArchitecture*AB*`: controlled binding, UV, RT half-plane, and safe-normal root-cause A/B evidence.
+
+The old `FinalArchitectureRememberedReadabilityPilot1080` sample is excluded: physical input drove the actor off the fixture and into a fall. It was not deleted, and none of its frames or statistics are used as pass evidence. User recordings, `Saved`, Binaries, Intermediate, DDC and generated contacts/videos remain ignored and uncommitted.
+
+### 13.8 Remaining authority and final user PIE
+
+This proof is deliberately limited to `L_VisionIntegration`, its non-Nanite BasicShapes fixture, and project-owned materials. It does not prove Fab/plugin generality, Nanite parity on a project Nanite asset, `L_Prototype`, particle consumers, or final art migration. The fixture Stalker has no skeletal mesh, so its result is authority/HUD/filtering evidence rather than a per-pixel skeletal-material demonstration. Those limits do not permit another screen-space patch and do not weaken the user's final visual authority.
+
+The user must now run the final architecture PIE at both 1920x1080 and 2560x1440, D3D12/SM6 and normal project TSR, with no diagnostic CVar. Acceptance requires: no directional shake, gray line, black/gray offset, black/bright wall inversion, or tile-edge leak; clearly recognizable Remembered floor/wall/static-object texture; black Unknown; stable circle/cone/doorway motion; preserved wall-facing/black-behind logic; `NeverRemember` plus Stalker/HUD synchronization; and Torch/Lantern/Torch recovery. Only the user can advance beyond `PARTIAL`.

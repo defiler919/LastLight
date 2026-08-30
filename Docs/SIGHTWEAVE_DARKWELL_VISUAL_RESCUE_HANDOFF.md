@@ -1,6 +1,6 @@
 # SightWeave DARKWELL Visual Rescue Retest Handoff
 
-Date: 2026-08-29
+Date: 2026-08-30
 
 Branch: `codex/sightweave-darkwell-visual-rescue`
 
@@ -16,9 +16,13 @@ Validated temporal-coherent project candidate SHA before final documentation: `4
 
 SurfaceMaterial source candidate SHA before final documentation: `8daed357e26aa8fa41be0892d63e906bc153317e`
 
+Final architecture proof starting SHA: `011fcbd3ce53704b14a89fd0d293995d52f2b427`
+
+Final architecture source candidate SHA before final documentation: `96183a2258fa2b79e9991f140b76f28ffac6fdd8`
+
 Stop-loss deadline: 2026-09-05
 
-Status: **BLOCKED — USER_DYNAMIC_PIE_RETEST_5_FAILED**
+Status: **PARTIAL — READY_FOR_USER_FINAL_ARCHITECTURE_PIE**
 
 ## Fifth user dynamic PIE disposition (2026-08-30)
 
@@ -291,15 +295,80 @@ Next recovery command:
 git switch codex/sightweave-darkwell-visual-rescue; git pull --ff-only
 ```
 
-## Fifth dynamic PIE handoff — SurfaceMaterial candidate (2026-08-30)
+## Final architecture PIE handoff (2026-08-30)
 
 ### Candidate state
 
 ```text
-PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5
+PARTIAL — READY_FOR_USER_FINAL_ARCHITECTURE_PIE
 ```
 
-This section supersedes the previous retest-4 readiness section, while preserving the fourth user rejection as the final verdict on screen-space composition. It does not claim `COMPLETED`.
+This final section supersedes the earlier `BLOCKED — USER_DYNAMIC_PIE_RETEST_5_FAILED` as the current agent-side handoff state; it does not erase that fifth user rejection and does not claim `COMPLETED`. The source candidate before this documentation is `96183a2258fa2b79e9991f140b76f28ffac6fdd8`.
+
+The final architecture removes the rejected primitive-wide `(+1,0)` CPD wall direction. Formal vertical-surface sampling now uses stable world geometric `VertexNormalWS`, corrected by `TwoSidedSign`, projected to XY and offset only toward that rendered face's outward free space. Floor/top faces sample their exact world XY. CPD `[0]` remains category and `[3]` remains sample distance; `[1]/[2]` no longer select formal wall direction. There is no ViewDirection choice and no maximum of both wall sides.
+
+The final floor-specific root was `Normalize((0,0))`: a horizontal geometric normal has zero XY, producing a non-finite bias UV even after multiplication by a zero wall weight. Known-white texture, uniform-white RT, direct world-UV threshold, and RT half-plane A/B isolated this from RT binding and state generation. The material now divides normal XY by `max(length, 0.0001)`, explicitly truncates the post-WorldMin LWC local coordinate to float, and samples mip 0. The corrected runtime half-plane and authority views match the direct ground UV.
+
+The persistent state target is linear `RTF_RGBA16f`, bilinear and clamped. R retains discrete authority for diagnostics; G is continuous world-anchored `LiveCoverage`; B is continuous `KnownCoverage`; A is scope validity. The formal weights are Live, Known-minus-Live Remembered, and one-minus-known Unknown, with Live precedence and memory eligibility. Real sampled BaseColor is preserved through the static Remembered desaturation/darkening/contrast filter. Unknown remains black. Dynamic SceneColor, lighting, shadow, particles, Stalker, temporal history and procedural time detail do not enter Remembered.
+
+The formal path is ordinary primitive SurfaceMaterial -> depth/coverage/velocity -> normal project TSR. Neither old post-TSR nor pre-TSR full-screen composite is registered in SurfaceMaterial mode. No stencil classification, SceneCapture, blur increase, mask expansion, TSR disable, resolution reduction, `L_Prototype`, `Darkwell.uproject`, Fab, or plugin-generalization change is part of this candidate.
+
+### Agent gate summary
+
+- E1: 20-second fixed Live/Remembered samples and fog-off controls. Remembered/fog-off correlation is `0.947743` at 1080p and `0.963518` at 1440p. Standard-deviation retention is `68.1841%` and `68.4273%`; Remembered mean/std/RMS are `177.523990 / 5.744403 / 0.032358` and `177.883358 / 6.027118 / 0.033882`. Unknown MAD is exactly zero.
+- E2: authority-frozen horizontal, vertical, rotation, along-wall and doorway runs are each 30 seconds / 900 frames with matched controls. Black-edge XOR/leading/trailing p95 is `0.00` in every run. Opened contacts/20-frame strips show no directional whole-edge inversion, gray line, seam or doorway discontinuity.
+- E3: fixed-camera source translation and full slow rotation are each 30 seconds / 900 frames with controls. MAD p95 is `0.25`/`0.05`; black-edge XOR/leading/trailing p95 is `0.00`. Coverage sweeps continuously over the textured floor, walls, door and landmark.
+- E4: normal gameplay at 1080p/1440p uses D3D12/SM6, project TSR and temporal jitter. Movement MAD p95 is `2.18`/`2.22`; Torch-cycle MAD p95 is `0.21`/`0.25`; black-edge metrics are zero. Both fog-on and fog-off soaks are exactly 600 seconds / 18,000 frames at 30 fps. Player Z remains `90.150` and both trajectories remain within the fixture.
+- Build: serial `DarkwellEditor Win64 Development` Success.
+- Automation: bounded `11/11` Success (SurfaceMaterial 3, M6P1 1, M3.4 3, M3.5 2, M4P1 1, D3D12/SM6 composite 1); complete DARKWELL `32/32` Success.
+- Logs: zero candidate-path fatal/assert/ensure/GPU crash/device removal/binding failure/DARKWELL-or-SightWeave error. UE 5.8.1 startup retains its disclosed UnifiedError self-test, thirteen automation-condition self-test, and Experimental Toolsets Python import noise.
+
+Evidence is ignored under `Saved/SightWeaveVisualRescueEvidence`: `Dynamic/E1_Final_*`, `E2_Final_*`, `E3_Final_*`, `E4_Final_*`, `Dynamic/FinalArchitecture*AB*`, and `FinalArchitectureProof/Tests`. User videos and all generated media remain uncommitted.
+
+### Required final user PIE
+
+1. Restore the pushed branch:
+
+   ```powershell
+   cd D:\UE_pro\Darkwell
+   git fetch origin
+   git switch codex/sightweave-darkwell-visual-rescue
+   git pull --ff-only
+   ```
+
+2. Open UE 5.8.1, load `/Game/Maps/L_VisionIntegration`, use normal D3D12/SM6 and project TSR, and do not set any `r.Darkwell.SightWeave.Diagnostic.*` or `r.SightWeave.Diagnostic.*` CVar.
+3. At 1920x1080, start normal PIE and choose `NEW GAME`. Hold player and camera still for 20 seconds. Confirm textured Remembered, wall faces, the Live boundary and Unknown remain stable with no gray line or seam.
+4. Move horizontally and vertically for 30 seconds each while keeping cube/wall faces visible. Confirm no direction-correlated left/right or top/bottom shake.
+5. Rotate aim slowly for 30 seconds, strafe along both walls, approach each face from both sides, and pass both wall ends. Confirm every face is consistent and black begins behind the wall.
+6. Cross the doorway in both directions. Confirm the opening and wall sides remain continuous.
+7. Sweep the floor and landmark through Live -> Remembered -> Live and Known -> Unknown. Confirm texture/large structure remains recognizable, Unknown leaks nothing, and no gray tile-edge line appears.
+8. Switch Torch -> Lantern -> Torch. Aim toward and away from the Stalker. Confirm legal light restores, Stalker and red threat HUD share visibility, and no enemy image remains in Remembered.
+9. Repeat the core static, horizontal, vertical, rotation, wall and doorway checks at 2560x1440, then play normally for at least ten minutes.
+
+Accept only if the user explicitly confirms the complete visual contract. A rejection ends implementation with:
+
+```text
+BLOCKED — SURFACE MATERIAL ARCHITECTURE PROOF FAILED
+SIGHTWEAVE VISUAL LAYER ABANDONED
+```
+
+No seventh visual patch, screen-space fallback, threshold relaxation, or evidence deletion is authorized after rejection. The 2026-09-05 stop-loss remains unconditional. Keep the computer on; no shutdown, sleep or restart is part of this handoff.
+
+### Final architecture continuation commits before documentation
+
+- `1303b4c12c8032ed4089e898023846fba4c28784` `docs: record fifth DARKWELL visual retest failure`
+- `e4120cc4ecc82873c0d9d72967cc21079499d921` `render: stabilize DARKWELL surface architecture`
+- `96183a2258fa2b79e9991f140b76f28ffac6fdd8` `render: stabilize DARKWELL horizontal surface sampling`
+
+## Historical fifth dynamic PIE handoff — rejected SurfaceMaterial candidate (2026-08-30)
+
+### Candidate state
+
+```text
+HISTORICAL — USER_DYNAMIC_PIE_RETEST_5_FAILED
+```
+
+This historical section records the candidate offered before the fifth user PIE. The user rejected it, and the authoritative current handoff is the final architecture section above plus the current-state footer below. It does not claim `COMPLETED`.
 
 The pushed source candidate before this documentation is `8daed357e26aa8fa41be0892d63e906bc153317e`. `L_VisionIntegration` now uses a project-only stencil-free surface-material path: SightWeave's Ultra 2.5 cm/texel live/feather/memory GPU mirrors incrementally update a persistent RGBA8 world-state texture, and real primitives sample it with `AbsoluteWorldPosition.xy`. Their normal geometry coverage, depth, velocity, and normal TSR produce the visible edges. The old pre-TSR and post-TSR full-screen formal composites are not registered while the surface target is active; CustomDepth/Stencil does not determine the candidate's scene outlines.
 
@@ -358,4 +427,17 @@ Next recovery command:
 
 ```powershell
 git switch codex/sightweave-darkwell-visual-rescue; git pull --ff-only
+```
+
+## Current-state footer
+
+The authoritative end state of this document is `PARTIAL — READY_FOR_USER_FINAL_ARCHITECTURE_PIE` at the final pushed documentation SHA. The older fifth-candidate section immediately above is retained only as rejected historical evidence. The user must perform the final architecture PIE sequence defined in this handoff; automated evidence cannot promote the result to `COMPLETED`.
+
+Recovery command:
+
+```powershell
+cd D:\UE_pro\Darkwell
+git fetch origin
+git switch codex/sightweave-darkwell-visual-rescue
+git pull --ff-only
 ```

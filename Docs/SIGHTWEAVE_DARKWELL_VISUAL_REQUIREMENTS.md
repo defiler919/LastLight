@@ -6,7 +6,30 @@
 **需求冻结日期：** 2026-08-29
 **补救硬截止日期：** 2026-09-05
 **当前失败证据基线：** `30366ecd0e38c969fc58537eafa6a9fa0e2cd47e`
-**当前判定：** `PARTIAL — USER_PIE VISUAL AND SEMANTIC ACCEPTANCE FAILED`
+**当前判定：** `PARTIAL — USER_DYNAMIC_PIE_RETEST_4_FAILED / SCREEN_SPACE COMPOSITION REJECTED FOR PRODUCTION`
+
+---
+
+## 0. 第四轮用户动态 PIE 裁决（2026-08-30）
+
+第四轮用户动态 PIE 保留为新的最高优先级失败证据：
+
+```text
+PARTIAL — USER_DYNAMIC_PIE_RETEST_4_FAILED
+SCREEN_SPACE COMPOSITION REJECTED FOR PRODUCTION
+```
+
+用户确认静止稳定性已有明显改善，但运动中的几何 coverage、历史重投影和边缘分类仍不同步：水平移动时立方体左右边缘/侧面颤抖，垂直移动时立方体上下边缘颤抖，且颤抖与运动方向直接相关。Remembered 同时因信息过少和整体过灰而不合格；它必须清楚保留真实地板 BaseColor 的方向、接缝和主要图案，并表现为正常静态三维场景经过降饱和、压暗、降对比度和动态信息过滤后的记忆，而不是纯灰填充、人工格纹、`frac` 图案或程序生成的替代纹理。
+
+因此，DARKWELL 正式候选不得继续以 post-TSR 全屏合成、pre-TSR CustomDepth/Stencil 切边、屏幕 UV 偏移、blur、feather、阈值或遮罩膨胀生成场景物体轮廓。下一且唯一获准的项目可用性原型是 stencil-free `SurfaceMaterial`：真实 primitive、材质、depth、coverage、velocity 与正常 TSR 共同生成边缘；SightWeave 的 CPU 权威、GPU mirror、三态、记忆、scope/revision/generation、Adapter 与 Stalker/HUD 权威保持不变。
+
+该施工在用户第五轮动态 PIE 明确认可前最高只能达到：
+
+```text
+PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5
+```
+
+若 surface-material 原型不能满足本合同，则必须进入 `BLOCKED — SURFACE MATERIAL VISUAL PROTOTYPE FAILED / SIGHTWEAVE ABANDONMENT REVIEW REQUIRED`，不得返回第五套屏幕空间补丁。
 
 ---
 

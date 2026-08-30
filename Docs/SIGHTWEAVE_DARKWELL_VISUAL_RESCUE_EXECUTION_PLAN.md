@@ -12,9 +12,19 @@ Unattended B0/B1 continuation starting SHA: `e4d654b74e3557ebefa328986bb626dcbfd
 
 Final stop-loss deadline: 2026-09-05
 
-Current status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_4**
+Current status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_4_FAILED / SCREEN_SPACE COMPOSITION REJECTED FOR PRODUCTION**
 
 This plan is subordinate to `Docs/SIGHTWEAVE_DARKWELL_VISUAL_REQUIREMENTS.md`. It is a DARKWELL project rescue, not a general plugin, packaging, Fab, or publication milestone. The original automated evidence remains valid engineering evidence, but it cannot establish visual acceptance after the user's dynamic PIE rejection.
+
+## 0A. Fourth user dynamic PIE rejection and sole authorized construction path
+
+The fourth user dynamic PIE rejected the screen-space production direction. Static stability was materially better, but horizontal motion made cube left/right edges and sides shake, vertical motion made cube top/bottom edges shake, and the failure tracked motion direction. The Remembered layer also retained too little scene information and was too uniformly gray; the real floor texture must remain clearly recognizable.
+
+The sole authorized next construction path is a DARKWELL project-first, stencil-free `SurfaceMaterial` vertical slice. It retains SightWeave CPU authority, world/scope/revision/generation, dirty-tile GPU mirror, three-state memory, feather authority, `NeverRemember`, persistence, the M6P1 Adapter, and the shared Stalker/HUD revision. It replaces only the formal DARKWELL visual output in `L_VisionIntegration` so real scene primitives and their materials participate in ordinary depth, coverage, velocity, and TSR.
+
+The candidate must use world-space surface sampling, a cross-frame-stable GPU state texture binding, project-owned material assets, primitive/material-stage surface categories, and conservative wall sampling. It must disable both post-TSR and pre-TSR full-screen production fog composition in SurfaceMaterial mode. No screen-space UV, stencil offset, blur, feather, threshold, mask dilation, SceneCapture, SceneColor snapshot, artificial grid, or derivative-normal patch is an acceptable substitute.
+
+The highest possible result remains `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5`; failure requires `BLOCKED — SURFACE MATERIAL VISUAL PROTOTYPE FAILED / SIGHTWEAVE ABANDONMENT REVIEW REQUIRED`.
 
 ## 0. 2026-08-30 pre-TSR proof qualification
 

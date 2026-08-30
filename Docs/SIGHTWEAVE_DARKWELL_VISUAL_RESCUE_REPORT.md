@@ -20,9 +20,24 @@ Validated temporal-coherent project candidate SHA before final documentation: `4
 
 Final stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_4**
+Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_4_FAILED / SCREEN_SPACE COMPOSITION REJECTED FOR PRODUCTION**
 
 This is a DARKWELL project-use rescue, not a plugin-generalization, Fab, packaging, or publication result. The user's first real dynamic PIE rejected the candidate at baseline `2439cfb0de843ab52b9c989439272f1e30727d1c`. The prior agent-side automation, screenshots, extracted frames, and D3D12/SM6 runs remain engineering evidence, but they do not establish visual acceptance and cannot be cited as proof that this candidate passed.
+
+## 0G. Fourth user dynamic PIE rejection (2026-08-30)
+
+The fourth user dynamic PIE rejected candidate baseline `f9dbf6f89046bbbe684e55889840f216422cb53c`. The authoritative disposition is:
+
+```text
+PARTIAL — USER_DYNAMIC_PIE_RETEST_4_FAILED
+SCREEN_SPACE COMPOSITION REJECTED FOR PRODUCTION
+```
+
+The user confirmed a real improvement in static stability, but not project usability. Horizontal motion makes the cube's left/right edges and side surfaces shake; vertical motion makes its top/bottom edges shake; the failure is direction-correlated. Remembered is also too gray and retains too little information. The user requires the actual floor texture to remain plainly recognizable and the gray layer to be a filtered real static 3D scene, not a pure-gray fill or an artificial/generated replacement texture.
+
+These observations supersede the prior retest-4 readiness state. Existing successful evidence for unified three-state authority, Ultra 2.5 cm/texel, gray-line removal, tile-edge empty-interval rejection, black/gray alignment, wall visibility, behind-wall black, `NeverRemember`, Stalker/HUD synchronization, Torch/Lantern/Torch recovery, and normal TSR remains frozen. It does not prove that screen-space composition is production-acceptable.
+
+No further post-process UV, CustomStencil offset, blur, feather, threshold, or dilation tuning is authorized. The next vertical slice is project-first stencil-free surface fog in `L_VisionIntegration`: the state remains SightWeave-authored, while real scene primitives/materials, depth, coverage, velocity, and normal TSR produce the final scene edges. The formal screen-space composite must be disabled for that candidate. Its highest possible state is `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5`.
 
 ## 0F. Qualification of the failed pre-TSR prototype (2026-08-30)
 

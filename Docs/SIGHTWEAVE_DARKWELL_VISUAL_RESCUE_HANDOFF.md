@@ -16,7 +16,15 @@ Validated temporal-coherent project candidate SHA before final documentation: `4
 
 Stop-loss deadline: 2026-09-05
 
-Status: **PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_4**
+Status: **PARTIAL — USER_DYNAMIC_PIE_RETEST_4_FAILED / SCREEN_SPACE COMPOSITION REJECTED FOR PRODUCTION**
+
+## Fourth user dynamic PIE disposition (2026-08-30)
+
+Retest 4 did not accept the screen-space production path. Static stability improved, but horizontal movement still shakes cube left/right edges and side surfaces, vertical movement still shakes cube top/bottom edges, and the visible failure follows motion direction. Remembered remains too gray and must instead preserve clearly recognizable real floor texture and the filtered appearance of the real static 3D scene.
+
+The next and only authorized project-use prototype is stencil-free `SurfaceMaterial` on `L_VisionIntegration`. SightWeave authority, GPU mirror, memory, Adapter, `NeverRemember`, Stalker/HUD shared revision, wall rules, and all already-passed line/seam fixes remain frozen. Both post-TSR and pre-TSR full-screen production composites must be disabled for the candidate; CustomDepth/Stencil may remain diagnostic only and may not determine scene-object outlines.
+
+Do not return to screen-space UV, stencil offset, blur, feather, threshold, or dilation repair. Success can only become `PARTIAL — READY_FOR_USER_DYNAMIC_PIE_RETEST_5`; prototype failure requires `BLOCKED — SURFACE MATERIAL VISUAL PROTOTYPE FAILED / SIGHTWEAVE ABANDONMENT REVIEW REQUIRED`.
 
 ## 2026-08-30 superseding interpretation
 

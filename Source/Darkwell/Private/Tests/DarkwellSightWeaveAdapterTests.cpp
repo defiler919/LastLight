@@ -429,6 +429,9 @@ bool FDarkwellSurfaceMaterialMappingAndWallTest::RunTest(const FString& Paramete
 	TestEqual(TEXT("Wall conservative bias remains frozen at 7.5 cm"),
 		Darkwell::SightWeaveSurface::WallConservativeSampleBiasCentimeters,
 		7.5f);
+	TestEqual(TEXT("Fixture wall sample crosses its 20 cm half thickness plus the bias"),
+		Darkwell::SightWeaveSurface::FixtureWallSampleDistanceCentimeters,
+		27.5f);
 	return true;
 }
 
@@ -471,6 +474,21 @@ bool FDarkwellSurfaceMaterialPrimitiveCategoryTest::RunTest(const FString& Param
 	}
 	TestEqual(TEXT("Exactly one ground primitive uses CPD[0]=0"), GroundCount, 1);
 	TestEqual(TEXT("Both wall primitives use CPD[0]=1"), WallCount, 2);
+	for (const UStaticMeshComponent* Mesh : Meshes)
+	{
+		const TArray<float>& Data = Mesh->GetCustomPrimitiveData().Data;
+		if (Data.IsValidIndex(Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex)
+			&& Data[Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex]
+				== Darkwell::SightWeaveSurface::WallOrCubeSideCategory)
+		{
+			TestEqual(TEXT("Wall CPD[1] provides stable world X direction"),
+				Data[Darkwell::SightWeaveSurface::WallSampleDirectionXCustomPrimitiveDataIndex], 1.0f);
+			TestEqual(TEXT("Wall CPD[2] provides stable world Y direction"),
+				Data[Darkwell::SightWeaveSurface::WallSampleDirectionYCustomPrimitiveDataIndex], 0.0f);
+			TestEqual(TEXT("Wall CPD[3] crosses the fixture half thickness"),
+				Data[Darkwell::SightWeaveSurface::WallSampleDistanceCustomPrimitiveDataIndex], 27.5f);
+		}
+	}
 	TestEqual(TEXT("Exactly one static landmark uses CPD[0]=2"), StaticCount, 1);
 	Fixture->DisableSightWeaveSurfaceMaterial();
 	for (const TPair<UStaticMeshComponent*, UMaterialInterface*>& Initial : InitialMaterials)

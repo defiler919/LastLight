@@ -111,6 +111,13 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 	WallSouth->SetCustomPrimitiveDataFloat(
 		Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex,
 		Darkwell::SightWeaveSurface::WallOrCubeSideCategory);
+	WallSouth->SetCustomPrimitiveDataFloat(
+		Darkwell::SightWeaveSurface::WallSampleDirectionXCustomPrimitiveDataIndex, 1.0f);
+	WallSouth->SetCustomPrimitiveDataFloat(
+		Darkwell::SightWeaveSurface::WallSampleDirectionYCustomPrimitiveDataIndex, 0.0f);
+	WallSouth->SetCustomPrimitiveDataFloat(
+		Darkwell::SightWeaveSurface::WallSampleDistanceCustomPrimitiveDataIndex,
+		Darkwell::SightWeaveSurface::FixtureWallSampleDistanceCentimeters);
 
 	WallNorth = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WallNorth"));
 	WallNorth->SetupAttachment(SceneRoot);
@@ -124,6 +131,13 @@ ADarkwellVisionIntegrationFixture::ADarkwellVisionIntegrationFixture()
 	WallNorth->SetCustomPrimitiveDataFloat(
 		Darkwell::SightWeaveSurface::SurfaceCategoryCustomPrimitiveDataIndex,
 		Darkwell::SightWeaveSurface::WallOrCubeSideCategory);
+	WallNorth->SetCustomPrimitiveDataFloat(
+		Darkwell::SightWeaveSurface::WallSampleDirectionXCustomPrimitiveDataIndex, 1.0f);
+	WallNorth->SetCustomPrimitiveDataFloat(
+		Darkwell::SightWeaveSurface::WallSampleDirectionYCustomPrimitiveDataIndex, 0.0f);
+	WallNorth->SetCustomPrimitiveDataFloat(
+		Darkwell::SightWeaveSurface::WallSampleDistanceCustomPrimitiveDataIndex,
+		Darkwell::SightWeaveSurface::FixtureWallSampleDistanceCentimeters);
 
 	MemoryLandmark = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MemoryLandmark"));
 	MemoryLandmark->SetupAttachment(SceneRoot);

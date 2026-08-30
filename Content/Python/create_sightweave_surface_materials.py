@@ -381,13 +381,76 @@ def create_master(asset_tools, function):
     center_uv = make_binary(
         material, unreal.MaterialExpressionMultiply, local_world, world_inv_extent, -1300, 50
     )
+    category = scalar_parameter(material, "SightWeaveSurfaceCategory", 0.0, -550, 750)
+    category.set_editor_property("use_custom_primitive_data", True)
+    category.set_editor_property("primitive_data_index", 0)
     normal = expr(material, unreal.MaterialExpressionPixelNormalWS, -2050, 500)
     normal_xy = make_mask(material, normal, "rg", -1800, 500)
-    normal_xy_normalized = expr(material, unreal.MaterialExpressionNormalize, -1550, 500)
-    connect(normal_xy, "", normal_xy_normalized, "")
+    stable_wall_x = scalar_parameter(material, "SightWeaveWallDirectionX", 0.0, -2050, 620)
+    stable_wall_x.set_editor_property("use_custom_primitive_data", True)
+    stable_wall_x.set_editor_property("primitive_data_index", 1)
+    stable_wall_y = scalar_parameter(material, "SightWeaveWallDirectionY", 0.0, -2050, 720)
+    stable_wall_y.set_editor_property("use_custom_primitive_data", True)
+    stable_wall_y.set_editor_property("primitive_data_index", 2)
+    stable_wall_direction = expr(material, unreal.MaterialExpressionAppendVector, -1800, 650)
+    connect(stable_wall_x, "", stable_wall_direction, "A")
+    connect(stable_wall_y, "", stable_wall_direction, "B")
+
+    category_minus_wall = make_binary(
+        material,
+        unreal.MaterialExpressionSubtract,
+        category,
+        scalar(material, 1.0, -1550, 780),
+        -1550,
+        720,
+    )
+    category_distance = expr(material, unreal.MaterialExpressionAbs, -1350, 720)
+    connect(category_minus_wall, "", category_distance, "")
+    category_distance_scaled = make_binary(
+        material,
+        unreal.MaterialExpressionMultiply,
+        category_distance,
+        scalar(material, 10000.0, -1350, 820),
+        -1150,
+        720,
+    )
+    wall_weight_raw = make_binary(
+        material,
+        unreal.MaterialExpressionSubtract,
+        scalar(material, 1.0, -1150, 820),
+        category_distance_scaled,
+        -950,
+        720,
+    )
+    wall_weight = expr(material, unreal.MaterialExpressionSaturate, -750, 720)
+    connect(wall_weight_raw, "", wall_weight, "")
+    sample_direction = expr(
+        material, unreal.MaterialExpressionLinearInterpolate, -1550, 500
+    )
+    connect(normal_xy, "", sample_direction, "A")
+    connect(stable_wall_direction, "", sample_direction, "B")
+    connect(wall_weight, "", sample_direction, "Alpha")
+    normal_xy_normalized = expr(material, unreal.MaterialExpressionNormalize, -1300, 500)
+    connect(sample_direction, "", normal_xy_normalized, "")
     wall_bias = scalar_parameter(material, "SightWeaveWallSampleBiasCm", 7.5, -1550, 650)
+    fixture_wall_distance = scalar_parameter(
+        material, "SightWeaveWallSampleDistanceCm", 27.5, -1300, 880
+    )
+    fixture_wall_distance.set_editor_property("use_custom_primitive_data", True)
+    fixture_wall_distance.set_editor_property("primitive_data_index", 3)
+    sample_distance = expr(
+        material, unreal.MaterialExpressionLinearInterpolate, -1100, 600
+    )
+    connect(wall_bias, "", sample_distance, "A")
+    connect(fixture_wall_distance, "", sample_distance, "B")
+    connect(wall_weight, "", sample_distance, "Alpha")
     bias_world = make_binary(
-        material, unreal.MaterialExpressionMultiply, normal_xy_normalized, wall_bias, -1300, 500
+        material,
+        unreal.MaterialExpressionMultiply,
+        normal_xy_normalized,
+        sample_distance,
+        -900,
+        500,
     )
     bias_uv = make_binary(
         material, unreal.MaterialExpressionMultiply, bias_world, world_inv_extent, -1050, 500
@@ -407,9 +470,6 @@ def create_master(asset_tools, function):
     positive_state = state_sample(material, empty_state, positive_uv, -550, 250)
     negative_state = state_sample(material, empty_state, negative_uv, -550, 500)
 
-    category = scalar_parameter(material, "SightWeaveSurfaceCategory", 0.0, -550, 750)
-    category.set_editor_property("use_custom_primitive_data", True)
-    category.set_editor_property("primitive_data_index", 0)
     memory_saturation = scalar_parameter(material, "RememberedSaturation", 0.18, -300, 750)
     memory_brightness = scalar_parameter(material, "RememberedBrightness", 0.32, -300, 850)
     memory_contrast = scalar_parameter(material, "RememberedContrast", 0.68, -300, 950)

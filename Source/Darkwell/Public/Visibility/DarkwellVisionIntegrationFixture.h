@@ -16,11 +16,17 @@ class UTexture;
 namespace Darkwell::SightWeaveSurface
 {
 	inline constexpr int32 SurfaceCategoryCustomPrimitiveDataIndex = 0;
+	inline constexpr int32 WallSampleDirectionXCustomPrimitiveDataIndex = 1;
+	inline constexpr int32 WallSampleDirectionYCustomPrimitiveDataIndex = 2;
+	inline constexpr int32 WallSampleDistanceCustomPrimitiveDataIndex = 3;
 	inline constexpr float GroundCategory = 0.0f;
 	inline constexpr float WallOrCubeSideCategory = 1.0f;
 	inline constexpr float RememberableStaticCategory = 2.0f;
 	inline constexpr float NeverRememberCategory = 3.0f;
 	inline constexpr float WallConservativeSampleBiasCentimeters = 7.5f;
+	inline constexpr float FixtureWallHalfThicknessCentimeters = 20.0f;
+	inline constexpr float FixtureWallSampleDistanceCentimeters =
+		FixtureWallHalfThicknessCentimeters + WallConservativeSampleBiasCentimeters;
 }
 
 struct DARKWELL_API FDarkwellSightWeaveSurfaceWeights

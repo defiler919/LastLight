@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/Scene.h"
 #include "SightWeaveStaticEnvironment.h"
 #include "SightWeaveSubjectMemory.h"
 #include "SightWeaveTypes.h"
@@ -69,6 +70,8 @@ private:
 		FString& OutFailure) const;
 	void UpdateDynamicAuthority();
 	void UpdateSubjectAuthority();
+	void ApplyProjectFogExposure();
+	void RestoreProjectFogExposure();
 	FDarkwellFogVisualSourceSnapshot BuildFogVisualSourceSnapshot() const;
 	void SetLegacyConsumersEnabled(bool bEnabled);
 	void RollbackToLegacy(const FString& FailureReason, bool bRestoreConsumers);
@@ -109,6 +112,8 @@ private:
 	double RequestAgeSeconds = 0.0;
 	uint64 NextAuthorityRevision = 1;
 	uint64 NextObservationRevision = 1;
+	FPostProcessSettings OriginalPlayerCameraPostProcessSettings;
+	bool bPlayerCameraPostProcessCaptured = false;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	bool bDiagnosticProofCameraActive = false;
 	bool bDiagnosticSubjectControllerSuppressed = false;

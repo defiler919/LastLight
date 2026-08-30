@@ -617,7 +617,7 @@ def create_surface(asset_tools):
     connect(original, "", remembered_color, "B")
     connect(saturation, "", remembered_color, "Alpha")
     remembered_brightness = scalar_parameter(
-        material, "RememberedBrightness", 0.48, -650, -350
+        material, "RememberedBrightness", 1.2, -650, -350
     )
     remembered_filtered = binary(
         material,

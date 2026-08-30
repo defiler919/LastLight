@@ -3,6 +3,7 @@
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 
 #include "AI/DarkwellStalkerCharacter.h"
+#include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Combat/DarkwellLoadoutComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -255,7 +256,8 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 		}
 	}
 	const bool bSubjectProof =
-		Darkwell::SightWeaveAdapter::CVarDiagnosticFogSubjectProof.GetValueOnGameThread() != 0;
+		Darkwell::SightWeaveAdapter::CVarDiagnosticFogSubjectProof.GetValueOnGameThread() != 0
+		|| Darkwell::SightWeaveAdapter::CVarDiagnosticRememberedPropCycle.GetValueOnGameThread() != 0;
 	if (ADarkwellStalkerCharacter* DiagnosticSubject = Stalker.Get())
 	{
 		if (AController* SubjectController = DiagnosticSubject->GetController())
@@ -658,6 +660,7 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 		RollbackToLegacy(TEXT("DARKWELL P4 dynamic-subject activation failed"), true);
 		return false;
 	}
+	ApplyProjectFogExposure();
 #endif
 	Diagnostics.ActiveMode = EDarkwellVisibilityAuthorityMode::SightWeave;
 	Diagnostics.State = EDarkwellVisibilityAuthorityState::ActiveSightWeave;
@@ -999,6 +1002,7 @@ void UDarkwellSightWeaveWorldSubsystem::RollbackToLegacy(
 	const FString& FailureReason,
 	const bool bRestoreConsumers)
 {
+	RestoreProjectFogExposure();
 	if (FogVisualSubsystem)
 	{
 		FogVisualSubsystem->Deactivate();
@@ -1097,6 +1101,46 @@ void UDarkwellSightWeaveWorldSubsystem::RollbackToLegacy(
 	Player.Reset();
 	Stalker.Reset();
 	RequestedFixture.Reset();
+}
+
+void UDarkwellSightWeaveWorldSubsystem::ApplyProjectFogExposure()
+{
+	ADarkwellCharacter* Character = Player.Get();
+	UCameraComponent* Camera = Character ? Character->GetTopDownCamera() : nullptr;
+	if (!Camera)
+	{
+		return;
+	}
+	if (!bPlayerCameraPostProcessCaptured)
+	{
+		OriginalPlayerCameraPostProcessSettings = Camera->PostProcessSettings;
+		bPlayerCameraPostProcessCaptured = true;
+	}
+	FPostProcessSettings& Settings = Camera->PostProcessSettings;
+	Settings.bOverride_AutoExposureMethod = true;
+	Settings.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
+	Settings.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
+	Settings.AutoExposureApplyPhysicalCameraExposure = 0;
+	Settings.bOverride_AutoExposureBias = true;
+	Settings.AutoExposureBias = 0.0f;
+	UE_LOG(LogDarkwellSightWeave, Log,
+		TEXT("ProjectFogExposure method=Manual physicalCamera=0 bias=0 restoreCaptured=1"));
+}
+
+void UDarkwellSightWeaveWorldSubsystem::RestoreProjectFogExposure()
+{
+	if (!bPlayerCameraPostProcessCaptured)
+	{
+		return;
+	}
+	if (ADarkwellCharacter* Character = Player.Get())
+	{
+		if (UCameraComponent* Camera = Character->GetTopDownCamera())
+		{
+			Camera->PostProcessSettings = OriginalPlayerCameraPostProcessSettings;
+		}
+	}
+	bPlayerCameraPostProcessCaptured = false;
 }
 
 bool UDarkwellSightWeaveWorldSubsystem::HasRequiredSightWeaveServices() const

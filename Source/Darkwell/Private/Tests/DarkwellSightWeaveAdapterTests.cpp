@@ -2,6 +2,7 @@
 
 #include "AI/DarkwellStalkerCharacter.h"
 #include "Combat/DarkwellLoadoutComponent.h"
+#include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -271,6 +272,13 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("Project fog is active on the P4 fixture"),
 		Fixture->IsDarkwellProjectFogEnabled());
+	const UCameraComponent* PlayerCamera = Player->GetTopDownCamera();
+	TestTrue(TEXT("Project fog locks exposure while active"),
+		PlayerCamera
+			&& PlayerCamera->PostProcessSettings.bOverride_AutoExposureMethod
+			&& PlayerCamera->PostProcessSettings.AutoExposureMethod == AEM_Manual
+			&& PlayerCamera->PostProcessSettings.bOverride_AutoExposureApplyPhysicalCameraExposure
+			&& !PlayerCamera->PostProcessSettings.AutoExposureApplyPhysicalCameraExposure);
 	TestFalse(TEXT("Project coverage uses continuous P2 occlusion"),
 		ProjectFog->GetDiagnostics().bP1NoOcclusion);
 	TestTrue(TEXT("Project presentation enables object-local P3 surface coverage"),
@@ -378,6 +386,8 @@ bool FDarkwellM6P1DuplicateFixtureRollbackTest::RunTest(const FString& Parameter
 	ADarkwellStalkerCharacter* Stalker = Spawn<ADarkwellStalkerCharacter>(
 		*World, FVector(550.0, 0.0, 92.0));
 	Stalker->ConfigurePersistentId(FName(TEXT("Enemy.Stalker.Rollback")));
+	const FPostProcessSettings OriginalCameraSettings =
+		Player->GetTopDownCamera()->PostProcessSettings;
 	UDarkwellSightWeaveWorldSubsystem* Adapter =
 		World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
 	USightWeaveWorldSubsystem* Runtime =
@@ -403,6 +413,12 @@ bool FDarkwellM6P1DuplicateFixtureRollbackTest::RunTest(const FString& Parameter
 		Runtime->GetVisionSourceCount(), 0);
 	TestTrue(TEXT("Rollback restores Legacy writes"),
 		Player->GetVisibilityComponent()->IsVisibilityAuthorityEnabled());
+	TestEqual(TEXT("Rollback restores the player's exposure method"),
+		Player->GetTopDownCamera()->PostProcessSettings.AutoExposureMethod,
+		OriginalCameraSettings.AutoExposureMethod);
+	TestEqual(TEXT("Rollback restores the exposure override flag"),
+		Player->GetTopDownCamera()->PostProcessSettings.bOverride_AutoExposureMethod,
+		OriginalCameraSettings.bOverride_AutoExposureMethod);
 	return true;
 }
 

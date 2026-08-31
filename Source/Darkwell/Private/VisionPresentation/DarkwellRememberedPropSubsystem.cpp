@@ -180,6 +180,10 @@ void UDarkwellRememberedPropSubsystem::UnregisterProp(
 		return;
 	}
 	DestroyProxy(*Record);
+	for (auto Proxy : Record->UnverifiedProxies)
+	{
+		if (Proxy.IsValid()) Proxy->Destroy();
+	}
 	Records.Remove(Component->GetStableId());
 }
 
@@ -267,11 +271,12 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 				TInlineComponentArray<UStaticMeshComponent*> Meshes(Old);
 				for (const auto* Mesh : Meshes)
 				{
-					for (double X : {-1.0, 0.0, 1.0}) for (double Y : {-1.0, 0.0, 1.0})
+					for (double X : {-1.0, 1.0}) for (double Y : {-1.0, 1.0})
 					{
 						const FVector Point = Mesh->Bounds.Origin + Mesh->Bounds.BoxExtent * FVector(X, Y, 0);
 						Coverage = FMath::Max(Coverage, Fog->EvaluateLiveCoverageAtWorldPoint(FVector2D(Point)));
 					}
+					Coverage = FMath::Max(Coverage, Fog->EvaluateLiveCoverageAtWorldPoint(FVector2D(Mesh->Bounds.Origin)));
 				}
 			}
 			if (!Old || Darkwell::PropLab::RelocationPolicy(GetWorld()) == 1 || Coverage >= FDarkwellRememberedPropState::EnterCoverage)

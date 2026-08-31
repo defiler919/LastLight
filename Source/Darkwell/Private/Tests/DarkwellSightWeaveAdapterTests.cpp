@@ -22,6 +22,8 @@
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
+#include "VisionPresentation/DarkwellPropGameplayLab.h"
+#include "HAL/IConsoleManager.h"
 
 namespace Darkwell::SightWeaveAdapterTests
 {
@@ -31,13 +33,13 @@ namespace Darkwell::SightWeaveAdapterTests
 	class FTestWorld final
 	{
 	public:
-		explicit FTestWorld(const TCHAR* BaseName)
+		explicit FTestWorld(const TCHAR* BaseName, UPackage* Outer = GetTransientPackage())
 		{
 			const FName WorldName = MakeUniqueObjectName(
 				GetTransientPackage(),
 				UWorld::StaticClass(),
 				FName(BaseName));
-			World = NewObject<UWorld>(GetTransientPackage(), WorldName, RF_Transient);
+			World = NewObject<UWorld>(Outer, WorldName, RF_Transient);
 			if (!World || !GEngine)
 			{
 				return;
@@ -60,8 +62,8 @@ namespace Darkwell::SightWeaveAdapterTests
 		{
 			if (World && GEngine)
 			{
-				GEngine->DestroyWorldContext(World);
 				World->DestroyWorld(true);
+				GEngine->DestroyWorldContext(World);
 			}
 		}
 
@@ -667,6 +669,81 @@ bool FDarkwellProjectFogRememberedPropRuntimeTest::RunTest(const FString& Parame
 		Memory->GetDiagnostics().RegisteredCount, 1);
 	TestEqual(TEXT("Exactly one remembered proxy is visible"),
 		Memory->GetDiagnostics().ProxyCount, 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPropLabRuntimeMatrixTest,
+	"Darkwell.PropLab.Runtime.SixCombinationsAndNeverRemember",
+	Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
+{
+	using namespace Darkwell::SightWeaveAdapterTests;
+	FTestWorld TestWorld(TEXT("PropLabRuntime"), CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+	UWorld* World = TestWorld.Get();
+	// This lightweight world has no InitializeActorsForPlay pass. Complete the
+	// fixture lifecycle so Destroy routes EndPlay exactly as a real PIE world does.
+	auto* Fixture = World->SpawnActor<ADarkwellPropGameplayLab>();
+	Fixture->PostInitializeComponents();
+	Fixture->DispatchBeginPlay();
+	auto* Player = Spawn<ADarkwellCharacter>(*World, FVector(0,-650,92),FRotator(0,-90,0));
+	auto* Stalker = Spawn<ADarkwellStalkerCharacter>(*World,FVector(0,-500,92));
+	Stalker->ConfigurePersistentId(TEXT("Lab.Test.Stalker"));
+	auto* Adapter = World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+	auto* Memory = World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+	auto* Mode = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"));
+	auto* Policy = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropRelocationPolicy"));
+	TestTrue(TEXT("Exact lab world activates the existing project adapter"),Adapter->RequestSightWeaveAuthority(Fixture));
+	for(int32 M=0;M<3;++M) for(int32 R=0;R<2;++R)
+	{
+		Mode->Set(M,ECVF_SetByConsole); Policy->Set(R,ECVF_SetByConsole);
+		const FName Id(*FString::Printf(TEXT("Lab.Test.M%d.P%d"),M,R));
+		FTransform A(FVector(-200,350,0));
+		auto* Prop=World->SpawnActorDeferred<ADarkwellPropLabFurniture>(ADarkwellPropLabFurniture::StaticClass(),A);
+		Prop->StableId=Id; Prop->Shape=1; Prop->Dimensions=FVector(82,76,190);
+		Prop->FinishSpawning(A); Prop->DispatchBeginPlay();
+		auto Observe=[&](FVector Position,float Yaw)
+		{
+			Player->SetActorLocationAndRotation(Position,FRotator(0,Yaw,0));
+			Adapter->Tick(0); Memory->RefreshNowForTesting(); Fixture->Tick(.016f);
+		};
+		Observe(FVector(0,-650,92),-90);
+		Prop->SetActorLocation(FVector(650,340,0));
+		Observe(FVector(0,-650,92),-90);
+		bool Live=false,Valid=false; FVector Location; AActor* Proxy=nullptr;
+		Memory->TryGetRecordForTesting(Id,Live,Valid,Location,Proxy);
+		TestTrue(TEXT("Unseen B stays hidden while entire A snapshot remains"),!Live && Valid && Proxy && !Proxy->IsHidden() && Location.X==-200);
+		Observe(FVector(650,50,92),90);
+		Memory->TryGetRecordForTesting(Id,Live,Valid,Location,Proxy);
+		TestTrue(TEXT("Identity recognition shows complete source B"),Live && Valid && Location.X==650);
+		TestEqual(TEXT("Only policy 0 retains A on B-first order"),Memory->GetUnverifiedSnapshotCount(Id),R==0 ? 1 : 0);
+		for(UStaticMeshComponent* Primitive : Prop->Memory->GetMemoryPrimitives())
+		{
+			TestTrue(TEXT("Whole source geometry remains visible in every presentation mode"),Primitive->IsVisible());
+			TestFalse(TEXT("Lab never writes CustomDepth"),Primitive->bRenderCustomDepth);
+		}
+		Observe(FVector(-250,50,92),90);
+		TestEqual(TEXT("Verifying empty A retires its proxy under either policy"),Memory->GetUnverifiedSnapshotCount(Id),0);
+		Prop->Destroy();
+		Observe(FVector(650,50,92),90);
+		Memory->TryGetRecordForTesting(Id,Live,Valid,Location,Proxy);
+		TestFalse(TEXT("Observed empty B removes destroyed furniture memory"),Valid);
+		// Presentation never influences enemy or HUD authority, including the legal-light cycle.
+		for(const auto Tool : {DarkwellGameplayTags::Equipment_Right_Torch.GetTag(),DarkwellGameplayTags::Equipment_Right_Lantern.GetTag(),DarkwellGameplayTags::Equipment_Right_Torch.GetTag()})
+		{
+			Player->GetLoadoutComponent()->EquipRightHandItem(Tool);
+			Observe(FVector(0,-650,92),90);
+			FDarkwellVisibilitySubjectSnapshot Snapshot;
+			TestTrue(TEXT("Stalker has one authoritative snapshot"),Adapter->TryGetSubjectSnapshot(Stalker->GetPersistentId(),Snapshot));
+			TestEqual(TEXT("Only legal Torch reveals cone Stalker"),Snapshot.bHardLive,Tool==DarkwellGameplayTags::Equipment_Right_Torch);
+			TestEqual(TEXT("Enemy presentation matches HardLive"),Stalker->IsVisibleBySightWeaveAuthority(),Snapshot.bHardLive);
+			TestEqual(TEXT("HUD uses the same authority revision"),Stalker->GetAppliedVisibilityAuthorityRevision(),Snapshot.AuthorityRevision);
+		}
+		TestFalse(TEXT("NeverRemember enemy never enters furniture records"),Memory->TryGetRecordForTesting(Stalker->GetPersistentId(),Live,Valid,Location,Proxy));
+		Observe(FVector(0,-650,92),-90);
+	}
+	Fixture->Destroy();
+	TestEqual(TEXT("Leaving laboratory restores accepted presentation CVar"),Mode->GetInt(),0);
+	TestEqual(TEXT("Leaving laboratory restores relocation CVar"),Policy->GetInt(),0);
 	return true;
 }
 

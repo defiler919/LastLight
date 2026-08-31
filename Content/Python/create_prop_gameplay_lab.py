@@ -73,6 +73,8 @@ def main():
     # Navigation bounds are authored with the editor brush builder, leaving core AI unchanged.
     nav = actors.spawn_actor_from_class(unreal.NavMeshBoundsVolume, unreal.Vector(0,0,80))
     nav.set_actor_scale3d(unreal.Vector(12,9,3))
+    navdata = actors.spawn_actor_from_class(unreal.RecastNavMesh, unreal.Vector())
+    navdata.set_editor_property('runtime_generation', unreal.RuntimeGenerationType.DYNAMIC)
     levels.save_current_level()
     unreal.log("PROP_LAB_ASSETS_READY furniture=25 map=" + MAP)
 

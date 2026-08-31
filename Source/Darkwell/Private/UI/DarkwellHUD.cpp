@@ -27,6 +27,7 @@
 #include "Save/DarkwellSaveSubsystem.h"
 #include "World/DarkwellWorkbench.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
+#include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "UObject/ConstructorHelpers.h"
 
 namespace
@@ -335,7 +336,8 @@ void ADarkwellHUD::DrawHUD()
 		: nullptr;
 	if (Font && MissionGameState)
 	{
-		const FString Objective = FString::Printf(
+		const FString Objective = Darkwell::PropLab::IsLabWorld(GetWorld())
+			? TEXT("PROP GAMEPLAY LAB  |  Darkwell.PropLab help  |  NO FINAL POLICY SELECTED") : FString::Printf(
 			TEXT("OBJECTIVE  %s"),
 			*MissionGameState->GetObjectiveText().ToString());
 		float Width = 0.0f;

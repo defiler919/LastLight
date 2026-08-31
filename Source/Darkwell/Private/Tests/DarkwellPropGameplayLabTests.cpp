@@ -11,7 +11,7 @@ bool FDarkwellPropLabPoliciesTest::RunTest(const FString& Parameters)
  const FTransform A(FVector(0,0,0)), B(FVector(500,0,0));
  for(int32 Mode=0;Mode<3;++Mode) for(int32 Policy=0;Policy<2;++Policy)
  {
-  IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"))->Set(Mode,ECVF_SetByCode);
+  IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"))->Set(Mode,ECVF_SetByConsole);
   FDarkwellRememberedPropState First; First.Initialize(A,1);
   auto D=First.Observe(true,B,0,0,1,Policy==0);
   TestTrue(TEXT("Unseen relocation preserves A and hides B"),D.bShowProxy && !D.bShowCurrent && First.SnapshotTransform.Equals(A));
@@ -31,7 +31,7 @@ bool FDarkwellPropLabPoliciesTest::RunTest(const FString& Parameters)
   D=Twin.Observe(false,FTransform::Identity,0,1,1,Policy==0);
   TestFalse(TEXT("Observed empty destroyed location removes memory"),D.bSnapshotValid);
  }
- IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"))->Set(0,ECVF_SetByCode);
+ IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"))->Set(0,ECVF_SetByConsole);
  return true;
 }
 

@@ -86,3 +86,19 @@ frames with no laboratory contract errors; its actual soft-mode image was inspec
 The earlier `Visual01` attempt is retained but rejected for short-transition evaluation:
 synchronous PNG compression reduced its cadence to approximately four frames per second.
 `Build09.log` records the full successful editor build for the asynchronous writer.
+
+Lifecycle/navigation checkpoint: `Build11.log` succeeded; `Automation04` passed all 15
+selected tests, including all six presentation/policy combinations, relocation, destruction,
+NeverRemember, enemy/HUD revision agreement and laboratory exit reset. Automation03's
+new exit assertion failed because its lightweight world skipped actor initialization;
+the fixture test now completes initialization before BeginPlay/Destroy. The failed report
+is preserved. Real-map `NavRelocationProbe01_1920_M1_P0_R6` confirms navigation projection
+and policy-0 B-first retention followed by A verification. Reset uses console priority so
+a prior console override cannot prevent return to zero. Saved Recast navigation is dynamic.
+
+`Visual02` completed 24 D3D12/SM6/TSR runs (1080p/1440p, three modes, four movement routes),
+2342 frames, with no laboratory contract/fatal/assert/ensure/material failures. All eight
+cross-mode comparison contact sheets were opened and inspected. Capture cadence is about
+0.10–0.11 seconds median, with a maximum 0.40-second startup gap; this is directional
+evidence, not a performance certificate. These visuals precede the navigation/lifecycle
+checkpoint; no furniture geometry or presentation material changed afterward.

@@ -25,6 +25,7 @@
 #include <atomic>
 #include "ImageUtils.h"
 #include "Misc/FileHelper.h"
+#include "NavigationSystem.h"
 #include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
@@ -264,7 +265,7 @@ void ADarkwellPropGameplayLab::EndPlay(EEndPlayReason::Type Reason)
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
  if (Darkwell::PropLab::IsLabWorld(GetWorld()))
  {
-  Darkwell::PropLab::Mode->Set(0,ECVF_SetByCode); Darkwell::PropLab::Policy->Set(0,ECVF_SetByCode); Darkwell::PropLab::Route->Set(0,ECVF_SetByCode);
+  Darkwell::PropLab::Mode->Set(0,ECVF_SetByConsole); Darkwell::PropLab::Policy->Set(0,ECVF_SetByConsole); Darkwell::PropLab::Route->Set(0,ECVF_SetByConsole);
  }
 #endif
  Super::EndPlay(Reason);
@@ -299,7 +300,9 @@ void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
  if (Mode==2) UpdateSoftCoverage(DeltaSeconds);
  if (RawCoverage) for (TActorIterator<ADarkwellPropLabFurniture> It(GetWorld()); It; ++It)
   It->BindPresentation(RawCoverage,SoftTargets.Num()==2 ? SoftTargets[SoftIndex].Get() : RawCoverage.Get(),FogMin,FogInv,Mode);
- if (GEngine) GEngine->AddOnScreenDebugMessage(0xDA471,0,FColor::Cyan,FString::Printf(TEXT("PROP LAB | Presentation %d | Relocation %d | %s | Darkwell.PropLab help"),Mode,Policy,*LastEvent));
+ static const TCHAR* ModeNames[]={TEXT("AcceptedWholeObject"),TEXT("SurfaceSweepHard"),TEXT("SurfaceSweepSoft")};
+ static const TCHAR* PolicyNames[]={TEXT("VerifyOldLocation"),TEXT("RecognizedIdentityRelocation")};
+ if (GEngine) GEngine->AddOnScreenDebugMessage(0xDA471,0,FColor::Cyan,FString::Printf(TEXT("PROP LAB | %d %s | %d %s | Route %d | %s"),Mode,ModeNames[Mode],Policy,PolicyNames[Policy],LastRoute,*LastEvent));
  CaptureEvidence();
 }
 
@@ -318,6 +321,15 @@ void ADarkwellPropGameplayLab::CaptureEvidence()
   FScreenshotRequest::RequestScreenshot(Path,true,false);
   auto* Adapter=GetWorld()->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
   auto* Memory=GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+  if(CaptureIndex==1)
+  {
+   auto* Navigation=FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+   FNavLocation Projected;
+   const bool bNavigationReady=Navigation && Navigation->GetDefaultNavDataInstance(FNavigationSystem::DontCreate)
+    && Navigation->ProjectPointToNavigation(FVector(0,-200,0),Projected,FVector(100,100,200));
+   UE_LOG(LogDarkwellPropLab,Display,TEXT("LAB_NAV_READY=%d"),bNavigationReady);
+   if(!bNavigationReady) UE_LOG(LogDarkwellPropLab,Error,TEXT("LAB_CONTRACT_FAIL navigation unavailable"));
+  }
   if(!Adapter->IsSightWeaveAuthorityActive()) UE_LOG(LogDarkwellPropLab,Error,TEXT("LAB_CONTRACT_FAIL inactive authority"));
   for(const FName Id : {FName(TEXT("Lab.Fridge")),FName(TEXT("Lab.MobileCabinet")),FName(TEXT("Lab.TwinA")),FName(TEXT("Lab.TwinB")),FName(TEXT("Lab.DestroyBox")),FName(TEXT("Lab.ReplaceOld")),FName(TEXT("Lab.ReplaceNew"))})
   {
@@ -418,7 +430,7 @@ void ADarkwellPropGameplayLab::RunRoute(float DeltaSeconds)
   else
   {
    if(PreviousTime<4 && RouteTime>=4) Event(Route==8 ? TEXT("swap") : Route==9 ? TEXT("destroy") : Route==10 ? TEXT("replace") : TEXT("fridge"));
-   Position=Phase<=1 ? FVector(0,-650,92) : FVector(Phase==2 ? (Route==5 ? -250 : 650) : -250,50,92);
+   Position=Phase<=1 ? FVector(0,-650,92) : FVector(Phase==2 ? (Route==5 ? -250 : 650) : (Route==5 ? 650 : -250),50,92);
    Yaw=Phase<=1 ? -90 : 90;
    if(Route>=8 && Phase>=2) { Position=FVector(500,-100,92); Yaw=90; }
   }

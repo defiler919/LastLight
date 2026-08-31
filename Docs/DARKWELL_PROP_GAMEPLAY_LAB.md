@@ -118,3 +118,11 @@ also checks that recognizing a similar-looking second StableID cannot clear the 
 unseen identity. Event routes aim directly at their target; the tool route includes a
 visible Stalker positive control, then returns it behind the cabinets. Capture checks
 actual actor hidden state and absence of any enemy furniture-memory record.
+
+Route timing correction: scripted movement/events now enter through the world's
+PreActorTick delegate, before authority evaluation. Surface updates and capture remain
+in PostUpdateWork. This prevents a scripted teleport after authority evaluation from
+carrying a previous-frame visibility state into the image. The delegate is world-scoped
+and removed at EndPlay. `Build15.log` and all 15 `Automation06` tests pass. Earlier
+directional captures are historical; final visual/relocation/event runs are being refreshed
+on this checkpoint, with no change to production maps or their default input/authority.

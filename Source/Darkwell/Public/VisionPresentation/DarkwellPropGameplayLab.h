@@ -52,6 +52,7 @@ public:
  virtual void DisableDarkwellProjectFog() override;
  void Event(const FString& Command);
 private:
+ void AdvanceRouteBeforeActors(UWorld* World, ELevelTick TickType, float DeltaSeconds);
  void UpdateSoftCoverage(float DeltaSeconds);
  void RunRoute(float DeltaSeconds);
  void CaptureEvidence();
@@ -67,6 +68,7 @@ private:
  int32 CaptureIndex = 0;
  TSharedPtr<FDarkwellLabCaptureWriter, ESPMode::ThreadSafe> CaptureWriter;
  FDelegateHandle ScreenshotHandle;
+ FDelegateHandle RouteTickHandle;
  FString LastEvent = TEXT("Ready: use Darkwell.PropLab help");
  TMap<FName, FTransform> InitialTransforms;
 };

@@ -238,6 +238,9 @@ void ADarkwellPropGameplayLab::BeginPlay()
 {
  Super::BeginPlay();
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) { SetActorTickEnabled(false); return; }
+ // Inputs must precede TickableGameObject authority updates. Material/capture stays
+ // in PostUpdateWork, after those updates; never teleport a subject after authority.
+ RouteTickHandle=FWorldDelegates::OnWorldPreActorTick.AddUObject(this,&ADarkwellPropGameplayLab::AdvanceRouteBeforeActors);
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
  if(FParse::Param(FCommandLine::Get(),TEXT("PropLabAsyncCapture")))
  {
@@ -262,6 +265,7 @@ void ADarkwellPropGameplayLab::BeginPlay()
 void ADarkwellPropGameplayLab::EndPlay(EEndPlayReason::Type Reason)
 {
  if(ScreenshotHandle.IsValid()) UGameViewportClient::OnScreenshotCaptured().Remove(ScreenshotHandle);
+ if(RouteTickHandle.IsValid()) FWorldDelegates::OnWorldPreActorTick.Remove(RouteTickHandle);
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
  if (Darkwell::PropLab::IsLabWorld(GetWorld()))
  {
@@ -279,10 +283,9 @@ void ADarkwellPropGameplayLab::UpdateSoftCoverage(float DeltaSeconds)
  SoftIndex=1-SoftIndex;
  UKismetRenderingLibrary::DrawMaterialToRenderTarget(this,SoftTargets[SoftIndex],SoftMaterial);
 }
-void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
+void ADarkwellPropGameplayLab::AdvanceRouteBeforeActors(UWorld* World, ELevelTick TickType, float DeltaSeconds)
 {
- Super::Tick(DeltaSeconds);
- if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
+ if (World!=GetWorld() || !Darkwell::PropLab::IsLabWorld(World)) return;
  if (Elapsed == 0)
  {
   if (auto* Player=UGameplayStatics::GetPlayerPawn(this,0))
@@ -290,6 +293,11 @@ void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
    { Boom->SetRelativeRotation(FRotator(-65,90,0)); Boom->TargetArmLength=1450; }
  }
  Elapsed+=DeltaSeconds; RunRoute(DeltaSeconds);
+}
+void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
+{
+ Super::Tick(DeltaSeconds);
+ if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
  const int32 Mode=Darkwell::PropLab::PresentationMode(GetWorld()), Policy=Darkwell::PropLab::RelocationPolicy(GetWorld());
  if (Mode!=LastMode || Policy!=LastPolicy)
  {

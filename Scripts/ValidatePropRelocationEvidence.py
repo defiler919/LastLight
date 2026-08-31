@@ -41,6 +41,16 @@ for path in sorted(root.glob(a.label+'_*.log')):
         checks['replacement_new_identity_hidden_unseen']=all(not r['valid'] and not r['live'] for r in at('Lab.ReplaceNew',5,7))
         checks['replacement_new_identity_recognized']=any(r['valid'] and r['live'] for r in at('Lab.ReplaceNew',9,20))
         checks['replacement_old_identity_cleared']=any(not r['valid'] for r in at('Lab.ReplaceOld',9,20))
+    if route==7:
+        subjects=[dict(time=float(t),hard=int(h),hidden=int(v),hud=int(u)) for t,h,v,u in re.findall(r'LAB_EVIDENCE .*?time=([\d.]+) stalkerHard=(\d) hidden=(\d) hudEligible=(\d)',text)]
+        positive=[r for r in subjects if 12.5<r['time']<15.5]
+        dark=[r for r in subjects if 9<r['time']<11]
+        hidden_again=[r for r in subjects if 17<r['time']<20]
+        checks['torch_visible_enemy_and_HUD_positive_control']=bool(positive) and all(r['hard'] and r['hud'] and not r['hidden'] for r in positive)
+        checks['no_legal_light_hides_enemy_and_HUD']=bool(dark) and all(not r['hard'] and not r['hud'] and r['hidden'] for r in dark)
+        checks['return_behind_cabinets_leaves_no_enemy_memory']=bool(hidden_again) and all(not r['hard'] and not r['hud'] and r['hidden'] for r in hidden_again)
+        checks['torch_lantern_dark_torch_events']=all('PropLab EVENT '+event in text for event in ('lantern','dark','torch'))
+    checks['real_navigation_projection']='LAB_NAV_READY=1' in text
     checks['completed_and_no_authority_failures']='LAB_CAPTURE_COMPLETE' in text and 'LAB_CONTRACT_FAIL' not in text
     result=dict(run=path.stem,checks=checks,passed=all(checks.values()))
     results.append(result)

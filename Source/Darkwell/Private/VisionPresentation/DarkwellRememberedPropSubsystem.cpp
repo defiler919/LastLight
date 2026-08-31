@@ -192,6 +192,34 @@ void UDarkwellRememberedPropSubsystem::RefreshNowForTesting()
 	RefreshRecords();
 }
 
+bool UDarkwellRememberedPropSubsystem::SetLabVerificationSubject(FName StableId)
+{
+ if(!Darkwell::PropLab::IsLabWorld(GetWorld()) || StableId.IsNone()) return false;
+ LabVerificationSubject=StableId; bLabSnapshotFrozen=false; return true;
+}
+AActor* UDarkwellRememberedPropSubsystem::FreezeLabVerificationSnapshot()
+{
+ if(!Darkwell::PropLab::IsLabWorld(GetWorld())) return nullptr;
+ FRecord* Record=Records.Find(LabVerificationSubject);
+ if(!Record || !Record->State.bSnapshotValid || !Record->ProxyActor.IsValid()) return nullptr;
+ bLabSnapshotFrozen=true;
+ Record->ProxyActor->SetActorHiddenInGame(false);
+ return Record->ProxyActor.Get();
+}
+void UDarkwellRememberedPropSubsystem::FinishLabVerificationSnapshot()
+{
+ if(!Darkwell::PropLab::IsLabWorld(GetWorld()) || !bLabSnapshotFrozen) return;
+ if(FRecord* Record=Records.Find(LabVerificationSubject))
+ { Record->State.bSnapshotValid=false; DestroyProxy(*Record); }
+}
+void UDarkwellRememberedPropSubsystem::ReleaseLabVerificationSubject()
+{
+ if(!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
+ if(FRecord* Record=Records.Find(LabVerificationSubject)) DestroyProxy(*Record);
+ Records.Remove(LabVerificationSubject);
+ LabVerificationSubject=NAME_None; bLabSnapshotFrozen=false;
+}
+
 int32 UDarkwellRememberedPropSubsystem::GetUnverifiedSnapshotCount(FName StableId) const
 {
 	const FRecord* Record = Records.Find(StableId);
@@ -244,6 +272,28 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 	{
 		FRecord& Record = Pair.Value;
 		UDarkwellRememberablePropComponent* Component = Record.Component.Get();
+		if(Darkwell::PropLab::IsLabWorld(GetWorld()) && !LabVerificationSubject.IsNone())
+		{
+			if(Pair.Key!=LabVerificationSubject)
+			{
+				if(Component) { Component->ApplySourceLiveState(false); Component->ApplySourceGeometryVisibility(false); }
+				if(Record.ProxyActor.IsValid()) Record.ProxyActor->SetActorHiddenInGame(true);
+				for(auto Proxy:Record.UnverifiedProxies) if(Proxy.IsValid()) Proxy->SetActorHiddenInGame(true);
+				continue;
+			}
+			if(bLabSnapshotFrozen)
+			{
+				// Source B still uses legal live authority. A is owned solely by the
+				// independent lab empty-evidence grid, never .50/.25 or known movement.
+				const bool bLive=Component && FDarkwellRememberedPropState::ResolveObjectLive(
+					Record.State.bWasLive,EvaluateMaximumCoverage(*Component));
+				Record.State.bWasLive=bLive;
+				if(Component) { Component->ApplySourceLiveState(bLive); Component->ApplySourceGeometryVisibility(bLive); }
+				Diagnostics.LiveCount+=bLive;
+				Diagnostics.ProxyCount+=Record.ProxyActor.IsValid();
+				continue;
+			}
+		}
 		const bool bCurrentExists = Component && IsValid(Component->GetOwner());
 		const FTransform CurrentTransform = bCurrentExists
 			? Component->GetObservationTransform()
@@ -289,7 +339,8 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 		// identity threshold. This never changes Observe(), LiveOnly effects, or
 		// an unseen relocated/replaced source. Mode 0 and other maps stay exact.
 		const bool bLab = Darkwell::PropLab::IsLabWorld(GetWorld());
-		const bool bKnownSurfaceGeometry = bLab && Darkwell::PropLab::PresentationMode(GetWorld()) != 0
+		const bool bKnownSurfaceGeometry = bLab && LabVerificationSubject.IsNone()
+			&& Darkwell::PropLab::PresentationMode(GetWorld()) != 0
 			&& bCurrentExists && Record.State.bSnapshotValid
 			&& Component->GetOwner()->IsA<ADarkwellPropLabFurniture>()
 			&& Darkwell::RememberedProp::TransformsMatch(Record.State.SnapshotTransform, CurrentTransform)

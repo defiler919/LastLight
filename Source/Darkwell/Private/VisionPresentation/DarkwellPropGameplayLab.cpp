@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
+#include "VisionPresentation/DarkwellStalePropLabComponent.h"
 #include "AI/DarkwellStalkerCharacter.h"
 #include "BrainComponent.h"
 #include "AIController.h"
@@ -184,6 +185,7 @@ void ADarkwellPropLabFurniture::BindPresentation(UTexture* Raw, UTexture* Soft, 
 
 ADarkwellPropGameplayLab::ADarkwellPropGameplayLab()
 {
+ StaleLab=CreateDefaultSubobject<UDarkwellStalePropLabComponent>(TEXT("StaleMemoryExperiment"));
  PrimaryActorTick.bCanEverTick = true;
  PrimaryActorTick.TickGroup = TG_PostUpdateWork;
  // The production fixture keeps its exact defaults. This derived fixture disables its geometry.
@@ -313,6 +315,14 @@ void ADarkwellPropGameplayLab::AdvanceRouteBeforeActors(UWorld* World, ELevelTic
   bPlayerInitialized=true;
  }
  Elapsed+=DeltaSeconds;
+ if(!bStaleAutoStarted && FParse::Param(FCommandLine::Get(),TEXT("StaleLabAuto")) && World->GetSubsystem<UDarkwellFogVisualSubsystem>()->IsActive())
+ {
+  int32 Mode=0,Scenario=2;
+  FParse::Value(FCommandLine::Get(),TEXT("StaleLabMode="),Mode); FParse::Value(FCommandLine::Get(),TEXT("StaleLabCase="),Scenario);
+  StaleLab->Start(Mode,Scenario); bStaleAutoStarted=true;
+ }
+ if(StaleLab->IsRunning()) { StaleLab->BeforeActors(DeltaSeconds); return; }
+ if(bStaleAutoStarted && StaleLab->HasCompletedCapture()) return;
  if(FParse::Param(FCommandLine::Get(),TEXT("PropLabComparisonCapture")) && !World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>()->IsSightWeaveAuthorityActive()) return;
  RunRoute(DeltaSeconds);
  RestoreComparisonTools(LastRoute==1);
@@ -331,7 +341,23 @@ void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
  }
  if (Mode==2) UpdateSoftCoverage(DeltaSeconds);
  if (RawCoverage) for (TActorIterator<ADarkwellPropLabFurniture> It(GetWorld()); It; ++It)
-  It->BindPresentation(RawCoverage,SoftTargets.Num()==2 ? SoftTargets[SoftIndex].Get() : RawCoverage.Get(),FogMin,FogInv,Mode);
+  It->BindPresentation(RawCoverage,SoftTargets.Num()==2 ? SoftTargets[SoftIndex].Get() : RawCoverage.Get(),FogMin,FogInv,StaleLab->IsRunning()?0:Mode);
+ if(StaleLab->IsRunning())
+ {
+  if(GEngine) GEngine->RemoveOnScreenDebugMessage(0xDA471);
+  StaleLab->AfterActors(DeltaSeconds); return;
+ }
+ StaleLab->AfterActors(DeltaSeconds);
+ if(bStaleAutoStarted && StaleLab->HasCompletedCapture())
+ {
+  if(!CaptureWriter || CaptureWriter->Pending.load()==0)
+  {
+   if(CaptureWriter && CaptureWriter->Failed.load()) UE_LOG(LogDarkwellPropLab,Error,TEXT("STALE_FAIL screenshot write"));
+   UE_LOG(LogDarkwellPropLab,Display,TEXT("STALE_CAPTURE_COMPLETE"));
+   UKismetSystemLibrary::QuitGame(this,nullptr,EQuitPreference::Quit,false);
+  }
+  return;
+ }
  static const TCHAR* ModeNames[]={TEXT("AcceptedWholeObject"),TEXT("SurfaceSweepHard"),TEXT("SurfaceSweepSoft")};
  static const TCHAR* PolicyNames[]={TEXT("VerifyOldLocation"),TEXT("RecognizedIdentityRelocation")};
  if (GEngine) GEngine->AddOnScreenDebugMessage(0xDA471,0,FColor::Cyan,FString::Printf(TEXT("PROP LAB | MODE %d %s | POLICY %d %s | Route %d t=%.2f | ENEMY %d | %s"),Mode,ModeNames[Mode],Policy,PolicyNames[Policy],LastRoute,RouteTime,IsEnemyEnabled(),*LastEvent));
@@ -401,6 +427,16 @@ void ADarkwellPropGameplayLab::Event(const FString& Command)
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
  TArray<FString> Words; Command.ParseIntoArrayWS(Words);
+ if(Words.Num()>=1 && Words[0]==TEXT("stale"))
+ {
+  if(Words.Num()<2 || !Words[1].IsNumeric()) { UE_LOG(LogDarkwellPropLab,Display,TEXT("Use Darkwell.PropLab stale 0/1/2 [A..F]; default C. Identical 36s routes. reset restores full Lab.")); return; }
+  int32 Scenario=2;
+  if(Words.Num()==3 && Words[2].Len()==1) Scenario=FChar::ToUpper(Words[2][0])-'A';
+  if(!StaleLab->Start(FCString::Atoi(*Words[1]),Scenario)) UE_LOG(LogDarkwellPropLab,Display,TEXT("Stale route rejected: mode 0..2, case A..F only"));
+  return;
+ }
+ if(StaleLab->IsRunning() && Command!=TEXT("reset") && Command!=TEXT("help"))
+ { UE_LOG(LogDarkwellPropLab,Display,TEXT("Stale route locks mode/policy/tools/enemy/path. Use stale N [A..F] to replay, or reset.")); return; }
  if (Words.Num()==2)
  {
   const int32 Value=FCString::Atoi(*Words[1]);
@@ -436,7 +472,7 @@ void ADarkwellPropGameplayLab::Event(const FString& Command)
  }
  LastEvent=Command;
  UE_LOG(LogDarkwellPropLab,Display,TEXT("PropLab EVENT %s mode=%d policy=%d"),*Command,Darkwell::PropLab::PresentationMode(GetWorld()),Darkwell::PropLab::RelocationPolicy(GetWorld()));
- if(Command==TEXT("help")) UE_LOG(LogDarkwellPropLab,Display,TEXT("Darkwell.PropLab: reset, fridge, cabinet, destroy, replace, swap, torch, lantern, dark; enemy 0/1 (default OFF); mode 0/1/2; policy 0/1; route 0..13 (0 manual;1 fixed-camera 30s comparison;2 oblique;3 rotate;4 parallel;5 A-first;6 B-first;7 tools;8 twins;9 destroy;10 replace;11 horizontal;12 vertical;13 diagonal). route 1 restarts without changing policy."));
+ if(Command==TEXT("help")) UE_LOG(LogDarkwellPropLab,Display,TEXT("Darkwell.PropLab: stale 0/1/2 [A..F] (default C; A destroy box, B move fridge, C long L-to-R, D reverse, E pause/jitter, F occlusion; 36s, POLICY 0 locked, ENEMY 0, auto restore). reset reloads clean Lab. Ordinary controls: fridge/cabinet/destroy/replace/swap/torch/lantern/dark; enemy 0/1; mode 0/1/2; policy 0/1; route 0..13."));
 #endif
 }
 

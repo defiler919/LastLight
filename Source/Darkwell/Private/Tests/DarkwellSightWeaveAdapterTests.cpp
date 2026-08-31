@@ -838,4 +838,53 @@ bool FDarkwellPropLabEmptyAndComparisonTest::RunTest(const FString& Parameters)
  return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellStaleSnapshotOwnershipTest,
+ "Darkwell.PropLab.Stale.RuntimeOldSnapshotOwnership", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellStaleSnapshotOwnershipTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("StaleOwnership"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+ UWorld* World=TestWorld.Get();
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>(); Fixture->PostInitializeComponents(); Fixture->DispatchBeginPlay();
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(400,-700,92),FRotator(0,90,0));
+ auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ auto* Memory=World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+ TestTrue(TEXT("Existing Lab authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ for(int32 Event=0;Event<2;++Event)
+ {
+  IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"))->Set(Event+1,ECVF_SetByConsole);
+  const FName Id(*FString::Printf(TEXT("Lab.Stale.Ownership%d"),Event));
+  TestTrue(TEXT("Explicit lab subject opt-in"),Memory->SetLabVerificationSubject(Id));
+  const FTransform A(FVector(400,-300,0));
+  auto* Prop=World->SpawnActorDeferred<ADarkwellPropLabFurniture>(ADarkwellPropLabFurniture::StaticClass(),A);
+  Prop->StableId=Id; Prop->Shape=4; Prop->Dimensions=FVector(600,100,90); Prop->Memory->bRememberFromStart=false;
+  Prop->FinishSpawning(A); Prop->DispatchBeginPlay();
+  Player->SetActorRotation(FRotator(0,90,0)); Adapter->Tick(0); Memory->RefreshNowForTesting();
+  bool Live=false,Valid=false; FVector At; AActor* Proxy=nullptr;
+  Memory->TryGetRecordForTesting(Id,Live,Valid,At,Proxy);
+  TestTrue(TEXT("Snapshot requires actual initial observation"),Live && Valid && Proxy);
+  const FVector RememberedA=At; // Observation origin is the primitive center, not actor floor Z.
+  Player->SetActorRotation(FRotator(0,-90,0)); Adapter->Tick(0); Memory->RefreshNowForTesting();
+  TestFalse(TEXT("Stale experiment initial gray uses identical whole-object proxy in every mode"),Prop->Parts[0]->IsVisible());
+  TestNotNull(TEXT("Freeze previously observed A before offscreen event"),Memory->FreezeLabVerificationSnapshot());
+  if(Event==0) Prop->Destroy(); else Prop->SetActorLocation(FVector(3000,3000,0));
+  for(float Yaw:{-90.f,0.f,45.f,90.f,180.f,-90.f})
+  {
+   Player->SetActorRotation(FRotator(0,Yaw,0)); Adapter->Tick(0); Memory->RefreshNowForTesting();
+   Memory->TryGetRecordForTesting(Id,Live,Valid,At,Proxy);
+   TestTrue(TEXT(".50/max coverage cannot erase independently owned A"),Valid && Proxy && At.Equals(RememberedA));
+   TestFalse(TEXT("Hidden B never becomes live"),Live);
+  }
+  Memory->FinishLabVerificationSnapshot();
+  for(int32 I=0;I<10;++I) Memory->RefreshNowForTesting();
+  Memory->TryGetRecordForTesting(Id,Live,Valid,At,Proxy);
+  TestTrue(TEXT("Verified erasure cannot resurrect on ordinary refresh"),!Valid && !Proxy && !Live);
+  if(Event==1) Prop->Destroy(); Memory->ReleaseLabVerificationSubject();
+ }
+ Fixture->Destroy();
+ FTestWorld Outside(TEXT("StaleOutside"));
+ TestFalse(TEXT("Dedicated ownership cannot activate outside Lab"),Outside.Get()->GetSubsystem<UDarkwellRememberedPropSubsystem>()->SetLabVerificationSubject(TEXT("Forbidden")));
+ return true;
+}
+
 #endif

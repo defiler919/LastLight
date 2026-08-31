@@ -59,6 +59,8 @@ public:
  float GetRouteTime() const { return RouteTime; }
  bool IsEnemyEnabled() const { return LabEnemy.IsValid(); }
 private:
+ UPROPERTY(VisibleAnywhere, Category="Lab") TObjectPtr<class UDarkwellStalePropLabComponent> StaleLab;
+ bool bStaleAutoStarted = false;
  void AdvanceRouteBeforeActors(UWorld* World, ELevelTick TickType, float DeltaSeconds);
  void UpdateSoftCoverage(float DeltaSeconds);
  void RunRoute(float DeltaSeconds);

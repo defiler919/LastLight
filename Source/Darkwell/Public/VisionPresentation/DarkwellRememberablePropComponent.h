@@ -34,6 +34,8 @@ public:
 	uint64 ComputeAppearanceRevision() const;
 	FTransform GetObservationTransform() const;
 	void ApplySourceLiveState(bool bLive);
+	/** Geometry presentation only; does not reveal LiveOnly effects or change subject state. */
+	void ApplySourceGeometryVisibility(bool bVisible);
 	bool IsSourceLive() const { return bSourceLive; }
 
 protected:

@@ -2,6 +2,9 @@
 import time
 import unreal
 
+# -ExecutePythonScript otherwise closes the editor as soon as this module returns.
+unreal.EditorPythonScripting.set_keep_python_script_alive(True)
+
 levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
 assert levels.load_level('/Game/Maps/L_ProjectFogPropGameplayLab')
@@ -31,6 +34,12 @@ def tick(delta):
         command(world, 'Darkwell.PropLab policy 1')
         assert_modes(1, 1)
         command(world, 'Darkwell.PropLab help')
+        command(world, 'Darkwell.PropLab cabinet')
+        cabinet = next(a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.DarkwellPropLabFurniture)
+                       if str(a.get_editor_property('stable_id')) == 'Lab.MobileCabinet')
+        location = cabinet.get_actor_location()
+        assert abs(location.x-720)<.01 and abs(location.y+500)<.01
+        unreal.log('LAB_PIE_CABINET_EVENT_PASS: native cabinet command moved A to B')
         command(world, 'Shot filename=D:/UE_projects/LastLight/Saved/PropGameplayLab/PIE_Hard.png')
         unreal.log('LAB_PIE_ACTIVE_HARD_POLICY1')
         stage = 2
@@ -48,6 +57,10 @@ def tick(delta):
     elif stage == 4 and elapsed > 19:
         assert levels.is_in_play_in_editor()
         assert_modes(0, 0)
+        cabinet = next(a for a in unreal.GameplayStatics.get_all_actors_of_class(editor.get_game_world(), unreal.DarkwellPropLabFurniture)
+                       if str(a.get_editor_property('stable_id')) == 'Lab.MobileCabinet')
+        location = cabinet.get_actor_location()
+        assert abs(location.x-850)<.01 and abs(location.y-540)<.01
         unreal.log('LAB_PIE_RESET_PASS: reload returned both controls to zero')
         command(editor.get_game_world(), 'Darkwell.PropLab mode 2')
         command(editor.get_game_world(), 'Darkwell.PropLab policy 1')
@@ -66,4 +79,12 @@ def tick(delta):
         unreal.unregister_slate_post_tick_callback(handle)
         stage = 6
 
-handle = unreal.register_slate_post_tick_callback(tick)
+def guarded_tick(delta):
+    try:
+        tick(delta)
+    except Exception as error:
+        unreal.unregister_slate_post_tick_callback(handle)
+        unreal.log_error('LAB_PIE_FAIL: ' + str(error))
+        raise
+
+handle = unreal.register_slate_post_tick_callback(guarded_tick)

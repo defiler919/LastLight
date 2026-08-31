@@ -81,6 +81,16 @@ FTransform UDarkwellRememberablePropComponent::GetObservationTransform() const
 	return GetOwner() ? GetOwner()->GetActorTransform() : FTransform::Identity;
 }
 
+void UDarkwellRememberablePropComponent::ApplySourceGeometryVisibility(const bool bVisible)
+{
+	for (UStaticMeshComponent* Primitive : MemoryPrimitives)
+	{
+		if (!Primitive) continue;
+		const bool* WasVisible = VisibilityBeforeHide.Find(Primitive);
+		Primitive->SetVisibility(bVisible && (!WasVisible || *WasVisible), false);
+	}
+}
+
 void UDarkwellRememberablePropComponent::ApplySourceLiveState(const bool bLive)
 {
 	if (bSourceLive == bLive)

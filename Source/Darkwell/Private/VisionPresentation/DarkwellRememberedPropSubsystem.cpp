@@ -285,9 +285,20 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 				Record.UnverifiedProxies.RemoveAt(Index);
 			}
 		}
+		// Known, unchanged geometry may display a surface sweep below the object
+		// identity threshold. This never changes Observe(), LiveOnly effects, or
+		// an unseen relocated/replaced source. Mode 0 and other maps stay exact.
+		const bool bLab = Darkwell::PropLab::IsLabWorld(GetWorld());
+		const bool bKnownSurfaceGeometry = bLab && Darkwell::PropLab::PresentationMode(GetWorld()) != 0
+			&& bCurrentExists && Record.State.bSnapshotValid
+			&& Component->GetOwner()->IsA<ADarkwellPropLabFurniture>()
+			&& Darkwell::RememberedProp::TransformsMatch(Record.State.SnapshotTransform, CurrentTransform)
+			&& Record.State.AppearanceRevision == AppearanceRevision;
+		const bool bShowProxyGeometry = Decision.bShowProxy && !bKnownSurfaceGeometry;
 		if (Component)
 		{
 			Component->ApplySourceLiveState(Decision.bShowCurrent);
+			if (bLab) Component->ApplySourceGeometryVisibility(Decision.bShowCurrent || bKnownSurfaceGeometry);
 		}
 		if (Decision.bSnapshotChanged && Decision.bSnapshotValid && Component)
 		{
@@ -307,24 +318,24 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 		}
 		if (AActor* Proxy = Record.ProxyActor.Get())
 		{
-			Proxy->SetActorHiddenInGame(!Decision.bShowProxy);
+			Proxy->SetActorHiddenInGame(!bShowProxyGeometry);
 		}
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 		if (!Record.bDiagnosticStateValid
 			|| Record.bDiagnosticLastLive != Decision.bShowCurrent
-			|| Record.bDiagnosticLastProxy != Decision.bShowProxy
+			|| Record.bDiagnosticLastProxy != bShowProxyGeometry
 			|| Record.bDiagnosticLastSnapshotValid != Decision.bSnapshotValid)
 		{
 			Record.bDiagnosticStateValid = true;
 			Record.bDiagnosticLastLive = Decision.bShowCurrent;
-			Record.bDiagnosticLastProxy = Decision.bShowProxy;
+			Record.bDiagnosticLastProxy = bShowProxyGeometry;
 			Record.bDiagnosticLastSnapshotValid = Decision.bSnapshotValid;
 			const FVector SnapshotLocation = Record.State.SnapshotTransform.GetLocation();
 			UE_LOG(LogDarkwellRememberedProp, Display,
 				TEXT("RememberedPropState id=%s currentLive=%d proxy=%d snapshotValid=%d snapshot=(%.1f,%.1f,%.1f)"),
 				*Pair.Key.ToString(),
 				Decision.bShowCurrent ? 1 : 0,
-				Decision.bShowProxy ? 1 : 0,
+				bShowProxyGeometry ? 1 : 0,
 				Decision.bSnapshotValid ? 1 : 0,
 				SnapshotLocation.X,
 				SnapshotLocation.Y,
@@ -332,7 +343,7 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 		}
 #endif
 		Diagnostics.LiveCount += Decision.bShowCurrent ? 1 : 0;
-		Diagnostics.ProxyCount += Decision.bShowProxy ? 1 : 0;
+		Diagnostics.ProxyCount += bShowProxyGeometry ? 1 : 0;
 		Diagnostics.RetainedDestroyedCount += !bCurrentExists
 			&& Decision.bShowProxy ? 1 : 0;
 	}

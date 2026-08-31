@@ -36,9 +36,11 @@ Presentation CVar: `r.Darkwell.ProjectFogVisual.PropPresentationMode` (default 0
 
 - 0 AcceptedWholeObject: original CPU maximum sample enter/exit thresholds .50/.25;
   confirmed current source is fully lit. No change to this threshold behavior.
-- 1 SurfaceSweepHard: identity confirmation still gates the source actor. Its entire
-  opaque mesh remains present; world LiveCoverage chooses live material versus gray.
-  Unseen relocation retains only the old snapshot, never the hidden new transform.
+- 1 SurfaceSweepHard: unchanged known geometry remains fully present even below the
+  object identity threshold; per-pixel world LiveCoverage chooses live material versus
+  gray. This grants neither identity Live nor LiveOnly effects. New transforms or
+  appearance revisions still require identity confirmation; unseen relocation displays
+  only the old snapshot, never the hidden new transform.
 - 2 SurfaceSweepSoft: same identity gate and raw coverage; a separate R16F field ramps
   current surface contribution over .20 seconds. Raw coverage caps every result and
   immediately clears lost coverage. No scene color, enemy, light, shadow or transform
@@ -126,3 +128,14 @@ carrying a previous-frame visibility state into the image. The delegate is world
 and removed at EndPlay. `Build15.log` and all 15 `Automation06` tests pass. Earlier
 directional captures are historical; final visual/relocation/event runs are being refreshed
 on this checkpoint, with no change to production maps or their default input/authority.
+
+Final separation correction: known geometry selection no longer uses the whole-object
+Live threshold in sweep modes. A matching valid snapshot transform and appearance allows
+the complete source mesh to show its per-pixel surface; a separate geometry-only operation
+does not change source Live state, subject state or LiveOnly effects. Mode 0 uses its
+original source visibility. New transforms remain hidden. Initial lab materials are bound
+before memory registration so the remembered appearance is the final bound appearance.
+`Build16.log` succeeds and all 15 `Automation07` tests pass, including explicit checks for
+known geometry without identity Live, hidden LiveOnly effects, exactly one full silhouette,
+and all source primitives hidden after an unseen relocation. Final captures must use this
+checkpoint. The earlier visual generations are retained as superseded development evidence.

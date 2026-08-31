@@ -700,6 +700,9 @@ bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
 		FTransform A(FVector(-200,350,0));
 		auto* Prop=World->SpawnActorDeferred<ADarkwellPropLabFurniture>(ADarkwellPropLabFurniture::StaticClass(),A);
 		Prop->StableId=Id; Prop->Shape=1; Prop->Dimensions=FVector(82,76,190);
+		auto* LiveEffect=NewObject<USceneComponent>(Prop);
+		LiveEffect->SetupAttachment(Prop->GetRootComponent()); LiveEffect->RegisterComponent();
+		Prop->Memory->AddLiveOnlyComponent(LiveEffect);
 		Prop->FinishSpawning(A); Prop->DispatchBeginPlay();
 		auto Observe=[&](FVector Position,float Yaw)
 		{
@@ -707,8 +710,17 @@ bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
 			Adapter->Tick(0); Memory->RefreshNowForTesting(); Fixture->Tick(.016f);
 		};
 		Observe(FVector(0,-650,92),-90);
+		bool KnownLive=false,KnownValid=false; FVector KnownLocation; AActor* KnownProxy=nullptr;
+		Memory->TryGetRecordForTesting(Id,KnownLive,KnownValid,KnownLocation,KnownProxy);
+		TestTrue(TEXT("Known geometry presentation does not grant identity Live"),!KnownLive && KnownValid);
+		TestFalse(TEXT("Surface-only geometry does not grant source Live or reveal LiveOnly effects"),Prop->Memory->IsSourceLive() || LiveEffect->IsVisible());
+		for(UStaticMeshComponent* Primitive : Prop->Memory->GetMemoryPrimitives())
+			TestEqual(TEXT("Only sweep modes expose unchanged known geometry for per-pixel coverage"),Primitive->IsVisible(),M!=0);
+		TestEqual(TEXT("Known complete silhouette has exactly one geometry representation"),KnownProxy && !KnownProxy->IsHidden(),M==0);
 		Prop->SetActorLocation(FVector(650,340,0));
 		Observe(FVector(0,-650,92),-90);
+		for(UStaticMeshComponent* Primitive : Prop->Memory->GetMemoryPrimitives())
+			TestFalse(TEXT("Unrecognized new transform never exposes source geometry"),Primitive->IsVisible());
 		bool Live=false,Valid=false; FVector Location; AActor* Proxy=nullptr;
 		Memory->TryGetRecordForTesting(Id,Live,Valid,Location,Proxy);
 		TestTrue(TEXT("Unseen B stays hidden while entire A snapshot remains"),!Live && Valid && Proxy && !Proxy->IsHidden() && Location.X==-200);

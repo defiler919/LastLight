@@ -142,7 +142,6 @@ void ADarkwellPropLabFurniture::BeginPlay()
 {
  // Saved actor properties and native parts are bound before component BeginPlay.
  OnConstruction(GetActorTransform());
- Super::BeginPlay();
  auto* Parent = LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_PropLabSurface.M_PropLabSurface"));
  for (UStaticMeshComponent* Part : Parts)
  {
@@ -153,6 +152,8 @@ void ADarkwellPropLabFurniture::BeginPlay()
   Part->SetMaterial(0, Material);
   Materials.Add(Material);
  }
+ // Register the initial memory after its final material bindings exist.
+ Super::BeginPlay();
 }
 
 void ADarkwellPropLabFurniture::BindPresentation(UTexture* Raw, UTexture* Soft, FVector2D Min, FVector2D Inv, int32 Mode)

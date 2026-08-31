@@ -6,7 +6,9 @@ Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE**
+Accepted implementation / reliable remote baseline: `4ab5a224062e53141b596654ad96fe74b8860bf1`
+
+Status: **PARTIAL — GRAY LIVE BASELINE USER ACCEPTED / PROP PRESENTATION POLICY PENDING**
 
 24-hour P1 gate: 2026-08-31
 
@@ -209,17 +211,17 @@ Agent inspection opened the key 1080p and 1440p contacts, every required adjacen
 
 The validated P5 index is `Saved/DarkwellProjectFogVisualRebuild/P5/p5_evidence_index.json`. The complete evidence remains ignored under `Saved` and is not committed.
 
-## 11. Remaining acceptance gate
+## 11. Historical acceptance gate
 
 The P1-P5 agent gates were complete at this historical checkpoint, but it was not `COMPLETED`. The subsequent gray-unlit and movable-memory checkpoint below supersedes this readiness label.
 
-The user must run real dynamic PIE and judge project usability: continuous movement and rotation, gray/live readability, four-direction wall behavior, enemy/HUD filtering and Torch/Lantern/Torch recovery. Only that user verdict can accept this gray/live phase. Black Unknown, exploration history and `UnknownUntilExplored` remain explicitly out of scope and must not begin automatically.
+At that checkpoint, the user still needed to run real dynamic PIE and judge project usability: continuous movement and rotation, gray/live readability, four-direction wall behavior, enemy/HUD filtering and Torch/Lantern/Torch recovery. The user's 2026-08-31 verdict is recorded in section 13 and supersedes the pending gray/live acceptance gate. Black Unknown, exploration history and `UnknownUntilExplored` remain explicitly out of scope and must not begin automatically.
 
 ## 12. Gray-unlit and movable-prop memory checkpoint
 
 Task baseline: `24a047039f157d2bcc090049898ea8b49f7a3301`.
 
-The user accepted the project-only continuous coverage direction and object-level rule (seeing any legal corner makes the whole object Live), but required two further contracts: gray scene surfaces must be recognizable while completely independent of current lighting, and rememberable movable props must retain their last observed transform without gameplay authority.
+At this implementation checkpoint, the project-only continuous coverage direction and object-level rule (seeing any legal corner makes the whole object Live) were carried forward, with two further contracts: gray scene surfaces must be recognizable while completely independent of current lighting, and rememberable movable props must retain their last observed transform without gameplay authority. The 2026-08-31 user verdict accepts the gray/live baseline and movable-memory cycle but leaves the cabinet, refrigerator and furniture-row presentation policy undecided; the current whole-object Live rule is not a final gameplay-policy approval.
 
 ### Gray-unlit implementation and root cause
 
@@ -261,4 +263,49 @@ Evidence is ignored and uncommitted under:
 Saved/DarkwellProjectFogVisualRebuild/GrayUnlitMemory
 ```
 
-The current maximum state is `PARTIAL — READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE`. This is not `COMPLETED`. The user must verify gray lighting independence, texture readability, A-to-B residual behavior, enemy filtering, walls, and Torch/Lantern/Torch in real dynamic PIE. Black Unknown/exploration and any plugin/Fab work remain out of scope.
+The historical handoff state was `PARTIAL — READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE`. Section 13 records the subsequent user acceptance and is the controlling current disposition. The system is not `COMPLETED`. Black Unknown/exploration and any plugin/Fab work remain out of scope.
+
+## 13. User dynamic PIE acceptance — 2026-08-31
+
+Current state: **PARTIAL — GRAY LIVE BASELINE USER ACCEPTED / PROP PRESENTATION POLICY PENDING**.
+
+The user completed actual dynamic PIE at the office in Unreal Engine 5.8.1, on `L_VisionIntegration`, using normal D3D12/SM6/TSR. This section records the user's supplied verdict and PropCycle evidence for the reliable implementation baseline `4ab5a224062e53141b596654ad96fe74b8860bf1`; it does not claim a new agent PIE run or independent video inspection in this documentation-only closure.
+
+User verdict:
+
+1. The overall gray layer plus real-time vision effect passed.
+2. The user did not observe the earlier wall-edge jitter, direction-dependent whole-face black/bright reversal, severe jaggies, insufficient gray-layer information or dynamic-shadow residue.
+3. Gray-layer textures are readable and Live lighting behaves normally.
+4. The movable-prop memory cycle passed the user's PIE.
+
+User video references (filenames only; the videos must not be committed to Git):
+
+- `Darkwell - 虚幻编辑器 2026-08-31 08-46-20.mp4`
+- `Darkwell - 虚幻编辑器 2026-08-31 08-51-18.mp4`
+- `Darkwell - 虚幻编辑器 2026-08-31 09-02-27.mp4`
+
+### Complete user PropCycle evidence
+
+| Phase | currentLive | proxy | snapshotValid | User-observed result |
+| --- | ---: | ---: | ---: | --- |
+| `phase=0 SeeA` | 1 | 0 | 1 | `snapshot=(900.0,-700.0,60.0)` |
+| `phase=1 MoveAtoBOutOfSight` | 0 | 1 | 1 | The old A snapshot remains; the real object at B is not exposed early. |
+| `phase=2 ReobserveEmptyA` | 0 | 0 | 0 | Reobserving the empty A location correctly clears the old A residual. |
+| `phase=3 SeeB` | 1 | 0 | 1 | `snapshot=(-1200.0,900.0,60.0)` |
+| `phase=4 LeaveB` | 0 | 1 | 1 | B correctly leaves a new gray memory. |
+
+The next `phase=0` starts normally; the cycle does not get stuck. Object-level movable memory, the A-to-B residual and clearing an old location only after confirming it empty remain protected contracts. Presentation-policy experiments must preserve them. This acceptance does not expand the runtime evidence into an unverified SaveGame serialization/restoration claim.
+
+### Core gameplay policy still pending
+
+The current rule, "illuminate a small part and the whole object enters Live," works technically, but may make rows of cabinets appear one by one in flashes. Cabinet, refrigerator and furniture-row presentation remains a core gameplay decision. Do not treat the gray/live baseline acceptance as approval of that final policy, and do not immediately replace it with purely per-pixel disappearance or appearance.
+
+A separately authorized next stage must first establish an independent complex gameplay experiment scene and compare whole-object Live against alternatives such as a complete gray silhouette with local real-time lighting. The user must decide the policy after that comparison. No such scene, policy change or new visual experiment is part of this closure, and none may begin automatically.
+
+### Documentation-only closure boundary
+
+Closure verification on 2026-08-31: `git diff --check` passed; `git diff -- Darkwell.uproject` showed only the pre-existing EngineAssociation GUID difference, and the project-file SHA256 was unchanged. `git status --short --branch` and `git lfs status` showed only the two document edits plus that unstaged project-file difference. `git lfs fsck` returned `Git LFS fsck OK`. The document diff was reviewed; no new build, automation or PIE was run.
+
+This round changes only this report and `Docs/DARKWELL_PROJECT_FOG_VISUAL_REBUILD_HANDOFF.md`. It records acceptance, closes the documentation, and commits/pushes the current branch. It does not change source, shaders, materials, assets, maps, `L_Prototype`, `L_VisionIntegration` or `Darkwell.uproject`. The pre-existing local `Darkwell.uproject` EngineAssociation GUID difference must remain uncommitted and must not be restored or overwritten.
+
+`Saved`, videos, screenshots, `Binaries`, `Intermediate` and `AutomationReports` must not be committed. No build or automation rerun is required for these documentation-only edits; the build/test results above remain historical implementation evidence. Before handoff, run `git diff --check`, `git diff -- Darkwell.uproject`, `git status --short --branch`, `git lfs status` and `git lfs fsck`; inspect the two-document diff and commit scope. After the commit, immediately push the current branch and verify local HEAD, upstream and the remote branch SHA agree. Do not merge, rebase, reset, clean or force-push. Stop after this closure; the overall system remains `PARTIAL`.

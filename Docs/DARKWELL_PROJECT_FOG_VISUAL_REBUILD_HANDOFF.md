@@ -6,11 +6,19 @@ Branch: `codex/darkwell-project-fog-visual-rebuild`
 
 Starting SHA: `e76f9893ca544e861b1b0c4e7e30df55e1bea0fb`
 
-Status: **PARTIAL — READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE**
+Accepted implementation / reliable remote baseline: `4ab5a224062e53141b596654ad96fe74b8860bf1`
+
+Status: **PARTIAL — GRAY LIVE BASELINE USER ACCEPTED / PROP PRESENTATION POLICY PENDING**
 
 Deadline: 2026-09-05
 
 ## Current disposition
+
+On 2026-08-31, the user completed actual dynamic PIE at the office in UE 5.8.1, on `L_VisionIntegration`, with normal D3D12/SM6/TSR. The gray layer plus real-time vision baseline and movable-prop memory cycle passed user acceptance. Gray texture is readable and Live lighting is normal; the user did not observe the earlier wall-edge jitter, direction-dependent whole-face black/bright reversal, severe jaggies, insufficient gray information or dynamic-shadow residue. This records the user's supplied evidence, not a new agent PIE run or independent video inspection during this documentation-only closure.
+
+The overall system is not `COMPLETED`: cabinet, refrigerator and furniture-row presentation remains an undecided core gameplay policy. Keep the current implementation unchanged until a separately authorized experiment and user decision. Complete only the two-document update, commit and push, then stop.
+
+### Historical rebuild context
 
 The user rejected the final SightWeave SurfaceMaterial visual candidate. The rejected result showed discrete world/tile stepping, periodic jaggies/flicker and orientation-dependent wall classification even though its texture format was floating point. The old candidate is neither accepted nor ready for another PIE.
 
@@ -81,9 +89,9 @@ Gray-layer metrics passed at both resolutions:
 
 The agent opened the key contacts, 20-frame strips, opposing wall views, tool-cycle transitions, ROI pairs and soak contacts. No periodic tile stepping, large jagged recurrence, direction-dependent wall reversal, doorway closure, black Unknown layer, behind-wall leak or NeverRemember subject leak was observed.
 
-## User acceptance next
+## Historical user acceptance checklist
 
-Run a real dynamic PIE on this exact branch and verify:
+Before the 2026-08-31 user verdict, the dynamic PIE checklist was:
 
 1. static, horizontal, vertical and diagonal movement remain smooth;
 2. slow rotation does not show periodic grid teeth or crawling;
@@ -93,7 +101,7 @@ Run a real dynamic PIE on this exact branch and verify:
 6. Torch/Lantern/Torch restores the cone without sticking or leaking;
 7. the gray/live mode is usable as a DARKWELL gameplay presentation.
 
-Do not accept or reject this phase from screenshots alone. The user dynamic PIE verdict is the remaining gate. Do not start black Unknown/exploration history automatically.
+The user's actual dynamic PIE verdict now accepts the gray/live baseline within the scope recorded below. This historical checklist is not a claim that each subcheck was separately reported by the user. Do not start black Unknown/exploration history automatically.
 
 ## Protected results and prohibitions
 
@@ -101,19 +109,19 @@ Retain CPU authority, legal source/light decisions, subject policy, `NeverRememb
 
 Build and tests remain serial and bounded. Do not run BuildPlugin, Fab, clean-host, full historical SightWeave regression, Cook, Package or a full performance matrix. Keep the computer on.
 
-## Maximum future handoff state
+## Current handoff state
 
-Even after every phase passes, the highest possible agent state is:
+The user-accepted baseline advances the former readiness state to:
 
 ```text
-PARTIAL — READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE
+PARTIAL — GRAY LIVE BASELINE USER ACCEPTED / PROP PRESENTATION POLICY PENDING
 ```
 
-Only the user's dynamic PIE can accept gray/live usability. Unknown/exploration history is a later independent phase and must not begin automatically.
+The user's dynamic PIE accepted gray/live usability and the movable-memory cycle. It did not settle the furniture presentation policy or complete the entire system. Unknown/exploration history is a later independent phase and must not begin automatically.
 
-## Gray-unlit memory handoff (current)
+## Gray-unlit memory implementation checkpoint
 
-Current task baseline: `24a047039f157d2bcc090049898ea8b49f7a3301`.
+Historical implementation task baseline: `24a047039f157d2bcc090049898ea8b49f7a3301`. The accepted implementation / reliable remote baseline for this closure is `4ab5a224062e53141b596654ad96fe74b8860bf1`.
 
 The current candidate adds two bounded project-only results without replacing the proven P1-P5 backend:
 
@@ -137,9 +145,9 @@ Final evidence summary:
 
 V1 and V2 failures remain preserved as ignored evidence. They must not be cited as final. Runtime A-to-B snapshot behavior is proven; SaveGame serialization/restoration for movable residual snapshots is not yet implemented or verified.
 
-### Required user PIE
+### Historical gray-unlit PIE checklist
 
-On the exact pushed SHA, verify:
+The implementation checkpoint requested these checks on the pushed candidate:
 
 1. move and rotate while watching a gray floor/wall/object: its texture must remain readable and must not react to Torch, Lantern, shadows, specular, AO or exposure;
 2. observe a rememberable cabinet at A, let it move to B out of sight, and confirm A remains; observe empty A and confirm the residual clears; see B, leave, and confirm B remains;
@@ -147,12 +155,64 @@ On the exact pushed SHA, verify:
 4. confirm Stalker/HUD remain Live-only and leave no residual;
 5. confirm wall visibility, behind-wall gray, seamless gray/Live edge, normal TSR and Torch/Lantern/Torch remain intact at 1080p and 1440p.
 
-Do not start black Unknown, exploration history, SightWeave generalization or Fab work. The highest permitted state remains `PARTIAL — READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE`; only the user's real dynamic PIE can advance acceptance.
+The subsequent user verdict below supersedes the former `READY_FOR_USER_GRAY_UNLIT_MEMORY_PIE` state. Do not infer separately reported results for every historical checklist item. Do not start black Unknown, exploration history, SightWeave generalization or Fab work.
+
+## User acceptance record — 2026-08-31
+
+The user accepted the overall gray/live effect, reported no recurrence of the listed visual failures, confirmed readable gray textures and normal Live lighting, and passed the movable-prop memory cycle in actual office PIE (UE 5.8.1, `L_VisionIntegration`, normal D3D12/SM6/TSR).
+
+User videos are referenced by filename only and must not be committed:
+
+- `Darkwell - 虚幻编辑器 2026-08-31 08-46-20.mp4`
+- `Darkwell - 虚幻编辑器 2026-08-31 08-51-18.mp4`
+- `Darkwell - 虚幻编辑器 2026-08-31 09-02-27.mp4`
+
+Complete user PropCycle evidence:
+
+| Phase | currentLive | proxy | snapshotValid | Result |
+| --- | ---: | ---: | ---: | --- |
+| `phase=0 SeeA` | 1 | 0 | 1 | `snapshot=(900.0,-700.0,60.0)` |
+| `phase=1 MoveAtoBOutOfSight` | 0 | 1 | 1 | Old A snapshot retained; real B not exposed early. |
+| `phase=2 ReobserveEmptyA` | 0 | 0 | 0 | Old A residual correctly cleared after confirming the location empty. |
+| `phase=3 SeeB` | 1 | 0 | 1 | `snapshot=(-1200.0,900.0,60.0)` |
+| `phase=4 LeaveB` | 0 | 1 | 1 | New gray memory correctly retained at B. |
+
+The next `phase=0` restarted normally without a stuck state. Preserve object-level movable memory, the A-to-B residual and empty-location confirmation/clearing through any later presentation-policy change. Runtime acceptance does not imply that movable residual SaveGame serialization/restoration has been implemented or verified.
+
+## Pending prop presentation policy and stop boundary
+
+The current "illuminate a small part, make the whole object Live" rule works technically, but rows of cabinets may appear one by one in flashes. Cabinets, refrigerators and furniture rows therefore remain a core gameplay decision. Do not change the rule during this closure and do not immediately replace it with purely per-pixel disappearance or appearance.
+
+The next stage, only when separately authorized, must first establish an independent complex gameplay experiment scene. Compare whole-object Live with options such as a complete gray silhouette plus local real-time lighting, preserve the accepted movable-memory contracts, and let the user decide the presentation policy. Do not create that scene or begin any new visual experiment now. Do not modify `L_Prototype` or `L_VisionIntegration`.
+
+This closure permits changes only to `Docs/DARKWELL_PROJECT_FOG_VISUAL_REBUILD_REPORT.md` and this handoff. Do not modify source, shaders, materials, assets, maps or `Darkwell.uproject`. Preserve the pre-existing local EngineAssociation GUID difference; do not stage, restore or overwrite the project file. Do not commit `Saved`, videos, screenshots, `Binaries`, `Intermediate` or `AutomationReports`. No new build or automation run is required for documentation-only edits; earlier build/test results remain historical evidence.
+
+Required pre-commit checks:
+
+```powershell
+git diff --check
+git diff -- Darkwell.uproject
+git status --short --branch
+git lfs status
+git lfs fsck
+```
+
+Recorded closure verification on 2026-08-31: all five checks completed successfully. The project diff remained EngineAssociation-only and its SHA256 was unchanged; status/LFS status showed only the two document edits and the unstaged local project difference. LFS integrity returned `Git LFS fsck OK`. The document diff was reviewed; no new build, automation or PIE was run.
+
+Inspect the document diff and stage only the two allowed Markdown files. Commit with `docs: record accepted DARKWELL gray live baseline`, immediately push the current branch, then confirm matching local/upstream/remote SHAs with:
+
+```powershell
+git rev-parse HEAD
+git rev-parse '@{upstream}'
+git ls-remote origin refs/heads/codex/darkwell-project-fog-visual-rebuild
+```
+
+Do not merge, rebase, reset, clean or force-push. Report the resulting commit SHA and equality of local/upstream/remote, then stop. The status remains **PARTIAL — GRAY LIVE BASELINE USER ACCEPTED / PROP PRESENTATION POLICY PENDING**.
 
 ## Recovery command
 
 ```powershell
-cd D:\UE_pro\Darkwell
+cd D:\UE_projects\LastLight
 git fetch origin
 git switch codex/darkwell-project-fog-visual-rebuild
 git pull --ff-only

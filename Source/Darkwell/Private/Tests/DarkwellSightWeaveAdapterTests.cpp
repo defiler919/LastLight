@@ -24,6 +24,7 @@
 #include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "VisionPresentation/DarkwellStalePropLabComponent.h"
+#include "VisionPresentation/DarkwellManualStaleRoom.h"
 #include "HAL/IConsoleManager.h"
 
 namespace Darkwell::SightWeaveAdapterTests
@@ -893,6 +894,125 @@ bool FDarkwellStaleSnapshotOwnershipTest::RunTest(const FString&)
  FTestWorld Outside(TEXT("StaleOutside"));
  TestFalse(TEXT("Dedicated ownership cannot activate outside Lab"),Outside.Get()->GetSubsystem<UDarkwellRememberedPropSubsystem>()->SetLabVerificationSubject(TEXT("Forbidden")));
  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellManualSwitchCyclesTest,
+ "Darkwell.PropLab.ManualSwitch.IsolationAndTenCycles", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellManualSwitchCyclesTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("ManualCycles"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+ UWorld* World=TestWorld.Get();
+ auto* Room=Spawn<ADarkwellManualStaleRoom>(*World,FVector(4000,0,0));
+ auto* Fixture=Spawn<ADarkwellPropGameplayLab>(*World,FVector::ZeroVector);
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(4500,150,92),FRotator(0,90,0));
+ auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ auto* Memory=World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+ TestTrue(TEXT("Manual room activates existing authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Explicit reset starts room"),Room->ResetRoom(Player));
+ auto Step=[&](FVector P,float Yaw,int32 Count=6)
+ {
+  Player->SetActorLocation(P); Player->SetActorRotation(FRotator(0,Yaw,0));
+  for(int32 I=0;I<Count;++I) { Adapter->Tick(1.f/30); Memory->RefreshNowForTesting(); Room->UpdateObservation(1.f/30,Player); }
+ };
+ bool Live=false,Valid=false; FVector At; AActor* Proxy=nullptr;
+ Step(FVector(4500,150,92),90);
+ Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+ TestTrue(TEXT("Reset does not invent memory: actual observation creates it"),Live && Valid && Proxy);
+ const TWeakObjectPtr<AActor> OriginalSnapshot=Proxy;
+ const FVector Press=Room->SwitchPosition()+FVector(0,0,92),Outside=Press+FVector(220,0,0);
+ for(int32 Cycle=0;Cycle<10;++Cycle)
+ {
+  Step(Press,90);
+  TestFalse(TEXT("One entry removes real cabinet"),Room->HasActualCabinet());
+  TestEqual(TEXT("One trigger per entry"),Room->GetToggleCount(),Cycle*2+1);
+  for(int32 Angle=0;Angle<360;Angle+=30)
+  {
+   Step(Press,float(Angle),3);
+   TestEqual(TEXT("All sampled headings at switch have zero legal cabinet coverage"),Room->GetCabinetCoverage(),0.f);
+  }
+  TestEqual(TEXT("Dwelling cannot retrigger"),Room->GetToggleCount(),Cycle*2+1);
+  for(int32 Mode:{2,0,1})
+  {
+   Room->Command({TEXT("stalemanual"),TEXT("mode"),FString::FromInt(Mode)});
+   Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+   TestTrue(TEXT("Mode switch preserves absent actual and original snapshot"),!Room->HasActualCabinet() && Valid && Proxy==OriginalSnapshot.Get());
+  }
+  Step(Outside,90); TestTrue(TEXT("Exit rearms"),Room->IsSwitchArmed());
+  Step(Press,90);
+  TestTrue(TEXT("Next entry respawns actual at same stable identity"),Room->HasActualCabinet());
+  Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+  TestTrue(TEXT("Unseen respawn preserves snapshot and never leaks source"),!Live && Valid && Proxy==OriginalSnapshot.Get());
+  TestEqual(TEXT("No empty evidence behind partition"),Room->GetVerifiedFraction(),0.f);
+  Step(Outside,90);
+ }
+ TestEqual(TEXT("Ten complete absence/presence cycles"),Room->GetToggleCount(),20);
+ World->URL.AddOption(TEXT("PropLabOriginal"));
+ TestNull(TEXT("Original layout opt-out preserves legacy fixtures/routes"),ADarkwellManualStaleRoom::FindActive(World));
+ TestTrue(TEXT("Original bounds stay byte-for-byte values"),Fixture->GetSightWeaveFloorBounds()==FBox2D(FVector2D(-1250,-950),FVector2D(1250,950)));
+ Fixture->Destroy();
+ FTestWorld OutsideWorld(TEXT("ManualOutside"));
+ TestNull(TEXT("No manual room outside Lab"),ADarkwellManualStaleRoom::FindActive(OutsideWorld.Get()));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellManualSwitchErasureTest,
+ "Darkwell.PropLab.ManualSwitch.ErasureAndModeChanges", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellManualSwitchErasureTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("ManualErasure"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+ UWorld* World=TestWorld.Get();
+ auto* Room=Spawn<ADarkwellManualStaleRoom>(*World,FVector(4000,0,0));
+ auto* Fixture=Spawn<ADarkwellPropGameplayLab>(*World,FVector::ZeroVector);
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(4500,150,92),FRotator(0,90,0));
+ auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ auto* Memory=World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+ TestTrue(TEXT("Manual authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ auto Step=[&](FVector P,float Yaw,int32 Count=6)
+ {
+  Player->SetActorLocation(P); Player->SetActorRotation(FRotator(0,Yaw,0));
+  for(int32 I=0;I<Count;++I) { Adapter->Tick(1.f/30); Memory->RefreshNowForTesting(); Room->UpdateObservation(1.f/30,Player); }
+ };
+ for(int32 InitialMode=0;InitialMode<3;++InitialMode)
+ {
+  Room->ResetRoom(Player); Room->Command({TEXT("stalemanual"),TEXT("mode"),FString::FromInt(InitialMode)});
+  Step(FVector(4500,150,92),90);
+  Step(Room->SwitchPosition()+FVector(0,0,92),90);
+  bool Live=false,Valid=false; FVector At; AActor* Proxy=nullptr;
+  Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+  TestTrue(TEXT("Unseen removal keeps full old snapshot"),Valid && Proxy && !Live);
+  TestEqual(TEXT("No switch memory shortcut"),Room->GetRemainingOpacity(),1.f);
+  bool bPartial=false;
+  for(int32 Yaw=0;Yaw<=180;Yaw+=3)
+  {
+   Step(FVector(4500,150,92),float(Yaw));
+   const float Fraction=Room->GetVerifiedFraction();
+   if(Fraction>0 && Fraction<1)
+   {
+    bPartial=true;
+    if(InitialMode==0) TestEqual(TEXT("Whole mode stays whole with partial evidence"),Room->GetRemainingOpacity(),1.f);
+   }
+  }
+  TestTrue(TEXT("Free scan has a partial evidence interval"),bPartial);
+  TestEqual(TEXT("Legal unoccluded scan verifies all occupancy"),Room->GetVerifiedFraction(),1.f);
+  Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+  TestTrue(TEXT("All modes finish erasure by legal evidence"),!Valid && !Proxy);
+  for(int32 Mode:{0,1,2,0})
+  {
+   Room->Command({TEXT("stalemanual"),TEXT("mode"),FString::FromInt(Mode)});
+   Step(Room->SwitchPosition()+FVector(220,0,92),-90);
+   Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+   TestTrue(TEXT("Cleared memory cannot resurrect on mode switch or leaving"),!Valid && !Proxy && !Room->HasActualCabinet());
+  }
+  Step(Room->SwitchPosition()+FVector(0,0,92),90);
+  Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+  TestTrue(TEXT("Unobserved return after erasure creates no new snapshot"),Room->HasActualCabinet() && !Valid && !Live && !Proxy);
+  Step(FVector(4500,150,92),90);
+  Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+  TestTrue(TEXT("Legally observing present cabinet creates fresh memory"),Live && Valid && Proxy);
+ }
+ Fixture->Destroy(); return true;
 }
 
 #endif

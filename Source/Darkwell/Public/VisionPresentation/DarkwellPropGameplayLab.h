@@ -61,6 +61,7 @@ public:
 private:
  UPROPERTY(VisibleAnywhere, Category="Lab") TObjectPtr<class UDarkwellStalePropLabComponent> StaleLab;
  bool bStaleAutoStarted = false;
+ bool bStaleRequestedStarted = false;
  void AdvanceRouteBeforeActors(UWorld* World, ELevelTick TickType, float DeltaSeconds);
  void UpdateSoftCoverage(float DeltaSeconds);
  void RunRoute(float DeltaSeconds);

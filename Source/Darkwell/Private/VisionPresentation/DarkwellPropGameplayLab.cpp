@@ -1,5 +1,6 @@
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "VisionPresentation/DarkwellStalePropLabComponent.h"
+#include "VisionPresentation/DarkwellManualStaleRoom.h"
 #include "AI/DarkwellStalkerCharacter.h"
 #include "BrainComponent.h"
 #include "AIController.h"
@@ -205,9 +206,14 @@ ADarkwellPropGameplayLab::ADarkwellPropGameplayLab()
  }
 }
 
-FBox2D ADarkwellPropGameplayLab::GetSightWeaveFloorBounds() const { return FBox2D(FVector2D(-1250,-950),FVector2D(1250,950)); }
+FBox2D ADarkwellPropGameplayLab::GetSightWeaveFloorBounds() const
+{
+ if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld())) return Room->FloorBounds();
+ return FBox2D(FVector2D(-1250,-950),FVector2D(1250,950));
+}
 void ADarkwellPropGameplayLab::BuildSightWeaveOccluderSegments(TArray<FDarkwellVisionIntegrationSegment>& Out) const
 {
+ if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld())) { Room->BuildOccluders(Out); return; }
  Out.Reset();
  for (int32 I=1; I<LabStructure.Num(); ++I)
  {
@@ -220,6 +226,12 @@ void ADarkwellPropGameplayLab::BuildSightWeaveOccluderSegments(TArray<FDarkwellV
 void ADarkwellPropGameplayLab::BuildSightWeaveStaticSurfaces(TArray<FDarkwellVisionIntegrationSurface>& Out) const
 {
  Out.Reset(); auto& Floor = Out.AddDefaulted_GetRef();
+ if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld()))
+ {
+  const FBox2D B=Room->FloorBounds();
+  Floor.WorldFootprint={B.Min,FVector2D(B.Max.X,B.Min.Y),B.Max,FVector2D(B.Min.X,B.Max.Y)};
+  Floor.NeutralIntensity=90; return;
+ }
  Floor.WorldFootprint = {FVector2D(-1200,-900),FVector2D(1200,-900),FVector2D(1200,900),FVector2D(-1200,900)};
  Floor.NeutralIntensity = 90;
 }
@@ -228,6 +240,7 @@ bool ADarkwellPropGameplayLab::EnableDarkwellProjectFogP4(UTexture* Raw, FVector
 {
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return false;
  RawCoverage=Raw; FogMin=Min; FogInv=Inv;
+ if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld())) Room->BindRoomPresentation(Raw,Min,Inv);
  auto* Parent=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_PropLabSurface.M_PropLabSurface"));
  for (int32 I=0; I<LabStructure.Num(); ++I)
  {
@@ -245,7 +258,7 @@ bool ADarkwellPropGameplayLab::EnableDarkwellProjectFogP4(UTexture* Raw, FVector
   auto* RT=UKismetRenderingLibrary::CreateRenderTarget2D(this,1000,760,RTF_R16f,FLinearColor::Black,false);
   RT->Filter=TF_Bilinear; SoftTargets.Add(RT);
  }
- UE_LOG(LogDarkwellPropLab,Display,TEXT("PropLab activated continuous coverage, no composite/stencil; 8 occluders; TSR unchanged"));
+ UE_LOG(LogDarkwellPropLab,Display,TEXT("PropLab activated continuous coverage, no composite/stencil; 8 occluders; TSR unchanged; manualRoom=%d"),ADarkwellManualStaleRoom::FindActive(GetWorld())!=nullptr);
  return true;
 }
 void ADarkwellPropGameplayLab::DisableDarkwellProjectFog() { RawCoverage=nullptr; SoftTargets.Reset(); SoftMaterial=nullptr; StructureMaterials.Reset(); }
@@ -254,6 +267,11 @@ void ADarkwellPropGameplayLab::BeginPlay()
 {
  Super::BeginPlay();
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) { SetActorTickEnabled(false); return; }
+ if(ADarkwellManualStaleRoom::FindActive(GetWorld()))
+ {
+  for(UStaticMeshComponent* Part:LabStructure) { Part->SetVisibility(false); Part->SetCollisionEnabled(ECollisionEnabled::NoCollision); }
+  for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It) It->SetActorEnableCollision(false);
+ }
  // Inputs must precede TickableGameObject authority updates. Material/capture stays
  // in PostUpdateWork, after those updates; never teleport a subject after authority.
  RouteTickHandle=FWorldDelegates::OnWorldPreActorTick.AddUObject(this,&ADarkwellPropGameplayLab::AdvanceRouteBeforeActors);
@@ -302,6 +320,12 @@ void ADarkwellPropGameplayLab::UpdateSoftCoverage(float DeltaSeconds)
 void ADarkwellPropGameplayLab::AdvanceRouteBeforeActors(UWorld* World, ELevelTick TickType, float DeltaSeconds)
 {
  if (World!=GetWorld() || !Darkwell::PropLab::IsLabWorld(World)) return;
+ if(auto* Room=ADarkwellManualStaleRoom::FindActive(World))
+ {
+  if(!Room->IsStarted() && World->GetSubsystem<UDarkwellFogVisualSubsystem>()->IsActive())
+   Room->ResetRoom(Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)));
+  return; // Free player input; no scripted route, tool refill or health restore.
+ }
  if (Elapsed == 0)
  {
   if (auto* Player=UGameplayStatics::GetPlayerPawn(this,0))
@@ -315,6 +339,11 @@ void ADarkwellPropGameplayLab::AdvanceRouteBeforeActors(UWorld* World, ELevelTic
   bPlayerInitialized=true;
  }
  Elapsed+=DeltaSeconds;
+ if(!bStaleRequestedStarted && World->URL.HasOption(TEXT("StaleMode=")) && World->GetSubsystem<UDarkwellFogVisualSubsystem>()->IsActive())
+ {
+  StaleLab->Start(FCString::Atoi(World->URL.GetOption(TEXT("StaleMode="),TEXT("0"))),FCString::Atoi(World->URL.GetOption(TEXT("StaleCase="),TEXT("2"))));
+  bStaleRequestedStarted=true;
+ }
  if(!bStaleAutoStarted && FParse::Param(FCommandLine::Get(),TEXT("StaleLabAuto")) && World->GetSubsystem<UDarkwellFogVisualSubsystem>()->IsActive())
  {
   int32 Mode=0,Scenario=2;
@@ -331,6 +360,13 @@ void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
 {
  Super::Tick(DeltaSeconds);
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
+ if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld()))
+ {
+  if(RawCoverage) for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It)
+   It->BindPresentation(RawCoverage,RawCoverage,FogMin,FogInv,0);
+  Room->UpdateObservation(DeltaSeconds,Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)));
+  return;
+ }
  RestoreComparisonTools(LastRoute==1);
  const int32 Mode=Darkwell::PropLab::PresentationMode(GetWorld()), Policy=Darkwell::PropLab::RelocationPolicy(GetWorld());
  if (Mode!=LastMode || Policy!=LastPolicy)
@@ -427,16 +463,34 @@ void ADarkwellPropGameplayLab::Event(const FString& Command)
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
  TArray<FString> Words; Command.ParseIntoArrayWS(Words);
+ if(Words.Num() && Words[0]==TEXT("stalemanual"))
+ {
+  if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld())) Room->Command(Words);
+  else if(Words.Num()==2 && Words[1]==TEXT("reset")) UGameplayStatics::OpenLevel(this,TEXT("/Game/Maps/L_ProjectFogPropGameplayLab"));
+  else UE_LOG(LogDarkwellPropLab,Display,TEXT("Use Darkwell.PropLab stalemanual reset to enter the manual room."));
+  return;
+ }
+ if(Command==TEXT("original")) { UGameplayStatics::OpenLevel(this,TEXT("/Game/Maps/L_ProjectFogPropGameplayLab"),true,TEXT("PropLabOriginal")); return; }
  if(Words.Num()>=1 && Words[0]==TEXT("stale"))
  {
   if(Words.Num()<2 || !Words[1].IsNumeric()) { UE_LOG(LogDarkwellPropLab,Display,TEXT("Use Darkwell.PropLab stale 0/1/2 [A..F]; default C. Identical 36s routes. reset restores full Lab.")); return; }
   int32 Scenario=2;
   if(Words.Num()==3 && Words[2].Len()==1) Scenario=FChar::ToUpper(Words[2][0])-'A';
+  if(ADarkwellManualStaleRoom::FindActive(GetWorld()) && FCString::Atoi(*Words[1])>=0 && FCString::Atoi(*Words[1])<=2 && Scenario>=0 && Scenario<6)
+  {
+   UGameplayStatics::OpenLevel(this,TEXT("/Game/Maps/L_ProjectFogPropGameplayLab"),true,FString::Printf(TEXT("PropLabOriginal?StaleMode=%d?StaleCase=%d"),FCString::Atoi(*Words[1]),Scenario)); return;
+  }
   if(!StaleLab->Start(FCString::Atoi(*Words[1]),Scenario)) UE_LOG(LogDarkwellPropLab,Display,TEXT("Stale route rejected: mode 0..2, case A..F only"));
   return;
  }
  if(StaleLab->IsRunning() && Command!=TEXT("reset") && Command!=TEXT("help"))
  { UE_LOG(LogDarkwellPropLab,Display,TEXT("Stale route locks mode/policy/tools/enemy/path. Use stale N [A..F] to replay, or reset.")); return; }
+ if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld()))
+ {
+  if(Command==TEXT("reset")) Room->ResetRoom(Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)));
+  else UE_LOG(LogDarkwellPropLab,Display,TEXT("Manual room: use stalemanual mode 0/1/2, reset, teleport top/bottom, help; original returns to automatic-route Lab. Enemy/policy/route mutations disabled."));
+  return;
+ }
  if (Words.Num()==2)
  {
   const int32 Value=FCString::Atoi(*Words[1]);
@@ -445,7 +499,7 @@ void ADarkwellPropGameplayLab::Event(const FString& Command)
   if (Words[0]==TEXT("route")) { Darkwell::PropLab::Route->Set(FMath::Clamp(Value,0,13),ECVF_SetByConsole); LastRoute=-1; }
   if (Words[0]==TEXT("enemy")) SetEnemyEnabled(Value!=0);
  }
- if (Command==TEXT("reset")) { UGameplayStatics::OpenLevel(this,TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")); return; }
+ if (Command==TEXT("reset")) { UGameplayStatics::OpenLevel(this,TEXT("/Game/Maps/L_ProjectFogPropGameplayLab"),true,TEXT("PropLabOriginal")); return; }
  auto Find=[&](FName Id)->ADarkwellPropLabFurniture* { for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It) if(It->StableId==Id) return *It; return nullptr; };
  if (Command==TEXT("fridge")) { if(auto* A=Find(TEXT("Lab.Fridge"))) A->SetActorLocation(FVector(650,340,0)); }
  if (Command==TEXT("cabinet")) { if(auto* A=Find(TEXT("Lab.MobileCabinet"))) A->SetActorLocation(FVector(720,-500,0)); }

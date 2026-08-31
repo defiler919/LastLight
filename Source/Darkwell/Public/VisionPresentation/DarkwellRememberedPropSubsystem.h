@@ -81,7 +81,7 @@ public:
 	}
 	int32 GetUnverifiedSnapshotCount(FName StableId) const;
 	// Explicit dedicated-lab opt-in only; the ordinary policy path is untouched.
-	bool SetLabVerificationSubject(FName StableId);
+	bool SetLabVerificationSubject(FName StableId, bool bManualObservation = false);
 	AActor* FreezeLabVerificationSnapshot();
 	void FinishLabVerificationSnapshot();
 	void ReleaseLabVerificationSubject();
@@ -119,5 +119,6 @@ private:
 	TMap<FName, FRecord> Records;
 	FName LabVerificationSubject;
 	bool bLabSnapshotFrozen = false;
+	bool bLabManualObservation = false;
 	FDarkwellRememberedPropDiagnostics Diagnostics;
 };

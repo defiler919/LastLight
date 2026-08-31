@@ -192,10 +192,10 @@ void UDarkwellRememberedPropSubsystem::RefreshNowForTesting()
 	RefreshRecords();
 }
 
-bool UDarkwellRememberedPropSubsystem::SetLabVerificationSubject(FName StableId)
+bool UDarkwellRememberedPropSubsystem::SetLabVerificationSubject(FName StableId, bool bManualObservation)
 {
  if(!Darkwell::PropLab::IsLabWorld(GetWorld()) || StableId.IsNone()) return false;
- LabVerificationSubject=StableId; bLabSnapshotFrozen=false; return true;
+ LabVerificationSubject=StableId; bLabSnapshotFrozen=false; bLabManualObservation=bManualObservation; return true;
 }
 AActor* UDarkwellRememberedPropSubsystem::FreezeLabVerificationSnapshot()
 {
@@ -208,7 +208,7 @@ AActor* UDarkwellRememberedPropSubsystem::FreezeLabVerificationSnapshot()
 }
 void UDarkwellRememberedPropSubsystem::FinishLabVerificationSnapshot()
 {
- if(!Darkwell::PropLab::IsLabWorld(GetWorld()) || !bLabSnapshotFrozen) return;
+ if(!Darkwell::PropLab::IsLabWorld(GetWorld()) || (!bLabSnapshotFrozen && !bLabManualObservation)) return;
  if(FRecord* Record=Records.Find(LabVerificationSubject))
  { Record->State.bSnapshotValid=false; DestroyProxy(*Record); }
 }
@@ -217,7 +217,7 @@ void UDarkwellRememberedPropSubsystem::ReleaseLabVerificationSubject()
  if(!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
  if(FRecord* Record=Records.Find(LabVerificationSubject)) DestroyProxy(*Record);
  Records.Remove(LabVerificationSubject);
- LabVerificationSubject=NAME_None; bLabSnapshotFrozen=false;
+ LabVerificationSubject=NAME_None; bLabSnapshotFrozen=false; bLabManualObservation=false;
 }
 
 int32 UDarkwellRememberedPropSubsystem::GetUnverifiedSnapshotCount(FName StableId) const
@@ -300,7 +300,12 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 			: FTransform::Identity;
 		const float CurrentCoverage = Fog && bCurrentExists
 			? EvaluateMaximumCoverage(*Component) : 0.0f;
-		const float SnapshotCoverage = Fog && Record.State.bSnapshotValid
+		// The free-play laboratory observes PRESENT through the ordinary identity
+		// authority, but only its independent grid may confirm ABSENT. A switch
+		// never invalidates a snapshot. This opt-in cannot affect other worlds.
+		const bool bManualSubject = Darkwell::PropLab::IsLabWorld(GetWorld())
+			&& bLabManualObservation && Pair.Key == LabVerificationSubject;
+		const float SnapshotCoverage = Fog && Record.State.bSnapshotValid && !bManualSubject
 			? EvaluateMaximumSnapshotCoverage(Record) : 0.0f;
 		const uint64 AppearanceRevision = bCurrentExists
 			? Component->ComputeAppearanceRevision() : Record.State.AppearanceRevision;

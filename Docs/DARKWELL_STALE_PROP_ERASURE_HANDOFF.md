@@ -1,5 +1,31 @@
 # DARKWELL stale prop erasure — 恢复验证交接
 
+## 2026-08-31 新增手动柜子开关房间（当前交付）
+
+**PARTIAL — READY_FOR_USER_MANUAL_STALE_PROP_SWITCH_ROOM_PIE**
+
+从 `1746c747a4136915350e559ebae2c517a183d5e0` 继续，在同一独立 Lab 的另一区域增加上下房间、右侧通道、左上柜子和左下圆形压力开关。当前默认人工 Play 进入该手动房间；原 25 件家具、自动路线、C/F 资料和此前可靠证据全部保留。未选择最终 Mode，未进入正式地图或 Policy 1 决策。
+
+完整操作、几何、身份/快照/实际占用边界、模式切换合同、构建与保留警告见 [DARKWELL_MANUAL_STALE_SWITCH_ROOM_PIE.md](DARKWELL_MANUAL_STALE_SWITCH_ROOM_PIE.md)。
+
+```text
+Darkwell.PropLab stalemanual reset
+Darkwell.PropLab stalemanual mode 0
+Darkwell.PropLab stalemanual mode 1
+Darkwell.PropLab stalemanual mode 2
+Darkwell.PropLab stalemanual teleport top
+Darkwell.PropLab stalemanual teleport bottom
+Darkwell.PropLab stalemanual help
+```
+
+每次从圆盘外进入只切换一次真实柜子，离开才重新武装。没有时间限制、强制移动/朝向或自动结束；只有用户 reset 才恢复柜子和玩家状态。Mode 随时切换，不改变实际存在或累计证据，已擦除部分不会恢复。默认 ENEMY 0，Policy 0；旧世界 `original` 和 `stale N C` 入口仍可用。
+
+最终标准构建 `ManualSwitchBuild02` 成功；`ManualSwitch02/index.json` 为 **23 项通过、0 失败**（原 21 项 + 2 新项，1 原有预期警告）。真实 D3D12/SM6/TSR PIE02 通过十个完整循环、三模式、未观察重建不泄漏、37 秒不自动复位、中墙阻挡及右走廊实际 CharacterMovement 步行。已打开最终布局和三模式图片。第一轮功能虽通过，但实际图片左右相反，已修正并保留 PIE01 资料。
+
+最新 severe=0；引擎启动 Condition failed、工具链/弃用及 NavMesh/CVar 警告保留，具体计数在专门文档。最终证据目录 `Saved/PropGameplayLab/ManualSwitchPIE_20260831_170029/`；最终 Git 清单 `Saved/PropGameplayLab/ManualSwitchFinalGit.log`。原自动路线不重采。本检查点推送后只打开手动 Lab 等用户 Play，电脑保持开启。
+
+---
+
 ## 2026-08-31 恢复记录（优先于下方历史暂停记录）
 
 用户已明确授权从 `f667527ce3fc3c3cd9db44a6fa4324a1b14381db` 和保留工作树继续。本次没有重新实现残影实验，没有变更空位判据、最终 Mode、Policy 1、正式地图或插件合同。

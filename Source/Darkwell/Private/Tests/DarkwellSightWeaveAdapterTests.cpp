@@ -27,6 +27,18 @@
 #include "VisionPresentation/DarkwellStalePropLabComponent.h"
 #include "VisionPresentation/DarkwellManualStaleRoom.h"
 #include "HAL/IConsoleManager.h"
+#include "Engine/StaticMesh.h"
+#include "StaticMeshResources.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#if WITH_EDITOR
+#include "Materials/MaterialExpressionConstant.h"
+#include "Materials/MaterialExpressionCustom.h"
+#include "Materials/MaterialExpressionMaterialFunctionCall.h"
+#include "Materials/MaterialExpressionShadowReplace.h"
+#include "Materials/MaterialExpressionTextureSampleParameter2D.h"
+#include "Materials/MaterialExpressionWorldPosition.h"
+#endif
 
 namespace Darkwell::SightWeaveAdapterTests
 {
@@ -1089,7 +1101,7 @@ bool FDarkwellManualHiddenShadowTest::RunTest(const FString&)
     for(UStaticMeshComponent* Part:Current->Memory->GetMemoryPrimitives())
     {
      const FGeometry& G=Geometry[Index++];
-     TestEqual(TEXT("Original main-pass visibility decision"),Part->IsVisible(),bVisible);
+     TestEqual(TEXT("Legacy visibility or Mode 2 material submission (pixels tested separately)"),Part->IsVisible(),bVisible || Mode==2);
      TestTrue(TEXT("Native hidden shadow enabled on same actual component"),Part->CastShadow && Part->bCastHiddenShadow);
      TestTrue(TEXT("Mesh asset and world transform unchanged"),Part->GetStaticMesh()==G.Mesh && Part->GetComponentTransform().Equals(G.Transform,0));
      TestTrue(TEXT("Bounds origin, extent and radius unchanged"),Part->Bounds.Origin==G.Bounds.Origin && Part->Bounds.BoxExtent==G.Bounds.BoxExtent && Part->Bounds.SphereRadius==G.Bounds.SphereRadius);
@@ -1113,5 +1125,144 @@ bool FDarkwellManualHiddenShadowTest::RunTest(const FString&)
  }
  Fixture->Destroy(); return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellManualFixedRevealGeometryTest,
+ "Darkwell.PropLab.ManualSwitch.FixedRevealGeometry", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellManualFixedRevealGeometryTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("ManualFixedReveal"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+ UWorld* World=TestWorld.Get();
+ auto* Room=Spawn<ADarkwellManualStaleRoom>(*World,FVector(4000,0,0));
+ auto* Fixture=Spawn<ADarkwellPropGameplayLab>(*World,FVector::ZeroVector);
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(4500,150,92),FRotator(0,90,0));
+ auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ auto* Memory=World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+ TestTrue(TEXT("Uses existing legal authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ Room->ResetRoom(Player); Room->Command({TEXT("stalemanual"),TEXT("mode"),TEXT("2")});
+ ADarkwellPropLabFurniture* Cabinet=nullptr;
+ for(TActorIterator<ADarkwellPropLabFurniture> It(World);It;++It) if(It->StableId==Room->CabinetId()) Cabinet=*It;
+ if(!TestNotNull(TEXT("Original actual cabinet"),Cabinet)) return false;
+ struct FPart
+ {
+  UStaticMeshComponent* Component; UStaticMesh* Mesh; UMaterialInterface* Material;
+  FTransform Relative,World; FVector LocalMin,LocalMax; FBoxSphereBounds Bounds;
+  TArray<FVector> Corners,Vertices;
+ };
+ auto Capture=[&]()
+ {
+  TArray<FPart> Result;
+  for(UStaticMeshComponent* Part:Cabinet->Memory->GetMemoryPrimitives())
+  {
+   FPart P; P.Component=Part; P.Mesh=Part->GetStaticMesh(); P.Material=Part->GetMaterial(0);
+   P.Relative=Part->GetRelativeTransform(); P.World=Part->GetComponentTransform(); P.Bounds=Part->Bounds;
+   Part->GetLocalBounds(P.LocalMin,P.LocalMax);
+   for(int32 I=0;I<8;++I) P.Corners.Add(P.World.TransformPosition(FVector(I&1?P.LocalMax.X:P.LocalMin.X,I&2?P.LocalMax.Y:P.LocalMin.Y,I&4?P.LocalMax.Z:P.LocalMin.Z)));
+   const auto& VB=P.Mesh->GetRenderData()->LODResources[0].VertexBuffers.PositionVertexBuffer;
+   for(uint32 I=0;I<VB.GetNumVertices();++I) P.Vertices.Add(P.World.TransformPosition(FVector(VB.VertexPosition(I))));
+   Result.Add(MoveTemp(P));
+  }
+  return Result;
+ };
+ auto Matches=[](const TArray<FPart>& A,const TArray<FPart>& B)
+ {
+  if(A.Num()!=B.Num()) return false;
+  for(int32 I=0;I<A.Num();++I)
+  {
+   const auto& X=A[I]; const auto& Y=B[I];
+   if(X.Component!=Y.Component || X.Mesh!=Y.Mesh || X.Material!=Y.Material || !X.Relative.Equals(Y.Relative,0) || !X.World.Equals(Y.World,0)
+    || X.LocalMin!=Y.LocalMin || X.LocalMax!=Y.LocalMax || X.Bounds.Origin!=Y.Bounds.Origin || X.Bounds.BoxExtent!=Y.Bounds.BoxExtent
+    || X.Bounds.SphereRadius!=Y.Bounds.SphereRadius || X.Corners!=Y.Corners || X.Vertices!=Y.Vertices) return false;
+  }
+  return true;
+ };
+ const auto Baseline=Capture(); const FTransform Actor=Cabinet->GetActorTransform();
+ const uint64 Appearance=Cabinet->Memory->ComputeAppearanceRevision();
+ TestEqual(TEXT("Three original real parts"),Baseline.Num(),3);
+ TInlineComponentArray<UPrimitiveComponent*> OriginalPrimitives(Cabinet);
+ TestEqual(TEXT("Twelve existing native slots, no additional primitive type"),OriginalPrimitives.Num(),12);
+ // Negative controls mutate captured DATA only, never any actor or geometry.
+ auto Bad=Baseline; Bad[0].World.SetScale3D(FVector(.01,1,1));
+ TestFalse(TEXT("Guard rejects thin plate / scale reconstruction"),Matches(Baseline,Bad));
+ Bad=Baseline; Bad[0].Bounds.BoxExtent.X*=.25;
+ TestFalse(TEXT("Guard rejects rebuilt smaller bounds"),Matches(Baseline,Bad));
+ Bad=Baseline; Bad[0].Vertices[0].X+=1;
+ TestFalse(TEXT("Guard rejects moved surface vertex"),Matches(Baseline,Bad));
+ Bad=Baseline; Bad.Add(Baseline[0]);
+ TestFalse(TEXT("Guard rejects auxiliary cabinet part"),Matches(Baseline,Bad));
+ int32 Partial=0,Empty=0,Full=0; bool Bins[4]={false,false,false,false};
+ for(float Yaw=-30;Yaw<=210;Yaw+=.5f)
+ {
+  Player->SetActorRotation(FRotator(0,Yaw,0));
+  Adapter->Tick(1.f/60); Memory->RefreshNowForTesting(); Fixture->Tick(1.f/60);
+  auto* Fog=World->GetSubsystem<UDarkwellFogVisualSubsystem>();
+  int32 Covered=0;
+  for(int32 X=0;X<100;++X) Covered+=Fog->EvaluateLiveCoverageAtWorldPoint(FVector2D(4282+4.4*X,420))>=.99f;
+  Partial+=Covered>0 && Covered<100; Empty+=Covered==0; Full+=Covered==100;
+  Bins[0]|=Covered>0 && Covered<=5; Bins[1]|=Covered>=23 && Covered<=27;
+  Bins[2]|=Covered>=48 && Covered<=52; Bins[3]|=Covered>=73 && Covered<=77;
+  TestTrue(TEXT("Every scan frame: identity, local/world transforms, bounds, eight corners and ALL original vertices fixed"),Matches(Baseline,Capture()));
+  TestTrue(TEXT("Actor transform exactly unchanged"),Cabinet->GetActorTransform().Equals(Actor,0));
+  TestEqual(TEXT("Mask parameters never revise appearance/snapshot identity"),Cabinet->Memory->ComputeAppearanceRevision(),Appearance);
+  TInlineComponentArray<UPrimitiveComponent*> Now(Cabinet);
+  TestTrue(TEXT("No auxiliary renderable geometry, same component pointers"),TArray<UPrimitiveComponent*>(Now)==TArray<UPrimitiveComponent*>(OriginalPrimitives));
+  int32 Casters=0;
+  for(UStaticMeshComponent* Part:Cabinet->Memory->GetMemoryPrimitives())
+  {
+   TestTrue(TEXT("Original geometry submitted even before whole-object threshold; material clips pixels"),Part->IsVisible());
+   Casters+=Part->CastShadow && Part->bCastHiddenShadow;
+   auto* MID=Cast<UMaterialInstanceDynamic>(Part->GetMaterial(0));
+   TestTrue(TEXT("Dedicated spatial mask active"),MID && MID->K2_GetScalarParameterValue(TEXT("FixedRevealEnabled"))==1);
+  }
+  TestEqual(TEXT("Same three original shadow sources at every scan angle"),Casters,3);
+ }
+ TestTrue(TEXT("Scan exercises zero, partial and full LEGAL coverage"),Empty>0 && Partial>10 && Full>0);
+ for(bool B:Bins) TestTrue(TEXT("Fixed corners/vertices checked at narrow, 25%, 50%, 75% legal surface coverage (sampling +/-2%)"),B);
+ Fixture->Destroy(); return true;
+}
+
+#if WITH_EDITOR
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellManualFixedRevealMaterialTest,
+ "Darkwell.PropLab.ManualSwitch.FixedRevealMaterialContract", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellManualFixedRevealMaterialTest::RunTest(const FString&)
+{
+ auto* M=LoadObject<UMaterial>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_ManualFixedReveal.M_ManualFixedReveal"));
+ if(!TestNotNull(TEXT("Fixed mesh masked material asset"),M)) return false;
+ TestEqual(TEXT("Pixel mask, never translucent whole-body fade"),M->BlendMode,BLEND_Masked);
+ TestNull(TEXT("No WPO: cannot thin, scale, move or rebuild vertices"),M->GetEditorOnlyData()->WorldPositionOffset.Expression);
+ auto* Shadow=Cast<UMaterialExpressionShadowReplace>(M->GetEditorOnlyData()->OpacityMask.Expression);
+ if(!TestNotNull(TEXT("Same mesh separates main mask from full real shadow"),Shadow)) return false;
+ auto* One=Cast<UMaterialExpressionConstant>(Shadow->Shadow.Expression);
+ TestTrue(TEXT("All original shadow pixels always enabled"),One && One->R==1.f);
+ auto* Dither=Cast<UMaterialExpressionMaterialFunctionCall>(Shadow->Default.Expression);
+ if(!TestNotNull(TEXT("Local alpha through native temporal opacity dithering"),Dither)) return false;
+ UMaterialExpressionCustom* Alpha=nullptr;
+ for(const auto& Input:Dither->FunctionInputs)
+  if(auto* C=Cast<UMaterialExpressionCustom>(Input.Input.Expression)) Alpha=C;
+ if(!TestNotNull(TEXT("Dither consumes local alpha, not an object-wide scalar"),Alpha)) return false;
+ TestTrue(TEXT("Guard rejects whole-body pop/fade and illegal coverage: compiled expression uses Raw AND per-texel Soft with fail-closed readiness"),
+  Alpha->Code==TEXT("return Enabled > 0.5 ? (Ready > 0.5 && Raw >= 0.99 ? saturate(Soft) : 0.0) : 1.0;"));
+ TestEqual(TEXT("Alpha requires four separate inputs"),Alpha->Inputs.Num(),4);
+ auto* Raw=Cast<UMaterialExpressionTextureSampleParameter2D>(Alpha->Inputs[0].Input.Expression);
+ auto* Soft=Cast<UMaterialExpressionTextureSampleParameter2D>(Alpha->Inputs[1].Input.Expression);
+ if(!TestNotNull(TEXT("Raw is a coverage TEXTURE, never object scalar"),Raw) || !TestNotNull(TEXT("Soft is a LOCAL texture, never uniform fade"),Soft)) return false;
+ TestEqual(TEXT("Existing legal field only"),Raw->ParameterName,FName(TEXT("DarkwellLiveCoverageTexture")));
+ TestEqual(TEXT("Per-pixel local age field"),Soft->ParameterName,FName(TEXT("LabSoftCoverageTexture")));
+ TestTrue(TEXT("Raw and local age sampled at exact same stable coordinates"),Raw->Coordinates.Expression==Soft->Coordinates.Expression);
+ TArray<UMaterialExpression*> Pending{Raw->Coordinates.Expression}; TSet<UMaterialExpression*> Seen; int32 WorldNodes=0;
+ while(!Pending.IsEmpty())
+ {
+  auto* Node=Pending.Pop(); if(!Node || Seen.Contains(Node)) continue; Seen.Add(Node);
+  if(auto* W=Cast<UMaterialExpressionWorldPosition>(Node))
+  {
+   ++WorldNodes;
+   TestEqual(TEXT("Fixed absolute world position excludes shader offsets"),W->WorldPositionShaderOffset,WPT_ExcludeAllShaderOffsets);
+  }
+  for(int32 I=0;;++I) { auto* Input=Node->GetInput(I); if(!Input) break; Pending.Add(Input->Expression); }
+ }
+ TestEqual(TEXT("Coverage coordinates actually depend on original world-space surface"),WorldNodes,1);
+ return true;
+}
+#endif
 
 #endif

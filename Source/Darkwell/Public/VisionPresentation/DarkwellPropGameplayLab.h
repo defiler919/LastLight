@@ -34,9 +34,13 @@ public:
  UPROPERTY(EditAnywhere, Category="Lab") bool bIndividualWorktop = true;
  UPROPERTY(EditAnywhere, Category="Lab") FLinearColor Tint = FLinearColor(0.24f, 0.40f, 0.56f);
  void BindPresentation(UTexture* Raw, UTexture* Soft, FVector2D Min, FVector2D Inv, int32 Mode);
+ /** Manual Mode 2 submits the SAME meshes; only their pixel mask gates visibility. */
+ bool SetManualFixedRevealEnabled(bool bEnabled);
  UPROPERTY(VisibleAnywhere, Category="Lab") TObjectPtr<UDarkwellRememberablePropComponent> Memory;
  UPROPERTY(VisibleAnywhere, Category="Lab") TArray<TObjectPtr<UStaticMeshComponent>> Parts;
  UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> Materials;
+private:
+ bool bManualFixedRevealMaterial = false;
 };
 
 /** Dedicated fixture. It extends the existing project fog adapter, never the plugin. */
@@ -76,6 +80,7 @@ private:
  UPROPERTY(Transient) TObjectPtr<UTexture> RawCoverage;
  FVector2D FogMin, FogInv;
  int32 SoftIndex = 0;
+ TWeakObjectPtr<ADarkwellPropLabFurniture> ManualRevealSource;
  int32 LastMode = -1, LastPolicy = -1, LastRoute = -1;
  float Elapsed = 0, RouteTime = 0;
  int32 CaptureIndex = 0;

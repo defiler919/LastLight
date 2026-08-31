@@ -353,8 +353,12 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 		const bool bShowProxyGeometry = Decision.bShowProxy && !bKnownSurfaceGeometry;
 		if (Component)
 		{
+			bool bMaskedManualGeometry=false;
+			if (bManualSubject)
+				if (auto* Furniture=Cast<ADarkwellPropLabFurniture>(Component->GetOwner()))
+					bMaskedManualGeometry=Furniture->SetManualFixedRevealEnabled(Darkwell::PropLab::PresentationMode(GetWorld())==2);
 			Component->ApplySourceLiveState(Decision.bShowCurrent);
-			if (bLab) Component->ApplySourceGeometryVisibility(Decision.bShowCurrent || bKnownSurfaceGeometry);
+			if (bLab) Component->ApplySourceGeometryVisibility(Decision.bShowCurrent || bKnownSurfaceGeometry || bMaskedManualGeometry);
 		}
 		if (Decision.bSnapshotChanged && Decision.bSnapshotValid && Component)
 		{

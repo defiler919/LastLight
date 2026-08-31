@@ -158,6 +158,11 @@ void ADarkwellPropLabFurniture::BeginPlay()
  // Saved actor properties and native parts are bound before component BeginPlay.
  OnConstruction(GetActorTransform());
  auto* Parent = LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_PropLabSurface.M_PropLabSurface"));
+ if (ADarkwellManualStaleRoom::FindActive(GetWorld()) && StableId==ADarkwellManualStaleRoom::CabinetId())
+ {
+  if (auto* Masked=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_ManualFixedReveal.M_ManualFixedReveal")))
+  { Parent=Masked; bManualFixedRevealMaterial=true; }
+ }
  for (UStaticMeshComponent* Part : Parts)
  {
   auto* Material = UMaterialInstanceDynamic::Create(Parent, this);
@@ -167,8 +172,17 @@ void ADarkwellPropLabFurniture::BeginPlay()
   Part->SetMaterial(0, Material);
   Materials.Add(Material);
  }
+ SetManualFixedRevealEnabled(Darkwell::PropLab::PresentationMode(GetWorld())==2);
  // Register the initial memory after its final material bindings exist.
  Super::BeginPlay();
+}
+
+bool ADarkwellPropLabFurniture::SetManualFixedRevealEnabled(bool bEnabled)
+{
+ if (!bManualFixedRevealMaterial) return false;
+ for (UMaterialInstanceDynamic* Material : Materials)
+  Material->SetScalarParameterValue(TEXT("FixedRevealEnabled"),bEnabled ? 1 : 0);
+ return bEnabled;
 }
 
 void ADarkwellPropLabFurniture::BindPresentation(UTexture* Raw, UTexture* Soft, FVector2D Min, FVector2D Inv, int32 Mode)
@@ -181,6 +195,7 @@ void ADarkwellPropLabFurniture::BindPresentation(UTexture* Raw, UTexture* Soft, 
   Material->SetVectorParameterValue(TEXT("FogWorldInvExtent"), FLinearColor(Inv.X,Inv.Y,0,0));
   Material->SetScalarParameterValue(TEXT("LabWholeObject"), Mode == 0 ? 1 : 0);
   Material->SetScalarParameterValue(TEXT("LabSoft"), Mode == 2 ? 1 : 0);
+  if (bManualFixedRevealMaterial) Material->SetScalarParameterValue(TEXT("FixedRevealReady"),Raw && Soft ? 1 : 0);
  }
 }
 
@@ -252,7 +267,10 @@ bool ADarkwellPropGameplayLab::EnableDarkwellProjectFogP4(UTexture* Raw, FVector
   Mat->SetVectorParameterValue(TEXT("OriginalBaseColorTint"),I==0 ? FLinearColor(.15f,.17f,.19f) : FLinearColor(.35f,.38f,.40f));
   LabStructure[I]->SetMaterial(0,Mat); StructureMaterials.Add(Mat);
  }
- SoftMaterial=UMaterialInstanceDynamic::Create(LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_PropLabSoft.M_PropLabSoft")),this);
+ const TCHAR* SoftPath=ADarkwellManualStaleRoom::FindActive(GetWorld())
+  ? TEXT("/Game/Darkwell/Vision/PropLab/M_ManualFixedRevealRamp.M_ManualFixedRevealRamp")
+  : TEXT("/Game/Darkwell/Vision/PropLab/M_PropLabSoft.M_PropLabSoft");
+ SoftMaterial=UMaterialInstanceDynamic::Create(LoadObject<UMaterialInterface>(nullptr,SoftPath),this);
  for (int32 I=0; I<2; ++I)
  {
   auto* RT=UKismetRenderingLibrary::CreateRenderTarget2D(this,1000,760,RTF_R16f,FLinearColor::Black,false);
@@ -362,8 +380,19 @@ void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
  if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld()))
  {
+  const int32 Mode=Darkwell::PropLab::PresentationMode(GetWorld());
+  ADarkwellPropLabFurniture* Source=nullptr;
+  for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It)
+   if(It->StableId==Room->CabinetId()) Source=*It;
+  // A respawn must not inherit the empty floor's visual ramp. No memory writes.
+  if(Mode!=LastMode || Source!=ManualRevealSource.Get())
+  {
+   for(UTextureRenderTarget2D* RT:SoftTargets) UKismetRenderingLibrary::ClearRenderTarget2D(this,RT);
+   ManualRevealSource=Source; LastMode=Mode;
+  }
+  if(Mode==2 && Source) UpdateSoftCoverage(DeltaSeconds);
   if(RawCoverage) for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It)
-   It->BindPresentation(RawCoverage,RawCoverage,FogMin,FogInv,0);
+   It->BindPresentation(RawCoverage,Mode==2 && SoftTargets.Num()==2 ? SoftTargets[SoftIndex].Get() : RawCoverage.Get(),FogMin,FogInv,0);
   Room->UpdateObservation(DeltaSeconds,Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)));
   return;
  }

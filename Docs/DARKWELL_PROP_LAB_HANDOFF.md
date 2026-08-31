@@ -1,5 +1,7 @@
 # DARKWELL 家具记忆玩法实验室
 
+> 历史交接记录。2026-08-31 的家具呈现复测修正见 [DARKWELL_PROP_COMPARISON_RETEST.md](DARKWELL_PROP_COMPARISON_RETEST.md)。当前默认敌人为 0、工具自动补充；岛台及 Route 1 已重建。下文旧版尺寸、默认敌人和路线说明不再用于本次人工比较。
+
 状态：**PARTIAL — READY_FOR_USER_PROP_GAMEPLAY_POLICY_LAB**。
 本任务不选择最终家具规则，所有实验仍以真实 PIE 中的用户比较为准。
 

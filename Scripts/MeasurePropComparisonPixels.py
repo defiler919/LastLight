@@ -11,6 +11,20 @@ for width in (1920,2560):
     group=[next((r for r in runs if r['width']==width and r['mode']==m and r['route']==1),None) for m in (0,1,2)]
     if not all(group):continue
     hard=group[1]
+    # Inspect every whole-object rendered frame, not only the matched examples.
+    whole_fractions=[]
+    for index in range(group[0]['frames']):
+        img=Image.open(root/group[0]['name']/f'frame_{index:03d}.png').convert('RGB')
+        pts=np.array(group[0]['polys'][str(index)]);center=pts.mean(axis=0);pts=center+(pts-center)*.95
+        x0,y0=np.floor(pts.min(axis=0)).astype(int);x1,y1=np.ceil(pts.max(axis=0)).astype(int)
+        patch=img.crop((int(x0),int(y0),int(x1+1),int(y1+1)))
+        mask=Image.new('L',patch.size);ImageDraw.Draw(mask).polygon([tuple(v) for v in pts-[x0,y0]],fill=255)
+        pixels=np.array(patch,dtype=np.int16)[np.array(mask)>0]
+        whole_fractions.append(float(np.mean(pixels[:,2]-pixels[:,0]>40)))
+    intermediates=[i for i,f in enumerate(whole_fractions) if .02<f<.98]
+    results.append(dict(width=width,whole_object_frames=len(whole_fractions),
+        whole_object_intermediate_frames=intermediates,passed=not intermediates,
+        gray_frames=sum(f<=.02 for f in whole_fractions),live_frames=sum(f>=.98 for f in whole_fractions)))
     indices=[min((i for i,r in enumerate(hard['rows']) if r['time']<16),key=lambda i:abs(hard['rows'][i]['covered']-q)) for q in (.25,.5,.75)]
     for q,index in zip((.25,.5,.75),indices):
         fractions=[]

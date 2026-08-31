@@ -66,7 +66,9 @@ for width in (1920,2560):
         sheet.save(root/(f'{a.label}_{width}_matched'+('_detail.jpg' if crop else '.jpg')),quality=95)
     # Neighboring true rendered frames around the 50% sample, plus first whole-object reveal.
     trigger=next(i for i,r in enumerate(group[0]['rows']) if r['live'])
-    for label,center in [('half',indices[1]),('jump',trigger)]:
+    withdrawal=min((i for i,r in enumerate(hard['rows']) if 16<r['time']<28),key=lambda i:abs(hard['rows'][i]['covered']-.5))
+    exit_frame=next(i for i,r in enumerate(group[0]['rows']) if r['time']>16 and not r['live'])
+    for label,center in [('half',indices[1]),('jump',trigger),('withdrawal',withdrawal),('exit',exit_frame)]:
         selected=list(range(max(0,center-2),center+5))
         sheet=Image.new('RGB',(7*400,3*170),'#17202b');draw=ImageDraw.Draw(sheet)
         for m,r in enumerate(group):
@@ -92,5 +94,19 @@ for width in (1920,2560):
             x,yy=col*280,m*200;sheet.paste(img,(x,yy+32));draw.text((x+4,yy+6),f'M{m} f{index} t={r["rows"][index]["time"]:.3f}',fill='white')
     sheet.save(root/f'{a.label}_{width}_adjacent_boundary.png')
     if not identical:raise SystemExit('Trajectories not identical')
+# The same consecutive rendered frames for every movement direction and stationary rotation.
+for width in (1920,2560):
+    for route in (3,11,12,13):
+        group=[next((r for r in runs if r['width']==width and r['mode']==m and r['route']==route),None) for m in (0,1,2)]
+        if not all(group):continue
+        sheet=Image.new('RGB',(7*400,3*190),'#17202b');draw=ImageDraw.Draw(sheet)
+        for m,r in enumerate(group):
+            for col,index in enumerate(range(87,94)):
+                img=Image.open(root/r['name']/f'frame_{index:03d}.png').convert('RGB');pts=r['polys'][index]
+                xs=[p[0] for p in pts];ys=[p[1] for p in pts]
+                img=img.crop((max(0,min(xs)-8),max(0,min(ys)-8),min(width,max(xs)+8),min(width*9//16,max(ys)+80)))
+                x,y=col*400,m*190;sheet.paste(img.resize((400,160)),(x,y+30))
+                draw.text((x+4,y+6),f'M{m} R{route} f{index} t={r["rows"][index]["time"]:.3f}',fill='white')
+        sheet.save(root/f'{a.label}_{width}_R{route}_adjacent.jpg',quality=96)
 (root/(a.label+'_audit.json')).write_text(json.dumps(runs,indent=2),encoding='utf-8')
 if any(not r['passed'] for r in runs):raise SystemExit(1)

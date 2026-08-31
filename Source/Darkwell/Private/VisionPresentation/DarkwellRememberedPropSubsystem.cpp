@@ -11,6 +11,7 @@
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
+#include "VisionPresentation/DarkwellManualStaleRoom.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDarkwellRememberedProp, Log, All);
 
@@ -350,7 +351,8 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 			&& Component->GetOwner()->IsA<ADarkwellPropLabFurniture>()
 			&& Darkwell::RememberedProp::TransformsMatch(Record.State.SnapshotTransform, CurrentTransform)
 			&& Record.State.AppearanceRevision == AppearanceRevision;
-		const bool bShowProxyGeometry = Decision.bShowProxy && !bKnownSurfaceGeometry;
+        const bool bManualSpatial = bManualSubject && Darkwell::PropLab::PresentationMode(GetWorld())==2;
+        const bool bShowProxyGeometry = bManualSpatial || (Decision.bShowProxy && !bKnownSurfaceGeometry);
 		if (Component)
 		{
 			bool bMaskedManualGeometry=false;
@@ -378,6 +380,10 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 		}
 		if (AActor* Proxy = Record.ProxyActor.Get())
 		{
+            // Bind before first submission: snapshotValid never grants full
+            // gray visibility. B excludes every surface owned by current D.
+            if (bManualSpatial)
+                if (auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld())) Room->BindSpatialProxy(Proxy);
 			Proxy->SetActorHiddenInGame(!bShowProxyGeometry);
 		}
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)

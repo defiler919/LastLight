@@ -1191,10 +1191,36 @@ bool FDarkwellManualFixedRevealGeometryTest::RunTest(const FString&)
  Bad=Baseline; Bad.Add(Baseline[0]);
  TestFalse(TEXT("Guard rejects auxiliary cabinet part"),Matches(Baseline,Bad));
  int32 Partial=0,Empty=0,Full=0; bool Bins[4]={false,false,false,false};
+ TArray<FDarkwellSpatialPropMemory::FCell> PreviousCells;
+ bool bSawPartialKnowledge=false,bSawRetainedGray=false;
  for(float Yaw=-30;Yaw<=210;Yaw+=.5f)
  {
   Player->SetActorRotation(FRotator(0,Yaw,0));
   Adapter->Tick(1.f/60); Memory->RefreshNowForTesting(); Fixture->Tick(1.f/60);
+  // This isolated world has no PlayerController; Fixture cannot find a pawn.
+  // Explicitly advance the SAME runtime observation entry with our test actor.
+  Room->UpdateObservation(1.f/60,Player);
+  const auto& Spatial=Room->GetSpatialStateForTesting();
+  const auto Cells=Spatial.GetCells(); int32 Known=0;
+  bool bMonotonic=true,bUnknownHidden=true,bNoHole=true,bDisjoint=true;
+  for(int32 I=0;I<Cells.Num();++I)
+  {
+   const auto& C=Cells[I]; const auto P=Spatial.Presentation(I); Known+=C.DiscoveredPresent>0;
+   if(PreviousCells.IsValidIndex(I))
+   {
+    bMonotonic&=C.DiscoveredPresent>=PreviousCells[I].DiscoveredPresent;
+    bNoHole&=P.R>=PreviousCells[I].AppearanceBlend;
+   }
+   if(C.DiscoveredPresent==0) bUnknownHidden&=P.R==0 && P.B==0;
+   bDisjoint&=P.R==0 || P.B==0;
+   bSawRetainedGray|=C.DiscoveredPresent>0 && C.CurrentLegalCoverage==0 && P.R==1 && P.G==0;
+  }
+  bSawPartialKnowledge|=Known>0 && Known<Cells.Num()/4;
+  TestTrue(TEXT("Real legal-field integration: per-cell D never shrinks on turn-away"),bMonotonic);
+  TestTrue(TEXT("No whole gray snapshot leak into unknown cells"),bUnknownHidden);
+  TestTrue(TEXT("Known source cannot become a floor hole on coverage exit"),bNoHole);
+  TestTrue(TEXT("Source and existing proxy have disjoint per-cell ownership"),bDisjoint);
+  PreviousCells=TArray<FDarkwellSpatialPropMemory::FCell>(Cells);
   auto* Fog=World->GetSubsystem<UDarkwellFogVisualSubsystem>();
   int32 Covered=0;
   for(int32 X=0;X<100;++X) Covered+=Fog->EvaluateLiveCoverageAtWorldPoint(FVector2D(4282+4.4*X,420))>=.99f;
@@ -1218,6 +1244,8 @@ bool FDarkwellManualFixedRevealGeometryTest::RunTest(const FString&)
  }
  TestTrue(TEXT("Scan exercises zero, partial and full LEGAL coverage"),Empty>0 && Partial>10 && Full>0);
  for(bool B:Bins) TestTrue(TEXT("Fixed corners/vertices checked at narrow, 25%, 50%, 75% legal surface coverage (sampling +/-2%)"),B);
+ TestTrue(TEXT("First partial discovery does not mark the entire cabinet known"),bSawPartialKnowledge);
+ TestTrue(TEXT("Exit ends on persistent gray original geometry, not an empty floor"),bSawRetainedGray);
  Fixture->Destroy(); return true;
 }
 
@@ -1240,16 +1268,13 @@ bool FDarkwellManualFixedRevealMaterialTest::RunTest(const FString&)
  for(const auto& Input:Dither->FunctionInputs)
   if(auto* C=Cast<UMaterialExpressionCustom>(Input.Input.Expression)) Alpha=C;
  if(!TestNotNull(TEXT("Dither consumes local alpha, not an object-wide scalar"),Alpha)) return false;
- TestTrue(TEXT("Guard rejects whole-body pop/fade and illegal coverage: compiled expression uses Raw AND per-texel Soft with fail-closed readiness"),
-  Alpha->Code==TEXT("return Enabled > 0.5 ? (Ready > 0.5 && Raw >= 0.99 ? saturate(Soft) : 0.0) : 1.0;"));
- TestEqual(TEXT("Alpha requires four separate inputs"),Alpha->Inputs.Num(),4);
- auto* Raw=Cast<UMaterialExpressionTextureSampleParameter2D>(Alpha->Inputs[0].Input.Expression);
- auto* Soft=Cast<UMaterialExpressionTextureSampleParameter2D>(Alpha->Inputs[1].Input.Expression);
- if(!TestNotNull(TEXT("Raw is a coverage TEXTURE, never object scalar"),Raw) || !TestNotNull(TEXT("Soft is a LOCAL texture, never uniform fade"),Soft)) return false;
- TestEqual(TEXT("Existing legal field only"),Raw->ParameterName,FName(TEXT("DarkwellLiveCoverageTexture")));
- TestEqual(TEXT("Per-pixel local age field"),Soft->ParameterName,FName(TEXT("LabSoftCoverageTexture")));
- TestTrue(TEXT("Raw and local age sampled at exact same stable coordinates"),Raw->Coordinates.Expression==Soft->Coordinates.Expression);
- TArray<UMaterialExpression*> Pending{Raw->Coordinates.Expression}; TSet<UMaterialExpression*> Seen; int32 WorldNodes=0;
+ TestTrue(TEXT("Persistent per-position opacity: rejects current-Raw reset and whole-body fade"),
+  Alpha->Code==TEXT("return Enabled > 0.5 ? (Ready > 0.5 ? saturate(State.r) : 0.0) : 1.0;"));
+ if(!TestEqual(TEXT("Separate texture, mode and fail-closed readiness inputs"),Alpha->Inputs.Num(),3)) return false;
+ auto* State=Cast<UMaterialExpressionTextureSampleParameter2D>(Alpha->Inputs[0].Input.Expression);
+ if(!TestNotNull(TEXT("Discovery is a LOCAL texture, never uniform fade"),State)) return false;
+ TestEqual(TEXT("Cumulative state texture"),State->ParameterName,FName(TEXT("SpatialStateTexture")));
+ TArray<UMaterialExpression*> Pending{State->Coordinates.Expression}; TSet<UMaterialExpression*> Seen; int32 WorldNodes=0;
  while(!Pending.IsEmpty())
  {
   auto* Node=Pending.Pop(); if(!Node || Seen.Contains(Node)) continue; Seen.Add(Node);
@@ -1261,6 +1286,21 @@ bool FDarkwellManualFixedRevealMaterialTest::RunTest(const FString&)
   for(int32 I=0;;++I) { auto* Input=Node->GetInput(I); if(!Input) break; Pending.Add(Input->Expression); }
  }
  TestEqual(TEXT("Coverage coordinates actually depend on original world-space surface"),WorldNodes,1);
+ Pending={M->GetEditorOnlyData()->BaseColor.Expression}; Seen.Reset(); bool bLocalColor=false;
+ while(!Pending.IsEmpty())
+ {
+  auto* Node=Pending.Pop(); if(!Node || Seen.Contains(Node)) continue; Seen.Add(Node);
+  if(auto* C=Cast<UMaterialExpressionCustom>(Node))
+   bLocalColor|=C->Code==TEXT("return Enabled > 0.5 ? (Ready > 0.5 ? saturate(State.g) : 0.0) : lerp(lerp(Raw, min(Raw, Soft), UseSoft), 1.0, Whole);");
+  for(int32 I=0;;++I) { auto* Input=Node->GetInput(I); if(!Input) break; Pending.Add(Input->Expression); }
+ }
+ TestTrue(TEXT("Original surface uses local live/gray blend, preserves exact Mode 0/1 branch"),bLocalColor);
+ auto* Proxy=LoadObject<UMaterial>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_ManualAccumulatedMemory.M_ManualAccumulatedMemory"));
+ if(!TestNotNull(TEXT("Existing proxy's accumulated mask material"),Proxy)) return false;
+ TestNull(TEXT("Proxy also has no WPO"),Proxy->GetEditorOnlyData()->WorldPositionOffset.Expression);
+ auto* ProxyAlpha=Cast<UMaterialExpressionCustom>(Proxy->GetEditorOnlyData()->Opacity.Expression);
+ TestTrue(TEXT("Proxy can only show unresolved previously discovered cells, never snapshotValid whole-body opacity"),
+  ProxyAlpha && ProxyAlpha->Code==TEXT("return Ready > 0.5 ? saturate(State.b) : 0.0;"));
  return true;
 }
 #endif

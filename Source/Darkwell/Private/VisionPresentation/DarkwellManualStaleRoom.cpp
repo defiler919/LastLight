@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
+#include "Math/Float16Color.h"
 #include "EngineUtils.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "NativeGameplayTags.h"
@@ -137,6 +138,8 @@ bool ADarkwellManualStaleRoom::ResetRoom(ADarkwellCharacter* Player)
  auto* Memory=GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>();
  Memory->ReleaseLabVerificationSubject(); Memory->SetLabVerificationSubject(CabinetId(),true);
  Evidence=FDarkwellEmptyVerification(); DisplayedOpacity.Reset(); ObservedProxy.Reset(); OpacityTexture=nullptr;
+ SpatialMemory=FDarkwellSpatialPropMemory(); SpatialSource.Reset(); SpatialProxy.Reset(); SpatialTexture=nullptr;
+ SpatialProxyMaterials.Reset(); LegacyProxyMaterials.Reset();
  PressureState=Darkwell::ManualStale::Armed; ToggleCount=0; Seconds=0; bStarted=true;
  Darkwell::ManualStale::SetCVar(TEXT("r.Darkwell.ProjectFogVisual.PropRelocationPolicy"),0);
  Darkwell::ManualStale::SetCVar(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"),0);
@@ -178,6 +181,7 @@ void ADarkwellManualStaleRoom::AttachObservedSnapshot(AActor* Proxy)
  OpacityTexture->SRGB=false; OpacityTexture->Filter=TF_Nearest; OpacityTexture->AddressX=TA_Clamp; OpacityTexture->AddressY=TA_Clamp;
  OpacityTexture->NeverStream=true; OpacityTexture->UpdateResource();
  auto* Parent=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_PropLabStaleMemory.M_PropLabStaleMemory"));
+ LegacyProxyMaterials.Reset();
  for(auto* Mesh:Meshes)
  {
   auto* Mat=UMaterialInstanceDynamic::Create(Parent,this); Mat->SetScalarParameterValue(TEXT("ForceRemembered"),1);
@@ -185,6 +189,7 @@ void ADarkwellManualStaleRoom::AttachObservedSnapshot(AActor* Proxy)
   Mat->SetTextureParameterValue(TEXT("StaleOpacity"),OpacityTexture);
   const FVector2D Min=Evidence.Bounds.Min,Inv=FVector2D(1,1)/Evidence.Bounds.GetSize();
   Mat->SetVectorParameterValue(TEXT("StaleMinInv"),FLinearColor(Min.X,Min.Y,Inv.X,Inv.Y)); Mesh->SetMaterial(0,Mat);
+  LegacyProxyMaterials.Add(Mat);
  }
 }
 void ADarkwellManualStaleRoom::ApplyErasure(int32 Mode)
@@ -218,6 +223,7 @@ void ADarkwellManualStaleRoom::UpdateObservation(float DeltaSeconds,ADarkwellCha
   ToggleActualCabinet();
  }
  auto* Memory=GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+ UpdateSpatialMemory(DeltaSeconds);
  bool Live=false,Valid=false; FVector At; AActor* Proxy=nullptr;
  Memory->TryGetRecordForTesting(CabinetId(),Live,Valid,At,Proxy);
  if(Valid && Proxy && ObservedProxy.Get()!=Proxy) AttachObservedSnapshot(Proxy);
@@ -227,8 +233,109 @@ void ADarkwellManualStaleRoom::UpdateObservation(float DeltaSeconds,ADarkwellCha
   Evidence.Observe(DeltaSeconds,Seconds,[Fog](FVector2D P){return Fog->EvaluateLiveCoverageAtWorldPoint(P);},
    [this](const FBox2D&){return HasActualCabinet() && Cabinet->GetActorEnableCollision();});
   ApplyErasure(Darkwell::PropLab::PresentationMode(GetWorld()));
+  if(Darkwell::PropLab::PresentationMode(GetWorld())==2) BindSpatialProxy(Proxy);
+  else
+  {
+   TInlineComponentArray<UStaticMeshComponent*> Meshes(Proxy);
+   for(int32 I=0;I<Meshes.Num() && I<LegacyProxyMaterials.Num();++I)
+    if(Meshes[I]->GetMaterial(0)!=LegacyProxyMaterials[I]) Meshes[I]->SetMaterial(0,LegacyProxyMaterials[I]);
+  }
  }
  Report();
+}
+void ADarkwellManualStaleRoom::BindSpatialParameters(UMaterialInstanceDynamic* Material) const
+{
+ const FBox2D& Box=SpatialMemory.GetBounds();
+ if(!SpatialTexture || !Box.bIsValid) { Material->SetScalarParameterValue(TEXT("SpatialReady"),0); return; }
+ const FVector2D Inv=FVector2D(1,1)/Box.GetSize();
+ Material->SetTextureParameterValue(TEXT("SpatialStateTexture"),SpatialTexture);
+ Material->SetVectorParameterValue(TEXT("SpatialMinInv"),FLinearColor(Box.Min.X,Box.Min.Y,Inv.X,Inv.Y));
+ Material->SetScalarParameterValue(TEXT("SpatialReady"),1);
+}
+void ADarkwellManualStaleRoom::BindSpatialProxy(AActor* Proxy)
+{
+ if(!Proxy || FindActive(GetWorld())!=this || Darkwell::PropLab::PresentationMode(GetWorld())!=2) return;
+ TInlineComponentArray<UStaticMeshComponent*> Meshes(Proxy);
+ if(SpatialProxy.Get()!=Proxy)
+ {
+  SpatialProxy=Proxy; SpatialProxyMaterials.Reset();
+  auto* Parent=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_ManualAccumulatedMemory.M_ManualAccumulatedMemory"));
+  for(int32 I=0;I<Meshes.Num();++I)
+  {
+   auto* Mat=UMaterialInstanceDynamic::Create(Parent,this);
+   Mat->SetVectorParameterValue(TEXT("OriginalBaseColorTint"),FLinearColor(.14f,.48f,.25f));
+   SpatialProxyMaterials.Add(Mat);
+  }
+ }
+ for(int32 I=0;I<Meshes.Num();++I)
+ {
+  BindSpatialParameters(SpatialProxyMaterials[I]);
+  if(Meshes[I]->GetMaterial(0)!=SpatialProxyMaterials[I]) Meshes[I]->SetMaterial(0,SpatialProxyMaterials[I]);
+ }
+}
+void ADarkwellManualStaleRoom::UpdateSpatialMemory(float DeltaSeconds)
+{
+ if(SpatialMemory.GetCells().IsEmpty())
+ {
+  if(!HasActualCabinet()) return;
+  // Read the original fixed footprint ONCE for texture coordinates. Never
+  // change component transforms/bounds or derive replacement geometry.
+  FBox Box(ForceInit);
+  for(UStaticMeshComponent* Part:Cabinet->Memory->GetMemoryPrimitives()) Box+=Part->Bounds.GetBox();
+  SpatialMemory.Initialize(CabinetId(),FBox2D(FVector2D(Box.Min),FVector2D(Box.Max)));
+  const FIntPoint Size=SpatialMemory.GetSize();
+  SpatialTexture=UTexture2D::CreateTransient(Size.X,Size.Y,PF_FloatRGBA);
+  SpatialTexture->SRGB=false; SpatialTexture->Filter=TF_Nearest;
+  SpatialTexture->AddressX=TA_Clamp; SpatialTexture->AddressY=TA_Clamp; SpatialTexture->NeverStream=true;
+  auto& Bulk=SpatialTexture->GetPlatformData()->Mips[0].BulkData;
+  FMemory::Memzero(Bulk.Lock(LOCK_READ_WRITE),Bulk.GetBulkDataSize()); Bulk.Unlock();
+  SpatialTexture->UpdateResource();
+ }
+ if(HasActualCabinet() && (!SpatialMemory.IsPresent() || SpatialSource.Get()!=Cabinet.Get()))
+ { SpatialMemory.BeginPresent(); SpatialSource=Cabinet; }
+ else if(!HasActualCabinet() && !SpatialMemory.IsAbsent())
+ { SpatialMemory.BeginAbsent(); SpatialSource.Reset(); }
+ const FIntPoint Size=SpatialMemory.GetSize(); const FBox2D& Box=SpatialMemory.GetBounds();
+ const FVector2D Step=Box.GetSize()/FVector2D(Size.X,Size.Y);
+ const auto* Fog=GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
+ TArray<float> Corners,Coverage; Corners.SetNumUninitialized((Size.X+1)*(Size.Y+1)); Coverage.SetNumUninitialized(Size.X*Size.Y);
+ for(int32 Y=0;Y<=Size.Y;++Y) for(int32 X=0;X<=Size.X;++X)
+  Corners[Y*(Size.X+1)+X]=Fog->EvaluateLiveCoverageAtWorldPoint(Box.Min+Step*FVector2D(X,Y));
+ for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X)
+ {
+  const int32 K=Y*(Size.X+1)+X;
+  // All corners AND center must be legal: visual history cannot enlarge sight.
+  Coverage[Y*Size.X+X]=FMath::Min(FMath::Min(Corners[K],Corners[K+1]),FMath::Min(Corners[K+Size.X+1],Corners[K+Size.X+2]));
+  Coverage[Y*Size.X+X]=FMath::Min(Coverage[Y*Size.X+X],Fog->EvaluateLiveCoverageAtWorldPoint(Box.Min+Step*FVector2D(X+.5,Y+.5)));
+ }
+ SpatialMemory.Advance(DeltaSeconds,Coverage);
+ auto* Pixels=new FFloat16Color[Coverage.Num()];
+ for(int32 I=0;I<Coverage.Num();++I) Pixels[I]=FFloat16Color(SpatialMemory.Presentation(I));
+ auto* Region=new FUpdateTextureRegion2D(0,0,0,0,Size.X,Size.Y);
+ SpatialTexture->UpdateTextureRegions(0,1,Region,Size.X*sizeof(FFloat16Color),sizeof(FFloat16Color),reinterpret_cast<uint8*>(Pixels),
+  [](uint8* Data,const FUpdateTextureRegion2D* R){delete[] reinterpret_cast<FFloat16Color*>(Data);delete R;});
+ if(HasActualCabinet()) for(UMaterialInstanceDynamic* Mat:Cabinet->Materials) BindSpatialParameters(Mat);
+}
+TArray<int32> ADarkwellManualStaleRoom::GetSpatialKnowledgeBits() const
+{
+ TArray<int32> Bits; Bits.Reserve(SpatialMemory.GetCells().Num());
+ for(const auto& C:SpatialMemory.GetCells()) Bits.Add((C.DiscoveredPresent>0?1:0)|(C.VerifiedEmpty>0?2:0)|(C.RemainingStale>0?4:0)|(C.CurrentLegalCoverage>=.99f?8:0));
+ return Bits;
+}
+FString ADarkwellManualStaleRoom::GetSpatialTelemetry() const
+{
+ float Current=0,Discovered=0,Verified=0,Remaining=0,Live=0,Source=0,ProxyOpacity=0;
+ const auto Cells=SpatialMemory.GetCells();
+ for(int32 I=0;I<Cells.Num();++I)
+ {
+  const auto& C=Cells[I]; Current+=C.CurrentLegalCoverage>=.99f; Discovered+=C.DiscoveredPresent; Verified+=C.VerifiedEmpty;
+  Remaining+=C.RemainingStale; Live+=C.LiveBlend; const auto P=SpatialMemory.Presentation(I); Source+=P.R; ProxyOpacity+=P.B;
+ }
+ const float N=FMath::Max(1,Cells.Num());
+ bool WasLive=false,Valid=false; FVector At; AActor* Proxy=nullptr;
+ GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>()->TryGetRecordForTesting(CabinetId(),WasLive,Valid,At,Proxy);
+ return FString::Printf(TEXT("{\"actual\":\"%s\",\"current\":%.8f,\"discovered\":%.8f,\"verified\":%.8f,\"remaining\":%.8f,\"live\":%.8f,\"sourceOpacity\":%.8f,\"proxyOpacity\":%.8f,\"snapshot\":%s,\"generation\":%u,\"toggles\":%d,\"cells\":%d}"),
+  HasActualCabinet()?TEXT("PRESENT"):TEXT("ABSENT"),Current/N,Discovered/N,Verified/N,Remaining/N,Live/N,Source/N,ProxyOpacity/N,Valid?TEXT("true"):TEXT("false"),SpatialMemory.GetGeneration(),ToggleCount,Cells.Num());
 }
 void ADarkwellManualStaleRoom::Report()
 {

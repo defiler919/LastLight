@@ -380,19 +380,10 @@ void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
  if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld()))
  {
-  const int32 Mode=Darkwell::PropLab::PresentationMode(GetWorld());
-  ADarkwellPropLabFurniture* Source=nullptr;
-  for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It)
-   if(It->StableId==Room->CabinetId()) Source=*It;
-  // A respawn must not inherit the empty floor's visual ramp. No memory writes.
-  if(Mode!=LastMode || Source!=ManualRevealSource.Get())
-  {
-   for(UTextureRenderTarget2D* RT:SoftTargets) UKismetRenderingLibrary::ClearRenderTarget2D(this,RT);
-   ManualRevealSource=Source; LastMode=Mode;
-  }
-  if(Mode==2 && Source) UpdateSoftCoverage(DeltaSeconds);
+  // The manual cabinet owns cumulative per-position knowledge in Room. The
+  // old current-frame RT ramp must not erase that history on coverage exit.
   if(RawCoverage) for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It)
-   It->BindPresentation(RawCoverage,Mode==2 && SoftTargets.Num()==2 ? SoftTargets[SoftIndex].Get() : RawCoverage.Get(),FogMin,FogInv,0);
+   It->BindPresentation(RawCoverage,RawCoverage,FogMin,FogInv,0);
   Room->UpdateObservation(DeltaSeconds,Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)));
   return;
  }

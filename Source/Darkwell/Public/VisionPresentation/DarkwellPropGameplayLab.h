@@ -80,7 +80,6 @@ private:
  UPROPERTY(Transient) TObjectPtr<UTexture> RawCoverage;
  FVector2D FogMin, FogInv;
  int32 SoftIndex = 0;
- TWeakObjectPtr<ADarkwellPropLabFurniture> ManualRevealSource;
  int32 LastMode = -1, LastPolicy = -1, LastRoute = -1;
  float Elapsed = 0, RouteTime = 0;
  int32 CaptureIndex = 0;

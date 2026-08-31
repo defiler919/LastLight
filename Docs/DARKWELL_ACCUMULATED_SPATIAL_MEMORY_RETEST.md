@@ -31,3 +31,17 @@ PRESENT 新世代清除当前发现和 Live 渐变；尚未验证的旧残影作
 `Saved/PropGameplayLab/AccumulatedMemory/Build01.log`：标准 Editor Development 构建成功。`Automation01.log`：13 项中 12 成功、1 失败。失败为退出速率的 float 舍入：理论单步 .092592597，实际状态相减 .092592657，超出旧断言约 5.2e-8（小于 FLT_EPSILON=1.192e-7）。断言改为允许一个 float 精度单位，仅处理运算舍入；没有修改 `.99` 覆盖、.20/.18 秒过渡、单调性、空位确认或任何行为门限。原失败日志保留。
 
 `Build02.log` 标准构建成功；`Automation02.log` **13/13 通过，0 失败、0 带警告测试、0 未运行**。此时先提交推送独立模型和审计报告作为可靠检查点，再继续接入，避免把全部修改堆在最后才保存。这个检查点没有宣称用户失败已经修复。
+
+## 检查点 2：原始材质与已有代理接入
+
+检查点 1 已提交推送为 `d29720e`。本检查点在手动 Room 中以原组件固定 Bounds 只读建立 2.5cm 状态坐标网格；不修改任何 Bounds。每格四角及中心都要达到原合法覆盖 `.99`，不放宽覆盖。RGBA16F 状态纹理：R=已发现表面的持续显露程度，G=局部 Live/灰色转换，B=仍未验证的旧代理区域，A=当前覆盖。真实源和旧代理的 R/B 同格互斥。材质默认 SpatialReady=0；代理在第一次提交到场景前已绑定局部掩码，snapshotValid 不能让未知区域整件变灰。
+
+首次发现立刻启动 .20 秒逐位置显露；D 不因离开覆盖而清零。绿色退出有 1/30 秒视觉保持，然后 .18 秒转灰。已知表面的不透明程度不减，只有颜色改变。ABSENT 时冻结真正已发现范围，空位证据用现有 .10 秒保守确认，V 单调增加，R=Initial*(1-V)，旧代理 .20 秒只减不增。重新 PRESENT 清除本世代 D/V/Live，仅保留未验证旧残影。对象级 Observe、快照与清除逻辑、StableID、碰撞不变。
+
+`M_ManualFixedReveal` 仍在三个原始组件上运行，ShadowPassSwitch 的 Shadow=1 保持不变；世界坐标排除 ShaderOffset，无 WPO。新增 `M_ManualAccumulatedMemory` 仅绑定已有代理，不新建渲染几何。Mode0/1 使用原材质分支及原代理路径；正式地图和插件未修改。旧的当前帧 Soft RT 不再驱动手动 Mode2。
+
+`Materials01.log`：UE Python 资产迁移成功，0 错误/2 条汇总警告（项目阴影 CVar 优先级、MCP EULA 提示），没有保存地图。`Build03.log` 标准构建成功。`Automation03.log` 13 项：11 无警告成功、1 带警告成功、1 失败；新增真实状态断言发现旧几何夹具没有 PlayerController，实验 Tick 找不到玩家，未推进 Room 观察状态。修复夹具为显式传入原测试玩家调用同一运行时 UpdateObservation；不放宽断言。外部 google generate_204 超时警告保留。
+
+`Build04.log` 标准构建成功；`Automation04.log` **13/13 通过（12 无警告、1 带警告），0 失败、0 未运行**。481 个角度逐帧检查三个原始组件 Transform、Local/World Bounds、8 角点、全部 LOD0 世界顶点、12 个原有槽位指针和 3 个同源阴影投射组件。新增同一扫描内逐位置 D 单调、未知区域不可见、已知表面不退回地面、源/代理互斥、部分发现及退出保持灰色断言。已有隐藏投影两循环、Mode0/1/2 和隔离测试保留。
+
+引擎启动日志中的 13 条 `LogAutomationTest: Error: Condition failed` 在未修改呈现的 Automation02 中也存在，发生于测试队列之前；不将它们删除或计作本套件成功。完整原日志保留。C++ 构建保留 UE 头文件 C4996 弃用警告。此检查点仍待 GPU 连续帧核验，不是用户人工通过。

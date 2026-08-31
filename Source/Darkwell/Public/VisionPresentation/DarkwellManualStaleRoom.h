@@ -5,6 +5,7 @@
 #include "GameplayTagContainer.h"
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 #include "VisionPresentation/DarkwellEmptyVerification.h"
+#include "VisionPresentation/DarkwellSpatialPropMemory.h"
 #include "DarkwellManualStaleRoom.generated.h"
 
 class ADarkwellPropLabFurniture;
@@ -37,6 +38,12 @@ public:
  UFUNCTION(BlueprintPure, Category="Lab") float GetRemainingOpacity() const;
  UFUNCTION(BlueprintPure, Category="Lab") bool IsSwitchArmed() const;
  UFUNCTION(BlueprintPure, Category="Lab") float GetCabinetCoverage() const;
+ UFUNCTION(BlueprintPure, Category="Lab") FString GetSpatialTelemetry() const;
+ /** Per-cell D/V/R/legal bits for editor validation, not an authority mutation API. */
+ UFUNCTION(BlueprintPure, Category="Lab") TArray<int32> GetSpatialKnowledgeBits() const;
+ const FDarkwellSpatialPropMemory& GetSpatialStateForTesting() const { return SpatialMemory; }
+ /** Called before a newly rebuilt existing proxy can enter the scene. */
+ void BindSpatialProxy(AActor* Proxy);
  // With the accepted yaw=90 top-down camera, world +X is screen-left.
  FVector CabinetPosition() const { return GetActorLocation()+FVector(500,500,0); }
  FVector SwitchPosition() const { return GetActorLocation()+FVector(500,-450,0); }
@@ -46,6 +53,8 @@ private:
  void ToggleActualCabinet(); // Deliberately has no memory/evidence API access.
  void AttachObservedSnapshot(AActor* Proxy);
  void ApplyErasure(int32 Mode);
+ void UpdateSpatialMemory(float DeltaSeconds);
+ void BindSpatialParameters(UMaterialInstanceDynamic* Material) const;
  void Report();
  UPROPERTY(VisibleAnywhere) TArray<TObjectPtr<UStaticMeshComponent>> Structure;
  UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> PressureDisc;
@@ -56,6 +65,12 @@ private:
  TWeakObjectPtr<AActor> ObservedProxy;
  FDarkwellEmptyVerification Evidence;
  TArray<float> DisplayedOpacity;
+ FDarkwellSpatialPropMemory SpatialMemory;
+ TWeakObjectPtr<ADarkwellPropLabFurniture> SpatialSource;
+ TWeakObjectPtr<AActor> SpatialProxy;
+ UPROPERTY(Transient) TObjectPtr<UTexture2D> SpatialTexture;
+ UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> SpatialProxyMaterials;
+ UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> LegacyProxyMaterials;
  FGameplayTag PressureState;
  FString Status;
  float Seconds=0;

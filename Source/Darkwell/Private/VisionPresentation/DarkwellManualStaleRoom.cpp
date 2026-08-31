@@ -112,6 +112,11 @@ void ADarkwellManualStaleRoom::SpawnActualCabinet()
  Cabinet->bIndividualWorktop=false; Cabinet->Tint=FLinearColor(.14f,.48f,.25f); Cabinet->Memory->bRememberFromStart=false;
  Cabinet->FinishSpawning(Transform);
  if(!Cabinet->HasActorBegunPlay()) Cabinet->DispatchBeginPlay();
+ // Only the actual manual cabinet casts this shadow, including while the
+ // existing authority hides it. Keep the same components/visibility path;
+ // do not enable the unused furniture parts or any remembered proxy.
+ for(UStaticMeshComponent* Part:Cabinet->Memory->GetMemoryPrimitives())
+ { Part->SetCastShadow(true); Part->SetCastHiddenShadow(true); }
  Cabinet->Memory->ApplySourceLiveState(false); Cabinet->Memory->ApplySourceGeometryVisibility(false);
  Cabinet->SetActorHiddenInGame(false);
 }

@@ -7,6 +7,7 @@
 #include "Engine/Engine.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Gameplay/DarkwellGameplayTags.h"
 #include "Gameplay/DarkwellVisibilityComponent.h"
 #include "Misc/AutomationTest.h"
@@ -1011,6 +1012,104 @@ bool FDarkwellManualSwitchErasureTest::RunTest(const FString&)
   Step(FVector(4500,150,92),90);
   Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
   TestTrue(TEXT("Legally observing present cabinet creates fresh memory"),Live && Valid && Proxy);
+ }
+ Fixture->Destroy(); return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellManualHiddenShadowTest,
+ "Darkwell.PropLab.ManualSwitch.HiddenShadowSameGeometry", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellManualHiddenShadowTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("ManualHiddenShadow"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+ UWorld* World=TestWorld.Get();
+ auto* Room=Spawn<ADarkwellManualStaleRoom>(*World,FVector(4000,0,0));
+ auto* Fixture=Spawn<ADarkwellPropGameplayLab>(*World,FVector::ZeroVector);
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(4500,150,92),FRotator(0,90,0));
+ auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ auto* Memory=World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+ TestTrue(TEXT("Existing manual authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ auto Actual=[&]() -> ADarkwellPropLabFurniture*
+ {
+  for(TActorIterator<ADarkwellPropLabFurniture> It(World);It;++It)
+   if(It->StableId==Room->CabinetId()) return *It;
+  return nullptr;
+ };
+ auto Step=[&](FVector P,float Yaw)
+ {
+  Player->SetActorLocation(P); Player->SetActorRotation(FRotator(0,Yaw,0));
+  for(int32 I=0;I<8;++I) { Adapter->Tick(1.f/30); Memory->RefreshNowForTesting(); Room->UpdateObservation(1.f/30,Player); }
+ };
+ struct FGeometry
+ {
+  UStaticMeshComponent* Component; UStaticMesh* Mesh;
+  FTransform Transform; FBoxSphereBounds Bounds;
+ };
+ const FVector Top(4500,150,92),Press=Room->SwitchPosition()+FVector(0,0,92),Outside=Press+FVector(220,0,0);
+ for(int32 Mode:{0,1,2})
+ {
+  Room->ResetRoom(Player); Room->Command({TEXT("stalemanual"),TEXT("mode"),FString::FromInt(Mode)});
+  Step(Top,90);
+  ADarkwellPropLabFurniture* First=Actual();
+  if(!TestNotNull(TEXT("Initial actual"),First)) return false;
+  TArray<FGeometry> Geometry;
+  for(UStaticMeshComponent* Part:First->Memory->GetMemoryPrimitives())
+   Geometry.Add({Part,Part->GetStaticMesh(),Part->GetComponentTransform(),Part->Bounds});
+  const FTransform ActorTransform=First->GetActorTransform();
+  const FVector Dimensions=First->Dimensions;
+  for(int32 Cycle=0;Cycle<2;++Cycle)
+  {
+   bool Live=false,Valid=false; FVector At; AActor* Proxy=nullptr;
+   Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+   TestTrue(TEXT("Real observation creates ordinary snapshot"),Live && Valid && Proxy);
+   const TWeakObjectPtr<AActor> Snapshot=Proxy;
+   const uint64 Revision=Memory->GetDiagnostics().SnapshotRevision;
+   Step(Press,90);
+   TestNull(TEXT("ABSENT has no actual actor or shadow source"),Actual());
+   Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+   TestTrue(TEXT("ABSENT retains unverified memory"),!Live && Valid && Proxy==Snapshot.Get());
+   if(Proxy)
+   {
+    TInlineComponentArray<UStaticMeshComponent*> Parts(Proxy);
+    TestEqual(TEXT("Only the original three memory parts"),Parts.Num(),3);
+    for(auto* Part:Parts) TestFalse(TEXT("Gray memory never casts a current real shadow"),Part->CastShadow);
+   }
+   Step(Outside,90); Step(Press,90);
+   ADarkwellPropLabFurniture* Current=Actual();
+   if(!TestNotNull(TEXT("PRESENT respawns original class"),Current)) return false;
+   TestEqual(TEXT("StableID unchanged"),Current->Memory->GetStableId(),Room->CabinetId());
+   TestTrue(TEXT("Actor transform and dimensions unchanged"),Current->GetActorTransform().Equals(ActorTransform,0) && Current->Dimensions==Dimensions);
+   TInlineComponentArray<UStaticMeshComponent*> AllParts(Current);
+   TestEqual(TEXT("No second geometry: same 12 native slots, 3 used"),AllParts.Num(),12);
+   TestEqual(TEXT("Original three actual parts only"),Current->Memory->GetMemoryPrimitives().Num(),3);
+   const uint64 Appearance=Current->Memory->ComputeAppearanceRevision();
+   auto CheckParts=[&](bool bVisible)
+   {
+    int32 Casters=0,Index=0;
+    for(UStaticMeshComponent* Part:Current->Memory->GetMemoryPrimitives())
+    {
+     const FGeometry& G=Geometry[Index++];
+     TestEqual(TEXT("Original main-pass visibility decision"),Part->IsVisible(),bVisible);
+     TestTrue(TEXT("Native hidden shadow enabled on same actual component"),Part->CastShadow && Part->bCastHiddenShadow);
+     TestTrue(TEXT("Mesh asset and world transform unchanged"),Part->GetStaticMesh()==G.Mesh && Part->GetComponentTransform().Equals(G.Transform,0));
+     TestTrue(TEXT("Bounds origin, extent and radius unchanged"),Part->Bounds.Origin==G.Bounds.Origin && Part->Bounds.BoxExtent==G.Bounds.BoxExtent && Part->Bounds.SphereRadius==G.Bounds.SphereRadius);
+     Casters+=Part->CastShadow && (Part->IsVisible() || Part->bCastHiddenShadow);
+    }
+    TestEqual(TEXT("Exactly three current shadow sources in both states"),Casters,3);
+    for(auto* Part:AllParts)
+     if(!Current->Memory->GetMemoryPrimitives().Contains(Part)) TestFalse(TEXT("Unused native slots cannot cast hidden shadows"),Part->bCastHiddenShadow);
+   };
+   CheckParts(false);
+   Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+   TestTrue(TEXT("Hidden respawn does not reveal or replace snapshot"),!Live && Valid && Proxy==Snapshot.Get());
+   TestEqual(TEXT("Hidden shadow causes no snapshot revision"),Memory->GetDiagnostics().SnapshotRevision,Revision);
+   TestEqual(TEXT("Hidden shadow creates no empty evidence"),Room->GetVerifiedFraction(),0.f);
+   TArray<UStaticMeshComponent*> HiddenParts; for(UStaticMeshComponent* Part:Current->Memory->GetMemoryPrimitives()) HiddenParts.Add(Part);
+   Step(Top,90); CheckParts(true);
+   int32 Index=0; for(UStaticMeshComponent* Part:Current->Memory->GetMemoryPrimitives()) TestEqual(TEXT("Visible transition reuses exact hidden component pointer"),Part,HiddenParts[Index++]);
+   TestEqual(TEXT("Visibility/shadow transition leaves appearance revision unchanged"),Current->Memory->ComputeAppearanceRevision(),Appearance);
+   Step(Outside,90); CheckParts(false); Step(Top,90);
+  }
  }
  Fixture->Destroy(); return true;
 }

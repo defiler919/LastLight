@@ -55,3 +55,83 @@ PRESENT 新世代清除当前发现和 Live 渐变；尚未验证的旧残影作
 `Build05.log` 标准构建成功。`Automation05.log` **13/13 通过（12 无警告、1 带外部 HTTP 超时警告），0 失败、0 未运行**。GPU01 的原失败和警告不删除，修复后的真实 GPU 结果另外记录。
 
 `GPU02.log` 不再有两份材质的 SM6 编译错误。实际打开 `PIE_20260831_231534/0000_initial_full00000.png`：原尺寸绿色柜子和同源阴影正常；这一张只能证明完整状态，不能证明累计转换。驱动完成三方向空位校准，但在第一次重新出生帧停止：旧脚本假定主组件尚未提交时 SpatialReady 必须为 0；新 Room 同帧已绑定 D=0 的纹理，下一权威 Tick 才提交原组件，因此 Ready=1 并非泄露。修正为只允许该唯一新 Actor 首帧隐藏，且直接要求 D=0、本体遮罩=0、Live=0；后续帧仍强制三件原始组件正常提交。原失败 JSON 保留。额外代理核实为原自动房间已有 75 个部件；手动快照恰好 3 个，已清空快照为 0，所有代理均无真实阴影。
+
+## 实际 GPU 与逐帧检查结果
+
+状态：**PARTIAL — READY_FOR_USER_ACCUMULATED_SPATIAL_MEMORY_RETEST**。这是修复后交给用户人工判断的检查点，不是 Mode2 最终完成，也不覆盖用户对基线的失败判定。
+
+| 运行 | 原生分辨率 / 渲染 | 完整循环 / 方向 | 截图 | 固定几何逐帧检查 | 直接逐格知识检查 | 结果 |
+|---|---|---|---:|---:|---:|---|
+| GPU03 / PIE_20260831_231710 | 1920×1080 / D3D12 SM6 / TSR=4 / ScreenPercentage=100 | 3 / 左→右、右→左、斜向 | 83 | 1,442 | 38,321,536 | 驱动无失败；人工交互待验 |
+| GPU04-1440 / PIE_20260831_232053 | 2560×1440 / D3D12 SM6 / TSR=4 / ScreenPercentage=100 | 1 / 左→右补充 | 38 | 511 | 13,332,352 | 驱动无失败；人工交互待验 |
+
+两次成功运行各自的材质编译失败数为 **0**；无新增可渲染组件、无原网格/Transform/Bounds/角点变化。当前 PRESENT 恰好三个原组件投影，ABSENT 为零，旧代理始终不投影。运行期间有 3,210 / 1,118 条逐 Tick 遥测，记录 actual、当前覆盖、D/V/R、Live、本体/代理遮罩、快照、世代、toggle 和原组件路径。每格知识位不是按平均比例推断：同世代 PRESENT 逐格检查 D 不减及新 D 必须有合法覆盖；ABSENT 逐格检查 V 不减、R 不增、已验证格不可残留。C++ 扫描额外直接比较全部 LOD0 世界顶点，而 Python 的实时检查比较原网格引用、Transform、Bounds 和角点。
+
+1080p 三次重现前均 D=0、SourceOpacity=0、ProxyOpacity=0、snapshot=false，隐藏真实阴影仍在；每次 10/25/50/75% 停留后转头，D 和 SourceOpacity 保持已发现范围，Live 最终归零成灰。三次空位擦除到 25/50/75/100%，转头后 V/R 不逆转；结尾 generation=8、toggles=7、ABSENT、V=1、R=0、snapshot=false。1440p 完成同样一轮补充及首次进入的五个相邻请求帧。
+
+下面 contact sheet 和原帧均已实际用图像工具打开，**没有仅统计文件数**。根目录为 `D:/UE_pro/Darkwell/Saved/PropGameplayLab/AccumulatedMemory/`，不提交到 Git。
+
+- `PIE_20260831_231710/left_discovery_contact.png`、`right_discovery_contact.png`、`diagonal_discovery_contact.png`：10% 只有原表面与遮罩交集出现；转头仅该部分留灰；25/50/75% 累积扩展，未看到首次接触就出现整件灰柜子。固定门把手及顶面接缝未滑动；窄条是裁切交集，不是缩小后的整件柜子。
+- `left_exit_adjacent_contact.png`：原帧 `0007`–`0011`，t=22.234–22.524，D 恒为 .24983288，Live .1960→.1363→.0217→0→0，原表面保持可见并变灰。
+- `right_exit_adjacent_contact.png`：原帧 `0038`–`0042`，t=47.730–48.033；`diagonal_exit_adjacent_contact.png`：`0063`–`0067`，t=71.387–71.669。均看到局部绿色向灰色转换，未返回空地。
+- `oscillation_adjacent_contact.png`：`0019`–`0024`，24 次 ±.25° 摆动中的六个相邻请求帧。已知完整柜子中约 25% 保持绿色、其余灰色；没有整件绿/灰交替或 D 重置。
+- `left_erasure_contact.png`、`right_diagonal_erasure_contact.png`：25/50/75% 的剩余灰色区域和转头对照；完整验证后为正常地面，无残影复活或 ABSENT 柜子阴影。
+- `shadow_contact.png`：两次相同位置 ABSENT/PRESENT 隐藏对照，柜子主通道不可见；身体附近合法地面上的柜子阴影仅在 PRESENT 出现。结合每帧同三源和 ShadowPassSwitch=1 断言，没有生成第二套投影几何。
+- `PIE_20260831_232053/entry_adjacent_1440.png`：`0004`–`0008`，t=11.896–12.288，D 从 .00008356 到 .01128008，SourceOpacity 从 .0000128 到 .0085416；看到原表面的局部渐显，随后达到约10%，没有整件弹出。
+- 同目录 `exit_adjacent_1440.png`、`discovery_1440.png`、`erasure_1440.png` 也已打开，重现保持灰色与空位单调擦除。
+
+所有原帧保持原生分辨率；contact sheet 只是带遥测标签的截图裁剪。截图请求与 GPU 像素不是严格同步时间戳；连续截图有捕获开销，相邻请求间隔约 40–130ms，不能据此宣称正常实时帧率下所有动态闪烁已消除。已看样本没有重现用户的整件早记忆/退回地面/反复重置，但用户鼠标瞄准、自由行走和主观节奏仍须真实人工 PIE 验证。
+
+## 最终构建、自动化、警告与限制
+
+所有 UBT/dotnet/Editor 构建和 commandlet 串行，启动前检查残留进程。标准命令为 `./Scripts/BuildEditor.ps1`（DarkwellEditor Win64 Development），共 **6 次成功、0 次失败**；最后独立 `Build06-final.log` 成功，4 个构建 action，16.78 秒。Build01/02/03/04/05/06 的 UE 头文件 C4996 警告分别为 5/0/9/3/3/3；没有修改或压制这些警告。
+
+| 自动化运行 | 无警告成功 | 带警告成功 | 失败 | 未运行 |
+|---|---:|---:|---:|---:|
+| Automation01 | 12 | 0 | 1 | 0 |
+| Automation02 | 13 | 0 | 0 | 0 |
+| Automation03 | 11 | 1 | 1 | 0 |
+| Automation04 | 12 | 1 | 0 | 0 |
+| Automation05（最终源码/资产） | 12 | 1 | 0 | 0 |
+
+共执行 65 项次：63 通过、2 失败；失败均已说明并保留。最终是 **13/13**，包含 4 个新增状态模型测试和 9 个相关既有测试；不是 65 个不同测试。最后构建只是重编译同一已验证代码，没有后续运行时代码改动。
+
+可复现的套件参数：`-ExecCmds="Automation RunTests Darkwell.PropLab.SpatialMemory+Darkwell.PropLab.ManualSwitch+Darkwell.FogVisual.RememberedProp+Darkwell.PropLab.Scope+Darkwell.FogVisual.GrayUnlit" -TestExit="Automation Test Queue Empty" -unattended -nullrhi -nosound`。详细结果在 `Saved/AutomationReports/AccumulatedMemory01` 至 `05`。GPU 驱动为 `Content/Python/verify_accumulated_spatial_memory.py`，用 `-d3d12 -sm6 -PropLabAsyncCapture -ExecutePythonScript=...` 启动后通过 Editor 原生 StartPIE；`-Accumulated1440` 只运行一个补充循环。驱动结束恢复输入与窗口设置并停止 PIE。
+
+保留的其他警告/错误：每个成功 GPU 日志各 7 条 Warning（阴影 CVar 优先级、MCP EULA、MotionVectorSimulation 的 RenderThreadSafe 警告、RecastNavMesh/CrowdManager 缺失、Shot 的 FindConsoleObject 性能提示）；重启 Editor 后 MCP 旧会话产生一次 Unknown session id，工具重连后成功启动。每次引擎启动的 13 条 Condition failed 原日志保留；非 Win64 可选 SDK 校验提示也保留。未将这些日志删掉、改为静默或通过重试掩盖。
+
+限制：仍是手动家具实验的固定 XY 占用网格，不是任意复杂网格、薄结构或大量家具性能方案。2.5cm 边界台阶、时间抖动颗粒及开放切面可见；**黑色封口和抗锯齿专项尚未开始**。Mode0/1、正式地图（包括 L_Prototype）、SightWeave 公共合同、StableID 和正式模式默认值未修改。房间原 HUD 的旧空位百分比仍是对象级验证字段；新增逐位置字段以 GetSpatialTelemetry 与逐格数组为准。
+
+## 修改范围与用户复测
+
+相对基线的运行时 C++ diff：**268 行增加 / 14 行删除，净 +254 行**（含注释、空行和声明，按 git numstat；没有把测试和 Python 算作运行时）。运行时文件共 7 个；全部修改文件如下：
+
+```text
+Source/Darkwell/Public/VisionPresentation/DarkwellSpatialPropMemory.h
+Source/Darkwell/Private/VisionPresentation/DarkwellSpatialPropMemory.cpp
+Source/Darkwell/Public/VisionPresentation/DarkwellManualStaleRoom.h
+Source/Darkwell/Private/VisionPresentation/DarkwellManualStaleRoom.cpp
+Source/Darkwell/Public/VisionPresentation/DarkwellPropGameplayLab.h
+Source/Darkwell/Private/VisionPresentation/DarkwellPropGameplayLab.cpp
+Source/Darkwell/Private/VisionPresentation/DarkwellRememberedPropSubsystem.cpp
+Source/Darkwell/Private/Tests/DarkwellSpatialPropMemoryTests.cpp
+Source/Darkwell/Private/Tests/DarkwellSightWeaveAdapterTests.cpp
+Content/Darkwell/Vision/PropLab/M_ManualFixedReveal.uasset
+Content/Darkwell/Vision/PropLab/M_ManualAccumulatedMemory.uasset
+Content/Python/update_accumulated_spatial_materials.py
+Content/Python/verify_accumulated_spatial_memory.py
+Docs/DARKWELL_ACCUMULATED_SPATIAL_MEMORY_RETEST.md
+```
+
+用户人工 PIE **仍待执行**。打开独立 `L_ProjectFogPropGameplayLab`，点 Play 后依次执行：
+
+```text
+Darkwell.PropLab stalemanual reset
+Darkwell.PropLab stalemanual mode 2
+Darkwell.PropLab stalemanual teleport top
+Darkwell.PropLab stalemanual teleport bottom
+```
+
+第一次踩圆盘使其 ABSENT，手动走回上方完整验证空位。回圆盘前先离开使其重置，再踩入重新 PRESENT；背向柜子走回，先看隐藏阴影。**此时不要 teleport top，它会自动朝向柜子。** 缓慢左右及斜向转头，只扫约10%后转开，应仅该部分留灰；继续25/50/75%，重复转开并小幅摆动边界。再踩圆盘消失，分段验证空位并转开，应只减少、不恢复。至少重复两轮。黑色封口不是本轮验收项；不要把仍有阶梯边缘误认为该阶段已做 AA。
+
+全部可靠检查点在当前分支提交后立即推送：`d29720e3b89793b1876c88e1b2b5820a630a6889`（独立状态与测试）、`df1b5e0f5e660461b2377400a2d3b0808467724f`（原几何材质/代理接入）、`f314cea3ef88663be73607f93ea2b816f6729de6`（GPU 暴露的 RGBA 连线修复与回归保护），以及本报告/已验证 GPU 驱动的交接提交。最后提交的完整 SHA 和最终 Git/LFS 闭合输出见交接消息。无截图、录像、Saved、Binaries、Intermediate、DDC 或自动化输出入库。

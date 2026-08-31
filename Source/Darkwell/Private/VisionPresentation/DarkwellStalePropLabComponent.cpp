@@ -30,7 +30,13 @@ namespace Darkwell::StaleLab
  UE_DEFINE_GAMEPLAY_TAG_STATIC(Mutated,"Lab.StaleProp.Phase.MutatedOffscreen");
  UE_DEFINE_GAMEPLAY_TAG_STATIC(Rescanning,"Lab.StaleProp.Phase.RescanningOldLocation");
  UE_DEFINE_GAMEPLAY_TAG_STATIC(Verified,"Lab.StaleProp.Phase.VerifiedEmpty");
- void CVar(const TCHAR* Name,int32 Value) { if(auto* V=IConsoleManager::Get().FindConsoleVariable(Name)) V->Set(Value,ECVF_SetByConsole); }
+ void CVar(const TCHAR* Name,int32 Value)
+ {
+  static TMap<FName,IConsoleVariable*> Variables;
+  IConsoleVariable*& Variable=Variables.FindOrAdd(FName(Name));
+  if(!Variable) Variable=IConsoleManager::Get().FindConsoleVariable(Name);
+  if(Variable) Variable->Set(Value,ECVF_SetByConsole);
+ }
 }
 
 float UDarkwellStalePropLabComponent::ScanYaw(float Time,int32 Case)
@@ -53,7 +59,9 @@ bool UDarkwellStalePropLabComponent::Start(int32 InMode,int32 InCase)
  Phase=Darkwell::StaleLab::Observing; ClearReason=TEXT("NoEmptyEvidence");
  Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"),Mode);
  Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.PropRelocationPolicy"),0);
- Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"),0);
+ // The existing Lab route guard in PlayerController owns cursor suppression.
+ // Reserve 14 for this component; do not change command World resolution or input rules.
+ Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"),14);
  for(TActorIterator<ADarkwellStalkerCharacter> It(GetWorld());It;++It) It->Destroy();
  for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It)
  { CollisionBackup.Add(*It,It->GetActorEnableCollision()); It->SetActorEnableCollision(false); }
@@ -92,6 +100,7 @@ void UDarkwellStalePropLabComponent::Stop()
  if(auto* Memory=GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>()) Memory->ReleaseLabVerificationSubject();
  for(auto& Pair:CollisionBackup) if(Pair.Key.IsValid()) Pair.Key->SetActorEnableCollision(Pair.Value);
  CollisionBackup.Reset(); bRunning=false;
+ Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"),0);
  if(auto* Player=Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)))
  {
   Player->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
@@ -121,6 +130,7 @@ void UDarkwellStalePropLabComponent::BeforeActors(float DeltaSeconds)
  if(!GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->IsActive()) return;
  Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"),Mode);
  Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.PropRelocationPolicy"),0);
+ Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"),14);
  for(TActorIterator<ADarkwellStalkerCharacter> It(GetWorld());It;++It) It->Destroy();
  Seconds+=DeltaSeconds;
  if(Seconds>=6 && Seconds<8) Phase=Darkwell::StaleLab::Remembered;
@@ -220,6 +230,9 @@ void UDarkwellStalePropLabComponent::Report(bool bCapture)
  if(GEngine) GEngine->AddOnScreenDebugMessage(0xDA472,0,FColor::Cyan,Status);
  auto* Player=Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)); if(!Player) return;
  const FVector P=Player->GetActorLocation(), Camera=Player->GetTopDownCamera()->GetComponentLocation();
+ const float ExpectedYaw=Seconds<6?(Scenario==5?-90.f:90.f)+70*FMath::Sin(Seconds*PI/3):Seconds<10?-90:ScanYaw(Seconds,Scenario);
+ if(FMath::Abs(FMath::FindDeltaAngleDegrees(ExpectedYaw,Player->GetActorRotation().Yaw))>.01f)
+  UE_LOG(LogDarkwellStaleLab,Error,TEXT("STALE_FAIL route aim overwritten expected=%.6f actual=%.6f"),ExpectedYaw,Player->GetActorRotation().Yaw);
  int32 EnemyCount=0; for(TActorIterator<ADarkwellStalkerCharacter> It(GetWorld());It;++It) ++EnemyCount;
  if(EnemyCount || (bMutated && Live)) UE_LOG(LogDarkwellStaleLab,Error,TEXT("STALE_FAIL enemy=%d newLocationLive=%d"),EnemyCount,Live);
  float Opacity=Evidence.IsObjectEmpty()?0:1;

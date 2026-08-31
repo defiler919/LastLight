@@ -1,4 +1,98 @@
-# DARKWELL stale prop erasure — 安全收尾交接
+# DARKWELL stale prop erasure — 恢复验证交接
+
+## 2026-08-31 恢复记录（优先于下方历史暂停记录）
+
+用户已明确授权从 `f667527ce3fc3c3cd9db44a6fa4324a1b14381db` 和保留工作树继续。本次没有重新实现残影实验，没有变更空位判据、最终 Mode、Policy 1、正式地图或插件合同。
+
+**PARTIAL — READY_FOR_USER_STALE_PROP_ERASURE_PIE**
+
+C 单路线重复性、三模式同轨动态复证、标准构建、规则自动化和真实 Editor PIE 均已通过。可以开始用户人工 PIE 对照，但不代表选定最终 Mode，也不代表全部 A–F / 分辨率矩阵已验收。下方旧的 TIMING EVIDENCE PENDING 仅为历史状态。
+
+### 权威起点与改动范围
+
+- 恢复开始实际确认 HEAD / upstream / 远端均为 `f667527ce3fc3c3cd9db44a6fa4324a1b14381db`，当前分支仍为 `codex/darkwell-prop-memory-gameplay-lab`。
+- 上次列出的 7 个保留文件全部存在，并与 `Saved/PropGameplayLab/StaleSafeClosePreserved.json` 的 SHA256 一致。未 restore / reset / clean / stash / 覆盖 / 丢弃。
+- 本次没有新增运行时代码改动，沿用上次保留的 route 14 输入保护、实际朝向诊断、旧 SoftCoverage 隔离和对应测试。最小复现先使用已经通过 Build07 的本机 DLL，没有先构建或改代码。
+- 验证脚本增加路线公式、帧间隔、扫描时相机固定检查；相邻帧标签改用日志时间，不能用 `帧号 / 30` 忽略初始偏移。日志审计只分类具体引擎启动错误，拒绝笼统忽略 Python 错误。
+- 真实 PIE 脚本检查相机旋转、世界时钟与路线时间、三模式完成、无敌人、固定工具和 reset；不改变运行时规则。
+- `Darkwell.uproject` 的 EngineAssociation 本机 GUID 保留且不提交。正式地图、SightWeave 插件和已有 LFS 材质未改动。
+
+### 实际根因与最小复证
+
+旧 C 三模式的 1080 个时间戳、相机位置和事件时刻原本已经一致；差异出现在玩家实际朝向。`LabRoute=0` 允许现有 PlayerController 在路线设定朝向后继续用鼠标瞄准覆盖它，进而改变合法覆盖与已验证格子。保留修正用内部 route 14 复用已有输入保护，结束恢复 0。本次证据支持修复的是**朝向输入干扰**，不声称发现或修复了引擎时钟漂移。
+
+1. `StaleResumeProbe01_1920_M0_C`：单独 Mode 0 / C，1080 帧；全程原生朝向诊断失败 0，最大路线公式误差 `0.000104°`，相机位置 `(400,-828.273,1224.885)` 固定。
+2. `StaleResumeRepeat01_1920_M0_C`：同一路线再跑一次，1080 帧全部元数据和格子 hash 与第一次完全一致。
+3. 在重复性成立后才采 `StaleResumeProbe01_1920_M1_C` / `M2_C`，没有批量重跑 C/F 六条。
+4. 三模式每帧玩家位置、实际 yaw、相机、时间、阶段、empty、验证比例和格子 hash 完全一致。首帧 `0.066667 s`，末帧 `36.033127 s`，固定步长 1/30；变更事件 `8.033327 s`，全格确认 `22.999992 s`。
+
+GPU 采集均为 1920×1080、D3D12 / PCD3D_SM6、TSR (`r.AntiAliasingMethod=4`)。三模式均 ENEMY 0、Torch 100，移动后的 B 没有进入 Live，已验证比例单调且视野离开后不恢复。
+
+### 实际画面审查与准确合同
+
+已实际打开三模式并排 `1920_C_matched.png`（含约 25% / 50% / 75% 同帧对照）、`1920_C_adjacent.png` 的 9 个连续帧，以及原始 `frame_0480.png`。视频由同一批真实帧组成，没有生成替代玩法画面。
+
+| 共同空位证据 | 时间 | Mode 0 | Mode 1 | Mode 2 |
+|---|---|---|---|---|
+| 约 25% | 12.97 s | 完整灰色长柜 | 左侧已验证部分擦除 | 相同区域约 .20 秒渐隐 |
+| 50% | 16.10 s | 完整灰色长柜 | 半件灰色残影 | 同一擦除边界的短渐隐 |
+| 约 75% | 19.30 s | 完整灰色长柜 | 约四分之一残影 | 同一证据，短暂透明过渡 |
+| 100% | 约 23 s 起 | 整件一次消失 | 剩余格子擦除 | 最后格子完成短渐隐 |
+| 离开视野 | 34 s | 不恢复 | 不恢复 | 不恢复 |
+
+Mode 0 的消除仍要求独立空位网格 **全部确认**，不是普通呈现 `.50/.25`；Mode 1/2 同一空间证据，已经消除的格子永久清除。相邻帧可见 Mode 2 的短透明边缘，没有看到整件反复出现；10 cm 格子边缘的小台阶仍可见。是否接受“半个柜子”和“幽灵溶解感”留给用户真实动态 PIE，不由代理决定。
+
+### 构建、自动化、失败与日志
+
+- `StaleResumeBuild01.log`：仅一次 `Scripts/BuildEditor.ps1 -Configuration Development`，**Succeeded**；目标 up to date / 0 actions，沿用已编译的保留源码，不把它说成一次全量重编译。保留 MSVC 14.51 新于引擎推荐 14.50 的警告。
+- `Saved/AutomationReports/StaleResume01/index.json`：**21 项通过，0 失败**（20 无警告、1 有预期警告）。过滤 `Darkwell.PropLab+Darkwell.FogVisual+Darkwell.SightWeave.M6P1`；预期警告仍为 `DuplicateFixtureRollback`。
+- 三模式 GPU 日志审计：**severe 0、未分类错误 0**，但保留 **159 条已分类启动 Error、75 条 Warning**。Error 为启动 Condition failed / Experimental Toolsets 缺少 Python 属性；不能报告日志零错误。全量清单在 `StaleResumeProbe01_Review/log_inventory.json`。
+- `StaleResumePIE01.log`：Mode 0 已正常结束，检查脚本却把 `ghost=0` 的末尾 `t=0` 当作时间，错误检查结束后相机。正则增加单词边界；运行时代码未改。
+- `StaleResumePIE02.log`：实际 `t=9.995548` / yaw=-90，HUD 四舍五入为 `10.00`，脚本误用下一阶段 yaw。脚本改为检查 HUD ±.005 秒舍入区间两侧；原生全精度 .01° 朝向诊断不变。对这两次现有日志的 **2075 帧离线回放通过**，并确认原有鼠标覆盖差异仍会被拒绝。不是再次发现无法解释的时钟漂移。
+- `StaleResumePIE03.log`：真实 Editor PIE、D3D12/SM6、TSR 通过。Mode 0 / 1 / 2 分别记录 1858 / 1937 / 1798 个可变帧率游戏帧，各运行约 36 秒；这里不冒充固定帧率同轨采集。相机旋转 `(-65,90,0)` 和位置检查、route/world 时钟偏移检查通过；三轮均 empty=1、ghost=0、恢复家具 25。policy 1 / enemy 1 在专用路线中被拒绝；reset 经过实际伤害和 dark 后恢复满生命、Torch 100、0/0、route 0、ENEMY 0；结束 PIE 成功。
+- 最新构建 / 自动化 / PIE03 severe 均为 0。自动化、PIE03 各保留 13 条引擎启动 Condition failed；Warning 分别为构建 1、自动化 4（重复 Fixture 在不同日志类别重复输出）、PIE03 8。PIE 包含 NavMesh/Crowd、MotionVectorSimulation 线程标记、CVar 查找性能警告；未扩修这些正式或引擎问题。清单为 `StaleResumeVerificationLogInventory.json`。PIE01/02 失败仍保留，不计入通过结果。
+- 上次 `StaleFinal01`、`StaleSmoke01`、构建/材质/测试失败记录全部保留；旧 C/F 六次采集仍无效，不以本次 C 通过追认旧 F。A/B/D/E/F 和 1440p 本次没有重采，不宣称完整动态矩阵通过。
+
+新证据均在本机忽略目录 `D:/UE_projects/LastLight/Saved/PropGameplayLab/`：
+
+- `StaleResumeProbe01_check.json`、`StaleResumeRepeat01_check.json`。
+- `StaleResumeProbe01_1920_M{0,1,2}_C.log` 及同名图像目录，`StaleResumeRepeat01_1920_M0_C.log`。
+- `StaleResumeProbe01_Review/1920_summary.json`、`1920_C_matched.png`、`1920_C_adjacent.png`、`1920_C_three_modes.mp4`、`log_inventory.json`。
+- `StaleResumeBuild01.log`、`StaleResumeAutomation01.log`、`StaleResumePIE01.log` / `02.log` / `03.log`、`StaleResumePIEScriptReplay.json`、`StaleResumeVerificationLogInventory.json`。
+
+### 用户 PIE 操作与提交边界
+
+打开 `/Game/Maps/L_ProjectFogPropGameplayLab`，点击 Play，在**活动 Lab PIE** 控制台依次输入：
+
+```text
+Darkwell.PropLab reset
+Darkwell.PropLab stale 0 C
+Darkwell.PropLab stale 1 C
+Darkwell.PropLab stale 2 C
+```
+
+reset 后等地图重新进入 PIE。每条 stale 等约 36 秒、看到 `ROUND FINISHED` 后再输下一条；用相同 C 路线比较。顶部应显示对应 Mode、Policy 0、ENEMY 0；不要用上一轮普通家具的 mode 命令代替 stale 命令。需要中止或重来使用 reset；help 列出 A–F。用户重点判断整件突然消失、半件残影及短渐隐的动态感受，不由自动截图替代。
+
+本次恢复检查点由包含本节的提交标识，提交并立即推送当前分支。仅提交已验证的 3 个 C++ 文件、3 个验证脚本和两份文档；不夹带 uproject / 地图 / 插件 / Saved / 构建产物。开始提交前 `git diff --check` 和 `git lfs fsck` 通过；最终 Git 核对另存 `Saved/PropGameplayLab/StaleResumeFinalGit.log`，最终 SHA 以该记录和用户报告为准。
+
+完成推送后打开 Lab Editor 等待用户 Play；保留电脑开启。不启动其他案例、Policy 1 决策或正式地图施工。用户下一轮可说：“从当前已推送检查点继续，先读取本交接顶部恢复记录和我的 PIE 反馈；不要重新重跑旧 C/F 矩阵或选择最终 Mode。”
+
+### 复现命令（后续明确授权验证时使用，不自动扩跑）
+
+```powershell
+# 全新 Label，先只跑一个 Mode / C；不得用默认参数扩跑 A–F。
+./Scripts/RunStalePropLab.ps1 -Widths 1920 -Modes 0 -Cases 2 -Label NewUniqueProbe -ZenDataPath D:/UE_projects/LastLight/DerivedDataCache/StaleLabZen
+# 单路线可信之后才补相同 Label 的 Mode 1 / 2。
+./Scripts/RunStalePropLab.ps1 -Widths 1920 -Modes 1,2 -Cases 2 -Label NewUniqueProbe -ZenDataPath D:/UE_projects/LastLight/DerivedDataCache/StaleLabZen
+python Scripts/ReviewStalePropLab.py --label NewUniqueProbe --width 1920 --cases C --video
+python Scripts/AuditStalePropLab.py --label NewUniqueProbe
+```
+
+本机验证 Python 为 `C:/Users/defiler919/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe`，Review 需要 Pillow；视频工具已在忽略目录，不安装新全局依赖。
+
+---
+
+# 历史记录：上次安全收尾（保留原文，不代表当前恢复状态）
 
 记录时间：2026-08-31，Asia/Shanghai。
 

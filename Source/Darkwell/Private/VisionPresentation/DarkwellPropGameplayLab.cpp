@@ -339,7 +339,7 @@ void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
   LastMode=Mode; LastPolicy=Policy;
   for (UTextureRenderTarget2D* RT : SoftTargets) UKismetRenderingLibrary::ClearRenderTarget2D(this,RT);
  }
- if (Mode==2) UpdateSoftCoverage(DeltaSeconds);
+ if (Mode==2 && !StaleLab->IsRunning()) UpdateSoftCoverage(DeltaSeconds);
  if (RawCoverage) for (TActorIterator<ADarkwellPropLabFurniture> It(GetWorld()); It; ++It)
   It->BindPresentation(RawCoverage,SoftTargets.Num()==2 ? SoftTargets[SoftIndex].Get() : RawCoverage.Get(),FogMin,FogInv,StaleLab->IsRunning()?0:Mode);
  if(StaleLab->IsRunning())

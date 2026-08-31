@@ -69,7 +69,15 @@ HUD 显示 Mode、Policy、案例/时间、阶段、StableID、已验证比例�
 
 ## 验证记录
 
-验证进行中，最终结果在可靠检查点补齐。自动证据用于发现实现错误，不能替代用户对实际动态 PIE 的最终体验判断。
+**PARTIAL — READY_FOR_USER_STALE_PROP_ERASURE_PIE**。从 `f667527` 及保留工作树恢复后的 C 单路线重复验证、三模式同轨对照和真实 Editor PIE 已通过。完整记录以 `Docs/DARKWELL_STALE_PROP_ERASURE_HANDOFF.md` 顶部的恢复记录为准，下方历史失败继续保留。
+
+- `StaleResumeProbe01` / `StaleResumeRepeat01`：Mode 0 / C 两次 1080 帧元数据和格子 hash 完全一致；随后 C 三模式各 1080 帧的时钟、实际朝向、相机、事件和空位证据一致。D3D12/SM6、1080p、TSR；不是重新批量运行 C/F 六条。
+- 实际打开并排图（25% / 50% / 75%）、相邻连续帧和原始帧。Mode 0 保留完整残影至约 23 秒全部格子确认，Mode 1 局部擦除，Mode 2 同一区域约 .20 秒渐隐；离开视野不恢复，B 无泄漏。
+- `StaleResumeBuild01` 标准 Editor Development 构建成功（up to date / 0 actions）；`StaleResume01/index.json` 21 项通过、0 失败，1 项预期警告。
+- `StaleResumePIE03` 真实 Editor PIE：三模式完成、固定相机与 route/world 时钟、禁止敌人和 Policy 1、每轮恢复家具、受伤/切暗后的 reset 全部通过。该可变帧率 PIE 仅验证生命周期，不宣称逐帧结果等于固定 30 fps 采集。
+- 最新采集和最终 PIE severe=0；引擎启动 Condition failed、Experimental Toolsets、NavMesh/Crowd、CVar/渲染线程和工具链警告仍保留，不能报告日志零错误。A/B/D/E/F 和 1440p 本次未重采，旧失败 C/F 不被追认。
+
+自动证据用于发现实现错误，不能替代用户对实际动态 PIE 的最终体验判断。最终 Mode / Policy 1 尚未决定。
 
 失败记录保留在忽略的 `Saved/PropGameplayLab`：
 
@@ -77,5 +85,8 @@ HUD 显示 Mode、Policy、案例/时间、阶段、StableID、已验证比例�
 - `StaleMaterial01`：默认纹理与 Linear Grayscale 采样类型不符；已重新建立专用灰色材质。`StaleMaterial02` 在加载旧失败资产时仍记录一次旧错误，其后重建保存，最终运行必须无材质编译失败。
 - C 盘约剩 1.6 GB，默认 Zen 返回 HTTP 507。后续验证使用进程参数 `-ZenDataPath=D:/UE_projects/LastLight/DerivedDataCache/StaleLabZen`；不修改全局缓存设置、不删除旧数据。
 - `StaleSmoke01`：旧普通 SurfaceSweep 分支可能影响初次灰色记忆阶段，已隔离专用实验的身份显示；该轮不作为最终公平对照。
+- `StaleAutomation02`：新增测试把观察原点（主体中心 Z=45）误当作 Actor 地面原点 Z=0；改为比较实际观察快照原点，随后 21 项通过（20 无警告、1 原有预期重复 Fixture 警告）。
+- `StaleFinal01`：逐帧 hash 对照发现实际朝向受鼠标输入干扰，不能作为公平证据。专用路线现占用内部 route 14，复用已有 PlayerController 的 Lab 路线输入保护；不修改正式控制器，也不重写命令 World 解析。重新采集后才可交付。
+- `StaleResumePIE01` / `02`：新检查脚本先把 `ghost=0` 误识别为时间，后在实际 9.995548 秒 / HUD 10.00 的边界误判朝向。分别修正字段边界及 HUD 舍入区间；2075 帧离线回放通过后 PIE03 完整通过。原生 .01° 全精度朝向诊断未放宽，运行时代码未因此修改。
 
 复现验证工具：`Scripts/RunStalePropLab.ps1`，`Scripts/ReviewStalePropLab.py`。截图、视频、报告和缓存全部留在忽略目录，不提交。

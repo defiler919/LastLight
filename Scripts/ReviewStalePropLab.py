@@ -1,5 +1,5 @@
 """Read captured game frames/logs; never generate substitute gameplay images."""
-import argparse, json, re, subprocess
+import argparse, json, math, re, subprocess
 from pathlib import Path
 from PIL import Image, ImageDraw
 
@@ -7,6 +7,14 @@ p=argparse.ArgumentParser();p.add_argument('--label',required=True);p.add_argume
 root=Path(__file__).resolve().parents[1]/'Saved/PropGameplayLab'
 out=root/(a.label+'_Review');out.mkdir(exist_ok=True)
 frame_re=re.compile(r'STALE_FRAME (.+)')
+def route_yaw(t,case):
+    if t<6:return (-90 if case=='F' else 90)+70*math.sin(t*math.pi/3)
+    if t<10:return -90
+    if t<20:y=-40+(t-10)*13
+    elif t<22:y=90+(4*math.sin((t-20)*2*math.pi) if case=='E' else 0)
+    elif t<32:y=90+(t-22)*13
+    else:return -90
+    return 180-y if case=='D' else y
 def parse(log):
     text=log.read_text(encoding='utf-8-sig',errors='replace')
     frames=[dict(re.findall(r'(\w+)=(\([^)]*\)|\S+)',m)) for m in frame_re.findall(text)]
@@ -24,6 +32,9 @@ for case in a.cases:
         assert 'PCD3D_SM6' in text and 'D3D12' in text
         assert not re.search(r'Fatal error:|Assertion failed:|Ensure condition failed:|GPU crashed|Failed to compile Material',text)
         ratios=[float(f['verified']) for f in frames]
+        assert all(abs((float(f['yaw'])-route_yaw(float(f['t']),case)+180)%360-180)<.01 for f in frames), 'route aim overwritten'
+        assert all(abs(float(y['t'])-float(x['t'])-1/30)<.00001 for x,y in zip(frames,frames[1:])), 'route clock interval differs'
+        assert len({f['camera'] for f in frames if 10<=float(f['t'])<32})==1, 'camera moved during scan'
         assert all(y>=x for x,y in zip(ratios,ratios[1:])), 'resurrection'
         assert all(f['enemy']=='0' and f['torch']=='100.00' for f in frames)
         assert all(f['live']=='0' for f in frames if float(f['t'])>=8), 'B leaked'
@@ -59,7 +70,7 @@ for case in a.cases:
         for mode,r in enumerate(runs):
             im=Image.open(r/f'frame_{i:04d}.png').convert('RGB')
             w,h=im.size;im=im.crop((int(w*.12),int(h*.25),int(w*.88),int(h*.62)));im.thumbnail((640,192))
-            x,y=640*mode,row*220;adjacent.paste(im,(x,y+24));d.text((x+5,y+5),f'M{mode} frame {i} t={i/30:.3f}',fill='white')
+            x,y=640*mode,row*220;adjacent.paste(im,(x,y+24));d.text((x+5,y+5),f"M{mode} frame {i} t={float(hard[i]['t']):.3f}",fill='white')
     adjacent.save(out/f'{a.width}_{case}_adjacent.png')
     if a.video:
         ffmpeg=root/'Tools/imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe'

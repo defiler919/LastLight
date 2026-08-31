@@ -23,6 +23,7 @@
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
+#include "VisionPresentation/DarkwellStalePropLabComponent.h"
 #include "HAL/IConsoleManager.h"
 
 namespace Darkwell::SightWeaveAdapterTests
@@ -881,6 +882,13 @@ bool FDarkwellStaleSnapshotOwnershipTest::RunTest(const FString&)
   TestTrue(TEXT("Verified erasure cannot resurrect on ordinary refresh"),!Valid && !Proxy && !Live);
   if(Event==1) Prop->Destroy(); Memory->ReleaseLabVerificationSubject();
  }
+ auto* Stale=Fixture->FindComponentByClass<UDarkwellStalePropLabComponent>();
+ TestTrue(TEXT("Explicit stale route starts"),Stale && Stale->Start(1,2));
+ TestEqual(TEXT("Existing PlayerController cursor guard sees a scripted Lab route"),
+  IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"))->GetInt(),14);
+ if(Stale) Stale->Stop();
+ TestEqual(TEXT("Stop restores manual Lab input"),
+  IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"))->GetInt(),0);
  Fixture->Destroy();
  FTestWorld Outside(TEXT("StaleOutside"));
  TestFalse(TEXT("Dedicated ownership cannot activate outside Lab"),Outside.Get()->GetSubsystem<UDarkwellRememberedPropSubsystem>()->SetLabVerificationSubject(TEXT("Forbidden")));

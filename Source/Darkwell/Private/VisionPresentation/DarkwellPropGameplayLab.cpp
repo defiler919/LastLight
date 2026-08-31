@@ -20,6 +20,11 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Paths.h"
 #include "UnrealClient.h"
+#include "Engine/GameViewportClient.h"
+#include "Async/Async.h"
+#include <atomic>
+#include "ImageUtils.h"
+#include "Misc/FileHelper.h"
 #include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
@@ -27,6 +32,11 @@
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDarkwellPropLab, Log, All);
+struct FDarkwellLabCaptureWriter
+{
+ std::atomic<int32> Pending{0};
+ std::atomic<int32> Failed{0};
+};
 namespace Darkwell::PropLab
 {
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
@@ -227,11 +237,30 @@ void ADarkwellPropGameplayLab::BeginPlay()
 {
  Super::BeginPlay();
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) { SetActorTickEnabled(false); return; }
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+ if(FParse::Param(FCommandLine::Get(),TEXT("PropLabAsyncCapture")))
+ {
+  CaptureWriter=MakeShared<FDarkwellLabCaptureWriter,ESPMode::ThreadSafe>();
+  ScreenshotHandle=UGameViewportClient::OnScreenshotCaptured().AddLambda([Writer=CaptureWriter](int32 W,int32 H,const TArray<FColor>& Bitmap)
+  {
+   const FString Filename=FScreenshotRequest::GetFilename();
+   Writer->Pending.fetch_add(1);
+   Async(EAsyncExecution::ThreadPool,[Writer,Filename,W,H,Pixels=Bitmap]()
+   {
+    TArray64<uint8> Compressed;
+    FImageUtils::PNGCompressImageArray(W,H,Pixels,Compressed);
+    if(!FFileHelper::SaveArrayToFile(Compressed,*Filename)) Writer->Failed.fetch_add(1);
+    Writer->Pending.fetch_sub(1);
+   });
+  });
+ }
+#endif
  for (TActorIterator<ADarkwellPropLabFurniture> It(GetWorld()); It; ++It) InitialTransforms.Add(It->StableId,It->GetActorTransform());
  UE_LOG(LogDarkwellPropLab,Display,TEXT("PropLab ready furniture=%d; controls: Darkwell.PropLab help"),InitialTransforms.Num());
 }
 void ADarkwellPropGameplayLab::EndPlay(EEndPlayReason::Type Reason)
 {
+ if(ScreenshotHandle.IsValid()) UGameViewportClient::OnScreenshotCaptured().Remove(ScreenshotHandle);
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
  if (Darkwell::PropLab::IsLabWorld(GetWorld()))
  {
@@ -310,7 +339,12 @@ void ADarkwellPropGameplayLab::CaptureEvidence()
     CaptureIndex-1,LastMode,LastPolicy,LastRoute,Elapsed,Found&&Snapshot.bHardLive,It->IsHidden(),Hud,Snapshot.AuthorityRevision,Memory->GetDiagnostics().RegisteredCount);
   }
  }
- if(Elapsed>Duration+1) { UE_LOG(LogDarkwellPropLab,Display,TEXT("LAB_CAPTURE_COMPLETE frames=%d"),CaptureIndex); UKismetSystemLibrary::QuitGame(this,nullptr,EQuitPreference::Quit,false); }
+ if(Elapsed>Duration+1 && (!CaptureWriter || CaptureWriter->Pending.load()==0))
+ {
+  if(CaptureWriter && CaptureWriter->Failed.load()!=0) UE_LOG(LogDarkwellPropLab,Error,TEXT("LAB_CONTRACT_FAIL screenshot write"));
+  UE_LOG(LogDarkwellPropLab,Display,TEXT("LAB_CAPTURE_COMPLETE frames=%d"),CaptureIndex);
+  UKismetSystemLibrary::QuitGame(this,nullptr,EQuitPreference::Quit,false);
+ }
 #endif
 }
 

@@ -79,3 +79,10 @@ Probe03 activated correctly but its texture made comparison hard; Probe04 uses p
 graybox material and was actually opened and inspected. Optional engine editor Python
 toolsets emit startup errors under `-game`; these are not lab authority failures and
 must remain listed in the final severe scan rather than being silently filtered away.
+
+Capture checkpoint: native PNG compression now runs on background workers and waits for
+all writes before exiting. `AsyncProbe01_1920_M2_P0_R2` produced all 100 requested 10 Hz
+frames with no laboratory contract errors; its actual soft-mode image was inspected.
+The earlier `Visual01` attempt is retained but rejected for short-transition evaluation:
+synchronous PNG compression reduced its cadence to approximately four frames per second.
+`Build09.log` records the full successful editor build for the asynchronous writer.

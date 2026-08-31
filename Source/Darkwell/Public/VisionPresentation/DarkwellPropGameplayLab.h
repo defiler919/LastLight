@@ -6,6 +6,7 @@
 
 class UTextureRenderTarget2D;
 class UDarkwellRememberablePropComponent;
+struct FDarkwellLabCaptureWriter;
 
 namespace Darkwell::PropLab
 {
@@ -64,6 +65,8 @@ private:
  int32 LastMode = -1, LastPolicy = -1, LastRoute = -1;
  float Elapsed = 0, RouteTime = 0;
  int32 CaptureIndex = 0;
+ TSharedPtr<FDarkwellLabCaptureWriter, ESPMode::ThreadSafe> CaptureWriter;
+ FDelegateHandle ScreenshotHandle;
  FString LastEvent = TEXT("Ready: use Darkwell.PropLab help");
  TMap<FName, FTransform> InitialTransforms;
 };

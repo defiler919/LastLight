@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellManualStaleRoom.h"
+#include "VisionPresentation/DarkwellMode2SolidComponent.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
@@ -31,6 +32,7 @@ namespace Darkwell::ManualStale
 
 ADarkwellManualStaleRoom::ADarkwellManualStaleRoom()
 {
+ Mode2Presentation=CreateDefaultSubobject<UDarkwellMode2SolidComponent>(TEXT("Mode2SolidPresentation"));
  SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("RoomRoot")));
  static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
  static ConstructorHelpers::FObjectFinder<UStaticMesh> Cylinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
@@ -128,6 +130,7 @@ void ADarkwellManualStaleRoom::ToggleActualCabinet()
 bool ADarkwellManualStaleRoom::ResetRoom(ADarkwellCharacter* Player)
 {
  if(FindActive(GetWorld())!=this || !Player) return false;
+ Mode2Presentation->ResetPresentation();
  if(HasActualCabinet()) Cabinet->Destroy();
  auto* Memory=GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>();
  Memory->ReleaseLabVerificationSubject(); Memory->SetLabVerificationSubject(CabinetId(),true);
@@ -223,7 +226,16 @@ void ADarkwellManualStaleRoom::UpdateObservation(float DeltaSeconds,ADarkwellCha
    [this](const FBox2D&){return HasActualCabinet() && Cabinet->GetActorEnableCollision();});
   ApplyErasure(Darkwell::PropLab::PresentationMode(GetWorld()));
  }
+ // ApplyErasure alone owns the existing finish timing. The rendering component
+ // only reads that result, and never creates/clears a snapshot or occupancy.
+ Memory->TryGetRecordForTesting(CabinetId(),Live,Valid,At,Proxy);
+ Mode2Presentation->Update(DeltaSeconds,HasActualCabinet()?Cabinet.Get():nullptr,Valid?Proxy:nullptr,Live,Evidence,DisplayedOpacity,Structure[0]);
  Report();
+}
+void ADarkwellManualStaleRoom::EnforceMode2Presentation(AActor* Snapshot)
+{
+ if(Darkwell::PropLab::PresentationMode(GetWorld())==2)
+  Mode2Presentation->EnforceSource(HasActualCabinet()?Cabinet.Get():nullptr,Snapshot);
 }
 void ADarkwellManualStaleRoom::Report()
 {

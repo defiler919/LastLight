@@ -11,6 +11,7 @@ class ADarkwellPropLabFurniture;
 class ADarkwellCharacter;
 class UTexture2D;
 class UMaterialInstanceDynamic;
+class UDarkwellMode2SolidComponent;
 
 /** Physical room and pressure input only exist in the independent development Lab. */
 UCLASS()
@@ -27,6 +28,7 @@ public:
  void BindRoomPresentation(UTexture* Raw, FVector2D Min, FVector2D Inv);
  bool ResetRoom(ADarkwellCharacter* Player);
  void UpdateObservation(float DeltaSeconds, ADarkwellCharacter* Player);
+ void EnforceMode2Presentation(AActor* Snapshot);
  void Command(const TArray<FString>& Args);
  void TeleportPlayer(ADarkwellCharacter* Player, bool bTop);
  bool IsStarted() const { return bStarted; }
@@ -37,11 +39,13 @@ public:
  UFUNCTION(BlueprintPure, Category="Lab") float GetRemainingOpacity() const;
  UFUNCTION(BlueprintPure, Category="Lab") bool IsSwitchArmed() const;
  UFUNCTION(BlueprintPure, Category="Lab") float GetCabinetCoverage() const;
+ UFUNCTION(BlueprintPure, Category="Lab") UDarkwellMode2SolidComponent* GetMode2Presentation() const { return Mode2Presentation; }
  // With the accepted yaw=90 top-down camera, world +X is screen-left.
  FVector CabinetPosition() const { return GetActorLocation()+FVector(500,500,0); }
  FVector SwitchPosition() const { return GetActorLocation()+FVector(500,-450,0); }
  static constexpr float SwitchRadius=100.f;
 private:
+ UPROPERTY(VisibleAnywhere) TObjectPtr<UDarkwellMode2SolidComponent> Mode2Presentation;
  void SpawnActualCabinet();
  void ToggleActualCabinet(); // Deliberately has no memory/evidence API access.
  void AttachObservedSnapshot(AActor* Proxy);

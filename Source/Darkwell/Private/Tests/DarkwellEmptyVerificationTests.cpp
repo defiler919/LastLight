@@ -3,6 +3,46 @@
 #include "VisionPresentation/DarkwellEmptyVerification.h"
 #include "VisionPresentation/DarkwellStalePropLabComponent.h"
 #include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
+#include "VisionPresentation/DarkwellMode2SolidComponent.h"
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMode2RevealRampTest,"Darkwell.PropLab.Mode2Solid.SpatialRampAndLegalGate",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellMode2RevealRampTest::RunTest(const FString&)
+{
+ using Solid=UDarkwellMode2SolidComponent;
+ TestEqual(TEXT("No legal view means no geometry alpha"),Solid::AdvanceReveal(0,0,10),0.f);
+ TestEqual(TEXT("Object identity .50 cannot open spatial surface"),Solid::AdvanceReveal(0,.5f,10),0.f);
+ TestEqual(TEXT("Soft outer fringe is not direct observation"),Solid::AdvanceReveal(0,.98f,10),0.f);
+ TestTrue(TEXT("First legal frame begins fade immediately"),Solid::AdvanceReveal(0,1,1.f/60)>0);
+ TestTrue(TEXT("Halfway at .10 seconds"),FMath::IsNearlyEqual(Solid::AdvanceReveal(0,1,.1f),.5f));
+ TestEqual(TEXT("Complete at .20 seconds"),Solid::AdvanceReveal(0,1,.2f),1.f);
+ TestEqual(TEXT("Occlusion immediately removes live pixels, no fade through wall"),Solid::AdvanceReveal(1,0,.001f),0.f);
+ float Left=0,Right=0;
+ for(int32 I=0;I<30;++I) { Left=Solid::AdvanceReveal(Left,1,1.f/60); Right=Solid::AdvanceReveal(Right,0,1.f/60); }
+ TestTrue(TEXT("Scan can reveal one side fully without exposing other side"),Left==1 && Right==0);
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMode2ContourTest,"Darkwell.PropLab.Mode2Solid.ContourDoesNotWriteEvidence",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellMode2ContourTest::RunTest(const FString&)
+{
+ FDarkwellEmptyVerification E; E.Initialize(FBox2D(FVector2D(0,0),FVector2D(20,20)));
+ TArray<float> Opacity={0,1,0,1};
+ for(double Y=0;Y<=20;Y+=.25)
+ {
+  TestTrue(TEXT("Smooth cut sits on the shared boundary, no cap over empty half"),FMath::IsNearlyEqual(UDarkwellMode2SolidComponent::SampleOpacity(E,Opacity,FVector2D(10,Y)),.5f));
+  TestTrue(TEXT("Empty side remains outside closed volume"),UDarkwellMode2SolidComponent::SampleOpacity(E,Opacity,FVector2D(9,Y))<.5f);
+ }
+ TestEqual(TEXT("Visual reconstruction creates no authoritative evidence"),E.VerifiedFraction(),0.f);
+ TestFalse(TEXT("Visual reconstruction cannot finish a snapshot"),E.IsObjectEmpty());
+ FDarkwellEmptyVerification Surround; Surround.Initialize(FBox2D(FVector2D(0,0),FVector2D(50,50)));
+ TArray<float> Ring; Ring.Init(1,25); Ring[12]=0;
+ for(double Y=20;Y<=30;Y+=.25) for(double X=20;X<=30;X+=.25)
+  TestTrue(TEXT("Even eight retained neighbours cannot place black volume in a fully empty cell"),
+   UDarkwellMode2SolidComponent::SampleOpacity(Surround,Ring,FVector2D(X,Y))<.8f);
+ return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellEmptyEvidenceTest,"Darkwell.PropLab.Stale.IndependentLegalEvidence",
  EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)

@@ -11,6 +11,7 @@
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
+#include "VisionPresentation/DarkwellManualStaleRoom.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDarkwellRememberedProp, Log, All);
 
@@ -376,6 +377,11 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 		{
 			Proxy->SetActorHiddenInGame(!bShowProxyGeometry);
 		}
+		// Manual Mode 2 owns render geometry only. Observe(), source LiveOnly
+		// state, snapshot capture/clear and all other modes remain above unchanged.
+		if (bManualSubject && Darkwell::PropLab::PresentationMode(GetWorld()) == 2)
+			if (auto* Room = ADarkwellManualStaleRoom::FindActive(GetWorld()))
+				Room->EnforceMode2Presentation(Record.ProxyActor.Get());
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 		if (!Record.bDiagnosticStateValid
 			|| Record.bDiagnosticLastLive != Decision.bShowCurrent

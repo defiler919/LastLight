@@ -25,6 +25,10 @@
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "VisionPresentation/DarkwellStalePropLabComponent.h"
 #include "VisionPresentation/DarkwellManualStaleRoom.h"
+#include "VisionPresentation/DarkwellMode2SolidComponent.h"
+#include "Components/DynamicMeshComponent.h"
+#include "DynamicMesh/DynamicMesh3.h"
+#include "DynamicMesh/DynamicMeshAttributeSet.h"
 #include "HAL/IConsoleManager.h"
 
 namespace Darkwell::SightWeaveAdapterTests
@@ -1011,6 +1015,73 @@ bool FDarkwellManualSwitchErasureTest::RunTest(const FString&)
   Step(FVector(4500,150,92),90);
   Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
   TestTrue(TEXT("Legally observing present cabinet creates fresh memory"),Live && Valid && Proxy);
+ }
+ Fixture->Destroy(); return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMode2SolidMatrixTest,
+ "Darkwell.PropLab.Mode2Solid.TwoCyclesAndModeIsolation", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellMode2SolidMatrixTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("SolidMatrix"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+ UWorld* World=TestWorld.Get();
+ auto* Room=Spawn<ADarkwellManualStaleRoom>(*World,FVector(4000,0,0));
+ auto* Fixture=Spawn<ADarkwellPropGameplayLab>(*World,FVector::ZeroVector);
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(4500,150,92),FRotator(0,90,0));
+ auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ auto* Memory=World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+ auto* Solid=Room->GetMode2Presentation();
+ TestTrue(TEXT("Existing adapter owns authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ Room->ResetRoom(Player); Room->Command({TEXT("stalemanual"),TEXT("mode"),TEXT("2")});
+ auto Step=[&](FVector P,float Yaw,int32 Count=8)
+ {
+  Player->SetActorLocation(P); Player->SetActorRotation(FRotator(0,Yaw,0));
+  for(int32 I=0;I<Count;++I) { Adapter->Tick(1.f/30); Memory->RefreshNowForTesting(); Room->UpdateObservation(1.f/30,Player); }
+ };
+ const FVector Top(4500,150,92),Press=Room->SwitchPosition()+FVector(0,0,92),Outside=Press+FVector(220,0,0);
+ Step(Top,90);
+ const int32 FullTriangles=Solid->GetLiveTriangles();
+ TestTrue(TEXT("Actual visible through spatial geometry"),FullTriangles>0 && Solid->GetRevealFraction()>.9f);
+ for(int32 Cycle=0;Cycle<2;++Cycle)
+ {
+  Step(Press,90);
+  TestTrue(TEXT("Absent memory retained with no real shadow source"),!Room->HasActualCabinet() && Room->GetRemainingOpacity()==1 && Solid->GetShadowSources()==0);
+  Step(Top,55);
+  TestTrue(TEXT("Partially erased gray volume has a real closed cut surface"),Room->GetVerifiedFraction()>0 && Room->GetVerifiedFraction()<1 && Solid->GetCapTriangles()>0);
+  TInlineComponentArray<UDynamicMeshComponent*> Displays(Room);
+  for(auto* Display:Displays)
+  {
+   TestFalse(TEXT("Display proxies never cast current shadows"),Display->CastShadow);
+   TestEqual(TEXT("Display geometry never changes collision"),Display->GetCollisionEnabled(),ECollisionEnabled::NoCollision);
+  }
+  for(int32 Yaw=0;Yaw<=180;Yaw+=6) Step(Top,float(Yaw));
+  bool Live=false,Valid=false; FVector At; AActor* Proxy=nullptr;
+  Memory->TryGetRecordForTesting(Room->CabinetId(),Live,Valid,At,Proxy);
+  TestTrue(TEXT("All empty leaves normal floor and no shadow or cap"),!Valid && !Proxy && Solid->GetShadowSources()==0 && Solid->GetCapTriangles()==0);
+  Step(Outside,90); Step(Press,90);
+  TestTrue(TEXT("Unseen present casts only actual shadow without body"),Room->HasActualCabinet() && Solid->GetShadowSources()==3 && Solid->GetLiveTriangles()==0);
+  Step(Top,30,1);
+  TestTrue(TEXT("First spatial contact is partial, never whole opacity"),Solid->GetRevealFraction()<.5f);
+  bool Partial=false;
+  for(int32 Yaw=30;Yaw<=90;Yaw+=3)
+  {
+   Step(Top,float(Yaw),2);
+   Partial|=Solid->GetRevealFraction()>0 && Solid->GetRevealFraction()<.8f && Solid->GetLiveTriangles()>0;
+  }
+  Step(Top,90);
+  TestTrue(TEXT("Rediscovery includes spatially partial frames then full actual"),Partial && Solid->GetRevealFraction()>.9f);
+  TestEqual(TEXT("Same original three actual parts cast shadow after reveal"),Solid->GetShadowSources(),3);
+  Step(Outside,90);
+  TestTrue(TEXT("Leaving restores remembered presentation"),Solid->GetLiveTriangles()==0 && Room->GetRemainingOpacity()==1);
+  Step(Top,90);
+ }
+ for(int32 Mode:{0,1})
+ {
+  Room->Command({TEXT("stalemanual"),TEXT("mode"),FString::FromInt(Mode)}); Step(Top,90);
+  TestEqual(TEXT("Legacy mode has no new hidden shadow behavior"),Solid->GetShadowSources(),0);
+  TInlineComponentArray<UDynamicMeshComponent*> Displays(Room);
+  for(auto* Display:Displays) TestFalse(TEXT("Legacy modes disable new geometry"),Display->IsVisible());
  }
  Fixture->Destroy(); return true;
 }

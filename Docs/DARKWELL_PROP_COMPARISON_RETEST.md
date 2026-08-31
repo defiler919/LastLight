@@ -34,3 +34,9 @@ Route 3 为静止旋转；11/12/13 分别为水平／垂直／对角移动，用
 RetestBuild04 完整 Editor Development 构建通过。RetestAutomation01 的 DARKWELL 过滤器 17/17 通过，含新增固定轨迹、零敌人／显式敌人往返生命周期、三模式完整轮廓与物体级状态。
 RetestBuild01 的 TObjectPtr 自动类型推导编译错误已修正；RetestProbe01 因原适配器强制 Stalker 而失败，已保留失败日志并添加仅实验地图的可选主体支持。
 RetestProbe02 正在确认可见对照；双分辨率正式矩阵、匹配帧、连续帧、实际 PIE 与 Git 闭合尚待完成。
+
+第二检查点：RetestBuild05 构建通过；RetestAutomation02 17/17 通过；RetestPIE02 真实 PIE 验证默认无敌人、Torch 100、policy 不变的路线重播、显式 enemy 1/0、受伤／无光后 reset 恢复 100 生命和 0/0/0。
+RetestPIE01 发现同帧 `route 1; enemy 1` 的暂时生成边界，已改为直接检查请求中的路线；同时测试脚本改用正常 ApplyDamage，避免写只读 Health 属性。
+1080p 试采 RetestProbe02 三条路线各 900 帧，相机／玩家／时间／Raw 轨迹逐帧一致。已实际打开匹配全图、长表面细节、整件跳变相邻帧、半覆盖相邻帧、放大的边界连续帧。
+25/50/75% 原覆盖的实际蓝色表面比例：Mode0 100/100/100%；Mode1 23.80/49.61/77.24%；Mode2 23.11/49.26/76.58%。这是截图内缩顶面上的颜色分类辅证，不替代权威覆盖或人工查看。
+Mode2 在同一固定表面像素的进入过渡可见更短柔化，原空间覆盖与 Mode1 完全一致；没有修改材质、feather、时间长度来夸大差异。

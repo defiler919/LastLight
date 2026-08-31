@@ -77,6 +77,20 @@ for width in (1920,2560):
                 x,y=col*400,m*170;sheet.paste(img.resize((400,145)),(x,y+25))
                 draw.text((x+4,y+5),f'M{m} f{index} t={r["rows"][index]["time"]:.3f}',fill='white')
         sheet.save(root/f'{a.label}_{width}_adjacent_{label}.jpg',quality=96)
+    # Magnified fixed screen patch at the moving boundary: no blur or reconstructed frames.
+    center=indices[1];pts=hard['polys'][center]
+    y=round(sum(q[1] for q in pts)/4)
+    mid=Image.open(root/hard['name']/f'frame_{center:03d}.png').convert('RGB')
+    left=round(min(q[0] for q in pts))+15;right=round(max(q[0] for q in pts))-15
+    blue=[x for x in range(left,right) if mid.getpixel((x,y))[2]-mid.getpixel((x,y))[0]>40]
+    boundary=max(blue)
+    sheet=Image.new('RGB',(7*280,3*200),'#17202b');draw=ImageDraw.Draw(sheet)
+    for m,r in enumerate(group):
+        for col,index in enumerate(range(center-2,center+5)):
+            img=Image.open(root/r['name']/f'frame_{index:03d}.png').convert('RGB')
+            img=img.crop((boundary-35,y-20,boundary+35,y+20)).resize((280,160),Image.Resampling.NEAREST)
+            x,yy=col*280,m*200;sheet.paste(img,(x,yy+32));draw.text((x+4,yy+6),f'M{m} f{index} t={r["rows"][index]["time"]:.3f}',fill='white')
+    sheet.save(root/f'{a.label}_{width}_adjacent_boundary.png')
     if not identical:raise SystemExit('Trajectories not identical')
 (root/(a.label+'_audit.json')).write_text(json.dumps(runs,indent=2),encoding='utf-8')
 if any(not r['passed'] for r in runs):raise SystemExit(1)

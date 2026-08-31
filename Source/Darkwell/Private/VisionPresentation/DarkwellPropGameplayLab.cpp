@@ -514,7 +514,9 @@ void ADarkwellPropGameplayLab::SetEnemyEnabled(bool bEnabled)
  if(!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
  if(bEnabled)
  {
-  if(LastRoute>=1 && LastRoute<=6) { UE_LOG(LogDarkwellPropLab,Display,TEXT("PropLab enemy rejected: routes 1-6 are enemy-free")); return; }
+  const auto* RouteCVar=IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"));
+  const int32 RequestedRoute=RouteCVar ? RouteCVar->GetInt() : LastRoute;
+  if(RequestedRoute>=1 && RequestedRoute<=6) { UE_LOG(LogDarkwellPropLab,Display,TEXT("PropLab enemy rejected: routes 1-6 are enemy-free")); return; }
   if(!LabEnemy.IsValid())
   {
    const FTransform Transform(FVector(-700,460,100));

@@ -35,10 +35,12 @@ for path in sorted(root.glob(a.label+'_*.log')):
         checks['twin_A_has_own_identity_at_B']=any(r['valid'] and r['live'] and r['x']==320 for r in at('Lab.TwinA',9,20))
         checks['twin_B_has_own_identity_at_A']=any(r['valid'] and r['live'] and r['x']==180 for r in at('Lab.TwinB',9,20))
     if route==9:
-        checks['destroyed_box_retained_unseen']=all(r['valid'] for r in at('Lab.DestroyBox',5,7))
+        unseen=at('Lab.DestroyBox',5,7)
+        checks['destroyed_box_retained_unseen']=bool(unseen) and all(r['valid'] for r in unseen)
         checks['destroyed_box_cleared_on_inspection']=any(not r['valid'] for r in at('Lab.DestroyBox',9,20))
     if route==10:
-        checks['replacement_new_identity_hidden_unseen']=all(not r['valid'] and not r['live'] for r in at('Lab.ReplaceNew',5,7))
+        unseen=at('Lab.ReplaceNew',5,7)
+        checks['replacement_new_identity_hidden_unseen']=bool(unseen) and all(not r['valid'] and not r['live'] for r in unseen)
         checks['replacement_new_identity_recognized']=any(r['valid'] and r['live'] for r in at('Lab.ReplaceNew',9,20))
         checks['replacement_old_identity_cleared']=any(not r['valid'] for r in at('Lab.ReplaceOld',9,20))
     if route==7:

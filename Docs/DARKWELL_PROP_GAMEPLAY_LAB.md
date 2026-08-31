@@ -1,6 +1,7 @@
 # DARKWELL furniture memory gameplay laboratory
 
-Work in progress. Final readiness requires the dynamic matrix and PIE review below.
+Historical implementation log. Current contracts, final verification and user handoff are in
+[DARKWELL_PROP_LAB_HANDOFF.md](DARKWELL_PROP_LAB_HANDOFF.md). Earlier WIP notes below are retained as history.
 Baseline: `0d5e6cba7bb9ed4c2c605d7e9cf4281b38e902e1`, accepted gray/live presentation.
 Branch: `codex/darkwell-prop-memory-gameplay-lab`.
 

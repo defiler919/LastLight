@@ -31,7 +31,7 @@ def state_texture(material):
     xy=m.mask(material,world,'rg',-1800,4000)
     domain=m.vector_parameter(material,'SpatialMinInv',unreal.LinearColor(0,0,0,0),-2000,4200)
     minimum=m.mask(material,domain,'rg',-1800,4200)
-    inverse=m.mask(material,domain,'ba',-1800,4400)
+    inverse=m.mask(material,domain,'ba',-1800,4400,source_output='RGBA')
     uv=m.binary(material,unreal.MaterialExpressionMultiply,
                 m.binary(material,unreal.MaterialExpressionSubtract,xy,minimum,-1550,4000),inverse,-1350,4000)
     texture=m.expr(material,unreal.MaterialExpressionTextureSampleParameter2D,-1100,4000)

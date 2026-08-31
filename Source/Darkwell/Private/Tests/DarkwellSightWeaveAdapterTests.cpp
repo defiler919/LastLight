@@ -33,6 +33,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #if WITH_EDITOR
 #include "Materials/MaterialExpressionConstant.h"
+#include "Materials/MaterialExpressionComponentMask.h"
 #include "Materials/MaterialExpressionCustom.h"
 #include "Materials/MaterialExpressionMaterialFunctionCall.h"
 #include "Materials/MaterialExpressionShadowReplace.h"
@@ -1283,6 +1284,8 @@ bool FDarkwellManualFixedRevealMaterialTest::RunTest(const FString&)
    ++WorldNodes;
    TestEqual(TEXT("Fixed absolute world position excludes shader offsets"),W->WorldPositionShaderOffset,WPT_ExcludeAllShaderOffsets);
   }
+  if(auto* Mask=Cast<UMaterialExpressionComponentMask>(Node); Mask && Mask->A)
+   TestTrue(TEXT("Spatial inverse Y uses an actual RGBA connection; default RGB fails SM6"),Mask->Input.MaskA!=0);
   for(int32 I=0;;++I) { auto* Input=Node->GetInput(I); if(!Input) break; Pending.Add(Input->Expression); }
  }
  TestEqual(TEXT("Coverage coordinates actually depend on original world-space surface"),WorldNodes,1);

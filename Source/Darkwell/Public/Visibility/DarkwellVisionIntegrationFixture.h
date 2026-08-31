@@ -70,17 +70,17 @@ struct DARKWELL_API FDarkwellVisionIntegrationSurface
 
 /** Native greybox/static-memory declaration placed in the dedicated integration map. */
 UCLASS()
-class DARKWELL_API ADarkwellVisionIntegrationFixture final : public AActor
+class DARKWELL_API ADarkwellVisionIntegrationFixture : public AActor
 {
 	GENERATED_BODY()
 
 public:
 	ADarkwellVisionIntegrationFixture();
 
-	FBox2D GetSightWeaveFloorBounds() const;
-	void BuildSightWeaveOccluderSegments(
+	virtual FBox2D GetSightWeaveFloorBounds() const;
+	virtual void BuildSightWeaveOccluderSegments(
 		TArray<FDarkwellVisionIntegrationSegment>& OutSegments) const;
-	void BuildSightWeaveStaticSurfaces(
+	virtual void BuildSightWeaveStaticSurfaces(
 		TArray<FDarkwellVisionIntegrationSurface>& OutSurfaces) const;
 	bool EnableSightWeaveSurfaceMaterial(
 		UTexture* StateTexture,
@@ -100,11 +100,11 @@ public:
 		UTexture* LiveCoverageTexture,
 		FVector2D WorldMin,
 		FVector2D InvWorldExtent);
-	bool EnableDarkwellProjectFogP4(
+	virtual bool EnableDarkwellProjectFogP4(
 		UTexture* LiveCoverageTexture,
 		FVector2D WorldMin,
 		FVector2D InvWorldExtent);
-	void DisableDarkwellProjectFog();
+	virtual void DisableDarkwellProjectFog();
 	bool IsDarkwellProjectFogEnabled() const
 	{
 		return ProjectFogGroundMaterial != nullptr;

@@ -1,0 +1,69 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Visibility/DarkwellVisionIntegrationFixture.h"
+#include "DarkwellPropGameplayLab.generated.h"
+
+class UTextureRenderTarget2D;
+class UDarkwellRememberablePropComponent;
+
+namespace Darkwell::PropLab
+{
+ DARKWELL_API bool IsLabWorld(const UWorld* World);
+ DARKWELL_API int32 PresentationMode(const UWorld* World);
+ DARKWELL_API int32 RelocationPolicy(const UWorld* World);
+}
+
+/** Graybox asset binding only. All identity and controls remain native. */
+UCLASS()
+class DARKWELL_API ADarkwellPropLabFurniture : public AActor
+{
+ GENERATED_BODY()
+public:
+ ADarkwellPropLabFurniture();
+ virtual void OnConstruction(const FTransform& Transform) override;
+ virtual void BeginPlay() override;
+ UPROPERTY(EditAnywhere, Category="Lab") FName StableId;
+ /** 0 cabinet, 1 refrigerator, 2 shelf, 3 box, 4 counter. */
+ UPROPERTY(EditAnywhere, Category="Lab") int32 Shape = 0;
+ UPROPERTY(EditAnywhere, Category="Lab") FVector Dimensions = FVector(60, 60, 90);
+ UPROPERTY(EditAnywhere, Category="Lab") FLinearColor Tint = FLinearColor(0.24f, 0.40f, 0.56f);
+ void BindPresentation(UTexture* Raw, UTexture* Soft, FVector2D Min, FVector2D Inv, int32 Mode);
+ UPROPERTY(VisibleAnywhere, Category="Lab") TObjectPtr<UDarkwellRememberablePropComponent> Memory;
+ UPROPERTY(VisibleAnywhere, Category="Lab") TArray<TObjectPtr<UStaticMeshComponent>> Parts;
+ UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> Materials;
+};
+
+/** Dedicated fixture. It extends the existing project fog adapter, never the plugin. */
+UCLASS()
+class DARKWELL_API ADarkwellPropGameplayLab : public ADarkwellVisionIntegrationFixture
+{
+ GENERATED_BODY()
+public:
+ ADarkwellPropGameplayLab();
+ virtual void BeginPlay() override;
+ virtual void EndPlay(EEndPlayReason::Type Reason) override;
+ virtual void Tick(float DeltaSeconds) override;
+ virtual FBox2D GetSightWeaveFloorBounds() const override;
+ virtual void BuildSightWeaveOccluderSegments(TArray<FDarkwellVisionIntegrationSegment>& Out) const override;
+ virtual void BuildSightWeaveStaticSurfaces(TArray<FDarkwellVisionIntegrationSurface>& Out) const override;
+ virtual bool EnableDarkwellProjectFogP4(UTexture* Raw, FVector2D Min, FVector2D Inv) override;
+ virtual void DisableDarkwellProjectFog() override;
+ void Event(const FString& Command);
+private:
+ void UpdateSoftCoverage(float DeltaSeconds);
+ void RunRoute(float DeltaSeconds);
+ void CaptureEvidence();
+ UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> LabStructure;
+ UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> StructureMaterials;
+ UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> SoftMaterial;
+ UPROPERTY(Transient) TArray<TObjectPtr<UTextureRenderTarget2D>> SoftTargets;
+ UPROPERTY(Transient) TObjectPtr<UTexture> RawCoverage;
+ FVector2D FogMin, FogInv;
+ int32 SoftIndex = 0;
+ int32 LastMode = -1, LastPolicy = -1, LastRoute = -1;
+ float Elapsed = 0, RouteTime = 0;
+ int32 CaptureIndex = 0;
+ FString LastEvent = TEXT("Ready: use Darkwell.PropLab help");
+ TMap<FName, FTransform> InitialTransforms;
+};

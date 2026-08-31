@@ -17,6 +17,7 @@ struct DARKWELL_API FDarkwellRememberedPropDecision
 	bool bShowCurrent = false;
 	bool bShowProxy = false;
 	bool bSnapshotChanged = false;
+	bool bRetainPreviousSnapshot = false;
 };
 
 /** Pure policy used by runtime and deterministic A->B contract tests. */
@@ -36,7 +37,8 @@ struct DARKWELL_API FDarkwellRememberedPropState
 		const FTransform& CurrentTransform,
 		float CurrentMaximumCoverage,
 		float SnapshotMaximumCoverage,
-		uint64 CurrentAppearanceRevision);
+		uint64 CurrentAppearanceRevision,
+		bool bVerifyOldLocation = false);
 	static bool ResolveObjectLive(bool bPreviouslyLive, float MaximumCoverage);
 };
 
@@ -77,6 +79,7 @@ public:
 	{
 		return Diagnostics;
 	}
+	int32 GetUnverifiedSnapshotCount(FName StableId) const;
 
 private:
 	struct FPrimitiveSnapshot
@@ -89,6 +92,7 @@ private:
 	{
 		TWeakObjectPtr<UDarkwellRememberablePropComponent> Component;
 		TWeakObjectPtr<AActor> ProxyActor;
+		TArray<TWeakObjectPtr<AActor>> UnverifiedProxies;
 		FDarkwellRememberedPropState State;
 		TArray<FPrimitiveSnapshot> Primitives;
 		FLinearColor Tint = FLinearColor::Gray;

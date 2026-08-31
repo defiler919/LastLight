@@ -336,9 +336,10 @@ return saturate(Visibility);
     return material
 
 
-def create_surface(asset_tools):
+def create_surface(asset_tools, lab=False):
     material, path = make_asset(asset_tools, SURFACE_NAME)
     base_texture = unreal.load_asset(
+        "/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture" if lab else
         "/Engine/Engine_MI_Shaders/T_Base_Tile_Diffuse.T_Base_Tile_Diffuse"
     )
     fallback_texture = unreal.load_asset(
@@ -592,6 +593,23 @@ def create_surface(asset_tools):
         1800,
         220,
     )
+    if lab:
+        # Raw remains the only authority; this second field only attenuates current Live.
+        soft_uv = binary(material, unreal.MaterialExpressionMultiply,
+                         binary(material, unreal.MaterialExpressionSubtract, world_float, world_min, 2100, 1850),
+                         world_inv, 2300, 1850)
+        soft_tex = expr(material, unreal.MaterialExpressionTextureSampleParameter2D, 2500, 1850)
+        soft_tex.set_editor_property("parameter_name", "LabSoftCoverageTexture")
+        soft_tex.set_editor_property("texture", fallback_texture)
+        soft_tex.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR)
+        connect(soft_uv, "", soft_tex, "Coordinates")
+        soft_channel = mask(material, soft_tex, "r", 2700, 1850)
+        effective_coverage = custom_expression(material,
+            "return lerp(Raw * lerp(1.0, min(Raw, Soft), UseSoft), 1.0, Whole);",
+            [("Raw", effective_coverage), ("Soft", soft_channel),
+             ("UseSoft", scalar_parameter(material, "LabSoft", 0, 2500, 2050)),
+             ("Whole", scalar_parameter(material, "LabWholeObject", 0, 2500, 2150))],
+            2900, 1700, "Lab surface weights; opaque silhouette, raw coverage safety gate")
     one_minus_coverage = binary(
         material,
         unreal.MaterialExpressionSubtract,
@@ -627,6 +645,13 @@ def create_surface(asset_tools):
         -400,
         -500,
     )
+    if lab:
+        normal = expr(material, unreal.MaterialExpressionVertexNormalWS, -600, -950)
+        relief = custom_expression(material, "return 0.62 + 0.38 * abs(N.z);",
+                                  [("N", normal)], -350, -950,
+                                  "Static geometric relief only; no lights, shadows, time or scene color")
+        remembered_filtered = binary(material, unreal.MaterialExpressionMultiply,
+                                     remembered_filtered, relief, -100, -900)
 
     live_base = binary(
         material, unreal.MaterialExpressionMultiply, original, effective_coverage, 50, -650

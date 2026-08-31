@@ -10,6 +10,7 @@
 #include "Materials/MaterialInterface.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
+#include "VisionPresentation/DarkwellPropGameplayLab.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDarkwellRememberedProp, Log, All);
 
@@ -49,13 +50,17 @@ FDarkwellRememberedPropDecision FDarkwellRememberedPropState::Observe(
 	const FTransform& CurrentTransform,
 	const float CurrentMaximumCoverage,
 	const float SnapshotMaximumCoverage,
-	const uint64 CurrentAppearanceRevision)
+	const uint64 CurrentAppearanceRevision,
+	const bool bVerifyOldLocation)
 {
 	FDarkwellRememberedPropDecision Result;
 	Result.bCurrentLive = bCurrentExists
 		&& ResolveObjectLive(bWasLive, CurrentMaximumCoverage);
 	if (Result.bCurrentLive)
 	{
+		Result.bRetainPreviousSnapshot = bVerifyOldLocation && bSnapshotValid
+			&& !Darkwell::RememberedProp::TransformsMatch(SnapshotTransform, CurrentTransform)
+			&& SnapshotMaximumCoverage < EnterCoverage;
 		Result.bSnapshotChanged = !bSnapshotValid
 			|| !Darkwell::RememberedProp::TransformsMatch(SnapshotTransform, CurrentTransform)
 			|| AppearanceRevision != CurrentAppearanceRevision;
@@ -91,6 +96,10 @@ void UDarkwellRememberedPropSubsystem::Deinitialize()
 			Component->ApplySourceLiveState(true);
 		}
 		DestroyProxy(Pair.Value);
+		for (auto Proxy : Pair.Value.UnverifiedProxies)
+		{
+			if (Proxy.IsValid()) Proxy->Destroy();
+		}
 	}
 	Records.Reset();
 	Diagnostics = FDarkwellRememberedPropDiagnostics();
@@ -142,6 +151,11 @@ bool UDarkwellRememberedPropSubsystem::RegisterProp(
 		Component->ComputeAppearanceRevision());
 	CaptureSnapshot(Record, *Component);
 	RebuildProxy(StableId, Record);
+	if (!Component->bRememberFromStart)
+	{
+		Record.State.bSnapshotValid = false;
+		DestroyProxy(Record);
+	}
 	++Diagnostics.SnapshotRevision;
 	RefreshRecords();
 	return true;
@@ -172,6 +186,12 @@ void UDarkwellRememberedPropSubsystem::UnregisterProp(
 void UDarkwellRememberedPropSubsystem::RefreshNowForTesting()
 {
 	RefreshRecords();
+}
+
+int32 UDarkwellRememberedPropSubsystem::GetUnverifiedSnapshotCount(FName StableId) const
+{
+	const FRecord* Record = Records.Find(StableId);
+	return Record ? Record->UnverifiedProxies.Num() : 0;
 }
 
 bool UDarkwellRememberedPropSubsystem::TryGetRecordForTesting(
@@ -235,13 +255,43 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 			CurrentTransform,
 			CurrentCoverage,
 			SnapshotCoverage,
-			AppearanceRevision);
+			AppearanceRevision,
+			Darkwell::PropLab::IsLabWorld(GetWorld()) && Darkwell::PropLab::RelocationPolicy(GetWorld()) == 0);
+		// Retired snapshots belong to this StableID record, never to appearance or pixels.
+		for (int32 Index = Record.UnverifiedProxies.Num() - 1; Index >= 0; --Index)
+		{
+			AActor* Old = Record.UnverifiedProxies[Index].Get();
+			float Coverage = 0.0f;
+			if (Old)
+			{
+				TInlineComponentArray<UStaticMeshComponent*> Meshes(Old);
+				for (const auto* Mesh : Meshes)
+				{
+					for (double X : {-1.0, 0.0, 1.0}) for (double Y : {-1.0, 0.0, 1.0})
+					{
+						const FVector Point = Mesh->Bounds.Origin + Mesh->Bounds.BoxExtent * FVector(X, Y, 0);
+						Coverage = FMath::Max(Coverage, Fog->EvaluateLiveCoverageAtWorldPoint(FVector2D(Point)));
+					}
+				}
+			}
+			if (!Old || Darkwell::PropLab::RelocationPolicy(GetWorld()) == 1 || Coverage >= FDarkwellRememberedPropState::EnterCoverage)
+			{
+				if (Old) Old->Destroy();
+				Record.UnverifiedProxies.RemoveAt(Index);
+			}
+		}
 		if (Component)
 		{
 			Component->ApplySourceLiveState(Decision.bShowCurrent);
 		}
 		if (Decision.bSnapshotChanged && Decision.bSnapshotValid && Component)
 		{
+			if (Decision.bRetainPreviousSnapshot && Record.ProxyActor.IsValid())
+			{
+				Record.ProxyActor->SetActorHiddenInGame(false);
+				Record.UnverifiedProxies.Add(Record.ProxyActor);
+				Record.ProxyActor.Reset();
+			}
 			CaptureSnapshot(Record, *Component);
 			RebuildProxy(Pair.Key, Record);
 			++Diagnostics.SnapshotRevision;
@@ -368,7 +418,9 @@ void UDarkwellRememberedPropSubsystem::RebuildProxy(
 		return;
 	}
 	UMaterialInterface* SurfaceParent = LoadObject<UMaterialInterface>(
-		nullptr, Darkwell::RememberedProp::SurfaceMaterialPath);
+		nullptr, Darkwell::PropLab::IsLabWorld(GetWorld())
+			? TEXT("/Game/Darkwell/Vision/PropLab/M_PropLabSurface.M_PropLabSurface")
+			: Darkwell::RememberedProp::SurfaceMaterialPath);
 	if (!SurfaceParent)
 	{
 		UE_LOG(LogDarkwellRememberedProp, Error,

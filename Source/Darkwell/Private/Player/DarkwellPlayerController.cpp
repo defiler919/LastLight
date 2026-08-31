@@ -16,6 +16,8 @@
 #include "UI/DarkwellHUD.h"
 #include "World/DarkwellStorageContainer.h"
 #include "World/DarkwellWorkbench.h"
+#include "VisionPresentation/DarkwellPropGameplayLab.h"
+#include "HAL/IConsoleManager.h"
 
 ADarkwellPlayerController::ADarkwellPlayerController()
 {
@@ -35,7 +37,8 @@ void ADarkwellPlayerController::BeginPlay()
 	const UDarkwellSaveSubsystem* SaveSubsystem = GetGameInstance()
 		? GetGameInstance()->GetSubsystem<UDarkwellSaveSubsystem>()
 		: nullptr;
-	if (!SaveSubsystem || SaveSubsystem->ShouldShowMainMenuOnWorldStart())
+	if (!Darkwell::PropLab::IsLabWorld(GetWorld())
+		&& (!SaveSubsystem || SaveSubsystem->ShouldShowMainMenuOnWorldStart()))
 	{
 		OpenMenu(EDarkwellMenuScreen::Main);
 	}
@@ -82,6 +85,13 @@ void ADarkwellPlayerController::PlayerTick(const float DeltaTime)
 	}
 
 	UpdateWeaponWheelInput();
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (Darkwell::PropLab::IsLabWorld(GetWorld()))
+	{
+		const auto* Route = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"));
+		if (Route && Route->GetInt() != 0) return;
+	}
+#endif
 	UpdateAimFromCursor();
 }
 

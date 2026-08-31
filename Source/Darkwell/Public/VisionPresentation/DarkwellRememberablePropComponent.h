@@ -20,6 +20,9 @@ public:
 
 	void ConfigureStableId(FName InStableId);
 	void AddMemoryPrimitive(UStaticMeshComponent* Primitive);
+	void ResetMemoryPrimitives() { check(!HasBegunPlay()); MemoryPrimitives.Reset(); }
+	bool bRememberFromStart = true;
+	void SetMemoryAppearance(FLinearColor Tint, float UVScale) { RememberedTint = Tint; RememberedUVScale = UVScale; }
 	void AddLiveOnlyComponent(USceneComponent* Component);
 	FName GetStableId() const { return StableId; }
 	TConstArrayView<TObjectPtr<UStaticMeshComponent>> GetMemoryPrimitives() const

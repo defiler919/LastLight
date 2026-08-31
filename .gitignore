@@ -23,6 +23,7 @@ Plugins/*/Intermediate/
 *.sdf
 
 # Platform and tool noise
+__pycache__/
 .DS_Store
 Thumbs.db
 Desktop.ini

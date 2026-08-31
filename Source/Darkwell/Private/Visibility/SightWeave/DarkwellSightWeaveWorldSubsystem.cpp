@@ -19,6 +19,7 @@
 #include "SightWeaveWorldSubsystem.h"
 #include "UI/DarkwellHUD.h"
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
+#include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #if !UE_SERVER
 #include "Engine/TextureRenderTarget2D.h"
@@ -814,8 +815,9 @@ bool UDarkwellSightWeaveWorldSubsystem::ValidateAndBuildDescriptions(
 		Converted.bExplicitlyImmutable = true;
 	}
 
+	const bool bLab = Darkwell::PropLab::IsLabWorld(World);
 	if (!OutFloor.IsValid() || !OutBody.IsValid() || !OutCone.IsValid()
-		|| !OutTorch.IsValid() || OutSegments.Num() != 11 || OutStatic.Num() != 4)
+		|| !OutTorch.IsValid() || OutSegments.Num() != (bLab ? 8 : 11) || OutStatic.Num() != (bLab ? 1 : 4))
 	{
 		OutFailure = FString::Printf(
 			TEXT("One or more project-fog declarations are invalid (segments=%d static=%d)"),

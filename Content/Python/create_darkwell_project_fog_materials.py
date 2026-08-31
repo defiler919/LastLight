@@ -605,7 +605,7 @@ def create_surface(asset_tools, lab=False):
         connect(soft_uv, "", soft_tex, "Coordinates")
         soft_channel = mask(material, soft_tex, "r", 2700, 1850)
         effective_coverage = custom_expression(material,
-            "return lerp(Raw * lerp(1.0, min(Raw, Soft), UseSoft), 1.0, Whole);",
+            "return lerp(lerp(Raw, min(Raw, Soft), UseSoft), 1.0, Whole);",
             [("Raw", effective_coverage), ("Soft", soft_channel),
              ("UseSoft", scalar_parameter(material, "LabSoft", 0, 2500, 2050)),
              ("Whole", scalar_parameter(material, "LabWholeObject", 0, 2500, 2150))],

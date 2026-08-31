@@ -345,8 +345,11 @@ void ADarkwellPropGameplayLab::CaptureEvidence()
    FDarkwellVisibilitySubjectSnapshot Snapshot;
    const bool Found=Adapter->TryGetSubjectSnapshot(It->GetPersistentId(),Snapshot);
    const bool Hud=Found && Snapshot.bHardLive && Snapshot.AuthorityRevision==It->GetAppliedVisibilityAuthorityRevision();
-   if(!Found || It->IsVisibleBySightWeaveAuthority()!=Snapshot.bHardLive || Hud!=Snapshot.bHardLive)
+   if(!Found || It->IsVisibleBySightWeaveAuthority()!=Snapshot.bHardLive || Hud!=Snapshot.bHardLive || It->IsHidden()==Snapshot.bHardLive)
     UE_LOG(LogDarkwellPropLab,Error,TEXT("LAB_CONTRACT_FAIL Stalker/HUD authority mismatch"));
+   bool EnemyLive=false,EnemyValid=false; FVector EnemyMemory; AActor* EnemyProxy=nullptr;
+   if(Memory->TryGetRecordForTesting(It->GetPersistentId(),EnemyLive,EnemyValid,EnemyMemory,EnemyProxy))
+    UE_LOG(LogDarkwellPropLab,Error,TEXT("LAB_CONTRACT_FAIL NeverRemember enemy entered prop records"));
    UE_LOG(LogDarkwellPropLab,Display,TEXT("LAB_EVIDENCE frame=%d mode=%d policy=%d route=%d time=%.3f stalkerHard=%d hidden=%d hudEligible=%d authority=%llu memoryProps=%d"),
     CaptureIndex-1,LastMode,LastPolicy,LastRoute,Elapsed,Found&&Snapshot.bHardLive,It->IsHidden(),Hud,Snapshot.AuthorityRevision,Memory->GetDiagnostics().RegisteredCount);
   }
@@ -424,7 +427,7 @@ void ADarkwellPropGameplayLab::RunRoute(float DeltaSeconds)
   const int32 Phase=FMath::Min(4,FMath::FloorToInt(RouteTime/4));
   if(Route==7)
   {
-   if(FMath::FloorToInt(PreviousTime/4)!=Phase) Event(Phase==1 ? TEXT("lantern") : Phase==2 ? TEXT("dark") : TEXT("torch"));
+   if(FMath::Min(4,FMath::FloorToInt(PreviousTime/4))!=Phase) Event(Phase==1 ? TEXT("lantern") : Phase==2 ? TEXT("dark") : TEXT("torch"));
    Yaw=90+35*FMath::Sin(RouteTime);
   }
   else
@@ -432,7 +435,10 @@ void ADarkwellPropGameplayLab::RunRoute(float DeltaSeconds)
    if(PreviousTime<4 && RouteTime>=4) Event(Route==8 ? TEXT("swap") : Route==9 ? TEXT("destroy") : Route==10 ? TEXT("replace") : TEXT("fridge"));
    Position=Phase<=1 ? FVector(0,-650,92) : FVector(Phase==2 ? (Route==5 ? -250 : 650) : (Route==5 ? 650 : -250),50,92);
    Yaw=Phase<=1 ? -90 : 90;
-   if(Route>=8 && Phase>=2) { Position=FVector(500,-100,92); Yaw=90; }
+   if(Route>=8 && Phase>=2)
+   {
+    Position=FVector(Route==8 ? 250 : Route==9 ? 410 : 860,-100,92); Yaw=90;
+   }
   }
  }
  P->SetActorLocation(Position,false,nullptr,ETeleportType::TeleportPhysics);
@@ -443,7 +449,9 @@ void ADarkwellPropGameplayLab::RunRoute(float DeltaSeconds)
  {
   if(auto* AI=Cast<AAIController>(It->GetController())) if(AI->GetBrainComponent()) AI->GetBrainComponent()->StopLogic(TEXT("Lab reproducible route"));
   if(auto* Move=It->GetCharacterMovement()) Move->StopMovementImmediately();
-  It->SetActorLocation(FVector(-720+60*FMath::Sin(RouteTime),460,92));
+  const bool bPositiveThreatControl=Route==7 && RouteTime>=12 && RouteTime<16;
+  It->SetActorLocation(bPositiveThreatControl ? Position+FRotator(0,Yaw,0).Vector()*150
+   : FVector(-720+60*FMath::Sin(RouteTime),460,92));
  }
 #endif
 }

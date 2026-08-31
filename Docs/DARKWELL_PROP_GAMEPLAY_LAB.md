@@ -102,3 +102,19 @@ cross-mode comparison contact sheets were opened and inspected. Capture cadence 
 0.10–0.11 seconds median, with a maximum 0.40-second startup gap; this is directional
 evidence, not a performance certificate. These visuals precede the navigation/lifecycle
 checkpoint; no furniture geometry or presentation material changed afterward.
+
+Superseding correction: review found that mode 2 multiplied partial RawCoverage twice.
+`MaterialGPU02.log` reproduces the error on the actual D3D12/SM6 shader (Raw=.1,
+output=.009995). The lab-only surface now uses `min(Raw, Soft)` directly. In
+`MaterialGPU03.log`, all 33 GPU readback checks pass: settled modes 1/2 agree at six
+coverage values, opaque mode 0 remains whole-object, loss of Raw clears immediately,
+and the 12-step .20-second rise stays bounded. `MaterialGPU01` was an initial Python
+API-name harness error, retained separately. Visual02 mode-2 evidence is superseded;
+mode-0/mode-1 graphics are unchanged. Corrected mode-2 captures are required before readiness.
+
+`Build14.log` is the latest full successful editor target build; `Automation05` passes
+all 15 selected tests after the added identity-isolation checks. The runtime test now
+also checks that recognizing a similar-looking second StableID cannot clear the first
+unseen identity. Event routes aim directly at their target; the tool route includes a
+visible Stalker positive control, then returns it behind the cabinets. Capture checks
+actual actor hidden state and absence of any enemy furniture-memory record.

@@ -741,6 +741,27 @@ bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("NeverRemember enemy never enters furniture records"),Memory->TryGetRecordForTesting(Stalker->GetPersistentId(),Live,Valid,Location,Proxy));
 		Observe(FVector(0,-650,92),-90);
 	}
+	// Similar appearance must not act as identity recognition across live records.
+	Mode->Set(2,ECVF_SetByConsole); Policy->Set(1,ECVF_SetByConsole);
+	auto MakeTwin=[&](FName Id,FVector Location)
+	{
+		const FTransform Transform(Location);
+		auto* Twin=World->SpawnActorDeferred<ADarkwellPropLabFurniture>(ADarkwellPropLabFurniture::StaticClass(),Transform);
+		Twin->StableId=Id; Twin->Shape=0; Twin->Dimensions=FVector(65,62,110);
+		Twin->FinishSpawning(Transform); Twin->DispatchBeginPlay();
+		return Twin;
+	};
+	auto* TwinA=MakeTwin(TEXT("Lab.Test.TwinA"),FVector(-200,350,0));
+	auto* TwinB=MakeTwin(TEXT("Lab.Test.TwinB"),FVector(850,540,0));
+	TwinA->SetActorLocation(FVector(-850,200,0));
+	TwinB->SetActorLocation(FVector(650,340,0));
+	Player->SetActorLocationAndRotation(FVector(650,50,92),FRotator(0,90,0));
+	Adapter->Tick(0); Memory->RefreshNowForTesting();
+	bool TwinLive=false,TwinValid=false; FVector TwinLocation; AActor* TwinProxy=nullptr;
+	Memory->TryGetRecordForTesting(TEXT("Lab.Test.TwinB"),TwinLive,TwinValid,TwinLocation,TwinProxy);
+	TestTrue(TEXT("Recognized twin B moves only its own StableID"),TwinLive && TwinValid && TwinLocation.X==650);
+	Memory->TryGetRecordForTesting(TEXT("Lab.Test.TwinA"),TwinLive,TwinValid,TwinLocation,TwinProxy);
+	TestTrue(TEXT("Similar visible twin cannot clear unseen twin A memory"),!TwinLive && TwinValid && TwinLocation.X==-200);
 	Fixture->Destroy();
 	TestEqual(TEXT("Leaving laboratory restores accepted presentation CVar"),Mode->GetInt(),0);
 	TestEqual(TEXT("Leaving laboratory restores relocation CVar"),Policy->GetInt(),0);

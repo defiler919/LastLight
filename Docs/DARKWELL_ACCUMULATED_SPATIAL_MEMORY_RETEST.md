@@ -135,3 +135,9 @@ Darkwell.PropLab stalemanual teleport bottom
 第一次踩圆盘使其 ABSENT，手动走回上方完整验证空位。回圆盘前先离开使其重置，再踩入重新 PRESENT；背向柜子走回，先看隐藏阴影。**此时不要 teleport top，它会自动朝向柜子。** 缓慢左右及斜向转头，只扫约10%后转开，应仅该部分留灰；继续25/50/75%，重复转开并小幅摆动边界。再踩圆盘消失，分段验证空位并转开，应只减少、不恢复。至少重复两轮。黑色封口不是本轮验收项；不要把仍有阶梯边缘误认为该阶段已做 AA。
 
 全部可靠检查点在当前分支提交后立即推送：`d29720e3b89793b1876c88e1b2b5820a630a6889`（独立状态与测试）、`df1b5e0f5e660461b2377400a2d3b0808467724f`（原几何材质/代理接入）、`f314cea3ef88663be73607f93ea2b816f6729de6`（GPU 暴露的 RGBA 连线修复与回归保护），以及本报告/已验证 GPU 驱动的交接提交。最后提交的完整 SHA 和最终 Git/LFS 闭合输出见交接消息。无截图、录像、Saved、Binaries、Intermediate、DDC 或自动化输出入库。
+
+## Git 与 Editor 闭合记录
+
+GPU 证据及驱动提交：`f2a1bc6512f760673361d2da80883ffeb3c489e1`。首次立即推送发生 `OpenSSL SSL_connect: SSL_ERROR_SYSCALL`，保留该失败；随后一次重试成功。闭合检查 `GitClosure01.json` 的八项命令全部 exit=0：status 干净，HEAD/upstream/ls-remote 均为 f2a1bc6 完整 SHA，diff --check 无输出，LFS 无待提交或待推送对象，LFS fsck OK。`git fsck --no-reflogs` 无 missing/corrupt，报告 49 个 dangling tree 和 14 个 dangling blob；全部保留，没有 clean、reset、revert、rebase、merge、force-push 或对象清理。本节是最后的纯文档提交，提交推送后再次执行同样八项检查，以交接消息给出的最终 SHA 为准。
+
+独立标准 Editor 已重新打开 `/Game/Maps/L_ProjectFogPropGameplayLab`，没有验证脚本或暂停输入。MCP `IsPIERunning=false`；实际打开 `CaptureEditorImage` 确认房间可见、绿色 Play 可点击。`ReadyEditor.log` 记录该状态。没有改写地图或 Darkwell.uproject；电脑保持开启，没有执行关机、睡眠或重启。用户确认前停止于本阶段。

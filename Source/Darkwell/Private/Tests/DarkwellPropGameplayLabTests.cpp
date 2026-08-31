@@ -4,6 +4,30 @@
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "HAL/IConsoleManager.h"
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPropComparisonRouteTest,
+ "Darkwell.PropLab.Comparison.FixedCameraTrajectory", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDarkwellPropComparisonRouteTest::RunTest(const FString& Parameters)
+{
+ for(int32 Mode=0;Mode<3;++Mode)
+ {
+  auto* CVar=IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"));
+  CVar->Set(Mode,ECVF_SetByConsole);
+  TestEqual(TEXT("Gray start yaw"),Darkwell::PropLab::ComparisonYaw(0),-30.f);
+  TestEqual(TEXT("Initial hold"),Darkwell::PropLab::ComparisonYaw(2),-30.f);
+  TestEqual(TEXT("Middle hold starts at 8s"),Darkwell::PropLab::ComparisonYaw(8),40.f);
+  TestEqual(TEXT("Middle hold lasts 2s"),Darkwell::PropLab::ComparisonYaw(10),40.f);
+  TestEqual(TEXT("Whole forward traversal is 12s plus hold"),Darkwell::PropLab::ComparisonYaw(16),110.f);
+  TestEqual(TEXT("Reverse finishes at 28s"),Darkwell::PropLab::ComparisonYaw(28),-30.f);
+  TestEqual(TEXT("30s route ends gray"),Darkwell::PropLab::ComparisonYaw(30),-30.f);
+  for(float T=2.1f;T<7.8f;T+=.1f)
+   TestTrue(TEXT("Forward angular speed constant"),FMath::IsNearlyEqual(Darkwell::PropLab::ComparisonYaw(T+.1f)-Darkwell::PropLab::ComparisonYaw(T),70.f/60,.0001f));
+  for(float T=16.1f;T<27.8f;T+=.1f)
+   TestTrue(TEXT("Reverse angular speed matches"),FMath::IsNearlyEqual(Darkwell::PropLab::ComparisonYaw(T+.1f)-Darkwell::PropLab::ComparisonYaw(T),-70.f/60,.0001f));
+ }
+ IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"))->Set(0,ECVF_SetByConsole);
+ return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPropLabPoliciesTest,
  "Darkwell.PropLab.Policies.OrderAndIdentity", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FDarkwellPropLabPoliciesTest::RunTest(const FString& Parameters)

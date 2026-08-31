@@ -9,6 +9,7 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "EngineUtils.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Gameplay/DarkwellGameplayTags.h"
 #include "HAL/IConsoleManager.h"
@@ -40,10 +41,21 @@ struct FDarkwellLabCaptureWriter
 };
 namespace Darkwell::PropLab
 {
+ FVector ComparisonPlayerPosition() { return FVector(400,-700,92); }
+ float ComparisonYaw(float Seconds)
+ {
+  // 2s gray; 6s to midpoint; 2s hold; 6s to far end; 12s reverse; 2s gray.
+  if(Seconds<=2) return -30;
+  if(Seconds<8) return -30+(Seconds-2)*(70.f/6.f);
+  if(Seconds<10) return 40;
+  if(Seconds<16) return 40+(Seconds-10)*(70.f/6.f);
+  if(Seconds<28) return 110-(Seconds-16)*(70.f/6.f);
+  return -30;
+ }
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
  TAutoConsoleVariable<int32> Mode(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"), 0, TEXT("Lab only: 0 AcceptedWholeObject, 1 SurfaceSweepHard, 2 SurfaceSweepSoft."));
  TAutoConsoleVariable<int32> Policy(TEXT("r.Darkwell.ProjectFogVisual.PropRelocationPolicy"), 0, TEXT("Lab only: 0 VerifyOldLocation, 1 RecognizedIdentityRelocation."));
- TAutoConsoleVariable<int32> Route(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"), 0, TEXT("Lab only: 0 manual, 1 sweep, 2 oblique, 3 rotate, 4 parallel, 5 old-first, 6 new-first, 7 tool cycle, 8 twins, 9 destruction, 10 replacement."));
+ TAutoConsoleVariable<int32> Route(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"), 0, TEXT("Lab only: 0 manual, 1 fixed-camera 30s comparison, 2 oblique, 3 rotate, 4 parallel, 5 old-first, 6 new-first, 7 tool cycle, 8 twins, 9 destruction, 10 replacement, 11 horizontal, 12 vertical, 13 diagonal."));
  FAutoConsoleCommandWithWorldAndArgs Control(TEXT("Darkwell.PropLab"), TEXT("help/reset/fridge/cabinet/destroy/replace/swap/torch/lantern/dark; mode N; policy N; route N"),
   FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
   {
@@ -119,7 +131,8 @@ void ADarkwellPropLabFurniture::OnConstruction(const FTransform& Transform)
  if (Shape == 2)
  {
   for (double X : {-1.0, 1.0}) for (double Y : {-1.0, 1.0}) Add(FVector(X*(W/2-3),Y*(D/2-3),H/2),FVector(6,6,H));
-  for (int32 I=0; I<4; ++I) Add(FVector(0,0,8+(H-16)*I/3),FVector(W,D,5));
+  // Shelves meet the inner post faces; no intersecting coplanar exterior skin.
+  for (int32 I=0; I<4; ++I) Add(FVector(0,0,8+(H-16)*I/3),FVector(W-12,D,5));
  }
  else
  {
@@ -130,9 +143,9 @@ void ADarkwellPropLabFurniture::OnConstruction(const FTransform& Transform)
    for (int32 I=0; I<Doors; ++I)
    {
     Add(FVector(0,-D/2-2,(I+0.5)*H/Doors),FVector(W-4,4,H/Doors-4));
-    Add(FVector(W*.30,-D/2-6,(I+0.5)*H/Doors),FVector(3,5,Shape == 1 ? 28 : 16));
+    Add(FVector(W*.30,-D/2-6.5,(I+0.5)*H/Doors),FVector(3,5,Shape == 1 ? 28 : 16));
    }
-   if (Shape == 0) Add(FVector(0,0,H+2),FVector(W+2,D+4,4));
+   if (Shape == 0 && bIndividualWorktop) Add(FVector(0,0,H+2),FVector(W,D,4));
   }
  }
  Memory->ConfigureStableId(StableId);
@@ -178,8 +191,8 @@ ADarkwellPropGameplayLab::ADarkwellPropGameplayLab()
  for (auto* Mesh : Inherited) { Mesh->SetVisibility(false); Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision); }
  GetRememberablePropComponent()->ConfigureStableId(NAME_None);
  static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
- const FVector Centers[] = { {0,0,-15},{-1000,100,125},{-1000,-630,125},{-750,720,125},{-550,590,125},{-230,-530,52},{-560,390,46},{-815,255,46},{-460,70,46} };
- const FVector Sizes[] = { {2400,1800,30},{25,700,250},{25,440,250},{520,25,250},{25,260,250},{320,28,104},{480,20,92},{20,240,92},{210,20,92} };
+ const FVector Centers[] = { {0,0,-15},{-1000,100,125},{-1000,-630,125},{-750,720,125},{-550,590,125},{-230,-530,52},{-560,415,46},{-920,255,46},{-1080,0,46} };
+ const FVector Sizes[] = { {2400,1800,30},{25,700,250},{25,440,250},{520,25,250},{25,260,250},{320,28,104},{480,20,92},{20,240,92},{20,180,92} };
  for (int32 I=0; I<UE_ARRAY_COUNT(Centers); ++I)
  {
   auto* Part = CreateDefaultSubobject<UStaticMeshComponent>(*FString::Printf(TEXT("LabStructure%d"),I));
@@ -293,12 +306,22 @@ void ADarkwellPropGameplayLab::AdvanceRouteBeforeActors(UWorld* World, ELevelTic
    if(auto* Boom=Player->FindComponentByClass<USpringArmComponent>())
    { Boom->SetRelativeRotation(FRotator(-65,90,0)); Boom->TargetArmLength=1450; }
  }
- Elapsed+=DeltaSeconds; RunRoute(DeltaSeconds);
+ if(!bPlayerInitialized) if(auto* Player=Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)))
+ {
+  Player->RestorePersistentState(Player->GetActorTransform(),Player->GetMaxHealth(),DarkwellGameplayTags::State_Player_Alive,FGameplayTag());
+  Player->GetLoadoutComponent()->RestorePersistentState(2,100,0,100,DarkwellGameplayTags::Equipment_Left_Shotgun,DarkwellGameplayTags::Equipment_Right_Torch);
+  bPlayerInitialized=true;
+ }
+ Elapsed+=DeltaSeconds;
+ if(FParse::Param(FCommandLine::Get(),TEXT("PropLabComparisonCapture")) && !World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>()->IsSightWeaveAuthorityActive()) return;
+ RunRoute(DeltaSeconds);
+ RestoreComparisonTools(LastRoute==1);
 }
 void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
 {
  Super::Tick(DeltaSeconds);
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
+ RestoreComparisonTools(LastRoute==1);
  const int32 Mode=Darkwell::PropLab::PresentationMode(GetWorld()), Policy=Darkwell::PropLab::RelocationPolicy(GetWorld());
  if (Mode!=LastMode || Policy!=LastPolicy)
  {
@@ -311,13 +334,14 @@ void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
   It->BindPresentation(RawCoverage,SoftTargets.Num()==2 ? SoftTargets[SoftIndex].Get() : RawCoverage.Get(),FogMin,FogInv,Mode);
  static const TCHAR* ModeNames[]={TEXT("AcceptedWholeObject"),TEXT("SurfaceSweepHard"),TEXT("SurfaceSweepSoft")};
  static const TCHAR* PolicyNames[]={TEXT("VerifyOldLocation"),TEXT("RecognizedIdentityRelocation")};
- if (GEngine) GEngine->AddOnScreenDebugMessage(0xDA471,0,FColor::Cyan,FString::Printf(TEXT("PROP LAB | %d %s | %d %s | Route %d | %s"),Mode,ModeNames[Mode],Policy,PolicyNames[Policy],LastRoute,*LastEvent));
+ if (GEngine) GEngine->AddOnScreenDebugMessage(0xDA471,0,FColor::Cyan,FString::Printf(TEXT("PROP LAB | MODE %d %s | POLICY %d %s | Route %d t=%.2f | ENEMY %d | %s"),Mode,ModeNames[Mode],Policy,PolicyNames[Policy],LastRoute,RouteTime,IsEnemyEnabled(),*LastEvent));
  CaptureEvidence();
 }
 
 void ADarkwellPropGameplayLab::CaptureEvidence()
 {
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+ if(FParse::Param(FCommandLine::Get(),TEXT("PropLabComparisonCapture"))) { CaptureComparisonEvidence(); return; }
  FString Relative;
  if(!FParse::Value(FCommandLine::Get(),TEXT("PropLabCapture="),Relative)) return;
  // Evidence is always local and ignored, regardless of caller-supplied label.
@@ -382,7 +406,8 @@ void ADarkwellPropGameplayLab::Event(const FString& Command)
   const int32 Value=FCString::Atoi(*Words[1]);
   if (Words[0]==TEXT("mode")) Darkwell::PropLab::Mode->Set(FMath::Clamp(Value,0,2),ECVF_SetByConsole);
   if (Words[0]==TEXT("policy")) Darkwell::PropLab::Policy->Set(FMath::Clamp(Value,0,1),ECVF_SetByConsole);
-  if (Words[0]==TEXT("route")) Darkwell::PropLab::Route->Set(FMath::Clamp(Value,0,10),ECVF_SetByConsole);
+  if (Words[0]==TEXT("route")) { Darkwell::PropLab::Route->Set(FMath::Clamp(Value,0,13),ECVF_SetByConsole); LastRoute=-1; }
+  if (Words[0]==TEXT("enemy")) SetEnemyEnabled(Value!=0);
  }
  if (Command==TEXT("reset")) { UGameplayStatics::OpenLevel(this,TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")); return; }
  auto Find=[&](FName Id)->ADarkwellPropLabFurniture* { for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It) if(It->StableId==Id) return *It; return nullptr; };
@@ -403,12 +428,15 @@ void ADarkwellPropGameplayLab::Event(const FString& Command)
  if (auto* P=Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0))) if(auto* L=P->GetLoadoutComponent())
  {
   if(Command==TEXT("torch") || Command==TEXT("lantern") || Command==TEXT("dark"))
+  {
+   bMaintainTools=Command!=TEXT("dark");
    L->RestorePersistentState(L->GetLoadedShells(),Command==TEXT("dark") ? 0 : 100,0,Command==TEXT("dark") ? 0 : 100,L->GetEquippedLeftHandItem(),
     Command==TEXT("lantern") ? DarkwellGameplayTags::Equipment_Right_Lantern.GetTag() : DarkwellGameplayTags::Equipment_Right_Torch.GetTag());
+  }
  }
  LastEvent=Command;
  UE_LOG(LogDarkwellPropLab,Display,TEXT("PropLab EVENT %s mode=%d policy=%d"),*Command,Darkwell::PropLab::PresentationMode(GetWorld()),Darkwell::PropLab::RelocationPolicy(GetWorld()));
- if(Command==TEXT("help")) UE_LOG(LogDarkwellPropLab,Display,TEXT("Darkwell.PropLab: reset, fridge, cabinet, destroy, replace, swap, torch, lantern, dark; mode 0/1/2; policy 0/1; route 0..10 (0 manual;1 sweep;2 oblique;3 rotate;4 parallel;5 A-first;6 B-first;7 tools;8 twins;9 destroy;10 replace)"));
+ if(Command==TEXT("help")) UE_LOG(LogDarkwellPropLab,Display,TEXT("Darkwell.PropLab: reset, fridge, cabinet, destroy, replace, swap, torch, lantern, dark; enemy 0/1 (default OFF); mode 0/1/2; policy 0/1; route 0..13 (0 manual;1 fixed-camera 30s comparison;2 oblique;3 rotate;4 parallel;5 A-first;6 B-first;7 tools;8 twins;9 destroy;10 replace;11 horizontal;12 vertical;13 diagonal). route 1 restarts without changing policy."));
 #endif
 }
 
@@ -418,6 +446,14 @@ void ADarkwellPropGameplayLab::RunRoute(float DeltaSeconds)
  const int32 Route=Darkwell::PropLab::Route.GetValueOnGameThread();
  if(Route!=LastRoute)
  {
+  if(Route>=1 && Route<=6) SetEnemyEnabled(false);
+  if(auto* P=Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)))
+  {
+   if(auto* Move=P->GetCharacterMovement()) { Move->StopMovementImmediately(); Move->SetMovementMode(Route==0 ? MOVE_Walking : MOVE_None); }
+   if(auto* Boom=P->FindComponentByClass<USpringArmComponent>())
+   { Boom->SetRelativeRotation(FRotator(-65,90,0)); Boom->TargetArmLength=(Route==1 || Route==3 || Route>=11) ? 1250 : 1450; Boom->TargetOffset=(Route==1 || Route==3 || Route>=11) ? FVector(0,400,0) : FVector::ZeroVector; }
+  }
+  for(UTextureRenderTarget2D* RT : SoftTargets) UKismetRenderingLibrary::ClearRenderTarget2D(this,RT);
   for(TActorIterator<ADarkwellStalkerCharacter> It(GetWorld());It;++It)
    if(auto* AI=Cast<AAIController>(It->GetController())) { AI->SetActorTickEnabled(Route==0); AI->StopMovement(); }
   LastRoute=Route; RouteTime=0; UE_LOG(LogDarkwellPropLab,Display,TEXT("PropLab ROUTE %d"),Route);
@@ -427,10 +463,18 @@ void ADarkwellPropGameplayLab::RunRoute(float DeltaSeconds)
  auto* P=Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)); if(!P) return;
  FVector Position(-520,-190,92); float Yaw=90;
  const float T=FMath::Clamp((RouteTime-2)/8,0.f,1.f);
- if(Route==1) Yaw=FMath::Lerp(5.f,175.f,T);
+ if(Route==1) { Position=Darkwell::PropLab::ComparisonPlayerPosition(); Yaw=Darkwell::PropLab::ComparisonYaw(RouteTime); }
  if(Route==2) { Position=FVector(-80,-50,92); Yaw=FMath::Lerp(60.f,170.f,T); }
- if(Route==3) Yaw=360*T;
+ if(Route==3) { Position=Darkwell::PropLab::ComparisonPlayerPosition(); Yaw=360*T; }
  if(Route==4) { Position.X=FMath::Lerp(-860.f,-170.f,T); Yaw=90; }
+ if(Route>=11)
+ {
+  Position=Darkwell::PropLab::ComparisonPlayerPosition();
+  const float Offset=150*FMath::Sin(2*PI*FMath::Clamp(RouteTime/12,0.f,1.f));
+  if(Route==11 || Route==13) Position.X+=Offset;
+  if(Route==12 || Route==13) Position.Y+=Offset;
+  Yaw=40;
+ }
  if(Route>=5 && Route<=10)
  {
   const int32 Phase=FMath::Min(4,FMath::FloorToInt(RouteTime/4));
@@ -461,6 +505,111 @@ void ADarkwellPropGameplayLab::RunRoute(float DeltaSeconds)
   const bool bPositiveThreatControl=Route==7 && RouteTime>=12 && RouteTime<16;
   It->SetActorLocation(bPositiveThreatControl ? Position+FRotator(0,Yaw,0).Vector()*150
    : FVector(-720+60*FMath::Sin(RouteTime),460,92));
+ }
+#endif
+}
+
+void ADarkwellPropGameplayLab::SetEnemyEnabled(bool bEnabled)
+{
+ if(!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
+ if(bEnabled)
+ {
+  if(LastRoute>=1 && LastRoute<=6) { UE_LOG(LogDarkwellPropLab,Display,TEXT("PropLab enemy rejected: routes 1-6 are enemy-free")); return; }
+  if(!LabEnemy.IsValid())
+  {
+   const FTransform Transform(FVector(-700,460,100));
+   auto* Enemy=GetWorld()->SpawnActorDeferred<ADarkwellStalkerCharacter>(ADarkwellStalkerCharacter::StaticClass(),Transform,nullptr,nullptr,ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+   if(Enemy) { Enemy->ConfigurePersistentId(TEXT("Lab.Stalker.NeverRemember")); Enemy->FinishSpawning(Transform); LabEnemy=Enemy; }
+  }
+ }
+ else
+ {
+  for(TActorIterator<ADarkwellStalkerCharacter> It(GetWorld());It;++It) It->Destroy();
+  LabEnemy.Reset();
+ }
+ UE_LOG(LogDarkwellPropLab,Display,TEXT("PropLab ENEMY=%d (explicit opt-in only)"),IsEnemyEnabled());
+}
+
+void ADarkwellPropGameplayLab::RestoreComparisonTools(bool bForceTorch)
+{
+ if(!Darkwell::PropLab::IsLabWorld(GetWorld()) || (!bMaintainTools && !bForceTorch)) return;
+ if(auto* Player=Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)))
+ {
+  auto* L=Player->GetLoadoutComponent();
+  // Lab-only fixed tool state; no production durability/weapon rule changes.
+  L->RestorePersistentState(L->GetLoadedShells(),100,0,100,L->GetEquippedLeftHandItem(),
+   bForceTorch ? DarkwellGameplayTags::Equipment_Right_Torch.GetTag() : L->GetEquippedRightHandItem());
+ }
+}
+
+void ADarkwellPropGameplayLab::CaptureComparisonEvidence()
+{
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+ FString Relative;
+ if(!FParse::Value(FCommandLine::Get(),TEXT("PropLabCapture="),Relative)) return;
+ Relative=FPaths::GetCleanFilename(Relative);
+ if(LastRoute<0) return;
+ float FPS=30; FParse::Value(FCommandLine::Get(),TEXT("FPS="),FPS);
+ const int32 Total=FMath::RoundToInt((LastRoute==1 ? 30.f : 12.f)*FPS);
+ if(CaptureIndex<Total)
+ {
+  auto* Player=Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0));
+  auto* Fog=GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
+  auto* Memory=GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+  auto* Adapter=GetWorld()->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+  if(!Player || !Fog || !Memory || !Adapter || !Adapter->IsSightWeaveAuthorityActive())
+  { UE_LOG(LogDarkwellPropLab,Error,TEXT("LAB_CONTRACT_FAIL comparison authority setup")); UKismetSystemLibrary::QuitGame(this,nullptr,EQuitPreference::Quit,false); return; }
+  int32 EnemyCount=0;
+  for(TActorIterator<ADarkwellStalkerCharacter> It(GetWorld());It;++It) ++EnemyCount;
+  if(EnemyCount) UE_LOG(LogDarkwellPropLab,Error,TEXT("LAB_CONTRACT_FAIL enemy in comparison"));
+  for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It)
+  {
+   bool Live=false,Valid=false; FVector Remembered; AActor* Proxy=nullptr;
+   Memory->TryGetRecordForTesting(It->StableId,Live,Valid,Remembered,Proxy);
+   int32 Visible=0;
+   for(UStaticMeshComponent* Part : It->Memory->GetMemoryPrimitives())
+   {
+    Visible+=Part->IsVisible();
+    const FVector C=Part->Bounds.Origin,E=Part->Bounds.BoxExtent;
+    float Maximum=Fog->EvaluateLiveCoverageAtWorldPoint(FVector2D(C));
+    for(double X : {-1.0,1.0}) for(double Y : {-1.0,1.0}) Maximum=FMath::Max(Maximum,Fog->EvaluateLiveCoverageAtWorldPoint(FVector2D(C.X+X*E.X,C.Y+Y*E.Y)));
+    if(CaptureIndex==0 || It->StableId==TEXT("Lab.Island"))
+     UE_LOG(LogDarkwellPropLab,Display,TEXT("LAB_PART frame=%d id=%s part=%s live=%d visible=%d coverage=%.6f transform=%s bounds=%s extent=%s material=%s"),
+      CaptureIndex,*It->StableId.ToString(),*Part->GetName(),Live,Part->IsVisible(),Maximum,*Part->GetComponentTransform().ToHumanReadableString().Replace(TEXT("\n"),TEXT(" ")),*C.ToString(),*E.ToString(),*GetNameSafe(Part->GetMaterial(0)));
+   }
+   if(Visible!=0 && Visible!=It->Memory->GetMemoryPrimitives().Num()) UE_LOG(LogDarkwellPropLab,Error,TEXT("LAB_CONTRACT_FAIL independent component visibility id=%s"),*It->StableId.ToString());
+   if(LastMode==0 && (Visible>0)!=Live) UE_LOG(LogDarkwellPropLab,Error,TEXT("LAB_CONTRACT_FAIL whole-object identity visibility"));
+   if(It->StableId!=TEXT("Lab.Island")) continue;
+   if(It->Memory->GetMemoryPrimitives().Num()!=1) UE_LOG(LogDarkwellPropLab,Error,TEXT("LAB_CONTRACT_FAIL island is not single geometry"));
+   const FVector C=It->Parts[0]->Bounds.Origin,E=It->Parts[0]->Bounds.BoxExtent;
+   float Mean=0; int32 Covered=0;
+   for(int32 X=0;X<201;++X) for(int32 Y=0;Y<9;++Y)
+   {
+    const float Raw=Fog->EvaluateLiveCoverageAtWorldPoint(FVector2D(C.X-E.X+2*E.X*X/200,C.Y-E.Y+2*E.Y*Y/8));
+    Mean+=Raw; Covered+=(Raw>=.5f);
+   }
+   const FVector Camera=Player->GetTopDownCamera()->GetComponentLocation();
+   const FVector P=Player->GetActorLocation();
+   UE_LOG(LogDarkwellPropLab,Display,TEXT("LAB_COMPARE frame=%d mode=%d policy=%d route=%d time=%.6f yaw=%.6f player=(%.3f,%.3f,%.3f) camera=(%.3f,%.3f,%.3f) rawMean=%.6f covered=%.6f live=%d visible=%d parts=%d enemy=%d torch=%.3f health=%.3f"),
+    CaptureIndex,LastMode,LastPolicy,LastRoute,RouteTime,Player->GetActorRotation().Yaw,P.X,P.Y,P.Z,Camera.X,Camera.Y,Camera.Z,Mean/1809,Covered/1809.f,Live,Visible,It->Memory->GetMemoryPrimitives().Num(),EnemyCount,Player->GetLoadoutComponent()->GetTorchCharge(),Player->GetHealth());
+   if(auto* Controller=Cast<APlayerController>(Player->GetController()))
+   {
+    FString Points;
+    for(const FVector2D Sign : {FVector2D(-1,-1),FVector2D(1,-1),FVector2D(1,1),FVector2D(-1,1)})
+    {
+     FVector2D Screen; Controller->ProjectWorldLocationToScreen(FVector(C.X+Sign.X*E.X,C.Y+Sign.Y*E.Y,C.Z+E.Z),Screen);
+     Points+=FString::Printf(TEXT(" %.3f,%.3f"),Screen.X,Screen.Y);
+    }
+    UE_LOG(LogDarkwellPropLab,Display,TEXT("LAB_TOP frame=%d%s"),CaptureIndex,*Points);
+   }
+  }
+  FScreenshotRequest::RequestScreenshot(FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("PropGameplayLab"),Relative,FString::Printf(TEXT("frame_%03d.png"),CaptureIndex++)),true,false);
+ }
+ else if(!CaptureWriter || CaptureWriter->Pending.load()==0)
+ {
+  if(CaptureWriter && CaptureWriter->Failed.load()!=0) UE_LOG(LogDarkwellPropLab,Error,TEXT("LAB_CONTRACT_FAIL screenshot write"));
+  UE_LOG(LogDarkwellPropLab,Display,TEXT("LAB_CAPTURE_COMPLETE frames=%d"),CaptureIndex);
+  UKismetSystemLibrary::QuitGame(this,nullptr,EQuitPreference::Quit,false);
  }
 #endif
 }

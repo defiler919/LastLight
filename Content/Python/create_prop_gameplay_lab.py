@@ -42,10 +42,8 @@ def main():
     fixture.set_actor_label("PROP LAB - native fixture and controls")
     start = actors.spawn_actor_from_class(unreal.PlayerStart, unreal.Vector(-520,-190,100), unreal.Rotator(0,90,0))
     start.set_actor_label("Start - kitchen sweep")
-    stalker = actors.spawn_actor_from_class(unreal.DarkwellStalkerCharacter, unreal.Vector(-700,460,100))
-    stalker.set_editor_property("persistent_id", "Lab.Stalker.NeverRemember")
     def prop(id, shape, pos, size, tint=(0.25,0.42,0.55), yaw=0):
-        a = actors.spawn_actor_from_class(unreal.DarkwellPropLabFurniture, unreal.Vector(*pos), unreal.Rotator(0,yaw,0))
+        a = actors.spawn_actor_from_class(unreal.DarkwellPropLabFurniture, unreal.Vector(*pos), unreal.Rotator(pitch=0,yaw=yaw,roll=0))
         a.set_editor_property("stable_id", id)
         a.set_editor_property("shape", shape)
         a.set_editor_property("dimensions", unreal.Vector(*size))
@@ -77,6 +75,8 @@ def main():
     navdata.set_editor_property('runtime_generation', unreal.RuntimeGenerationType.DYNAMIC)
     levels.save_current_level()
     unreal.log("PROP_LAB_ASSETS_READY furniture=25 map=" + MAP)
+    # Keep fresh creation consistent with the comparison migration.
+    import update_prop_lab_comparison
 
 if __name__ == "__main__":
     main()

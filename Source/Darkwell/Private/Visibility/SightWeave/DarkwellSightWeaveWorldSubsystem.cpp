@@ -164,10 +164,37 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 	{
 		return;
 	}
-	if (!Player.IsValid() || !Stalker.IsValid() || !RequestedFixture.IsValid())
+	const bool bPropLab = Darkwell::PropLab::IsLabWorld(GetWorld());
+	if (!Player.IsValid() || (!bPropLab && !Stalker.IsValid()) || !RequestedFixture.IsValid())
 	{
 		RollbackToLegacy(TEXT("An authoritative integration actor was destroyed"), true);
 		return;
+	}
+	// Optional enemy lifecycle belongs only to the furniture lab. The accepted
+	// integration world's required single-Stalker contract remains unchanged.
+	if (bPropLab && !Stalker.IsValid())
+	{
+		if (StalkerSubjectHandle.IsValid())
+		{
+			SubjectAuthority.Unregister(StalkerSubjectHandle);
+			SubjectSnapshots.Remove(StalkerSubjectRegistration.Identity.StableId);
+			StalkerSubjectHandle = FSightWeaveSubjectHandle();
+		}
+		Diagnostics.SubjectCount = 0;
+		for (TActorIterator<ADarkwellStalkerCharacter> It(GetWorld()); It; ++It)
+		{
+			if (It->GetPersistentId().IsNone()) continue;
+			FSightWeaveMemoryScopeKey Scope;
+			if (!RuntimeSubsystem->GetExplorationMemoryScope(Scope)) break;
+			StalkerSubjectRegistration.Identity.StableId = It->GetPersistentId();
+			StalkerSubjectRegistration.Identity.InstanceGeneration = FMath::Max<int64>(
+				Diagnostics.WorldGeneration, StalkerSubjectRegistration.Identity.InstanceGeneration + 1);
+			StalkerSubjectRegistration.Scope = Scope;
+			StalkerSubjectRegistration.Policy = ESightWeaveSubjectMemoryPolicy::NeverRemember;
+			StalkerSubjectHandle = SubjectAuthority.Register(StalkerSubjectRegistration);
+			if (StalkerSubjectHandle.IsValid()) { Stalker = *It; Diagnostics.SubjectCount = 1; }
+			break;
+		}
 	}
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	const int32 ProjectTrajectory =
@@ -632,6 +659,8 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 		RollbackToLegacy(TEXT("The exact exploration-memory scope was unavailable"), true);
 		return false;
 	}
+	if (FoundStalker)
+	{
 	StalkerSubjectRegistration.Identity.StableId = FoundStalker->GetPersistentId();
 	StalkerSubjectRegistration.Identity.InstanceGeneration =
 		static_cast<int64>(Diagnostics.WorldGeneration);
@@ -642,6 +671,7 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 	{
 		RollbackToLegacy(TEXT("Stalker NeverRemember registration failed"), true);
 		return false;
+	}
 	}
 #if !UE_SERVER
 	TArray<FDarkwellFogVisualSegment> FogVisualSegments;
@@ -671,7 +701,7 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 	Diagnostics.IlluminationSourceCount = 1;
 	Diagnostics.OccluderCount = 1;
 	Diagnostics.StaticEnvironmentCount = StaticEnvironmentHandles.Num();
-	Diagnostics.SubjectCount = 1;
+	Diagnostics.SubjectCount = FoundStalker ? 1 : 0;
 	Diagnostics.bLegacyWritesEnabled = false;
 	Diagnostics.bLegacyPresentationEnabled = false;
 	Diagnostics.bSightWeavePresentationEnabled = false;
@@ -682,7 +712,7 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 		*Diagnostics.WorldName.ToString(),
 		FogVisualSegments.Num(),
 		*FloorId.GetValue().ToString(),
-		StaticEnvironmentHandles.Num(), *FoundStalker->GetPersistentId().ToString());
+		StaticEnvironmentHandles.Num(), FoundStalker ? *FoundStalker->GetPersistentId().ToString() : TEXT("None (prop lab)"));
 	return true;
 }
 
@@ -729,8 +759,9 @@ bool UDarkwellSightWeaveWorldSubsystem::ValidateAndBuildDescriptions(
 			++StalkerCount;
 		}
 	}
-	if (PlayerCount != 1 || StalkerCount != 1 || !OutStalker
-		|| OutStalker->GetPersistentId().IsNone())
+	const bool bOptionalLabEnemy = Darkwell::PropLab::IsLabWorld(World) && StalkerCount == 0;
+	if (PlayerCount != 1 || (!bOptionalLabEnemy && (StalkerCount != 1 || !OutStalker
+		|| OutStalker->GetPersistentId().IsNone())))
 	{
 		OutFailure = FString::Printf(
 			TEXT("Expected one player and one base Stalker with a stable ID (players=%d stalkers=%d)"),

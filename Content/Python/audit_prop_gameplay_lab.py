@@ -7,7 +7,7 @@ assert levels.load_level(MAP)
 furniture = []
 for a in actors.get_all_level_actors():
     if isinstance(a, unreal.DarkwellStalkerCharacter):
-        a.set_editor_property("persistent_id", "Lab.Stalker.NeverRemember")
+        raise AssertionError('Default lab must not contain a placed Stalker')
     if isinstance(a, unreal.DarkwellPropLabFurniture):
         furniture.append(a)
         unreal.log(f"LAB_ASSET {a.get_editor_property('stable_id')} shape={a.get_editor_property('shape')} dimensions={a.get_editor_property('dimensions')}")

@@ -780,4 +780,62 @@ bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPropLabEmptyAndComparisonTest,
+ "Darkwell.PropLab.Comparison.EmptyWorldAndActorAuthority", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellPropLabEmptyAndComparisonTest::RunTest(const FString& Parameters)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("PropComparison"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+ UWorld* World=TestWorld.Get();
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>(); Fixture->PostInitializeComponents(); Fixture->DispatchBeginPlay();
+ auto* Player=Spawn<ADarkwellCharacter>(*World,Darkwell::PropLab::ComparisonPlayerPosition(),FRotator(0,-30,0));
+ auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ auto* Memory=World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+ auto* Fog=World->GetSubsystem<UDarkwellFogVisualSubsystem>();
+ TestTrue(TEXT("Lab authority starts without a placed enemy"),Adapter->RequestSightWeaveAuthority(Fixture));
+ Adapter->Tick(0);
+ TestTrue(TEXT("Zero enemy does not roll back the laboratory"),Adapter->IsSightWeaveAuthorityActive());
+ for(int32 Generation=0;Generation<2;++Generation)
+ {
+  auto* Enemy=Spawn<ADarkwellStalkerCharacter>(*World,FVector(400,-550,92)); Enemy->ConfigurePersistentId(TEXT("Lab.OptionalTest"));
+  Adapter->Tick(0);
+  FDarkwellVisibilitySubjectSnapshot Snapshot;
+  TestTrue(TEXT("Explicit late enemy has NeverRemember authority"),Adapter->TryGetSubjectSnapshot(TEXT("Lab.OptionalTest"),Snapshot));
+  bool Live=false,Valid=false; FVector Location; AActor* Proxy=nullptr;
+  TestFalse(TEXT("Late enemy never becomes a furniture memory"),Memory->TryGetRecordForTesting(TEXT("Lab.OptionalTest"),Live,Valid,Location,Proxy));
+  Enemy->Destroy(); Adapter->Tick(0);
+  TestTrue(TEXT("Removing optional enemy preserves floor authority"),Adapter->IsSightWeaveAuthorityActive());
+  TestFalse(TEXT("Removing enemy clears its HUD snapshot"),Adapter->TryGetSubjectSnapshot(TEXT("Lab.OptionalTest"),Snapshot));
+ }
+ const FTransform Transform(FVector(400,-300,0));
+ auto* Island=World->SpawnActorDeferred<ADarkwellPropLabFurniture>(ADarkwellPropLabFurniture::StaticClass(),Transform);
+ Island->StableId=TEXT("Lab.Island"); Island->Shape=4; Island->Dimensions=FVector(1400,110,90);
+ Island->FinishSpawning(Transform); Island->DispatchBeginPlay();
+ TestEqual(TEXT("Comparison island has exactly one primitive"),Island->Memory->GetMemoryPrimitives().Num(),1);
+ auto* Mode=IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"));
+ for(int32 M=0;M<3;++M)
+ {
+  Mode->Set(M,ECVF_SetByConsole);
+  int32 Intermediate=0,Gray=0,LiveFrames=0;
+  for(int32 Step=0;Step<=300;++Step)
+  {
+   Player->SetActorRotation(FRotator(0,Darkwell::PropLab::ComparisonYaw(Step*.1f),0));
+   Adapter->Tick(0); Memory->RefreshNowForTesting();
+   bool Live=false,Valid=false; FVector Location; AActor* Proxy=nullptr;
+   Memory->TryGetRecordForTesting(TEXT("Lab.Island"),Live,Valid,Location,Proxy);
+   TestTrue(TEXT("Full silhouette remains known through forward/reverse scans"),Valid);
+   TestEqual(TEXT("Source visibility is unified by identity, not component thresholds"),Island->Parts[0]->IsVisible(),M==0 ? Live : true);
+   TestEqual(TEXT("Exactly one source or gray proxy represents the island"),Proxy && !Proxy->IsHidden(),M==0 && !Live);
+   float Mean=0;
+   for(int32 X=0;X<=100;++X) Mean+=Fog->EvaluateLiveCoverageAtWorldPoint(FVector2D(-300+14*X,-300));
+   Mean/=101;
+   Intermediate+=(Mean>.2f && Mean<.8f); Gray+=(Mean<.001f); LiveFrames+=Live;
+  }
+  TestTrue(TEXT("Route has sustained intermediate spatial coverage"),Intermediate>70);
+  TestTrue(TEXT("Route contains fully gray endpoints and live identity samples"),Gray>30 && LiveFrames>50);
+ }
+ Fixture->Destroy();
+ return true;
+}
+
 #endif

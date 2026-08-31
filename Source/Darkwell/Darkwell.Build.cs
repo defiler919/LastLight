@@ -22,9 +22,7 @@ public class Darkwell : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
-			"SightWeaveRuntime",
-			"GeometryCore",
-			"GeometryFramework"
+			"SightWeaveRuntime"
 		});
 
 		if (Target.Type != TargetType.Server)

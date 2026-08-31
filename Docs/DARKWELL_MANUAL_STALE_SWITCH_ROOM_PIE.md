@@ -1,7 +1,5 @@
 # DARKWELL 柜子残影开关房间
 
-2026-08-31 后续 Mode 2 实心封口、隐藏投影及空间重新显露复测见 [DARKWELL_MODE2_SOLID_REVEAL_RETEST.md](DARKWELL_MODE2_SOLID_REVEAL_RETEST.md)。下方保留原手动房间与 Mode 0/1 的历史验收记录。
-
 恢复基线：`1746c747a4136915350e559ebae2c517a183d5e0`。
 分支：`codex/darkwell-prop-memory-gameplay-lab`。
 地图：`/Game/Maps/L_ProjectFogPropGameplayLab`，没有新建分支或正式地图。

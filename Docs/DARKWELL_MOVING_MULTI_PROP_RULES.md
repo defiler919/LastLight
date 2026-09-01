@@ -2,7 +2,7 @@
 
 ## Status
 
-`PARTIAL — SPATIAL_EVIDENCE_MOVING_PROP_GPU_EVIDENCE_PENDING`
+`PARTIAL — READY_FOR_USER_IN_WORLD_MOVING_PROP_RETEST`
 
 This document records the qualification and implementation history for Step 1,
 Moving and Multi-Prop Rule Validation. It does not change the frozen Mode 2
@@ -103,7 +103,9 @@ lab memory policy, not a final whole-project streaming policy.
 ## Isolated moving and multi-prop room
 
 The existing map asset is unchanged. The room is spawned at runtime only when
-the Lab world has the `MoveRules` URL option. It uses Engine basic geometry:
+the Lab world has the `MoveRules` URL option or the editor is launched with
+`-PropLabMovingControls`. The latter is the user-facing path. It uses Engine
+basic geometry and contains no saved map changes:
 
 - three-part cabinet;
 - three-part low bed;
@@ -121,6 +123,34 @@ The Mode 2 historical proxies use the frozen accumulated-memory material, 4x4
 conservative presentation sampling, bilinear filtering, `.20/.18` timing, and
 the existing opaque, unlit, two-sided `#343A40` cap material. They do not change
 the frozen static-prop path.
+
+### In-world F-key mechanisms
+
+The manual room now has seven green, labeled interactables that use the existing
+`UDarkwellInteractionComponent` and character F binding. They do not open the
+console or invoke the legacy `scenario` / `advance` command path:
+
+- **VISIBLE TRANSLATE**: one-second hold, then a four-second continuous A to B
+  translation; the result remains at B.
+- **VISIBLE ROTATE**: one-second hold, then a four-second continuous 0 to 180
+  degree rotation; the result remains at 180 degrees.
+- **OFFSCREEN A TO B**: arms the rear orange pressure plate. The plate starts a
+  four-second move only while the cabinet has zero legal coverage.
+- **COVERAGE EDGE**: one-second hold, then an eight-second continuous passage
+  across the legal view boundary.
+- **A TO B TO C**: arms the pressure plate twice. B and C are each reached by a
+  four-second hidden move; seeing B or C does not clear older records.
+- **MULTI PROP**: a blue high cabinet and orange low cabinet move continuously
+  for four seconds, a red small box becomes absent, and a green long table stays
+  fixed. Shapes, dimensions, colors, StableIDs, and spatial records are distinct.
+- **RESET CURRENT EXPERIMENT**: recreates only the selected experiment's real
+  actor(s) and record state. It does not clear evidence in other experiment
+  zones. Starts, motion completion, focus changes, and walking away never reset.
+
+HUD telemetry always shows Mode, rule, enemy count, Scenario, Phase, Motion
+`STOPPED/RUNNING/FINISHED`, object position `A/B/C/TRANSIT`, current interaction,
+identity count, spatial record count, and multi-prop count. The room spawns no
+Stalker and reports `ENEMY 0`.
 
 ## Deterministic scenarios and results
 
@@ -142,91 +172,98 @@ state. Their deterministic mutation moves item 00 and makes item 01 absent;
 neighbors remain unchanged. A duplicate real StableID is rejected with a
 warning. The counts are correctness evidence, not a performance matrix.
 
-## Commands and shortest manual route
+## Shortest manual route with no console
 
-Start PIE in `/Game/Maps/L_ProjectFogPropGameplayLab`, then enter:
+Open `/Game/Maps/L_ProjectFogPropGameplayLab` in the prepared editor and click
+Play. The editor is launched with `-PropLabMovingControls`, so no console command
+is required.
 
-```text
-Darkwell.PropLab moverules reset
-Darkwell.PropLab moverules help
-Darkwell.PropLab moverules scenario 1
-Darkwell.PropLab moverules scenario 2
-Darkwell.PropLab moverules scenario 3
-Darkwell.PropLab moverules scenario 4
-Darkwell.PropLab moverules scenario 5
-Darkwell.PropLab moverules scenario 6
-Darkwell.PropLab moverules scenario 7
-Darkwell.PropLab moverules advance
-Darkwell.PropLab moverules multi 2
-Darkwell.PropLab moverules multi 8
-Darkwell.PropLab moverules multi 32
-Darkwell.PropLab moverules stop
-```
+1. The player begins facing **VISIBLE TRANSLATE**. Keep the cursor aimed at its
+   green label, press F once, and watch the one-second hold plus four-second move.
+   The HUD must reach `Scenario 1 / Motion RUNNING / position TRANSIT`, then
+   `FINISHED / B`.
+2. Walk to **RESET CURRENT EXPERIMENT**, press F, then use **VISIBLE ROTATE**.
+   Confirm a continuous four-second rotation with multiple intermediate angles.
+3. Reset, face the cabinet at A, press F on **OFFSCREEN A TO B**, walk behind the
+   opaque divider, and step onto the orange pressure plate. Return to B first:
+   B appears while A remains. Look at A only afterward to erase A.
+4. Reset and repeat **A TO B TO C** with two pressure-plate visits. Observe C
+   before revisiting A or B; A and B remain independent until each location is
+   legally rechecked.
+5. Reset and use **MULTI PROP**. Confirm two differently shaped objects move, the
+   small box disappears, and the long table stays fixed.
+6. Reset and use **COVERAGE EDGE**. Hold the view while the cabinet crosses the
+   boundary for eight seconds and compare live, gray-memory, entry, and exit.
 
-`moverules reset` travels to the isolated room and forces Lab Mode 2. There is no
-policy command. Mode 0/1 remain available in the older Lab for regression only.
-
-The shortest SpatialEvidenceOnly check is:
-
-1. Run `moverules reset`, then `moverules scenario 3`.
-2. Run `moverules advance` once: movement happens while A and B are illegal.
-   Confirm A remains a gray spatial record and B does not leak.
-3. Run `moverules advance` again: B is viewed and appears through Mode 2 while A
-   remains. The HUD record count becomes two.
-4. Run `moverules advance` a third time: A is legally viewed and only A erases.
-5. Run `moverules scenario 7`, then `advance` four times to observe A, B, and C.
-   Confirm A and B remain while C is current. Two more `advance` commands verify
-   and erase A and B independently.
-6. Run `moverules multi 2`, `multi 8`, and `multi 32`; after each, run `advance`
-   once to compare one moved, one absent, and unaffected neighbors.
+Legacy commands remain only for deterministic automation compatibility. They are
+not part of user acceptance. There is no policy command. Mode 0/1 remain available
+in the older Lab for regression only.
 
 StableID and observation epochs are shown only as diagnostics. The HUD does not
 tell the player that an item moved or connect A, B, and C as inferred knowledge.
 
-## Final build and automation checkpoint
+## In-world control build and automation checkpoint
 
 Runtime-room build after the final source change:
 
-- `Saved/PropGameplayLab/MovingMulti/MovingRoomBuild09.log`
+- `Saved/PropGameplayLab/MovingMulti/InWorldFinalBuild.log`
 - `DarkwellEditor Win64 Development`: Success, 7/7 actions.
 - Preserved warnings: Visual Studio 14.51 is newer than the preferred 14.50 and
   UE 5.8.2 engine headers emit existing deprecation warnings.
 
-The focused room test passed twice:
+The focused in-world control test passed after the final source change:
 
-- `Saved/AutomationReports/MovingMultiRoomRuntime08`: 1/1 Success with the
-  expected duplicate-StableID warning.
-- The same test passed again inside the final combined suite.
+- `Saved/AutomationReports/InWorldControls06`: 1/1 Success.
+- It drives the seven mechanism actors without console commands and verifies at
+  least 80 distinct translation samples, 80 distinct rotation samples, 160 edge
+  samples, hidden A-to-B and A-to-B-to-C history, multi-prop isolation, focus
+  stability, and current-zone-only reset.
+- Rotation also asserts every changing spatial grid uses a matching presentation
+  texture extent; this guards the D3D12 out-of-bounds failure found during GPU QA.
 
 Final combined suite:
 
-- Filter: frozen 16 tests + all moving rules + existing Lab runtime matrix.
-- Report: `Saved/AutomationReports/MovingMultiSpatialEvidenceFinal01`.
-- Log: `Saved/PropGameplayLab/MovingMulti/AutomationSpatialEvidenceFinal01.log`.
-- Result: 23/23 Success; 17 clean, 6 Success with warnings, 0 failed, 0 not run.
+- Filter: frozen 16 tests + all moving rules + existing Lab runtime matrix + the
+  new in-world control test.
+- Report: `Saved/AutomationReports/InWorldControlsFinal24`.
+- Log: `Saved/PropGameplayLab/MovingMulti/InWorldAutomationFinal24.log`.
+- Result: 24/24 Success; 19 clean, 5 Success with warnings, 0 failed, 0 not run.
 - Severe scan (`Fatal`, assertion, ensure, access violation, failed test): 0.
 - The warnings are expected duplicate/capacity fail-closed diagnostics and the
   already preserved external/editor warnings in the frozen suite.
 
-## GPU evidence limitation
+## D3D12/SM6 visual evidence
 
-No new moving-room GPU evidence is accepted in this checkpoint. Four bounded
-1080p D3D12/SM6 attempts stopped before the first screenshot:
+The final evidence run used D3D12, SM6, normal TSR, and 100% Screen Percentage.
+The actual embedded PIE backbuffer was `1526x549`; this is recorded as the actual
+available resolution and is not represented as strict 1080p or performance
+evidence. The successful run produced 85 screenshot files:
 
-- `Saved/PropGameplayLab/MovingMulti/GPU1080_SpatialEvidence01.log`: UE 5.8.2
-  floating PIE window had no `NetMode` title.
-- `GPU1080_SpatialEvidence02.log`: `editor_request_begin_play()` used the embedded
-  viewport, so there was no separate PIE top-level window.
-- `GPU1080_SpatialEvidence03.log`: resizing a maximized editor window was ignored.
-- `GPU1080_SpatialEvidence04.log`: the restored embedded viewport was clamped by
-  the 1920x1032 Windows work area at 1914x1054, short of the required 1920x1080.
+- Log: `Saved/PropGameplayLab/MovingMulti/InWorldGPU02.log`.
+- Data: `Saved/PropGameplayLab/MovingMulti/InWorldPIE_20260901_134507/checks.json`.
+- Review sheets: the `review` child directory beside `checks.json`.
+- 12+ distinct rendered translation positions over four seconds.
+- 12+ distinct rendered rotation angles over four seconds.
+- Continuous eight-second boundary crossing, hidden A-to-B results, and the
+  four-item multi-prop state.
+- Severe scan: 0 in the successful run.
 
-All four runs confirmed forced D3D12 and SM6, but none produced a valid visual
-frame or performance claim. The 1440p run was intentionally not started after
-the bounded 1080p failure. Previous accepted Mode 2 GPU evidence remains valid
-for the frozen static-prop presentation, but it is not represented as moving-room
-evidence. Manual PIE is available; formal dual-resolution moving-room visual
-evidence remains pending.
+The agent opened and inspected the translation, rotation, boundary, and
+hidden/multi contact sheets plus individual full-size frames. Adjacent frames
+showed continuous position and angle changes with no instant final-transform
+jump, residual chain, duplicate prop, duplicate shadow, or D3D12 assertion.
+
+One preserved failed attempt is material: `InWorldGPU01.log` reached rotation
+and exposed an out-of-bounds texture upload when rotating bounds exceeded the
+initial record texture width. The Lab now recreates that record's presentation
+texture whenever its grid dimensions change; the subsequent focused automation,
+Editor build, and complete D3D12 run passed. The older four resolution-sizing
+failures remain preserved and are not recast as visual evidence.
+
+The actual Standalone PIE window was also exercised with Windows input: after
+mouse capture and aiming at the green mechanism, pressing F changed the HUD from
+`Scenario 0 / Motion STOPPED` to `Scenario 1 / Phase 1 / Motion RUNNING /
+position TRANSIT`. No console command was used.
 
 ## Checkpoint commits
 

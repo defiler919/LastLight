@@ -322,7 +322,9 @@ void ADarkwellPropGameplayLab::DisableDarkwellProjectFog() { RawCoverage=nullptr
 
 void ADarkwellPropGameplayLab::BeginPlay()
 {
- if(GetWorld() && GetWorld()->URL.HasOption(TEXT("MoveRules"))
+ if(GetWorld() && (GetWorld()->URL.HasOption(TEXT("MoveRules"))
+  || GetWorld()->URL.HasOption(TEXT("InWorldControls"))
+  || FParse::Param(FCommandLine::Get(),TEXT("PropLabMovingControls")))
   && !ADarkwellMovingPropLabRoom::FindActive(GetWorld()))
   GetWorld()->SpawnActor<ADarkwellMovingPropLabRoom>();
  Super::BeginPlay();

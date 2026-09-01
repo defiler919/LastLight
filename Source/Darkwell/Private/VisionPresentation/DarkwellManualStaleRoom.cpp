@@ -66,7 +66,9 @@ ADarkwellManualStaleRoom::ADarkwellManualStaleRoom()
 
 ADarkwellManualStaleRoom* ADarkwellManualStaleRoom::FindActive(const UWorld* World)
 {
- if(!Darkwell::PropLab::IsLabWorld(World) || World->URL.HasOption(TEXT("PropLabOriginal"))) return nullptr;
+ if(!Darkwell::PropLab::IsLabWorld(World) || World->URL.HasOption(TEXT("PropLabOriginal"))
+  || World->URL.HasOption(TEXT("InWorldControls"))
+  || FParse::Param(FCommandLine::Get(),TEXT("PropLabMovingControls"))) return nullptr;
  for(const TCHAR* Flag:{TEXT("StaleLabAuto"),TEXT("PropLabCapture="),TEXT("PropLabComparisonCapture")})
   if(FCString::Stristr(FCommandLine::Get(),Flag)) return nullptr;
  for(TActorIterator<ADarkwellManualStaleRoom> It(World);It;++It) return *It;

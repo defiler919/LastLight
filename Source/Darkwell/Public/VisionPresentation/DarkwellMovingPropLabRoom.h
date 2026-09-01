@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Interaction/DarkwellInteractable.h"
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 #include "VisionPresentation/DarkwellSpatialObservationHistory.h"
 #include "DarkwellMovingPropLabRoom.generated.h"
@@ -11,7 +12,55 @@ class ADarkwellPropLabFurniture;
 class UDynamicMeshComponent;
 class UMaterialInstanceDynamic;
 class UStaticMeshComponent;
+class UTextRenderComponent;
 class UTexture2D;
+class ADarkwellMovingPropLabRoom;
+
+UENUM()
+enum class EDarkwellMovingPropLabControlKind : uint8
+{
+	VisibleTranslate,
+	VisibleRotate,
+	HiddenAtoB,
+	CoverageBoundary,
+	AtoBtoC,
+	MultiProp,
+	ResetCurrent
+};
+
+/** Lab-only world interaction driven by the existing F-key interaction path. */
+UCLASS()
+class DARKWELL_API ADarkwellMovingPropLabControl final
+	: public AActor
+	, public IDarkwellInteractable
+{
+	GENERATED_BODY()
+
+public:
+	ADarkwellMovingPropLabControl();
+	void Configure(
+		ADarkwellMovingPropLabRoom* InRoom,
+		EDarkwellMovingPropLabControlKind InKind,
+		const FText& InLabel);
+	void RefreshDisplay();
+
+	virtual bool CanInteract(const ADarkwellCharacter& Character) const override;
+	virtual void Interact(ADarkwellCharacter& Character) override;
+	virtual FText GetInteractionPrompt(const ADarkwellCharacter& Character) const override;
+	virtual void OnInteractionFocusChanged(bool bFocused) override;
+
+	UFUNCTION(BlueprintPure, Category="Lab") EDarkwellMovingPropLabControlKind GetControlKind() const { return Kind; }
+	UFUNCTION(BlueprintCallable, Category="Lab") bool TriggerForLabEvidence(ADarkwellCharacter* Character);
+	EDarkwellMovingPropLabControlKind GetKind() const { return Kind; }
+
+private:
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Body;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> Label;
+	TWeakObjectPtr<ADarkwellMovingPropLabRoom> Room;
+	FText BaseLabel;
+	EDarkwellMovingPropLabControlKind Kind = EDarkwellMovingPropLabControlKind::VisibleTranslate;
+	bool bFocused = false;
+};
 
 /** Development-only, runtime-spawned basic-geometry room for moving prop rules. */
 UCLASS()
@@ -42,7 +91,19 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab") int32 GetTotalProxyCount() const;
 	UFUNCTION(BlueprintPure, Category="Lab") int32 GetTotalCapTriangles() const;
 	UFUNCTION(BlueprintPure, Category="Lab") FString GetTelemetry() const;
+	UFUNCTION(BlueprintPure, Category="Lab") FString GetMotionState() const;
+	UFUNCTION(BlueprintPure, Category="Lab") FString GetCurrentInteraction() const;
+	UFUNCTION(BlueprintPure, Category="Lab") FString GetObjectPositionLabel() const;
+	UFUNCTION(BlueprintPure, Category="Lab") FVector GetPressurePlatePosition() const;
+	UFUNCTION(BlueprintPure, Category="Lab") FTransform GetTrackedTransform(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab") bool IsInWorldControlMode() const { return bInWorldControls; }
 	bool TryDuplicateStableIdForTesting(FName StableId);
+	bool DoSpatialRecordTexturesMatchForTesting(FName StableId) const;
+	bool ActivateInWorldControl(EDarkwellMovingPropLabControlKind Kind, ADarkwellCharacter& Character);
+	bool CanActivateInWorldControl(EDarkwellMovingPropLabControlKind Kind) const;
+	FText GetInWorldControlPrompt(EDarkwellMovingPropLabControlKind Kind) const;
+	FText GetInWorldControlDisplay(EDarkwellMovingPropLabControlKind Kind) const;
+	ADarkwellMovingPropLabControl* GetControlForTesting(EDarkwellMovingPropLabControlKind Kind) const;
 
 	bool SelectScenario(int32 InScenario, ADarkwellCharacter* Player);
 	bool AdvanceScenario(ADarkwellCharacter* Player);
@@ -75,6 +136,15 @@ private:
 		bool bExists = false;
 	};
 
+	struct FActiveMotion
+	{
+		TWeakObjectPtr<ADarkwellPropLabFurniture> Prop;
+		FTransform Start = FTransform::Identity;
+		FTransform End = FTransform::Identity;
+		float Seconds = 0.0f;
+		float Duration = 0.0f;
+	};
+
 	ADarkwellPropLabFurniture* SpawnTracked(
 		FName StableId,
 		int32 Shape,
@@ -82,7 +152,18 @@ private:
 		FLinearColor Tint,
 		const FTransform& Transform);
 	void DestroyTracked();
+	void DestroyTracked(FName StableId);
 	void DestroyVisual(FRecordVisual& Visual);
+	void ConfigureInWorldProps();
+	void SpawnInWorldControls();
+	void DestroyInWorldControls();
+	bool ResetCurrentInWorldZone();
+	void ResetInWorldControlState();
+	void StartMotion(ADarkwellPropLabFurniture* Prop, const FTransform& Target, float Duration);
+	void UpdateInWorldAutomation(float DeltaSeconds, ADarkwellCharacter* Player);
+	void UpdatePressurePlate(ADarkwellCharacter* Player);
+	void CompleteInWorldMotionGroup();
+	FName GetInWorldPropId(EDarkwellMovingPropLabControlKind Kind) const;
 	FBox2D ActualBounds(const ADarkwellPropLabFurniture& Prop) const;
 	TArray<FBox> ActualPartBounds(const ADarkwellPropLabFurniture& Prop) const;
 	TArray<float> ConservativeCoverage(const FBox2D& Bounds) const;
@@ -100,19 +181,26 @@ private:
 	void Report();
 
 	UPROPERTY(VisibleAnywhere) TArray<TObjectPtr<UStaticMeshComponent>> Structure;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> PressurePlate;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> PressureLabel;
 	UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> OwnedMaterials;
 	UPROPERTY(Transient) TArray<TObjectPtr<UTexture2D>> OwnedTextures;
 	UPROPERTY(Transient) TArray<TObjectPtr<UDynamicMeshComponent>> OwnedCaps;
 	TMap<FName, FTrackedProp> Tracked;
-	TWeakObjectPtr<ADarkwellPropLabFurniture> MotionProp;
-	FTransform MotionStart = FTransform::Identity;
-	FTransform MotionEnd = FTransform::Identity;
-	float MotionSeconds = 0.0f;
-	float MotionDuration = 0.0f;
+	UPROPERTY(Transient) TArray<TObjectPtr<ADarkwellMovingPropLabControl>> InWorldControls;
+	TArray<FActiveMotion> ActiveMotions;
 	FString Status;
+	FString CurrentInteraction = TEXT("NONE");
+	EDarkwellMovingPropLabControlKind ActiveControl = EDarkwellMovingPropLabControlKind::VisibleTranslate;
+	float AutoDelaySeconds = 0.0f;
 	int32 Scenario = 0;
 	int32 ScenarioPhase = 0;
 	int32 MultiCount = 0;
+	int32 HiddenMoveIndex = 0;
 	bool bMotionActive = false;
 	bool bStarted = false;
+	bool bInWorldControls = false;
+	bool bInWorldScenarioSelected = false;
+	bool bInWorldFinished = false;
+	bool bPressureWaitingForExit = false;
 };

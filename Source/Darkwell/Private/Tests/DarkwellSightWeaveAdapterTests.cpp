@@ -13,6 +13,7 @@
 #include "EngineUtils.h"
 #include "Gameplay/DarkwellGameplayTags.h"
 #include "Gameplay/DarkwellVisibilityComponent.h"
+#include "Interaction/DarkwellInteractionComponent.h"
 #include "Misc/AutomationTest.h"
 #include "Player/DarkwellCharacter.h"
 #include "SightWeavePresentation.h"
@@ -1506,6 +1507,146 @@ bool FDarkwellMovingPropRoomRuntimeTest::RunTest(const FString&)
  }
  TestTrue(TEXT("HUD telemetry names the fixed rule"),Room->GetTelemetry().Contains(TEXT("SpatialEvidenceOnly")));
  Fixture->Destroy(); return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMovingPropInWorldControlsTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.NoConsoleContinuousMotion", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellMovingPropInWorldControlsTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("MovingPropInWorldControls"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+ UWorld* World=TestWorld.Get(); World->URL.AddOption(TEXT("PropLabOriginal")); World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-1100,80,92),FRotator(0,90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>(); Fixture->PostInitializeComponents(); Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);
+ auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("InWorldControls URL spawns moving room"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("In-world room activates ordinary SightWeave authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("In-world reset establishes controls and props"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames=30)
+ {
+  for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/30);Room->UpdateRoom(1.f/30,Player);Fixture->Tick(1.f/30);}
+ };
+ auto Use=[&](EDarkwellMovingPropLabControlKind Kind)
+ {
+  auto* Control=Room->GetControlForTesting(Kind); if(!Control)return false;
+  const FVector Center=Control->GetActorLocation();
+  FVector Facing=(Center-FVector(Center.X,Center.Y-140,92)).GetSafeNormal2D();
+  Player->SetActorLocation(FVector(Center.X,Center.Y-140,92));
+  Player->SetActorRotation(Facing.Rotation()); Step(2);
+  if(!Control->CanInteract(*Player))return false;
+  Player->GetInteractionComponent()->UpdateFocusedActor(Control);
+  if(Player->GetInteractionComponent()->GetFocusedActor()!=Control)return false;
+  Control->Interact(*Player);
+  return true;
+ };
+ auto UseReset=[&](){return Use(EDarkwellMovingPropLabControlKind::ResetCurrent);};
+ Step();
+ int32 EnemyCount=0;for(TActorIterator<ADarkwellStalkerCharacter> It(World);It;++It)++EnemyCount;
+ TestEqual(TEXT("In-world room has no enemy"),EnemyCount,0);
+ int32 ControlCount=0;for(TActorIterator<ADarkwellMovingPropLabControl> It(World);It;++It)++ControlCount;
+ TestEqual(TEXT("Seven labeled F-key mechanisms exist"),ControlCount,7);
+
+ auto* InitialTranslateControl=Room->GetControlForTesting(EDarkwellMovingPropLabControlKind::VisibleTranslate);
+ if(TestNotNull(TEXT("Initial visible-translation mechanism exists"),InitialTranslateControl))
+ {
+  const FVector Center=InitialTranslateControl->GetActorLocation();
+  Player->SetActorLocation(FVector(Center.X,Center.Y-140,92));
+  Player->SetActorRotation(FRotator(0,90,0));Step(2);
+  TestTrue(TEXT("Visible-translation mechanism is valid before F"),InitialTranslateControl->CanInteract(*Player));
+  Player->GetInteractionComponent()->UpdateFocusedActor(InitialTranslateControl);
+  TestEqual(TEXT("Interaction component accepts the mechanism as an explicit valid candidate"),
+   Player->GetInteractionComponent()->GetFocusedActor(),static_cast<AActor*>(InitialTranslateControl));
+ }
+
+ TestTrue(TEXT("In-world interactable starts visible translation without console"),Use(EDarkwellMovingPropLabControlKind::VisibleTranslate));
+ TestEqual(TEXT("Translation selection starts at scenario 1 phase 0"),Room->GetScenario(),1);
+ TestEqual(TEXT("One-second preparation is stopped"),Room->GetMotionState(),FString(TEXT("STOPPED")));
+ const int32 BeforeFocus=Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet"));
+ auto* TranslateControl=Room->GetControlForTesting(EDarkwellMovingPropLabControlKind::VisibleTranslate);
+ if(TestNotNull(TEXT("Visible translation control remains available during focus change"),TranslateControl))
+ {TranslateControl->OnInteractionFocusChanged(false);TranslateControl->OnInteractionFocusChanged(true);Step(2);}
+ TestEqual(TEXT("Focus changes do not reset spatial history"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),BeforeFocus);
+ TSet<int32> TranslateSamples;
+ for(int32 Frame=0;Frame<165;++Frame)
+ {Step(1);TranslateSamples.Add(FMath::RoundToInt(Room->GetTrackedTransform(TEXT("Lab.Moving.Cabinet")).GetLocation().X*10));}
+ TestTrue(TEXT("Visible translation contains many intermediate transforms"),TranslateSamples.Num()>=80);
+ TestEqual(TEXT("Visible translation finishes and holds B"),Room->GetMotionState(),FString(TEXT("FINISHED")));
+ TestEqual(TEXT("Visible translation labels B"),Room->GetObjectPositionLabel(),FString(TEXT("B")));
+ TestEqual(TEXT("Visible translation creates no residual chain"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),1);
+ TestTrue(TEXT("Explicit reset mechanism resets current translation zone"),UseReset());Step();
+ TestEqual(TEXT("Reset returns scenario selection to zero"),Room->GetScenario(),0);
+
+ TestTrue(TEXT("F-key mechanism starts visible rotation"),Use(EDarkwellMovingPropLabControlKind::VisibleRotate));
+ TSet<int32> RotationSamples;
+	bool bRotationTexturesMatched = true;
+ for(int32 Frame=0;Frame<165;++Frame)
+ {Step(1);RotationSamples.Add(FMath::RoundToInt(Room->GetTrackedTransform(TEXT("Lab.InWorld.Rotate.Cabinet")).Rotator().Yaw*10));
+  bRotationTexturesMatched &= Room->DoSpatialRecordTexturesMatchForTesting(TEXT("Lab.InWorld.Rotate.Cabinet"));}
+ TestTrue(TEXT("Visible rotation contains many intermediate angles"),RotationSamples.Num()>=80);
+	TestTrue(TEXT("Rotating bounds always use a matching presentation texture extent"),bRotationTexturesMatched);
+ TestEqual(TEXT("Visible rotation finishes without pose chain"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Rotate.Cabinet")),1);
+ TestTrue(TEXT("Reset rotation zone explicitly"),UseReset());Step();
+
+ TestTrue(TEXT("F-key mechanism starts continuous coverage-boundary crossing"),Use(EDarkwellMovingPropLabControlKind::CoverageBoundary));
+ TSet<int32> BoundarySamples;
+ for(int32 Frame=0;Frame<285;++Frame)
+ {Step(1);BoundarySamples.Add(FMath::RoundToInt(Room->GetTrackedTransform(TEXT("Lab.InWorld.Edge.Cabinet")).GetLocation().Y*10));}
+ TestTrue(TEXT("Coverage-boundary motion contains many intermediate transforms"),BoundarySamples.Num()>=160);
+ TestEqual(TEXT("Coverage-boundary motion finishes and holds B"),Room->GetMotionState(),FString(TEXT("FINISHED")));
+ TestTrue(TEXT("Coverage-boundary movement creates no continuous residual chain"),
+  Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Edge.Cabinet"))<=1);
+ TestTrue(TEXT("Reset coverage-boundary zone explicitly"),UseReset());Step();
+
+ TestTrue(TEXT("F-key mechanism arms offscreen A-to-B"),Use(EDarkwellMovingPropLabControlKind::HiddenAtoB));Step();
+ const int32 HiddenARecords=Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Hidden.Cabinet"));
+ TestEqual(TEXT("A was observed before pressure trigger"),HiddenARecords,1);
+ Player->SetActorLocation(Room->GetPressurePlatePosition()+FVector(0,0,92));Player->SetActorRotation(FRotator(0,-90,0));Step(3);
+ TestEqual(TEXT("Pressure starts only after cabinet coverage is illegal"),Room->GetMotionState(),FString(TEXT("RUNNING")));
+ TSet<int32> HiddenMotionSamples;
+ for(int32 Frame=0;Frame<130;++Frame)
+ {Step(1);HiddenMotionSamples.Add(FMath::RoundToInt(Room->GetTrackedTransform(TEXT("Lab.InWorld.Hidden.Cabinet")).GetLocation().X*10));}
+ TestTrue(TEXT("Offscreen A-to-B is continuous rather than a button teleport"),HiddenMotionSamples.Num()>=80);
+ TestEqual(TEXT("Hidden motion retains A only before B is seen"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Hidden.Cabinet")),1);
+ Player->SetActorLocation(FVector(900,300,92));Player->SetActorRotation(FRotator(0,90,0));Step();
+ TestEqual(TEXT("Seeing B adds B without identity-clearing A"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Hidden.Cabinet")),2);
+ Player->SetActorLocation(FVector(500,300,92));Player->SetActorRotation(FRotator(0,90,0));Step();
+ TestEqual(TEXT("Only legal observation of A erases A"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Hidden.Cabinet")),1);
+ TestTrue(TEXT("Reset hidden zone explicitly"),UseReset());Step();
+
+ TestTrue(TEXT("F-key mechanism arms A-to-B-to-C"),Use(EDarkwellMovingPropLabControlKind::AtoBtoC));Step();
+ Player->SetActorLocation(Room->GetPressurePlatePosition()+FVector(0,0,92));Player->SetActorRotation(FRotator(0,-90,0));Step(130);
+ Player->SetActorLocation(FVector(-1050,700,92));Player->SetActorRotation(FRotator(0,90,0));Step();
+ TestEqual(TEXT("ABC B observation preserves A"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.ABC.Cabinet")),2);
+ Player->SetActorLocation(Room->GetPressurePlatePosition()+FVector(0,0,92));Player->SetActorRotation(FRotator(0,-90,0));Step(130);
+ Player->SetActorLocation(FVector(-600,700,92));Player->SetActorRotation(FRotator(0,90,0));Step();
+ TestEqual(TEXT("ABC C observation preserves independent A and B"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.ABC.Cabinet")),3);
+ Player->SetActorLocation(FVector(-1500,700,92));Player->SetActorRotation(FRotator(0,90,0));Step();
+ TestEqual(TEXT("ABC observing A erases A only"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.ABC.Cabinet")),2);
+ Player->SetActorLocation(FVector(-1050,700,92));Player->SetActorRotation(FRotator(0,90,0));Step();
+ TestEqual(TEXT("ABC observing B erases B only"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.ABC.Cabinet")),1);
+ TestTrue(TEXT("Reset ABC zone explicitly"),UseReset());Step();
+
+ Player->SetActorLocation(FVector(-1200,-900,92));Player->SetActorRotation(FRotator(0,90,0));Step();
+ const FTransform StaticTable=Room->GetTrackedTransform(TEXT("Lab.InWorld.Multi.LongTable"));
+ TestTrue(TEXT("F-key mechanism starts multi-prop experiment"),Use(EDarkwellMovingPropLabControlKind::MultiProp));
+ TSet<int32> HighSamples,LowSamples;
+ for(int32 Frame=0;Frame<165;++Frame)
+ {Step(1);HighSamples.Add(FMath::RoundToInt(Room->GetTrackedTransform(TEXT("Lab.InWorld.Multi.HighCabinet")).GetLocation().X*10));LowSamples.Add(FMath::RoundToInt(Room->GetTrackedTransform(TEXT("Lab.InWorld.Multi.LowCabinet")).GetLocation().Y*10));}
+ TestTrue(TEXT("High and low props move independently through intermediate transforms"),HighSamples.Num()>=80&&LowSamples.Num()>=80);
+ TestFalse(TEXT("Small box becomes absent"),Room->IsActualPresent(TEXT("Lab.InWorld.Multi.SmallBox")));
+ TestTrue(TEXT("Long table remains unchanged"),Room->GetTrackedTransform(TEXT("Lab.InWorld.Multi.LongTable")).Equals(StaticTable,0.01f));
+ TestEqual(TEXT("High moving prop has no residual chain"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Multi.HighCabinet")),1);
+ TestEqual(TEXT("Low moving prop has no residual chain"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Multi.LowCabinet")),1);
+ Player->SetActorLocation(FVector(-300,300,92));Player->SetActorRotation(FRotator(0,90,0));Step();
+ const int32 UnrelatedRotationHistory=Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ TestTrue(TEXT("Unrelated rotation zone has retained evidence"),UnrelatedRotationHistory>0);
+ TestTrue(TEXT("Explicit reset resets current multi zone"),UseReset());Step();
+ TestEqual(TEXT("Reset current multi zone leaves unrelated evidence intact"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Rotate.Cabinet")),UnrelatedRotationHistory);
+ TestTrue(TEXT("Multi box is restored only by explicit zone reset"),Room->IsActualPresent(TEXT("Lab.InWorld.Multi.SmallBox")));
+
+ Fixture->Destroy();return true;
 }
 
 #if WITH_EDITOR

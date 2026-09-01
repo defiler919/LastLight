@@ -126,9 +126,9 @@ def resize_viewport():
     cmd('r.ScreenPercentage 100')
 
 directions=[('left_to_right',4500,150,-5,90),('right_to_left',4500,150,185,90),('diagonal',4840,330,270,160)]
-# Primary 1080p covers three full cycles. Optional 1440p is a bounded one-cycle
-# supplement, not another large screenshot matrix.
-if resolution==(2560,1440):directions=directions[:1]
+# Earlier AA evidence used a bounded 1440p supplement.  The symmetric-cap
+# retest explicitly requests the same three directions at both resolutions.
+if resolution==(2560,1440) and '-SymmetricCapFullDirections' not in unreal.SystemLibrary.get_command_line():directions=directions[:1]
 def calibrate(spec):
     # Calibrate only against fully verified EMPTY floor. It cannot discover a
     # present generation. Use actual conservative per-cell legal area, not MAX.
@@ -166,13 +166,21 @@ def checkpoints(spec,absent=False):
         if absent and index==0:continue
         pose(x,y,last_angle);yield .12
         yield from sweep_to(x,y,last_angle,angle,entry_label=prefix if index==0 and not absent else None,
-                            adjacent_label=prefix if absent and index==2 else None)
+                            adjacent_label=prefix if index==2 else None)
         s=sample(prefix+f'_{int(target*100)}_held',True);yield .08
         assert abs(s['current']-target)<.012
         if absent:
             assert abs(s['verified']-target)<.015 and abs(s['remaining']-(1-target))<.015
             assert s['capVisible'] and s['capTriangles']>0
-        else:assert abs(s['discovered']-target)<.015 and abs(s['sourceOpacity']-s['discovered'])<1e-6
+        else:
+            assert abs(s['discovered']-target)<.015 and abs(s['sourceOpacity']-s['discovered'])<1e-6
+            assert s['capVisible'] and s['capTriangles']>0
+        if index==2:
+            for k in range(3):
+                sample(prefix+f'_50_stationary_adjacent_{k}',True)
+                # Shot is asynchronous. Keep the identical pose long enough
+                # for every requested frame to land before the away pose.
+                yield .12
         pose(x,y,away)
         if not absent and index==1:
             for k in range(5):
@@ -187,7 +195,7 @@ def checkpoints(spec,absent=False):
     yield from sweep_to(x,y,last_angle,full)
     s=sample(prefix+'_full',True);yield .08
     if absent:assert s['verified']==1 and s['remaining']==0 and s['proxyOpacity']==0 and not s['capVisible'] and s['capTriangles']==0
-    else:assert s['discovered']==1 and s['sourceOpacity']==1
+    else:assert s['discovered']==1 and s['sourceOpacity']==1 and not s['capVisible'] and s['capTriangles']==0
     pose(x,y,away);yield .4
     s=sample(prefix+'_full_away',True);yield .08
     assert s['current']==0 and s['live']==0

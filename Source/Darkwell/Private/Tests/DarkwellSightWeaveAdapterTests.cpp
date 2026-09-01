@@ -36,6 +36,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #if WITH_EDITOR
 #include "Materials/MaterialExpressionConstant.h"
+#include "Materials/MaterialExpressionConstant3Vector.h"
 #include "Materials/MaterialExpressionComponentMask.h"
 #include "Materials/MaterialExpressionCustom.h"
 #include "Materials/MaterialExpressionMaterialFunctionCall.h"
@@ -1258,7 +1259,7 @@ bool FDarkwellManualFixedRevealGeometryTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellManualStaleCutCapTest,
- "Darkwell.PropLab.ManualSwitch.Mode2BlackCutCap", Darkwell::SightWeaveAdapterTests::TestFlags)
+ "Darkwell.PropLab.ManualSwitch.Mode2SymmetricDarkGrayCutCap", Darkwell::SightWeaveAdapterTests::TestFlags)
 bool FDarkwellManualStaleCutCapTest::RunTest(const FString&)
 {
  using namespace Darkwell::SightWeaveAdapterTests;
@@ -1284,10 +1285,40 @@ bool FDarkwellManualStaleCutCapTest::RunTest(const FString&)
  TArray<FBox> PartBounds;
  for(UStaticMeshComponent* Part:Cabinet->Memory->GetMemoryPrimitives()) PartBounds.Add(Part->Bounds.GetBox());
  TestEqual(TEXT("Original three cabinet solids define cap intersections"),PartBounds.Num(),3);
+ Step(FVector(4500,150,92),-30,2);
+ TestEqual(TEXT("Zero present coverage has no premature cap"),Room->GetStaleCapTriangleCount(),0);
+ bool bSawPresentPartial=false,bSawPresentCap=false;
+ for(float Yaw=-30;Yaw<=210;Yaw+=.5f)
+ {
+  Step(FVector(4500,150,92),Yaw,1);
+  const auto Cells=Room->GetSpatialStateForTesting().GetCells();
+  int32 Known=0; for(const auto& C:Cells) Known+=C.DiscoveredPresent>0;
+  if(Known<=0 || Known>=Cells.Num()) continue;
+  bSawPresentPartial=true;
+  if(Room->GetStaleCapTriangleCount()>0) { bSawPresentCap=true; break; }
+ }
+ TestTrue(TEXT("Partial legal present discovery occurs"),bSawPresentPartial);
+ TestTrue(TEXT("Touching discovered/undiscovered present boundary produces cap triangles"),bSawPresentCap);
+ TestTrue(TEXT("Present cap is the same non-authoritative component"),Room->GetStaleCapComponentForTesting()->IsVisible());
+ TArray<FDarkwellSpatialPropMemory::FCell> BeforeCapModeSwitch;
+ BeforeCapModeSwitch.Append(Room->GetSpatialStateForTesting().GetCells().GetData(),Room->GetSpatialStateForTesting().GetCells().Num());
+ Room->Command({TEXT("stalemanual"),TEXT("mode"),TEXT("1")}); Room->UpdateObservation(0,Player);
+ TestTrue(TEXT("Mode 1 clears present cap"),!Room->GetStaleCapComponentForTesting()->IsVisible() && Room->GetStaleCapTriangleCount()==0);
+ const auto AfterCapModeSwitch=Room->GetSpatialStateForTesting().GetCells();
+ bool bAuthorityUnchanged=BeforeCapModeSwitch.Num()==AfterCapModeSwitch.Num();
+ for(int32 I=0;bAuthorityUnchanged && I<BeforeCapModeSwitch.Num();++I)
+ {
+  const auto& A=BeforeCapModeSwitch[I]; const auto& B=AfterCapModeSwitch[I];
+  bAuthorityUnchanged=A.DiscoveredPresent==B.DiscoveredPresent && A.VerifiedEmpty==B.VerifiedEmpty
+   && A.InitialRemembered==B.InitialRemembered && A.RemainingStale==B.RemainingStale;
+ }
+ TestTrue(TEXT("Cap and mode presentation never mutate D/V/R authority"),bAuthorityUnchanged);
+ Room->Command({TEXT("stalemanual"),TEXT("mode"),TEXT("2")}); Room->UpdateObservation(0,Player);
+ TestTrue(TEXT("Mode 2 rebuilds identical present authority boundary"),Room->GetStaleCapTriangleCount()>0);
  for(float Yaw=-30;Yaw<=210;Yaw+=1) Step(FVector(4500,150,92),Yaw,2);
  float Discovered=0; for(const auto& C:Room->GetSpatialStateForTesting().GetCells()) Discovered+=C.DiscoveredPresent;
  TestTrue(TEXT("Setup remembers nearly the full original surface"),Discovered>=Room->GetSpatialStateForTesting().GetCells().Num()*.95f);
- TestEqual(TEXT("No cap while actual cabinet is present"),Room->GetStaleCapTriangleCount(),0);
+ TestEqual(TEXT("Complete present discovery removes cap"),Room->GetStaleCapTriangleCount(),0);
  Step(Room->SwitchPosition()+FVector(0,0,92),90,4);
  TestFalse(TEXT("Pressure mutation makes actual cabinet absent"),Room->HasActualCabinet());
 
@@ -1342,7 +1373,7 @@ bool FDarkwellManualStaleCutCapTest::RunTest(const FString&)
  Room->Command({TEXT("stalemanual"),TEXT("mode"),TEXT("2")}); Step(FVector(4500,150,92),90);
  TestTrue(TEXT("Returning Mode 2 rebuilds the same authority boundary without memory reset"),Room->GetStaleCapTriangleCount()>0);
  for(int32 Sweep=0;Sweep<3;++Sweep) for(float Yaw=-30;Yaw<=210;Yaw+=1) Step(FVector(4500,150,92),Yaw,4);
- TestEqual(TEXT("Complete erase removes every meaningless black cap"),Room->GetStaleCapTriangleCount(),0);
+ TestEqual(TEXT("Complete erase removes every meaningless dark-gray cap"),Room->GetStaleCapTriangleCount(),0);
  TestFalse(TEXT("Complete erase hides cap component"),Room->GetStaleCapComponentForTesting()->IsVisible());
  Fixture->Destroy(); return true;
 }
@@ -1405,13 +1436,18 @@ bool FDarkwellManualFixedRevealMaterialTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellManualStaleCutCapMaterialTest,
- "Darkwell.PropLab.ManualSwitch.Mode2BlackCutCapMaterial", Darkwell::SightWeaveAdapterTests::TestFlags)
+ "Darkwell.PropLab.ManualSwitch.Mode2DarkGrayCutCapMaterial", Darkwell::SightWeaveAdapterTests::TestFlags)
 bool FDarkwellManualStaleCutCapMaterialTest::RunTest(const FString&)
 {
  auto* M=LoadObject<UMaterial>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_ManualStaleCutCap.M_ManualStaleCutCap"));
  if(!TestNotNull(TEXT("Dedicated cut-only material"),M)) return false;
  TestEqual(TEXT("Opaque solid section, not a black unknown overlay"),M->BlendMode,BLEND_Opaque);
- TestTrue(TEXT("Unlit stable black interior"),M->GetShadingModels().HasShadingModel(MSM_Unlit));
+ TestTrue(TEXT("Unlit color cannot drift with highlights or shadow"),M->GetShadingModels().HasShadingModel(MSM_Unlit));
+ auto* Color=Cast<UMaterialExpressionConstant3Vector>(M->GetEditorOnlyData()->EmissiveColor.Expression);
+ if(!TestNotNull(TEXT("Cap uses one fixed emissive color"),Color)) return false;
+ const FLinearColor Expected=FLinearColor::FromSRGBColor(FColor(0x34,0x3A,0x40));
+ TestTrue(TEXT("Cap color is exactly neutral dark gray sRGB #343A40, not black"),Color->Constant.Equals(Expected,1e-6f));
+ TestNull(TEXT("Unlit cap does not use lit base color"),M->GetEditorOnlyData()->BaseColor.Expression);
  TestTrue(TEXT("Both scan directions see the same cap"),M->TwoSided);
  TestNull(TEXT("Cap material cannot move or scale geometry"),M->GetEditorOnlyData()->WorldPositionOffset.Expression);
  TestNull(TEXT("Cap has no opacity-driven body replacement"),M->GetEditorOnlyData()->Opacity.Expression);

@@ -349,13 +349,16 @@ void ADarkwellManualStaleRoom::UpdateStaleCap(int32 Mode)
  using namespace UE::Geometry;
  const auto Cells=SpatialMemory.GetCells();
  const FIntPoint Size=SpatialMemory.GetSize();
- if(Mode!=2 || !SpatialMemory.IsAbsent() || Cells.IsEmpty() || OriginalPartBounds.IsEmpty())
+ const bool bPresent=SpatialMemory.IsPresent();
+ const bool bAbsent=SpatialMemory.IsAbsent();
+ if(Mode!=2 || (!bPresent && !bAbsent) || Cells.IsEmpty() || OriginalPartBounds.IsEmpty())
  { if(StaleCapTriangleCount>0 || StaleCap->IsVisible()) ClearStaleCap(); return; }
 
- uint64 Signature=uint64(SpatialMemory.GetGeneration())*1099511628211ull;
+ uint64 Signature=(uint64(SpatialMemory.GetGeneration())<<1 | uint64(bPresent))*1099511628211ull;
  for(const auto& C:Cells)
  {
-  const uint64 Bits=(C.InitialRemembered>0?1ull:0ull)|(C.VerifiedEmpty>0?2ull:0ull);
+  const uint64 Bits=bPresent ? (C.DiscoveredPresent>0?1ull:0ull)
+                              : ((C.InitialRemembered>0?1ull:0ull)|(C.VerifiedEmpty>0?2ull:0ull));
   Signature=(Signature^Bits)*1099511628211ull;
  }
  if(Signature==StaleCapSignature) return;
@@ -365,17 +368,21 @@ void ADarkwellManualStaleRoom::UpdateStaleCap(int32 Mode)
  const FBox2D& Bounds=SpatialMemory.GetBounds();
  const FVector2D Step=Bounds.GetSize()/FVector2D(Size.X,Size.Y);
  const FVector Origin=GetActorLocation();
- auto IsRetained=[&](int32 X,int32 Y)
+ // The same fixed authority-grid boundary closes both directions.  For an
+ // absent generation it separates retained stale memory from verified floor;
+ // for a present generation it separates discovered source from undiscovered
+ // source.  It never reads temporal opacity, camera position, or AA samples.
+ auto IsSubmittedSide=[&](int32 X,int32 Y)
  {
   if(X<0 || Y<0 || X>=Size.X || Y>=Size.Y) return false;
   const auto& C=Cells[Y*Size.X+X];
-  return C.InitialRemembered>0 && C.VerifiedEmpty==0;
+  return bPresent ? C.DiscoveredPresent>0 : C.InitialRemembered>0 && C.VerifiedEmpty==0;
  };
- auto IsVerifiedRemembered=[&](int32 X,int32 Y)
+ auto IsCutSide=[&](int32 X,int32 Y)
  {
   if(X<0 || Y<0 || X>=Size.X || Y>=Size.Y) return false;
   const auto& C=Cells[Y*Size.X+X];
-  return C.InitialRemembered>0 && C.VerifiedEmpty>0;
+  return bPresent ? C.DiscoveredPresent==0 : C.InitialRemembered>0 && C.VerifiedEmpty>0;
  };
  auto AddQuad=[&](const FVector& A,const FVector& B,const FVector& C,const FVector& D)
  {
@@ -407,13 +414,13 @@ void ADarkwellManualStaleRoom::UpdateStaleCap(int32 Mode)
  };
  for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X)
  {
-  if(!IsRetained(X,Y)) continue;
+  if(!IsSubmittedSide(X,Y)) continue;
   const double X0=Bounds.Min.X+X*Step.X,X1=X0+Step.X;
   const double Y0=Bounds.Min.Y+Y*Step.Y,Y1=Y0+Step.Y;
-  if(IsVerifiedRemembered(X-1,Y)) AddVerticalEdge(X0,Y0,Y1);
-  if(IsVerifiedRemembered(X+1,Y)) AddVerticalEdge(X1,Y0,Y1);
-  if(IsVerifiedRemembered(X,Y-1)) AddHorizontalEdge(Y0,X0,X1);
-  if(IsVerifiedRemembered(X,Y+1)) AddHorizontalEdge(Y1,X0,X1);
+  if(IsCutSide(X-1,Y)) AddVerticalEdge(X0,Y0,Y1);
+  if(IsCutSide(X+1,Y)) AddVerticalEdge(X1,Y0,Y1);
+  if(IsCutSide(X,Y-1)) AddHorizontalEdge(Y0,X0,X1);
+  if(IsCutSide(X,Y+1)) AddHorizontalEdge(Y1,X0,X1);
  }
  StaleCapTriangleCount=Mesh.TriangleCount();
  StaleCap->SetMesh(MoveTemp(Mesh));
@@ -450,7 +457,7 @@ void ADarkwellManualStaleRoom::Report()
 {
  bool Live=false,Valid=false; FVector At; AActor* Proxy=nullptr;
  GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>()->TryGetRecordForTesting(CabinetId(),Live,Valid,At,Proxy);
- Status=FString::Printf(TEXT("MANUAL STALE ROOM | Mode %d | Policy 0 | ENEMY 0\nCabinet Actual: %s | Remembered Snapshot: %s | StableID: %s\nOld Occupancy Verified: %.1f%% | Object Empty Confirmed: %d | Pressure Switch: %s\nLiveCoverage at Cabinet: %.6f | Source Live: %d | Toggles: %d | Black Cap Tris: %d\nFree movement / mouse aim; right corridor connects rooms. Darkwell.PropLab stalemanual help"),
+ Status=FString::Printf(TEXT("MANUAL STALE ROOM | Mode %d | Policy 0 | ENEMY 0\nCabinet Actual: %s | Remembered Snapshot: %s | StableID: %s\nOld Occupancy Verified: %.1f%% | Object Empty Confirmed: %d | Pressure Switch: %s\nLiveCoverage at Cabinet: %.6f | Source Live: %d | Toggles: %d | Dark Gray Cap Tris: %d\nFree movement / mouse aim; right corridor connects rooms. Darkwell.PropLab stalemanual help"),
   Darkwell::PropLab::PresentationMode(GetWorld()),HasActualCabinet()?TEXT("PRESENT"):TEXT("ABSENT"),Valid?TEXT("VALID"):TEXT("EMPTY"),*CabinetId().ToString(),
   100*Evidence.VerifiedFraction(),Evidence.IsObjectEmpty(),IsSwitchArmed()?TEXT("ARMED"):TEXT("WAITING_FOR_EXIT"),GetCabinetCoverage(),Live,ToggleCount,StaleCapTriangleCount);
  if(GEngine) GEngine->AddOnScreenDebugMessage(0xDA473,0,FColor::Cyan,Status);

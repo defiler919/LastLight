@@ -1896,12 +1896,84 @@ bool FDarkwellPartialRotatedStaleCapReproductionTest::RunTest(const FString&)
  Max3DOwnership=FMath::Max(Max3DOwnership,Room->GetMax3DRenderOwnershipContributorsForTesting(RotateId));
  TestEqual(TEXT("Final cabinet becomes completely legal Live geometry"),Room->GetLastLegalCoverageRatioForTesting(RotateId),1.0f);
  TestTrue(TEXT("SpatialEvidenceOnly legitimately retains at least one stale epoch"),Room->GetStaleEpochCountForTesting(RotateId)>0);
- // Checkpoint-A contract: this assertion deliberately proves the 9428ce9 defect
- // without treating STALE>0 as failure. Checkpoint B will invert it to zero.
- TestTrue(TEXT("9428ce9 reproduces stale cap inside current 3D ownership"),MaxCap3DOverlap>0&&Max3DOwnership>1);
+ TestEqual(TEXT("Current-owned 3D space contains no stale surface contribution"),MaxSurface3DOverlap,0);
+ TestEqual(TEXT("Current-owned 3D space contains no stale cap contribution"),MaxCap3DOverlap,0);
+ TestTrue(TEXT("True 3D render ownership never exceeds one contributor"),Max3DOwnership<=1);
  AddInfo(FString::Printf(TEXT("partial_ratio=%.6f partial_discovered=%d/%d max_surface_3d_overlap=%d max_cap_3d_overlap=%d max_3d_ownership=%d %s"),
   PartialRatio,PartialDiscovered,PartialCells,MaxSurface3DOverlap,MaxCap3DOverlap,Max3DOwnership,
   *Room->Get3DOwnershipTelemetryForTesting(RotateId)));
+ Fixture->Destroy();return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPartialCurrentMultiEpoch3DOwnershipTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.PartialCurrentMultiEpoch3DOwnership", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellPartialCurrentMultiEpoch3DOwnershipTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("PartialCurrentMultiEpoch3DOwnership"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("Multi-epoch 3D Lab exists"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("Multi-epoch 3D Lab authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Multi-epoch 3D Lab reset"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames=1){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ auto* Control=Room->GetControlForTesting(EDarkwellMovingPropLabControlKind::VisibleRotate);
+ if(!TestNotNull(TEXT("Multi-epoch rotation control exists"),Control))return false;
+ Player->SetActorLocation(FVector(-300,70,92));Player->SetActorRotation(FRotator(0,90,0));Step(90);World->UpdateWorldComponents(true,false);
+ Player->GetInteractionComponent()->UpdateFocusedActorFromWorld();
+ TestEqual(TEXT("Multi-epoch route focuses real F control"),Player->GetInteractionComponent()->GetFocusedActor(),static_cast<AActor*>(Control));
+ TestTrue(TEXT("Multi-epoch route starts through real F"),Player->GetInteractionComponent()->TryInteract());
+ Player->SetActorRotation(FRotator(0,-90,0));Step(130);
+
+ auto PartialReacquire=[&](const float Minimum,const float Maximum)
+ {
+  for(int32 Yaw=150;Yaw>=130;--Yaw)
+  {
+   Player->SetActorRotation(FRotator(0,float(Yaw),0));Step(2);
+   const float Ratio=Room->GetLastLegalCoverageRatioForTesting(RotateId);
+   if(Ratio>=Minimum&&Ratio<=Maximum)return Ratio;
+  }
+  return 0.0f;
+ };
+ const float FirstPartial=PartialReacquire(.06f,.30f);TestTrue(TEXT("First intermediate epoch is partially observed"),FirstPartial>0);
+ Step(4);Player->SetActorRotation(FRotator(0,-90,0));Step(3);
+ const int32 FirstPartialCells=Room->GetNewestHistoricalDiscoveredCellCountForTesting(RotateId);
+ TestTrue(TEXT("First partial epoch owns a strict cell subset"),FirstPartialCells>0
+  && FirstPartialCells<Room->GetNewestHistoricalCellCountForTesting(RotateId));
+
+ Step(65);
+ const float SecondPartial=PartialReacquire(.04f,.32f);TestTrue(TEXT("Second intermediate angle is partially observed"),SecondPartial>0);
+ Step(4);Player->SetActorRotation(FRotator(0,-90,0));Step(3);
+ TestTrue(TEXT("0, first partial and second partial create multiple legitimate stale epochs"),Room->GetStaleEpochCountForTesting(RotateId)>=3);
+ Step(300);
+
+ float FinalPartial=0.0f;
+ for(int32 Yaw=155;Yaw>=90&&FinalPartial==0.0f;--Yaw)
+ {
+  Player->SetActorRotation(FRotator(0,float(Yaw),0));Step(2);
+  const float Ratio=Room->GetLastLegalCoverageRatioForTesting(RotateId);
+  if(Ratio>=.40f&&Ratio<=.70f)FinalPartial=Ratio;
+ }
+ Step(8);
+ TestTrue(TEXT("Final cabinet is only partly legally reacquired"),FinalPartial>0.0f
+  && Room->GetLastLegalCoverageRatioForTesting(RotateId)<.75f);
+ TestEqual(TEXT("Partial current-owned region has no stale surface intrusion"),Room->GetCurrent3DOverlapStaleSurfaceForTesting(RotateId),0);
+ TestEqual(TEXT("Partial current-owned region clips only overlapping stale cap segments"),Room->GetCurrent3DOverlapStaleCapForTesting(RotateId),0);
+ TestTrue(TEXT("Unreacquired spatial history remains resident without StableID clearing"),Room->GetStaleEpochCountForTesting(RotateId)>0
+  && Room->GetHistoricalPresentationResourceCountForTesting(RotateId)>0);
+ TestTrue(TEXT("Partial current reacquire keeps true 3D ownership exclusive"),Room->GetMaxTotalContributorsForTesting(RotateId)<=1);
+
+ Player->SetActorRotation(FRotator(0,90,0));Step(120);
+ TestEqual(TEXT("Full final reacquire keeps stale surface out of current OBB"),Room->GetCurrent3DOverlapStaleSurfaceForTesting(RotateId),0);
+ TestEqual(TEXT("Full final reacquire keeps stale cap out of current OBB"),Room->GetCurrent3DOverlapStaleCapForTesting(RotateId),0);
+ TestTrue(TEXT("Full final Live does not identity-clear all non-overlapping history"),Room->GetStaleEpochCountForTesting(RotateId)>0);
+ TestTrue(TEXT("Multi-epoch final ownership remains one"),Room->GetMaxTotalContributorsForTesting(RotateId)<=1);
+ AddInfo(FString::Printf(TEXT("first_partial=%.6f second_partial=%.6f final_partial=%.6f stale=%d %s"),
+  FirstPartial,SecondPartial,FinalPartial,Room->GetStaleEpochCountForTesting(RotateId),*Room->Get3DOwnershipTelemetryForTesting(RotateId)));
  Fixture->Destroy();return true;
 }
 

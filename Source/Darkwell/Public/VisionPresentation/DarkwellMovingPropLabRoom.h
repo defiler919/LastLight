@@ -295,6 +295,16 @@ private:
 		const FTrackedProp& Prop,
 		FVector2D Point,
 		TArray<FVector2D>& OutIntervals) const;
+	bool CollectNewerOwnedVerticalIntervals(
+		const FTrackedProp& Prop,
+		uint32 OlderEpoch,
+		FVector2D Point,
+		TArray<FVector2D>& OutIntervals) const;
+	bool HasNewerObservedGeometryOverlapAt(
+		const FTrackedProp& Prop,
+		const FRecordVisual& OlderVisual,
+		uint32 OlderEpoch,
+		FVector2D Point) const;
 	TArray<float> ConservativeCoverage(const FBox2D& Bounds) const;
 	FCoverageSnapshot SampleConservativeCoverage(
 		const FBox2D& Bounds,

@@ -59,6 +59,21 @@ def trigger(x, y):
     return control
 
 
+def diagnostic(stable_name, *fragments):
+    """Call a diagnostic whose reflected Python spelling contains a digit/acronym."""
+    normalized_fragments = tuple(fragment.lower().replace('_', '')
+                                 for fragment in fragments)
+    matches = []
+    for attribute in dir(room):
+        normalized_attribute = attribute.lower().replace('_', '')
+        if all(fragment in normalized_attribute for fragment in normalized_fragments):
+            candidate = getattr(room, attribute)
+            if callable(candidate):
+                matches.append((attribute, candidate))
+    assert len(matches) == 1, f'diagnostic {fragments}: {[name for name, _ in matches]}'
+    return matches[0][1](stable_name)
+
+
 def tracked(stable_id):
     transform = room.get_tracked_transform(unreal.Name(stable_id))
     p = transform.translation
@@ -86,6 +101,12 @@ def sample(label, stable_id, capture=True):
         cap_contributors=room.get_max_cap_contributors_for_testing(stable_name),
         total_contributors=room.get_max_total_contributors_for_testing(stable_name),
         overlap_contributors=room.get_max_overlap_contributors_for_testing(stable_name),
+        current_3d_overlap_stale_surface=diagnostic(
+            stable_name, 'current', '3d', 'overlap', 'stale', 'surface'),
+        current_3d_overlap_stale_cap=diagnostic(
+            stable_name, 'current', '3d', 'overlap', 'stale', 'cap'),
+        max_3d_render_ownership=diagnostic(
+            stable_name, 'max', '3d', 'render', 'ownership', 'contributors'),
         legal_coverage=room.get_last_legal_coverage_ratio_for_testing(stable_name),
         coverage_valid=room.is_last_coverage_valid_for_testing(stable_name),
         coverage_zero_reason=room.get_last_coverage_zero_reason_for_testing(stable_name),
@@ -155,6 +176,59 @@ def run():
                if row['label'].startswith('rotate_')) <= 1
     assert all(row['overlap_contributors'] == 1 for row in rows
                if row['label'].startswith('rotate_') and abs(row['transform']['yaw']) > 0.1)
+    # User-reported route: fully observe 0 degrees, turn away before hidden
+    # rotation starts, briefly reacquire only an edge at an intermediate angle,
+    # turn away again, finish at 180 hidden, then slowly reacquire the final pose.
+    reset_current()
+    pose(-300, 100, 90)
+    yield 1.5
+    initial = sample('partial_rotation_full_0', 'Lab.InWorld.Rotate.Cabinet')
+    assert initial['legal_coverage'] == 1.0
+    trigger(-300, 260)
+    pose(-300, 100, -90)
+    yield 2.2
+    hidden_mid = sample('partial_rotation_hidden_mid', 'Lab.InWorld.Rotate.Cabinet')
+    assert 40 <= abs(hidden_mid['transform']['yaw']) <= 120
+    partial_mid = None
+    for yaw in range(150, 129, -1):
+        pose(-300, 100, yaw)
+        yield 0.08
+        candidate = sample(f'partial_rotation_mid_edge_{yaw}',
+                           'Lab.InWorld.Rotate.Cabinet')
+        if 0.06 <= candidate['legal_coverage'] <= 0.30:
+            partial_mid = candidate
+            break
+    assert partial_mid is not None
+    pose(-300, 100, -90)
+    yield 0.25
+    sealed_mid = sample('partial_rotation_mid_sealed',
+                        'Lab.InWorld.Rotate.Cabinet')
+    assert sealed_mid['seal_count'] >= 2
+    yield 4.5
+    hidden_final = sample('partial_rotation_hidden_final_180',
+                          'Lab.InWorld.Rotate.Cabinet')
+    assert round(abs(hidden_final['transform']['yaw'])) == 180
+    partial_final_rows = []
+    for yaw in range(155, 89, -1):
+        pose(-300, 100, yaw)
+        yield 0.08
+        partial_final_rows.append(sample(
+            f'partial_rotation_final_reacquire_{yaw}',
+            'Lab.InWorld.Rotate.Cabinet'))
+    pose(-300, 100, 90)
+    yield 2.0
+    final_live = sample('partial_rotation_final_full_live',
+                        'Lab.InWorld.Rotate.Cabinet')
+    assert final_live['legal_coverage'] == 1.0
+    assert any(row['stale_epochs'] > 0 for row in partial_final_rows)
+    assert max(row['current_3d_overlap_stale_surface']
+               for row in partial_final_rows) == 0
+    assert max(row['current_3d_overlap_stale_cap']
+               for row in partial_final_rows) == 0
+    assert max(row['max_3d_render_ownership']
+               for row in partial_final_rows) <= 1
+    assert final_live['current_3d_overlap_stale_surface'] == 0
+    assert final_live['current_3d_overlap_stale_cap'] == 0
     # Repeat Scenario 2 while deliberately leaving legal view mid-rotation.
     # This reproduces the user's old/new-pose overlap case without a console.
     reset_current()
@@ -253,7 +327,7 @@ def tick(_delta):
     if now < deadline:
         return
     try:
-        assert now - start < 180, 'moving evidence timeout'
+        assert now - start < 240, 'moving evidence timeout'
         deadline = now + next(sequence)
     except StopIteration:
         unreal.unregister_slate_post_tick_callback(handle)

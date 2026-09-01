@@ -2,7 +2,7 @@
 
 ## Status
 
-`PARTIAL — READY_FOR_USER_ALL_IN_WORLD_CONTROLS_AND_FLICKER_RETEST`
+`PARTIAL — READY_FOR_USER_PARTIAL_ROTATION_STALE_CAP_RETEST`
 
 This document records the qualification and implementation history for Step 1,
 Moving and Multi-Prop Rule Validation. It does not change the frozen Mode 2
@@ -686,3 +686,137 @@ world controls and **F**:
 The user has not yet accepted Scenario 2 or the remaining controls. Nothing in
 this correction changes the frozen Mode 2 tag, production maps, production
 defaults, or the public SightWeave/StableID contracts.
+
+## 2026-09-02 partial-rotation stale-cap 3D ownership closure
+
+This follow-up started at
+`9428ce929f3ff361ce70df5e3b63cd46fb2374d2`. The stricter user route was:
+
+1. fully observe the asymmetric cabinet at 0 degrees;
+2. start **VISIBLE ROTATE**, turn away during its one-second delay, briefly
+   reacquire only an edge at an intermediate angle, then turn away again;
+3. let the cabinet finish at 180 degrees while hidden;
+4. slowly reacquire the final pose while unresolved stale epochs still exist.
+
+Retaining stale epochs is correct `SpatialEvidenceOnly` behavior. The defect was
+specifically a stale surface or cap occupying current-cabinet 3D space. The
+reliable pre-fix report
+`Saved/AutomationReports/PartialRotatedStaleCap_CheckpointA_02` kept stale
+history and measured two stale cap segments inside current-owned 3D space, with
+maximum 3D render ownership 2. Its focused log is
+`Saved/PropGameplayLab/MovingMulti/PartialRotatedStaleCap/CheckpointA_Focused01.log`.
+The old `TOTAL=max(surface,cap)` telemetry incorrectly remained 1 because those
+were projected, class-local counts rather than one 3D ownership query.
+
+### Root cause and geometry correction
+
+Each observation record previously retained only world axis-aligned aggregate
+bounds for ownership decisions. Surface suppression was an XY test, and the cap
+builder emitted coarse horizontal quads accepted from only the cap center in
+XY. A rotated stale OBB could therefore project a cap through the final current
+cabinet without the old telemetry seeing two contributors.
+
+Records now snapshot each primitive's local bounds plus world transform. A
+vertical world ray is transformed into each primitive's local space to compute
+the actual OBB Z interval at that XY sample. Current and newer legally observed
+epochs publish their owned intervals; stale surfaces are suppressed only where
+old and newer primitive intervals truly overlap in 3D. Each coarse cap quad is
+split into four fine horizontal segments, restricted to the recorded primitive
+OBB, then clipped by subtracting newer/current legally observed OBB Z intervals.
+Only residual non-overlapping segments are emitted. Resource retirement uses
+the same OBB model.
+
+This is not a depth bias, offset, transparent material, whole-cap disable,
+StableID clear, or history discard. Unresolved non-overlapping stale geometry
+continues to render under `SpatialEvidenceOnly`; true `VerifiedEmpty` boundaries
+still create the frozen opaque unlit deep-gray cap. Projected surface/cap
+diagnostics remain as class-local observability, while `TOTAL`, compatibility
+overlap, and the enforced ownership bound now use actual 3D render contributors.
+
+New telemetry reports `CURRENT_3D_OVERLAP_STALE_SURFACE`,
+`CURRENT_3D_OVERLAP_STALE_CAP`, `MAX_3D_RENDER_OWNERSHIP`, and the first
+offending epoch, primitive, world point, and current transform. Current-owned
+3D space must contain no stale surface or cap, and each actual world sample may
+have at most one render owner.
+
+### Checkpoints and deterministic regression
+
+- `9fc96a6409da6be140e2d9bfdb3d59c06878d50e` (`test: reproduce partial
+  rotated stale cap overlap`) adds the bounded diagnostics and deterministic
+  failing reproduction. It was built and pushed before the fix.
+- `54d7055143acb38987f0dd3b18a9733fde054d60` (`fix: clip stale cap against
+  newer observed geometry`) adds transformed-OBB ownership, fine cap clipping,
+  resource retirement correction, and multi-epoch regression coverage. It was
+  built, tested, and pushed before this documentation closure.
+
+`Darkwell.PropLab.MovingRules.InWorldControls.PartialRotatedStaleCapReproduction`
+uses the real in-world control interaction and normal SightWeave/project-fog
+coverage; it does not force a coverage ratio or write presentation cells.
+`PartialCurrentMultiEpoch3DOwnership` creates two partial intermediate
+observations and a partial final observation while three stale epochs remain.
+It recorded first/second/final coverage ratios of 8.6821%, 5.2753%, and 41.6667%
+respectively, with zero current/stale surface overlap, zero current/stale cap
+overlap, and maximum 3D ownership 1.
+
+The post-fix MovingRules report is
+`Saved/AutomationReports/PartialRotatedStaleCap_CheckpointB_MovingRules06`:
+14/14 Success (5 clean, 9 with preserved warnings), 0 failed/not-run, 381.887
+seconds. It includes the rotation lifecycle, partial multi-epoch ownership,
+resource retirement, and real `VerifiedEmpty` Mode 2 cap positive control.
+
+### Final build, automation, and D3D12 evidence
+
+The final serial build used
+`Scripts/BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8`.
+`DarkwellEditor Win64 Development` succeeded in 17.92 seconds with 4/4 actions.
+Preserved warnings are MSVC 14.51 being newer than UE's preferred 14.50 and
+existing UE header deprecations. Log:
+`Saved/PropGameplayLab/MovingMulti/PartialRotatedStaleCap/CheckpointD_FinalBuild.log`.
+
+The final NullRHI filter was
+`Darkwell.PropLab+Darkwell.FogVisual+Darkwell.SightWeave.M6P1`. Report
+`Saved/AutomationReports/PartialRotatedStaleCap_Final` contains 45/45 Success:
+31 clean, 14 with preserved warnings, 0 failed/not-run, 443.2573 seconds. It
+includes both new partial-rotation tests, all 14 MovingRules tests, the
+`Mode2SymmetricDarkGrayCutCap` positive control, FogVisual, and M6P1. Severe
+scans found no project fatal, assertion, unhandled exception, failed automation,
+GPU crash, or D3D12 device error. Warning-class results retain expected
+duplicate-fixture/StableID probes and engine HTTP/startup noise.
+
+The repeatable GPU run used real Windows D3D12/SM6 Editor PIE with normal TSR
+and 100% Screen Percentage. Its actual embedded PIE backbuffer was `2038x789`;
+the screenshots are `2560x1440` engine captures, so this is functional evidence
+rather than a strict requested-resolution performance claim. It produced 496
+telemetry rows and 488 original screenshots under
+`Saved/PropGameplayLab/MovingMulti/InWorldPIE_20260902_012149`; log:
+`Saved/PropGameplayLab/MovingMulti/PartialRotatedStaleCap/CheckpointD_D3D12_02.log`.
+
+The exact user route reached a 21.1738% intermediate edge observation and
+finished with three stale epochs plus visible historical surface/cap evidence.
+Across its 76 partial-rotation samples, maximum current-owned stale-surface
+intrusion was 0, maximum current-owned stale-cap intrusion was 0, and maximum
+3D render ownership was 1. The agent opened the original initial, intermediate
+edge, resealed, hidden-final, and slow-reacquisition frames and found no stale
+gray cap/surface crossing the current cabinet, double cabinet, or Z-fighting.
+The first GPU attempt is intentionally retained as `CheckpointD_D3D12_01.log`;
+it failed only because the Python reflection spelling of the digit/acronym
+diagnostic getter differed from its C++ name, after native automation had
+already validated the gameplay diagnostics.
+
+### Required user retest
+
+Final state is **PARTIAL — READY_FOR_USER_PARTIAL_ROTATION_STALE_CAP_RETEST**.
+Open `/Game/Maps/L_ProjectFogPropGameplayLab` with normal D3D12/SM6, project TSR,
+and 100% Screen Percentage, then use the world prompt and **F** only:
+
+1. reset Scenario 2 and fully observe the cabinet at 0 degrees;
+2. press **F** on **VISIBLE ROTATE**, immediately turn away, briefly look back
+   at only one edge during rotation, then turn away again;
+3. wait for hidden 180-degree completion and slowly look back across the final
+   cabinet;
+4. accept only if unresolved history may remain elsewhere but no stale gray
+   surface or dark-gray cap intersects the current cabinet, flashes as a second
+   cabinet, or Z-fights with it.
+
+The user has not yet accepted this correction. It does not change the frozen
+Mode 2 tag, production maps/defaults, or public SightWeave/StableID contracts.

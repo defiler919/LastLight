@@ -354,27 +354,54 @@ bool UDarkwellFogVisualSubsystem::UpdateSource(
 float UDarkwellFogVisualSubsystem::EvaluateLiveCoverageAtWorldPoint(
 	const FVector2D& WorldPosition) const
 {
-	if (!Diagnostics.bActive || !LastSource.IsValid()
-		|| !FMath::IsFinite(WorldPosition.X) || !FMath::IsFinite(WorldPosition.Y))
+	return QueryLiveCoverageAtWorldPoint(WorldPosition).Coverage;
+}
+
+FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryLiveCoverageAtWorldPoint(
+	const FVector2D& WorldPosition) const
+{
+	FDarkwellFogVisualCoverageQuery Result;
+	Result.AuthorityRevision = Diagnostics.LastAuthorityRevision;
+	Result.CoverageDrawRevision = Diagnostics.CoverageDrawCount;
+	if (!Diagnostics.bActive)
 	{
-		return 0.0f;
+		Result.ZeroReason = EDarkwellFogCoverageZeroReason::SubsystemInactive;
+		return Result;
 	}
+	if (!LastSource.IsValid())
+	{
+		Result.ZeroReason = EDarkwellFogCoverageZeroReason::SourceInvalid;
+		return Result;
+	}
+	if (!FMath::IsFinite(WorldPosition.X) || !FMath::IsFinite(WorldPosition.Y))
+	{
+		Result.ZeroReason = EDarkwellFogCoverageZeroReason::PointInvalid;
+		return Result;
+	}
+	Result.bValid = true;
 
 	const float BodySignedDistance = LastSource.BodyRadiusCentimeters
 		- FVector2D::Distance(WorldPosition, LastSource.BodyCenter);
 	float BodyCoverage = Darkwell::FogVisual::SignedLinearCoverage(
 		BodySignedDistance,
 		Darkwell::FogVisual::CoverageTransitionWidthCentimeters);
-	if (FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
+	Result.bBodyBlocked = FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
 		LastSource.BodyCenter,
 		WorldPosition,
-		CachedOccluderSegments))
+		CachedOccluderSegments);
+	if (Result.bBodyBlocked)
 	{
 		BodyCoverage = 0.0f;
 	}
 	if (!LastSource.bConeLegallyLive)
 	{
-		return BodyCoverage;
+		Result.Coverage = BodyCoverage;
+		Result.ZeroReason = BodyCoverage > 0.0f
+			? EDarkwellFogCoverageZeroReason::None
+			: (Result.bBodyBlocked && BodySignedDistance >= 0.0f
+				? EDarkwellFogCoverageZeroReason::Occluded
+				: EDarkwellFogCoverageZeroReason::ConeNotLegallyLive);
+		return Result;
 	}
 
 	const FVector2D Forward = LastSource.ConeForward.GetSafeNormal();
@@ -389,14 +416,30 @@ float UDarkwellFogVisualSubsystem::EvaluateLiveCoverageAtWorldPoint(
 	float ConeCoverage = Darkwell::FogVisual::SignedLinearCoverage(
 		FMath::Min(SideSignedDistance, RadialSignedDistance),
 		Darkwell::FogVisual::CoverageTransitionWidthCentimeters);
-	if (FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
+	Result.bConeBlocked = FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
 		LastSource.ConeOrigin,
 		WorldPosition,
-		CachedOccluderSegments))
+		CachedOccluderSegments);
+	if (Result.bConeBlocked)
 	{
 		ConeCoverage = 0.0f;
 	}
-	return FMath::Max(BodyCoverage, ConeCoverage);
+	Result.Coverage = FMath::Max(BodyCoverage, ConeCoverage);
+	if (Result.Coverage > 0.0f)
+	{
+		Result.ZeroReason = EDarkwellFogCoverageZeroReason::None;
+	}
+	else if ((Result.bBodyBlocked && BodySignedDistance >= 0.0f)
+		|| (Result.bConeBlocked && SideSignedDistance >= 0.0f
+			&& RadialSignedDistance >= 0.0f))
+	{
+		Result.ZeroReason = EDarkwellFogCoverageZeroReason::Occluded;
+	}
+	else
+	{
+		Result.ZeroReason = EDarkwellFogCoverageZeroReason::OutsideLegalSource;
+	}
+	return Result;
 }
 
 void UDarkwellFogVisualSubsystem::Deactivate()

@@ -75,6 +75,21 @@ namespace Darkwell::MovingPropLab
 		}
 #endif
 	}
+
+	const TCHAR* CoverageZeroReasonName(const EDarkwellFogCoverageZeroReason Reason)
+	{
+		switch (Reason)
+		{
+		case EDarkwellFogCoverageZeroReason::None: return TEXT("NONE");
+		case EDarkwellFogCoverageZeroReason::SubsystemInactive: return TEXT("SUBSYSTEM_INACTIVE");
+		case EDarkwellFogCoverageZeroReason::SourceInvalid: return TEXT("SOURCE_INVALID");
+		case EDarkwellFogCoverageZeroReason::PointInvalid: return TEXT("POINT_INVALID");
+		case EDarkwellFogCoverageZeroReason::ConeNotLegallyLive: return TEXT("NO_LEGAL_CONE");
+		case EDarkwellFogCoverageZeroReason::Occluded: return TEXT("OCCLUDED");
+		case EDarkwellFogCoverageZeroReason::OutsideLegalSource: return TEXT("OUTSIDE_LEGAL_SOURCE");
+		default: return TEXT("UNKNOWN");
+		}
+	}
 }
 
 ADarkwellMovingPropLabControl::ADarkwellMovingPropLabControl()
@@ -361,10 +376,26 @@ void ADarkwellMovingPropLabRoom::DestroyVisual(FRecordVisual& Visual)
 	}
 	if (UDynamicMeshComponent* Cap = Visual.Cap.Get())
 	{
+		OwnedCaps.Remove(Cap);
 		Cap->DestroyComponent();
+	}
+	if (UTexture2D* Texture = Visual.Texture.Get())
+	{
+		OwnedTextures.Remove(Texture);
+	}
+	for (const TWeakObjectPtr<UMaterialInstanceDynamic>& Material : Visual.Materials)
+	{
+		if (UMaterialInstanceDynamic* MaterialObject = Material.Get())
+		{
+			OwnedMaterials.Remove(MaterialObject);
+		}
 	}
 	Visual.Proxy.Reset();
 	Visual.Cap.Reset();
+	Visual.Texture.Reset();
+	Visual.Materials.Reset();
+	Visual.CapTriangles = 0;
+	Visual.CapSamplePoints.Reset();
 }
 
 void ADarkwellMovingPropLabRoom::DestroyTracked()
@@ -444,29 +475,72 @@ TArray<FBox> ADarkwellMovingPropLabRoom::ActualPartBounds(
 TArray<float> ADarkwellMovingPropLabRoom::ConservativeCoverage(
 	const FBox2D& Bounds) const
 {
-	TArray<float> Coverage;
+	return SampleConservativeCoverage(Bounds, 0, 0).Values;
+}
+
+ADarkwellMovingPropLabRoom::FCoverageSnapshot
+ADarkwellMovingPropLabRoom::SampleConservativeCoverage(
+	const FBox2D& Bounds,
+	const uint64 TransformRevision,
+	const uint64 GridRevision) const
+{
+	FCoverageSnapshot Result;
+	Result.TransformRevision = TransformRevision;
+	Result.GridRevision = GridRevision;
 	const UDarkwellFogVisualSubsystem* Fog = GetWorld()
 		? GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>() : nullptr;
 	if (!Fog || !Bounds.bIsValid)
 	{
-		return Coverage;
+		Result.ZeroReason = Fog ? TEXT("BOUNDS_INVALID") : TEXT("FOG_UNAVAILABLE");
+		return Result;
 	}
 	const FIntPoint Size(
 		FMath::CeilToInt(Bounds.GetSize().X / Darkwell::MovingPropLab::CellSize),
 		FMath::CeilToInt(Bounds.GetSize().Y / Darkwell::MovingPropLab::CellSize));
 	if (Size.X <= 0 || Size.Y <= 0)
 	{
-		return Coverage;
+		Result.ZeroReason = TEXT("GRID_INVALID");
+		return Result;
 	}
 	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
 	TArray<float> Corners;
 	Corners.SetNumUninitialized((Size.X + 1) * (Size.Y + 1));
-	Coverage.SetNumUninitialized(Size.X * Size.Y);
+	Result.Values.SetNumUninitialized(Size.X * Size.Y);
+	Result.bValid = true;
+	bool bRevisionInitialized = false;
+	EDarkwellFogCoverageZeroReason AggregateZeroReason = EDarkwellFogCoverageZeroReason::None;
+	auto Sample = [&](const FVector2D Point)
+	{
+		const FDarkwellFogVisualCoverageQuery Query = Fog->QueryLiveCoverageAtWorldPoint(Point);
+		if (!Query.bValid)
+		{
+			Result.bValid = false;
+			AggregateZeroReason = Query.ZeroReason;
+			return 0.0f;
+		}
+		if (!bRevisionInitialized)
+		{
+			Result.AuthorityRevision = Query.AuthorityRevision;
+			Result.CoverageRevision = Query.CoverageDrawRevision;
+			bRevisionInitialized = true;
+		}
+		else if (Result.AuthorityRevision != Query.AuthorityRevision
+			|| Result.CoverageRevision != Query.CoverageDrawRevision)
+		{
+			Result.bValid = false;
+			Result.ZeroReason = TEXT("REVISION_MISMATCH");
+		}
+		if (Query.Coverage <= 0.0f && AggregateZeroReason == EDarkwellFogCoverageZeroReason::None)
+		{
+			AggregateZeroReason = Query.ZeroReason;
+		}
+		return Query.Coverage;
+	};
 	for (int32 Y = 0; Y <= Size.Y; ++Y)
 	{
 		for (int32 X = 0; X <= Size.X; ++X)
 		{
-			Corners[Y * (Size.X + 1) + X] = Fog->EvaluateLiveCoverageAtWorldPoint(
+			Corners[Y * (Size.X + 1) + X] = Sample(
 				Bounds.Min + Step * FVector2D(X, Y));
 		}
 	}
@@ -478,12 +552,32 @@ TArray<float> ADarkwellMovingPropLabRoom::ConservativeCoverage(
 			float Value = FMath::Min(
 				FMath::Min(Corners[Corner], Corners[Corner + 1]),
 				FMath::Min(Corners[Corner + Size.X + 1], Corners[Corner + Size.X + 2]));
-			Value = FMath::Min(Value, Fog->EvaluateLiveCoverageAtWorldPoint(
+			Value = FMath::Min(Value, Sample(
 				Bounds.Min + Step * FVector2D(X + .5f, Y + .5f)));
-			Coverage[Y * Size.X + X] = Value;
+			Result.Values[Y * Size.X + X] = Value;
 		}
 	}
-	return Coverage;
+	if (!Result.bValid)
+	{
+		if (Result.ZeroReason == TEXT("NOT_SAMPLED"))
+		{
+			Result.ZeroReason = Darkwell::MovingPropLab::CoverageZeroReasonName(AggregateZeroReason);
+		}
+		return Result;
+	}
+	float Maximum = 0.0f;
+	for (const float Value : Result.Values)
+	{
+		Maximum = FMath::Max(Maximum, Value);
+	}
+	const bool bAnyLegal = Result.Values.ContainsByPredicate([](const float Value)
+	{
+		return Value >= FDarkwellSpatialPropMemory::LegalCoverage;
+	});
+	Result.ZeroReason = bAnyLegal ? TEXT("NONE")
+		: (Maximum > 0.0f ? TEXT("BELOW_LEGAL_THRESHOLD")
+			: Darkwell::MovingPropLab::CoverageZeroReasonName(AggregateZeroReason));
+	return Result;
 }
 
 bool ADarkwellMovingPropLabRoom::IsOccupiedByActual(
@@ -550,6 +644,61 @@ bool ADarkwellMovingPropLabRoom::HasCurrentObservedContributionAt(
 	return Cell.DiscoveredPresent > 0.0f && Cell.AppearanceBlend > 0.0f;
 }
 
+bool ADarkwellMovingPropLabRoom::HasNewerObservedContributionAt(
+	const FTrackedProp& Prop,
+	const uint32 OlderEpoch,
+	const FVector2D Point) const
+{
+	for (const FDarkwellSpatialObservationRecord& Candidate : Prop.History.GetRecords())
+	{
+		if (Candidate.Epoch <= OlderEpoch)
+		{
+			continue;
+		}
+		if (Candidate.bCurrentObservedLocation)
+		{
+			if (HasCurrentObservedContributionAt(Prop, Point))
+			{
+				return true;
+			}
+			continue;
+		}
+		const FRecordVisual* NewerVisual = Prop.Visuals.Find(Candidate.Epoch);
+		const FBox2D& Bounds = Candidate.SpatialMemory.GetBounds();
+		const FIntPoint Coarse = Candidate.SpatialMemory.GetSize();
+		const FIntPoint Fine = Coarse * Darkwell::MovingPropLab::PresentationSamples;
+		if (!NewerVisual || NewerVisual->bPresentationRetired || !Bounds.IsInside(Point)
+			|| Fine.X <= 0 || Fine.Y <= 0)
+		{
+			continue;
+		}
+		bool bInsideRecordedPart = NewerVisual->PartBounds.IsEmpty();
+		for (const FBox& Part : NewerVisual->PartBounds)
+		{
+			bInsideRecordedPart |= Point.X >= Part.Min.X && Point.X <= Part.Max.X
+				&& Point.Y >= Part.Min.Y && Point.Y <= Part.Max.Y;
+		}
+		if (!bInsideRecordedPart)
+		{
+			continue;
+		}
+		const FVector2D Relative = (Point - Bounds.Min) / Bounds.GetSize();
+		const int32 FineX = FMath::Clamp(FMath::FloorToInt(Relative.X * Fine.X), 0, Fine.X - 1);
+		const int32 FineY = FMath::Clamp(FMath::FloorToInt(Relative.Y * Fine.Y), 0, Fine.Y - 1);
+		const int32 FineIndex = FineY * Fine.X + FineX;
+		const int32 CellIndex = (FineY / Darkwell::MovingPropLab::PresentationSamples) * Coarse.X
+			+ FineX / Darkwell::MovingPropLab::PresentationSamples;
+		const bool bSuppressed = NewerVisual->SuppressedByCurrentEvidence.IsValidIndex(FineIndex)
+			&& NewerVisual->SuppressedByCurrentEvidence[FineIndex];
+		if (!bSuppressed && Candidate.SpatialMemory.GetCells().IsValidIndex(CellIndex)
+			&& Candidate.SpatialMemory.GetCells()[CellIndex].InitialRemembered > 0.0f)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void ADarkwellMovingPropLabRoom::UpdateHistoricalContributionExclusion(
 	FTrackedProp& Prop,
 	FDarkwellSpatialObservationRecord& Record)
@@ -580,9 +729,19 @@ void ADarkwellMovingPropLabRoom::UpdateHistoricalContributionExclusion(
 		for (int32 X = 0; X < Size.X; ++X)
 		{
 			const int32 Index = Y * Size.X + X;
-			if (!Visual->SuppressedByCurrentEvidence[Index]
-				&& HasCurrentObservedContributionAt(
-					Prop, Bounds.Min + Step * FVector2D(X + 0.5f, Y + 0.5f)))
+			bool bSuperseded = false;
+			for (int32 SampleY = 0; SampleY < 3 && !bSuperseded; ++SampleY)
+			{
+				for (int32 SampleX = 0; SampleX < 3 && !bSuperseded; ++SampleX)
+				{
+					const FVector2D Offset(
+						FMath::Lerp(0.001f, 0.999f, SampleX * 0.5f),
+						FMath::Lerp(0.001f, 0.999f, SampleY * 0.5f));
+					bSuperseded = HasNewerObservedContributionAt(Prop, Record.Epoch,
+						Bounds.Min + Step * (FVector2D(X, Y) + Offset));
+				}
+			}
+			if (!Visual->SuppressedByCurrentEvidence[Index] && bSuperseded)
 			{
 				// This is a monotonic presentation-ownership decision backed by new
 				// legal present evidence. It does not mark the old cell verified empty
@@ -593,26 +752,134 @@ void ADarkwellMovingPropLabRoom::UpdateHistoricalContributionExclusion(
 	}
 }
 
-int32 ADarkwellMovingPropLabRoom::ComputeMaxOverlapContributors(
-	const FTrackedProp& Prop) const
+bool ADarkwellMovingPropLabRoom::IsHistoricalPresentationResolved(
+	const FDarkwellSpatialObservationRecord& Record,
+	const FRecordVisual& Visual) const
 {
-	int32 Maximum = 0;
-	const int32 CurrentIndex = Prop.History.GetCurrentIndex();
-	if (CurrentIndex != INDEX_NONE && Prop.History.GetRecords().IsValidIndex(CurrentIndex))
+	if (Record.bCurrentObservedLocation)
 	{
-		const FDarkwellSpatialObservationRecord& Current = Prop.History.GetRecords()[CurrentIndex];
-		Maximum = Current.SpatialMemory.GetCells().ContainsByPredicate(
-			[](const FDarkwellSpatialPropMemory::FCell& Cell)
-			{
-				return Cell.DiscoveredPresent > 0.0f && Cell.AppearanceBlend > 0.0f;
-			}) ? 1 : 0;
+		return false;
 	}
+	const FIntPoint Coarse = Record.SpatialMemory.GetSize();
+	const int32 Samples = Darkwell::MovingPropLab::PresentationSamples;
+	const FIntPoint Fine = Coarse * Samples;
+	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
+	if (Fine.X <= 0 || Fine.Y <= 0
+		|| Visual.SuppressedByCurrentEvidence.Num() != Fine.X * Fine.Y)
+	{
+		return false;
+	}
+	const FVector2D Step = Bounds.GetSize() / FVector2D(Fine.X, Fine.Y);
+	for (int32 Y = 0; Y < Fine.Y; ++Y)
+	{
+		for (int32 X = 0; X < Fine.X; ++X)
+		{
+			const int32 FineIndex = Y * Fine.X + X;
+			const int32 CellIndex = (Y / Samples) * Coarse.X + X / Samples;
+			const FVector2D Point = Bounds.Min + Step * FVector2D(X + 0.5f, Y + 0.5f);
+			bool bInsideRecordedPart = Visual.PartBounds.IsEmpty();
+			for (const FBox& Part : Visual.PartBounds)
+			{
+				bInsideRecordedPart |= Point.X >= Part.Min.X && Point.X <= Part.Max.X
+					&& Point.Y >= Part.Min.Y && Point.Y <= Part.Max.Y;
+			}
+			if (!bInsideRecordedPart)
+			{
+				continue;
+			}
+			if (!Visual.SuppressedByCurrentEvidence[FineIndex]
+				&& Record.SpatialMemory.Presentation(CellIndex).B > 0.0f)
+			{
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+void ADarkwellMovingPropLabRoom::RetireHistoricalPresentation(
+	FTrackedProp& Prop,
+	FRecordVisual& Visual)
+{
+	if (Visual.bPresentationRetired)
+	{
+		return;
+	}
+	UE_LOG(LogDarkwellMovingPropLab, Display,
+		TEXT("MOVING_RULES_PRESENTATION_RETIRED id=%s epoch=%u proxy=%d cap=%d texture=%d"),
+		*Prop.StableId.ToString(), Visual.Epoch,
+		Visual.Proxy.IsValid() ? Visual.Proxy->GetUniqueID() : 0,
+		Visual.Cap.IsValid() ? Visual.Cap->GetUniqueID() : 0,
+		Visual.Texture.IsValid() ? Visual.Texture->GetUniqueID() : 0);
+	DestroyVisual(Visual);
+	Visual.bPresentationRetired = true;
+}
+
+void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
+	FTrackedProp& Prop) const
+{
+	Prop.MaxSurfaceContributors = 0;
+	Prop.MaxCapContributors = 0;
+	Prop.MaxTotalContributors = 0;
+	Prop.VisibleHistoricalCaps = 0;
+	TArray<FVector2D> SamplePoints;
+	auto SurfaceContributorsAt = [&](const FVector2D Point)
+	{
+		int32 Contributors = HasCurrentObservedContributionAt(Prop, Point) ? 1 : 0;
+		for (const FDarkwellSpatialObservationRecord& Historical : Prop.History.GetRecords())
+		{
+			if (Historical.bCurrentObservedLocation
+				|| !Historical.SpatialMemory.GetBounds().IsInside(Point))
+			{
+				continue;
+			}
+			const FRecordVisual* Visual = Prop.Visuals.Find(Historical.Epoch);
+			const FIntPoint Coarse = Historical.SpatialMemory.GetSize();
+			const FIntPoint Fine = Coarse * Darkwell::MovingPropLab::PresentationSamples;
+			if (!Visual || Visual->bPresentationRetired || Fine.X <= 0 || Fine.Y <= 0)
+			{
+				continue;
+			}
+			const FVector2D Relative = (Point - Historical.SpatialMemory.GetBounds().Min)
+				/ Historical.SpatialMemory.GetBounds().GetSize();
+			const int32 FineX = FMath::Clamp(FMath::FloorToInt(Relative.X * Fine.X), 0, Fine.X - 1);
+			const int32 FineY = FMath::Clamp(FMath::FloorToInt(Relative.Y * Fine.Y), 0, Fine.Y - 1);
+			const int32 FineIndex = FineY * Fine.X + FineX;
+			const int32 CellX = FineX / Darkwell::MovingPropLab::PresentationSamples;
+			const int32 CellY = FineY / Darkwell::MovingPropLab::PresentationSamples;
+			const bool bSuppressed = Visual->SuppressedByCurrentEvidence.IsValidIndex(FineIndex)
+				&& Visual->SuppressedByCurrentEvidence[FineIndex];
+			if (!bSuppressed
+				&& Historical.SpatialMemory.Presentation(CellY * Coarse.X + CellX).B > 0.0f)
+			{
+				++Contributors;
+			}
+		}
+		return Contributors;
+	};
+	auto CapContributorsAt = [&](const FVector2D Point)
+	{
+		int32 Contributors = 0;
+		for (const TPair<uint32, FRecordVisual>& Pair : Prop.Visuals)
+		{
+			const FRecordVisual& Visual = Pair.Value;
+			if (!Visual.Cap.IsValid() || !Visual.Cap->IsVisible()
+				|| Visual.CapTriangles <= 0)
+			{
+				continue;
+			}
+			if (Visual.CapSamplePoints.ContainsByPredicate([&](const FVector2D Candidate)
+			{
+				return Candidate.Equals(Point, 0.25f);
+			}))
+			{
+				++Contributors;
+			}
+		}
+		return Contributors;
+	};
 	for (const FDarkwellSpatialObservationRecord& SampleRecord : Prop.History.GetRecords())
 	{
-		if (SampleRecord.bCurrentObservedLocation)
-		{
-			continue;
-		}
 		const FIntPoint SampleSize = SampleRecord.SpatialMemory.GetSize()
 			* Darkwell::MovingPropLab::PresentationSamples;
 		const FBox2D& SampleBounds = SampleRecord.SpatialMemory.GetBounds();
@@ -625,43 +892,39 @@ int32 ADarkwellMovingPropLabRoom::ComputeMaxOverlapContributors(
 		{
 			for (int32 X = 0; X < SampleSize.X; ++X)
 			{
-				const FVector2D Point = SampleBounds.Min
-					+ Step * FVector2D(X + 0.5f, Y + 0.5f);
-				int32 Contributors = HasCurrentObservedContributionAt(Prop, Point) ? 1 : 0;
-				for (const FDarkwellSpatialObservationRecord& Historical : Prop.History.GetRecords())
-				{
-					if (Historical.bCurrentObservedLocation
-						|| !Historical.SpatialMemory.GetBounds().IsInside(Point))
-					{
-						continue;
-					}
-					const FRecordVisual* Visual = Prop.Visuals.Find(Historical.Epoch);
-					const FIntPoint Coarse = Historical.SpatialMemory.GetSize();
-					const FIntPoint Fine = Coarse * Darkwell::MovingPropLab::PresentationSamples;
-					if (!Visual || Fine.X <= 0 || Fine.Y <= 0)
-					{
-						continue;
-					}
-					const FVector2D Relative = (Point - Historical.SpatialMemory.GetBounds().Min)
-						/ Historical.SpatialMemory.GetBounds().GetSize();
-					const int32 FineX = FMath::Clamp(FMath::FloorToInt(Relative.X * Fine.X), 0, Fine.X - 1);
-					const int32 FineY = FMath::Clamp(FMath::FloorToInt(Relative.Y * Fine.Y), 0, Fine.Y - 1);
-					const int32 FineIndex = FineY * Fine.X + FineX;
-					const int32 CellX = FineX / Darkwell::MovingPropLab::PresentationSamples;
-					const int32 CellY = FineY / Darkwell::MovingPropLab::PresentationSamples;
-					const bool bSuppressed = Visual->SuppressedByCurrentEvidence.IsValidIndex(FineIndex)
-						&& Visual->SuppressedByCurrentEvidence[FineIndex];
-					if (!bSuppressed
-						&& Historical.SpatialMemory.Presentation(CellY * Coarse.X + CellX).B > 0.0f)
-					{
-						++Contributors;
-					}
-				}
-				Maximum = FMath::Max(Maximum, Contributors);
+				SamplePoints.Add(SampleBounds.Min
+					+ Step * FVector2D(X + 0.5f, Y + 0.5f));
 			}
 		}
 	}
-	return Maximum;
+	for (const FDarkwellSpatialObservationRecord& Record : Prop.History.GetRecords())
+	{
+		const FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
+		if (!Visual || Visual->bPresentationRetired)
+		{
+			continue;
+		}
+		SamplePoints.Append(Visual->CapSamplePoints);
+		if (!Record.bCurrentObservedLocation && Visual->Cap.IsValid()
+			&& Visual->Cap->IsVisible() && Visual->CapTriangles > 0)
+		{
+			++Prop.VisibleHistoricalCaps;
+		}
+	}
+	for (const FVector2D Point : SamplePoints)
+	{
+		const int32 Surfaces = SurfaceContributorsAt(Point);
+		const int32 Caps = CapContributorsAt(Point);
+		Prop.MaxSurfaceContributors = FMath::Max(Prop.MaxSurfaceContributors, Surfaces);
+		Prop.MaxCapContributors = FMath::Max(Prop.MaxCapContributors, Caps);
+		// Surface samples represent horizontal/exterior mesh locations, while cap
+		// samples represent the interior vertical cut plane. Their XY projection can
+		// coincide without sharing a 3D render sample. Same-class overlaps are real;
+		// current/newer ownership at a cap plane is rejected while building the cap.
+		Prop.MaxTotalContributors = FMath::Max(Prop.MaxTotalContributors,
+			FMath::Max(Surfaces, Caps));
+	}
+	Prop.MaxOverlapContributors = Prop.MaxTotalContributors;
 }
 
 void ADarkwellMovingPropLabRoom::LogRotationFrame(const FTrackedProp& Prop) const
@@ -673,9 +936,14 @@ void ADarkwellMovingPropLabRoom::LogRotationFrame(const FTrackedProp& Prop) cons
 	uint32 CurrentEpoch = 0;
 	int32 StaleEpochs = 0;
 	int32 VisibleProxies = 0;
+	int32 VisibleCaps = 0;
 	int32 Discovered = 0;
 	int32 Verified = 0;
 	int32 Residual = 0;
+	const TCHAR* ObservationState = Prop.ObservationState == EObservationState::ObservedArmed
+		? TEXT("OBSERVED_ARMED")
+		: (Prop.ObservationState == EObservationState::UnobservedSealed
+			? TEXT("UNOBSERVED_SEALED") : TEXT("NEVER_OBSERVED"));
 	TArray<FString> Historical;
 	for (const FDarkwellSpatialObservationRecord& Record : Prop.History.GetRecords())
 	{
@@ -688,11 +956,27 @@ void ADarkwellMovingPropLabRoom::LogRotationFrame(const FTrackedProp& Prop) cons
 			++StaleEpochs;
 			const FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
 			const bool bVisible = Visual && Visual->Proxy.IsValid() && !Visual->Proxy->IsHidden();
+			const bool bCapVisible = Visual && Visual->Cap.IsValid()
+				&& Visual->Cap->IsVisible() && Visual->CapTriangles > 0;
+			int32 SupersededSamples = 0;
+			if (Visual)
+			{
+				for (int32 Index = 0; Index < Visual->SuppressedByCurrentEvidence.Num(); ++Index)
+				{
+					SupersededSamples += Visual->SuppressedByCurrentEvidence[Index] ? 1 : 0;
+				}
+			}
 			VisibleProxies += bVisible ? 1 : 0;
-			Historical.Add(FString::Printf(TEXT("%u@%.2f/proxy=%d/visible=%d"),
+			VisibleCaps += bCapVisible ? 1 : 0;
+			Historical.Add(FString::Printf(TEXT("%u@%.2f/proxy=%d/visible=%d/cap=%d/tri=%d/tex=%dx%d/gen=%u/superseded=%d"),
 				Record.Epoch, Record.SnapshotTransform.Rotator().Yaw,
 				Visual && Visual->Proxy.IsValid() ? Visual->Proxy->GetUniqueID() : 0,
-				bVisible ? 1 : 0));
+				bVisible ? 1 : 0,
+				Visual && Visual->Cap.IsValid() ? Visual->Cap->GetUniqueID() : 0,
+				Visual ? Visual->CapTriangles : 0,
+				Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeX() : 0,
+				Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeY() : 0,
+				Record.SpatialMemory.GetGeneration(), SupersededSamples));
 		}
 		for (const FDarkwellSpatialPropMemory::FCell& Cell : Record.SpatialMemory.GetCells())
 		{
@@ -712,11 +996,16 @@ void ADarkwellMovingPropLabRoom::LogRotationFrame(const FTrackedProp& Prop) cons
 		}
 	}
 	UE_LOG(LogDarkwellMovingPropLab, Display,
-		TEXT("ROTATION_FRAME live_epoch=%u stale_epochs=%d actual=%d/%d actual_yaw=%.2f coverage=%.4f proxies=%d stale=[%s] D=%d V=%d R=%d overlap_contributors=%d"),
-		CurrentEpoch, StaleEpochs, VisibleActualComponents, ActualComponents,
+		TEXT("ROTATION_FRAME live_epoch=%u stale_epochs=%d observation_episode=%d observation_state=%s actual=%d/%d actual_yaw=%.2f transform_rev=%llu coverage=%.4f coverage_valid=%d coverage_zero_reason=%s authority_rev=%llu coverage_rev=%llu coverage_transform_rev=%llu coverage_grid_rev=%llu grid_rev=%llu proxies=%d caps=%d stale=[%s] D=%d V=%d R=%d surface_contributors=%d cap_contributors=%d total_contributors=%d seal_count=%d"),
+		CurrentEpoch, StaleEpochs, Prop.ObservationEpisode, ObservationState,
+		VisibleActualComponents, ActualComponents,
 		Prop.Actual.IsValid() ? Prop.Actual->GetActorRotation().Yaw : 0.0f,
-		Prop.LastLegalCoverageRatio, VisibleProxies, *FString::Join(Historical, TEXT(";")),
-		Discovered, Verified, Residual, Prop.MaxOverlapContributors);
+		Prop.TransformRevision, Prop.LastLegalCoverageRatio, Prop.bLastCoverageValid ? 1 : 0,
+		*Prop.LastCoverageZeroReason, Prop.CoverageAuthorityRevision, Prop.CoverageRevision,
+		Prop.CoverageTransformRevision, Prop.CoverageGridRevision, Prop.GridRevision,
+		VisibleProxies, VisibleCaps, *FString::Join(Historical, TEXT(";")),
+		Discovered, Verified, Residual, Prop.MaxSurfaceContributors,
+		Prop.MaxCapContributors, Prop.MaxTotalContributors, Prop.HiddenFreezeCount);
 }
 
 void ADarkwellMovingPropLabRoom::UpdateTracked(
@@ -728,64 +1017,121 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 	{
 		const FTransform Transform = Actual->GetActorTransform();
 		const FBox2D Bounds = ActualBounds(*Actual);
-		TArray<float> Coverage = ConservativeCoverage(Bounds);
-		const bool bAnyLegal = Coverage.ContainsByPredicate([](const float Value)
+		const bool bTransformChanged = !Darkwell::MovingPropLab::TransformsMatch(
+			Prop.LastPhysicalTransform, Transform);
+		if (bTransformChanged)
 		{
-			return Value >= FDarkwellSpatialPropMemory::LegalCoverage;
-		});
+			++Prop.TransformRevision;
+		}
+		const FIntPoint CoverageSize = Bounds.bIsValid
+			? FIntPoint(
+				FMath::CeilToInt(Bounds.GetSize().X / Darkwell::MovingPropLab::CellSize),
+				FMath::CeilToInt(Bounds.GetSize().Y / Darkwell::MovingPropLab::CellSize))
+			: FIntPoint::ZeroValue;
+		if (!Prop.LastCoverageBounds.bIsValid
+			|| !Prop.LastCoverageBounds.Min.Equals(Bounds.Min, 0.01)
+			|| !Prop.LastCoverageBounds.Max.Equals(Bounds.Max, 0.01)
+			|| Prop.LastCoverageSize != CoverageSize)
+		{
+			++Prop.GridRevision;
+			Prop.LastCoverageBounds = Bounds;
+			Prop.LastCoverageSize = CoverageSize;
+		}
+		FCoverageSnapshot CoverageSnapshot = SampleConservativeCoverage(
+			Bounds, Prop.TransformRevision, Prop.GridRevision);
+		if (Prop.bInjectInvalidCoverageOnce)
+		{
+			Prop.bInjectInvalidCoverageOnce = false;
+			CoverageSnapshot.bValid = false;
+			CoverageSnapshot.ZeroReason = TEXT("TEST_INJECTED_INVALID");
+		}
+		TArray<float>& Coverage = CoverageSnapshot.Values;
+		Prop.bLastCoverageValid = CoverageSnapshot.bValid;
+		Prop.CoverageAuthorityRevision = CoverageSnapshot.AuthorityRevision;
+		Prop.CoverageRevision = CoverageSnapshot.CoverageRevision;
+		Prop.CoverageTransformRevision = CoverageSnapshot.TransformRevision;
+		Prop.CoverageGridRevision = CoverageSnapshot.GridRevision;
+		Prop.LastCoverageZeroReason = CoverageSnapshot.ZeroReason;
+		const bool bAnyLegal = CoverageSnapshot.bValid
+			&& Coverage.ContainsByPredicate([](const float Value)
+			{
+				return Value >= FDarkwellSpatialPropMemory::LegalCoverage;
+			});
 		int32 LegalCells = 0;
 		for (const float Value : Coverage)
 		{
 			LegalCells += Value >= FDarkwellSpatialPropMemory::LegalCoverage ? 1 : 0;
 		}
-		Prop.LastLegalCoverageRatio = Coverage.IsEmpty()
-			? 0.0f : static_cast<float>(LegalCells) / Coverage.Num();
-		const int32 CurrentIndex = Prop.History.GetCurrentIndex();
-		if (CurrentIndex != INDEX_NONE
-			&& !Darkwell::MovingPropLab::TransformsMatch(Prop.LastPhysicalTransform, Transform))
+		Prop.LastLegalCoverageRatio = CoverageSnapshot.bValid && !Coverage.IsEmpty()
+			? static_cast<float>(LegalCells) / Coverage.Num() : 0.0f;
+
+		// Observation lifecycle is driven only by revision-matched authoritative
+		// samples. Invalid/not-ready data may fail closed visually, but never writes
+		// player knowledge, seals an epoch, or rearms a later seal.
+		int32 CurrentIndex = Prop.History.GetCurrentIndex();
+		if (CoverageSnapshot.bValid && CurrentIndex != INDEX_NONE)
 		{
 			if (bAnyLegal)
 			{
-				Prop.History.RebaseCurrentObservedLocation(
-					Transform, Bounds, Darkwell::MovingPropLab::CellSize);
-				FDarkwellSpatialObservationRecord& Current =
-					Prop.History.GetMutableRecords()[Prop.History.GetCurrentIndex()];
-				FRecordVisual& Visual = Prop.Visuals.FindOrAdd(Current.Epoch);
-				Visual.PartBounds = ActualPartBounds(*Actual);
+				if (bTransformChanged)
+				{
+					Prop.History.RebaseCurrentObservedLocation(
+						Transform, Bounds, Darkwell::MovingPropLab::CellSize);
+					FDarkwellSpatialObservationRecord& Current =
+						Prop.History.GetMutableRecords()[Prop.History.GetCurrentIndex()];
+					FRecordVisual& Visual = Prop.Visuals.FindOrAdd(Current.Epoch);
+					Visual.PartBounds = ActualPartBounds(*Actual);
+				}
+				Prop.ObservationState = EObservationState::ObservedArmed;
 			}
-			else
+			else if (bTransformChanged
+				&& Prop.ObservationState == EObservationState::ObservedArmed)
 			{
-				// Fallback for externally driven hidden motion. In-world scenarios seal
-				// the epoch before StartMotion, so they never enter through this late path.
-				FreezeCurrentForHiddenMotion(Prop, TEXT("UNANNOUNCED_HIDDEN_TRANSFORM"));
+				FreezeCurrentForHiddenMotion(Prop, TEXT("VALID_OBSERVED_TO_UNOBSERVED"));
 			}
 		}
-		if (Prop.History.GetCurrentIndex() == INDEX_NONE && bAnyLegal)
+		CurrentIndex = Prop.History.GetCurrentIndex();
+		if (CoverageSnapshot.bValid && CurrentIndex == INDEX_NONE && bAnyLegal)
 		{
-			Prop.History.BeginObservedLocation(
+			const int32 NewIndex = Prop.History.BeginObservedLocation(
 				Transform, Bounds, Darkwell::MovingPropLab::CellSize);
+			if (NewIndex != INDEX_NONE)
+			{
+				++Prop.ObservationEpisode;
+				Prop.ObservationState = EObservationState::ObservedArmed;
+			}
 		}
-		if (Prop.History.GetCurrentIndex() != INDEX_NONE)
+		CurrentIndex = Prop.History.GetCurrentIndex();
+		if (CurrentIndex != INDEX_NONE)
 		{
 			FDarkwellSpatialObservationRecord& Current =
-				Prop.History.GetMutableRecords()[Prop.History.GetCurrentIndex()];
-			if (Coverage.Num() == Current.SpatialMemory.GetCells().Num())
+				Prop.History.GetMutableRecords()[CurrentIndex];
+			if (CoverageSnapshot.bValid
+				&& CoverageSnapshot.TransformRevision == Prop.TransformRevision
+				&& CoverageSnapshot.GridRevision == Prop.GridRevision
+				&& Coverage.Num() == Current.SpatialMemory.GetCells().Num())
 			{
 				Prop.History.AdvanceCurrent(DeltaSeconds, Coverage);
 			}
 			EnsureRecordVisual(Prop, Current);
 			UpdateRecordTexture(Prop, Current);
 			UpdateRecordCap(Prop, Current);
-			Actual->BindSpatialState(
-				Prop.Visuals.FindChecked(Current.Epoch).Texture.Get(),
-				Current.SpatialMemory.GetBounds());
-			Actual->Memory->ApplySourceGeometryVisibility(true);
+			if (FRecordVisual* CurrentVisual = Prop.Visuals.Find(Current.Epoch);
+				CurrentVisual && CurrentVisual->Texture.IsValid())
+			{
+				Actual->BindSpatialState(CurrentVisual->Texture.Get(),
+					Current.SpatialMemory.GetBounds());
+				Actual->Memory->ApplySourceGeometryVisibility(true);
+			}
 		}
 		else
 		{
 			Actual->Memory->ApplySourceGeometryVisibility(false);
 		}
-		Prop.LastPhysicalTransform = Transform;
+		if (!bTransformChanged || CoverageSnapshot.bValid)
+		{
+			Prop.LastPhysicalTransform = Transform;
+		}
 	}
 
 	TArray<uint32> HistoricalEpochs;
@@ -803,28 +1149,43 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		{
 			continue;
 		}
-		TArray<float> Coverage = ConservativeCoverage(Record->SpatialMemory.GetBounds());
-		const FIntPoint Size = Record->SpatialMemory.GetSize();
-		const FBox2D& Bounds = Record->SpatialMemory.GetBounds();
-		const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
-		for (int32 Y = 0; Y < Size.Y; ++Y)
+		EnsureRecordVisual(Prop, *Record);
+		FRecordVisual* Visual = Prop.Visuals.Find(Epoch);
+		if (!Visual || Visual->bPresentationRetired)
 		{
-			for (int32 X = 0; X < Size.X; ++X)
+			continue;
+		}
+		const FCoverageSnapshot HistoricalCoverage = SampleConservativeCoverage(
+			Record->SpatialMemory.GetBounds(), Record->Epoch,
+			Record->SpatialMemory.GetGeneration());
+		if (HistoricalCoverage.bValid)
+		{
+			TArray<float> Coverage = HistoricalCoverage.Values;
+			const FIntPoint Size = Record->SpatialMemory.GetSize();
+			const FBox2D& Bounds = Record->SpatialMemory.GetBounds();
+			const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
+			for (int32 Y = 0; Y < Size.Y; ++Y)
 			{
-				if (IsOccupiedByActual(
-					Bounds.Min + Step * FVector2D(X + .5f, Y + .5f), NAME_None))
+				for (int32 X = 0; X < Size.X; ++X)
 				{
-					Coverage[Y * Size.X + X] = 0.0f;
+					if (IsOccupiedByActual(
+						Bounds.Min + Step * FVector2D(X + .5f, Y + .5f), NAME_None))
+					{
+						Coverage[Y * Size.X + X] = 0.0f;
+					}
 				}
 			}
+			Prop.History.AdvanceHistorical(Epoch, DeltaSeconds, Coverage);
 		}
-		Prop.History.AdvanceHistorical(Epoch, DeltaSeconds, Coverage);
-		EnsureRecordVisual(Prop, *Record);
 		UpdateHistoricalContributionExclusion(Prop, *Record);
 		UpdateRecordTexture(Prop, *Record);
 		UpdateRecordCap(Prop, *Record);
+		if (IsHistoricalPresentationResolved(*Record, *Visual))
+		{
+			RetireHistoricalPresentation(Prop, *Visual);
+		}
 	}
-	Prop.MaxOverlapContributors = ComputeMaxOverlapContributors(Prop);
+	RefreshContributionDiagnostics(Prop);
 	LogRotationFrame(Prop);
 
 	TArray<uint32> Erased;
@@ -860,7 +1221,8 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	const TCHAR* Reason)
 {
 	const int32 CurrentIndex = Prop.History.GetCurrentIndex();
-	if (CurrentIndex == INDEX_NONE)
+	if (CurrentIndex == INDEX_NONE
+		|| Prop.ObservationState != EObservationState::ObservedArmed)
 	{
 		return false;
 	}
@@ -882,6 +1244,7 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	{
 		return false;
 	}
+	Prop.ObservationState = EObservationState::UnobservedSealed;
 	++Prop.HiddenFreezeCount;
 	if (FDarkwellSpatialObservationRecord* Historical = Prop.History.FindRecord(Epoch))
 	{
@@ -891,8 +1254,10 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	}
 	const FRecordVisual* Visual = Prop.Visuals.Find(Epoch);
 	UE_LOG(LogDarkwellMovingPropLab, Display,
-		TEXT("MOVING_RULES_STALE_SEALED id=%s epoch=%u reason=%s freezes=%d proxy=%d texture=%dx%d uploads=%d"),
-		*Prop.StableId.ToString(), Epoch, Reason, Prop.HiddenFreezeCount,
+		TEXT("MOVING_RULES_STALE_SEALED id=%s epoch=%u episode=%d reason=%s freezes=%d transform_rev=%llu coverage_rev=%llu grid_rev=%llu proxy=%d texture=%dx%d uploads=%d"),
+		*Prop.StableId.ToString(), Epoch, Prop.ObservationEpisode, Reason,
+		Prop.HiddenFreezeCount, Prop.TransformRevision, Prop.CoverageRevision,
+		Prop.GridRevision,
 		Visual && Visual->Proxy.IsValid() ? Visual->Proxy->GetUniqueID() : 0,
 		Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeX() : 0,
 		Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeY() : 0,
@@ -939,6 +1304,10 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 {
 	FRecordVisual& Visual = Prop.Visuals.FindOrAdd(Record.Epoch);
 	Visual.Epoch = Record.Epoch;
+	if (!Record.bCurrentObservedLocation && Visual.bPresentationRetired)
+	{
+		return;
+	}
 	const FIntPoint Size = Record.SpatialMemory.GetSize()
 		* Darkwell::MovingPropLab::PresentationSamples;
 	if (!Record.bCurrentObservedLocation)
@@ -1175,6 +1544,7 @@ void ADarkwellMovingPropLabRoom::BindProxyMaterial(
 		Material->SetScalarParameterValue(TEXT("SpatialReady"), 1.0f);
 		Mesh->SetMaterial(0, Material);
 		OwnedMaterials.Add(Material);
+		Visual->Materials.Add(Material);
 	}
 }
 
@@ -1197,6 +1567,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 		Visual->Cap->SetMesh(FDynamicMesh3());
 		Visual->Cap->SetVisibility(false);
 		Visual->CapTriangles = 0;
+		Visual->CapSamplePoints.Reset();
 		return;
 	}
 	auto IsSuppressedByCurrent = [&](const int32 X, const int32 Y)
@@ -1243,6 +1614,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	}
 	Visual->CapSignature = Signature;
 	FDynamicMesh3 Mesh;
+	Visual->CapSamplePoints.Reset();
 	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
 	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
 	const FVector Origin = GetActorLocation();
@@ -1260,16 +1632,24 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 		const auto& Cell = Cells[Y * Size.X + X];
 		return bPresent ? Cell.DiscoveredPresent == 0
 			: Cell.InitialRemembered > 0
-				&& (Cell.VerifiedEmpty > 0 || IsSuppressedByCurrent(X, Y));
+				&& Cell.VerifiedEmpty > 0;
 	};
 	auto AddQuad = [&](const FVector& A, const FVector& B, const FVector& C, const FVector& D)
 	{
+		const FVector Center = (A + B + C + D) * 0.25f;
+		if (!Record.bCurrentObservedLocation
+			&& HasNewerObservedContributionAt(
+				Prop, Record.Epoch, FVector2D(Center.X, Center.Y)))
+		{
+			return;
+		}
 		const int32 IA = Mesh.AppendVertex(FVector3d(A - Origin));
 		const int32 IB = Mesh.AppendVertex(FVector3d(B - Origin));
 		const int32 IC = Mesh.AppendVertex(FVector3d(C - Origin));
 		const int32 ID = Mesh.AppendVertex(FVector3d(D - Origin));
 		Mesh.AppendTriangle(IA, IB, IC);
 		Mesh.AppendTriangle(IA, IC, ID);
+		Visual->CapSamplePoints.Add(FVector2D(Center.X, Center.Y));
 	};
 	auto Vertical = [&](const double X, const double Y0, const double Y1)
 	{
@@ -1662,11 +2042,18 @@ FText ADarkwellMovingPropLabRoom::GetInWorldControlDisplay(
 		State = TEXT("NEXT TEST");
 	}
 	const FString Diagnostics = Kind == EDarkwellMovingPropLabControlKind::VisibleRotate
-		? FString::Printf(TEXT("\nLIVE EPOCHS %d | STALE EPOCHS %d\nVISIBLE PROXIES %d | OVERLAP CONTRIBUTORS %d"),
+		? FString::Printf(TEXT("\nLIVE %d | STALE %d | PROXIES %d | CAPS %d\nSURFACE %d | CAP %d | TOTAL %d\nCOVERAGE %.0f%% VALID %d %s | SEALS %d"),
 			GetCurrentEpochCountForTesting(Darkwell::MovingPropLab::RotateId),
 			GetStaleEpochCountForTesting(Darkwell::MovingPropLab::RotateId),
 			GetVisibleHistoricalProxyCountForTesting(Darkwell::MovingPropLab::RotateId),
-			GetMaxOverlapContributorsForTesting(Darkwell::MovingPropLab::RotateId))
+			GetVisibleHistoricalCapCountForTesting(Darkwell::MovingPropLab::RotateId),
+			GetMaxSurfaceContributorsForTesting(Darkwell::MovingPropLab::RotateId),
+			GetMaxCapContributorsForTesting(Darkwell::MovingPropLab::RotateId),
+			GetMaxTotalContributorsForTesting(Darkwell::MovingPropLab::RotateId),
+			GetLastLegalCoverageRatioForTesting(Darkwell::MovingPropLab::RotateId) * 100.0f,
+			IsLastCoverageValidForTesting(Darkwell::MovingPropLab::RotateId) ? 1 : 0,
+			*GetLastCoverageZeroReasonForTesting(Darkwell::MovingPropLab::RotateId),
+			GetSealCountForTesting(Darkwell::MovingPropLab::RotateId))
 		: FString();
 	return FText::FromString(FString::Printf(TEXT("%s\n[%s]%s"), Name, *State, *Diagnostics));
 }
@@ -2379,11 +2766,139 @@ int32 ADarkwellMovingPropLabRoom::GetMaxOverlapContributorsForTesting(
 	return Prop ? Prop->MaxOverlapContributors : 0;
 }
 
+int32 ADarkwellMovingPropLabRoom::GetVisibleHistoricalCapCountForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? Prop->VisibleHistoricalCaps : 0;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetHistoricalPresentationResourceCountForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	int32 Count = 0;
+	if (Prop)
+	{
+		for (const FDarkwellSpatialObservationRecord& Record : Prop->History.GetRecords())
+		{
+			if (Record.bCurrentObservedLocation) continue;
+			const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
+			Count += Visual && (Visual->Proxy.IsValid() || Visual->Cap.IsValid()
+				|| Visual->Texture.IsValid() || !Visual->Materials.IsEmpty()) ? 1 : 0;
+		}
+	}
+	return Count;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetMaxSurfaceContributorsForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? Prop->MaxSurfaceContributors : 0;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetMaxCapContributorsForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? Prop->MaxCapContributors : 0;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetMaxTotalContributorsForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? Prop->MaxTotalContributors : 0;
+}
+
 float ADarkwellMovingPropLabRoom::GetLastLegalCoverageRatioForTesting(
 	const FName StableId) const
 {
 	const FTrackedProp* Prop = Tracked.Find(StableId);
 	return Prop ? Prop->LastLegalCoverageRatio : 0.0f;
+}
+
+bool ADarkwellMovingPropLabRoom::IsLastCoverageValidForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop && Prop->bLastCoverageValid;
+}
+
+FString ADarkwellMovingPropLabRoom::GetLastCoverageZeroReasonForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? Prop->LastCoverageZeroReason : TEXT("MISSING");
+}
+
+int64 ADarkwellMovingPropLabRoom::GetTransformRevisionForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? static_cast<int64>(Prop->TransformRevision) : 0;
+}
+
+int64 ADarkwellMovingPropLabRoom::GetCoverageRevisionForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? static_cast<int64>(Prop->CoverageRevision) : 0;
+}
+
+int64 ADarkwellMovingPropLabRoom::GetCoverageTransformRevisionForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? static_cast<int64>(Prop->CoverageTransformRevision) : 0;
+}
+
+int64 ADarkwellMovingPropLabRoom::GetCoverageGridRevisionForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? static_cast<int64>(Prop->CoverageGridRevision) : 0;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetSealCountForTesting(const FName StableId) const
+{
+	return GetHiddenFreezeCountForTesting(StableId);
+}
+
+int32 ADarkwellMovingPropLabRoom::GetObservationEpisodeForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? Prop->ObservationEpisode : 0;
+}
+
+FString ADarkwellMovingPropLabRoom::GetObservationStateForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	if (!Prop)
+	{
+		return TEXT("MISSING");
+	}
+	switch (Prop->ObservationState)
+	{
+	case EObservationState::ObservedArmed: return TEXT("OBSERVED_ARMED");
+	case EObservationState::UnobservedSealed: return TEXT("UNOBSERVED_SEALED");
+	default: return TEXT("NEVER_OBSERVED");
+	}
+}
+
+bool ADarkwellMovingPropLabRoom::InjectInvalidCoverageOnceForTesting(
+	const FName StableId)
+{
+	FTrackedProp* Prop = Tracked.Find(StableId);
+	if (!Prop)
+	{
+		return false;
+	}
+	Prop->bInjectInvalidCoverageOnce = true;
+	return true;
 }
 
 float ADarkwellMovingPropLabRoom::GetNewestHistoricalYawForTesting(
@@ -2516,12 +3031,23 @@ FString ADarkwellMovingPropLabRoom::GetTelemetry() const
 void ADarkwellMovingPropLabRoom::Report()
 {
 	const FString RotationDiagnostics = Scenario == 2
-		? FString::Printf(TEXT("\nROTATE: LIVE EPOCHS %d | STALE EPOCHS %d | VISIBLE PROXIES %d | OVERLAP CONTRIBUTORS %d | LEGAL COVERAGE %.1f%%"),
+		? FString::Printf(TEXT("\nROTATE: LIVE %d | STALE %d | PROXIES %d | CAPS %d\nSURFACE %d | CAP %d | TOTAL %d | COVERAGE %.1f%% VALID %d %s\nOBS EPISODE %d %s | TRANSFORM REV %lld | COVERAGE REV %lld | GRID REV %lld | SEALS %d"),
 			GetCurrentEpochCountForTesting(Darkwell::MovingPropLab::RotateId),
 			GetStaleEpochCountForTesting(Darkwell::MovingPropLab::RotateId),
 			GetVisibleHistoricalProxyCountForTesting(Darkwell::MovingPropLab::RotateId),
-			GetMaxOverlapContributorsForTesting(Darkwell::MovingPropLab::RotateId),
-			GetLastLegalCoverageRatioForTesting(Darkwell::MovingPropLab::RotateId) * 100.0f)
+			GetVisibleHistoricalCapCountForTesting(Darkwell::MovingPropLab::RotateId),
+			GetMaxSurfaceContributorsForTesting(Darkwell::MovingPropLab::RotateId),
+			GetMaxCapContributorsForTesting(Darkwell::MovingPropLab::RotateId),
+			GetMaxTotalContributorsForTesting(Darkwell::MovingPropLab::RotateId),
+			GetLastLegalCoverageRatioForTesting(Darkwell::MovingPropLab::RotateId) * 100.0f,
+			IsLastCoverageValidForTesting(Darkwell::MovingPropLab::RotateId) ? 1 : 0,
+			*GetLastCoverageZeroReasonForTesting(Darkwell::MovingPropLab::RotateId),
+			GetObservationEpisodeForTesting(Darkwell::MovingPropLab::RotateId),
+			*GetObservationStateForTesting(Darkwell::MovingPropLab::RotateId),
+			GetTransformRevisionForTesting(Darkwell::MovingPropLab::RotateId),
+			GetCoverageRevisionForTesting(Darkwell::MovingPropLab::RotateId),
+			GetCoverageGridRevisionForTesting(Darkwell::MovingPropLab::RotateId),
+			GetSealCountForTesting(Darkwell::MovingPropLab::RotateId))
 		: FString();
 	Status = FString::Printf(
 		TEXT("MOVING + MULTI PROP LAB | MODE %d | RULE SpatialEvidenceOnly | ENEMY 0\nScenario %d | Phase %d | Motion %s | Object position %s\nCurrent interaction: %s%s\nCompleted %d/6 | NEXT TEST: %s\nIdentities %d | Spatial records %d | Multi %d\nWalk to a labeled mechanism and press F. Console is not required."),

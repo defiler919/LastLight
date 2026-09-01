@@ -1720,6 +1720,57 @@ bool FDarkwellMovingPropVisibleRotationExclusionTest::RunTest(const FString&)
  Fixture->Destroy();return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMovingPropInvalidCoverageTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.InvalidCoverageDoesNotSeal", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellMovingPropInvalidCoverageTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("MovingPropInvalidCoverage"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("Invalid-coverage Lab exists"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("Invalid-coverage Lab authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Invalid-coverage Lab reset"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames=1){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ auto* Control=Room->GetControlForTesting(EDarkwellMovingPropLabControlKind::VisibleRotate);
+ if(!TestNotNull(TEXT("Invalid-coverage rotation control"),Control))return false;
+ const FVector Center=Control->GetActorLocation();Player->SetActorLocation(FVector(Center.X,Center.Y-190,92));
+ Player->SetActorRotation(FRotator(0,90,0));Step(62);World->UpdateWorldComponents(true,false);
+ Player->GetInteractionComponent()->UpdateFocusedActorFromWorld();
+ TestEqual(TEXT("Invalid-coverage route focuses the actual F control"),
+  Player->GetInteractionComponent()->GetFocusedActor(),static_cast<AActor*>(Control));
+ TestTrue(TEXT("F starts the continuously visible rotation"),Player->GetInteractionComponent()->TryInteract());
+ Step(90);
+ const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ const int32 EpisodeBefore=Room->GetObservationEpisodeForTesting(RotateId);
+ const int32 SealsBefore=Room->GetSealCountForTesting(RotateId);
+ const int32 RecordsBefore=Room->GetSpatialRecordCount(RotateId);
+ const FTransform TransformBefore=Room->GetTrackedTransform(RotateId);
+ TestTrue(TEXT("Test hook marks exactly the next coverage sample invalid"),
+  Room->InjectInvalidCoverageOnceForTesting(RotateId));
+ Step();
+ TestFalse(TEXT("Injected frame is reported invalid rather than legal zero"),
+  Room->IsLastCoverageValidForTesting(RotateId));
+ TestEqual(TEXT("Invalid reason remains explicit"),
+  Room->GetLastCoverageZeroReasonForTesting(RotateId),FString(TEXT("TEST_INJECTED_INVALID")));
+ TestEqual(TEXT("Invalid frame cannot seal an epoch"),Room->GetSealCountForTesting(RotateId),SealsBefore);
+ TestEqual(TEXT("Invalid frame cannot change observation episode"),
+  Room->GetObservationEpisodeForTesting(RotateId),EpisodeBefore);
+ TestEqual(TEXT("Invalid frame cannot create a stale record"),Room->GetSpatialRecordCount(RotateId),RecordsBefore);
+ TestEqual(TEXT("Invalid frame keeps one current epoch"),Room->GetCurrentEpochCountForTesting(RotateId),1);
+ Step();
+ TestTrue(TEXT("Next authoritative frame becomes valid again"),Room->IsLastCoverageValidForTesting(RotateId));
+ TestEqual(TEXT("Recovery continues the same observation episode"),
+  Room->GetObservationEpisodeForTesting(RotateId),EpisodeBefore);
+ TestEqual(TEXT("Recovery still has no stale proxy"),Room->GetVisibleHistoricalProxyCountForTesting(RotateId),0);
+ TestTrue(TEXT("Physical rotation continues across the invalid presentation frame"),
+  !Room->GetTrackedTransform(RotateId).Equals(TransformBefore,0.001f));
+ Fixture->Destroy();return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMovingPropRotationOcclusionTest,
  "Darkwell.PropLab.MovingRules.InWorldControls.RotationOcclusionLastSeenPose", Darkwell::SightWeaveAdapterTests::TestFlags)
 bool FDarkwellMovingPropRotationOcclusionTest::RunTest(const FString&)
@@ -1757,6 +1808,18 @@ bool FDarkwellMovingPropRotationOcclusionTest::RunTest(const FString&)
  bool bExclusive=true;for(int32 Frame=0;Frame<600;++Frame){Step();bExclusive&=Room->GetMaxOverlapContributorsForTesting(RotateId)<=1;}
  TestTrue(TEXT("Current and stale poses are spatially contribution-exclusive for ten seconds"),bExclusive);
  TestEqual(TEXT("Old proxy never whole-object flickers during fixed view"),Room->GetHistoricalProxyVisibilityTransitionsForTesting(RotateId),0);
+ TestTrue(TEXT("Legally observed current pose can return to the old spatial pose"),
+  Room->StartTrackedRotationForTesting(RotateId,FrozenYaw,2));
+ Step(150);
+ TestEqual(TEXT("A fully superseded stale surface has no visible proxy"),
+  Room->GetVisibleHistoricalProxyCountForTesting(RotateId),0);
+ TestEqual(TEXT("Superseded-by-current ownership never leaves a stale cap"),
+  Room->GetVisibleHistoricalCapCountForTesting(RotateId),0);
+ TestEqual(TEXT("A fully resolved epoch releases proxy, cap, texture and materials"),
+  Room->GetHistoricalPresentationResourceCountForTesting(RotateId),0);
+ Player->SetActorLocation(FVector(900,-850,92));Player->SetActorRotation(FRotator(0,-90,0));Step(60);
+ TestEqual(TEXT("Retired historical presentation cannot reappear after view loss"),
+  Room->GetHistoricalPresentationResourceCountForTesting(RotateId),0);
  AddInfo(Room->GetHistoricalVisualTelemetryForTesting(RotateId));
  Fixture->Destroy();return true;
 }

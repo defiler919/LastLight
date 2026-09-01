@@ -119,10 +119,25 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetCurrentEpochCountForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetStaleEpochCountForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetVisibleHistoricalProxyCountForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetVisibleHistoricalCapCountForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetHistoricalPresentationResourceCountForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetMaxOverlapContributorsForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetMaxSurfaceContributorsForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetMaxCapContributorsForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetMaxTotalContributorsForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") float GetLastLegalCoverageRatioForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") bool IsLastCoverageValidForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetLastCoverageZeroReasonForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int64 GetTransformRevisionForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int64 GetCoverageRevisionForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int64 GetCoverageTransformRevisionForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int64 GetCoverageGridRevisionForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetSealCountForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetObservationEpisodeForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetObservationStateForTesting(FName StableId) const;
 	float GetNewestHistoricalYawForTesting(FName StableId) const;
 	bool StartTrackedRotationForTesting(FName StableId, float TargetYaw, float Duration);
+	bool InjectInvalidCoverageOnceForTesting(FName StableId);
 
 	bool SelectScenario(int32 InScenario, ADarkwellCharacter* Player);
 	bool AdvanceScenario(ADarkwellCharacter* Player);
@@ -146,8 +161,18 @@ private:
 		int32 ProxyVisibilityTransitions = 0;
 		FIntPoint HistoricalTextureSize = FIntPoint::ZeroValue;
 		TBitArray<> SuppressedByCurrentEvidence;
+		TArray<FVector2D> CapSamplePoints;
+		TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> Materials;
+		bool bPresentationRetired = false;
 		bool bHasProxyVisibilitySample = false;
 		bool bLastProxyVisible = false;
+	};
+
+	enum class EObservationState : uint8
+	{
+		NeverObserved,
+		ObservedArmed,
+		UnobservedSealed
 	};
 
 	struct FTrackedProp
@@ -162,9 +187,37 @@ private:
 		FLinearColor Tint = FLinearColor::Gray;
 		int32 Shape = 0;
 		int32 HiddenFreezeCount = 0;
+		int32 ObservationEpisode = 0;
 		int32 MaxOverlapContributors = 0;
+		int32 MaxSurfaceContributors = 0;
+		int32 MaxCapContributors = 0;
+		int32 MaxTotalContributors = 0;
+		int32 VisibleHistoricalCaps = 0;
 		float LastLegalCoverageRatio = 0.0f;
+		uint64 TransformRevision = 1;
+		uint64 GridRevision = 1;
+		uint64 CoverageRevision = 0;
+		uint64 CoverageAuthorityRevision = 0;
+		uint64 CoverageTransformRevision = 0;
+		uint64 CoverageGridRevision = 0;
+		FBox2D LastCoverageBounds;
+		FIntPoint LastCoverageSize = FIntPoint::ZeroValue;
+		FString LastCoverageZeroReason = TEXT("NOT_SAMPLED");
+		EObservationState ObservationState = EObservationState::NeverObserved;
+		bool bLastCoverageValid = false;
+		bool bInjectInvalidCoverageOnce = false;
 		bool bExists = false;
+	};
+
+	struct FCoverageSnapshot
+	{
+		TArray<float> Values;
+		uint64 AuthorityRevision = 0;
+		uint64 CoverageRevision = 0;
+		uint64 TransformRevision = 0;
+		uint64 GridRevision = 0;
+		FString ZeroReason = TEXT("NOT_SAMPLED");
+		bool bValid = false;
 	};
 
 	struct FActiveMotion
@@ -202,12 +255,24 @@ private:
 	FBox2D ActualBounds(const ADarkwellPropLabFurniture& Prop) const;
 	TArray<FBox> ActualPartBounds(const ADarkwellPropLabFurniture& Prop) const;
 	TArray<float> ConservativeCoverage(const FBox2D& Bounds) const;
+	FCoverageSnapshot SampleConservativeCoverage(
+		const FBox2D& Bounds,
+		uint64 TransformRevision,
+		uint64 GridRevision) const;
 	bool IsOccupiedByActual(FVector2D Point, FName IgnoredStableId) const;
 	bool HasCurrentObservedContributionAt(const FTrackedProp& Prop, FVector2D Point) const;
+	bool HasNewerObservedContributionAt(
+		const FTrackedProp& Prop,
+		uint32 OlderEpoch,
+		FVector2D Point) const;
 	void UpdateHistoricalContributionExclusion(
 		FTrackedProp& Prop,
 		FDarkwellSpatialObservationRecord& Record);
-	int32 ComputeMaxOverlapContributors(const FTrackedProp& Prop) const;
+	bool IsHistoricalPresentationResolved(
+		const FDarkwellSpatialObservationRecord& Record,
+		const FRecordVisual& Visual) const;
+	void RetireHistoricalPresentation(FTrackedProp& Prop, FRecordVisual& Visual);
+	void RefreshContributionDiagnostics(FTrackedProp& Prop) const;
 	void LogRotationFrame(const FTrackedProp& Prop) const;
 	void UpdateTracked(FTrackedProp& Prop, float DeltaSeconds);
 	bool SetTrackedExists(FName StableId, bool bExists);

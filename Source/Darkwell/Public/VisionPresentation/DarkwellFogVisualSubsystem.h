@@ -44,6 +44,34 @@ struct DARKWELL_API FDarkwellFogVisualSourceSnapshot
 	bool IsEquivalentTo(const FDarkwellFogVisualSourceSnapshot& Other) const;
 };
 
+/** Why a valid project-side analytic coverage query returned zero. */
+enum class EDarkwellFogCoverageZeroReason : uint8
+{
+	None,
+	SubsystemInactive,
+	SourceInvalid,
+	PointInvalid,
+	ConeNotLegallyLive,
+	Occluded,
+	OutsideLegalSource
+};
+
+/**
+ * Revisioned CPU coverage query used by Development/Editor validation.
+ * A fail-closed numeric zero is not evidence unless bValid is true.
+ */
+struct DARKWELL_API FDarkwellFogVisualCoverageQuery
+{
+	float Coverage = 0.0f;
+	uint64 AuthorityRevision = 0;
+	uint64 CoverageDrawRevision = 0;
+	EDarkwellFogCoverageZeroReason ZeroReason =
+		EDarkwellFogCoverageZeroReason::SubsystemInactive;
+	bool bValid = false;
+	bool bBodyBlocked = false;
+	bool bConeBlocked = false;
+};
+
 /** Stable world-to-texture mapping for the DARKWELL-owned continuous coverage field. */
 struct DARKWELL_API FDarkwellFogVisualMapping
 {
@@ -137,6 +165,9 @@ public:
 	void Deactivate();
 	/** CPU query matching the formal analytic body/cone and segment occlusion path. */
 	float EvaluateLiveCoverageAtWorldPoint(const FVector2D& WorldPosition) const;
+	/** Same analytic query with validity, revision and zero-reason diagnostics. */
+	FDarkwellFogVisualCoverageQuery QueryLiveCoverageAtWorldPoint(
+		const FVector2D& WorldPosition) const;
 
 	bool IsActive() const { return Diagnostics.bActive; }
 	UTextureRenderTarget2D* GetLiveCoverageTexture() const { return LiveCoverageTexture; }

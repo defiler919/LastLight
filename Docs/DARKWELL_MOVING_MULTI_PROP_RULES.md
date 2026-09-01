@@ -510,3 +510,179 @@ coplanar flashing, duplicate cabinet, or path chain after reacquisition.
 This checkpoint is ready for the user's Scenario 2 rotation contribution
 exclusion retest. It does not claim that the user has accepted the correction,
 and it does not revise the frozen Mode 2 baseline or production defaults.
+
+## 2026-09-01 Scenario 2 observation-validity and cap-ownership closure
+
+The user then reproduced a stricter failure on runtime checkpoint `5463ef6`:
+Scenario 2 could leave approximately 0, 67, and 125 degree gray poses beside
+the final 180 degree live cabinet. A dark-gray vertical cap could remain even
+when the visible stale surface appeared suppressed, and some samples had two
+render contributors. This real Standalone result supersedes the earlier visual
+claim above. **VISIBLE TRANSLATE** remains user-passed; Scenario 2 and the five
+remaining controls still require the user's new manual pass.
+
+### Confirmed root cause
+
+The repeated zeroes on the user's route were genuine legal-observation losses
+(`OUTSIDE_LEGAL_SOURCE`, and in bounded cases occlusion), rather than rotation
+grid allocation failures. The defect was that the shared moving-prop tracker
+had no explicit armed/sealed observation lifecycle and did not carry coverage
+validity plus authority/transform/grid revisions through the decision. Every
+valid zero combined with another transform change could therefore seal another
+intermediate pose. An invalid or not-ready sample was also indistinguishable
+from a valid zero at the caller.
+
+The second defect was independent. Historical presentation used current-evidence
+suppression as part of its cut classification, so suppression could feed the cap
+builder even though it was occupied evidence rather than an empty-space
+verification. The old diagnostic counted surface projection contributors but
+did not cover every cap primitive and could also conflate separate 3D samples
+that happened to share XY. A resolved record could retain its proxy, cap,
+texture, and MIDs, leaving resources capable of rendering again.
+
+### Observation lifecycle and publication revisions
+
+The project-side coverage query now returns the numeric coverage, validity,
+authority revision, coverage revision, and an explicit zero reason. Moving Lab
+snapshots additionally carry the transform and grid revisions used by that
+coverage. The shared tracker uses `NeverObserved`, `ObservedArmed`, and
+`UnobservedSealed` states:
+
+- valid legal observation arms one current observation episode;
+- a real, valid loss while the physical transform changes seals the last valid
+  pose once and enters `UnobservedSealed`;
+- repeated valid zeroes and later hidden transforms cannot create a pose chain;
+- valid legal reacquisition starts the next episode and re-arms one future seal;
+- invalid/not-ready coverage never seals, re-arms, advances the last valid pose,
+  verifies empty space, or changes a historical record.
+
+The one-frame invalid-coverage injection is test-only and exercises this shared
+path; Scenario 2 contains no validity bypass, fixed-coverage override, delay,
+or N-frame debounce.
+
+### Spatial ownership and cap semantics
+
+Historical presentation cells now distinguish unresolved memory, true
+`VerifiedEmpty` evidence, and monotonic current-evidence supersession. A newer
+legal current observation owns overlapping world samples, so older surfaces at
+those samples contribute zero. This is presentation ownership only: it does not
+clear a StableID, rewrite the historical transform, or claim that the player
+observed empty space. Unresolved, non-overlapping history remains available
+under `SpatialEvidenceOnly`.
+
+The cap builder now accepts only a real `VerifiedEmpty` boundary. Current
+evidence supersession is explicitly excluded and current-owned centers are
+skipped. Therefore current suppression cannot manufacture a cap, while the
+existing positive control still creates the accepted `#343A40` cap at a real
+partial empty verification boundary. The 4x4 conservative presentation sample,
+bilinear filtering, `.20/.18` timing, deep-gray material, Mode 0/1 behavior,
+and D/V/R authority are unchanged.
+
+Contributor diagnostics now report live/stale epochs, visible surface proxies,
+visible cap primitives, surface/cap/total contributors across every epoch,
+coverage validity and reason, all relevant revisions, observation episode/state,
+seal count, and texture dimensions/generation. Separate 3D surface and vertical
+cap loci are no longer added merely because their XY projections coincide. The
+enforced bound is:
+
+```text
+CurrentSurface + all StaleSurfaces + all StaleCaps <= 1
+```
+
+When every renderable sample of an old epoch is either truly empty or
+superseded, its proxy, cap, presentation texture, and material instances are
+permanently retired. Later view loss cannot recreate them. Authority metadata
+may remain under the existing history policy; retirement is not represented as
+player empty-space knowledge.
+
+### Checkpoints, build, and automation
+
+The reliable runtime checkpoint is
+`1e3fd7753e4a98df1a67e89cb73f66249aebc3ce` (`fix: gate rotated stale ownership
+on valid observation`). It was pushed to
+`origin/codex/darkwell-prop-memory-gameplay-lab`. It combines the bounded
+diagnostic, observation-lifecycle, ownership/cap, resource-retirement, tests,
+and evidence-driver changes; no intentionally failing intermediate commit was
+published. The documentation closure is a separate subsequent checkpoint.
+
+All UBT, dotnet, Editor, and automation processes ran serially. The final
+`./Scripts/BuildEditor.ps1 -Configuration Development -EngineRoot 'D:\\UE_5.8'`
+completed `DarkwellEditor Win64 Development` successfully (`5/5` actions after
+the final source correction). Preserved compiler warnings are the installed
+MSVC 14.51 toolchain being newer than UE's preferred 14.50 family and existing
+UE deprecation warnings.
+
+Final automation evidence is retained under ignored `Saved/AutomationReports`:
+
+- `RotationCheckpointBC_20260901_180422`: 5/5 Success (2 clean, 3 with
+  warnings, 0 failed/not-run), 92.6143 seconds. It covers invalid coverage,
+  no-console continuous motion, true-loss last-seen pose, ten-second stale
+  stability, and fully visible rotation exclusion.
+- `RotationRelease_20260901_180746`: 1/1 clean Success, 31.9057 seconds. It
+  logs proxy/cap/texture retirement and proves no later reappearance.
+- `PropLabFinal_20260901_180933`: 31/31 Success (22 clean, 9 with warnings,
+  0 failed/not-run), 172.7431 seconds.
+- `FogVisualFinal_20260901_181255`: 8/8 clean Success, 0.1427 seconds.
+- `M6P1Final_20260901_181324`: 4/4 Success (3 clean, 1 with warnings,
+  0 failed/not-run), 0.1184 seconds.
+
+The warning-class results retain engine startup/HTTP noise; none is a failed
+Darkwell assertion. Severe scans found zero project `Assertion failed`, `Fatal
+error`, `Unhandled Exception`, `Automation Test Failed`, GPU crash, or D3D12RHI
+error. Earlier diagnostic failures remain preserved at
+`RotationDiagA_20260901_174447`, `RotationLifecycle_20260901_175459`,
+`RotationOwnership_20260901_175834`, and
+`RotationOwnership2_20260901_180022`. They exposed respectively the original
+duplicate contributors, over-eager static turn-away sealing, incomplete
+ownership sampling, and the old XY-only contributor false positive; they are
+not cited as passing evidence.
+
+### D3D12/SM6 inspection
+
+A real Windows Standalone run used the in-world prompt and an actual **F** press
+to start **VISIBLE ROTATE**; no console command or direct Scenario function was
+used. The requested window was 1600x900 (Windows capture 1602x932 including
+frame). Its HUD showed `Scenario 2`, valid 100% coverage, `LIVE 1`, `STALE 0`,
+`PROXIES 0`, `CAPS 0`, `SURFACE 1`, `CAP 0`, `TOTAL 1`, and `SEALS 0` at start
+and completion. A further fixed ten-second observation showed no old pose,
+vertical cap, double cabinet, or whole-object flash. This is functional manual
+evidence, not user acceptance.
+
+The repeatable D3D12/SM6 Editor PIE evidence used normal TSR and 100% Screen
+Percentage at the actual `1526x549` backbuffer. It produced 420 telemetry rows
+and 413 screenshots under
+`Saved/PropGameplayLab/MovingMulti/InWorldPIE_20260901_183517`. The visible
+rotation set has 22 rendered samples, 13 distinct sampled yaws, zero stale
+epoch/cap/seal, and maximum total contributor 1; native automation supplies the
+80-plus intermediate-angle state coverage. The deliberate loss/reacquisition
+set has 152 samples, one seal, at most one stale epoch, and maximum total
+contributor 1. The fixed post-reacquisition strip has 101 adjacent samples over
+ten seconds and total contributor exactly 1 throughout.
+
+The agent opened at original resolution the visible-rotation, loss/reacquisition,
+and ten-frame fixed contact sheets plus adjacent full-size frames around the
+seal and reacquisition. The current cabinet and historical presentation never
+write the same sampled location. A cap resource can remain while genuinely
+unverified old space remains, but current-evidence suppression contributes no
+cap; the real-empty positive cap is independently retained by the 31/31 PropLab
+regression. No Saved image, report, log, video, Binary, or Intermediate output
+is tracked by Git.
+
+### Required user retest
+
+Final state is **PARTIAL — READY_FOR_USER_SCENARIO2_AND_REMAINING_IN_WORLD_CONTROLS_RETEST**.
+On the home checkout, open `/Game/Maps/L_ProjectFogPropGameplayLab` with normal
+D3D12/SM6, project TSR, and 100% Screen Percentage. Click Play and use only the
+world controls and **F**:
+
+1. run **VISIBLE TRANSLATE**, then **VISIBLE ROTATE**;
+2. watch the full four-second 0-to-180 rotation and the completed pose for at
+   least ten seconds, then move and turn slowly;
+3. reject the build if any old gray angle, dark-gray vertical cap, duplicate
+   cabinet, or Z-fighting returns during the continuously visible rotation;
+4. continue **OFFSCREEN A TO B**, **COVERAGE EDGE**, **A TO B TO C**,
+   **MULTI PROP**, and **RESET CURRENT EXPERIMENT**.
+
+The user has not yet accepted Scenario 2 or the remaining controls. Nothing in
+this correction changes the frozen Mode 2 tag, production maps, production
+defaults, or the public SightWeave/StableID contracts.

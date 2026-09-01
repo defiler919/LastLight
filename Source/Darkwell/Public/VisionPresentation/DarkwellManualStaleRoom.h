@@ -44,6 +44,8 @@ public:
  UFUNCTION(BlueprintPure, Category="Lab") TArray<int32> GetSpatialKnowledgeBits() const;
  const FDarkwellSpatialPropMemory& GetSpatialStateForTesting() const { return SpatialMemory; }
  UFUNCTION(BlueprintPure, Category="Lab") int32 GetStaleCapTriangleCount() const { return StaleCapTriangleCount; }
+ UFUNCTION(BlueprintPure, Category="Lab") FIntPoint GetSpatialPresentationSize() const { return SpatialPresentationSize; }
+ const UTexture2D* GetSpatialPresentationTextureForTesting() const { return SpatialTexture; }
  const UDynamicMeshComponent* GetStaleCapComponentForTesting() const { return StaleCap; }
  /** Called before a newly rebuilt existing proxy can enter the scene. */
  void BindSpatialProxy(AActor* Proxy);
@@ -74,6 +76,7 @@ private:
  TWeakObjectPtr<ADarkwellPropLabFurniture> SpatialSource;
  TWeakObjectPtr<AActor> SpatialProxy;
  UPROPERTY(Transient) TObjectPtr<UTexture2D> SpatialTexture;
+ FIntPoint SpatialPresentationSize=FIntPoint::ZeroValue;
  UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> SpatialProxyMaterials;
  UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> LegacyProxyMaterials;
  UPROPERTY(VisibleAnywhere) TObjectPtr<UDynamicMeshComponent> StaleCap;

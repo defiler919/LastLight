@@ -135,4 +135,42 @@ bool FDarkwellSpatialGenerationTest::RunTest(const FString&)
  }
  return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellSpatialPresentationAATest,"Darkwell.PropLab.SpatialMemory.ConservativePresentationAA",Darkwell::SpatialMemoryTests::Flags)
+bool FDarkwellSpatialPresentationAATest::RunTest(const FString&)
+{
+ FDarkwellSpatialPropMemory S;
+ S.Initialize(TEXT("Lab.ManualStale.Cabinet"),FBox2D(FVector2D(0,0),FVector2D(20,10)),10);
+ S.BeginPresent(); TArray<float> Coverage{1,0};
+ for(int32 I=0;I<15;++I) S.Advance(1.f/60,Coverage);
+ const auto AuthorityBefore=S.GetCells(); TArray<FLinearColor> Pixels;
+ TestEqual(TEXT("Four display samples per unchanged authority cell"),S.BuildConservativePresentation(4,Pixels),FIntPoint(8,4));
+ TestEqual(TEXT("Dense presentation pixel count"),Pixels.Num(),32);
+ for(int32 Y=0;Y<4;++Y)
+ {
+  TestEqual(TEXT("Known region keeps a fully opaque interior"),Pixels[Y*8+0].R,1.f);
+  TestTrue(TEXT("Spatial edge ramps inward before authority boundary"),Pixels[Y*8+2].R>0 && Pixels[Y*8+2].R<1);
+  TestEqual(TEXT("Visible-side guard sample is zero at the boundary"),Pixels[Y*8+3].R,0.f);
+  for(int32 X=4;X<8;++X) TestEqual(TEXT("Unknown region receives no bilinear seed"),Pixels[Y*8+X].R,0.f);
+ }
+ for(int32 I=0;I<AuthorityBefore.Num();++I)
+ {
+  const auto& A=AuthorityBefore[I]; const auto& B=S.GetCells()[I];
+  TestTrue(TEXT("AA generation cannot mutate D/V/R, legal coverage or temporal blends"),
+   A.CurrentLegalCoverage==B.CurrentLegalCoverage && A.DiscoveredPresent==B.DiscoveredPresent && A.VerifiedEmpty==B.VerifiedEmpty
+   && A.InitialRemembered==B.InitialRemembered && A.RemainingStale==B.RemainingStale && A.AppearanceBlend==B.AppearanceBlend
+   && A.LiveBlend==B.LiveBlend && A.StaleOpacity==B.StaleOpacity && A.ExitAge==B.ExitAge && A.EmptyDwell==B.EmptyDwell);
+ }
+ Coverage={1,1}; for(int32 I=0;I<15;++I) S.Advance(1.f/60,Coverage);
+ S.BeginAbsent(); Coverage={1,0}; for(int32 I=0;I<30;++I) S.Advance(1.f/60,Coverage);
+ S.BuildConservativePresentation(4,Pixels);
+ for(int32 Y=0;Y<4;++Y)
+ {
+  for(int32 X=0;X<4;++X) TestEqual(TEXT("Verified empty side stays exactly empty"),Pixels[Y*8+X].B,0.f);
+  TestEqual(TEXT("Retained stale boundary has a zero guard"),Pixels[Y*8+4].B,0.f);
+  TestTrue(TEXT("Retained stale edge ramps only inside unresolved memory"),Pixels[Y*8+5].B>0 && Pixels[Y*8+5].B<1);
+  TestEqual(TEXT("Unresolved stale interior stays opaque"),Pixels[Y*8+7].B,1.f);
+ }
+ return true;
+}
 #endif

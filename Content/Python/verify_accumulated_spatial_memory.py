@@ -147,13 +147,15 @@ def calibrate(spec):
         angles.append(angle)
     calibration[name]=angles
 
-def sweep_to(x,y,begin,end,duration=1.2,entry_label=None):
+def sweep_to(x,y,begin,end,duration=1.2,entry_label=None,adjacent_label=None):
     first=last=unreal.GameplayStatics.get_time_seconds(world())
-    entry_frames=0
+    entry_frames=adjacent_frames=0
     while last-first<duration:
         t=min(1,(last-first)/duration);pose(x,y,begin+(end-begin)*t)
         if entry_label and entry_frames<5 and json.loads(room.get_spatial_telemetry())['discovered']>0:
             sample(entry_label+f'_entry_adjacent_{entry_frames}',True);entry_frames+=1
+        if adjacent_label and .3<=t<=.8 and adjacent_frames<6:
+            sample(adjacent_label+f'_motion_adjacent_{adjacent_frames}',True);adjacent_frames+=1
         yield 0;last=unreal.GameplayStatics.get_time_seconds(world())
     pose(x,y,end);yield .35
 
@@ -163,10 +165,13 @@ def checkpoints(spec,absent=False):
     for index,(target,angle) in enumerate(zip((.10,.25,.50,.75),calibration[name])):
         if absent and index==0:continue
         pose(x,y,last_angle);yield .12
-        yield from sweep_to(x,y,last_angle,angle,entry_label=prefix if index==0 and not absent else None)
+        yield from sweep_to(x,y,last_angle,angle,entry_label=prefix if index==0 and not absent else None,
+                            adjacent_label=prefix if absent and index==2 else None)
         s=sample(prefix+f'_{int(target*100)}_held',True);yield .08
         assert abs(s['current']-target)<.012
-        if absent:assert abs(s['verified']-target)<.015 and abs(s['remaining']-(1-target))<.015
+        if absent:
+            assert abs(s['verified']-target)<.015 and abs(s['remaining']-(1-target))<.015
+            assert s['capVisible'] and s['capTriangles']>0
         else:assert abs(s['discovered']-target)<.015 and abs(s['sourceOpacity']-s['discovered'])<1e-6
         pose(x,y,away)
         if not absent and index==1:
@@ -181,7 +186,7 @@ def checkpoints(spec,absent=False):
     pose(x,y,last_angle);yield .12
     yield from sweep_to(x,y,last_angle,full)
     s=sample(prefix+'_full',True);yield .08
-    if absent:assert s['verified']==1 and s['remaining']==0 and s['proxyOpacity']==0
+    if absent:assert s['verified']==1 and s['remaining']==0 and s['proxyOpacity']==0 and not s['capVisible'] and s['capTriangles']==0
     else:assert s['discovered']==1 and s['sourceOpacity']==1
     pose(x,y,away);yield .4
     s=sample(prefix+'_full_away',True);yield .08

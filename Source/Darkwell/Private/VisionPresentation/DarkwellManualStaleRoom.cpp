@@ -148,6 +148,7 @@ bool ADarkwellManualStaleRoom::ResetRoom(ADarkwellCharacter* Player)
  Memory->ReleaseLabVerificationSubject(); Memory->SetLabVerificationSubject(CabinetId(),true);
  Evidence=FDarkwellEmptyVerification(); DisplayedOpacity.Reset(); ObservedProxy.Reset(); OpacityTexture=nullptr;
  SpatialMemory=FDarkwellSpatialPropMemory(); SpatialSource.Reset(); SpatialProxy.Reset(); SpatialTexture=nullptr;
+ SpatialPresentationSize=FIntPoint::ZeroValue;
  SpatialProxyMaterials.Reset(); LegacyProxyMaterials.Reset();
  OriginalPartBounds.Reset(); ClearStaleCap();
  PressureState=Darkwell::ManualStale::Armed; ToggleCount=0; Seconds=0; bStarted=true;
@@ -297,8 +298,12 @@ void ADarkwellManualStaleRoom::UpdateSpatialMemory(float DeltaSeconds)
   { const FBox PartBox=Part->Bounds.GetBox(); Box+=PartBox; OriginalPartBounds.Add(PartBox); }
   SpatialMemory.Initialize(CabinetId(),FBox2D(FVector2D(Box.Min),FVector2D(Box.Max)));
   const FIntPoint Size=SpatialMemory.GetSize();
-  SpatialTexture=UTexture2D::CreateTransient(Size.X,Size.Y,PF_FloatRGBA);
-  SpatialTexture->SRGB=false; SpatialTexture->Filter=TF_Nearest;
+  // Authority remains one immutable 2.5 cm cell. Four presentation samples per
+  // cell provide a conservative inward ramp; the visible side ends in a zero
+  // guard sample so bilinear filtering cannot discover or erase early.
+  SpatialPresentationSize=Size*4;
+  SpatialTexture=UTexture2D::CreateTransient(SpatialPresentationSize.X,SpatialPresentationSize.Y,PF_FloatRGBA);
+  SpatialTexture->SRGB=false; SpatialTexture->Filter=TF_Bilinear;
   SpatialTexture->AddressX=TA_Clamp; SpatialTexture->AddressY=TA_Clamp; SpatialTexture->NeverStream=true;
   auto& Bulk=SpatialTexture->GetPlatformData()->Mips[0].BulkData;
   FMemory::Memzero(Bulk.Lock(LOCK_READ_WRITE),Bulk.GetBulkDataSize()); Bulk.Unlock();
@@ -322,10 +327,13 @@ void ADarkwellManualStaleRoom::UpdateSpatialMemory(float DeltaSeconds)
   Coverage[Y*Size.X+X]=FMath::Min(Coverage[Y*Size.X+X],Fog->EvaluateLiveCoverageAtWorldPoint(Box.Min+Step*FVector2D(X+.5,Y+.5)));
  }
  SpatialMemory.Advance(DeltaSeconds,Coverage);
- auto* Pixels=new FFloat16Color[Coverage.Num()];
- for(int32 I=0;I<Coverage.Num();++I) Pixels[I]=FFloat16Color(SpatialMemory.Presentation(I));
- auto* Region=new FUpdateTextureRegion2D(0,0,0,0,Size.X,Size.Y);
- SpatialTexture->UpdateTextureRegions(0,1,Region,Size.X*sizeof(FFloat16Color),sizeof(FFloat16Color),reinterpret_cast<uint8*>(Pixels),
+ constexpr int32 Samples=4;
+ TArray<FLinearColor> PresentationPixels;
+ check(SpatialMemory.BuildConservativePresentation(Samples,PresentationPixels)==SpatialPresentationSize);
+ auto* Pixels=new FFloat16Color[SpatialPresentationSize.X*SpatialPresentationSize.Y];
+ for(int32 I=0;I<PresentationPixels.Num();++I) Pixels[I]=FFloat16Color(PresentationPixels[I]);
+ auto* Region=new FUpdateTextureRegion2D(0,0,0,0,SpatialPresentationSize.X,SpatialPresentationSize.Y);
+ SpatialTexture->UpdateTextureRegions(0,1,Region,SpatialPresentationSize.X*sizeof(FFloat16Color),sizeof(FFloat16Color),reinterpret_cast<uint8*>(Pixels),
   [](uint8* Data,const FUpdateTextureRegion2D* R){delete[] reinterpret_cast<FFloat16Color*>(Data);delete R;});
  if(HasActualCabinet()) for(UMaterialInstanceDynamic* Mat:Cabinet->Materials) BindSpatialParameters(Mat);
 }
@@ -435,8 +443,8 @@ FString ADarkwellManualStaleRoom::GetSpatialTelemetry() const
  const float N=FMath::Max(1,Cells.Num());
  bool WasLive=false,Valid=false; FVector At; AActor* Proxy=nullptr;
  GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>()->TryGetRecordForTesting(CabinetId(),WasLive,Valid,At,Proxy);
- return FString::Printf(TEXT("{\"actual\":\"%s\",\"current\":%.8f,\"discovered\":%.8f,\"verified\":%.8f,\"remaining\":%.8f,\"live\":%.8f,\"sourceOpacity\":%.8f,\"proxyOpacity\":%.8f,\"snapshot\":%s,\"generation\":%u,\"toggles\":%d,\"cells\":%d,\"capTriangles\":%d,\"capVisible\":%s}"),
-  HasActualCabinet()?TEXT("PRESENT"):TEXT("ABSENT"),Current/N,Discovered/N,Verified/N,Remaining/N,Live/N,Source/N,ProxyOpacity/N,Valid?TEXT("true"):TEXT("false"),SpatialMemory.GetGeneration(),ToggleCount,Cells.Num(),StaleCapTriangleCount,StaleCap->IsVisible()?TEXT("true"):TEXT("false"));
+ return FString::Printf(TEXT("{\"actual\":\"%s\",\"current\":%.8f,\"discovered\":%.8f,\"verified\":%.8f,\"remaining\":%.8f,\"live\":%.8f,\"sourceOpacity\":%.8f,\"proxyOpacity\":%.8f,\"snapshot\":%s,\"generation\":%u,\"toggles\":%d,\"cells\":%d,\"capTriangles\":%d,\"capVisible\":%s,\"presentationWidth\":%d,\"presentationHeight\":%d}"),
+  HasActualCabinet()?TEXT("PRESENT"):TEXT("ABSENT"),Current/N,Discovered/N,Verified/N,Remaining/N,Live/N,Source/N,ProxyOpacity/N,Valid?TEXT("true"):TEXT("false"),SpatialMemory.GetGeneration(),ToggleCount,Cells.Num(),StaleCapTriangleCount,StaleCap->IsVisible()?TEXT("true"):TEXT("false"),SpatialPresentationSize.X,SpatialPresentationSize.Y);
 }
 void ADarkwellManualStaleRoom::Report()
 {

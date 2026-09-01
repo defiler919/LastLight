@@ -8,6 +8,7 @@
 #include "DynamicMesh/DynamicMesh3.h"
 #include "Engine/Engine.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Gameplay/DarkwellGameplayTags.h"
@@ -1249,6 +1250,10 @@ bool FDarkwellManualFixedRevealGeometryTest::RunTest(const FString&)
  for(bool B:Bins) TestTrue(TEXT("Fixed corners/vertices checked at narrow, 25%, 50%, 75% legal surface coverage (sampling +/-2%)"),B);
  TestTrue(TEXT("First partial discovery does not mark the entire cabinet known"),bSawPartialKnowledge);
  TestTrue(TEXT("Exit ends on persistent gray original geometry, not an empty floor"),bSawRetainedGray);
+ const FIntPoint AuthoritySize=Room->GetSpatialStateForTesting().GetSize();
+ TestEqual(TEXT("AA uses four display samples per unchanged authority cell"),Room->GetSpatialPresentationSize(),AuthoritySize*4);
+ TestTrue(TEXT("Dense conservative presentation field uses bilinear sampling"),Room->GetSpatialPresentationTextureForTesting()
+  && Room->GetSpatialPresentationTextureForTesting()->Filter==TF_Bilinear);
  Fixture->Destroy(); return true;
 }
 

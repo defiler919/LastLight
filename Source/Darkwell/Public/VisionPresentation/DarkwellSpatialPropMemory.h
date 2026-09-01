@@ -39,6 +39,8 @@ struct DARKWELL_API FDarkwellSpatialPropMemory
  TConstArrayView<FCell> GetCells() const { return Cells; }
  /** R: current source opacity; G: live/gray blend; B: existing proxy opacity. */
  FLinearColor Presentation(int32 Index) const;
+ /** Builds a denser, inward-feathered display field without mutating D/V/R authority. */
+ FIntPoint BuildConservativePresentation(int32 SamplesPerCell,TArray<FLinearColor>& OutPixels) const;
 private:
  FName StableId;
  FGameplayTag ActualState;

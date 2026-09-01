@@ -337,7 +337,7 @@ void ADarkwellHUD::DrawHUD()
 	if (Font && MissionGameState)
 	{
 		const FString Objective = Darkwell::PropLab::IsLabWorld(GetWorld())
-			? TEXT("PROP GAMEPLAY LAB  |  Darkwell.PropLab help  |  NO FINAL POLICY SELECTED") : FString::Printf(
+			? TEXT("PROP GAMEPLAY LAB  |  Darkwell.PropLab help  |  MOVING MEMORY: SpatialEvidenceOnly") : FString::Printf(
 			TEXT("OBJECTIVE  %s"),
 			*MissionGameState->GetObjectiveText().ToString());
 		float Width = 0.0f;

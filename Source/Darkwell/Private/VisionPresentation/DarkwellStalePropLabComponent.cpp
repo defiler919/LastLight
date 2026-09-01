@@ -58,7 +58,6 @@ bool UDarkwellStalePropLabComponent::Start(int32 InMode,int32 InCase)
  GhostMaterials.Reset(); OpacityTexture=nullptr; Evidence=FDarkwellEmptyVerification();
  Phase=Darkwell::StaleLab::Observing; ClearReason=TEXT("NoEmptyEvidence");
  Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"),Mode);
- Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.PropRelocationPolicy"),0);
  // The existing Lab route guard in PlayerController owns cursor suppression.
  // Reserve 14 for this component; do not change command World resolution or input rules.
  Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"),14);
@@ -78,7 +77,7 @@ bool UDarkwellStalePropLabComponent::Start(int32 InMode,int32 InCase)
   Player->GetLoadoutComponent()->RestorePersistentState(2,100,0,100,DarkwellGameplayTags::Equipment_Left_Shotgun.GetTag(),DarkwellGameplayTags::Equipment_Right_Torch.GetTag());
  }
  SetView(90,true);
- UE_LOG(LogDarkwellStaleLab,Display,TEXT("STALE_START mode=%d policy=0 case=%c duration=36 id=%s enemy=0 grid=10cm legal=.99 all5 dwell=.10 whole=100percent fade=.20"),Mode,TCHAR('A'+Scenario),*StableId.ToString());
+ UE_LOG(LogDarkwellStaleLab,Display,TEXT("STALE_START mode=%d rule=SpatialEvidenceOnly case=%c duration=36 id=%s enemy=0 grid=10cm legal=.99 all5 dwell=.10 whole=100percent fade=.20"),Mode,TCHAR('A'+Scenario),*StableId.ToString());
  return true;
 }
 
@@ -129,7 +128,6 @@ void UDarkwellStalePropLabComponent::BeforeActors(float DeltaSeconds)
  if(!bRunning) return;
  if(!GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->IsActive()) return;
  Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"),Mode);
- Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.PropRelocationPolicy"),0);
  Darkwell::StaleLab::CVar(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"),14);
  for(TActorIterator<ADarkwellStalkerCharacter> It(GetWorld());It;++It) It->Destroy();
  Seconds+=DeltaSeconds;
@@ -215,7 +213,7 @@ void UDarkwellStalePropLabComponent::AfterActors(float DeltaSeconds)
   UE_LOG(LogDarkwellStaleLab,Display,TEXT("STALE_COMPLETE mode=%d case=%c verified=%.6f whole=%d ghost=%d frames=%d reason=%s"),Mode,TCHAR('A'+Scenario),Evidence.VerifiedFraction(),Evidence.IsObjectEmpty(),Ghost.IsValid(),Frame,*ClearReason);
   if((Scenario!=5 && !Evidence.IsObjectEmpty()) || (Scenario==5 && (Evidence.IsObjectEmpty() || Evidence.VerifiedFraction()<=0)))
    UE_LOG(LogDarkwellStaleLab,Error,TEXT("STALE_FAIL unexpected terminal evidence"));
-  Status=FString::Printf(TEXT("STALE ROUND FINISHED | MODE %d POLICY 0 CASE %c | %.1f%% empty=%d ghost=%d | %s | Reset to stable Lab; ENEMY 0"),Mode,TCHAR('A'+Scenario),100*Evidence.VerifiedFraction(),Evidence.IsObjectEmpty(),Ghost.IsValid(),*ClearReason);
+  Status=FString::Printf(TEXT("STALE ROUND FINISHED | MODE %d RULE SpatialEvidenceOnly CASE %c | %.1f%% empty=%d ghost=%d | %s | Reset to stable Lab; ENEMY 0"),Mode,TCHAR('A'+Scenario),100*Evidence.VerifiedFraction(),Evidence.IsObjectEmpty(),Ghost.IsValid(),*ClearReason);
   Stop(); bCaptureComplete=true;
  }
 }
@@ -226,7 +224,7 @@ void UDarkwellStalePropLabComponent::Report(bool bCapture)
  GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>()->TryGetRecordForTesting(StableId,Live,Valid,At,Proxy);
  const bool bGhostPresent=Proxy && !Proxy->IsHidden();
  const FString PhaseName=Phase.ToString().Replace(TEXT("Lab.StaleProp.Phase."),TEXT(""));
- Status=FString::Printf(TEXT("STALE LAB | MODE %d POLICY 0 | CASE %c t=%.2f | %s | ENEMY 0\n%s | verified %.1f%% | object empty %d | ghost %d | %s"),Mode,TCHAR('A'+Scenario),Seconds,*PhaseName,*StableId.ToString(),Evidence.VerifiedFraction()*100,Evidence.IsObjectEmpty(),bGhostPresent,*ClearReason);
+ Status=FString::Printf(TEXT("STALE LAB | MODE %d RULE SpatialEvidenceOnly | CASE %c t=%.2f | %s | ENEMY 0\n%s | verified %.1f%% | object empty %d | ghost %d | %s"),Mode,TCHAR('A'+Scenario),Seconds,*PhaseName,*StableId.ToString(),Evidence.VerifiedFraction()*100,Evidence.IsObjectEmpty(),bGhostPresent,*ClearReason);
  if(GEngine) GEngine->AddOnScreenDebugMessage(0xDA472,0,FColor::Cyan,Status);
  auto* Player=Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)); if(!Player) return;
  const FVector P=Player->GetActorLocation(), Camera=Player->GetTopDownCamera()->GetComponentLocation();

@@ -28,31 +28,31 @@ bool FDarkwellPropComparisonRouteTest::RunTest(const FString& Parameters)
  return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPropLabPoliciesTest,
- "Darkwell.PropLab.Policies.OrderAndIdentity", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-bool FDarkwellPropLabPoliciesTest::RunTest(const FString& Parameters)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPropLabSpatialEvidenceRuleTest,
+ "Darkwell.PropLab.MovingRules.SpatialEvidenceOnlyState", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDarkwellPropLabSpatialEvidenceRuleTest::RunTest(const FString& Parameters)
 {
  const FTransform A(FVector(0,0,0)), B(FVector(500,0,0));
- for(int32 Mode=0;Mode<3;++Mode) for(int32 Policy=0;Policy<2;++Policy)
+ for(int32 Mode=0;Mode<3;++Mode)
  {
   IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"))->Set(Mode,ECVF_SetByConsole);
   FDarkwellRememberedPropState First; First.Initialize(A,1);
-  auto D=First.Observe(true,B,0,0,1,Policy==0);
+  auto D=First.Observe(true,B,0,0,1,true);
   TestTrue(TEXT("Unseen relocation preserves A and hides B"),D.bShowProxy && !D.bShowCurrent && First.SnapshotTransform.Equals(A));
-  D=First.Observe(true,B,0,1,1,Policy==0);
+  D=First.Observe(true,B,0,1,1,true);
   TestFalse(TEXT("Checking empty A invalidates its memory"),D.bSnapshotValid);
-  D=First.Observe(true,B,1,0,1,Policy==0);
+  D=First.Observe(true,B,1,0,1,true);
   TestTrue(TEXT("Then seeing B creates current snapshot only"),D.bShowCurrent && !D.bRetainPreviousSnapshot && First.SnapshotTransform.Equals(B));
   FDarkwellRememberedPropState Second; Second.Initialize(A,1);
-  D=Second.Observe(true,B,1,0,1,Policy==0);
-  TestEqual(TEXT("Seeing B first retires A only for VerifyOldLocation"),D.bRetainPreviousSnapshot,Policy==0);
-  TestTrue(TEXT("B always updates latest stable identity"),Second.SnapshotTransform.Equals(B));
+  D=Second.Observe(true,B,1,0,1,true);
+  TestTrue(TEXT("Seeing B first always retains A as separate spatial knowledge"),D.bRetainPreviousSnapshot);
+  TestTrue(TEXT("B updates current observation without invalidating A"),Second.SnapshotTransform.Equals(B));
   FDarkwellRememberedPropState Twin; Twin.Initialize(A,1);
-  Twin.Observe(true,B,0,0,1,Policy==0);
+  Twin.Observe(true,B,0,0,1,true);
   TestTrue(TEXT("Recognizing another identical-looking ID does not change twin memory"),Twin.SnapshotTransform.Equals(A));
-  D=Twin.Observe(false,FTransform::Identity,0,0,1,Policy==0);
+  D=Twin.Observe(false,FTransform::Identity,0,0,1,true);
   TestTrue(TEXT("Unseen destruction retains memory"),D.bShowProxy);
-  D=Twin.Observe(false,FTransform::Identity,0,1,1,Policy==0);
+  D=Twin.Observe(false,FTransform::Identity,0,1,1,true);
   TestFalse(TEXT("Observed empty destroyed location removes memory"),D.bSnapshotValid);
  }
  IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"))->Set(0,ECVF_SetByConsole);

@@ -16,9 +16,8 @@ handle = None
 def command(world, text):
     unreal.SystemLibrary.execute_console_command(world, text)
 
-def assert_modes(mode, policy):
+def assert_mode(mode):
     assert unreal.SystemLibrary.get_console_variable_int_value('r.Darkwell.ProjectFogVisual.PropPresentationMode') == mode
-    assert unreal.SystemLibrary.get_console_variable_int_value('r.Darkwell.ProjectFogVisual.PropRelocationPolicy') == policy
 
 def tick(delta):
     global stage
@@ -31,8 +30,7 @@ def tick(delta):
         world = editor.get_game_world()
         assert world
         command(world, 'Darkwell.PropLab mode 1')
-        command(world, 'Darkwell.PropLab policy 1')
-        assert_modes(1, 1)
+        assert_mode(1)
         command(world, 'Darkwell.PropLab help')
         command(world, 'Darkwell.PropLab cabinet')
         cabinet = next(a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.DarkwellPropLabFurniture)
@@ -41,13 +39,13 @@ def tick(delta):
         assert abs(location.x-720)<.01 and abs(location.y+500)<.01
         unreal.log('LAB_PIE_CABINET_EVENT_PASS: native cabinet command moved A to B')
         command(world, 'Shot filename=D:/UE_projects/LastLight/Saved/PropGameplayLab/PIE_Hard.png')
-        unreal.log('LAB_PIE_ACTIVE_HARD_POLICY1')
+        unreal.log('LAB_PIE_ACTIVE_HARD_SPATIAL_EVIDENCE_ONLY')
         stage = 2
     elif stage == 2 and elapsed > 12:
         world = editor.get_game_world()
         command(world, 'Darkwell.PropLab mode 2')
         command(world, 'Darkwell.PropLab lantern')
-        assert_modes(2, 1)
+        assert_mode(2)
         command(world, 'Shot filename=D:/UE_projects/LastLight/Saved/PropGameplayLab/PIE_SoftLantern.png')
         stage = 3
     elif stage == 3 and elapsed > 15:
@@ -56,26 +54,24 @@ def tick(delta):
         stage = 4
     elif stage == 4 and elapsed > 19:
         assert levels.is_in_play_in_editor()
-        assert_modes(0, 0)
+        assert_mode(0)
         cabinet = next(a for a in unreal.GameplayStatics.get_all_actors_of_class(editor.get_game_world(), unreal.DarkwellPropLabFurniture)
                        if str(a.get_editor_property('stable_id')) == 'Lab.MobileCabinet')
         location = cabinet.get_actor_location()
         assert abs(location.x-850)<.01 and abs(location.y-540)<.01
         unreal.log('LAB_PIE_RESET_PASS: reload returned both controls to zero')
         command(editor.get_game_world(), 'Darkwell.PropLab mode 2')
-        command(editor.get_game_world(), 'Darkwell.PropLab policy 1')
         levels.editor_request_end_play()
         stage = 5
     elif stage == 5 and elapsed > 23:
         assert not levels.is_in_play_in_editor()
-        assert_modes(0, 0)
+        assert_mode(0)
         world = editor.get_editor_world()
         # Console reads and rejected out-of-map commands remain in the log.
         command(world, 'r.Darkwell.ProjectFogVisual.PropPresentationMode')
-        command(world, 'r.Darkwell.ProjectFogVisual.PropRelocationPolicy')
         command(world, 'Darkwell.PropLab mode 2')
-        assert_modes(0, 0)
-        unreal.log('LAB_PIE_LIFECYCLE_PASS: actual PIE controls, reset and EndPlay verified; both CVars=0')
+        assert_mode(0)
+        unreal.log('LAB_PIE_LIFECYCLE_PASS: actual PIE controls, reset and EndPlay verified; mode CVar=0; rule=SpatialEvidenceOnly')
         unreal.unregister_slate_post_tick_callback(handle)
         stage = 6
 

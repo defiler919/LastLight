@@ -12,7 +12,6 @@ namespace Darkwell::PropLab
 {
  DARKWELL_API bool IsLabWorld(const UWorld* World);
  DARKWELL_API int32 PresentationMode(const UWorld* World);
- DARKWELL_API int32 RelocationPolicy(const UWorld* World);
  /** Shared deterministic trajectory, independent of mode/policy. 30 seconds. */
  DARKWELL_API float ComparisonYaw(float Seconds);
  DARKWELL_API FVector ComparisonPlayerPosition();
@@ -80,7 +79,7 @@ private:
  UPROPERTY(Transient) TObjectPtr<UTexture> RawCoverage;
  FVector2D FogMin, FogInv;
  int32 SoftIndex = 0;
- int32 LastMode = -1, LastPolicy = -1, LastRoute = -1;
+ int32 LastMode = -1, LastRoute = -1;
  float Elapsed = 0, RouteTime = 0;
  int32 CaptureIndex = 0;
  TSharedPtr<FDarkwellLabCaptureWriter, ESPMode::ThreadSafe> CaptureWriter;

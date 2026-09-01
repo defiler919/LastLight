@@ -152,7 +152,6 @@ bool ADarkwellManualStaleRoom::ResetRoom(ADarkwellCharacter* Player)
  SpatialProxyMaterials.Reset(); LegacyProxyMaterials.Reset();
  OriginalPartBounds.Reset(); ClearStaleCap();
  PressureState=Darkwell::ManualStale::Armed; ToggleCount=0; Seconds=0; bStarted=true;
- Darkwell::ManualStale::SetCVar(TEXT("r.Darkwell.ProjectFogVisual.PropRelocationPolicy"),0);
  Darkwell::ManualStale::SetCVar(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"),0);
  Player->RestorePersistentState(Player->GetActorTransform(),Player->GetMaxHealth(),DarkwellGameplayTags::State_Player_Alive,FGameplayTag());
  Player->GetLoadoutComponent()->RestorePersistentState(2,100,0,100,DarkwellGameplayTags::Equipment_Left_Shotgun,DarkwellGameplayTags::Equipment_Right_Torch);
@@ -457,7 +456,7 @@ void ADarkwellManualStaleRoom::Report()
 {
  bool Live=false,Valid=false; FVector At; AActor* Proxy=nullptr;
  GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>()->TryGetRecordForTesting(CabinetId(),Live,Valid,At,Proxy);
- Status=FString::Printf(TEXT("MANUAL STALE ROOM | Mode %d | Policy 0 | ENEMY 0\nCabinet Actual: %s | Remembered Snapshot: %s | StableID: %s\nOld Occupancy Verified: %.1f%% | Object Empty Confirmed: %d | Pressure Switch: %s\nLiveCoverage at Cabinet: %.6f | Source Live: %d | Toggles: %d | Dark Gray Cap Tris: %d\nFree movement / mouse aim; right corridor connects rooms. Darkwell.PropLab stalemanual help"),
+ Status=FString::Printf(TEXT("MANUAL STALE ROOM | Mode %d | RULE SpatialEvidenceOnly | ENEMY 0\nCabinet Actual: %s | Remembered Snapshot: %s | StableID: %s\nOld Occupancy Verified: %.1f%% | Object Empty Confirmed: %d | Pressure Switch: %s\nLiveCoverage at Cabinet: %.6f | Source Live: %d | Toggles: %d | Dark Gray Cap Tris: %d\nFree movement / mouse aim; right corridor connects rooms. Darkwell.PropLab stalemanual help"),
   Darkwell::PropLab::PresentationMode(GetWorld()),HasActualCabinet()?TEXT("PRESENT"):TEXT("ABSENT"),Valid?TEXT("VALID"):TEXT("EMPTY"),*CabinetId().ToString(),
   100*Evidence.VerifiedFraction(),Evidence.IsObjectEmpty(),IsSwitchArmed()?TEXT("ARMED"):TEXT("WAITING_FOR_EXIT"),GetCabinetCoverage(),Live,ToggleCount,StaleCapTriangleCount);
  if(GEngine) GEngine->AddOnScreenDebugMessage(0xDA473,0,FColor::Cyan,Status);

@@ -693,7 +693,7 @@ bool FDarkwellProjectFogRememberedPropRuntimeTest::RunTest(const FString& Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPropLabRuntimeMatrixTest,
-	"Darkwell.PropLab.Runtime.SixCombinationsAndNeverRemember",
+	"Darkwell.PropLab.Runtime.ThreeModesSpatialEvidenceAndNeverRemember",
 	Darkwell::SightWeaveAdapterTests::TestFlags)
 bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
 {
@@ -711,12 +711,11 @@ bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
 	auto* Adapter = World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
 	auto* Memory = World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
 	auto* Mode = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"));
-	auto* Policy = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropRelocationPolicy"));
 	TestTrue(TEXT("Exact lab world activates the existing project adapter"),Adapter->RequestSightWeaveAuthority(Fixture));
-	for(int32 M=0;M<3;++M) for(int32 R=0;R<2;++R)
+	for(int32 M=0;M<3;++M)
 	{
-		Mode->Set(M,ECVF_SetByConsole); Policy->Set(R,ECVF_SetByConsole);
-		const FName Id(*FString::Printf(TEXT("Lab.Test.M%d.P%d"),M,R));
+		Mode->Set(M,ECVF_SetByConsole);
+		const FName Id(*FString::Printf(TEXT("Lab.Test.M%d"),M));
 		FTransform A(FVector(-200,350,0));
 		auto* Prop=World->SpawnActorDeferred<ADarkwellPropLabFurniture>(ADarkwellPropLabFurniture::StaticClass(),A);
 		Prop->StableId=Id; Prop->Shape=1; Prop->Dimensions=FVector(82,76,190);
@@ -747,14 +746,14 @@ bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
 		Observe(FVector(650,50,92),90);
 		Memory->TryGetRecordForTesting(Id,Live,Valid,Location,Proxy);
 		TestTrue(TEXT("Identity recognition shows complete source B"),Live && Valid && Location.X==650);
-		TestEqual(TEXT("Only policy 0 retains A on B-first order"),Memory->GetUnverifiedSnapshotCount(Id),R==0 ? 1 : 0);
+		TestEqual(TEXT("B-first observation retains A for spatial verification"),Memory->GetUnverifiedSnapshotCount(Id),1);
 		for(UStaticMeshComponent* Primitive : Prop->Memory->GetMemoryPrimitives())
 		{
 			TestTrue(TEXT("Whole source geometry remains visible in every presentation mode"),Primitive->IsVisible());
 			TestFalse(TEXT("Lab never writes CustomDepth"),Primitive->bRenderCustomDepth);
 		}
 		Observe(FVector(-250,50,92),90);
-		TestEqual(TEXT("Verifying empty A retires its proxy under either policy"),Memory->GetUnverifiedSnapshotCount(Id),0);
+		TestEqual(TEXT("Only legal evidence at A retires its proxy"),Memory->GetUnverifiedSnapshotCount(Id),0);
 		Prop->Destroy();
 		Observe(FVector(650,50,92),90);
 		Memory->TryGetRecordForTesting(Id,Live,Valid,Location,Proxy);
@@ -774,7 +773,7 @@ bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
 		Observe(FVector(0,-650,92),-90);
 	}
 	// Similar appearance must not act as identity recognition across live records.
-	Mode->Set(2,ECVF_SetByConsole); Policy->Set(1,ECVF_SetByConsole);
+	Mode->Set(2,ECVF_SetByConsole);
 	auto MakeTwin=[&](FName Id,FVector Location)
 	{
 		const FTransform Transform(Location);
@@ -796,7 +795,6 @@ bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Similar visible twin cannot clear unseen twin A memory"),!TwinLive && TwinValid && TwinLocation.X==-200);
 	Fixture->Destroy();
 	TestEqual(TEXT("Leaving laboratory restores accepted presentation CVar"),Mode->GetInt(),0);
-	TestEqual(TEXT("Leaving laboratory restores relocation CVar"),Policy->GetInt(),0);
 	return true;
 }
 

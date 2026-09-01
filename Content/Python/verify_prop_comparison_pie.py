@@ -21,14 +21,13 @@ def tick(dt):
         player,tool=state()
         assert player.get_editor_property('health')==100 and tool.get_editor_property('torch_charge')==100
         unreal.log('PROP_RETEST_PIE_DEFAULT_PASS enemy=0 health=100 torch=100')
-        cmd('Darkwell.PropLab mode 1');cmd('Darkwell.PropLab policy 1');cmd('Darkwell.PropLab route 1');cmd('Darkwell.PropLab enemy 1')
+        cmd('Darkwell.PropLab mode 1');cmd('Darkwell.PropLab route 1');cmd('Darkwell.PropLab enemy 1')
         assert len(enemies())==0, 'Route command must reject enemy immediately, before the next tick'
         stage=2
     elif stage==2 and t>13:
         assert len(enemies())==0
-        assert unreal.SystemLibrary.get_console_variable_int_value('r.Darkwell.ProjectFogVisual.PropRelocationPolicy')==1
         cmd('Darkwell.PropLab mode 2');cmd('Darkwell.PropLab route 1')
-        unreal.log('PROP_RETEST_PIE_ROUTE_PASS policy=1 enemy=0 replay=1')
+        unreal.log('PROP_RETEST_PIE_ROUTE_PASS rule=SpatialEvidenceOnly enemy=0 replay=1')
         stage=3
     elif stage==3 and t>17:
         cmd('Darkwell.PropLab route 0');stage=4
@@ -49,9 +48,9 @@ def tick(dt):
         assert len(enemies())==0
         player,tool=state()
         assert player.get_editor_property('health')==100 and tool.get_editor_property('torch_charge')==100
-        for name in ('PropPresentationMode','PropRelocationPolicy','LabRoute'):
+        for name in ('PropPresentationMode','LabRoute'):
             assert unreal.SystemLibrary.get_console_variable_int_value('r.Darkwell.ProjectFogVisual.'+name)==0
-        unreal.log('PROP_RETEST_PIE_RESET_PASS enemy=0 health=100 torch=100 mode=0 policy=0 route=0')
+        unreal.log('PROP_RETEST_PIE_RESET_PASS enemy=0 health=100 torch=100 mode=0 rule=SpatialEvidenceOnly route=0')
         levels.editor_request_end_play();stage=8
     elif stage==8 and t>30:
         assert not levels.is_in_play_in_editor()

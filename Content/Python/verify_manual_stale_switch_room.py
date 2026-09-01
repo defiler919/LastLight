@@ -34,7 +34,7 @@ def sample(label):
     unreal.log('MANUAL_PIE_CHECK '+json.dumps(row))
     assert len(actors(unreal.DarkwellStalkerCharacter))==0
     assert unreal.SystemLibrary.get_console_variable_int_value('r.Darkwell.ProjectFogVisual.LabRoute')==0
-    assert unreal.SystemLibrary.get_console_variable_int_value('r.Darkwell.ProjectFogVisual.PropRelocationPolicy')==0
+    assert 'RULE SpatialEvidenceOnly' in row['status']
     return row
 def shot(name):
     unreal.SystemLibrary.execute_console_command(world(),f'Shot SHOWUI filename="{(root/(name+".png")).as_posix()}"')

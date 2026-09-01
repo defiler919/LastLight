@@ -237,11 +237,11 @@ bool FDarkwellFogGrayUnlitMaterialContractTest::RunTest(const FString& Parameter
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FDarkwellRememberedPropAtoBPolicyTest,
-	"Darkwell.FogVisual.RememberedProp.AtoBPolicy",
+	FDarkwellRememberedPropSpatialEvidenceTest,
+	"Darkwell.FogVisual.RememberedProp.SpatialEvidenceOnly",
 	Darkwell::FogVisualTests::Flags)
 
-bool FDarkwellRememberedPropAtoBPolicyTest::RunTest(const FString& Parameters)
+bool FDarkwellRememberedPropSpatialEvidenceTest::RunTest(const FString& Parameters)
 {
 	const FTransform A(FRotator::ZeroRotator, FVector(100.0f, 200.0f, 50.0f));
 	const FTransform B(FRotator(0.0f, 90.0f, 0.0f), FVector(700.0f, -300.0f, 50.0f));
@@ -257,6 +257,14 @@ bool FDarkwellRememberedPropAtoBPolicyTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("A remains as the last-observed proxy"), Decision.bShowProxy);
 	TestTrue(TEXT("Snapshot identity remains at A"),
 		State.SnapshotTransform.GetLocation().Equals(A.GetLocation()));
+
+	FDarkwellRememberedPropState BFirst;
+	BFirst.Initialize(A, 1);
+	Decision = BFirst.Observe(true, B, 1.0f, 0.0f, 2, true);
+	TestTrue(TEXT("Seeing the same StableID at B retains A for independent spatial verification"),
+		Decision.bShowCurrent && Decision.bRetainPreviousSnapshot);
+	TestTrue(TEXT("B becomes current knowledge without claiming A is empty"),
+		BFirst.SnapshotTransform.GetLocation().Equals(B.GetLocation()));
 
 	Decision = State.Observe(true, B, 0.0f, 1.0f, 2);
 	TestFalse(TEXT("Observing empty A invalidates the entire old proxy"),

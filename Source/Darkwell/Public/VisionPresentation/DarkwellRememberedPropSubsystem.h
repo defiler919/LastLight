@@ -38,7 +38,7 @@ struct DARKWELL_API FDarkwellRememberedPropState
 		float CurrentMaximumCoverage,
 		float SnapshotMaximumCoverage,
 		uint64 CurrentAppearanceRevision,
-		bool bVerifyOldLocation = false);
+		bool bRetainSpatialHistory = false);
 	static bool ResolveObjectLive(bool bPreviouslyLive, float MaximumCoverage);
 };
 

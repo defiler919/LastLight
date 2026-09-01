@@ -1,4 +1,4 @@
-"""Real Editor PIE lifecycle and command test. No simulated world or user policy choice."""
+"""Real Editor PIE lifecycle and fixed SpatialEvidenceOnly command test."""
 import math
 import re
 import time
@@ -55,14 +55,13 @@ def tick(dt):
         assert_route_pose(status)
         if not checked:
             assert unreal.SystemLibrary.get_console_variable_int_value('r.Darkwell.ProjectFogVisual.LabRoute')==14,'Cursor input must be suppressed by existing route guard'
-            cmd('Darkwell.PropLab policy 1');cmd('Darkwell.PropLab enemy 1')
+            cmd('Darkwell.PropLab enemy 1')
             assert len(actors(unreal.DarkwellStalkerCharacter))==0
-            assert unreal.SystemLibrary.get_console_variable_int_value('r.Darkwell.ProjectFogVisual.PropRelocationPolicy')==0
             checked=True
         if 'ROUND FINISHED' in status:
-            assert f'MODE {mode} POLICY 0 CASE C' in status and '100.0% empty=1 ghost=0' in status,status
+            assert f'MODE {mode} RULE SpatialEvidenceOnly CASE C' in status and '100.0% empty=1 ghost=0' in status,status
             assert len(actors(unreal.DarkwellPropLabFurniture))==25,'Transient experiment not cleaned up'
-            unreal.log(f'STALE_PIE_MODE_PASS mode={mode} policy=0 whole=1 ghost=0 restoredFurniture=25 cameraRotation=(-65,90,0) routeWorldClockStable=1')
+            unreal.log(f'STALE_PIE_MODE_PASS mode={mode} rule=SpatialEvidenceOnly whole=1 ghost=0 restoredFurniture=25 cameraRotation=(-65,90,0) routeWorldClockStable=1')
             mode+=1;checked=False;clock_offset=None
             if mode<3:cmd(f'Darkwell.PropLab stale {mode} C');deadline=now+2
             else:
@@ -72,10 +71,10 @@ def tick(dt):
                 cmd('Darkwell.PropLab dark');cmd('Darkwell.PropLab reset');stage=3;deadline=now+6
     elif stage==3 and now>deadline:
         assert_defaults()
-        for name in ('PropPresentationMode','PropRelocationPolicy','LabRoute'):
+        for name in ('PropPresentationMode','LabRoute'):
             assert unreal.SystemLibrary.get_console_variable_int_value('r.Darkwell.ProjectFogVisual.'+name)==0
         assert len(actors(unreal.DarkwellPropLabFurniture))==25
-        unreal.log('STALE_PIE_RESET_PASS defaults=0/0 enemy=0 health=100 torch=100')
+        unreal.log('STALE_PIE_RESET_PASS mode=0 route=0 rule=SpatialEvidenceOnly enemy=0 health=100 torch=100')
         levels.editor_request_end_play();stage=4;deadline=now+2
     elif stage==4 and now>deadline:
         assert not levels.is_in_play_in_editor()

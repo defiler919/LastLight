@@ -52,14 +52,14 @@ FDarkwellRememberedPropDecision FDarkwellRememberedPropState::Observe(
 	const float CurrentMaximumCoverage,
 	const float SnapshotMaximumCoverage,
 	const uint64 CurrentAppearanceRevision,
-	const bool bVerifyOldLocation)
+	const bool bRetainSpatialHistory)
 {
 	FDarkwellRememberedPropDecision Result;
 	Result.bCurrentLive = bCurrentExists
 		&& ResolveObjectLive(bWasLive, CurrentMaximumCoverage);
 	if (Result.bCurrentLive)
 	{
-		Result.bRetainPreviousSnapshot = bVerifyOldLocation && bSnapshotValid
+		Result.bRetainPreviousSnapshot = bRetainSpatialHistory && bSnapshotValid
 			&& !Darkwell::RememberedProp::TransformsMatch(SnapshotTransform, CurrentTransform)
 			&& SnapshotMaximumCoverage < EnterCoverage;
 		Result.bSnapshotChanged = !bSnapshotValid
@@ -316,7 +316,7 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 			CurrentCoverage,
 			SnapshotCoverage,
 			AppearanceRevision,
-			Darkwell::PropLab::IsLabWorld(GetWorld()) && Darkwell::PropLab::RelocationPolicy(GetWorld()) == 0);
+			Darkwell::PropLab::IsLabWorld(GetWorld()));
 		// Retired snapshots belong to this StableID record, never to appearance or pixels.
 		for (int32 Index = Record.UnverifiedProxies.Num() - 1; Index >= 0; --Index)
 		{
@@ -335,7 +335,7 @@ void UDarkwellRememberedPropSubsystem::RefreshRecords()
 					Coverage = FMath::Max(Coverage, Fog->EvaluateLiveCoverageAtWorldPoint(FVector2D(Mesh->Bounds.Origin)));
 				}
 			}
-			if (!Old || Darkwell::PropLab::RelocationPolicy(GetWorld()) == 1 || Coverage >= FDarkwellRememberedPropState::EnterCoverage)
+			if (!Old || Coverage >= FDarkwellRememberedPropState::EnterCoverage)
 			{
 				if (Old) Old->Destroy();
 				Record.UnverifiedProxies.RemoveAt(Index);

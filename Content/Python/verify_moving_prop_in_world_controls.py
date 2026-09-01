@@ -2,7 +2,7 @@
 
 The delivered player path uses F through UDarkwellInteractionComponent.  This
 driver invokes the same visible mechanism actors directly so evidence capture
-does not open the console, change window focus, or call the legacy scenario / 
+does not open the console, change window focus, or call the legacy scenario /
 advance commands.  All output remains under Saved/PropGameplayLab.
 """
 import json

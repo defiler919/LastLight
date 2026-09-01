@@ -67,6 +67,7 @@ def tracked(stable_id):
 
 
 def sample(label, stable_id, capture=True):
+    stable_name = unreal.Name(stable_id)
     row = dict(
         label=label,
         stable_id=stable_id,
@@ -76,7 +77,12 @@ def sample(label, stable_id, capture=True):
         motion=room.get_motion_state(),
         position=room.get_object_position_label(),
         interaction=room.get_current_interaction(),
-        records=room.get_spatial_record_count(unreal.Name(stable_id)),
+        records=room.get_spatial_record_count(stable_name),
+        live_epochs=room.get_current_epoch_count_for_testing(stable_name),
+        stale_epochs=room.get_stale_epoch_count_for_testing(stable_name),
+        visible_proxies=room.get_visible_historical_proxy_count_for_testing(stable_name),
+        overlap_contributors=room.get_max_overlap_contributors_for_testing(stable_name),
+        legal_coverage=room.get_last_legal_coverage_ratio_for_testing(stable_name),
         viewport=list(controller.get_viewport_size()),
         time=unreal.GameplayStatics.get_time_seconds(world()),
     )
@@ -132,6 +138,26 @@ def run():
     trigger(-300, 260)
     yield from capture_motion('rotate', 'Lab.InWorld.Rotate.Cabinet', 5.4, 0.25)
     assert room.get_motion_state() == 'FINISHED'
+    assert max(row['overlap_contributors'] for row in rows
+               if row['label'].startswith('rotate_')) <= 1
+    assert all(row['overlap_contributors'] == 1 for row in rows
+               if row['label'].startswith('rotate_') and abs(row['transform']['yaw']) > 0.1)
+    # Repeat Scenario 2 while deliberately leaving legal view mid-rotation.
+    # This reproduces the user's old/new-pose overlap case without a console.
+    reset_current()
+    pose(-300, 100, 90)
+    trigger(-300, 260)
+    yield from capture_motion('rotate_loss_visible', 'Lab.InWorld.Rotate.Cabinet', 2.0, 0.2)
+    pose(900, -850, -90)
+    yield from capture_motion('rotate_loss_hidden', 'Lab.InWorld.Rotate.Cabinet', 3.6, 0.2)
+    pose(-300, 300, 90)
+    yield from capture_motion('rotate_reacquired', 'Lab.InWorld.Rotate.Cabinet', 2.0, 0.1)
+    yield from capture_motion('rotate_reacquired_fixed_10s',
+                              'Lab.InWorld.Rotate.Cabinet', 10.0, 0.1)
+    rotation_loss = [row for row in rows
+                     if row['label'].startswith(('rotate_loss_', 'rotate_reacquired'))]
+    assert any(row['stale_epochs'] == 1 for row in rotation_loss)
+    assert max(row['overlap_contributors'] for row in rotation_loss) <= 1
     # The cabinet continuously crosses the legal coverage boundary for eight seconds.
     pose(1400, 100, 90)
     trigger(1400, 260)

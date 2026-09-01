@@ -411,3 +411,102 @@ retest remains the authority for final usability.
 No production map, `/Game/Maps/L_Prototype`, frozen Mode 2 behavior, public
 SightWeave contract, StableID contract, or `Darkwell.uproject` is part of this
 correction.
+
+## 2026-09-01 Scenario 2 rotation overlap correction
+
+The user's real PIE result supersedes the earlier agent-side visual conclusion.
+**VISIBLE TRANSLATE** remains user-passed. **VISIBLE ROTATE** started and moved
+continuously, but finished with a gray proxy at the old orientation and the
+current real cabinet at the new orientation sharing the same center. Their
+intersecting and coplanar surfaces produced visible Z-fighting. The remaining
+in-world mechanisms still require the user's manual pass after this correction.
+
+The rotation control did not explicitly freeze the zero-degree pose. The shared
+tracking path froze an epoch whenever the physical transform changed while no
+cell had legal SightWeave coverage. A brief loss of legal coverage during an
+otherwise visible rotation therefore sealed the last legally seen intermediate
+pose. On reacquisition, the current pose received a new current epoch. The old
+record could not be verified empty where the new, same-center cabinet occupied
+the same samples, and the renderer had no per-sample ownership rule between the
+current geometry and the stale proxy. Both representations could consequently
+write the same pixels and depth. Automated occlusion telemetry sealed yaw
+`36.87` degrees; the D3D12 route sealed an intermediate pose around `57.5`
+degrees. This confirms a last-seen-pose record rather than a hard-coded
+zero-degree duplicate.
+
+The correction adds monotonic, legal-evidence-backed presentation ownership.
+When newly discovered current geometry owns a world sample, historical
+presentation at that sample contributes zero. The historical observation epoch
+and its D/V/R authority remain intact; this rule does not mark the old space
+empty, clear an entire StableID, hide the whole proxy, or use a depth offset.
+When the real object later leaves and the old space is legally observed empty,
+the existing `SpatialEvidenceOnly` erasure path remains responsible for
+verification and record release. This keeps current and historical rendering
+mutually exclusive at each sampled world position:
+
+```text
+CurrentLiveContribution + StaleProxyContribution <= 1
+```
+
+Scenario 2 diagnostics now expose `LIVE EPOCHS`, `STALE EPOCHS`, `VISIBLE
+PROXIES`, `OVERLAP CONTRIBUTORS`, and legal coverage in the Lab HUD. Per-frame
+telemetry records the live and stale epoch identities, actual and stale
+transforms, real and proxy component visibility, D/V/R cell counts, legal
+coverage ratio, and maximum contributor count.
+
+The continuously visible `0 -> 180` rotation lasts four seconds and samples at
+least 80 distinct intermediate angles. It remains `live=1`, `stale=0`,
+`visible proxy=0`, and `overlap contributors=1` throughout. A fixed ten-second,
+600-frame-equivalent observation after completion creates no proxy and no
+visibility transition. The same automation also covers `180 -> 0` and
+`0 -> 90 -> 180`, for three continuous visible rounds with one current epoch
+and no stale epoch or path chain.
+
+The visibility-loss test starts from legal view, loses coverage during rotation,
+and freezes the actual last legally seen intermediate orientation. Returning to
+view can retain one current and one stale epoch because StableID is not player
+knowledge, but per-sample contributors never exceed one. The stale record is
+resolved only by legal spatial evidence. Existing regressions continue to prove
+visible translation has no trail, offscreen A-to-B retains A until A is checked,
+A-to-B-to-C and multi-prop histories remain isolated, and Mode 0/1, `.20/.18`,
+4x4 AA, the deep-gray cap, NeverRemember, and invalid-coverage-zero contracts
+are unchanged.
+
+### Corrected build and evidence
+
+All UBT and dotnet operations were serial. The final source checkpoints built
+successfully as `DarkwellEditor Win64 Development`: 7/7 actions before the
+final diagnostic semantics correction and 5/5 actions afterward. Two build
+failures are preserved: the first used an unavailable `TArray`
+`CountByPredicate` helper in UE 5.8, and the second exposed an ambiguous integer
+automation assertion. Both were compile-only issues and were corrected without
+changing the authority thresholds.
+
+Focused automation progression is retained rather than rewritten:
+
+- `RotationOverlapFocused_20260901_154459`: 3/4 Success. The failed rotation
+  segment tried to start on the exact floating-point completion frame.
+- `RotationOverlapFocused_20260901_154657`: 4/4 Success.
+- `RotationOverlapTelemetryFinal_20260901_155702`: 4/4 Success after the final
+  contributor-count semantics correction. Its completed visible rotation logs
+  `live_epoch=1 stale_epochs=0 actual_yaw=180 coverage=1 proxies=0
+  overlap_contributors=1`.
+- `RotationOverlapFullFinal_20260901_160355`: 27/27 Success, 18 clean and 9 with
+  preserved warnings, 0 failed/not-run tests, 98.01 seconds. The startup
+  `UnifiedErrorTest` deliberately emits `Condition failed` probes; the exported
+  Darkwell report has no failed test or runtime fatal/assert/crash.
+
+The final D3D12/SM6 run uses normal TSR and 100% Screen Percentage at the actual
+embedded PIE backbuffer `1526x549`. It wrote 413 screenshots under
+`Saved/PropGameplayLab/MovingMulti/InWorldPIE_20260901_155848`; this is functional
+evidence, not strict 1080p performance evidence. The run covers the fully
+visible rotation, deliberate mid-rotation view loss and reacquisition, 101
+fixed adjacent samples over ten seconds, and the remaining in-world routes.
+The agent opened the visible-rotation, loss/reacquisition, and ten-adjacent-frame
+contact sheets. They show one continuously rotating asymmetric cabinet, no old
+gray proxy during fully legal rotation, and no alternating whole-proxy frame,
+coplanar flashing, duplicate cabinet, or path chain after reacquisition.
+
+This checkpoint is ready for the user's Scenario 2 rotation contribution
+exclusion retest. It does not claim that the user has accepted the correction,
+and it does not revise the frozen Mode 2 baseline or production defaults.

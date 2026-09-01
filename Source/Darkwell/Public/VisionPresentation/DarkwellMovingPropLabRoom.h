@@ -116,6 +116,13 @@ public:
 	int32 GetHistoricalTextureUploadCountForTesting(FName StableId) const;
 	uint64 GetHistoricalVisualSignatureForTesting(FName StableId) const;
 	FString GetHistoricalVisualTelemetryForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetCurrentEpochCountForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetStaleEpochCountForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetVisibleHistoricalProxyCountForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetMaxOverlapContributorsForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") float GetLastLegalCoverageRatioForTesting(FName StableId) const;
+	float GetNewestHistoricalYawForTesting(FName StableId) const;
+	bool StartTrackedRotationForTesting(FName StableId, float TargetYaw, float Duration);
 
 	bool SelectScenario(int32 InScenario, ADarkwellCharacter* Player);
 	bool AdvanceScenario(ADarkwellCharacter* Player);
@@ -138,6 +145,7 @@ private:
 		int32 TextureUploadCount = 0;
 		int32 ProxyVisibilityTransitions = 0;
 		FIntPoint HistoricalTextureSize = FIntPoint::ZeroValue;
+		TBitArray<> SuppressedByCurrentEvidence;
 		bool bHasProxyVisibilitySample = false;
 		bool bLastProxyVisible = false;
 	};
@@ -154,6 +162,8 @@ private:
 		FLinearColor Tint = FLinearColor::Gray;
 		int32 Shape = 0;
 		int32 HiddenFreezeCount = 0;
+		int32 MaxOverlapContributors = 0;
+		float LastLegalCoverageRatio = 0.0f;
 		bool bExists = false;
 	};
 
@@ -193,6 +203,12 @@ private:
 	TArray<FBox> ActualPartBounds(const ADarkwellPropLabFurniture& Prop) const;
 	TArray<float> ConservativeCoverage(const FBox2D& Bounds) const;
 	bool IsOccupiedByActual(FVector2D Point, FName IgnoredStableId) const;
+	bool HasCurrentObservedContributionAt(const FTrackedProp& Prop, FVector2D Point) const;
+	void UpdateHistoricalContributionExclusion(
+		FTrackedProp& Prop,
+		FDarkwellSpatialObservationRecord& Record);
+	int32 ComputeMaxOverlapContributors(const FTrackedProp& Prop) const;
+	void LogRotationFrame(const FTrackedProp& Prop) const;
 	void UpdateTracked(FTrackedProp& Prop, float DeltaSeconds);
 	bool SetTrackedExists(FName StableId, bool bExists);
 	void EnsureRecordVisual(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);

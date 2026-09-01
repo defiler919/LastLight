@@ -1583,11 +1583,21 @@ bool FDarkwellMovingPropInWorldControlsTest::RunTest(const FString&)
  TestTrue(TEXT("Second F-key mechanism remains usable after translation completes"),Use(EDarkwellMovingPropLabControlKind::VisibleRotate));
  TSet<int32> RotationSamples;
 	bool bRotationTexturesMatched = true;
+	bool bRotationStayedSingleLive = true;
+	bool bRotationContributorsExclusive = true;
  for(int32 Frame=0;Frame<165;++Frame)
  {Step(1);RotationSamples.Add(FMath::RoundToInt(Room->GetTrackedTransform(TEXT("Lab.InWorld.Rotate.Cabinet")).Rotator().Yaw*10));
-  bRotationTexturesMatched &= Room->DoSpatialRecordTexturesMatchForTesting(TEXT("Lab.InWorld.Rotate.Cabinet"));}
+  bRotationTexturesMatched &= Room->DoSpatialRecordTexturesMatchForTesting(TEXT("Lab.InWorld.Rotate.Cabinet"));
+  bRotationStayedSingleLive &= Room->GetCurrentEpochCountForTesting(TEXT("Lab.InWorld.Rotate.Cabinet"))==1
+   && Room->GetStaleEpochCountForTesting(TEXT("Lab.InWorld.Rotate.Cabinet"))==0
+   && Room->GetVisibleHistoricalProxyCountForTesting(TEXT("Lab.InWorld.Rotate.Cabinet"))==0;
+  bRotationContributorsExclusive &= Room->GetMaxOverlapContributorsForTesting(TEXT("Lab.InWorld.Rotate.Cabinet"))<=1;}
  TestTrue(TEXT("Visible rotation contains many intermediate angles"),RotationSamples.Num()>=80);
 	TestTrue(TEXT("Rotating bounds always use a matching presentation texture extent"),bRotationTexturesMatched);
+ TestTrue(TEXT("Continuously visible rotation remains one live epoch with no stale proxy"),bRotationStayedSingleLive);
+ TestTrue(TEXT("Continuously visible rotation never has two contributors per world sample"),bRotationContributorsExclusive);
+ TestEqual(TEXT("Continuously visible rotation has exactly one render contributor"),
+  Room->GetMaxOverlapContributorsForTesting(TEXT("Lab.InWorld.Rotate.Cabinet")),1);
  TestEqual(TEXT("Visible rotation finishes without pose chain"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Rotate.Cabinet")),1);
  TestTrue(TEXT("Third F-key mechanism starts after rotation without global reset"),Use(EDarkwellMovingPropLabControlKind::CoverageBoundary));
  TSet<int32> BoundarySamples;
@@ -1643,6 +1653,111 @@ bool FDarkwellMovingPropInWorldControlsTest::RunTest(const FString&)
  TestEqual(TEXT("Reset current multi zone leaves unrelated evidence intact"),Room->GetSpatialRecordCount(TEXT("Lab.InWorld.Rotate.Cabinet")),UnrelatedRotationHistory);
  TestTrue(TEXT("Multi box is restored only by explicit zone reset"),Room->IsActualPresent(TEXT("Lab.InWorld.Multi.SmallBox")));
 
+ Fixture->Destroy();return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMovingPropVisibleRotationExclusionTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.VisibleRotationExclusion", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellMovingPropVisibleRotationExclusionTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("MovingPropVisibleRotationExclusion"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("Visible-rotation Lab exists"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("Visible-rotation Lab authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Visible-rotation Lab reset"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames=1){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ auto UseRotate=[&]()
+ {
+  auto* Control=Room->GetControlForTesting(EDarkwellMovingPropLabControlKind::VisibleRotate);if(!Control)return false;
+  const FVector Center=Control->GetActorLocation();Player->SetActorLocation(FVector(Center.X,Center.Y-190,92));
+  Player->SetActorRotation(FRotator(0,90,0));Step(2);World->UpdateWorldComponents(true,false);
+  Player->GetInteractionComponent()->UpdateFocusedActorFromWorld();
+  return Player->GetInteractionComponent()->GetFocusedActor()==Control
+   && Player->GetInteractionComponent()->TryInteract();
+ };
+ const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ Step(60);TestTrue(TEXT("Traced F starts visible rotation"),UseRotate());
+ TSet<int32> Samples;bool bSingleLive=true,bExclusive=true;
+ for(int32 Frame=0;Frame<300;++Frame)
+ {
+  Step();Samples.Add(FMath::RoundToInt(Room->GetTrackedTransform(RotateId).Rotator().Yaw*10));
+  bSingleLive &= Room->GetCurrentEpochCountForTesting(RotateId)==1
+   && Room->GetStaleEpochCountForTesting(RotateId)==0
+   && Room->GetVisibleHistoricalProxyCountForTesting(RotateId)==0;
+  bExclusive &= Room->GetMaxOverlapContributorsForTesting(RotateId)<=1;
+ }
+ TestTrue(TEXT("0-to-180 has at least 80 distinct intermediate angles"),Samples.Num()>=80);
+ TestTrue(TEXT("0-to-180 stays live epoch one with stale epoch zero"),bSingleLive);
+ TestTrue(TEXT("0-to-180 contributor count never exceeds one"),bExclusive);
+ TestEqual(TEXT("0-to-180 finishes with exactly one render contributor"),
+  Room->GetMaxOverlapContributorsForTesting(RotateId),1);
+ TestEqual(TEXT("0-to-180 finishes at 180"),
+  static_cast<int32>(FMath::RoundToInt(FMath::Abs(Room->GetTrackedTransform(RotateId).Rotator().Yaw))),180);
+ for(int32 Frame=0;Frame<600;++Frame){Step();bExclusive&=Room->GetMaxOverlapContributorsForTesting(RotateId)<=1;}
+ TestEqual(TEXT("Ten-second fixed view creates zero stale proxies"),Room->GetVisibleHistoricalProxyCountForTesting(RotateId),0);
+ TestTrue(TEXT("Ten-second fixed view remains overlap-free"),bExclusive);
+
+ TestTrue(TEXT("Round two starts 180-to-0"),Room->StartTrackedRotationForTesting(RotateId,0,4));
+ TSet<int32> ReverseSamples;
+ for(int32 Frame=0;Frame<245;++Frame){Step();ReverseSamples.Add(FMath::RoundToInt(Room->GetTrackedTransform(RotateId).Rotator().Yaw*10));}
+ TestTrue(TEXT("180-to-0 has at least 80 intermediate angles"),ReverseSamples.Num()>=80);
+ TestEqual(TEXT("180-to-0 has no stale epoch"),Room->GetStaleEpochCountForTesting(RotateId),0);
+ TestTrue(TEXT("Round three starts 0-to-90"),Room->StartTrackedRotationForTesting(RotateId,90,2));
+ TSet<int32> FirstHalf;for(int32 Frame=0;Frame<125;++Frame){Step();FirstHalf.Add(FMath::RoundToInt(Room->GetTrackedTransform(RotateId).Rotator().Yaw*10));}
+ TestTrue(TEXT("0-to-90 is continuous"),FirstHalf.Num()>=80);
+ TestTrue(TEXT("Round three continues 90-to-180"),Room->StartTrackedRotationForTesting(RotateId,180,2));
+ TSet<int32> SecondHalf;for(int32 Frame=0;Frame<125;++Frame){Step();SecondHalf.Add(FMath::RoundToInt(Room->GetTrackedTransform(RotateId).Rotator().Yaw*10));}
+ TestTrue(TEXT("90-to-180 is continuous"),SecondHalf.Num()>=80);
+ TestEqual(TEXT("Three visible rounds retain exactly one current epoch"),Room->GetCurrentEpochCountForTesting(RotateId),1);
+ TestEqual(TEXT("Three visible rounds retain zero stale epochs"),Room->GetStaleEpochCountForTesting(RotateId),0);
+ TestEqual(TEXT("Three visible rounds create zero stale proxies"),Room->GetHistoricalProxyCreationCountForTesting(RotateId),0);
+ TestTrue(TEXT("Three visible rounds preserve one contributor maximum"),Room->GetMaxOverlapContributorsForTesting(RotateId)<=1);
+ Fixture->Destroy();return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMovingPropRotationOcclusionTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.RotationOcclusionLastSeenPose", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellMovingPropRotationOcclusionTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("MovingPropRotationOcclusion"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("Occluded-rotation Lab exists"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("Occluded-rotation Lab authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Occluded-rotation Lab reset"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames=1){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ auto* Control=Room->GetControlForTesting(EDarkwellMovingPropLabControlKind::VisibleRotate);
+ if(!TestNotNull(TEXT("Rotation control exists"),Control))return false;
+ const FVector Center=Control->GetActorLocation();Player->SetActorLocation(FVector(Center.X,Center.Y-190,92));
+ Player->SetActorRotation(FRotator(0,90,0));Step(62);World->UpdateWorldComponents(true,false);
+ Player->GetInteractionComponent()->UpdateFocusedActorFromWorld();
+ TestEqual(TEXT("Rotation trace focuses the real control"),Player->GetInteractionComponent()->GetFocusedActor(),static_cast<AActor*>(Control));
+ TestTrue(TEXT("F starts rotation before occlusion"),Player->GetInteractionComponent()->TryInteract());
+ Step(120);const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ const float LastVisibleYaw=Room->GetTrackedTransform(RotateId).Rotator().Yaw;
+ TestTrue(TEXT("Rotation visibly advances before coverage loss"),FMath::Abs(LastVisibleYaw)>5&&FMath::Abs(LastVisibleYaw)<120);
+ Player->SetActorLocation(FVector(900,-850,92));Player->SetActorRotation(FRotator(0,-90,0));Step(3);
+ TestEqual(TEXT("Coverage loss seals one last-seen stale epoch"),Room->GetHiddenFreezeCountForTesting(RotateId),1);
+ const float FrozenYaw=Room->GetNewestHistoricalYawForTesting(RotateId);
+ TestTrue(TEXT("Frozen pose is the last observed intermediate pose, not zero-degree start"),FMath::Abs(FrozenYaw)>5);
+ TestTrue(TEXT("Frozen pose stays near the last legally observed frame"),FMath::Abs(FMath::FindDeltaAngleDegrees(FrozenYaw,LastVisibleYaw))<8);
+ Step(240);TestEqual(TEXT("Hidden continuation creates one stale epoch"),Room->GetStaleEpochCountForTesting(RotateId),1);
+ Player->SetActorLocation(FVector(-300,300,92));Player->SetActorRotation(FRotator(0,90,0));Step(120);
+ TestEqual(TEXT("Returning legal view creates one current epoch"),Room->GetCurrentEpochCountForTesting(RotateId),1);
+ TestEqual(TEXT("Old last-seen pose remains one independent stale epoch"),Room->GetStaleEpochCountForTesting(RotateId),1);
+ bool bExclusive=true;for(int32 Frame=0;Frame<600;++Frame){Step();bExclusive&=Room->GetMaxOverlapContributorsForTesting(RotateId)<=1;}
+ TestTrue(TEXT("Current and stale poses are spatially contribution-exclusive for ten seconds"),bExclusive);
+ TestEqual(TEXT("Old proxy never whole-object flickers during fixed view"),Room->GetHistoricalProxyVisibilityTransitionsForTesting(RotateId),0);
+ AddInfo(Room->GetHistoricalVisualTelemetryForTesting(RotateId));
  Fixture->Destroy();return true;
 }
 

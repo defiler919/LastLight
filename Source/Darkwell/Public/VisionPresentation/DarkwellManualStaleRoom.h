@@ -12,6 +12,7 @@ class ADarkwellPropLabFurniture;
 class ADarkwellCharacter;
 class UTexture2D;
 class UMaterialInstanceDynamic;
+class UDynamicMeshComponent;
 
 /** Physical room and pressure input only exist in the independent development Lab. */
 UCLASS()
@@ -42,6 +43,8 @@ public:
  /** Per-cell D/V/R/legal bits for editor validation, not an authority mutation API. */
  UFUNCTION(BlueprintPure, Category="Lab") TArray<int32> GetSpatialKnowledgeBits() const;
  const FDarkwellSpatialPropMemory& GetSpatialStateForTesting() const { return SpatialMemory; }
+ UFUNCTION(BlueprintPure, Category="Lab") int32 GetStaleCapTriangleCount() const { return StaleCapTriangleCount; }
+ const UDynamicMeshComponent* GetStaleCapComponentForTesting() const { return StaleCap; }
  /** Called before a newly rebuilt existing proxy can enter the scene. */
  void BindSpatialProxy(AActor* Proxy);
  // With the accepted yaw=90 top-down camera, world +X is screen-left.
@@ -54,6 +57,8 @@ private:
  void AttachObservedSnapshot(AActor* Proxy);
  void ApplyErasure(int32 Mode);
  void UpdateSpatialMemory(float DeltaSeconds);
+ void UpdateStaleCap(int32 Mode);
+ void ClearStaleCap();
  void BindSpatialParameters(UMaterialInstanceDynamic* Material) const;
  void Report();
  UPROPERTY(VisibleAnywhere) TArray<TObjectPtr<UStaticMeshComponent>> Structure;
@@ -71,6 +76,10 @@ private:
  UPROPERTY(Transient) TObjectPtr<UTexture2D> SpatialTexture;
  UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> SpatialProxyMaterials;
  UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> LegacyProxyMaterials;
+ UPROPERTY(VisibleAnywhere) TObjectPtr<UDynamicMeshComponent> StaleCap;
+ TArray<FBox> OriginalPartBounds;
+ uint64 StaleCapSignature=0;
+ int32 StaleCapTriangleCount=0;
  FGameplayTag PressureState;
  FString Status;
  float Seconds=0;

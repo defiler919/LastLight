@@ -4,6 +4,8 @@
 #include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/DynamicMeshComponent.h"
+#include "DynamicMesh/DynamicMesh3.h"
 #include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
 #include "Math/Float16Color.h"
@@ -33,6 +35,13 @@ namespace Darkwell::ManualStale
 ADarkwellManualStaleRoom::ADarkwellManualStaleRoom()
 {
  SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("RoomRoot")));
+ StaleCap=CreateDefaultSubobject<UDynamicMeshComponent>(TEXT("Mode2StaleCutCap"));
+ StaleCap->SetupAttachment(GetRootComponent());
+ StaleCap->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+ StaleCap->SetGenerateOverlapEvents(false);
+ StaleCap->SetCastShadow(false);
+ StaleCap->SetReceivesDecals(false);
+ StaleCap->SetVisibility(false);
  static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
  static ConstructorHelpers::FObjectFinder<UStaticMesh> Cylinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
  const FVector Centers[]={{-25,0,-15},{-25,800,125},{-25,-800,125},{950,0,125},{125,0,125},{-700,-710,125},{-700,0,125},{-700,710,125},{-1000,0,125}};
@@ -140,6 +149,7 @@ bool ADarkwellManualStaleRoom::ResetRoom(ADarkwellCharacter* Player)
  Evidence=FDarkwellEmptyVerification(); DisplayedOpacity.Reset(); ObservedProxy.Reset(); OpacityTexture=nullptr;
  SpatialMemory=FDarkwellSpatialPropMemory(); SpatialSource.Reset(); SpatialProxy.Reset(); SpatialTexture=nullptr;
  SpatialProxyMaterials.Reset(); LegacyProxyMaterials.Reset();
+ OriginalPartBounds.Reset(); ClearStaleCap();
  PressureState=Darkwell::ManualStale::Armed; ToggleCount=0; Seconds=0; bStarted=true;
  Darkwell::ManualStale::SetCVar(TEXT("r.Darkwell.ProjectFogVisual.PropRelocationPolicy"),0);
  Darkwell::ManualStale::SetCVar(TEXT("r.Darkwell.ProjectFogVisual.LabRoute"),0);
@@ -224,6 +234,7 @@ void ADarkwellManualStaleRoom::UpdateObservation(float DeltaSeconds,ADarkwellCha
  }
  auto* Memory=GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>();
  UpdateSpatialMemory(DeltaSeconds);
+ UpdateStaleCap(Darkwell::PropLab::PresentationMode(GetWorld()));
  bool Live=false,Valid=false; FVector At; AActor* Proxy=nullptr;
  Memory->TryGetRecordForTesting(CabinetId(),Live,Valid,At,Proxy);
  if(Valid && Proxy && ObservedProxy.Get()!=Proxy) AttachObservedSnapshot(Proxy);
@@ -281,7 +292,9 @@ void ADarkwellManualStaleRoom::UpdateSpatialMemory(float DeltaSeconds)
   // Read the original fixed footprint ONCE for texture coordinates. Never
   // change component transforms/bounds or derive replacement geometry.
   FBox Box(ForceInit);
-  for(UStaticMeshComponent* Part:Cabinet->Memory->GetMemoryPrimitives()) Box+=Part->Bounds.GetBox();
+  OriginalPartBounds.Reset();
+  for(UStaticMeshComponent* Part:Cabinet->Memory->GetMemoryPrimitives())
+  { const FBox PartBox=Part->Bounds.GetBox(); Box+=PartBox; OriginalPartBounds.Add(PartBox); }
   SpatialMemory.Initialize(CabinetId(),FBox2D(FVector2D(Box.Min),FVector2D(Box.Max)));
   const FIntPoint Size=SpatialMemory.GetSize();
   SpatialTexture=UTexture2D::CreateTransient(Size.X,Size.Y,PF_FloatRGBA);
@@ -316,6 +329,94 @@ void ADarkwellManualStaleRoom::UpdateSpatialMemory(float DeltaSeconds)
   [](uint8* Data,const FUpdateTextureRegion2D* R){delete[] reinterpret_cast<FFloat16Color*>(Data);delete R;});
  if(HasActualCabinet()) for(UMaterialInstanceDynamic* Mat:Cabinet->Materials) BindSpatialParameters(Mat);
 }
+void ADarkwellManualStaleRoom::ClearStaleCap()
+{
+ if(!StaleCap) return;
+ StaleCap->SetMesh(UE::Geometry::FDynamicMesh3());
+ StaleCap->SetVisibility(false);
+ StaleCapSignature=0; StaleCapTriangleCount=0;
+}
+void ADarkwellManualStaleRoom::UpdateStaleCap(int32 Mode)
+{
+ using namespace UE::Geometry;
+ const auto Cells=SpatialMemory.GetCells();
+ const FIntPoint Size=SpatialMemory.GetSize();
+ if(Mode!=2 || !SpatialMemory.IsAbsent() || Cells.IsEmpty() || OriginalPartBounds.IsEmpty())
+ { if(StaleCapTriangleCount>0 || StaleCap->IsVisible()) ClearStaleCap(); return; }
+
+ uint64 Signature=uint64(SpatialMemory.GetGeneration())*1099511628211ull;
+ for(const auto& C:Cells)
+ {
+  const uint64 Bits=(C.InitialRemembered>0?1ull:0ull)|(C.VerifiedEmpty>0?2ull:0ull);
+  Signature=(Signature^Bits)*1099511628211ull;
+ }
+ if(Signature==StaleCapSignature) return;
+ StaleCapSignature=Signature;
+
+ FDynamicMesh3 Mesh;
+ const FBox2D& Bounds=SpatialMemory.GetBounds();
+ const FVector2D Step=Bounds.GetSize()/FVector2D(Size.X,Size.Y);
+ const FVector Origin=GetActorLocation();
+ auto IsRetained=[&](int32 X,int32 Y)
+ {
+  if(X<0 || Y<0 || X>=Size.X || Y>=Size.Y) return false;
+  const auto& C=Cells[Y*Size.X+X];
+  return C.InitialRemembered>0 && C.VerifiedEmpty==0;
+ };
+ auto IsVerifiedRemembered=[&](int32 X,int32 Y)
+ {
+  if(X<0 || Y<0 || X>=Size.X || Y>=Size.Y) return false;
+  const auto& C=Cells[Y*Size.X+X];
+  return C.InitialRemembered>0 && C.VerifiedEmpty>0;
+ };
+ auto AddQuad=[&](const FVector& A,const FVector& B,const FVector& C,const FVector& D)
+ {
+  const int32 IA=Mesh.AppendVertex(FVector3d(A-Origin));
+  const int32 IB=Mesh.AppendVertex(FVector3d(B-Origin));
+  const int32 IC=Mesh.AppendVertex(FVector3d(C-Origin));
+  const int32 ID=Mesh.AppendVertex(FVector3d(D-Origin));
+  Mesh.AppendTriangle(IA,IB,IC); Mesh.AppendTriangle(IA,IC,ID);
+ };
+ auto AddVerticalEdge=[&](double X,double Y0,double Y1)
+ {
+  for(const FBox& Part:OriginalPartBounds)
+  {
+   if(X<Part.Min.X-UE_KINDA_SMALL_NUMBER || X>Part.Max.X+UE_KINDA_SMALL_NUMBER) continue;
+   const double A=FMath::Max(Y0,Part.Min.Y),B=FMath::Min(Y1,Part.Max.Y);
+   if(B-A<=UE_KINDA_SMALL_NUMBER) continue;
+   AddQuad(FVector(X,A,Part.Min.Z),FVector(X,B,Part.Min.Z),FVector(X,B,Part.Max.Z),FVector(X,A,Part.Max.Z));
+  }
+ };
+ auto AddHorizontalEdge=[&](double Y,double X0,double X1)
+ {
+  for(const FBox& Part:OriginalPartBounds)
+  {
+   if(Y<Part.Min.Y-UE_KINDA_SMALL_NUMBER || Y>Part.Max.Y+UE_KINDA_SMALL_NUMBER) continue;
+   const double A=FMath::Max(X0,Part.Min.X),B=FMath::Min(X1,Part.Max.X);
+   if(B-A<=UE_KINDA_SMALL_NUMBER) continue;
+   AddQuad(FVector(A,Y,Part.Min.Z),FVector(B,Y,Part.Min.Z),FVector(B,Y,Part.Max.Z),FVector(A,Y,Part.Max.Z));
+  }
+ };
+ for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X)
+ {
+  if(!IsRetained(X,Y)) continue;
+  const double X0=Bounds.Min.X+X*Step.X,X1=X0+Step.X;
+  const double Y0=Bounds.Min.Y+Y*Step.Y,Y1=Y0+Step.Y;
+  if(IsVerifiedRemembered(X-1,Y)) AddVerticalEdge(X0,Y0,Y1);
+  if(IsVerifiedRemembered(X+1,Y)) AddVerticalEdge(X1,Y0,Y1);
+  if(IsVerifiedRemembered(X,Y-1)) AddHorizontalEdge(Y0,X0,X1);
+  if(IsVerifiedRemembered(X,Y+1)) AddHorizontalEdge(Y1,X0,X1);
+ }
+ StaleCapTriangleCount=Mesh.TriangleCount();
+ StaleCap->SetMesh(MoveTemp(Mesh));
+ if(StaleCapTriangleCount>0)
+ {
+  if(!StaleCap->GetMaterial(0))
+   StaleCap->SetMaterial(0,LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_ManualStaleCutCap.M_ManualStaleCutCap")));
+  StaleCap->SetVisibility(true);
+ }
+ else StaleCap->SetVisibility(false);
+}
 TArray<int32> ADarkwellManualStaleRoom::GetSpatialKnowledgeBits() const
 {
  TArray<int32> Bits; Bits.Reserve(SpatialMemory.GetCells().Num());
@@ -334,16 +435,16 @@ FString ADarkwellManualStaleRoom::GetSpatialTelemetry() const
  const float N=FMath::Max(1,Cells.Num());
  bool WasLive=false,Valid=false; FVector At; AActor* Proxy=nullptr;
  GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>()->TryGetRecordForTesting(CabinetId(),WasLive,Valid,At,Proxy);
- return FString::Printf(TEXT("{\"actual\":\"%s\",\"current\":%.8f,\"discovered\":%.8f,\"verified\":%.8f,\"remaining\":%.8f,\"live\":%.8f,\"sourceOpacity\":%.8f,\"proxyOpacity\":%.8f,\"snapshot\":%s,\"generation\":%u,\"toggles\":%d,\"cells\":%d}"),
-  HasActualCabinet()?TEXT("PRESENT"):TEXT("ABSENT"),Current/N,Discovered/N,Verified/N,Remaining/N,Live/N,Source/N,ProxyOpacity/N,Valid?TEXT("true"):TEXT("false"),SpatialMemory.GetGeneration(),ToggleCount,Cells.Num());
+ return FString::Printf(TEXT("{\"actual\":\"%s\",\"current\":%.8f,\"discovered\":%.8f,\"verified\":%.8f,\"remaining\":%.8f,\"live\":%.8f,\"sourceOpacity\":%.8f,\"proxyOpacity\":%.8f,\"snapshot\":%s,\"generation\":%u,\"toggles\":%d,\"cells\":%d,\"capTriangles\":%d,\"capVisible\":%s}"),
+  HasActualCabinet()?TEXT("PRESENT"):TEXT("ABSENT"),Current/N,Discovered/N,Verified/N,Remaining/N,Live/N,Source/N,ProxyOpacity/N,Valid?TEXT("true"):TEXT("false"),SpatialMemory.GetGeneration(),ToggleCount,Cells.Num(),StaleCapTriangleCount,StaleCap->IsVisible()?TEXT("true"):TEXT("false"));
 }
 void ADarkwellManualStaleRoom::Report()
 {
  bool Live=false,Valid=false; FVector At; AActor* Proxy=nullptr;
  GetWorld()->GetSubsystem<UDarkwellRememberedPropSubsystem>()->TryGetRecordForTesting(CabinetId(),Live,Valid,At,Proxy);
- Status=FString::Printf(TEXT("MANUAL STALE ROOM | Mode %d | Policy 0 | ENEMY 0\nCabinet Actual: %s | Remembered Snapshot: %s | StableID: %s\nOld Occupancy Verified: %.1f%% | Object Empty Confirmed: %d | Pressure Switch: %s\nLiveCoverage at Cabinet: %.6f | Source Live: %d | Toggles: %d\nFree movement / mouse aim; right corridor connects rooms. Darkwell.PropLab stalemanual help"),
+ Status=FString::Printf(TEXT("MANUAL STALE ROOM | Mode %d | Policy 0 | ENEMY 0\nCabinet Actual: %s | Remembered Snapshot: %s | StableID: %s\nOld Occupancy Verified: %.1f%% | Object Empty Confirmed: %d | Pressure Switch: %s\nLiveCoverage at Cabinet: %.6f | Source Live: %d | Toggles: %d | Black Cap Tris: %d\nFree movement / mouse aim; right corridor connects rooms. Darkwell.PropLab stalemanual help"),
   Darkwell::PropLab::PresentationMode(GetWorld()),HasActualCabinet()?TEXT("PRESENT"):TEXT("ABSENT"),Valid?TEXT("VALID"):TEXT("EMPTY"),*CabinetId().ToString(),
-  100*Evidence.VerifiedFraction(),Evidence.IsObjectEmpty(),IsSwitchArmed()?TEXT("ARMED"):TEXT("WAITING_FOR_EXIT"),GetCabinetCoverage(),Live,ToggleCount);
+  100*Evidence.VerifiedFraction(),Evidence.IsObjectEmpty(),IsSwitchArmed()?TEXT("ARMED"):TEXT("WAITING_FOR_EXIT"),GetCabinetCoverage(),Live,ToggleCount,StaleCapTriangleCount);
  if(GEngine) GEngine->AddOnScreenDebugMessage(0xDA473,0,FColor::Cyan,Status);
 }
 void ADarkwellManualStaleRoom::Command(const TArray<FString>& Args)

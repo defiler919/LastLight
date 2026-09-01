@@ -4,6 +4,8 @@
 #include "Combat/DarkwellLoadoutComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/DynamicMeshComponent.h"
+#include "DynamicMesh/DynamicMesh3.h"
 #include "Engine/Engine.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
@@ -1250,6 +1252,96 @@ bool FDarkwellManualFixedRevealGeometryTest::RunTest(const FString&)
  Fixture->Destroy(); return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellManualStaleCutCapTest,
+ "Darkwell.PropLab.ManualSwitch.Mode2BlackCutCap", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellManualStaleCutCapTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ using namespace UE::Geometry;
+ FTestWorld TestWorld(TEXT("ManualStaleCutCap"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+ UWorld* World=TestWorld.Get();
+ auto* Room=Spawn<ADarkwellManualStaleRoom>(*World,FVector(4000,0,0));
+ auto* Fixture=Spawn<ADarkwellPropGameplayLab>(*World,FVector::ZeroVector);
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(4500,150,92),FRotator(0,90,0));
+ auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ auto* Memory=World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+ TestTrue(TEXT("Uses existing legal authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ Room->ResetRoom(Player); Room->Command({TEXT("stalemanual"),TEXT("mode"),TEXT("2")});
+ auto Step=[&](FVector P,float Yaw,int32 Frames=1)
+ {
+  Player->SetActorLocation(P); Player->SetActorRotation(FRotator(0,Yaw,0));
+  for(int32 I=0;I<Frames;++I)
+  { Adapter->Tick(1.f/30); Memory->RefreshNowForTesting(); Fixture->Tick(1.f/30); Room->UpdateObservation(1.f/30,Player); }
+ };
+ ADarkwellPropLabFurniture* Cabinet=nullptr;
+ for(TActorIterator<ADarkwellPropLabFurniture> It(World);It;++It) if(It->StableId==Room->CabinetId()) Cabinet=*It;
+ if(!TestNotNull(TEXT("Original actual cabinet"),Cabinet)) return false;
+ TArray<FBox> PartBounds;
+ for(UStaticMeshComponent* Part:Cabinet->Memory->GetMemoryPrimitives()) PartBounds.Add(Part->Bounds.GetBox());
+ TestEqual(TEXT("Original three cabinet solids define cap intersections"),PartBounds.Num(),3);
+ for(float Yaw=-30;Yaw<=210;Yaw+=1) Step(FVector(4500,150,92),Yaw,2);
+ float Discovered=0; for(const auto& C:Room->GetSpatialStateForTesting().GetCells()) Discovered+=C.DiscoveredPresent;
+ TestTrue(TEXT("Setup remembers nearly the full original surface"),Discovered>=Room->GetSpatialStateForTesting().GetCells().Num()*.95f);
+ TestEqual(TEXT("No cap while actual cabinet is present"),Room->GetStaleCapTriangleCount(),0);
+ Step(Room->SwitchPosition()+FVector(0,0,92),90,4);
+ TestFalse(TEXT("Pressure mutation makes actual cabinet absent"),Room->HasActualCabinet());
+
+ bool bSawPartial=false,bSawCap=false,bCapVisibleValid=true,bNoCollisionValid=true,bNoOverlapValid=true,bNoShadowValid=true;
+ bool bTriangleCountValid=true,bGridValid=true,bInsideOriginalValid=true;
+ for(float Yaw=-30;Yaw<=210;Yaw+=.5f)
+ {
+  Step(FVector(4500,150,92),Yaw,1);
+  const auto Cells=Room->GetSpatialStateForTesting().GetCells();
+  int32 Verified=0,Remembered=0;
+  for(const auto& C:Cells) { Verified+=C.InitialRemembered>0 && C.VerifiedEmpty>0; Remembered+=C.InitialRemembered>0; }
+  const bool bPartial=Verified>0 && Verified<Remembered;
+  if(!bPartial) continue;
+  bSawPartial=true;
+  const UDynamicMeshComponent* Cap=Room->GetStaleCapComponentForTesting();
+  if(Room->GetStaleCapTriangleCount()==0) continue; // Disjoint remembered islands need no exposed section yet.
+  bSawCap=true;
+  bCapVisibleValid&=Cap && Cap->IsVisible();
+  bNoCollisionValid&=Cap && Cap->GetCollisionEnabled()==ECollisionEnabled::NoCollision;
+  bNoOverlapValid&=Cap && !Cap->GetGenerateOverlapEvents();
+  bNoShadowValid&=Cap && !Cap->CastShadow;
+  if(Cap) Cap->ProcessMesh([&](const FDynamicMesh3& Mesh)
+  {
+   bTriangleCountValid&=Mesh.TriangleCount()==Room->GetStaleCapTriangleCount();
+   const FBox2D& Grid=Room->GetSpatialStateForTesting().GetBounds();
+   const FVector2D Cell=Grid.GetSize()/FVector2D(Room->GetSpatialStateForTesting().GetSize());
+   for(int32 VertexId:Mesh.VertexIndicesItr())
+   {
+    const FVector WorldVertex=FVector(Mesh.GetVertex(VertexId))+Room->GetActorLocation();
+    const double GX=(WorldVertex.X-Grid.Min.X)/Cell.X,GY=(WorldVertex.Y-Grid.Min.Y)/Cell.Y;
+    const bool bOnGrid=FMath::IsNearlyEqual(GX,FMath::RoundToDouble(GX),1e-3)
+                      || FMath::IsNearlyEqual(GY,FMath::RoundToDouble(GY),1e-3);
+    bool bInsideOriginal=false;
+    for(const FBox& Box:PartBounds) bInsideOriginal|=Box.ExpandBy(.01).IsInsideOrOn(WorldVertex);
+    bGridValid&=bOnGrid;
+    bInsideOriginalValid&=bInsideOriginal;
+   }
+  });
+  if(Room->GetStaleCapTriangleCount()>0) break;
+ }
+ TestTrue(TEXT("Partial legal empty verification produces a cut boundary"),bSawPartial);
+ TestTrue(TEXT("A touching verified/retained boundary produces cap triangles"),bSawCap);
+ TestTrue(TEXT("Cap component is visible only at a partial cut"),bCapVisibleValid);
+ TestTrue(TEXT("Cap has no collision"),bNoCollisionValid);
+ TestTrue(TEXT("Cap generates no overlap events"),bNoOverlapValid);
+ TestTrue(TEXT("Cap casts no shadow"),bNoShadowValid);
+ TestTrue(TEXT("Cap telemetry exactly matches its generated triangle mesh"),bTriangleCountValid);
+ TestTrue(TEXT("Every cap vertex lies on the fixed authority grid"),bGridValid);
+ TestTrue(TEXT("Every cap vertex is clipped to one of the original three solid bounds"),bInsideOriginalValid);
+ Room->Command({TEXT("stalemanual"),TEXT("mode"),TEXT("1")}); Step(FVector(4500,150,92),90);
+ TestTrue(TEXT("Mode 1 cannot retain the Mode 2 cap"),!Room->GetStaleCapComponentForTesting()->IsVisible() && Room->GetStaleCapTriangleCount()==0);
+ Room->Command({TEXT("stalemanual"),TEXT("mode"),TEXT("2")}); Step(FVector(4500,150,92),90);
+ TestTrue(TEXT("Returning Mode 2 rebuilds the same authority boundary without memory reset"),Room->GetStaleCapTriangleCount()>0);
+ for(int32 Sweep=0;Sweep<3;++Sweep) for(float Yaw=-30;Yaw<=210;Yaw+=1) Step(FVector(4500,150,92),Yaw,4);
+ TestEqual(TEXT("Complete erase removes every meaningless black cap"),Room->GetStaleCapTriangleCount(),0);
+ TestFalse(TEXT("Complete erase hides cap component"),Room->GetStaleCapComponentForTesting()->IsVisible());
+ Fixture->Destroy(); return true;
+}
+
 #if WITH_EDITOR
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellManualFixedRevealMaterialTest,
  "Darkwell.PropLab.ManualSwitch.FixedRevealMaterialContract", Darkwell::SightWeaveAdapterTests::TestFlags)
@@ -1304,6 +1396,20 @@ bool FDarkwellManualFixedRevealMaterialTest::RunTest(const FString&)
  auto* ProxyAlpha=Cast<UMaterialExpressionCustom>(Proxy->GetEditorOnlyData()->Opacity.Expression);
  TestTrue(TEXT("Proxy can only show unresolved previously discovered cells, never snapshotValid whole-body opacity"),
   ProxyAlpha && ProxyAlpha->Code==TEXT("return Ready > 0.5 ? saturate(State.b) : 0.0;"));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellManualStaleCutCapMaterialTest,
+ "Darkwell.PropLab.ManualSwitch.Mode2BlackCutCapMaterial", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellManualStaleCutCapMaterialTest::RunTest(const FString&)
+{
+ auto* M=LoadObject<UMaterial>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_ManualStaleCutCap.M_ManualStaleCutCap"));
+ if(!TestNotNull(TEXT("Dedicated cut-only material"),M)) return false;
+ TestEqual(TEXT("Opaque solid section, not a black unknown overlay"),M->BlendMode,BLEND_Opaque);
+ TestTrue(TEXT("Unlit stable black interior"),M->GetShadingModels().HasShadingModel(MSM_Unlit));
+ TestTrue(TEXT("Both scan directions see the same cap"),M->TwoSided);
+ TestNull(TEXT("Cap material cannot move or scale geometry"),M->GetEditorOnlyData()->WorldPositionOffset.Expression);
+ TestNull(TEXT("Cap has no opacity-driven body replacement"),M->GetEditorOnlyData()->Opacity.Expression);
  return true;
 }
 #endif

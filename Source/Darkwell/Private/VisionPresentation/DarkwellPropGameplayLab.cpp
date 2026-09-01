@@ -1,6 +1,7 @@
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "VisionPresentation/DarkwellStalePropLabComponent.h"
 #include "VisionPresentation/DarkwellManualStaleRoom.h"
+#include "VisionPresentation/DarkwellMovingPropLabRoom.h"
 #include "AI/DarkwellStalkerCharacter.h"
 #include "BrainComponent.h"
 #include "AIController.h"
@@ -121,7 +122,31 @@ void ADarkwellPropLabFurniture::OnConstruction(const FTransform& Transform)
   Memory->AddMemoryPrimitive(Part);
  };
  const double W = Dimensions.X, D = Dimensions.Y, H = Dimensions.Z;
- if (Shape == 2)
+ if (Shape == 5)
+ {
+  Add(FVector(0,0,12),FVector(W,D,24));
+  Add(FVector(0,0,32),FVector(W-8,D-8,16));
+  Add(FVector(-W/2+5,0,H/2),FVector(10,D,H));
+ }
+ else if (Shape == 6)
+ {
+  Add(FVector(0,0,H-6),FVector(W,D,12));
+  for(double X:{-1.0,1.0}) for(double Y:{-1.0,1.0})
+   Add(FVector(X*(W/2-7),Y*(D/2-7),(H-12)/2),FVector(10,10,H-12));
+ }
+ else if (Shape == 7)
+ {
+  Add(FVector(0,0,4),FVector(W, D, 8));
+  // Leave a real gap around the table top. The lamp and table aggregate bounds
+  // overlap, while no primitive surfaces intersect or become coplanar.
+  Add(FVector(0,0,39),FVector(8,8,62));
+  Add(FVector(0,0,105),FVector(W*.8,D*.8,30));
+ }
+ else if (Shape == 8)
+ {
+  Add(FVector(0,0,H/2),FVector(W,D,H));
+ }
+ else if (Shape == 2)
  {
   for (double X : {-1.0, 1.0}) for (double Y : {-1.0, 1.0}) Add(FVector(X*(W/2-3),Y*(D/2-3),H/2),FVector(6,6,H));
   // Shelves meet the inner post faces; no intersecting coplanar exterior skin.
@@ -141,7 +166,7 @@ void ADarkwellPropLabFurniture::OnConstruction(const FTransform& Transform)
    if (Shape == 0 && bIndividualWorktop) Add(FVector(0,0,H+2),FVector(W,D,4));
   }
  }
- Memory->ConfigureStableId(StableId);
+ Memory->ConfigureStableId(bSpatialHistoryManaged ? NAME_None : StableId);
 }
 
 void ADarkwellPropLabFurniture::BeginPlay()
@@ -149,7 +174,8 @@ void ADarkwellPropLabFurniture::BeginPlay()
  // Saved actor properties and native parts are bound before component BeginPlay.
  OnConstruction(GetActorTransform());
  auto* Parent = LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_PropLabSurface.M_PropLabSurface"));
- if (ADarkwellManualStaleRoom::FindActive(GetWorld()) && StableId==ADarkwellManualStaleRoom::CabinetId())
+ if ((ADarkwellManualStaleRoom::FindActive(GetWorld()) && StableId==ADarkwellManualStaleRoom::CabinetId())
+	 || bSpatialHistoryManaged)
  {
   if (auto* Masked=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_ManualFixedReveal.M_ManualFixedReveal")))
   { Parent=Masked; bManualFixedRevealMaterial=true; }
@@ -166,6 +192,19 @@ void ADarkwellPropLabFurniture::BeginPlay()
  SetManualFixedRevealEnabled(Darkwell::PropLab::PresentationMode(GetWorld())==2);
  // Register the initial memory after its final material bindings exist.
  Super::BeginPlay();
+}
+
+void ADarkwellPropLabFurniture::BindSpatialState(UTexture* StateTexture, const FBox2D& WorldBounds)
+{
+ if(!bSpatialHistoryManaged || !StateTexture || !WorldBounds.bIsValid) return;
+ const FVector2D Inv=FVector2D(1,1)/WorldBounds.GetSize();
+ for(UMaterialInstanceDynamic* Material:Materials)
+ {
+  Material->SetTextureParameterValue(TEXT("SpatialStateTexture"),StateTexture);
+  Material->SetVectorParameterValue(TEXT("SpatialMinInv"),FLinearColor(WorldBounds.Min.X,WorldBounds.Min.Y,Inv.X,Inv.Y));
+  Material->SetScalarParameterValue(TEXT("SpatialReady"),1);
+  Material->SetScalarParameterValue(TEXT("FixedRevealEnabled"),1);
+ }
 }
 
 bool ADarkwellPropLabFurniture::SetManualFixedRevealEnabled(bool bEnabled)
@@ -214,11 +253,13 @@ ADarkwellPropGameplayLab::ADarkwellPropGameplayLab()
 
 FBox2D ADarkwellPropGameplayLab::GetSightWeaveFloorBounds() const
 {
+ if(auto* Room=ADarkwellMovingPropLabRoom::FindActive(GetWorld())) return Room->FloorBounds();
  if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld())) return Room->FloorBounds();
  return FBox2D(FVector2D(-1250,-950),FVector2D(1250,950));
 }
 void ADarkwellPropGameplayLab::BuildSightWeaveOccluderSegments(TArray<FDarkwellVisionIntegrationSegment>& Out) const
 {
+ if(auto* Room=ADarkwellMovingPropLabRoom::FindActive(GetWorld())) { Room->BuildOccluders(Out); return; }
  if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld())) { Room->BuildOccluders(Out); return; }
  Out.Reset();
  for (int32 I=1; I<LabStructure.Num(); ++I)
@@ -232,6 +273,12 @@ void ADarkwellPropGameplayLab::BuildSightWeaveOccluderSegments(TArray<FDarkwellV
 void ADarkwellPropGameplayLab::BuildSightWeaveStaticSurfaces(TArray<FDarkwellVisionIntegrationSurface>& Out) const
 {
  Out.Reset(); auto& Floor = Out.AddDefaulted_GetRef();
+ if(auto* Room=ADarkwellMovingPropLabRoom::FindActive(GetWorld()))
+ {
+  const FBox2D B=Room->FloorBounds();
+  Floor.WorldFootprint={B.Min,FVector2D(B.Max.X,B.Min.Y),B.Max,FVector2D(B.Min.X,B.Max.Y)};
+  Floor.NeutralIntensity=90; return;
+ }
  if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld()))
  {
   const FBox2D B=Room->FloorBounds();
@@ -246,6 +293,7 @@ bool ADarkwellPropGameplayLab::EnableDarkwellProjectFogP4(UTexture* Raw, FVector
 {
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return false;
  RawCoverage=Raw; FogMin=Min; FogInv=Inv;
+ if(auto* Room=ADarkwellMovingPropLabRoom::FindActive(GetWorld())) Room->BindRoomPresentation(Raw,Min,Inv);
  if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld())) Room->BindRoomPresentation(Raw,Min,Inv);
  auto* Parent=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Darkwell/Vision/PropLab/M_PropLabSurface.M_PropLabSurface"));
  for (int32 I=0; I<LabStructure.Num(); ++I)
@@ -274,9 +322,12 @@ void ADarkwellPropGameplayLab::DisableDarkwellProjectFog() { RawCoverage=nullptr
 
 void ADarkwellPropGameplayLab::BeginPlay()
 {
+ if(GetWorld() && GetWorld()->URL.HasOption(TEXT("MoveRules"))
+  && !ADarkwellMovingPropLabRoom::FindActive(GetWorld()))
+  GetWorld()->SpawnActor<ADarkwellMovingPropLabRoom>();
  Super::BeginPlay();
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) { SetActorTickEnabled(false); return; }
- if(ADarkwellManualStaleRoom::FindActive(GetWorld()))
+ if(ADarkwellManualStaleRoom::FindActive(GetWorld()) || ADarkwellMovingPropLabRoom::FindActive(GetWorld()))
  {
   for(UStaticMeshComponent* Part:LabStructure) { Part->SetVisibility(false); Part->SetCollisionEnabled(ECollisionEnabled::NoCollision); }
   for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It) It->SetActorEnableCollision(false);
@@ -329,6 +380,15 @@ void ADarkwellPropGameplayLab::UpdateSoftCoverage(float DeltaSeconds)
 void ADarkwellPropGameplayLab::AdvanceRouteBeforeActors(UWorld* World, ELevelTick TickType, float DeltaSeconds)
 {
  if (World!=GetWorld() || !Darkwell::PropLab::IsLabWorld(World)) return;
+ if(auto* Room=ADarkwellMovingPropLabRoom::FindActive(World))
+ {
+  if(!bPlayerInitialized && World->GetSubsystem<UDarkwellFogVisualSubsystem>()->IsActive())
+  {
+   Room->ResetRoom(Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)));
+   bPlayerInitialized=true;
+  }
+  return;
+ }
  if(auto* Room=ADarkwellManualStaleRoom::FindActive(World))
  {
   if(!Room->IsStarted() && World->GetSubsystem<UDarkwellFogVisualSubsystem>()->IsActive())
@@ -369,6 +429,13 @@ void ADarkwellPropGameplayLab::Tick(float DeltaSeconds)
 {
  Super::Tick(DeltaSeconds);
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
+ if(auto* Room=ADarkwellMovingPropLabRoom::FindActive(GetWorld()))
+ {
+  if(RawCoverage) for(TActorIterator<ADarkwellPropLabFurniture> It(GetWorld());It;++It)
+   if(It->bSpatialHistoryManaged) It->BindPresentation(RawCoverage,RawCoverage,FogMin,FogInv,0);
+  Room->UpdateRoom(DeltaSeconds,Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)));
+  return;
+ }
  if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld()))
  {
   // The manual cabinet owns cumulative per-position knowledge in Room. The
@@ -472,6 +539,14 @@ void ADarkwellPropGameplayLab::Event(const FString& Command)
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
  if (!Darkwell::PropLab::IsLabWorld(GetWorld())) return;
  TArray<FString> Words; Command.ParseIntoArrayWS(Words);
+ if(Words.Num() && Words[0]==TEXT("moverules"))
+ {
+  if(auto* Room=ADarkwellMovingPropLabRoom::FindActive(GetWorld())) Room->Command(Words);
+  else if(Words.Num()==2 && (Words[1]==TEXT("reset") || Words[1]==TEXT("help")))
+   UGameplayStatics::OpenLevel(this,TEXT("/Game/Maps/L_ProjectFogPropGameplayLab"),true,TEXT("PropLabOriginal?MoveRules"));
+  else UE_LOG(LogDarkwellPropLab,Display,TEXT("Use Darkwell.PropLab moverules reset to enter the moving and multi-prop room."));
+  return;
+ }
  if(Words.Num() && Words[0]==TEXT("stalemanual"))
  {
   if(auto* Room=ADarkwellManualStaleRoom::FindActive(GetWorld())) Room->Command(Words);

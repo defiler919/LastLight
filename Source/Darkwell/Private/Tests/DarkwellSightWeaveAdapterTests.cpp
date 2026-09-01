@@ -29,6 +29,7 @@
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "VisionPresentation/DarkwellStalePropLabComponent.h"
 #include "VisionPresentation/DarkwellManualStaleRoom.h"
+#include "VisionPresentation/DarkwellMovingPropLabRoom.h"
 #include "HAL/IConsoleManager.h"
 #include "Engine/StaticMesh.h"
 #include "StaticMeshResources.h"
@@ -1373,6 +1374,137 @@ bool FDarkwellManualStaleCutCapTest::RunTest(const FString&)
  for(int32 Sweep=0;Sweep<3;++Sweep) for(float Yaw=-30;Yaw<=210;Yaw+=1) Step(FVector(4500,150,92),Yaw,4);
  TestEqual(TEXT("Complete erase removes every meaningless dark-gray cap"),Room->GetStaleCapTriangleCount(),0);
  TestFalse(TEXT("Complete erase hides cap component"),Room->GetStaleCapComponentForTesting()->IsVisible());
+ Fixture->Destroy(); return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMovingPropRoomRuntimeTest,
+ "Darkwell.PropLab.MovingRules.Runtime.AtoBtoCAndMultiCounts", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellMovingPropRoomRuntimeTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("MovingPropRoom"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+ UWorld* World=TestWorld.Get();
+ World->URL.AddOption(TEXT("PropLabOriginal"));
+ World->URL.AddOption(TEXT("MoveRules"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-1100,300,92),FRotator(0,90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>(); Fixture->PostInitializeComponents(); Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);
+ auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("MoveRules URL spawns the isolated native room"),Room) || !Player || !Adapter) return false;
+ TestTrue(TEXT("Moving room activates ordinary SightWeave authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Reset establishes deterministic basic-geometry identities"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames=30)
+ {
+  for(int32 Frame=0;Frame<Frames;++Frame)
+  { Adapter->Tick(1.f/30); Room->UpdateRoom(1.f/30,Player); Fixture->Tick(1.f/30); }
+ };
+ Step();
+ int32 EnemyCount=0; for(TActorIterator<ADarkwellStalkerCharacter> It(World);It;++It) ++EnemyCount;
+ TestEqual(TEXT("No placed or spawned enemy in moving room"),EnemyCount,0);
+ TestEqual(TEXT("Cabinet, bed, table, lamp, thin panel and two twins are present"),Room->GetTrackedIdentityCount(),7);
+ TMap<FName,int32> PrimitiveCounts;
+ for(TActorIterator<ADarkwellPropLabFurniture> It(World);It;++It) if(It->bSpatialHistoryManaged)
+ {
+  TestTrue(TEXT("Spatial history proxy authority never registers a second StableID"),It->Memory->GetStableId().IsNone());
+  TestFalse(TEXT("Duplicate actual StableID fails closed"),PrimitiveCounts.Contains(It->StableId));
+  PrimitiveCounts.Add(It->StableId,It->Memory->GetMemoryPrimitives().Num());
+ }
+ TestEqual(TEXT("Cabinet is a three-part basic fixture"),PrimitiveCounts.FindRef(TEXT("Lab.Moving.Cabinet")),3);
+ TestEqual(TEXT("Bed is a three-part basic fixture"),PrimitiveCounts.FindRef(TEXT("Lab.Moving.Bed")),3);
+ TestEqual(TEXT("Table has top and four legs"),PrimitiveCounts.FindRef(TEXT("Lab.Moving.Table")),5);
+ TestEqual(TEXT("Lamp uses base, thin stem and shade"),PrimitiveCounts.FindRef(TEXT("Lab.Moving.Lamp")),3);
+ TestEqual(TEXT("Thin panel stays one thin primitive"),PrimitiveCounts.FindRef(TEXT("Lab.Moving.ThinPanel")),1);
+ ADarkwellPropLabFurniture* Table=nullptr; ADarkwellPropLabFurniture* Lamp=nullptr;
+ for(TActorIterator<ADarkwellPropLabFurniture> It(World);It;++It)
+ {
+  if(It->StableId==TEXT("Lab.Moving.Table")) Table=*It;
+  if(It->StableId==TEXT("Lab.Moving.Lamp")) Lamp=*It;
+ }
+ FBox TableBounds(ForceInit),LampBounds(ForceInit); bool bPrimitiveIntersection=false;
+ if(Table && Lamp)
+ {
+  for(const TObjectPtr<UStaticMeshComponent>& Part:Table->Memory->GetMemoryPrimitives()) TableBounds+=Part->Bounds.GetBox();
+  for(const TObjectPtr<UStaticMeshComponent>& Part:Lamp->Memory->GetMemoryPrimitives()) LampBounds+=Part->Bounds.GetBox();
+  for(const TObjectPtr<UStaticMeshComponent>& A:Table->Memory->GetMemoryPrimitives())
+   for(const TObjectPtr<UStaticMeshComponent>& B:Lamp->Memory->GetMemoryPrimitives())
+    bPrimitiveIntersection|=A->Bounds.GetBox().Intersect(B->Bounds.GetBox());
+ }
+ TestTrue(TEXT("Table and lamp intentionally exercise overlapping aggregate bounds"),TableBounds.Intersect(LampBounds));
+ TestFalse(TEXT("Overlapping aggregate bounds use separated, non-coplanar primitives"),bPrimitiveIntersection);
+ TestFalse(TEXT("Duplicate StableID is rejected without creating a second actor identity"),Room->TryDuplicateStableIdForTesting(TEXT("Lab.Moving.Cabinet")));
+
+ TestTrue(TEXT("Select visible translation"),Room->SelectScenario(1,Player));
+ bool bSawPresentCap=false;
+ for(int32 Yaw=0;Yaw<=180 && !bSawPresentCap;Yaw+=2)
+ {
+  Player->SetActorRotation(FRotator(0,float(Yaw),0)); Step(1);
+  bSawPresentCap=Room->GetTotalCapTriangles()>0;
+ }
+ TestTrue(TEXT("Partial PRESENT discovery uses the frozen symmetric dark-gray cap path"),bSawPresentCap);
+ Player->SetActorRotation(FRotator(0,90,0)); Step();
+ TestTrue(TEXT("Start deterministic in-view translation"),Room->AdvanceScenario(Player)); Step(130);
+ TestEqual(TEXT("Observed translation rebases one epoch and leaves no proxy chain"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),1);
+ TestEqual(TEXT("Observed translation leaves no historical proxy"),Room->GetTotalProxyCount(),0);
+
+ TestTrue(TEXT("Select visible rotation"),Room->SelectScenario(2,Player)); Step();
+ TestTrue(TEXT("Start observed 90 degree rotation"),Room->AdvanceScenario(Player)); Step(100);
+ TestTrue(TEXT("Start observed 180 degree rotation"),Room->AdvanceScenario(Player)); Step(100);
+ TestEqual(TEXT("Observed rotations keep one final observed pose"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),1);
+
+ TestTrue(TEXT("Select coverage-boundary movement"),Room->SelectScenario(6,Player)); Step();
+ TestTrue(TEXT("Start movement out of legal coverage"),Room->AdvanceScenario(Player)); Step(250);
+ TestEqual(TEXT("Last legal pose freezes once hidden movement begins"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),1);
+ TestTrue(TEXT("Explicitly observe the final real position"),Room->AdvanceScenario(Player)); Step();
+ TestEqual(TEXT("Re-entry creates a new spatial epoch without hidden interpolation"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),2);
+
+ TestTrue(TEXT("Select deterministic A-B-C scenario"),Room->SelectScenario(7,Player));
+ Step();
+ TestEqual(TEXT("A observation creates one record"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),1);
+ TestTrue(TEXT("Hidden A-B command accepted"),Room->AdvanceScenario(Player)); Step(4);
+ TestEqual(TEXT("Hidden move keeps A and reveals no B record"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),1);
+ TestTrue(TEXT("Explicit B observation phase accepted"),Room->AdvanceScenario(Player)); Step();
+ TestEqual(TEXT("Seeing B adds a second record without clearing A"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),2);
+ TestTrue(TEXT("Hidden B-C command accepted"),Room->AdvanceScenario(Player)); Step(4);
+ TestTrue(TEXT("Explicit C observation phase accepted"),Room->AdvanceScenario(Player)); Step();
+ TestEqual(TEXT("Seeing C preserves independent A and B history"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),3);
+ TestTrue(TEXT("A and B are rendered as independent no-authority proxies"),Room->GetTotalProxyCount()>=2);
+ for(TActorIterator<AActor> It(World);It;++It) if(It->GetName().StartsWith(TEXT("SpatialMemory_")))
+ {
+  TestFalse(TEXT("Spatial memory proxy has no actor collision"),It->GetActorEnableCollision());
+  TInlineComponentArray<UStaticMeshComponent*> Meshes(*It);
+  for(const UStaticMeshComponent* Mesh:Meshes)
+  { TestFalse(TEXT("Spatial memory proxy casts no duplicate shadow"),Mesh->CastShadow); TestEqual(TEXT("Spatial memory proxy mesh has no collision"),Mesh->GetCollisionEnabled(),ECollisionEnabled::NoCollision); }
+ }
+ TestTrue(TEXT("Explicit A verification phase accepted"),Room->AdvanceScenario(Player)); Step(40);
+ TestEqual(TEXT("Legal evidence at A clears only A"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),2);
+ TestTrue(TEXT("Explicit B verification phase accepted"),Room->AdvanceScenario(Player)); Step(40);
+ TestEqual(TEXT("Legal evidence at B clears only B; current C remains"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),1);
+
+ for(const int32 Count:{2,8,32})
+ {
+  TestTrue(TEXT("Supported deterministic multi count"),Room->SetMultiCount(Count,Player));
+  TArray<ADarkwellPropLabFurniture*> MultiActors;
+  for(TActorIterator<ADarkwellPropLabFurniture> It(World);It;++It) if(It->bSpatialHistoryManaged) MultiActors.Add(*It);
+  MultiActors.Sort([](const ADarkwellPropLabFurniture& A,const ADarkwellPropLabFurniture& B){return A.StableId.LexicalLess(B.StableId);});
+  for(ADarkwellPropLabFurniture* Actor:MultiActors)
+  { const FVector P=Actor->GetActorLocation(); Player->SetActorLocationAndRotation(FVector(P.X,P.Y-300,92),FRotator(0,90,0)); Step(8); }
+  TestEqual(TEXT("Every multi fixture has one unique real identity"),Room->GetTrackedIdentityCount(),Count);
+  TSet<FName> StableIds;
+  int32 Managed=0;
+  for(TActorIterator<ADarkwellPropLabFurniture> It(World);It;++It) if(It->bSpatialHistoryManaged)
+  { ++Managed; StableIds.Add(It->StableId); TestTrue(TEXT("Multi actual is excluded from ordinary single-snapshot registration"),It->Memory->GetStableId().IsNone()); }
+  TestEqual(TEXT("No duplicate managed actors"),Managed,Count);
+  TestEqual(TEXT("No duplicate StableID in 2/8/32 fixture"),StableIds.Num(),Count);
+  for(int32 Index=0;Index<Count;++Index)
+   TestEqual(TEXT("Each observed identical mesh owns an isolated spatial record"),Room->GetSpatialRecordCount(*FString::Printf(TEXT("Lab.Multi.%02d"),Index)),1);
+  TestTrue(TEXT("Explicit multi mutation hides movement and removes one actual"),Room->AdvanceScenario(Player)); Step(4);
+  TestTrue(TEXT("Moving item keeps its old record"),Room->GetSpatialRecordCount(TEXT("Lab.Multi.00"))==1);
+  TestFalse(TEXT("ABSENT item has no rendering/collision occupancy"),Room->IsActualPresent(TEXT("Lab.Multi.01")));
+  TestEqual(TEXT("ABSENT transition retains its own independent record"),Room->GetSpatialRecordCount(TEXT("Lab.Multi.01")),1);
+  for(int32 Index=2;Index<Count;++Index)
+   TestEqual(TEXT("Mutating two identities does not alter neighbors"),Room->GetSpatialRecordCount(*FString::Printf(TEXT("Lab.Multi.%02d"),Index)),1);
+ }
+ TestTrue(TEXT("HUD telemetry names the fixed rule"),Room->GetTelemetry().Contains(TEXT("SpatialEvidenceOnly")));
  Fixture->Destroy(); return true;
 }
 

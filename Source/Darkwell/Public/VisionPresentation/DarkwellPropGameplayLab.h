@@ -31,10 +31,13 @@ public:
  UPROPERTY(EditAnywhere, Category="Lab") int32 Shape = 0;
  UPROPERTY(EditAnywhere, Category="Lab") FVector Dimensions = FVector(60, 60, 90);
  UPROPERTY(EditAnywhere, Category="Lab") bool bIndividualWorktop = true;
+ /** Dedicated moving-rules room owns observation history instead of the ordinary single snapshot path. */
+ UPROPERTY(EditAnywhere, Category="Lab") bool bSpatialHistoryManaged = false;
  UPROPERTY(EditAnywhere, Category="Lab") FLinearColor Tint = FLinearColor(0.24f, 0.40f, 0.56f);
  void BindPresentation(UTexture* Raw, UTexture* Soft, FVector2D Min, FVector2D Inv, int32 Mode);
  /** Manual Mode 2 submits the SAME meshes; only their pixel mask gates visibility. */
  bool SetManualFixedRevealEnabled(bool bEnabled);
+ void BindSpatialState(UTexture* StateTexture, const FBox2D& WorldBounds);
  UPROPERTY(VisibleAnywhere, Category="Lab") TObjectPtr<UDarkwellRememberablePropComponent> Memory;
  UPROPERTY(VisibleAnywhere, Category="Lab") TArray<TObjectPtr<UStaticMeshComponent>> Parts;
  UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> Materials;

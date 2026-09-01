@@ -49,6 +49,10 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 	{
 		return Records;
 	}
+	TArrayView<FDarkwellSpatialObservationRecord> GetMutableRecords()
+	{
+		return Records;
+	}
 	FDarkwellSpatialObservationRecord* FindRecord(uint32 Epoch);
 	const FDarkwellSpatialObservationRecord* FindRecord(uint32 Epoch) const;
 
@@ -61,4 +65,3 @@ private:
 	uint64 OverflowRejectCount = 0;
 	TArray<FDarkwellSpatialObservationRecord> Records;
 };
-

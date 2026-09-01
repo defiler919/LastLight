@@ -47,6 +47,7 @@
 | First milestone | Greybox gameplay prototype before a polished vertical slice |
 | Independent vision plugin identity | `SightWeave`; modules `SightWeaveRuntime`, `SightWeaveEditor`, and `SightWeaveTests`; public C++ types use the `SightWeave` prefix |
 | SightWeave GPU live mask | M3.0 freezes CPU-triangulated polygons -> GPU dirty-tile rasterization in a new `SightWeaveRender` Runtime module; a stable floor-local sparse R8 atlas is partitioned by Knowledge Owner/floor, compatibility intermediates are transient, and GPU failure is black/fail-closed without changing CPU authority |
+| Static prop-memory presentation baseline | User accepted Mode 2 at runtime commit `39908cc67eb91d72a7d5ac35fe813367b41a7919`: cumulative spatial D/V/R, fixed original geometry and hidden same-source shadow, local `.20/.18` reveal-to-memory timing, monotonic stale erasure, symmetric solid `#343A40` caps, and conservative 4x4 bilinear presentation AA. Mode 0/1 remain Lab comparison/regression modes; production integration is deferred. |
 
 ## Deferred decisions
 

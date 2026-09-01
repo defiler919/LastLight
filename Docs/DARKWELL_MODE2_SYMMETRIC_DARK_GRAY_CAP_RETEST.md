@@ -112,3 +112,16 @@ Darkwell.PropLab stalemanual teleport bottom
 完整显露/擦除无残留，并切 Mode 0/1 检查不会留下 Mode 2 封口。
 
 用户人工 PIE 仍待执行，不能宣布 Mode 2 最终完成。
+
+## 用户人工验收结果
+
+```text
+USER MANUAL PIE: PASSED
+Date: 2026-09-01
+Accepted commit: 39908cc67eb91d72a7d5ac35fe813367b41a7919
+Decision: Mode 2 is the canonical prop-memory presentation baseline.
+```
+
+用户已在真实 PIE 中确认累计空间记忆、PRESENT/ABSENT 双向深灰色剖面、当前 4×4 保守采样和抗锯齿表现
+通过。Mode 0/1 保留为 Lab 对照、调试和回归模式，不再作为玩家默认候选。本次决定只冻结呈现稳定点，
+没有把实验系统迁入正式地图，也没有设置正式运行时默认模式。

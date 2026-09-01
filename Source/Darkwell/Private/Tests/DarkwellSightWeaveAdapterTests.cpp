@@ -1821,6 +1821,87 @@ bool FDarkwellMovingPropRotationOcclusionTest::RunTest(const FString&)
  TestEqual(TEXT("Retired historical presentation cannot reappear after view loss"),
   Room->GetHistoricalPresentationResourceCountForTesting(RotateId),0);
  AddInfo(Room->GetHistoricalVisualTelemetryForTesting(RotateId));
+	Fixture->Destroy();return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPartialRotatedStaleCapReproductionTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.PartialRotatedStaleCapReproduction", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellPartialRotatedStaleCapReproductionTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("PartialRotatedStaleCapReproduction"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("Partial-rotation Lab exists"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("Partial-rotation Lab authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Partial-rotation Lab reset"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames=1){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ auto* Control=Room->GetControlForTesting(EDarkwellMovingPropLabControlKind::VisibleRotate);
+ if(!TestNotNull(TEXT("Partial-rotation F control exists"),Control))return false;
+
+ // A. Fully observe the zero-degree cabinet through ordinary project coverage.
+ Player->SetActorLocation(FVector(-300,70,92));Player->SetActorRotation(FRotator(0,90,0));Step(90);
+ TestEqual(TEXT("Initial pose is completely inside legal coverage"),Room->GetLastLegalCoverageRatioForTesting(RotateId),1.0f);
+ World->UpdateWorldComponents(true,false);Player->GetInteractionComponent()->UpdateFocusedActorFromWorld();
+ TestEqual(TEXT("Real F trace focuses VISIBLE ROTATE"),Player->GetInteractionComponent()->GetFocusedActor(),static_cast<AActor*>(Control));
+ TestTrue(TEXT("Real F interaction arms VISIBLE ROTATE"),Player->GetInteractionComponent()->TryInteract());
+
+ // B/C. Turn away during the one-second preparation and let rotation begin hidden.
+ Player->SetActorRotation(FRotator(0,-90,0));Step(130);
+ TestEqual(TEXT("Initial full observation seals exactly once when hidden motion begins"),Room->GetSealCountForTesting(RotateId),1);
+ const float HiddenYaw=FMath::Abs(Room->GetTrackedTransform(RotateId).Rotator().Yaw);
+ TestTrue(TEXT("Hidden rotation reaches a real intermediate angle"),HiddenYaw>=40.0f&&HiddenYaw<=120.0f);
+
+ // D. Sweep only the cone edge across the rotating cabinet. No coverage value or
+ // memory cell is injected; the ordinary SightWeave/project-fog path must find a
+ // legal but deliberately partial observation.
+ bool bFoundPartial=false;
+ float PartialRatio=0.0f;
+ for(int32 Yaw=150;Yaw>=135&&!bFoundPartial;--Yaw)
+ {
+  Player->SetActorRotation(FRotator(0,float(Yaw),0));Step(2);
+  PartialRatio=Room->GetLastLegalCoverageRatioForTesting(RotateId);
+  bFoundPartial=PartialRatio>=0.08f&&PartialRatio<0.35f;
+ }
+ TestTrue(TEXT("Cone-edge sweep produces genuine partial legal coverage"),bFoundPartial);
+ TestTrue(TEXT("Partial reacquire occurs while the cabinet is still rotating"),Room->GetMotionState()==TEXT("RUNNING"));
+ Step(4);
+ Player->SetActorRotation(FRotator(0,-90,0));Step(3);
+ TestEqual(TEXT("Turning away after partial reacquire seals one intermediate epoch"),Room->GetSealCountForTesting(RotateId),2);
+ const int32 PartialDiscovered=Room->GetNewestHistoricalDiscoveredCellCountForTesting(RotateId);
+ const int32 PartialCells=Room->GetNewestHistoricalCellCountForTesting(RotateId);
+ TestTrue(TEXT("Intermediate epoch contains real discovered-present samples"),PartialDiscovered>0);
+ TestTrue(TEXT("Intermediate epoch remains a local fragment, never a whole cabinet"),PartialDiscovered<PartialCells);
+
+ // E/F. Finish at 180 degrees while hidden, then slowly reacquire through the
+ // same ordinary cone edge before allowing the whole final cabinet to become Live.
+ Step(300);
+ TestEqual(TEXT("Hidden motion finishes at 180 degrees"),
+  static_cast<int32>(FMath::RoundToInt(FMath::Abs(Room->GetTrackedTransform(RotateId).Rotator().Yaw))),180);
+ int32 MaxSurface3DOverlap=0,MaxCap3DOverlap=0,Max3DOwnership=0;
+ for(int32 Yaw=155;Yaw>=90;--Yaw)
+ {
+  Player->SetActorRotation(FRotator(0,float(Yaw),0));Step(2);
+  MaxSurface3DOverlap=FMath::Max(MaxSurface3DOverlap,Room->GetCurrent3DOverlapStaleSurfaceForTesting(RotateId));
+  MaxCap3DOverlap=FMath::Max(MaxCap3DOverlap,Room->GetCurrent3DOverlapStaleCapForTesting(RotateId));
+  Max3DOwnership=FMath::Max(Max3DOwnership,Room->GetMax3DRenderOwnershipContributorsForTesting(RotateId));
+ }
+ Player->SetActorRotation(FRotator(0,90,0));Step(120);
+ MaxSurface3DOverlap=FMath::Max(MaxSurface3DOverlap,Room->GetCurrent3DOverlapStaleSurfaceForTesting(RotateId));
+ MaxCap3DOverlap=FMath::Max(MaxCap3DOverlap,Room->GetCurrent3DOverlapStaleCapForTesting(RotateId));
+ Max3DOwnership=FMath::Max(Max3DOwnership,Room->GetMax3DRenderOwnershipContributorsForTesting(RotateId));
+ TestEqual(TEXT("Final cabinet becomes completely legal Live geometry"),Room->GetLastLegalCoverageRatioForTesting(RotateId),1.0f);
+ TestTrue(TEXT("SpatialEvidenceOnly legitimately retains at least one stale epoch"),Room->GetStaleEpochCountForTesting(RotateId)>0);
+ // Checkpoint-A contract: this assertion deliberately proves the 9428ce9 defect
+ // without treating STALE>0 as failure. Checkpoint B will invert it to zero.
+ TestTrue(TEXT("9428ce9 reproduces stale cap inside current 3D ownership"),MaxCap3DOverlap>0&&Max3DOwnership>1);
+ AddInfo(FString::Printf(TEXT("partial_ratio=%.6f partial_discovered=%d/%d max_surface_3d_overlap=%d max_cap_3d_overlap=%d max_3d_ownership=%d %s"),
+  PartialRatio,PartialDiscovered,PartialCells,MaxSurface3DOverlap,MaxCap3DOverlap,Max3DOwnership,
+  *Room->Get3DOwnershipTelemetryForTesting(RotateId)));
  Fixture->Destroy();return true;
 }
 

@@ -125,6 +125,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetMaxSurfaceContributorsForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetMaxCapContributorsForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetMaxTotalContributorsForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetCurrent3DOverlapStaleSurfaceForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetCurrent3DOverlapStaleCapForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetMax3DRenderOwnershipContributorsForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString Get3DOwnershipTelemetryForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetNewestHistoricalDiscoveredCellCountForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetNewestHistoricalCellCountForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") float GetLastLegalCoverageRatioForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") bool IsLastCoverageValidForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetLastCoverageZeroReasonForTesting(FName StableId) const;
@@ -145,6 +151,22 @@ public:
 	void StopMotion();
 
 private:
+	struct FPrimitiveGeometrySnapshot
+	{
+		FBox LocalBounds = FBox(ForceInit);
+		FTransform WorldTransform = FTransform::Identity;
+		int32 PrimitiveIndex = INDEX_NONE;
+	};
+
+	struct FCapQuadSnapshot
+	{
+		FVector A = FVector::ZeroVector;
+		FVector B = FVector::ZeroVector;
+		FVector C = FVector::ZeroVector;
+		FVector D = FVector::ZeroVector;
+		int32 PrimitiveIndex = INDEX_NONE;
+	};
+
 	struct FRecordVisual
 	{
 		uint32 Epoch = 0;
@@ -152,6 +174,8 @@ private:
 		TWeakObjectPtr<UTexture2D> Texture;
 		TWeakObjectPtr<UDynamicMeshComponent> Cap;
 		TArray<FBox> PartBounds;
+		TArray<FPrimitiveGeometrySnapshot> PartGeometry;
+		TArray<FCapQuadSnapshot> CapQuads;
 		uint64 CapSignature = 0;
 		uint64 TextureSignature = 0;
 		int32 CapTriangles = 0;
@@ -193,6 +217,12 @@ private:
 		int32 MaxCapContributors = 0;
 		int32 MaxTotalContributors = 0;
 		int32 VisibleHistoricalCaps = 0;
+		int32 Current3DOverlapStaleSurface = 0;
+		int32 Current3DOverlapStaleCap = 0;
+		int32 Max3DRenderOwnershipContributors = 0;
+		uint32 Offending3DEpoch = 0;
+		int32 Offending3DPrimitive = INDEX_NONE;
+		FVector Offending3DWorldPosition = FVector::ZeroVector;
 		float LastLegalCoverageRatio = 0.0f;
 		uint64 TransformRevision = 1;
 		uint64 GridRevision = 1;
@@ -254,6 +284,17 @@ private:
 	FName GetInWorldPropId(EDarkwellMovingPropLabControlKind Kind) const;
 	FBox2D ActualBounds(const ADarkwellPropLabFurniture& Prop) const;
 	TArray<FBox> ActualPartBounds(const ADarkwellPropLabFurniture& Prop) const;
+	TArray<FPrimitiveGeometrySnapshot> ActualPartGeometry(
+		const ADarkwellPropLabFurniture& Prop) const;
+	static bool QueryVerticalInterval(
+		const FPrimitiveGeometrySnapshot& Geometry,
+		FVector2D Point,
+		double& OutMinZ,
+		double& OutMaxZ);
+	bool CollectCurrentOwnedVerticalIntervals(
+		const FTrackedProp& Prop,
+		FVector2D Point,
+		TArray<FVector2D>& OutIntervals) const;
 	TArray<float> ConservativeCoverage(const FBox2D& Bounds) const;
 	FCoverageSnapshot SampleConservativeCoverage(
 		const FBox2D& Bounds,

@@ -3,6 +3,7 @@
 #include "Camera/CameraComponent.h"
 #include "Combat/DarkwellLoadoutComponent.h"
 #include "Components/DynamicMeshComponent.h"
+#include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "DynamicMesh/DynamicMesh3.h"
@@ -79,10 +80,12 @@ namespace Darkwell::MovingPropLab
 ADarkwellMovingPropLabControl::ADarkwellMovingPropLabControl()
 {
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
+	ControlRoot = CreateDefaultSubobject<USceneComponent>(TEXT("ControlRoot"));
+	SetRootComponent(ControlRoot);
 	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ControlBody"));
-	SetRootComponent(Body);
+	Body->SetupAttachment(ControlRoot);
 	Body->SetStaticMesh(Cube.Object);
-	Body->SetRelativeScale3D(FVector(1.4f, 1.0f, 0.35f));
+	Body->SetRelativeScale3D(FVector(1.8f, 1.35f, 0.40f));
 	Body->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	Body->SetCollisionObjectType(ECC_WorldDynamic);
 	Body->SetCollisionResponseToAllChannels(ECR_Ignore);
@@ -92,14 +95,25 @@ ADarkwellMovingPropLabControl::ADarkwellMovingPropLabControl()
 	Body->SetCastShadow(false);
 
 	Label = CreateDefaultSubobject<UTextRenderComponent>(TEXT("ControlLabel"));
-	Label->SetupAttachment(Body);
-	Label->SetRelativeLocation(FVector(0, 0, 170));
-	Label->SetRelativeRotation(FRotator(0, 90, 0));
+	Label->SetupAttachment(ControlRoot);
+	Label->SetRelativeLocation(FVector(0, -72, 92));
+	Label->SetRelativeRotation(FRotator(0, -90, 0));
 	Label->SetHorizontalAlignment(EHTA_Center);
 	Label->SetVerticalAlignment(EVRTA_TextCenter);
-	Label->SetWorldSize(34.0f);
+	Label->SetWorldSize(42.0f);
 	Label->SetTextRenderColor(FColor(90, 255, 150));
 	Label->SetCastShadow(false);
+
+	StatusIndicator = CreateDefaultSubobject<UTextRenderComponent>(TEXT("ControlStatusIndicator"));
+	StatusIndicator->SetupAttachment(ControlRoot);
+	StatusIndicator->SetRelativeLocation(FVector(0, -74, 155));
+	StatusIndicator->SetRelativeRotation(FRotator(0, -90, 0));
+	StatusIndicator->SetHorizontalAlignment(EHTA_Center);
+	StatusIndicator->SetVerticalAlignment(EVRTA_TextCenter);
+	StatusIndicator->SetWorldSize(58.0f);
+	StatusIndicator->SetText(FText::FromString(TEXT("●")));
+	StatusIndicator->SetTextRenderColor(FColor(90, 255, 150));
+	StatusIndicator->SetCastShadow(false);
 }
 
 void ADarkwellMovingPropLabControl::Configure(
@@ -116,12 +130,17 @@ void ADarkwellMovingPropLabControl::Configure(
 void ADarkwellMovingPropLabControl::RefreshDisplay()
 {
 	Label->SetText(Room.IsValid() ? Room->GetInWorldControlDisplay(Kind) : BaseLabel);
-	Label->SetTextRenderColor(bFocused ? FColor::Yellow : FColor(90, 255, 150));
+	const FColor StateColor = Room.IsValid()
+		? Room->GetInWorldControlColor(Kind) : FColor(90, 255, 150);
+	Label->SetTextRenderColor(bFocused ? FColor::Yellow : StateColor);
+	StatusIndicator->SetTextRenderColor(bFocused ? FColor::White : StateColor);
 }
 
 bool ADarkwellMovingPropLabControl::CanInteract(const ADarkwellCharacter&) const
 {
-	return Room.IsValid() && Room->CanActivateInWorldControl(Kind);
+	// A focused but blocked control must remain a valid interactable so its prompt
+	// can explain BUSY / COMPLETED / DISTANCE state. Activation remains authoritative.
+	return Room.IsValid() && Room->CanFocusInWorldControl();
 }
 
 void ADarkwellMovingPropLabControl::Interact(ADarkwellCharacter& Character)
@@ -146,12 +165,11 @@ void ADarkwellMovingPropLabControl::OnInteractionFocusChanged(const bool bInFocu
 
 bool ADarkwellMovingPropLabControl::TriggerForLabEvidence(ADarkwellCharacter* Character)
 {
-	if (!Character || !CanInteract(*Character))
+	if (!Character || !Room.IsValid() || !CanInteract(*Character))
 	{
 		return false;
 	}
-	Interact(*Character);
-	return true;
+	return Room->ActivateInWorldControl(Kind, *Character);
 }
 
 ADarkwellMovingPropLabRoom::ADarkwellMovingPropLabRoom()
@@ -517,7 +535,9 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			}
 			else
 			{
-				Prop.History.FreezeCurrentForHiddenMovement();
+				// Fallback for externally driven hidden motion. In-world scenarios seal
+				// the epoch before StartMotion, so they never enter through this late path.
+				FreezeCurrentForHiddenMotion(Prop, TEXT("UNANNOUNCED_HIDDEN_TRANSFORM"));
 			}
 		}
 		if (Prop.History.GetCurrentIndex() == INDEX_NONE && bAnyLegal)
@@ -612,6 +632,51 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 	Prop.History.ReleaseFullyErasedRecords();
 }
 
+bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
+	FTrackedProp& Prop,
+	const TCHAR* Reason)
+{
+	const int32 CurrentIndex = Prop.History.GetCurrentIndex();
+	if (CurrentIndex == INDEX_NONE)
+	{
+		return false;
+	}
+	FDarkwellSpatialObservationRecord& Current =
+		Prop.History.GetMutableRecords()[CurrentIndex];
+	const uint32 Epoch = Current.Epoch;
+	EnsureRecordVisual(Prop, Current);
+	UpdateRecordTexture(Prop, Current);
+	UpdateRecordCap(Prop, Current);
+
+	// Hide the original source before making the stale proxy renderable. Both
+	// state changes happen on the game thread before StartMotion advances the
+	// actor, so the overlapping start pose can never draw two coplanar layers.
+	if (ADarkwellPropLabFurniture* Actual = Prop.Actual.Get())
+	{
+		Actual->Memory->ApplySourceGeometryVisibility(false);
+	}
+	if (!Prop.History.FreezeCurrentForHiddenMovement())
+	{
+		return false;
+	}
+	++Prop.HiddenFreezeCount;
+	if (FDarkwellSpatialObservationRecord* Historical = Prop.History.FindRecord(Epoch))
+	{
+		EnsureRecordVisual(Prop, *Historical);
+		UpdateRecordTexture(Prop, *Historical);
+		UpdateRecordCap(Prop, *Historical);
+	}
+	const FRecordVisual* Visual = Prop.Visuals.Find(Epoch);
+	UE_LOG(LogDarkwellMovingPropLab, Display,
+		TEXT("MOVING_RULES_STALE_SEALED id=%s epoch=%u reason=%s freezes=%d proxy=%d texture=%dx%d uploads=%d"),
+		*Prop.StableId.ToString(), Epoch, Reason, Prop.HiddenFreezeCount,
+		Visual && Visual->Proxy.IsValid() ? Visual->Proxy->GetUniqueID() : 0,
+		Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeX() : 0,
+		Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeY() : 0,
+		Visual ? Visual->TextureUploadCount : 0);
+	return true;
+}
+
 bool ADarkwellMovingPropLabRoom::SetTrackedExists(
 	const FName StableId,
 	const bool bExists)
@@ -624,13 +689,7 @@ bool ADarkwellMovingPropLabRoom::SetTrackedExists(
 	}
 	if (!bExists)
 	{
-		if (Prop->History.GetCurrentIndex() != INDEX_NONE)
-		{
-			FDarkwellSpatialObservationRecord& Current =
-				Prop->History.GetMutableRecords()[Prop->History.GetCurrentIndex()];
-			EnsureRecordVisual(*Prop, Current);
-			Prop->History.FreezeCurrentForHiddenMovement();
-		}
+		FreezeCurrentForHiddenMotion(*Prop, TEXT("ACTUAL_BECAME_ABSENT"));
 		Actual->Memory->ApplySourceGeometryVisibility(false);
 		Actual->SetActorEnableCollision(false);
 		Actual->SetActorHiddenInGame(true);
@@ -659,6 +718,20 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 	Visual.Epoch = Record.Epoch;
 	const FIntPoint Size = Record.SpatialMemory.GetSize()
 		* Darkwell::MovingPropLab::PresentationSamples;
+	if (!Record.bCurrentObservedLocation)
+	{
+		if (Visual.HistoricalTextureSize == FIntPoint::ZeroValue)
+		{
+			Visual.HistoricalTextureSize = Size;
+		}
+		else if (Visual.HistoricalTextureSize != Size)
+		{
+			UE_LOG(LogDarkwellMovingPropLab, Error,
+				TEXT("MOVING_RULES_STALE_SIZE_CHANGED id=%s epoch=%u locked=%dx%d requested=%dx%d"),
+				*Prop.StableId.ToString(), Record.Epoch,
+				Visual.HistoricalTextureSize.X, Visual.HistoricalTextureSize.Y, Size.X, Size.Y);
+		}
+	}
 	const bool bTextureSizeChanged = Visual.Texture.IsValid()
 		&& (Visual.Texture->GetSizeX() != Size.X || Visual.Texture->GetSizeY() != Size.Y);
 	if (!Visual.Texture.IsValid() || bTextureSizeChanged)
@@ -674,6 +747,8 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 		Bulk.Unlock();
 		Texture->UpdateResource();
 		Visual.Texture = Texture;
+		++Visual.TextureCreationCount;
+		Visual.TextureSignature = 0;
 		OwnedTextures.Add(Texture);
 		if (bTextureSizeChanged)
 		{
@@ -710,8 +785,23 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 		if (AActor* Proxy = SpawnMemoryProxy(Prop, Record))
 		{
 			Visual.Proxy = Proxy;
+			++Visual.ProxyCreationCount;
 			BindProxyMaterial(Prop, Record, Proxy);
 		}
+	}
+	if (!Record.bCurrentObservedLocation && Visual.Proxy.IsValid())
+	{
+		const bool bVisible = !Visual.Proxy->IsHidden();
+		if (Visual.bHasProxyVisibilitySample && Visual.bLastProxyVisible != bVisible)
+		{
+			++Visual.ProxyVisibilityTransitions;
+			UE_LOG(LogDarkwellMovingPropLab, Warning,
+				TEXT("MOVING_RULES_STALE_VISIBILITY_CHANGED id=%s epoch=%u visible=%d transitions=%d"),
+				*Prop.StableId.ToString(), Record.Epoch, bVisible,
+				Visual.ProxyVisibilityTransitions);
+		}
+		Visual.bHasProxyVisibilitySample = true;
+		Visual.bLastProxyVisible = bVisible;
 	}
 }
 
@@ -731,6 +821,26 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
 	{
 		return;
 	}
+	uint64 Signature = 1469598103934665603ull;
+	auto MixFloat = [&Signature](const float Value)
+	{
+		uint32 Bits = 0;
+		FMemory::Memcpy(&Bits, &Value, sizeof(Bits));
+		Signature = (Signature ^ Bits) * 1099511628211ull;
+	};
+	for (const FLinearColor& Pixel : Presentation)
+	{
+		MixFloat(Pixel.R);
+		MixFloat(Pixel.G);
+		MixFloat(Pixel.B);
+		MixFloat(Pixel.A);
+	}
+	if (Visual->TextureSignature == Signature)
+	{
+		return;
+	}
+	Visual->TextureSignature = Signature;
+	++Visual->TextureUploadCount;
 	FFloat16Color* Pixels = new FFloat16Color[Presentation.Num()];
 	for (int32 Index = 0; Index < Presentation.Num(); ++Index)
 	{
@@ -957,6 +1067,7 @@ void ADarkwellMovingPropLabRoom::TeleportPlayer(
 void ADarkwellMovingPropLabRoom::ConfigureInWorldProps()
 {
 	DestroyTracked();
+	CompletedInWorldControls.Reset();
 	SpawnTracked(Darkwell::MovingPropLab::MainId, 0, FVector(160, 80, 150),
 		FLinearColor(.18f, .43f, .62f), FTransform(Darkwell::MovingPropLab::TranslateA));
 	SpawnTracked(Darkwell::MovingPropLab::RotateId, 0, FVector(150, 75, 145),
@@ -1091,6 +1202,7 @@ bool ADarkwellMovingPropLabRoom::ResetCurrentInWorldZone()
 		default: break;
 		}
 	}
+	CompletedInWorldControls.Remove(ActiveControl);
 	ResetInWorldControlState();
 	UE_LOG(LogDarkwellMovingPropLab, Display, TEXT("IN_WORLD_CONTROL reset current zone only"));
 	return true;
@@ -1107,7 +1219,66 @@ bool ADarkwellMovingPropLabRoom::CanActivateInWorldControl(
 	{
 		return bInWorldScenarioSelected;
 	}
-	return !bInWorldScenarioSelected && !bMotionActive;
+	return !IsCurrentInWorldControlBusy() && !CompletedInWorldControls.Contains(Kind);
+}
+
+bool ADarkwellMovingPropLabRoom::IsInWorldControlCompleted(
+	const EDarkwellMovingPropLabControlKind Kind) const
+{
+	return CompletedInWorldControls.Contains(Kind);
+}
+
+bool ADarkwellMovingPropLabRoom::IsCurrentInWorldControlBusy() const
+{
+	if (!bInWorldScenarioSelected || CompletedInWorldControls.Contains(ActiveControl))
+	{
+		return false;
+	}
+	if (bMotionActive || AutoDelaySeconds > 0.0f)
+	{
+		return true;
+	}
+	// Hidden scenarios remain busy while armed, while awaiting the player at B/C,
+	// and between the two pressure-plate legs. Their completion is explicit.
+	if (ActiveControl == EDarkwellMovingPropLabControlKind::HiddenAtoB
+		|| ActiveControl == EDarkwellMovingPropLabControlKind::AtoBtoC)
+	{
+		return !bInWorldFinished;
+	}
+	return !bInWorldFinished;
+}
+
+FString ADarkwellMovingPropLabRoom::GetNextInWorldControlLabel() const
+{
+	const TPair<EDarkwellMovingPropLabControlKind, const TCHAR*> Ordered[] = {
+		{EDarkwellMovingPropLabControlKind::VisibleTranslate, TEXT("VISIBLE TRANSLATE")},
+		{EDarkwellMovingPropLabControlKind::VisibleRotate, TEXT("VISIBLE ROTATE")},
+		{EDarkwellMovingPropLabControlKind::HiddenAtoB, TEXT("OFFSCREEN A -> B")},
+		{EDarkwellMovingPropLabControlKind::CoverageBoundary, TEXT("COVERAGE EDGE")},
+		{EDarkwellMovingPropLabControlKind::AtoBtoC, TEXT("A -> B -> C")},
+		{EDarkwellMovingPropLabControlKind::MultiProp, TEXT("MULTI PROP")}};
+	for (const TPair<EDarkwellMovingPropLabControlKind, const TCHAR*>& Entry : Ordered)
+	{
+		if (!CompletedInWorldControls.Contains(Entry.Key))
+		{
+			return Entry.Value;
+		}
+	}
+	return TEXT("RESET CURRENT OR RESTART PIE");
+}
+
+void ADarkwellMovingPropLabRoom::MarkActiveInWorldControlCompleted()
+{
+	if (!bInWorldScenarioSelected || ActiveControl == EDarkwellMovingPropLabControlKind::ResetCurrent)
+	{
+		return;
+	}
+	bInWorldFinished = true;
+	CompletedInWorldControls.Add(ActiveControl);
+	CurrentInteraction += FString::Printf(TEXT(" | NEXT TEST: %s"), *GetNextInWorldControlLabel());
+	UE_LOG(LogDarkwellMovingPropLab, Display,
+		TEXT("IN_WORLD_CONTROL completed scenario=%d control=%d next=%s"),
+		Scenario, static_cast<int32>(ActiveControl), *GetNextInWorldControlLabel());
 }
 
 bool ADarkwellMovingPropLabRoom::ActivateInWorldControl(
@@ -1116,6 +1287,19 @@ bool ADarkwellMovingPropLabRoom::ActivateInWorldControl(
 {
 	if (!CanActivateInWorldControl(Kind))
 	{
+		if (Kind == EDarkwellMovingPropLabControlKind::ResetCurrent)
+		{
+			CurrentInteraction = TEXT("RESET UNAVAILABLE - START AN EXPERIMENT FIRST");
+		}
+		else if (CompletedInWorldControls.Contains(Kind))
+		{
+			CurrentInteraction = TEXT("THIS EXPERIMENT IS COMPLETE - FOLLOW NEXT TEST OR RESET IT WHILE CURRENT");
+		}
+		else
+		{
+			CurrentInteraction = FString::Printf(TEXT("CONTROL BLOCKED - CURRENT SCENARIO %d IS STILL BUSY"), Scenario);
+		}
+		Report();
 		return false;
 	}
 	if (Kind == EDarkwellMovingPropLabControlKind::ResetCurrent)
@@ -1155,10 +1339,18 @@ FText ADarkwellMovingPropLabRoom::GetInWorldControlPrompt(
 	if (Kind == EDarkwellMovingPropLabControlKind::ResetCurrent)
 	{
 		return FText::FromString(bInWorldScenarioSelected
-			? TEXT("F: Reset current experiment zone") : TEXT("Reset: choose an experiment first"));
+			? TEXT("F — RESET CURRENT EXPERIMENT ZONE") : TEXT("RESET UNAVAILABLE — START AN EXPERIMENT FIRST"));
 	}
-	return FText::FromString(CanActivateInWorldControl(Kind)
-		? TEXT("F: Start this experiment") : TEXT("Use RESET CURRENT before another experiment"));
+	if (CompletedInWorldControls.Contains(Kind))
+	{
+		return FText::FromString(TEXT("COMPLETE — FOLLOW NEXT TEST; RESET ONLY CLEARS CURRENT ZONE"));
+	}
+	if (IsCurrentInWorldControlBusy())
+	{
+		return FText::FromString(FString::Printf(
+			TEXT("WAIT — SCENARIO %d IS RUNNING OR AWAITING ITS NEXT STEP"), Scenario));
+	}
+	return FText::FromString(TEXT("F — START THIS EXPERIMENT"));
 }
 
 FText ADarkwellMovingPropLabRoom::GetInWorldControlDisplay(
@@ -1176,15 +1368,49 @@ FText ADarkwellMovingPropLabRoom::GetInWorldControlDisplay(
 	case EDarkwellMovingPropLabControlKind::ResetCurrent: Name = TEXT("F  RESET CURRENT EXPERIMENT\nONLY THIS CLEARS ITS RECORDS"); break;
 	}
 	FString State = TEXT("READY");
-	if (bInWorldScenarioSelected)
+	if (Kind == EDarkwellMovingPropLabControlKind::ResetCurrent)
 	{
-		State = Kind == ActiveControl ? GetMotionState() : TEXT("WAIT FOR RESET");
-		if (Kind == EDarkwellMovingPropLabControlKind::ResetCurrent)
-		{
-			State = TEXT("ARMED");
-		}
+		State = bInWorldScenarioSelected ? TEXT("ARMED") : TEXT("NO CURRENT TEST");
+	}
+	else if (CompletedInWorldControls.Contains(Kind))
+	{
+		State = TEXT("COMPLETE");
+	}
+	else if (bInWorldScenarioSelected && Kind == ActiveControl && IsCurrentInWorldControlBusy())
+	{
+		State = bMotionActive ? TEXT("RUNNING") : TEXT("ARMED / WAITING FOR NEXT STEP");
+	}
+	else if (IsCurrentInWorldControlBusy())
+	{
+		State = FString::Printf(TEXT("WAIT - SCENARIO %d BUSY"), Scenario);
+	}
+	else if (FString(Name).Contains(GetNextInWorldControlLabel()))
+	{
+		State = TEXT("NEXT TEST");
 	}
 	return FText::FromString(FString::Printf(TEXT("%s\n[%s]"), Name, *State));
+}
+
+FColor ADarkwellMovingPropLabRoom::GetInWorldControlColor(
+	const EDarkwellMovingPropLabControlKind Kind) const
+{
+	if (Kind == EDarkwellMovingPropLabControlKind::ResetCurrent)
+	{
+		return bInWorldScenarioSelected ? FColor(255, 90, 230) : FColor(150, 70, 140);
+	}
+	if (CompletedInWorldControls.Contains(Kind))
+	{
+		return FColor(70, 220, 255);
+	}
+	if (bInWorldScenarioSelected && Kind == ActiveControl && IsCurrentInWorldControlBusy())
+	{
+		return FColor(255, 190, 45);
+	}
+	if (IsCurrentInWorldControlBusy())
+	{
+		return FColor(255, 105, 55);
+	}
+	return FColor(90, 255, 150);
 }
 
 ADarkwellMovingPropLabControl* ADarkwellMovingPropLabRoom::GetControlForTesting(
@@ -1436,6 +1662,9 @@ void ADarkwellMovingPropLabRoom::UpdatePressurePlate(ADarkwellCharacter* Player)
 	const FVector Target = ActiveControl == EDarkwellMovingPropLabControlKind::HiddenAtoB
 		? Darkwell::MovingPropLab::HiddenB
 		: (bFirstMove ? Darkwell::MovingPropLab::AbcB : Darkwell::MovingPropLab::AbcC);
+	// Seal exactly one fixed stale epoch while the source is still at A/B. This
+	// precedes the first interpolated transform and prevents a one-frame overlap.
+	FreezeCurrentForHiddenMotion(*Prop, bFirstMove ? TEXT("PRESSURE_A_TO_B") : TEXT("PRESSURE_B_TO_C"));
 	StartMotion(Actual, FTransform(Target), 4.0f);
 	bPressureWaitingForExit = true;
 	ScenarioPhase = bFirstMove ? 1 : 4;
@@ -1497,8 +1726,8 @@ void ADarkwellMovingPropLabRoom::UpdateInWorldAutomation(
 			&& ScenarioPhase == 2 && GetSpatialRecordCount(Id) >= 2)
 		{
 			ScenarioPhase = 3;
-			bInWorldFinished = true;
 			CurrentInteraction = TEXT("B SEEN / A MEMORY RETAINED - SCAN A TO ERASE IT");
+			MarkActiveInWorldControlCompleted();
 		}
 		else if (ActiveControl == EDarkwellMovingPropLabControlKind::AtoBtoC
 			&& ScenarioPhase == 2 && GetSpatialRecordCount(Id) >= 2)
@@ -1511,8 +1740,8 @@ void ADarkwellMovingPropLabRoom::UpdateInWorldAutomation(
 			&& ScenarioPhase == 5 && GetSpatialRecordCount(Id) >= 3)
 		{
 			ScenarioPhase = 6;
-			bInWorldFinished = true;
 			CurrentInteraction = TEXT("C SEEN / A+B RETAINED - VERIFY OLD LOCATIONS INDEPENDENTLY");
+			MarkActiveInWorldControlCompleted();
 		}
 	}
 }
@@ -1546,10 +1775,10 @@ void ADarkwellMovingPropLabRoom::CompleteInWorldMotionGroup()
 		}
 	}
 	ScenarioPhase = 2;
-	bInWorldFinished = true;
 	CurrentInteraction = ActiveControl == EDarkwellMovingPropLabControlKind::MultiProp
 		? TEXT("MULTI FINISHED - TWO MOVED / BOX ABSENT / TABLE UNCHANGED")
 		: TEXT("MOTION FINISHED - STATE HELD UNTIL EXPLICIT RESET");
+	MarkActiveInWorldControlCompleted();
 }
 
 void ADarkwellMovingPropLabRoom::StopMotion()
@@ -1703,6 +1932,133 @@ bool ADarkwellMovingPropLabRoom::DoSpatialRecordTexturesMatchForTesting(
 	return true;
 }
 
+int32 ADarkwellMovingPropLabRoom::GetHiddenFreezeCountForTesting(const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? Prop->HiddenFreezeCount : 0;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetHistoricalProxyVisibilityTransitionsForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	int32 Total = 0;
+	if (Prop)
+	{
+		for (const FDarkwellSpatialObservationRecord& Record : Prop->History.GetRecords())
+		{
+			if (Record.bCurrentObservedLocation) continue;
+			if (const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch))
+			{
+				Total += Visual->ProxyVisibilityTransitions;
+			}
+		}
+	}
+	return Total;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetHistoricalProxyCreationCountForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	int32 Total = 0;
+	if (Prop)
+	{
+		for (const FDarkwellSpatialObservationRecord& Record : Prop->History.GetRecords())
+		{
+			if (Record.bCurrentObservedLocation) continue;
+			if (const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch))
+			{
+				Total += Visual->ProxyCreationCount;
+			}
+		}
+	}
+	return Total;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetHistoricalTextureUploadCountForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	int32 Total = 0;
+	if (Prop)
+	{
+		for (const FDarkwellSpatialObservationRecord& Record : Prop->History.GetRecords())
+		{
+			if (Record.bCurrentObservedLocation) continue;
+			if (const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch))
+			{
+				Total += Visual->TextureUploadCount;
+			}
+		}
+	}
+	return Total;
+}
+
+uint64 ADarkwellMovingPropLabRoom::GetHistoricalVisualSignatureForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	if (!Prop) return 0;
+	uint64 Signature = 1469598103934665603ull;
+	auto Mix = [&Signature](const uint64 Value)
+	{
+		Signature = (Signature ^ Value) * 1099511628211ull;
+	};
+	auto MixFloat = [&Mix](const float Value)
+	{
+		uint32 Bits = 0;
+		FMemory::Memcpy(&Bits, &Value, sizeof(Bits));
+		Mix(Bits);
+	};
+	for (const FDarkwellSpatialObservationRecord& Record : Prop->History.GetRecords())
+	{
+		if (Record.bCurrentObservedLocation) continue;
+		Mix(Record.Epoch);
+		const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
+		Mix(Visual && Visual->Proxy.IsValid() ? Visual->Proxy->GetUniqueID() : 0);
+		Mix(Visual && Visual->Texture.IsValid() ? Visual->Texture->GetUniqueID() : 0);
+		Mix(Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeX() : 0);
+		Mix(Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeY() : 0);
+		Mix(Visual && Visual->bLastProxyVisible ? 1 : 0);
+		for (const FDarkwellSpatialPropMemory::FCell& Cell : Record.SpatialMemory.GetCells())
+		{
+			MixFloat(Cell.DiscoveredPresent);
+			MixFloat(Cell.VerifiedEmpty);
+			MixFloat(Cell.RemainingStale);
+			MixFloat(Cell.StaleOpacity);
+			MixFloat(Cell.CurrentLegalCoverage);
+		}
+	}
+	return Signature;
+}
+
+FString ADarkwellMovingPropLabRoom::GetHistoricalVisualTelemetryForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	if (!Prop) return FString::Printf(TEXT("id=%s missing"), *StableId.ToString());
+	TArray<FString> Records;
+	for (const FDarkwellSpatialObservationRecord& Record : Prop->History.GetRecords())
+	{
+		if (Record.bCurrentObservedLocation) continue;
+		const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
+		Records.Add(FString::Printf(
+			TEXT("epoch=%u proxy=%d visible=%d transitions=%d texture=%d size=%dx%d creates=%d uploads=%d"),
+			Record.Epoch,
+			Visual && Visual->Proxy.IsValid() ? Visual->Proxy->GetUniqueID() : 0,
+			Visual && Visual->bLastProxyVisible ? 1 : 0,
+			Visual ? Visual->ProxyVisibilityTransitions : 0,
+			Visual && Visual->Texture.IsValid() ? Visual->Texture->GetUniqueID() : 0,
+			Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeX() : 0,
+			Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeY() : 0,
+			Visual ? Visual->ProxyCreationCount : 0,
+			Visual ? Visual->TextureUploadCount : 0));
+	}
+	return FString::Printf(TEXT("id=%s freezes=%d records=[%s]"),
+		*StableId.ToString(), Prop->HiddenFreezeCount, *FString::Join(Records, TEXT("; ")));
+}
+
 FString ADarkwellMovingPropLabRoom::GetMotionState() const
 {
 	if (bMotionActive)
@@ -1797,9 +2153,10 @@ FString ADarkwellMovingPropLabRoom::GetTelemetry() const
 void ADarkwellMovingPropLabRoom::Report()
 {
 	Status = FString::Printf(
-		TEXT("MOVING + MULTI PROP LAB | MODE %d | RULE SpatialEvidenceOnly | ENEMY 0\nScenario %d | Phase %d | Motion %s | Object position %s\nCurrent interaction: %s\nIdentities %d | Spatial records %d | Multi %d\nWalk to a labeled mechanism and press F. Console is not required."),
+		TEXT("MOVING + MULTI PROP LAB | MODE %d | RULE SpatialEvidenceOnly | ENEMY 0\nScenario %d | Phase %d | Motion %s | Object position %s\nCurrent interaction: %s\nCompleted %d/6 | NEXT TEST: %s\nIdentities %d | Spatial records %d | Multi %d\nWalk to a labeled mechanism and press F. Console is not required."),
 		Darkwell::PropLab::PresentationMode(GetWorld()), Scenario, ScenarioPhase,
 		*GetMotionState(), *GetObjectPositionLabel(), *CurrentInteraction,
+		CompletedInWorldControls.Num(), *GetNextInWorldControlLabel(),
 		Tracked.Num(), GetTotalSpatialRecordCount(), MultiCount);
 	for (ADarkwellMovingPropLabControl* Control : InWorldControls)
 	{

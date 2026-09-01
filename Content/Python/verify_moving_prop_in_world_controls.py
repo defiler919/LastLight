@@ -1,9 +1,9 @@
 """D3D12 PIE evidence for the moving-prop Lab's in-world mechanisms.
 
-The delivered player path uses F through UDarkwellInteractionComponent.  This
-driver invokes the same visible mechanism actors directly so evidence capture
-does not open the console, change window focus, or call the legacy scenario /
-advance commands.  All output remains under Saved/PropGameplayLab.
+The delivered player path uses F through UDarkwellInteractionComponent. This
+GPU-only driver invokes the same visible mechanism actors directly; native
+automation and a separate real PIE pass exercise proximity trace + F. The
+driver never opens the console or calls legacy scenario / advance commands.
 """
 import json
 import time
@@ -127,25 +127,16 @@ def run():
     trigger(-1100, 260)
     yield from capture_motion('translate', 'Lab.Moving.Cabinet', 5.4, 0.25)
     assert room.get_motion_state() == 'FINISHED'
-    reset_current()
-    yield 0.5
-
     # Visible rotation: one-second hold, then continuous 0->180 over four seconds.
     pose(-300, 100, 90)
     trigger(-300, 260)
     yield from capture_motion('rotate', 'Lab.InWorld.Rotate.Cabinet', 5.4, 0.25)
     assert room.get_motion_state() == 'FINISHED'
-    reset_current()
-    yield 0.5
-
     # The cabinet continuously crosses the legal coverage boundary for eight seconds.
     pose(1400, 100, 90)
     trigger(1400, 260)
     yield from capture_motion('coverage_edge', 'Lab.InWorld.Edge.Cabinet', 9.4, 0.5)
     assert room.get_motion_state() == 'FINISHED'
-    reset_current()
-    yield 0.5
-
     # Offscreen A->B is armed in front and begins only on the rear pressure plate.
     pose(500, 250, 90)
     sample('hidden_a_observed', 'Lab.InWorld.Hidden.Cabinet')
@@ -153,16 +144,35 @@ def run():
     pose(900, -850, -90)
     yield 0.5
     sample('hidden_motion_rear_plate', 'Lab.InWorld.Hidden.Cabinet')
-    yield 4.5
+    yield from capture_motion('hidden_transit', 'Lab.InWorld.Hidden.Cabinet', 4.5, 0.25)
     sample('hidden_motion_finished', 'Lab.InWorld.Hidden.Cabinet')
+    # Ten seconds at the fixed rear camera. Native automation samples all 600
+    # 60-Hz states; these denser rendered frames expose whole-proxy flashes.
+    yield from capture_motion('hidden_fixed_10s', 'Lab.InWorld.Hidden.Cabinet', 10.0, 0.1)
+    for index in range(21):
+        pose(900, -850, -110 + 2 * index)
+        sample(f'hidden_slow_sweep_{index:02}', 'Lab.InWorld.Hidden.Cabinet')
+        yield 0.1
     pose(900, 250, 90)
     yield 1.0
     sample('hidden_b_seen_a_retained', 'Lab.InWorld.Hidden.Cabinet')
     pose(500, 250, 90)
     yield 1.0
     sample('hidden_a_legally_rechecked', 'Lab.InWorld.Hidden.Cabinet')
-    reset_current()
-    yield 0.5
+    # A->B->C: two distinct hidden epochs, each sealed only at the plate.
+    pose(-1500, 700, 90)
+    sample('abc_a_observed', 'Lab.InWorld.ABC.Cabinet')
+    trigger(-1500, 700)
+    pose(900, -850, -90)
+    yield from capture_motion('abc_a_to_b', 'Lab.InWorld.ABC.Cabinet', 4.5, 0.25)
+    pose(-1050, 700, 90)
+    yield 1.0
+    sample('abc_b_seen_a_retained', 'Lab.InWorld.ABC.Cabinet')
+    pose(900, -850, -90)
+    yield from capture_motion('abc_b_to_c', 'Lab.InWorld.ABC.Cabinet', 4.5, 0.25)
+    pose(-600, 700, 90)
+    yield 1.0
+    sample('abc_c_seen_ab_retained', 'Lab.InWorld.ABC.Cabinet')
 
     # Four shapes: two move continuously, one becomes absent, one stays fixed.
     pose(-1200, -900, 90)
@@ -172,6 +182,7 @@ def run():
     sample('multi_table_static', 'Lab.InWorld.Multi.LongTable')
     assert not room.is_actual_present(unreal.Name('Lab.InWorld.Multi.SmallBox'))
     assert room.get_motion_state() == 'FINISHED'
+    reset_current()
     # Let the final queued screenshot reach disk before recording the file count.
     yield 1.0
 

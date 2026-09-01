@@ -2,7 +2,7 @@
 
 ## Status
 
-`PARTIAL — READY_FOR_USER_IN_WORLD_MOVING_PROP_RETEST`
+`PARTIAL — READY_FOR_USER_ALL_IN_WORLD_CONTROLS_AND_FLICKER_RETEST`
 
 This document records the qualification and implementation history for Step 1,
 Moving and Multi-Prop Rule Validation. It does not change the frozen Mode 2
@@ -181,19 +181,23 @@ is required.
 1. The player begins facing **VISIBLE TRANSLATE**. Keep the cursor aimed at its
    green label, press F once, and watch the one-second hold plus four-second move.
    The HUD must reach `Scenario 1 / Motion RUNNING / position TRANSIT`, then
-   `FINISHED / B`.
-2. Walk to **RESET CURRENT EXPERIMENT**, press F, then use **VISIBLE ROTATE**.
-   Confirm a continuous four-second rotation with multiple intermediate angles.
-3. Reset, face the cabinet at A, press F on **OFFSCREEN A TO B**, walk behind the
+   `FINISHED / B`. Its indicator changes to complete and the HUD names the next
+   test.
+2. Walk to **VISIBLE ROTATE** without resetting and press F. Confirm a continuous
+   four-second rotation with multiple intermediate angles.
+3. Face the cabinet at A, press F on **OFFSCREEN A TO B**, walk behind the
    opaque divider, and step onto the orange pressure plate. Return to B first:
    B appears while A remains. Look at A only afterward to erase A.
-4. Reset and repeat **A TO B TO C** with two pressure-plate visits. Observe C
+4. Use **COVERAGE EDGE** and hold the view while the cabinet crosses the legal
+   coverage boundary for eight seconds.
+5. Use **A TO B TO C** with two pressure-plate visits. Observe C
    before revisiting A or B; A and B remain independent until each location is
    legally rechecked.
-5. Reset and use **MULTI PROP**. Confirm two differently shaped objects move, the
+6. Enter the lower room from its north side and use **MULTI PROP**. Confirm two
+   differently shaped objects move, the
    small box disappears, and the long table stays fixed.
-6. Reset and use **COVERAGE EDGE**. Hold the view while the cabinet crosses the
-   boundary for eight seconds and compare live, gray-memory, entry, and exit.
+7. Use **RESET CURRENT EXPERIMENT** only when the active experiment should be
+   cleared and recreated. Ordinary completion never resets other zones.
 
 Legacy commands remain only for deterministic automation compatibility. They are
 not part of user acceptance. There is no policy command. Mode 0/1 remain available
@@ -274,3 +278,136 @@ position TRANSIT`. No console command was used.
 
 The frozen tag still points to the documentation freeze commit and the accepted
 runtime baseline remains `39908cc67eb91d72a7d5ac35fe813367b41a7919`.
+
+## 2026-09-01 user failure correction and control-lock fix
+
+The previous claim that all seven mechanisms were ready was disproved by the
+user's real Standalone PIE run. The user could operate only **VISIBLE
+TRANSLATE**. The other six controls could not be used, and the old gray proxy at
+the movement origin sometimes flickered. This result supersedes the earlier
+agent-side conclusion.
+
+All six inaccessible controls had the same runtime root cause. The room used
+`bInWorldScenarioSelected` both as the identity of the currently selected zone
+and as a permanent global interaction lock. It was set by the first mechanism
+and remained set after that motion reached its final phase. Consequently the
+other independent actors failed `CanActivateInWorldControl`; they could not
+become the focused interaction target, show a usable F prompt, or dispatch their
+scenario. The actors were spawned, had distinct interaction identities and
+interfaces, and their labels matched their locations. Scenario state did not
+consume them individually; the shared latch blocked all of them. A synthetic
+test initially approached **MULTI PROP** and **RESET** from south of the room,
+which is behind the exterior wall. Their intended reachable side is north; the
+end-to-end test now uses that same interior approach.
+
+The correction separates selection from activity. Each mechanism has an
+independent Actor and completion state, while the room-wide busy state lasts
+only while the current test is running or waiting for its required spatial
+evidence. Completion releases the lock without clearing any D/V/R data,
+Observation Epoch, or evidence in another zone. A completed control remains
+focusable and reports its state instead of silently failing. The indicator and
+prompt now distinguish ready, running, complete, busy, and reset states; the HUD
+shows `Completed n/6` and `NEXT TEST`. Window focus changes do not reset or
+consume a control.
+
+The exact scenario/phase contracts are:
+
+- **VISIBLE TRANSLATE**: Scenario 1, Phase 0 ready, Phase 1 moving, Phase 2
+  finished at B.
+- **VISIBLE ROTATE**: Scenario 2, Phase 0 ready, Phase 1 rotating, Phase 2
+  finished at 180 degrees.
+- **OFFSCREEN A TO B**: Scenario 3, Phase 0 armed, Phase 1 moving, Phase 2 at B
+  waiting for legal B evidence, Phase 3 complete.
+- **COVERAGE EDGE**: Scenario 6, Phase 0 ready, Phase 1 crossing, Phase 2
+  finished.
+- **A TO B TO C**: Scenario 7, Phase 0 ready, Phase 1 A-to-B, Phase 2 at B,
+  Phase 3 B-to-C armed, Phase 4 B-to-C moving, Phase 5 at C waiting for legal C
+  evidence, Phase 6 complete.
+- **MULTI PROP**: Scenario 100, Phase 0 ready, Phase 1 moving/mutating, Phase 2
+  finished.
+- **RESET CURRENT EXPERIMENT**: Scenario 0 after rebuilding only the active zone;
+  it is the seventh independent interaction and is never an implicit phase of
+  another control.
+
+## Stale-proxy flicker root cause and correction
+
+The stale record was normally created once, but hidden motion performed its
+first real-actor transform update before freezing the old epoch and creating the
+proxy. This left a first-frame representation handoff in which live and stale
+geometry could overlap at A or the stale representation could arrive one tick
+late. In addition, an unchanged historical D/V/R presentation texture was
+uploaded every frame. The record was not meant to toggle, but these two sources
+of presentation churn made an occasional whole-proxy flicker possible.
+
+Hidden motion now seals A atomically before the first transform interpolation:
+the current visual state is finalized, source geometry is hidden for the
+handoff, exactly one stale epoch and proxy are frozen at the fixed A transform,
+its texture and cap are updated, and only then does the real actor begin moving.
+The current live epoch alone follows the real actor. A historical record locks
+its texture dimensions, does not upload an unchanged presentation buffer, and
+is never rebuilt from rotating current bounds. The fix adds diagnostic counts
+for freezes, proxy creations, visibility transitions, texture creation/uploads,
+fixed dimensions, record ID, and D/V/R signature. It does not add delay or
+change `.20/.18`, 4x4 AA, the dark-gray cap, or `SpatialEvidenceOnly`.
+
+The focused flicker test repeats hidden A-to-B three times. Each cycle creates
+one stale epoch and one proxy and produces no trail. The first cycle records 600
+60-Hz-equivalent states over ten seconds with a fixed camera, followed by a slow
+behind-wall sweep. Proxy visibility transitions remain zero; record ID, texture
+dimensions, and D/V/R signature remain stable; unchanged frames do not cause
+new texture uploads. The same test covers movement start overlap, departure,
+transit, arrival, A/B repetition, and multi-prop isolation.
+
+## Corrected validation checkpoint
+
+The final source build is `DarkwellEditor Win64 Development` and succeeded: the
+full source checkpoint completed 7/7 actions, and the final incremental build
+after the evidence-hook return-value correction completed 4/4 actions. All
+UBT/dotnet invocations were serial. A focused progression history is deliberately
+preserved:
+
+- `Saved/AutomationReports/MovingControlsFocused_20260901_142459`: 0/2. The
+  synthetic route approached the lower controls through the south wall.
+- `Saved/AutomationReports/MovingControlsFocused_20260901_142627`: 1/2. The
+  flicker test passed; the remaining assertion incorrectly required an
+  undiscovered low prop to own a record.
+- `Saved/AutomationReports/MovingControlsFocused_20260901_142843`: 2/2 Success.
+- `Saved/AutomationReports/MovingControlsFinal_20260901_142938`: 25/25 Success,
+  19 clean and 6 with preserved warnings, with 0 failed/not-run tests and 0
+  severe-log matches.
+- `Saved/AutomationReports/MovingControlsClosure_20260901_144607`: the final
+  post-build closure run is also 25/25 Success, 19 clean and 6 with preserved
+  warnings, 0 failed/not-run/in-process, 80.69 seconds, and 0 severe-log
+  matches. Its log is `Saved/Logs/MovingControlsClosure_20260901_144607.log`.
+
+The native in-world automation follows the player interaction chain rather than
+calling scenario functions: it moves the Pawn into range, performs the same
+proximity query and visibility trace, verifies the F prompt, dispatches through
+`UDarkwellInteractionComponent::TryInteract`, waits for continuous motion, and
+continues to the next actor. It individually covers all seven interactions and
+also runs them sequentially without a global reset. Intermediate samples prove
+that translation and rotation are continuous.
+
+The corrected D3D12/SM6 evidence run used normal TSR and 100% Screen Percentage.
+Its actual embedded PIE backbuffer was `1526x549`; it is functional evidence,
+not strict 1080p performance evidence. It wrote 261 screenshots under
+`Saved/PropGameplayLab/MovingMulti/InWorldPIE_20260901_143312`, including 101
+frames for the ten-second fixed stale-proxy observation. The agent opened the
+all-motion, hidden-transit/fixed, ten adjacent fixed frames, slow sweep, and
+A-to-B-to-C/multi contact sheets. They show continuous translation/rotation,
+no whole-proxy disappearance, no path chain, no duplicate prop or shadow, and
+no visible Z-fighting in the captured sequence.
+
+The actual Windows Standalone window was used without the console for the first
+control. A real F press produced `Scenario 1 / Phase 1 / Motion RUNNING /
+TRANSIT`, then `Scenario 1 / Phase 2 / FINISHED / B`, and exposed the next-test
+guidance. The available Windows input driver cannot hold a WASD axis across
+simulation ticks, so it could not honestly walk the agent to the remaining six
+controls. Those six are covered by the same range/trace/prompt/F-dispatch path in
+native automation and by GPU runtime evidence, but the document does not claim
+that the agent manually walked and pressed F on all seven. The user real PIE
+retest remains the authority for final usability.
+
+No production map, `/Game/Maps/L_Prototype`, frozen Mode 2 behavior, public
+SightWeave contract, StableID contract, or `Darkwell.uproject` is part of this
+correction.

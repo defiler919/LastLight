@@ -11,6 +11,7 @@ class ADarkwellCharacter;
 class ADarkwellPropLabFurniture;
 class UDynamicMeshComponent;
 class UMaterialInstanceDynamic;
+class USceneComponent;
 class UStaticMeshComponent;
 class UTextRenderComponent;
 class UTexture2D;
@@ -54,8 +55,10 @@ public:
 	EDarkwellMovingPropLabControlKind GetKind() const { return Kind; }
 
 private:
+	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> ControlRoot;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Body;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> Label;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> StatusIndicator;
 	TWeakObjectPtr<ADarkwellMovingPropLabRoom> Room;
 	FText BaseLabel;
 	EDarkwellMovingPropLabControlKind Kind = EDarkwellMovingPropLabControlKind::VisibleTranslate;
@@ -101,9 +104,18 @@ public:
 	bool DoSpatialRecordTexturesMatchForTesting(FName StableId) const;
 	bool ActivateInWorldControl(EDarkwellMovingPropLabControlKind Kind, ADarkwellCharacter& Character);
 	bool CanActivateInWorldControl(EDarkwellMovingPropLabControlKind Kind) const;
+	bool CanFocusInWorldControl() const { return bInWorldControls && bStarted; }
+	bool IsInWorldControlCompleted(EDarkwellMovingPropLabControlKind Kind) const;
 	FText GetInWorldControlPrompt(EDarkwellMovingPropLabControlKind Kind) const;
 	FText GetInWorldControlDisplay(EDarkwellMovingPropLabControlKind Kind) const;
+	FColor GetInWorldControlColor(EDarkwellMovingPropLabControlKind Kind) const;
 	ADarkwellMovingPropLabControl* GetControlForTesting(EDarkwellMovingPropLabControlKind Kind) const;
+	int32 GetHiddenFreezeCountForTesting(FName StableId) const;
+	int32 GetHistoricalProxyVisibilityTransitionsForTesting(FName StableId) const;
+	int32 GetHistoricalProxyCreationCountForTesting(FName StableId) const;
+	int32 GetHistoricalTextureUploadCountForTesting(FName StableId) const;
+	uint64 GetHistoricalVisualSignatureForTesting(FName StableId) const;
+	FString GetHistoricalVisualTelemetryForTesting(FName StableId) const;
 
 	bool SelectScenario(int32 InScenario, ADarkwellCharacter* Player);
 	bool AdvanceScenario(ADarkwellCharacter* Player);
@@ -119,7 +131,15 @@ private:
 		TWeakObjectPtr<UDynamicMeshComponent> Cap;
 		TArray<FBox> PartBounds;
 		uint64 CapSignature = 0;
+		uint64 TextureSignature = 0;
 		int32 CapTriangles = 0;
+		int32 ProxyCreationCount = 0;
+		int32 TextureCreationCount = 0;
+		int32 TextureUploadCount = 0;
+		int32 ProxyVisibilityTransitions = 0;
+		FIntPoint HistoricalTextureSize = FIntPoint::ZeroValue;
+		bool bHasProxyVisibilitySample = false;
+		bool bLastProxyVisible = false;
 	};
 
 	struct FTrackedProp
@@ -133,6 +153,7 @@ private:
 		FVector Dimensions = FVector::ZeroVector;
 		FLinearColor Tint = FLinearColor::Gray;
 		int32 Shape = 0;
+		int32 HiddenFreezeCount = 0;
 		bool bExists = false;
 	};
 
@@ -159,6 +180,10 @@ private:
 	void DestroyInWorldControls();
 	bool ResetCurrentInWorldZone();
 	void ResetInWorldControlState();
+	bool IsCurrentInWorldControlBusy() const;
+	void MarkActiveInWorldControlCompleted();
+	FString GetNextInWorldControlLabel() const;
+	bool FreezeCurrentForHiddenMotion(FTrackedProp& Prop, const TCHAR* Reason);
 	void StartMotion(ADarkwellPropLabFurniture* Prop, const FTransform& Target, float Duration);
 	void UpdateInWorldAutomation(float DeltaSeconds, ADarkwellCharacter* Player);
 	void UpdatePressurePlate(ADarkwellCharacter* Player);
@@ -189,6 +214,7 @@ private:
 	TMap<FName, FTrackedProp> Tracked;
 	UPROPERTY(Transient) TArray<TObjectPtr<ADarkwellMovingPropLabControl>> InWorldControls;
 	TArray<FActiveMotion> ActiveMotions;
+	TSet<EDarkwellMovingPropLabControlKind> CompletedInWorldControls;
 	FString Status;
 	FString CurrentInteraction = TEXT("NONE");
 	EDarkwellMovingPropLabControlKind ActiveControl = EDarkwellMovingPropLabControlKind::VisibleTranslate;

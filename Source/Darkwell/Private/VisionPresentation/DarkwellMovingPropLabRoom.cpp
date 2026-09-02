@@ -1031,6 +1031,39 @@ bool ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	return bPresentationChanged || bTopologyChanged;
 }
 
+void ADarkwellMovingPropLabRoom::GetFineEvidenceDiagnosticsForTesting(
+	const FName StableId, TArray<FFineEvidenceDiagnostic>& Out) const
+{
+	Out.Reset();
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const auto* Fog = GetWorld() ? GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>() : nullptr;
+	if (!Prop || !Fog) return;
+	for (const auto& Record : Prop->History.GetRecords())
+	{
+		if (!Record.FineHistory.IsInitialized()) continue;
+		const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
+		if (!Visual) continue;
+		const auto Size = Record.FineHistory.GetSize();
+		const auto Bounds = Record.FineHistory.GetBounds();
+		const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
+		for (int32 I = 0; I < Record.FineHistory.GetSamples().Num(); ++I)
+		{
+			auto& D = Out.AddDefaulted_GetRef();
+			D.Epoch = Record.Epoch; D.Index = I;
+			D.Position = Bounds.Min + Step * FVector2D(I % Size.X + .5, I / Size.X + .5);
+			D.Sample = Record.FineHistory.GetSamples()[I];
+			D.bValid = Visual->CachedFineCoverage.IsValidIndex(I)
+				&& Visual->CachedCoverageAuthorityRevision == Fog->GetDiagnostics().LastAuthorityRevision
+				&& Visual->CachedCoverageDrawRevision == Fog->GetDiagnostics().CoverageDrawCount;
+			D.Coverage = D.bValid ? Visual->CachedFineCoverage[I] : 0;
+			D.bOccupied = Visual->CachedFineOccupied.IsValidIndex(I) && Visual->CachedFineOccupied[I];
+			D.bOwned = Visual->SuppressedByCurrentEvidence.IsValidIndex(I) && Visual->SuppressedByCurrentEvidence[I];
+			D.bSubmitted = !Visual->bPresentationRetired && Visual->SubmittedPresentation.IsValidIndex(I)
+				&& Visual->SubmittedPresentation[I].A > 0 && Visual->SubmittedPresentation[I].B > 0;
+		}
+	}
+}
+
 FString ADarkwellMovingPropLabRoom::GetFineHistoryTelemetry(const FName StableId) const
 {
 	const FTrackedProp* Prop = Tracked.Find(StableId);

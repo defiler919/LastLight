@@ -187,6 +187,19 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetHistoryRuntimeTelemetry() const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetMultiEpochCompositeDiagnosis(FName StableId) const;
 	FHistoryRuntimeTelemetry GetHistoryRuntimeFrameTelemetryForTesting() const { return RuntimeFrame; }
+	struct FFineEvidenceDiagnostic
+	{
+		uint32 Epoch = 0;
+		int32 Index = 0;
+		FVector2D Position = FVector2D::ZeroVector;
+		FDarkwellHistoryGridV2::FSample Sample;
+		float Coverage = 0;
+		bool bValid = false;
+		bool bOccupied = false;
+		bool bOwned = false;
+		bool bSubmitted = false;
+	};
+	void GetFineEvidenceDiagnosticsForTesting(FName StableId, TArray<FFineEvidenceDiagnostic>& Out) const;
 	FHistoryRuntimeTelemetry GetHistoryRuntimeTotalTelemetryForTesting() const { return RuntimeTotal; }
 	void ResetHistoryRuntimeTelemetryForTesting();
 	bool ConfigureHistoricalEpochCountForTesting(FName StableId, int32 HistoricalEpochs);

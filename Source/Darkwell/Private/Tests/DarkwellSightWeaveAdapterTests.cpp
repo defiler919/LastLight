@@ -2536,6 +2536,104 @@ bool FDarkwellMultiEpochCompositeDiagnosisTest::RunTest(const FString&)
  return true;
 }
 
+namespace
+{
+ struct FFastSweepObservation
+ {
+  int32 LegalFrames=0, InvalidFrames=0, DwellResets=0;
+  float Consecutive=0, Total=0, Maximum=0, PreviousDwell=0;
+ };
+ struct FFastSweepRouteResult
+ {
+  TMap<uint64,FFastSweepObservation> Observations;
+  TArray<ADarkwellMovingPropLabRoom::FFineEvidenceDiagnostic> Final;
+  FString Hash;
+  int32 SurvivingSeenEmpty=0, Proxies=0, Records=0;
+ };
+ FFastSweepRouteResult RunFastSweepEvidenceRoute(FAutomationTestBase& Test, int32 SweepFrames, float Fps=60)
+ {
+  using namespace Darkwell::SightWeaveAdapterTests;
+  FFastSweepRouteResult Result;
+  FTestWorld TestWorld(TEXT("FastSweepEvidence"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+  UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+  auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,100,92),FRotator(0,90,0));
+  auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+  auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+  if(!Test.TestNotNull(TEXT("Fast sweep Lab exists"),Room)||!Player||!Adapter)return Result;
+  Test.TestTrue(TEXT("Fast sweep legal authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+  Room->ResetRoom(Player);
+  const FName Id(TEXT("Lab.InWorld.Rotate.Cabinet"));
+  auto Step=[&](int32 Frames=1,float Dt=1.f/60){for(int32 F=0;F<Frames;++F){Adapter->Tick(Dt);Room->UpdateRoom(Dt,Player);Fixture->Tick(Dt);}};
+  Player->SetActorLocation(FVector(-300,100,92));Player->SetActorRotation(FRotator(0,90,0));Step(90);
+  World->UpdateWorldComponents(true,false);Player->GetInteractionComponent()->UpdateFocusedActorFromWorld();
+  Test.TestTrue(TEXT("Fast sweep route starts through F"),Player->GetInteractionComponent()->TryInteract());
+  Player->SetActorRotation(FRotator(0,-90,0));Step(190);
+  Player->SetActorRotation(FRotator(0,146,0));Step(6);
+  Test.TestTrue(TEXT("Brief intermediate observation is partial"),Room->GetLastLegalCoverageRatioForTesting(Id)>0 && Room->GetLastLegalCoverageRatioForTesting(Id)<.5f);
+  Player->SetActorRotation(FRotator(0,-90,0));Step(303);
+  Test.TestTrue(TEXT("Normal middle gray history exists before sweep"),Room->GetVisibleHistoricalProxyCountForTesting(Id)>0);
+  Player->SetActorRotation(FRotator(0,160,0));Step(1);
+  auto Observe=[&](float Dt)
+  {
+   TArray<ADarkwellMovingPropLabRoom::FFineEvidenceDiagnostic> Samples;
+   Room->GetFineEvidenceDiagnosticsForTesting(Id,Samples);
+   for(const auto& D:Samples)
+   {
+    auto& O=Result.Observations.FindOrAdd((uint64(D.Epoch)<<32)|uint32(D.Index));
+    const bool Legal=D.bValid && D.Coverage>=FDarkwellSpatialPropMemory::LegalCoverage && !D.bOccupied;
+    if(Legal){++O.LegalFrames;O.Total+=Dt;O.Consecutive+=Dt;O.Maximum=FMath::Max(O.Maximum,O.Consecutive);}
+    else O.Consecutive=0;
+    O.InvalidFrames+=!D.bValid;
+    O.DwellResets+=O.PreviousDwell>0 && D.Sample.EmptyDwell==0 && !D.Sample.bVerifiedEmpty && !D.bOwned;
+    O.PreviousDwell=D.Sample.EmptyDwell;
+   }
+  };
+  for(int32 F=1;F<=SweepFrames;++F)
+  {
+   Player->SetActorRotation(FRotator(0,FMath::Lerp(160.f,20.f,float(F)/SweepFrames),0));
+   Step(1,1.f/Fps);Observe(1.f/Fps);
+  }
+  Step(90);Observe(0);
+  Room->GetFineEvidenceDiagnosticsForTesting(Id,Result.Final);
+  Result.Hash=Room->GetFineHistoryTelemetry(Id);
+  Result.Proxies=Room->GetVisibleHistoricalProxyCountForTesting(Id);Result.Records=Room->GetSpatialRecordCount(Id);
+  int32 Rows=0, Resets=0;
+  for(const auto& D:Result.Final)
+  {
+   const auto* O=Result.Observations.Find((uint64(D.Epoch)<<32)|uint32(D.Index));
+   if(!O)continue;Resets+=O->DwellResets;
+   if(!D.bSubmitted || O->LegalFrames==0 || D.bOccupied)continue;
+   ++Result.SurvivingSeenEmpty;
+   if(Rows++<12)Test.AddInfo(FString::Printf(TEXT("FAST_SWEEP_SAMPLE epoch=%u index=%d xy=(%.3f,%.3f) state=%s opacity=%.3f coverage=%.3f valid=%d occupied=%d ownership=%d dwell=%.5f verified=%d legal_frames=%d total=%.5f max_consecutive=%.5f resets=%d invalid=%d"),
+    D.Epoch,D.Index,D.Position.X,D.Position.Y,*D.Sample.State.ToString(),D.Sample.Opacity,D.Coverage,D.bValid,D.bOccupied,D.bOwned,D.Sample.EmptyDwell,D.Sample.bVerifiedEmpty,O->LegalFrames,O->Total,O->Maximum,O->DwellResets,O->InvalidFrames));
+  }
+  Test.AddInfo(FString::Printf(TEXT("FAST_SWEEP_ROUTE frames=%d fps=%.0f seen_empty_survivors=%d proxies=%d records=%d dwell_resets=%d %s"),SweepFrames,Fps,Result.SurvivingSeenEmpty,Result.Proxies,Result.Records,Resets,*Result.Hash));
+  Fixture->Destroy();return Result;
+ }
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellFastSweepReproductionTest,
+ "Darkwell.PropLab.MovingRules.FastSweep.ReproduceEvidenceTunneling", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellFastSweepReproductionTest::RunTest(const FString&)
+{
+ const auto Slow=RunFastSweepEvidenceRoute(*this,280);
+ const auto Fast=RunFastSweepEvidenceRoute(*this,2);
+ const auto Extreme=RunFastSweepEvidenceRoute(*this,1);
+ TestEqual(TEXT("Slow sweep resolves legally seen empty samples"),Slow.SurvivingSeenEmpty,0);
+ TestTrue(TEXT("Baseline reproduces short-legal-dwell survivors"),Fast.SurvivingSeenEmpty>0);
+ TestTrue(TEXT("Old gray survives alongside observed final 180 pose"),Fast.Proxies>0 && Fast.Records>=3);
+ int32 SpatialMiss=0;
+ for(const auto& D:Extreme.Final)
+ {
+  const uint64 Key=(uint64(D.Epoch)<<32)|uint32(D.Index);
+  const auto* S=Slow.Observations.Find(Key);const auto* F=Extreme.Observations.Find(Key);
+  SpatialMiss+=D.bSubmitted && S && S->LegalFrames>0 && (!F || F->LegalFrames==0);
+ }
+ TestTrue(TEXT("Extreme endpoints skip space seen by identical slow arc"),SpatialMiss>0);
+ AddInfo(FString::Printf(TEXT("FAST_SWEEP_ROOT_CAUSE=BOTH dwell_survivors=%d spatial_missed=%d"),Fast.SurvivingSeenEmpty,SpatialMiss));
+ return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHistoryRuntimeIdleCostTest,
  "Darkwell.PropLab.MovingRules.HistoryRuntime.HistoryGridV2IdleCost", Darkwell::SightWeaveAdapterTests::TestFlags)
 bool FDarkwellHistoryRuntimeIdleCostTest::RunTest(const FString&)

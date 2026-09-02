@@ -1785,3 +1785,27 @@ No user acceptance has been inferred from automation. Final implementation
 status for this checkpoint:
 
 `PARTIAL — READY_FOR_USER_HISTORY_RUNTIME_RETEST`
+
+## 2026-09-03 home fast-sweep evidence tunneling (in progress)
+
+Starting HEAD is `93eb6e4be0463c34233968bddff276516a25a06d`; the immutable
+correctness stable remains `404a5820739638f1097eaae0aa7fba19733298c3`.
+The user manually rejects the candidate: slow sweep clears the middle gray
+pose, but an extremely quick pass followed immediately by looking away leaves
+that old pose alongside the newly remembered 180-degree cabinet.
+
+Checkpoint A changes diagnostics/tests only. The earlier fast test held the
+final view for 30 frames, masking this failure. A new real Lab/F-interaction
+fixture instead sweeps 160 to 20 degrees in 280, 2, or 1 frames and immediately
+stays outside the old space. Full editor build succeeded. Home evidence:
+`Saved/PropGameplayLab/MovingMulti/FastSweep/CheckpointA_Report`, 1/1 clean,
+75.20 seconds, normal process exit.
+
+Root cause is `BOTH`: the two-frame route retains 1,565 submitted samples that
+were legally observed empty, with 28,083 dwell resets, two old proxies and
+three records (including the final observed 180-degree pose). The slow route
+has zero such survivors. A single-frame endpoint jump misses 1,745 submitted
+samples reached by the same slow arc. Per-sample epoch/index/XY/state/opacity,
+coverage validity, occupancy/ownership, dwell, total/max-consecutive legal
+time and reset counts are in the report. This is a reproduced temporal and
+spatial evidence loss, not a new multi-epoch presentation policy.

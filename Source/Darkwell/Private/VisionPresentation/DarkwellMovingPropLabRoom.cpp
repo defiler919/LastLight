@@ -409,7 +409,6 @@ void ADarkwellMovingPropLabRoom::DestroyVisual(FRecordVisual& Visual)
 	Visual.CapQuads.Reset();
 	Visual.SubmittedPresentation.Reset();
 	Visual.SuppressedByCurrentEvidence.Reset();
-	Visual.HardOwnershipFilterGuard.Reset();
 }
 
 void ADarkwellMovingPropLabRoom::DestroyTracked()
@@ -510,7 +509,8 @@ bool ADarkwellMovingPropLabRoom::QueryVerticalInterval(
 	const FPrimitiveGeometrySnapshot& Geometry,
 	const FVector2D Point,
 	double& OutMinZ,
-	double& OutMaxZ)
+	double& OutMaxZ,
+	const double ProjectionTolerance)
 {
 	if (!Geometry.LocalBounds.IsValid || Geometry.WorldTransform.ContainsNaN())
 	{
@@ -522,12 +522,16 @@ bool ADarkwellMovingPropLabRoom::QueryVerticalInterval(
 		FVector::UpVector);
 	double Near = -UE_DOUBLE_BIG_NUMBER;
 	double Far = UE_DOUBLE_BIG_NUMBER;
+	const FVector Scale = Geometry.WorldTransform.GetScale3D().GetAbs();
+	// Same XY closed set as ClipSegmentToGeometryProjection; Z clearance is
+	// applied exactly once by SubtractOwnedCapIntervals, never to authority.
+	const double LocalTolerance = ProjectionTolerance / FMath::Max(UE_DOUBLE_SMALL_NUMBER, FMath::Min(Scale.X, Scale.Y));
 	for (int32 Axis = 0; Axis < 3; ++Axis)
 	{
 		const double Origin = LocalOrigin[Axis];
 		const double Direction = LocalDirection[Axis];
-		const double Minimum = Geometry.LocalBounds.Min[Axis];
-		const double Maximum = Geometry.LocalBounds.Max[Axis];
+		const double Minimum = Geometry.LocalBounds.Min[Axis] - (Axis < 2 ? LocalTolerance : 0.0);
+		const double Maximum = Geometry.LocalBounds.Max[Axis] + (Axis < 2 ? LocalTolerance : 0.0);
 		if (FMath::Abs(Direction) <= UE_DOUBLE_SMALL_NUMBER)
 		{
 			if (Origin < Minimum - UE_KINDA_SMALL_NUMBER
@@ -620,10 +624,10 @@ bool ADarkwellMovingPropLabRoom::ClipSegmentToGeometryProjection(
 bool ADarkwellMovingPropLabRoom::CollectCurrentOwnedVerticalIntervals(
 	const FTrackedProp& Prop,
 	const FVector2D Point,
-	TArray<FVector2D>& OutIntervals) const
+	TArray<FVector2D>& OutIntervals, const double ProjectionTolerance) const
 {
 	OutIntervals.Reset();
-	if (!HasCurrentObservedContributionAt(Prop, Point))
+	if (ProjectionTolerance == 0.0 && !HasCurrentObservedContributionAt(Prop, Point))
 	{
 		return false;
 	}
@@ -634,9 +638,16 @@ bool ADarkwellMovingPropLabRoom::CollectCurrentOwnedVerticalIntervals(
 	}
 	for (const FPrimitiveGeometrySnapshot& Geometry : ActualPartGeometry(*Actual))
 	{
+		if (ProjectionTolerance > 0.0)
+		{
+			FVector Local = Geometry.WorldTransform.InverseTransformPosition(FVector(Point, Geometry.WorldTransform.GetLocation().Z));
+			Local.X = FMath::Clamp(Local.X, Geometry.LocalBounds.Min.X + 1.e-6, Geometry.LocalBounds.Max.X - 1.e-6);
+			Local.Y = FMath::Clamp(Local.Y, Geometry.LocalBounds.Min.Y + 1.e-6, Geometry.LocalBounds.Max.Y - 1.e-6);
+			if (!HasCurrentObservedContributionAt(Prop, FVector2D(Geometry.WorldTransform.TransformPosition(Local)))) continue;
+		}
 		double MinimumZ = 0.0;
 		double MaximumZ = 0.0;
-		if (QueryVerticalInterval(Geometry, Point, MinimumZ, MaximumZ))
+		if (QueryVerticalInterval(Geometry, Point, MinimumZ, MaximumZ, ProjectionTolerance))
 		{
 			OutIntervals.Add(FVector2D(MinimumZ, MaximumZ));
 		}
@@ -648,7 +659,7 @@ bool ADarkwellMovingPropLabRoom::CollectNewerOwnedVerticalIntervals(
 	const FTrackedProp& Prop,
 	const uint32 OlderEpoch,
 	const FVector2D Point,
-	TArray<FVector2D>& OutIntervals) const
+	TArray<FVector2D>& OutIntervals, const double ProjectionTolerance) const
 {
 	OutIntervals.Reset();
 	for (const FDarkwellSpatialObservationRecord& Candidate : Prop.History.GetRecords())
@@ -660,7 +671,7 @@ bool ADarkwellMovingPropLabRoom::CollectNewerOwnedVerticalIntervals(
 		if (Candidate.bCurrentObservedLocation)
 		{
 			TArray<FVector2D> CurrentIntervals;
-			CollectCurrentOwnedVerticalIntervals(Prop, Point, CurrentIntervals);
+			CollectCurrentOwnedVerticalIntervals(Prop, Point, CurrentIntervals, ProjectionTolerance);
 			OutIntervals.Append(CurrentIntervals);
 			continue;
 		}
@@ -668,7 +679,7 @@ bool ADarkwellMovingPropLabRoom::CollectNewerOwnedVerticalIntervals(
 		const FBox2D& Bounds = Candidate.SpatialMemory.GetBounds();
 		const FIntPoint Coarse = Candidate.SpatialMemory.GetSize();
 		const FIntPoint Fine = Coarse * Darkwell::MovingPropLab::PresentationSamples;
-		if (!Visual || Visual->bPresentationRetired || !Bounds.IsInside(Point)
+		if (!Visual || Visual->bPresentationRetired || (ProjectionTolerance == 0.0 && !Bounds.IsInside(Point))
 			|| Fine.X <= 0 || Fine.Y <= 0)
 		{
 			continue;
@@ -690,7 +701,7 @@ bool ADarkwellMovingPropLabRoom::CollectNewerOwnedVerticalIntervals(
 		{
 			double MinimumZ = 0.0;
 			double MaximumZ = 0.0;
-			if (QueryVerticalInterval(Geometry, Point, MinimumZ, MaximumZ))
+			if (QueryVerticalInterval(Geometry, Point, MinimumZ, MaximumZ, ProjectionTolerance))
 			{
 				OutIntervals.Add(FVector2D(MinimumZ, MaximumZ));
 			}
@@ -946,7 +957,13 @@ bool ADarkwellMovingPropLabRoom::IsOccupiedByActual(
 		const ADarkwellPropLabFurniture* Actual = Prop.Actual.Get();
 		if (Actual && Actual->GetActorEnableCollision() && ActualBounds(*Actual).IsInside(Point))
 		{
-			return true;
+			// Actor bounds are only a broad phase. Empty space beside a rotated
+			// door/handle must reach legal empty verification, not retain old skin.
+			for (const FPrimitiveGeometrySnapshot& Geometry : ActualPartGeometry(*Actual))
+			{
+				double MinZ, MaxZ;
+				if (QueryVerticalInterval(Geometry, Point, MinZ, MaxZ)) return true;
+			}
 		}
 	}
 	return false;
@@ -1028,10 +1045,6 @@ void ADarkwellMovingPropLabRoom::UpdateHistoricalContributionExclusion(
 	{
 		Visual->SuppressedByCurrentEvidence.Init(false, Size.X * Size.Y);
 	}
-	if (Visual->HardOwnershipFilterGuard.Num() != Size.X * Size.Y)
-	{
-		Visual->HardOwnershipFilterGuard.Init(false, Size.X * Size.Y);
-	}
 	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
 	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
 	for (int32 Y = 0; Y < Size.Y; ++Y)
@@ -1051,31 +1064,6 @@ void ADarkwellMovingPropLabRoom::UpdateHistoricalContributionExclusion(
 			}
 		}
 	}
-	// TF_Bilinear has one-texel support. Keep the smooth historical signal, but
-	// zero exactly that filter support around hard current/newer ownership so a
-	// neighbouring stale B value cannot be reconstructed inside owned geometry.
-	for (int32 Y = 0; Y < Size.Y; ++Y)
-	{
-		for (int32 X = 0; X < Size.X; ++X)
-		{
-			if (!Visual->SuppressedByCurrentEvidence[Y * Size.X + X])
-			{
-				continue;
-			}
-			for (int32 DY = -1; DY <= 1; ++DY)
-			{
-				for (int32 DX = -1; DX <= 1; ++DX)
-				{
-					const int32 GuardX = X + DX;
-					const int32 GuardY = Y + DY;
-					if (GuardX >= 0 && GuardY >= 0 && GuardX < Size.X && GuardY < Size.Y)
-					{
-						Visual->HardOwnershipFilterGuard[GuardY * Size.X + GuardX] = true;
-					}
-				}
-			}
-		}
-	}
 }
 
 bool ADarkwellMovingPropLabRoom::IsHistoricalPresentationResolved(
@@ -1086,6 +1074,9 @@ bool ADarkwellMovingPropLabRoom::IsHistoricalPresentationResolved(
 	{
 		return false;
 	}
+	// A real remaining cut fragment can extend above/below newer owned space.
+	// Surface-only XY retirement must not discard that independently clipped cap.
+	if (Visual.CapTriangles > 0) return false;
 	const FIntPoint Coarse = Record.SpatialMemory.GetSize();
 	const int32 Samples = Darkwell::MovingPropLab::PresentationSamples;
 	const FIntPoint Fine = Coarse * Samples;
@@ -1289,7 +1280,8 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 							&& Visual->SubmittedPresentation[NY * Fine.X + NX].B > 0.0f;
 					}
 				}
-				if (!bPositiveFilterNeighbour)
+				// The actual moving shader loads binary A after filtering B.
+				if (!bPositiveFilterNeighbour || Visual->SubmittedPresentation[Index].A == 0.0f)
 				{
 					continue;
 				}
@@ -1962,10 +1954,6 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 		{
 			Visual.SuppressedByCurrentEvidence.Init(false, Size.X * Size.Y);
 		}
-		if (Visual.HardOwnershipFilterGuard.Num() != Size.X * Size.Y)
-		{
-			Visual.HardOwnershipFilterGuard.Init(false, Size.X * Size.Y);
-		}
 	}
 	const bool bTextureSizeChanged = Visual.Texture.IsValid()
 		&& (Visual.Texture->GetSizeX() != Size.X || Visual.Texture->GetSizeY() != Size.Y);
@@ -2065,19 +2053,13 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
 		return;
 	}
 	if (!Record.bCurrentObservedLocation
-		&& Visual->HardOwnershipFilterGuard.Num() == Presentation.Num())
+		&& Visual->SuppressedByCurrentEvidence.Num() == Presentation.Num())
 	{
 		for (int32 Index = 0; Index < Presentation.Num(); ++Index)
 		{
-			if (Visual->HardOwnershipFilterGuard[Index])
-			{
-				// Current legally discovered geometry owns this world sample. The
-				// historical proxy remains a valid spatial record but contributes no
-				// second surface at the same sample.
-				Presentation[Index].R = 0.0f;
-				Presentation[Index].G = 0.0f;
-				Presentation[Index].B = 0.0f;
-			}
+			// Preserve frozen smooth RGB; load binary ownership A without filtering
+			// at the final shader gate. No authoritative SpatialMemory cell changes.
+			Presentation[Index].A = Visual->SuppressedByCurrentEvidence[Index] ? 0.0f : 1.0f;
 		}
 	}
 	Visual->SubmittedPresentation = Presentation;
@@ -2178,7 +2160,7 @@ void ADarkwellMovingPropLabRoom::BindProxyMaterial(
 		return;
 	}
 	UMaterialInterface* Parent = LoadObject<UMaterialInterface>(
-		nullptr, TEXT("/Game/Darkwell/Vision/PropLab/M_ManualAccumulatedMemory.M_ManualAccumulatedMemory"));
+		nullptr, TEXT("/Game/Darkwell/Vision/PropLab/M_MovingAccumulatedMemory.M_MovingAccumulatedMemory"));
 	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
 	const FVector2D Inv = FVector2D(1, 1) / Bounds.GetSize();
 	TInlineComponentArray<UStaticMeshComponent*> Meshes(Proxy);
@@ -2194,6 +2176,28 @@ void ADarkwellMovingPropLabRoom::BindProxyMaterial(
 		OwnedMaterials.Add(Material);
 		Visual->Materials.Add(Material);
 	}
+}
+
+TArray<FVector2D> ADarkwellMovingPropLabRoom::SubtractOwnedCapIntervals(
+	FVector2D Candidate, TConstArrayView<FVector2D> Owned)
+{
+	TArray<FVector2D> Remaining{Candidate};
+	for (const FVector2D Newer : Owned)
+	{
+		TArray<FVector2D> Next;
+		const double ClipMin = Newer.X - Darkwell::MovingPropLab::RenderOwnershipClipClearance;
+		const double ClipMax = Newer.Y + Darkwell::MovingPropLab::RenderOwnershipClipClearance;
+		for (const FVector2D Interval : Remaining)
+		{
+			if (ClipMax < Interval.X || ClipMin > Interval.Y) { Next.Add(Interval); continue; }
+			if (ClipMin > Interval.X + UE_KINDA_SMALL_NUMBER)
+				Next.Add(FVector2D(Interval.X, FMath::Min(ClipMin, Interval.Y)));
+			if (ClipMax < Interval.Y - UE_KINDA_SMALL_NUMBER)
+				Next.Add(FVector2D(FMath::Max(ClipMax, Interval.X), Interval.Y));
+		}
+		Remaining = MoveTemp(Next);
+	}
+	return Remaining;
 }
 
 void ADarkwellMovingPropLabRoom::UpdateRecordCap(
@@ -2312,16 +2316,14 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 		if (X < 0 || Y < 0 || X >= Size.X || Y >= Size.Y) return false;
 		const auto& Cell = Cells[Y * Size.X + X];
 		return bPresent ? Cell.DiscoveredPresent > 0
-			: Cell.InitialRemembered > 0 && Cell.VerifiedEmpty == 0
-				&& !IsSuppressedByCurrent(X, Y);
+			: Cell.InitialRemembered > 0 && Cell.VerifiedEmpty == 0;
 	};
 	auto IsCut = [&](const int32 X, const int32 Y)
 	{
 		if (X < 0 || Y < 0 || X >= Size.X || Y >= Size.Y) return false;
 		const auto& Cell = Cells[Y * Size.X + X];
 		return bPresent ? Cell.DiscoveredPresent == 0
-			: Cell.InitialRemembered > 0
-				&& Cell.VerifiedEmpty > 0;
+			: Cell.InitialRemembered == 0 || Cell.VerifiedEmpty > 0;
 	};
 	auto AppendQuad = [&](const FVector& A, const FVector& B, const FVector& C, const FVector& D,
 		const int32 PrimitiveIndex)
@@ -2339,13 +2341,13 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	const TArray<FPrimitiveGeometrySnapshot> NewerGeometry = Record.bCurrentObservedLocation
 		? TArray<FPrimitiveGeometrySnapshot>()
 		: CollectNewerGeometrySnapshots(Prop, Record.Epoch);
-	auto AddNewerGridBreakpoints = [&](const FVector2D SegmentStart,
+	auto AddOwnershipGridBreakpoints = [&](const FVector2D SegmentStart,
 		const FVector2D SegmentEnd, TArray<double>& Breakpoints)
 	{
 		const FVector2D Delta = SegmentEnd - SegmentStart;
 		for (const FDarkwellSpatialObservationRecord& Candidate : Prop.History.GetRecords())
 		{
-			if (Candidate.Epoch <= Record.Epoch)
+			if (Candidate.Epoch < Record.Epoch)
 			{
 				continue;
 			}
@@ -2370,6 +2372,9 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 					if (Alpha > 0.0 && Alpha < 1.0)
 					{
 						Breakpoints.Add(Alpha);
+						const double Guard = Darkwell::MovingPropLab::RenderOwnershipClipPrecisionMargin / FMath::Abs(Delta.X);
+						Breakpoints.Add(FMath::Clamp(Alpha-Guard,0.0,1.0));
+						Breakpoints.Add(FMath::Clamp(Alpha+Guard,0.0,1.0));
 					}
 				}
 			}
@@ -2384,13 +2389,16 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 					if (Alpha > 0.0 && Alpha < 1.0)
 					{
 						Breakpoints.Add(Alpha);
+						const double Guard = Darkwell::MovingPropLab::RenderOwnershipClipPrecisionMargin / FMath::Abs(Delta.Y);
+						Breakpoints.Add(FMath::Clamp(Alpha-Guard,0.0,1.0));
+						Breakpoints.Add(FMath::Clamp(Alpha+Guard,0.0,1.0));
 					}
 				}
 			}
 		}
 	};
 	auto AddQuad = [&](const FVector& A, const FVector& B, const FVector& C, const FVector& D,
-		const int32 PrimitiveIndex)
+		const int32 PrimitiveIndex, const FVector2D RetainedSide)
 	{
 		++Visual->CapGenerated;
 		for (int32 Segment = 0; Segment < Darkwell::MovingPropLab::PresentationSamples;
@@ -2405,6 +2413,16 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 			const FVector Top1 = FMath::Lerp(D, C, Alpha1);
 			const FVector Top0 = FMath::Lerp(D, C, Alpha0);
 			TArray<double> Breakpoints{0.0, 1.0};
+			// Clip to the original transformed primitive too. A midpoint inside
+			// its OBB does not imply both endpoints are inside (especially yaw).
+			if (Visual->PartGeometry.IsValidIndex(PrimitiveIndex))
+			{
+				double Entry, Exit;
+				if (!ClipSegmentToGeometryProjection(Visual->PartGeometry[PrimitiveIndex],
+					FVector2D(Bottom0), FVector2D(Bottom1), 0.0, Entry, Exit)) continue;
+				Breakpoints.Add(FMath::Clamp(Entry, 0.0, 1.0));
+				Breakpoints.Add(FMath::Clamp(Exit, 0.0, 1.0));
+			}
 			if (!Record.bCurrentObservedLocation)
 			{
 				for (const FPrimitiveGeometrySnapshot& Geometry : NewerGeometry)
@@ -2420,7 +2438,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 						Breakpoints.Add(FMath::Clamp(Exit, 0.0, 1.0));
 					}
 				}
-				AddNewerGridBreakpoints(FVector2D(Bottom0), FVector2D(Bottom1), Breakpoints);
+				AddOwnershipGridBreakpoints(FVector2D(Bottom0), FVector2D(Bottom1), Breakpoints);
 			}
 			Breakpoints.Sort();
 			for (int32 Index = Breakpoints.Num() - 1; Index > 0; --Index)
@@ -2465,33 +2483,40 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 				TArray<FVector2D> Remaining{FVector2D(OldMinZ, OldMaxZ)};
 				if (!Record.bCurrentObservedLocation)
 				{
-					TArray<FVector2D> NewerIntervals;
-					CollectNewerOwnedVerticalIntervals(Prop, Record.Epoch, Point, NewerIntervals);
-					for (const FVector2D Newer : NewerIntervals)
+					// Match the final surface ownership domain, not just exact OBBs.
+					// A conservative fine texel can be wholly owned even when its
+					// center lies just outside the newer mesh. Leaving a cap in that
+					// texel creates a detached strip with no remaining historical skin.
+					// This is post-candidate clipping only; never a new cut or V write.
+					const FIntPoint Fine = Size * Darkwell::MovingPropLab::PresentationSamples;
+					const FVector2D Support = Point + RetainedSide
+						* Darkwell::MovingPropLab::RenderOwnershipClipPrecisionMargin;
+					const FVector2D UV = (Support - Bounds.Min) / Bounds.GetSize();
+					const int32 FX = FMath::Clamp(FMath::FloorToInt(UV.X * Fine.X), 0, Fine.X - 1);
+					const int32 FY = FMath::Clamp(FMath::FloorToInt(UV.Y * Fine.Y), 0, Fine.Y - 1);
+					if (Visual->SuppressedByCurrentEvidence.IsValidIndex(FY * Fine.X + FX)
+						&& Visual->SuppressedByCurrentEvidence[FY * Fine.X + FX])
 					{
-						TArray<FVector2D> Next;
-						for (const FVector2D Interval : Remaining)
-						{
-							const double ClipMin = Newer.X
-								- Darkwell::MovingPropLab::RenderOwnershipClipClearance;
-							const double ClipMax = Newer.Y
-								+ Darkwell::MovingPropLab::RenderOwnershipClipClearance;
-							if (ClipMax < Interval.X || ClipMin > Interval.Y)
-							{
-								Next.Add(Interval);
-								continue;
-							}
-							if (ClipMin > Interval.X + UE_KINDA_SMALL_NUMBER)
-							{
-								Next.Add(FVector2D(Interval.X, FMath::Min(ClipMin, Interval.Y)));
-							}
-							if (ClipMax < Interval.Y - UE_KINDA_SMALL_NUMBER)
-							{
-								Next.Add(FVector2D(FMath::Max(ClipMax, Interval.X), Interval.Y));
-							}
-						}
-						Remaining = MoveTemp(Next);
+						++Visual->CapClipped;
+						continue;
 					}
+					TArray<FVector2D> NewerIntervals;
+					CollectNewerOwnedVerticalIntervals(Prop, Record.Epoch, Point, NewerIntervals,
+						Darkwell::MovingPropLab::RenderOwnershipClipClearance);
+					// Resolve the closed ownership of an exact grid endpoint only in
+					// the existing 0.001-cm precision strip, not the whole adjacent span.
+					if (FVector2D::Distance(FVector2D(SpanBottom0), FVector2D(SpanBottom1)) <=
+						2.01 * Darkwell::MovingPropLab::RenderOwnershipClipPrecisionMargin)
+					{
+						for (const FVector Endpoint : {SpanBottom0, SpanBottom1})
+						{
+							TArray<FVector2D> EndIntervals;
+							CollectNewerOwnedVerticalIntervals(Prop, Record.Epoch, FVector2D(Endpoint), EndIntervals,
+								Darkwell::MovingPropLab::RenderOwnershipClipClearance);
+							NewerIntervals.Append(EndIntervals);
+						}
+					}
+					Remaining = SubtractOwnedCapIntervals(FVector2D(OldMinZ, OldMaxZ), NewerIntervals);
 					if (Remaining.Num() != 1 || Remaining[0] != FVector2D(OldMinZ, OldMaxZ))
 					{
 						++Visual->CapClipped;
@@ -2508,7 +2533,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 			}
 		}
 	};
-	auto Vertical = [&](const double X, const double Y0, const double Y1)
+	auto Vertical = [&](const double X, const double Y0, const double Y1, const double RetainedX)
 	{
 		for (int32 PrimitiveIndex = 0; PrimitiveIndex < Visual->PartBounds.Num(); ++PrimitiveIndex)
 		{
@@ -2519,11 +2544,11 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 			if (To - From > UE_KINDA_SMALL_NUMBER)
 			{
 				AddQuad(FVector(X, From, Part.Min.Z), FVector(X, To, Part.Min.Z),
-					FVector(X, To, Part.Max.Z), FVector(X, From, Part.Max.Z), PrimitiveIndex);
+					FVector(X, To, Part.Max.Z), FVector(X, From, Part.Max.Z), PrimitiveIndex, FVector2D(RetainedX, 0));
 			}
 		}
 	};
-	auto Horizontal = [&](const double Y, const double X0, const double X1)
+	auto Horizontal = [&](const double Y, const double X0, const double X1, const double RetainedY)
 	{
 		for (int32 PrimitiveIndex = 0; PrimitiveIndex < Visual->PartBounds.Num(); ++PrimitiveIndex)
 		{
@@ -2534,7 +2559,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 			if (To - From > UE_KINDA_SMALL_NUMBER)
 			{
 				AddQuad(FVector(From, Y, Part.Min.Z), FVector(To, Y, Part.Min.Z),
-					FVector(To, Y, Part.Max.Z), FVector(From, Y, Part.Max.Z), PrimitiveIndex);
+					FVector(To, Y, Part.Max.Z), FVector(From, Y, Part.Max.Z), PrimitiveIndex, FVector2D(0, RetainedY));
 			}
 		}
 	};
@@ -2564,10 +2589,10 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 			const double X1 = X0 + Step.X;
 			const double Y0 = Bounds.Min.Y + Y * Step.Y;
 			const double Y1 = Y0 + Step.Y;
-			if (IsCut(X - 1, Y)) Vertical(X0, Y0, Y1);
-			if (IsCut(X + 1, Y)) Vertical(X1, Y0, Y1);
-			if (IsCut(X, Y - 1)) Horizontal(Y0, X0, X1);
-			if (IsCut(X, Y + 1)) Horizontal(Y1, X0, X1);
+			if (IsCut(X - 1, Y)) Vertical(X0, Y0, Y1, 1);
+			if (IsCut(X + 1, Y)) Vertical(X1, Y0, Y1, -1);
+			if (IsCut(X, Y - 1)) Horizontal(Y0, X0, X1, 1);
+			if (IsCut(X, Y + 1)) Horizontal(Y1, X0, X1, -1);
 		}
 	}
 	Visual->CapTriangles = Mesh.TriangleCount();
@@ -3848,8 +3873,21 @@ FString ADarkwellMovingPropLabRoom::GetResidualFragmentTelemetryForTesting(
 	const FName StableId) const
 {
 	const FTrackedProp* Prop = Tracked.Find(StableId);
-	return Prop ? FString::Join(Prop->ResidualFragmentDiagnostics, TEXT("; "))
-		: TEXT("NO_TRACKED_PROP");
+	if (!Prop) return TEXT("NO_TRACKED_PROP");
+	FString Result = FString::Join(Prop->ResidualFragmentDiagnostics, TEXT("; "));
+	for (const auto& Pair : Prop->Visuals)
+	{
+		const auto* Record = Prop->History.FindRecord(Pair.Key);
+		if (!Record || Record->bCurrentObservedLocation || !Pair.Value.Cap.IsValid() || !Pair.Value.Cap->IsVisible()) continue;
+		for (const auto& Q : Pair.Value.CapQuads)
+		{
+			const FVector C = (Q.A+Q.B+Q.C+Q.D)*.25;
+			Result += FString::Printf(TEXT("\nepoch=%u primitive=%d type=STALE_CAP A=(%.4f,%.4f,%.4f) B=(%.4f,%.4f,%.4f) top=%.4f actualOccupied=%d currentObserved=%d"),
+				Pair.Key,Q.PrimitiveIndex,Q.A.X,Q.A.Y,Q.A.Z,Q.B.X,Q.B.Y,Q.B.Z,Q.C.Z,
+				IsOccupiedByActual(FVector2D(C),NAME_None),HasCurrentObservedContributionAt(*Prop,FVector2D(C)));
+		}
+	}
+	return Result;
 }
 
 int32 ADarkwellMovingPropLabRoom::GetNewestHistoricalDiscoveredCellCountForTesting(

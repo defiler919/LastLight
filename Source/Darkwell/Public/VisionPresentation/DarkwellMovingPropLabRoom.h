@@ -166,6 +166,9 @@ private:
 		FTransform WorldTransform = FTransform::Identity;
 		int32 PrimitiveIndex = INDEX_NONE;
 	};
+	friend class FDarkwellCapPartialClipTest;
+	friend class FDarkwellCapCoplanarContactTest;
+	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);
 
 	struct FCapQuadSnapshot
 	{
@@ -198,7 +201,6 @@ private:
 		int32 ProxyVisibilityTransitions = 0;
 		FIntPoint HistoricalTextureSize = FIntPoint::ZeroValue;
 		TBitArray<> SuppressedByCurrentEvidence;
-		TBitArray<> HardOwnershipFilterGuard;
 		TArray<FVector2D> CapSamplePoints;
 		TArray<FLinearColor> SubmittedPresentation;
 		TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> Materials;
@@ -309,7 +311,8 @@ private:
 		const FPrimitiveGeometrySnapshot& Geometry,
 		FVector2D Point,
 		double& OutMinZ,
-		double& OutMaxZ);
+		double& OutMaxZ,
+		double ProjectionTolerance = 0.0);
 	static bool ClipSegmentToGeometryProjection(
 		const FPrimitiveGeometrySnapshot& Geometry,
 		FVector2D Start,
@@ -320,12 +323,12 @@ private:
 	bool CollectCurrentOwnedVerticalIntervals(
 		const FTrackedProp& Prop,
 		FVector2D Point,
-		TArray<FVector2D>& OutIntervals) const;
+		TArray<FVector2D>& OutIntervals, double ProjectionTolerance = 0.0) const;
 	bool CollectNewerOwnedVerticalIntervals(
 		const FTrackedProp& Prop,
 		uint32 OlderEpoch,
 		FVector2D Point,
-		TArray<FVector2D>& OutIntervals) const;
+		TArray<FVector2D>& OutIntervals, double ProjectionTolerance = 0.0) const;
 	bool HasNewerObservedGeometryOverlapAt(
 		const FTrackedProp& Prop,
 		const FRecordVisual& OlderVisual,

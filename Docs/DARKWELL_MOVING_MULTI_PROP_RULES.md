@@ -1069,3 +1069,63 @@ selectors reproduce the same incorrect result (71 missing cut candidates,
 moving Lab is **BUG_ALSO_REPRODUCED_MODE1**; its Mode 1 selector shares the
 Mode 2 moving presentation path, not the ordinary/manual Mode 1 semantics.
 This checkpoint intentionally preserves the failing behavior for reproduction.
+
+### Checkpoint B: separate candidate cuts and final presentation exclusion
+
+Checkpoint A is `80354e03a806a5a1cf5cc81432a9de532e75c5ae` (pushed).
+The correction restores sealed partial-discovery boundaries without treating
+ownership as an empty/cut signal. Candidate caps are then split at original
+primitive, ownership-grid and newer-geometry boundaries. Interval subtraction
+retains disconnected legal pieces. The existing 0.05/0.051/0.001 cm contact,
+clipping and precision constants are unchanged; midpoint classification now
+uses the same closed set as segment clipping. Candidate vertices are also
+clipped against their own original transformed primitive.
+
+The old-space occupancy broad phase now requires an actual transformed
+primitive intersection. Legal empty coverage next to the door/handle reaches
+the existing historical `Advance` path instead of being blocked by aggregate
+bounds. This does not clear by identity or by observing the new location.
+
+The actual moving proxy material is a project-side derivative,
+`M_MovingAccumulatedMemory`. Frozen manual materials are untouched. The RGB
+history signal remains the existing 4x4 conservative/bilinear result. Binary
+ownership is stored separately in A and loaded with `Texture.Load` at the
+**final opacity multiplication**, after smooth B sampling. The former CPU
+one-texel RGB-zeroing guard is removed. No D/V/R cell is written by this gate.
+
+Restoring positive candidates exposed a second cap-specific residue: exact
+OBB subtraction left tiny strips above/below the newer door/handle while the
+old outer surface was already excluded by its conservative fine texel. The
+near-camera image remained unchanged when only stale outer surfaces were
+temporarily hidden for attribution: these strips were `STALE_CAP`, not TSR.
+Cap clipping now also applies the **same retained-side fine-texel ownership
+domain as the outer surface**, after candidate generation. It neither turns
+ownership into a cap nor hides an entire unresolved epoch. Retirement waits
+for both residual surface contribution and clipped cap geometry to be empty.
+Historical authority records are not identity-cleared.
+
+Scope limitation: this room retains its existing conservative XY presentation
+ownership grid and yaw-only basic geometry. Interval-unit tests exercise
+partial vertical clipping, but are not evidence for arbitrary stacked meshes,
+pitch/roll, or a full 3D volumetric knowledge system. The new cap support gate
+matches the existing surface domain; it does not add such a system.
+
+Serial standard Development build `CheckpointB_SupportGridBuild.log` succeeded
+(4/4 actions, 14.62 seconds). Targeted report
+`Saved/AutomationReports/CapResidual_CheckpointB_SurfaceDomain/index.json`:
+6 tests, 2 clean + 4 success with warnings, 0 failed, 0 not-run, 135.330 seconds.
+These include real early/late rotation routes, four-view residual zero,
+positive historical/VerifiedEmpty caps, partial interval subtraction,
+coplanar/endpoints and multi-epoch 3D ownership. Final rendered historical
+proxy/cap counts are zero after the late route's full legal recheck.
+
+Intermediate failures remain under `Saved/PropGameplayLab/MovingMulti/CapResidual`:
+`CheckpointB` and `CheckpointB_ClosedSet` each failed the residual case;
+the latter had 2 clean + 2 warnings + 1 failure in 129.297 seconds.
+Do not count those as successful verification. The first shader-readback
+fixture also failed compilation (a float3 output was incorrectly packed as
+a scalar); its all-zero result was rejected, not counted as a pass.
+Corrected real-texture shader readback checked 131,072 pixels across two
+runtime textures: 3,339 blocked-positive-history samples and 66,934 allowed
+positive samples, zero errors. Final route/GPU and full regression are pending
+at this checkpoint; this is not user acceptance or final readiness.

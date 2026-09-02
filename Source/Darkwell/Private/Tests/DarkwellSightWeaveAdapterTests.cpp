@@ -2044,6 +2044,8 @@ namespace
   int32 VisibleCaps=0;
   int32 Records=0;
   int32 FalseOccupied=0;
+  int32 FinalProxies=0;
+  int32 FinalCaps=0;
  };
 
  FDarkwellResidualOwnershipRouteResult RunResidualOwnershipRoute(
@@ -2100,6 +2102,8 @@ namespace
   }
   Step(30);
   Result.FalseOccupied=Room->GetFalseOccupiedHistoryCountForTesting(RotateId);
+  Result.FinalProxies=Room->GetVisibleHistoricalProxyCountForTesting(RotateId);
+  Result.FinalCaps=Room->GetVisibleHistoricalCapCountForTesting(RotateId);
   Test.AddInfo(Room->GetFalseOccupiedHistoryTelemetryForTesting(RotateId));
   if(bCheckFourViews)
   {
@@ -2117,6 +2121,59 @@ namespace
   PresentationMode->Set(PreviousMode,ECVF_SetByConsole);
   Fixture->Destroy();return Result;
  }
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellCapPartialClipTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.CapPartialClipNotWholeReject", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellCapPartialClipTest::RunTest(const FString&)
+{
+ const TArray<FVector2D> Owned{FVector2D(0,50)};
+ const auto Residual=ADarkwellMovingPropLabRoom::SubtractOwnedCapIntervals(FVector2D(0,100),Owned);
+ TestEqual(TEXT("Half-owned candidate preserves one legal interval"),Residual.Num(),1);
+ if(Residual.Num()==1)
+ {
+  TestTrue(TEXT("Only contact clearance is removed from legal half"),FMath::IsNearlyEqual(Residual[0].X,50.051,1.e-6));
+  TestEqual(TEXT("Far endpoint is preserved"),Residual[0].Y,100.0);
+ }
+ const TArray<FVector2D> Middle{FVector2D(40,60)};
+ TestEqual(TEXT("Interior clipping retains both disjoint legal pieces"),
+  ADarkwellMovingPropLabRoom::SubtractOwnedCapIntervals(FVector2D(0,100),Middle).Num(),2);
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellCapCoplanarContactTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.CoplanarContact", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellCapCoplanarContactTest::RunTest(const FString&)
+{
+ using Room=ADarkwellMovingPropLabRoom;
+ for(const double Gap:{0.0,.025,.05,.1,1.0})
+ {
+  const TArray<FVector2D> Owned{FVector2D(100+Gap,120)};
+  const auto R=Room::SubtractOwnedCapIntervals(FVector2D(0,100),Owned);
+  TestEqual(TEXT("Touching cannot reject whole remote cap"),R.Num(),1);
+  if(R.Num()==1)
+  {
+   TestEqual(TEXT("Nonconflicting endpoint retained"),R[0].X,0.0);
+   TestTrue(TEXT("Closed contact clipped without tolerance inflation"),
+    FMath::IsNearlyEqual(R[0].Y,FMath::Min(100.0,100+Gap-.051),1.e-6));
+  }
+ }
+ Room::FPrimitiveGeometrySnapshot G;
+ G.LocalBounds=FBox(FVector(-50,-25,0),FVector(50,25,100));
+ for(const double Yaw:{0.0,.01,5.0,45.0,89.99})
+ {
+  G.WorldTransform=FTransform(FRotator(0,Yaw,0),FVector::ZeroVector);
+  double Entry,Exit;
+  TestTrue(TEXT("Actual transformed source accepts interior segment"),
+   Room::ClipSegmentToGeometryProjection(G,FVector2D(-100,0),FVector2D(100,0),0.0,Entry,Exit));
+  for(const double T:{Entry,Exit})
+  {
+   const FVector P(FMath::Lerp(-100.0,100.0,T),0,50);
+   TestTrue(TEXT("Both cut endpoints stay inside original source OBB"),
+    G.LocalBounds.ExpandBy(.0001).IsInsideOrOn(G.WorldTransform.InverseTransformPosition(P)));
+  }
+ }
+ return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHistoricalCapLifecycleTest,
@@ -2138,6 +2195,8 @@ bool FDarkwellCurrentOwnedResidualZeroTest::RunTest(const FString&)
  TestEqual(TEXT("Current-owned stale surface is zero"),Result.MaxSurfaceContact,0);
  TestEqual(TEXT("Current-owned stale cap is zero"),Result.MaxCapContact,0);
  TestEqual(TEXT("Legally observed empty holes inside aggregate bounds must not retain stale surfaces"),Result.FalseOccupied,0);
+ TestEqual(TEXT("Full legal recheck leaves no rendered stale proxy"),Result.FinalProxies,0);
+ TestEqual(TEXT("Full legal recheck leaves no rendered stale cap"),Result.FinalCaps,0);
  return true;
 }
 

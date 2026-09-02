@@ -1330,3 +1330,17 @@ An initial diagnostic-only run exposed premature diagnostic retirement;
 the final run keeps V2 updating after legacy rendering retires and restricts
 seeded knowledge to the original primitive footprint. Evidence is retained.
 Current stage status: PARTIAL — MIXED_CELL_HISTORY_WORK_IN_PROGRESS.
+
+A pushed: `70f4d8acde69c78d052416222f7500b3009f7f76`.
+B switches historical surface texture RGB/ownership A to the fine record.
+The frozen 4x4 envelope is retained at sealing; per-sample opacity now follows
+its own evidence. The existing moving-only material still bilinearly samples
+RGB and then multiplies by unfiltered A. Superseded and fully erased samples
+have A=0; no post-gate smoothing is introduced. Coarse V cannot release a
+fine record that still owns unresolved knowledge. Superseded is not relabeled
+as verified empty to reclaim records. Cap generation remains coarse at B;
+this is an intermediate buildable checkpoint, not the final GPU retest build.
+B standard build: succeeded, 30.58 seconds. `HistoryGridV2_B/index.json`:
+3/3 Success, 0 warnings/failures, 112.4748 seconds. The earlier route name/log
+label `ParallelLateReacquire`/`PARALLEL_ONLY` is retained in this intermediate
+test, but surface output at B is V2, not legacy. Fast/slow final counts agree.

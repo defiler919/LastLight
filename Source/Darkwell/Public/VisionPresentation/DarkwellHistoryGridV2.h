@@ -13,6 +13,7 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 		FGameplayTag State;
 		float InitialRemembered = 0;
 		float Opacity = 0;
+		float FrozenAAEnvelope = 0;
 		float EmptyDwell = 0;
 		bool bVerifiedEmpty = false; // Fact survives ownership changes; ownership never sets it.
 	};
@@ -29,6 +30,8 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	TConstArrayView<FSample> GetSamples() const { return Samples; }
 	bool IsInitialized() const { return !Samples.IsEmpty(); }
 	bool HasResidualSurface() const;
+	void BuildPresentation(TArray<FLinearColor>& OutPixels) const;
+	bool IsFullyVerifiedEmpty() const;
 	int32 Count(FGameplayTag State) const;
 	int32 CountMixedCoarseCells() const;
 private:

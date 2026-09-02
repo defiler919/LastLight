@@ -140,6 +140,7 @@ bool FDarkwellSpatialObservationHistory::IsFullyErased(
 	{
 		return false;
 	}
+	if (Record.FineHistory.IsInitialized()) return Record.FineHistory.IsFullyVerifiedEmpty();
 	for (const FDarkwellSpatialPropMemory::FCell& Cell : Record.SpatialMemory.GetCells())
 	{
 		if (Cell.RemainingStale > 0.0f || Cell.StaleOpacity > 0.0f)

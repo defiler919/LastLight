@@ -30,6 +30,13 @@ namespace Darkwell::MovingPropLab
 {
 	constexpr float CellSize = 2.5f;
 	constexpr int32 PresentationSamples = 4;
+	float HistoricalOpacity(const FDarkwellSpatialObservationRecord& Record, int32 FineIndex, int32 CoarseIndex)
+	{
+		if (!Record.FineHistory.IsInitialized()) return Record.SpatialMemory.Presentation(CoarseIndex).B;
+		const auto& S = Record.FineHistory.GetSamples()[FineIndex];
+		return S.State == FDarkwellHistoryGridV2::Superseded() || S.State == FDarkwellHistoryGridV2::NeverObserved()
+			? 0.f : S.Opacity * S.FrozenAAEnvelope;
+	}
 	// Render ownership is a closed-set presentation rule. This tolerance is one
 	// half millimetre in UE centimetres and never enters coverage or D/V/R state.
 	constexpr double RenderOwnershipContactTolerance = 0.05;
@@ -693,7 +700,7 @@ bool ADarkwellMovingPropLabRoom::CollectNewerOwnedVerticalIntervals(
 		const bool bSuppressed = Visual->SuppressedByCurrentEvidence.IsValidIndex(FineIndex)
 			&& Visual->SuppressedByCurrentEvidence[FineIndex];
 		if (bSuppressed || !Candidate.SpatialMemory.GetCells().IsValidIndex(CellIndex)
-			|| Candidate.SpatialMemory.Presentation(CellIndex).B <= 0.0f)
+			|| Darkwell::MovingPropLab::HistoricalOpacity(Candidate, FineIndex, CellIndex) <= 0.0f)
 		{
 			continue;
 		}
@@ -960,8 +967,10 @@ void ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	{
 		Occupied[Y * Size.X + X] = IsOccupiedByActual(Bounds.Min + Step * FVector2D(X + .5, Y + .5), NAME_None);
 	}
-	// Checkpoint A: independent diagnostic evidence. Legacy fields still own all output.
+	// Evidence owns historical output; the old coarse fields remain diagnostic.
 	Record.FineHistory.Advance(DeltaSeconds, Coverage.Values, Occupied, Visual->SuppressedByCurrentEvidence);
+	for (int32 I = 0; I < Visual->SuppressedByCurrentEvidence.Num(); ++I)
+		Visual->SuppressedByCurrentEvidence[I] = Record.FineHistory.GetSamples()[I].State == FDarkwellHistoryGridV2::Superseded();
 }
 
 FString ADarkwellMovingPropLabRoom::GetFineHistoryTelemetry(const FName StableId) const
@@ -1123,6 +1132,7 @@ bool ADarkwellMovingPropLabRoom::IsHistoricalPresentationResolved(
 	// A real remaining cut fragment can extend above/below newer owned space.
 	// Surface-only XY retirement must not discard that independently clipped cap.
 	if (Visual.CapTriangles > 0) return false;
+	if (Record.FineHistory.IsInitialized()) return !Record.FineHistory.HasResidualSurface();
 	const FIntPoint Coarse = Record.SpatialMemory.GetSize();
 	const int32 Samples = Darkwell::MovingPropLab::PresentationSamples;
 	const FIntPoint Fine = Coarse * Samples;
@@ -1225,7 +1235,7 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 			const bool bSuppressed = Visual->SuppressedByCurrentEvidence.IsValidIndex(FineIndex)
 				&& Visual->SuppressedByCurrentEvidence[FineIndex];
 			if (!bSuppressed
-				&& Historical.SpatialMemory.Presentation(CellY * Coarse.X + CellX).B > 0.0f)
+				&& Darkwell::MovingPropLab::HistoricalOpacity(Historical, FineIndex, CellY * Coarse.X + CellX) > 0.0f)
 			{
 				++Contributors;
 			}
@@ -1394,7 +1404,7 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 					const bool bSuppressed = Visual->SuppressedByCurrentEvidence.IsValidIndex(FineIndex)
 						&& Visual->SuppressedByCurrentEvidence[FineIndex];
 					if (bSuppressed || !Historical.SpatialMemory.GetCells().IsValidIndex(CellIndex)
-						|| Historical.SpatialMemory.Presentation(CellIndex).B <= 0.0f)
+						|| Darkwell::MovingPropLab::HistoricalOpacity(Historical, FineIndex, CellIndex) <= 0.0f)
 					{
 						continue;
 					}
@@ -1877,7 +1887,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			{
 				return Cell.RemainingStale > 0.0f || Cell.StaleOpacity > 0.0f;
 			});
-		if (!bAny)
+		if (Record.FineHistory.IsInitialized() ? Record.FineHistory.IsFullyVerifiedEmpty() : !bAny)
 		{
 			Erased.Add(Record.Epoch);
 		}
@@ -2118,13 +2128,20 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
 		return;
 	}
 	TArray<FLinearColor> Presentation;
-	const FIntPoint Size = Record.SpatialMemory.BuildConservativePresentation(
+	const bool FineHistory = !Record.bCurrentObservedLocation && Record.FineHistory.IsInitialized();
+	FIntPoint Size;
+	if (FineHistory)
+	{
+		Record.FineHistory.BuildPresentation(Presentation);
+		Size = Record.FineHistory.GetSize();
+	}
+	else Size = Record.SpatialMemory.BuildConservativePresentation(
 		Darkwell::MovingPropLab::PresentationSamples, Presentation);
 	if (Size.X <= 0 || Presentation.Num() != Size.X * Size.Y)
 	{
 		return;
 	}
-	if (!Record.bCurrentObservedLocation
+	if (!Record.bCurrentObservedLocation && !FineHistory
 		&& Visual->SuppressedByCurrentEvidence.Num() == Presentation.Num())
 	{
 		for (int32 Index = 0; Index < Presentation.Num(); ++Index)

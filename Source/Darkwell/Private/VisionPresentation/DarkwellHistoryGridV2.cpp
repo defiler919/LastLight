@@ -20,6 +20,8 @@ void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& Sealed
 	const FIntPoint Coarse = SealedMemory.GetSize();
 	Size = Coarse * SamplesPerCell;
 	Samples.SetNum(Size.X * Size.Y);
+	TArray<FLinearColor> FrozenPresentation;
+	SealedMemory.BuildConservativePresentation(SamplesPerCell, FrozenPresentation);
 	for (int32 Y = 0; Y < Size.Y; ++Y) for (int32 X = 0; X < Size.X; ++X)
 	{
 		const auto& Cell = SealedMemory.GetCells()[(Y / SamplesPerCell) * Coarse.X + X / SamplesPerCell];
@@ -27,6 +29,7 @@ void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& Sealed
 		Sample = FSample();
 		Sample.InitialRemembered = Cell.InitialRemembered;
 		Sample.Opacity = Cell.StaleOpacity;
+		Sample.FrozenAAEnvelope = Cell.StaleOpacity > 0 ? FrozenPresentation[Y * Size.X + X].B / Cell.StaleOpacity : 0;
 		Sample.State = Sample.InitialRemembered > 0 ? Unresolved() : NeverObserved();
 	}
 }
@@ -74,6 +77,25 @@ bool FDarkwellHistoryGridV2::HasResidualSurface() const
 	{
 		return (S.State == Unresolved() && S.InitialRemembered > 0)
 			|| (S.State == VerifiedEmpty() && S.Opacity > 0);
+	});
+}
+void FDarkwellHistoryGridV2::BuildPresentation(TArray<FLinearColor>& OutPixels) const
+{
+	OutPixels.SetNumUninitialized(Samples.Num());
+	for (int32 I = 0; I < Samples.Num(); ++I)
+	{
+		const FSample& S = Samples[I];
+		// Keep the frozen 4x4 envelope and bilinear RGB. Binary A is loaded
+		// unfiltered by M_MovingAccumulatedMemory at the FINAL shader output.
+		const bool Gate = S.State == Unresolved() || (S.State == VerifiedEmpty() && S.Opacity > 0);
+		OutPixels[I] = FLinearColor(0, 0, S.Opacity * S.FrozenAAEnvelope, Gate ? 1.f : 0.f);
+	}
+}
+bool FDarkwellHistoryGridV2::IsFullyVerifiedEmpty() const
+{
+	return IsInitialized() && !Samples.ContainsByPredicate([](const FSample& S)
+	{
+		return S.InitialRemembered > 0 && (!S.bVerifiedEmpty || S.Opacity > 0);
 	});
 }
 int32 FDarkwellHistoryGridV2::Count(FGameplayTag State) const

@@ -1977,6 +1977,63 @@ bool FDarkwellPartialCurrentMultiEpoch3DOwnershipTest::RunTest(const FString&)
  Fixture->Destroy();return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellEdgeContactSliverTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.EdgeContactSliver", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellEdgeContactSliverTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("EdgeContactSliver"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("Edge-contact Lab exists"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("Edge-contact authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Edge-contact reset"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames=1){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ auto* Control=Room->GetControlForTesting(EDarkwellMovingPropLabControlKind::VisibleRotate);
+ if(!TestNotNull(TEXT("Edge-contact real F control exists"),Control))return false;
+
+ Player->SetActorLocation(FVector(-300,70,92));Player->SetActorRotation(FRotator(0,90,0));Step(90);World->UpdateWorldComponents(true,false);
+ Player->GetInteractionComponent()->UpdateFocusedActorFromWorld();
+ TestEqual(TEXT("Edge-contact route focuses VISIBLE ROTATE"),Player->GetInteractionComponent()->GetFocusedActor(),static_cast<AActor*>(Control));
+ TestTrue(TEXT("Edge-contact route starts through real F"),Player->GetInteractionComponent()->TryInteract());
+ Player->SetActorRotation(FRotator(0,-90,0));Step(130);
+ bool bFoundPartial=false;
+ for(int32 Yaw=150;Yaw>=130&&!bFoundPartial;--Yaw)
+ {
+  Player->SetActorRotation(FRotator(0,float(Yaw),0));Step(2);
+  const float Ratio=Room->GetLastLegalCoverageRatioForTesting(RotateId);
+  bFoundPartial=Ratio>=.06f&&Ratio<=.30f;
+ }
+ TestTrue(TEXT("Edge-contact route creates the intermediate partial epoch"),bFoundPartial);
+ Step(4);Player->SetActorRotation(FRotator(0,-90,0));Step(303);
+
+ int32 MaxSurfaceContact=0,MaxCapContact=0,MaxFilterLeak=0;
+ FString ResidualTelemetry;
+ for(int32 Yaw=155;Yaw>=90;--Yaw)
+ {
+  Player->SetActorRotation(FRotator(0,float(Yaw),0));Step(2);
+  MaxSurfaceContact=FMath::Max(MaxSurfaceContact,Room->GetCurrentRenderContactStaleSurfaceForTesting(RotateId));
+  MaxCapContact=FMath::Max(MaxCapContact,Room->GetCurrentRenderContactStaleCapForTesting(RotateId));
+  MaxFilterLeak=FMath::Max(MaxFilterLeak,Room->GetHardOwnershipFilterLeakForTesting(RotateId));
+  if(ResidualTelemetry.IsEmpty())ResidualTelemetry=Room->GetResidualFragmentTelemetryForTesting(RotateId);
+ }
+ // Checkpoint-A reproduction: volume-overlap telemetry is clean, but the exact
+ // submitted fragments still contain a bilinear stale surface boundary and/or
+ // a closed-set cap contact. Checkpoint B must invert these render assertions.
+ TestTrue(TEXT("8747acd reproduces a submitted residual ownership fragment"),
+  MaxSurfaceContact>0||MaxCapContact>0);
+ TestTrue(TEXT("8747acd reproduces hard-mask filtering leakage"),MaxFilterLeak>0);
+ TestEqual(TEXT("Legacy open-volume surface overlap misses the residual"),Room->GetCurrent3DOverlapStaleSurfaceForTesting(RotateId),0);
+ TestEqual(TEXT("Legacy open-volume cap overlap misses the residual"),Room->GetCurrent3DOverlapStaleCapForTesting(RotateId),0);
+ AddInfo(FString::Printf(TEXT("surface_contact=%d cap_contact=%d filter_leak=%d fragments=[%s]"),
+  MaxSurfaceContact,MaxCapContact,MaxFilterLeak,*ResidualTelemetry));
+ Fixture->Destroy();return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMovingPropStaleFlickerStabilityTest,
  "Darkwell.PropLab.MovingRules.InWorldControls.StaleEpochFlickerStability", Darkwell::SightWeaveAdapterTests::TestFlags)
 bool FDarkwellMovingPropStaleFlickerStabilityTest::RunTest(const FString&)

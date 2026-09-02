@@ -30,6 +30,9 @@ namespace Darkwell::MovingPropLab
 {
 	constexpr float CellSize = 2.5f;
 	constexpr int32 PresentationSamples = 4;
+	// Render ownership is a closed-set presentation rule. This tolerance is one
+	// half millimetre in UE centimetres and never enters coverage or D/V/R state.
+	constexpr double RenderOwnershipContactTolerance = 0.05;
 	const FName MainId(TEXT("Lab.Moving.Cabinet"));
 	const FVector A(-1100.0f, 650.0f, 0.0f);
 	const FVector B(0.0f, 650.0f, 0.0f);
@@ -398,6 +401,7 @@ void ADarkwellMovingPropLabRoom::DestroyVisual(FRecordVisual& Visual)
 	Visual.CapTriangles = 0;
 	Visual.CapSamplePoints.Reset();
 	Visual.CapQuads.Reset();
+	Visual.SubmittedPresentation.Reset();
 }
 
 void ADarkwellMovingPropLabRoom::DestroyTracked()
@@ -541,6 +545,68 @@ bool ADarkwellMovingPropLabRoom::QueryVerticalInterval(
 	OutMinZ = Near;
 	OutMaxZ = Far;
 	return OutMaxZ - OutMinZ > UE_KINDA_SMALL_NUMBER;
+}
+
+bool ADarkwellMovingPropLabRoom::ClipSegmentToGeometryProjection(
+	const FPrimitiveGeometrySnapshot& Geometry,
+	const FVector2D Start,
+	const FVector2D End,
+	double& OutStartAlpha,
+	double& OutEndAlpha)
+{
+	if (!Geometry.LocalBounds.IsValid || Geometry.WorldTransform.ContainsNaN())
+	{
+		return false;
+	}
+	// Lab furniture transforms only around world Z. In that contract, inverse XY
+	// is independent of the chosen world Z and a slab clip is the exact projected
+	// segment/OBB intersection, including endpoints and tangency.
+	const FVector WorldUp = Geometry.WorldTransform.TransformVectorNoScale(FVector::UpVector);
+	if (FMath::Abs(FVector::DotProduct(WorldUp.GetSafeNormal(), FVector::UpVector)) < 0.9999)
+	{
+		return false;
+	}
+	const double ReferenceZ = Geometry.WorldTransform.GetLocation().Z;
+	const FVector LocalStart3 = Geometry.WorldTransform.InverseTransformPosition(
+		FVector(Start.X, Start.Y, ReferenceZ));
+	const FVector LocalEnd3 = Geometry.WorldTransform.InverseTransformPosition(
+		FVector(End.X, End.Y, ReferenceZ));
+	const FVector2D LocalStart(LocalStart3.X, LocalStart3.Y);
+	const FVector2D LocalEnd(LocalEnd3.X, LocalEnd3.Y);
+	const FVector2D Delta = LocalEnd - LocalStart;
+	const FVector Scale = Geometry.WorldTransform.GetScale3D().GetAbs();
+	const double MinimumScale = FMath::Max(UE_DOUBLE_SMALL_NUMBER,
+		FMath::Min(Scale.X, Scale.Y));
+	const double LocalTolerance = Darkwell::MovingPropLab::RenderOwnershipContactTolerance
+		/ MinimumScale;
+	OutStartAlpha = 0.0;
+	OutEndAlpha = 1.0;
+	for (int32 Axis = 0; Axis < 2; ++Axis)
+	{
+		const double Minimum = Geometry.LocalBounds.Min[Axis] - LocalTolerance;
+		const double Maximum = Geometry.LocalBounds.Max[Axis] + LocalTolerance;
+		if (FMath::Abs(Delta[Axis]) <= UE_DOUBLE_SMALL_NUMBER)
+		{
+			if (LocalStart[Axis] < Minimum || LocalStart[Axis] > Maximum)
+			{
+				return false;
+			}
+			continue;
+		}
+		double Near = (Minimum - LocalStart[Axis]) / Delta[Axis];
+		double Far = (Maximum - LocalStart[Axis]) / Delta[Axis];
+		if (Near > Far)
+		{
+			Swap(Near, Far);
+		}
+		OutStartAlpha = FMath::Max(OutStartAlpha, Near);
+		OutEndAlpha = FMath::Min(OutEndAlpha, Far);
+		if (OutEndAlpha + UE_DOUBLE_SMALL_NUMBER < OutStartAlpha)
+		{
+			return false;
+		}
+	}
+	return OutEndAlpha >= 0.0 && OutStartAlpha <= 1.0;
 }
 
 bool ADarkwellMovingPropLabRoom::CollectCurrentOwnedVerticalIntervals(
@@ -966,6 +1032,10 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 	Prop.Current3DOverlapStaleSurface = 0;
 	Prop.Current3DOverlapStaleCap = 0;
 	Prop.Max3DRenderOwnershipContributors = 1;
+	Prop.CurrentRenderContactStaleSurface = 0;
+	Prop.CurrentRenderContactStaleCap = 0;
+	Prop.HardOwnershipFilterLeak = 0;
+	Prop.ResidualFragmentDiagnostics.Reset();
 	Prop.Offending3DEpoch = 0;
 	Prop.Offending3DPrimitive = INDEX_NONE;
 	Prop.Offending3DWorldPosition = FVector::ZeroVector;
@@ -1058,6 +1128,61 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 			++Prop.VisibleHistoricalCaps;
 		}
 	}
+	// The stale proxy samples B with bilinear filtering. A hard-zero ownership
+	// texel adjacent to a positive stale texel can therefore submit a real stale
+	// surface fragment inside current-owned space even though point diagnostics
+	// report the zero texel. Record that render fragment explicitly.
+	for (const FDarkwellSpatialObservationRecord& Historical : Prop.History.GetRecords())
+	{
+		if (Historical.bCurrentObservedLocation)
+		{
+			continue;
+		}
+		const FRecordVisual* Visual = Prop.Visuals.Find(Historical.Epoch);
+		const FIntPoint Fine = Historical.SpatialMemory.GetSize()
+			* Darkwell::MovingPropLab::PresentationSamples;
+		if (!Visual || Visual->bPresentationRetired
+			|| Visual->SubmittedPresentation.Num() != Fine.X * Fine.Y
+			|| Visual->SuppressedByCurrentEvidence.Num() != Fine.X * Fine.Y)
+		{
+			continue;
+		}
+		for (int32 Y = 0; Y < Fine.Y; ++Y)
+		{
+			for (int32 X = 0; X < Fine.X; ++X)
+			{
+				const int32 Index = Y * Fine.X + X;
+				if (!Visual->SuppressedByCurrentEvidence[Index])
+				{
+					continue;
+				}
+				bool bPositiveFilterNeighbour = false;
+				for (int32 DY = -1; DY <= 1 && !bPositiveFilterNeighbour; ++DY)
+				{
+					for (int32 DX = -1; DX <= 1 && !bPositiveFilterNeighbour; ++DX)
+					{
+						const int32 NX = X + DX;
+						const int32 NY = Y + DY;
+						bPositiveFilterNeighbour = NX >= 0 && NY >= 0
+							&& NX < Fine.X && NY < Fine.Y
+							&& Visual->SubmittedPresentation[NY * Fine.X + NX].B > 0.0f;
+					}
+				}
+				if (!bPositiveFilterNeighbour)
+				{
+					continue;
+				}
+				++Prop.HardOwnershipFilterLeak;
+				++Prop.CurrentRenderContactStaleSurface;
+				if (Prop.ResidualFragmentDiagnostics.Num() < 32)
+				{
+					Prop.ResidualFragmentDiagnostics.Add(FString::Printf(
+						TEXT("epoch=%u primitive=ALL type=STALE_SURFACE texel=(%d,%d) material=M_ManualAccumulatedMemory ownership=SUPPRESSED clip=FILTER_LEAK overlap=BILINEAR_NEIGHBOUR"),
+						Historical.Epoch, X, Y));
+				}
+			}
+		}
+	}
 	for (const FVector2D Point : SamplePoints)
 	{
 		const int32 Surfaces = SurfaceContributorsAt(Point);
@@ -1076,6 +1201,12 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 	{
 		return FMath::Min(AMax, BMax) - FMath::Max(AMin, BMin)
 			> UE_KINDA_SMALL_NUMBER;
+	};
+	auto IntervalsRenderContact = [](const double AMin, const double AMax,
+		const double BMin, const double BMax)
+	{
+		return FMath::Min(AMax, BMax) + Darkwell::MovingPropLab::RenderOwnershipContactTolerance
+			>= FMath::Max(AMin, BMin);
 	};
 	for (const FDarkwellSpatialObservationRecord& Historical : Prop.History.GetRecords())
 	{
@@ -1158,6 +1289,95 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 
 		for (const FCapQuadSnapshot& Quad : Visual->CapQuads)
 		{
+			bool bQuadContactsCurrent = false;
+			FVector ContactPoint = FVector::ZeroVector;
+			if (const ADarkwellPropLabFurniture* CurrentActual = Prop.bExists
+				? Prop.Actual.Get() : nullptr)
+			{
+				for (const FPrimitiveGeometrySnapshot& CurrentGeometry
+					: ActualPartGeometry(*CurrentActual))
+				{
+					double Alpha0 = 0.0;
+					double Alpha1 = 0.0;
+					if (!ClipSegmentToGeometryProjection(CurrentGeometry,
+						FVector2D(Quad.A), FVector2D(Quad.B), Alpha0, Alpha1))
+					{
+						continue;
+					}
+					const double Alpha = FMath::Clamp((Alpha0 + Alpha1) * 0.5, 0.0, 1.0);
+					const FVector Bottom = FMath::Lerp(Quad.A, Quad.B, Alpha);
+					const FVector Top = FMath::Lerp(Quad.D, Quad.C, Alpha);
+					const FVector2D Point(Bottom.X, Bottom.Y);
+					TArray<FVector2D> CurrentIntervals;
+					if (!CollectCurrentOwnedVerticalIntervals(Prop, Point, CurrentIntervals))
+					{
+						continue;
+					}
+					const double CapMinZ = FMath::Min(Bottom.Z, Top.Z);
+					const double CapMaxZ = FMath::Max(Bottom.Z, Top.Z);
+					for (const FVector2D CurrentInterval : CurrentIntervals)
+					{
+						if (IntervalsRenderContact(CapMinZ, CapMaxZ,
+							CurrentInterval.X, CurrentInterval.Y))
+						{
+							bQuadContactsCurrent = true;
+							ContactPoint = FVector(Point.X, Point.Y,
+								FMath::Max(CapMinZ, CurrentInterval.X));
+							break;
+						}
+					}
+					if (bQuadContactsCurrent)
+					{
+						break;
+					}
+				}
+			}
+			for (const double Alpha : {0.0, 0.25, 0.5, 0.75, 1.0})
+			{
+				if (bQuadContactsCurrent)
+				{
+					break;
+				}
+				const FVector Bottom = FMath::Lerp(Quad.A, Quad.B, Alpha);
+				const FVector Top = FMath::Lerp(Quad.D, Quad.C, Alpha);
+				const FVector2D Point(Bottom.X, Bottom.Y);
+				TArray<FVector2D> CurrentIntervals;
+				if (!CollectCurrentOwnedVerticalIntervals(Prop, Point, CurrentIntervals))
+				{
+					continue;
+				}
+				const double CapMinZ = FMath::Min(Bottom.Z, Top.Z);
+				const double CapMaxZ = FMath::Max(Bottom.Z, Top.Z);
+				for (const FVector2D CurrentInterval : CurrentIntervals)
+				{
+					if (IntervalsRenderContact(CapMinZ, CapMaxZ,
+						CurrentInterval.X, CurrentInterval.Y))
+					{
+						bQuadContactsCurrent = true;
+						ContactPoint = FVector(Point.X, Point.Y,
+							FMath::Max(CapMinZ, CurrentInterval.X));
+						break;
+					}
+				}
+				if (bQuadContactsCurrent)
+				{
+					break;
+				}
+			}
+			if (bQuadContactsCurrent)
+			{
+				++Prop.CurrentRenderContactStaleCap;
+				if (Prop.ResidualFragmentDiagnostics.Num() < 32)
+				{
+					const FVector Normal = FVector::CrossProduct(Quad.B - Quad.A, Quad.D - Quad.A).GetSafeNormal();
+					Prop.ResidualFragmentDiagnostics.Add(FString::Printf(
+						TEXT("epoch=%u primitive=%d type=STALE_CAP vertices=[%s|%s|%s|%s] normal=%s material=M_ManualStaleCutCap ownership=OLDER clip=KEPT overlap=CLOSED_CONTACT nearest=CURRENT separation<=%.3f world=%s"),
+						Historical.Epoch, Quad.PrimitiveIndex, *Quad.A.ToCompactString(),
+						*Quad.B.ToCompactString(), *Quad.C.ToCompactString(), *Quad.D.ToCompactString(),
+						*Normal.ToCompactString(), Darkwell::MovingPropLab::RenderOwnershipContactTolerance,
+						*ContactPoint.ToCompactString()));
+				}
+			}
 			for (int32 Segment = 0; Segment < Darkwell::MovingPropLab::PresentationSamples;
 				++Segment)
 			{
@@ -1722,6 +1942,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
 			}
 		}
 	}
+	Visual->SubmittedPresentation = Presentation;
 	uint64 Signature = 1469598103934665603ull;
 	auto MixFloat = [&Signature](const float Value)
 	{
@@ -3225,6 +3446,27 @@ int32 ADarkwellMovingPropLabRoom::GetMax3DRenderOwnershipContributorsForTesting(
 	return Prop ? Prop->Max3DRenderOwnershipContributors : 0;
 }
 
+int32 ADarkwellMovingPropLabRoom::GetCurrentRenderContactStaleSurfaceForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? Prop->CurrentRenderContactStaleSurface : 0;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetCurrentRenderContactStaleCapForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? Prop->CurrentRenderContactStaleCap : 0;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetHardOwnershipFilterLeakForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? Prop->HardOwnershipFilterLeak : 0;
+}
+
 FString ADarkwellMovingPropLabRoom::Get3DOwnershipTelemetryForTesting(
 	const FName StableId) const
 {
@@ -3234,10 +3476,13 @@ FString ADarkwellMovingPropLabRoom::Get3DOwnershipTelemetryForTesting(
 		return TEXT("CURRENT_3D_OVERLAP_STALE_SURFACE=0 CURRENT_3D_OVERLAP_STALE_CAP=0 MAX_3D_RENDER_OWNERSHIP=0");
 	}
 	return FString::Printf(
-		TEXT("CURRENT_3D_OVERLAP_STALE_SURFACE=%d CURRENT_3D_OVERLAP_STALE_CAP=%d MAX_3D_RENDER_OWNERSHIP=%d OFFENDING_EPOCH=%u OFFENDING_PRIMITIVE=%d OFFENDING_WORLD=(%.3f,%.3f,%.3f) CURRENT_OBSERVATION_EPOCH=%d CURRENT_TRANSFORM=%s"),
+		TEXT("CURRENT_3D_OVERLAP_STALE_SURFACE=%d CURRENT_3D_OVERLAP_STALE_CAP=%d MAX_3D_RENDER_OWNERSHIP=%d CURRENT_RENDER_CONTACT_STALE_SURFACE=%d CURRENT_RENDER_CONTACT_STALE_CAP=%d HARD_OWNERSHIP_FILTER_LEAK=%d OFFENDING_EPOCH=%u OFFENDING_PRIMITIVE=%d OFFENDING_WORLD=(%.3f,%.3f,%.3f) CURRENT_OBSERVATION_EPOCH=%d CURRENT_TRANSFORM=%s"),
 		Prop->Current3DOverlapStaleSurface,
 		Prop->Current3DOverlapStaleCap,
 		Prop->Max3DRenderOwnershipContributors,
+		Prop->CurrentRenderContactStaleSurface,
+		Prop->CurrentRenderContactStaleCap,
+		Prop->HardOwnershipFilterLeak,
 		Prop->Offending3DEpoch,
 		Prop->Offending3DPrimitive,
 		Prop->Offending3DWorldPosition.X,
@@ -3246,6 +3491,14 @@ FString ADarkwellMovingPropLabRoom::Get3DOwnershipTelemetryForTesting(
 		Prop->ObservationEpisode,
 		Prop->Actual.IsValid() ? *Prop->Actual->GetActorTransform().ToHumanReadableString()
 			: TEXT("NONE"));
+}
+
+FString ADarkwellMovingPropLabRoom::GetResidualFragmentTelemetryForTesting(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? FString::Join(Prop->ResidualFragmentDiagnostics, TEXT("; "))
+		: TEXT("NO_TRACKED_PROP");
 }
 
 int32 ADarkwellMovingPropLabRoom::GetNewestHistoricalDiscoveredCellCountForTesting(

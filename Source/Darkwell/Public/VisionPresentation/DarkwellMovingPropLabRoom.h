@@ -128,7 +128,11 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetCurrent3DOverlapStaleSurfaceForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetCurrent3DOverlapStaleCapForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetMax3DRenderOwnershipContributorsForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetCurrentRenderContactStaleSurfaceForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetCurrentRenderContactStaleCapForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetHardOwnershipFilterLeakForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString Get3DOwnershipTelemetryForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetResidualFragmentTelemetryForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetNewestHistoricalDiscoveredCellCountForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetNewestHistoricalCellCountForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") float GetLastLegalCoverageRatioForTesting(FName StableId) const;
@@ -186,6 +190,7 @@ private:
 		FIntPoint HistoricalTextureSize = FIntPoint::ZeroValue;
 		TBitArray<> SuppressedByCurrentEvidence;
 		TArray<FVector2D> CapSamplePoints;
+		TArray<FLinearColor> SubmittedPresentation;
 		TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> Materials;
 		bool bPresentationRetired = false;
 		bool bHasProxyVisibilitySample = false;
@@ -220,6 +225,10 @@ private:
 		int32 Current3DOverlapStaleSurface = 0;
 		int32 Current3DOverlapStaleCap = 0;
 		int32 Max3DRenderOwnershipContributors = 0;
+		int32 CurrentRenderContactStaleSurface = 0;
+		int32 CurrentRenderContactStaleCap = 0;
+		int32 HardOwnershipFilterLeak = 0;
+		TArray<FString> ResidualFragmentDiagnostics;
 		uint32 Offending3DEpoch = 0;
 		int32 Offending3DPrimitive = INDEX_NONE;
 		FVector Offending3DWorldPosition = FVector::ZeroVector;
@@ -291,6 +300,12 @@ private:
 		FVector2D Point,
 		double& OutMinZ,
 		double& OutMaxZ);
+	static bool ClipSegmentToGeometryProjection(
+		const FPrimitiveGeometrySnapshot& Geometry,
+		FVector2D Start,
+		FVector2D End,
+		double& OutStartAlpha,
+		double& OutEndAlpha);
 	bool CollectCurrentOwnedVerticalIntervals(
 		const FTrackedProp& Prop,
 		FVector2D Point,

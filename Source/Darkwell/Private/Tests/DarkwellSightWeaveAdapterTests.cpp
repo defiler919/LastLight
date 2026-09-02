@@ -2053,6 +2053,7 @@ namespace
   int32 FinalProxies=0;
   int32 FinalCaps=0;
   FString FineHistory;
+	 TArray<ADarkwellMovingPropLabRoom::FFineEvidenceDiagnostic> FinalEvidence;
 	 FString CompositeDiagnosis;
 	 FString SealedFineHistory;
   float SealedYaw=0;
@@ -2127,6 +2128,7 @@ namespace
   }
   Step(30);
   Result.FineHistory=Room->GetFineHistoryTelemetry(RotateId);
+  Room->GetFineEvidenceDiagnosticsForTesting(RotateId,Result.FinalEvidence);
   Test.AddInfo(TEXT("HISTORY_GRID_V2 ")+Result.FineHistory);
   Result.FalseOccupied=Room->GetFalseOccupiedHistoryCountForTesting(RotateId);
   Result.FinalProxies=Room->GetVisibleHistoricalProxyCountForTesting(RotateId);
@@ -2193,7 +2195,28 @@ bool FDarkwellFineSlowReacquireTest::RunTest(const FString&)
 	 AddInfo(TEXT("FAST_SEALED ")+Fast.SealedFineHistory);
 	 AddInfo(TEXT("SLOW_SEALED ")+Slow.SealedFineHistory);
  TestEqual(TEXT("Same frozen pose"),Slow.SealedYaw,Fast.SealedYaw);
- TestEqual(TEXT("Same terminal fine state counts"),Slow.FineHistory,Fast.FineHistory);
+ TestEqual(TEXT("Same exact sealed snapshot including raw presentation hash"),Slow.SealedFineHistory,Fast.SealedFineHistory);
+ TestEqual(TEXT("Same ordered terminal sample count"),Slow.FinalEvidence.Num(),Fast.FinalEvidence.Num());
+ int32 StateDifferences=0, FrozenDifferences=0, ActiveDifferences=0, OwnedOpacityDifferences=0, OwnedFactDifferences=0;
+ for(int32 I=0;I<FMath::Min(Slow.FinalEvidence.Num(),Fast.FinalEvidence.Num());++I)
+ {
+  const auto& S=Slow.FinalEvidence[I]; const auto& F=Fast.FinalEvidence[I];
+  StateDifferences+=S.Epoch!=F.Epoch || S.Index!=F.Index || S.Sample.State!=F.Sample.State;
+  FrozenDifferences+=S.Sample.InitialRemembered!=F.Sample.InitialRemembered || S.Sample.FrozenAAEnvelope!=F.Sample.FrozenAAEnvelope;
+  const bool BothOwned=S.Sample.State==FDarkwellHistoryGridV2::Superseded() && F.Sample.State==FDarkwellHistoryGridV2::Superseded()
+   && S.bOwned && F.bOwned && !S.bSubmitted && !F.bSubmitted;
+  // A slow partial reveal can prove a cell empty before a later full current
+  // footprint takes ownership. Fast reacquire takes ownership first. Preserve
+  // that real historical fact; never erase it merely to equalize a raw hash.
+  ActiveDifferences+=!BothOwned && (S.Sample.Opacity!=F.Sample.Opacity || S.Sample.bVerifiedEmpty!=F.Sample.bVerifiedEmpty);
+  OwnedOpacityDifferences+=BothOwned && S.Sample.Opacity!=F.Sample.Opacity;
+  OwnedFactDifferences+=BothOwned && S.Sample.bVerifiedEmpty!=F.Sample.bVerifiedEmpty;
+ }
+ TestEqual(TEXT("Every ordered terminal four-state sample matches"),StateDifferences,0);
+ TestEqual(TEXT("Every frozen opacity and AA envelope remains identical"),FrozenDifferences,0);
+ TestEqual(TEXT("All non-hard-gated presentation and empty-fact fields match"),ActiveDifferences,0);
+ AddInfo(FString::Printf(TEXT("RAW_HASH_AUDIT state_diff=%d frozen_diff=%d active_diff=%d owned_opacity_diff=%d owned_fact_diff=%d"),
+  StateDifferences,FrozenDifferences,ActiveDifferences,OwnedOpacityDifferences,OwnedFactDifferences));
  TestEqual(TEXT("Slow final has no stale proxy"),Slow.FinalProxies,0);
  TestEqual(TEXT("Slow final has no stale cap"),Slow.FinalCaps,0);
  return true;
@@ -2548,6 +2571,7 @@ namespace
   TMap<uint64,FFastSweepObservation> Observations;
   TArray<ADarkwellMovingPropLabRoom::FFineEvidenceDiagnostic> Final;
   FString Hash;
+  uint64 StateHash=1469598103934665603ull;
   int32 SurvivingSeenEmpty=0, Proxies=0, Records=0;
  };
  FFastSweepRouteResult RunFastSweepEvidenceRoute(FAutomationTestBase& Test, int32 SweepFrames, float Fps=60)
@@ -2588,11 +2612,17 @@ namespace
     O.PreviousDwell=D.Sample.EmptyDwell;
    }
   };
+  Room->ResetHistoryRuntimeTelemetryForTesting();TArray<double> EventGt;
   for(int32 F=1;F<=SweepFrames;++F)
   {
    Player->SetActorRotation(FRotator(0,FMath::Lerp(160.f,20.f,float(F)/SweepFrames),0));
-   Step(1,1.f/Fps);Observe(1.f/Fps);
+   Step(1,1.f/Fps);EventGt.Add(Room->GetHistoryRuntimeFrameTelemetryForTesting().MovingPropLabGameThreadUs);Observe(1.f/Fps);
   }
+  const auto Event=Room->GetHistoryRuntimeTotalTelemetryForTesting();EventGt.Sort();
+  Test.AddInfo(FString::Printf(TEXT("FAST_SWEEP_COST frames=%d fps=%.0f avg_ms=%.3f p95_ms=%.3f p99_ms=%.3f peak_ms=%.3f analytic_substeps=0 candidates=%llu proof_queries=%llu accepted=%llu budget_rejects=%llu all_queries=%llu fine_touched=%llu proof_ms=%.3f"),
+   SweepFrames,Fps,Event.MovingPropLabGameThreadUs/SweepFrames/1000,EventGt[FMath::Clamp(FMath::CeilToInt(.95*SweepFrames)-1,0,SweepFrames-1)]/1000,
+   EventGt[FMath::Clamp(FMath::CeilToInt(.99*SweepFrames)-1,0,SweepFrames-1)]/1000,EventGt.Last()/1000,
+   Event.SweepCandidateSamples,Event.SweepCoverageQueries,Event.SweepAcceptedSamples,Event.SweepBudgetRejects,Event.CoverageQueries,Event.FineSamplesScanned,Event.SweepProofUs/1000));
   Step(90);Observe(0);
   Room->GetFineEvidenceDiagnosticsForTesting(Id,Result.Final);
   Result.Hash=Room->GetFineHistoryTelemetry(Id);
@@ -2600,6 +2630,8 @@ namespace
   int32 Rows=0, Resets=0;
   for(const auto& D:Result.Final)
   {
+   const uint64 State=D.Sample.State==FDarkwellHistoryGridV2::NeverObserved()?0:D.Sample.State==FDarkwellHistoryGridV2::Unresolved()?1:D.Sample.State==FDarkwellHistoryGridV2::VerifiedEmpty()?2:3;
+   Result.StateHash=(Result.StateHash^State)*1099511628211ull;
    const auto* O=Result.Observations.Find((uint64(D.Epoch)<<32)|uint32(D.Index));
    if(!O)continue;Resets+=O->DwellResets;
    if(!D.bSubmitted || O->LegalFrames==0 || D.bOccupied)continue;
@@ -2607,7 +2639,12 @@ namespace
    if(Rows++<12)Test.AddInfo(FString::Printf(TEXT("FAST_SWEEP_SAMPLE epoch=%u index=%d xy=(%.3f,%.3f) state=%s opacity=%.3f coverage=%.3f valid=%d occupied=%d ownership=%d dwell=%.5f verified=%d legal_frames=%d total=%.5f max_consecutive=%.5f resets=%d invalid=%d"),
     D.Epoch,D.Index,D.Position.X,D.Position.Y,*D.Sample.State.ToString(),D.Sample.Opacity,D.Coverage,D.bValid,D.bOccupied,D.bOwned,D.Sample.EmptyDwell,D.Sample.bVerifiedEmpty,O->LegalFrames,O->Total,O->Maximum,O->DwellResets,O->InvalidFrames));
   }
-  Test.AddInfo(FString::Printf(TEXT("FAST_SWEEP_ROUTE frames=%d fps=%.0f seen_empty_survivors=%d proxies=%d records=%d dwell_resets=%d %s"),SweepFrames,Fps,Result.SurvivingSeenEmpty,Result.Proxies,Result.Records,Resets,*Result.Hash));
+  Test.AddInfo(FString::Printf(TEXT("FAST_SWEEP_ROUTE frames=%d fps=%.0f seen_empty_survivors=%d proxies=%d records=%d dwell_resets=%d state_hash=%llu %s"),SweepFrames,Fps,Result.SurvivingSeenEmpty,Result.Proxies,Result.Records,Resets,Result.StateHash,*Result.Hash));
+  Room->ResetHistoryRuntimeTelemetryForTesting();Step(120);
+  const auto Idle=Room->GetHistoryRuntimeTotalTelemetryForTesting();
+  Test.TestEqual(TEXT("Sweep ends with zero continuing coverage work"),Idle.CoverageQueries,uint64(0));
+  Test.TestEqual(TEXT("Sweep ends with zero continuing fine scans"),Idle.FineSamplesScanned,uint64(0));
+  Test.AddInfo(FString::Printf(TEXT("FAST_SWEEP_IDLE avg_us=%.3f queries=%llu fine=%llu uploads=%llu caps=%llu"),Idle.MovingPropLabGameThreadUs/120,Idle.CoverageQueries,Idle.FineSamplesScanned,Idle.TextureUploads,Idle.CapMeshRebuilds));
   Fixture->Destroy();return Result;
  }
 }
@@ -2622,6 +2659,7 @@ bool FDarkwellFastSweepReproductionTest::RunTest(const FString&)
  TestEqual(TEXT("Slow sweep resolves legally seen empty samples"),Slow.SurvivingSeenEmpty,0);
  TestEqual(TEXT("One legal proof survives immediately leaving the view"),Fast.SurvivingSeenEmpty,0);
  TestTrue(TEXT("Final 180 pose is observed without retaining resolved old gray"),Fast.Proxies==0 && Fast.Records>=3);
+ TestEqual(TEXT("Real Lab fast/slow ordered sample states match"),Fast.StateHash,Slow.StateHash);
  int32 SpatialMiss=0;
  for(const auto& D:Extreme.Final)
  {
@@ -2629,8 +2667,22 @@ bool FDarkwellFastSweepReproductionTest::RunTest(const FString&)
   const auto* S=Slow.Observations.Find(Key);const auto* F=Extreme.Observations.Find(Key);
   SpatialMiss+=D.bSubmitted && S && S->LegalFrames>0 && (!F || F->LegalFrames==0);
  }
- TestTrue(TEXT("Extreme endpoints skip space seen by identical slow arc"),SpatialMiss>0);
- AddInfo(FString::Printf(TEXT("FAST_SWEEP_TEMPORAL_FIXED dwell_survivors=%d spatial_missed=%d"),Fast.SurvivingSeenEmpty,SpatialMiss));
+ TestEqual(TEXT("Extreme endpoints resolve space proven by the identical slow arc"),SpatialMiss,0);
+ AddInfo(FString::Printf(TEXT("FAST_SWEEP_FIXED dwell_survivors=%d spatial_missed=%d"),Fast.SurvivingSeenEmpty,SpatialMiss));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellFastSweepCompositeRegressionTest,
+ "Darkwell.PropLab.MovingRules.FastSweep.FastSweepCompositeHistoryRegression", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellFastSweepCompositeRegressionTest::RunTest(const FString&)
+{
+ const auto Slow=RunFastSweepEvidenceRoute(*this,280);
+ for(const float Fps:{30.f,60.f,120.f,144.f})
+ {
+  const auto Fast=RunFastSweepEvidenceRoute(*this,2,Fps);
+  TestEqual(TEXT("Real middle+final pose composite disappears after fast legal sweep"),Fast.Proxies,0);
+  TestEqual(TEXT("Real 30/60/120/144 fps exact ordered state equality"),Fast.StateHash,Slow.StateHash);
+ }
  return true;
 }
 

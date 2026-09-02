@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellMovingPropLabRoom.h"
+#include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 
 #include "Camera/CameraComponent.h"
 #include "Combat/DarkwellLoadoutComponent.h"
@@ -987,7 +988,7 @@ ADarkwellMovingPropLabRoom::SampleConservativeCoverage(
 bool ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record,
 	const float DeltaSeconds, const bool bCoverageDirty,
-	const TConstArrayView<int32> GeometryDirtyIndices)
+	const TConstArrayView<int32> GeometryDirtyIndices, const uint64 SweepPreviousDrawRevision)
 {
 	FScopedHistoryRuntimeTimer Timer(RuntimeFrame.AdvanceFineHistoryUs);
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
@@ -1021,10 +1022,44 @@ bool ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	for (TConstSetBitIterator<> It(DirtyMask); It; ++It) DirtyIndices.Add(It.GetIndex());
 	RuntimeFrame.FineSamplesScanned += DirtyIndices.Num()
 		+ Record.FineHistory.GetActiveTransitionCount();
+	TArray<float> SweepEvidence;
+	const auto* Fog = GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
+	FDarkwellFogVisualSourceSnapshot PreviousSource, CurrentSource;
+	TConstArrayView<FDarkwellFogVisualSegment> Occluders;
+	if (bCoverageDirty && Fog && Fog->GetHistoricalRotationSweep(
+		SweepPreviousDrawRevision,PreviousSource,CurrentSource,Occluders)
+		&& FDarkwellHistoricalVisibilitySweep::MayAffectBounds(PreviousSource,CurrentSource,Bounds))
+	{
+		FScopedHistoryRuntimeTimer SweepTimer(RuntimeFrame.SweepProofUs);
+		const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X,Size.Y);
+		for (const int32 Index : DirtyIndices)
+		{
+			const auto& Sample = Record.FineHistory.GetSamples()[Index];
+			if (Sample.bVerifiedEmpty || Sample.State == FDarkwellHistoryGridV2::Superseded()
+				|| Visual->CachedFineOccupied[Index] || Visual->SuppressedByCurrentEvidence[Index]
+				|| Visual->CachedFineCoverage[Index] >= FDarkwellSpatialPropMemory::LegalCoverage) continue;
+			const FVector2D Min = Bounds.Min + Step * FVector2D(Index % Size.X,Index / Size.X);
+			const FBox2D Footprint(Min,Min+Step);
+			if (!FDarkwellHistoricalVisibilitySweep::MayAffectBounds(PreviousSource,CurrentSource,Footprint)) continue;
+			// Per-room event budget. Extreme input fails conservatively, never queues
+			// unbounded substep scans or replays old visibility with newer geometry.
+			if (RuntimeFrame.SweepCandidateSamples >= 65536) { ++RuntimeFrame.SweepBudgetRejects; continue; }
+			++RuntimeFrame.SweepCandidateSamples;
+			uint64 Queries = 0;
+			const bool bProven = FDarkwellHistoricalVisibilitySweep::ProveEmptyFootprintCoverage(
+				PreviousSource,CurrentSource,Occluders,Footprint,Queries);
+			RuntimeFrame.SweepCoverageQueries += Queries; RuntimeFrame.CoverageQueries += Queries;
+			if (bProven)
+			{
+				if (SweepEvidence.IsEmpty()) SweepEvidence = Visual->CachedFineCoverage;
+				SweepEvidence[Index] = 1; ++RuntimeFrame.SweepAcceptedSamples;
+			}
+		}
+	}
 	bool bTopologyChanged = false;
 	// Evidence owns historical output; the old coarse fields remain diagnostic.
 	const bool bPresentationChanged = Record.FineHistory.AdvanceDirty(
-		DeltaSeconds, Visual->CachedFineCoverage, Visual->CachedFineOccupied,
+		DeltaSeconds, SweepEvidence.IsEmpty() ? Visual->CachedFineCoverage : SweepEvidence, Visual->CachedFineOccupied,
 		Visual->SuppressedByCurrentEvidence, DirtyIndices, bTopologyChanged);
 	Visual->bPresentationDirty |= bPresentationChanged;
 	Visual->bCapTopologyDirty |= bTopologyChanged;
@@ -1082,10 +1117,10 @@ FString ADarkwellMovingPropLabRoom::GetFineHistoryTelemetry(const FName StableId
 			OldBlockedNewEmpty += Cell.InitialRemembered > 0 && Cell.VerifiedEmpty == 0
 				&& Grid.GetSamples()[Y * Fine.X + X].State == FDarkwellHistoryGridV2::VerifiedEmpty();
 		}
-		Result += FString::Printf(TEXT("epoch=%u fine=%dx%d never=%d unresolved=%d empty=%d superseded=%d mixed=%d oldBlockedNewEmpty=%d hash=%llu sample_bytes=%llu;"),
+		Result += FString::Printf(TEXT("epoch=%u fine=%dx%d never=%d unresolved=%d empty=%d superseded=%d mixed=%d oldBlockedNewEmpty=%d hash=%llu sample_bytes=%llu state_hash=%llu;"),
 			Record.Epoch, Fine.X, Fine.Y, Grid.Count(Grid.NeverObserved()), Grid.Count(Grid.Unresolved()),
 			Grid.Count(Grid.VerifiedEmpty()), Grid.Count(Grid.Superseded()), Grid.CountMixedCoarseCells(), OldBlockedNewEmpty,
-			Grid.EvidenceHash(), uint64(Grid.GetSamples().Num()) * sizeof(FDarkwellHistoryGridV2::FSample));
+			Grid.EvidenceHash(), uint64(Grid.GetSamples().Num()) * sizeof(FDarkwellHistoryGridV2::FSample), Grid.StateHash());
 	}
 	return Result;
 }
@@ -2265,6 +2300,9 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		const uint64 CoverageDrawRevision = Fog ? Fog->GetDiagnostics().CoverageDrawCount : 0;
 		const bool bCoverageDirty = Visual->CachedCoverageAuthorityRevision != AuthorityRevision
 			|| Visual->CachedCoverageDrawRevision != CoverageDrawRevision;
+		const uint64 SweepPreviousDraw = ActiveMotions.IsEmpty()
+			&& Visual->ProcessedGeometryRevision == GeometryRevision
+			? Visual->CachedCoverageDrawRevision : MAX_uint64;
 		if (bCoverageDirty)
 		{
 			const FCoverageSnapshot HistoricalCoverage = SampleConservativeCoverage(
@@ -2305,7 +2343,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		const bool bOwnershipChanged = UpdateHistoricalContributionExclusion(
 			Prop, *Record, GeometryDirtyIndices);
 		const bool bFineChanged = AdvanceFineHistory(
-			Prop, *Record, DeltaSeconds, bCoverageDirty, GeometryDirtyIndices);
+			Prop, *Record, DeltaSeconds, bCoverageDirty, GeometryDirtyIndices, SweepPreviousDraw);
 		Visual->bPresentationDirty |= bOwnershipChanged;
 		Visual->bCapTopologyDirty |= bOwnershipChanged;
 		if (!bPresentationRetired && Visual->bPresentationDirty)
@@ -4056,6 +4094,11 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	RuntimeTotal.LogRotationFrameUs += RuntimeFrame.LogRotationFrameUs;
 	RuntimeTotal.ReportHudUs += RuntimeFrame.ReportHudUs;
 	RuntimeTotal.AdvanceFineHistoryUs += RuntimeFrame.AdvanceFineHistoryUs;
+	RuntimeTotal.SweepCandidateSamples += RuntimeFrame.SweepCandidateSamples;
+	RuntimeTotal.SweepCoverageQueries += RuntimeFrame.SweepCoverageQueries;
+	RuntimeTotal.SweepAcceptedSamples += RuntimeFrame.SweepAcceptedSamples;
+	RuntimeTotal.SweepBudgetRejects += RuntimeFrame.SweepBudgetRejects;
+	RuntimeTotal.SweepProofUs += RuntimeFrame.SweepProofUs;
 	RuntimeTotal.UpdateTrackedUs += RuntimeFrame.UpdateTrackedUs;
 	RuntimeTotal.MovingPropLabGameThreadUs += RuntimeFrame.MovingPropLabGameThreadUs;
 	RuntimeTotal.ProxyCount = RuntimeFrame.ProxyCount;

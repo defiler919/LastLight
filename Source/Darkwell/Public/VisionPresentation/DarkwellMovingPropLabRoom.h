@@ -88,6 +88,11 @@ public:
 		uint64 TextureUploads = 0;
 		uint64 UpdateRecordCapCalls = 0;
 		uint64 CapMeshRebuilds = 0;
+		uint64 SweepCandidateSamples = 0;
+		uint64 SweepCoverageQueries = 0;
+		uint64 SweepAcceptedSamples = 0;
+		uint64 SweepBudgetRejects = 0;
+		double SweepProofUs = 0;
 		int32 ProxyCount = 0;
 		int32 CapComponentCount = 0;
 		int32 TextureCount = 0;
@@ -421,7 +426,8 @@ private:
 		uint64 TransformRevision,
 		uint64 GridRevision, int32 Subdivision = 1) const;
 	bool AdvanceFineHistory(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record,
-		float DeltaSeconds, bool bCoverageDirty, TConstArrayView<int32> GeometryDirtyIndices);
+		float DeltaSeconds, bool bCoverageDirty, TConstArrayView<int32> GeometryDirtyIndices,
+		uint64 SweepPreviousDrawRevision);
 	bool IsOccupiedByActual(FVector2D Point, FName IgnoredStableId) const;
 	bool HasCurrentObservedContributionAt(const FTrackedProp& Prop, FVector2D Point) const;
 	bool HasNewerObservedContributionAt(

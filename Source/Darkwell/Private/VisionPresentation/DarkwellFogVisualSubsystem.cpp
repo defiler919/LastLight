@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
+#include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 
 #include "Engine/TextureRenderTarget2D.h"
 #include "HAL/IConsoleManager.h"
@@ -340,6 +341,8 @@ bool UDarkwellFogVisualSubsystem::UpdateSource(
 {
 	if (!Diagnostics.bActive || !Source.IsValid())
 	{
+		PreviousSource = FDarkwellFogVisualSourceSnapshot();
+		bSourceContinuityValid = false;
 		return false;
 	}
 	const bool bNeedsDraw = !Source.IsEquivalentTo(LastSource);
@@ -361,14 +364,20 @@ FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryLiveCoverageAt
 	const FVector2D& WorldPosition) const
 {
 	FDarkwellFogVisualCoverageQuery Result;
+	if (Diagnostics.bActive)
+		Result = FDarkwellContinuousVisibilityBuilder::QuerySourceCoverage(LastSource, WorldPosition, CachedOccluderSegments);
 	Result.AuthorityRevision = Diagnostics.LastAuthorityRevision;
 	Result.CoverageDrawRevision = Diagnostics.CoverageDrawCount;
-	if (!Diagnostics.bActive)
-	{
-		Result.ZeroReason = EDarkwellFogCoverageZeroReason::SubsystemInactive;
-		return Result;
-	}
-	if (!LastSource.IsValid())
+	return Result;
+}
+
+FDarkwellFogVisualCoverageQuery FDarkwellContinuousVisibilityBuilder::QuerySourceCoverage(
+	const FDarkwellFogVisualSourceSnapshot& Source, const FVector2D& WorldPosition,
+	const TConstArrayView<FDarkwellFogVisualSegment> Occluders)
+{
+	FDarkwellFogVisualCoverageQuery Result;
+	Result.AuthorityRevision = Source.AuthorityRevision;
+	if (!Source.IsValid())
 	{
 		Result.ZeroReason = EDarkwellFogCoverageZeroReason::SourceInvalid;
 		return Result;
@@ -380,20 +389,20 @@ FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryLiveCoverageAt
 	}
 	Result.bValid = true;
 
-	const float BodySignedDistance = LastSource.BodyRadiusCentimeters
-		- FVector2D::Distance(WorldPosition, LastSource.BodyCenter);
+	const float BodySignedDistance = Source.BodyRadiusCentimeters
+		- FVector2D::Distance(WorldPosition, Source.BodyCenter);
 	float BodyCoverage = Darkwell::FogVisual::SignedLinearCoverage(
 		BodySignedDistance,
 		Darkwell::FogVisual::CoverageTransitionWidthCentimeters);
 	Result.bBodyBlocked = FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
-		LastSource.BodyCenter,
+		Source.BodyCenter,
 		WorldPosition,
-		CachedOccluderSegments);
+		Occluders);
 	if (Result.bBodyBlocked)
 	{
 		BodyCoverage = 0.0f;
 	}
-	if (!LastSource.bConeLegallyLive)
+	if (!Source.bConeLegallyLive)
 	{
 		Result.Coverage = BodyCoverage;
 		Result.ZeroReason = BodyCoverage > 0.0f
@@ -404,22 +413,22 @@ FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryLiveCoverageAt
 		return Result;
 	}
 
-	const FVector2D Forward = LastSource.ConeForward.GetSafeNormal();
-	const FVector2D Relative = WorldPosition - LastSource.ConeOrigin;
+	const FVector2D Forward = Source.ConeForward.GetSafeNormal();
+	const FVector2D Relative = WorldPosition - Source.ConeOrigin;
 	const float Along = FVector2D::DotProduct(Relative, Forward);
 	const float Cross = FMath::Abs(Relative.X * Forward.Y - Relative.Y * Forward.X);
 	const float HalfAngleRadians = FMath::DegreesToRadians(
-		LastSource.ConeHalfAngleDegrees);
+		Source.ConeHalfAngleDegrees);
 	const float SideSignedDistance = Along * FMath::Sin(HalfAngleRadians)
 		- Cross * FMath::Cos(HalfAngleRadians);
-	const float RadialSignedDistance = LastSource.ConeRangeCentimeters - Relative.Size();
+	const float RadialSignedDistance = Source.ConeRangeCentimeters - Relative.Size();
 	float ConeCoverage = Darkwell::FogVisual::SignedLinearCoverage(
 		FMath::Min(SideSignedDistance, RadialSignedDistance),
 		Darkwell::FogVisual::CoverageTransitionWidthCentimeters);
 	Result.bConeBlocked = FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
-		LastSource.ConeOrigin,
+		Source.ConeOrigin,
 		WorldPosition,
-		CachedOccluderSegments);
+		Occluders);
 	if (Result.bConeBlocked)
 	{
 		ConeCoverage = 0.0f;
@@ -442,6 +451,17 @@ FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryLiveCoverageAt
 	return Result;
 }
 
+bool UDarkwellFogVisualSubsystem::GetHistoricalRotationSweep(const uint64 PreviousDrawRevision,
+	FDarkwellFogVisualSourceSnapshot& OutPrevious, FDarkwellFogVisualSourceSnapshot& OutCurrent,
+	TConstArrayView<FDarkwellFogVisualSegment>& OutOccluders) const
+{
+	if (!Diagnostics.bActive || PreviousDrawRevision == MAX_uint64
+		|| PreviousDrawRevision + 1 != Diagnostics.CoverageDrawCount
+		|| !FDarkwellHistoricalVisibilitySweep::IsSupported(PreviousSource,LastSource)) return false;
+	OutPrevious = PreviousSource; OutCurrent = LastSource; OutOccluders = CachedOccluderSegments;
+	return true;
+}
+
 void UDarkwellFogVisualSubsystem::Deactivate()
 {
 	if (ADarkwellVisionIntegrationFixture* Fixture = ActiveFixture.Get())
@@ -453,6 +473,8 @@ void UDarkwellFogVisualSubsystem::Deactivate()
 	CoverageMaterial = nullptr;
 	Mapping = FDarkwellFogVisualMapping();
 	LastSource = FDarkwellFogVisualSourceSnapshot();
+	PreviousSource = FDarkwellFogVisualSourceSnapshot();
+	bSourceContinuityValid = false;
 	CachedOccluderSegments.Reset();
 	Diagnostics = FDarkwellFogVisualDiagnostics();
 	DiagnosticReadbackFrameCount = 0;
@@ -587,7 +609,9 @@ bool UDarkwellFogVisualSubsystem::DrawCoverage(
 		GetWorld(),
 		LiveCoverageTexture,
 		CoverageMaterial);
+	PreviousSource = bSourceContinuityValid ? LastSource : FDarkwellFogVisualSourceSnapshot();
 	LastSource = Source;
+	bSourceContinuityValid = true;
 	Diagnostics.LastAuthorityRevision = Source.AuthorityRevision;
 	++Diagnostics.CoverageDrawCount;
 	return true;

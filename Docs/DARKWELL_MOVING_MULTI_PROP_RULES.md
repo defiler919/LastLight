@@ -1820,3 +1820,56 @@ superseded and never-observed negative controls pass. Home B build succeeded;
 `FastSweep/CheckpointB_Report` is 6/6 clean, 75.35 seconds. Two-frame survivors
 are now zero, old proxies zero, dwell resets zero. The independent single-frame
 spatial miss remains 1,745 and is explicitly not claimed fixed at B.
+
+### Checkpoint C: continuous legal rotation evidence
+
+Checkpoint B is `b8958e0` (pushed). C adds an analytic shortest-yaw-arc proof
+for a stationary observer with unchanged legal source shape and unchanged
+physical occupancy. Normal player facing uses `PlayerMath::TurnYawToward` /
+`FMath::FixedTurn` (walk 280 degrees/s, sprint 190 degrees/s), so this matches
+the continuous turn direction of this user route. It is not a reconstruction
+of arbitrary teleports, observer translation, lighting changes, or turns of
+170 degrees or more: those are unsupported and conservatively skipped.
+
+For each affected 4x4 footprint, intersect all five points' legal angular
+intervals (four corners plus center), select one shared legal intermediate
+pose, then evaluate the exact same body/cone/segment-occlusion function used
+by live FogVisual coverage. This is neither endpoint-cone union nor a union
+of separate per-corner observations. A wall blocks each actual proof query.
+FogVisual only publishes the immediately preceding valid draw; deactivation,
+invalid source and reactivation break continuity. Occluder segments are
+immutable within one activation. The Room additionally requires unchanged
+geometry and no active prop motion across the interval. Swept evidence is
+transient input to the history fact model, never cached as current visibility.
+
+The operation is revision/event driven, broad-phased against historical bounds
+and fine footprints, skips already resolved/occupied/owned/currently legal
+samples, and budgets at most 65,536 analytic footprint candidates per room
+event. There are **zero uniform substeps**, no repeated full grid per substep,
+no deferred replay against later geometry, and no added idle queries/scans.
+Five legal point queries per candidate is the maximum; occlusion may exit early.
+
+Initial C regression found an important hash distinction. The existing raw
+`EvidenceHash` contains not only four-state knowledge but also retained empty
+facts and opacity behind the Superseded hard-zero ownership gate. A slow
+partial reveal may prove a sample empty before a later current footprint owns
+it; fast reacquire may own it first. Erasing that real prior fact to equalize
+the hash would violate monotonic evidence. The raw hash remains unchanged and
+reported. A separate ordered `StateHash` compares the four-state contract.
+The existing slow/fast regression now compares **every ordered sample**,
+every frozen opacity/AA envelope and every non-hard-gated opacity/empty fact,
+plus the exact sealed raw hash. Any differing latent fields must be confined
+to samples that are Superseded, owned and not submitted on both routes; their
+counts are explicitly logged as `RAW_HASH_AUDIT`. Presentation rules were not
+changed to satisfy a hash.
+
+C validation: full Development build succeeded in 18.51 seconds. The original
+failed exploratory report is retained as `FastSweep/CheckpointC_Report`; the
+corrected explicit-field regression is `CheckpointC2_Report`. Its raw audit
+finds zero state/frozen/active differences, 18 gated-opacity differences and
+26 gated-prior-fact differences, not a currently rendered survivor. The real
+Lab slow and two-frame fast routes at 30/60/120/144 fps have the same aggregate
+ordered state hash `13323734992896764684`, zero old proxies and three records.
+The one-frame 140-degree arc reduces the independently diagnosed spatial
+misses from 1,745 to zero. The separate 4-speed x 4-fps empty-footprint matrix
+also has exact full raw evidence hash equality (`14188568822265195139`).

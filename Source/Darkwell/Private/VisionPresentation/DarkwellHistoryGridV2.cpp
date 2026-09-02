@@ -214,3 +214,15 @@ uint64 FDarkwellHistoryGridV2::EvidenceHash() const
 	}
 	return Hash;
 }
+
+uint64 FDarkwellHistoryGridV2::StateHash() const
+{
+	uint64 Hash = 1469598103934665603ull;
+	for (const FSample& S : Samples)
+	{
+		const uint64 State = S.State == NeverObserved() ? 0 : S.State == Unresolved() ? 1
+			: S.State == VerifiedEmpty() ? 2 : 3;
+		Hash = (Hash ^ State) * 1099511628211ull;
+	}
+	return Hash;
+}

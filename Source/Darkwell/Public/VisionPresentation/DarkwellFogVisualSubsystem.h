@@ -89,6 +89,10 @@ struct DARKWELL_API FDarkwellFogVisualMapping
 class DARKWELL_API FDarkwellContinuousVisibilityBuilder final
 {
 public:
+	/** Shared body/cone + segment-occlusion query used by live and swept evidence. */
+	static FDarkwellFogVisualCoverageQuery QuerySourceCoverage(
+		const FDarkwellFogVisualSourceSnapshot& Source, const FVector2D& WorldPosition,
+		TConstArrayView<FDarkwellFogVisualSegment> Occluders);
 	static float EvaluateNoOcclusionCoverage(
 		const FDarkwellFogVisualSourceSnapshot& Source,
 		const FVector2D& WorldPosition,
@@ -168,6 +172,10 @@ public:
 	/** Same analytic query with validity, revision and zero-reason diagnostics. */
 	FDarkwellFogVisualCoverageQuery QueryLiveCoverageAtWorldPoint(
 		const FVector2D& WorldPosition) const;
+	/** Only the immediately preceding valid publication may supply a sweep. */
+	bool GetHistoricalRotationSweep(uint64 PreviousDrawRevision,
+		FDarkwellFogVisualSourceSnapshot& OutPrevious, FDarkwellFogVisualSourceSnapshot& OutCurrent,
+		TConstArrayView<FDarkwellFogVisualSegment>& OutOccluders) const;
 
 	bool IsActive() const { return Diagnostics.bActive; }
 	UTextureRenderTarget2D* GetLiveCoverageTexture() const { return LiveCoverageTexture; }
@@ -197,6 +205,8 @@ private:
 
 	FDarkwellFogVisualMapping Mapping;
 	FDarkwellFogVisualSourceSnapshot LastSource;
+	FDarkwellFogVisualSourceSnapshot PreviousSource;
+	bool bSourceContinuityValid = false;
 	TArray<FDarkwellFogVisualSegment> CachedOccluderSegments;
 	FDarkwellFogVisualDiagnostics Diagnostics;
 	int32 DiagnosticReadbackFrameCount = 0;

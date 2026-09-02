@@ -37,6 +37,8 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	bool IsFullyVerifiedEmpty() const;
 	bool CanEmitCap(int32 RetainedIndex, int32 NeighborIndex) const;
 	uint64 EvidenceHash() const;
+	/** Ordered four-state knowledge hash; excludes timing-dependent, hard-gated presentation fields. */
+	uint64 StateHash() const;
 	int32 Count(FGameplayTag State) const;
 	int32 CountMixedCoarseCells() const;
 	int32 GetActiveTransitionCount() const { return ActiveSamples.Num(); }

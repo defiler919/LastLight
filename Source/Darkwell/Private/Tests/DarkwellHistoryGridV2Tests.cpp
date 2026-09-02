@@ -1,6 +1,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
 #include "VisionPresentation/DarkwellHistoryGridV2.h"
+#include <limits>
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMixedCellTest,
 	"Darkwell.PropLab.MovingRules.HistoryGridV2.MixedCellEmptyOccupiedUnresolved",
@@ -78,5 +79,71 @@ bool FDarkwellFineCapBoundaryTest::RunTest(const FString&)
 	TestFalse(TEXT("All ownership-resolved surface can retire"),Grid.HasResidualSurface());
 	TestFalse(TEXT("Retiring output is not claiming all space empty"),Grid.IsFullyVerifiedEmpty());
 	return true;
+}
+namespace
+{
+	FDarkwellHistoryGridV2 MakeEmptyEvidenceGrid()
+	{
+		FDarkwellSpatialPropMemory Memory;
+		Memory.Initialize(TEXT("Lab.FastSweep"), FBox2D(FVector2D(0), FVector2D(2.5)));
+		Memory.BeginPresent(); Memory.Advance(.2f, TArray<float>{1}); Memory.BeginAbsent();
+		FDarkwellHistoryGridV2 Grid; Grid.Initialize(Memory); return Grid;
+	}
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellFastEmptyEvidenceTest,
+	"Darkwell.PropLab.MovingRules.FastSweep.FastSweepHistoricalEmptyEvidence",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDarkwellFastEmptyEvidenceTest::RunTest(const FString&)
+{
+	for (const float Fps : {30.f,60.f,120.f,144.f})
+	{
+		auto Grid=MakeEmptyEvidenceGrid();TArray<float> Coverage;Coverage.Init(0,16);Coverage[0]=1;
+		TBitArray<> Occupied(false,16),Owned(false,16);
+		Grid.Advance(1/Fps,Coverage,Occupied,Owned);
+		TestTrue(TEXT("Single lawful footprint commits empty fact independent of frame duration"),Grid.GetSamples()[0].bVerifiedEmpty);
+		TestTrue(TEXT("Frozen .20 fade is not instant removal"),Grid.GetSamples()[0].Opacity>0);
+		Coverage.Init(0,16);
+		for(int32 I=0;I<40;++I)Grid.Advance(1/Fps,Coverage,Occupied,Owned);
+		TestEqual(TEXT("Fact continues fading after leaving"),Grid.GetSamples()[0].Opacity,0.f);
+		TestTrue(TEXT("Fact is monotonic"),Grid.GetSamples()[0].bVerifiedEmpty);
+	}
+	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellInvalidFineEvidenceTest,
+	"Darkwell.PropLab.MovingRules.FastSweep.InvalidCoverageDoesNotAccumulateEvidence",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDarkwellInvalidFineEvidenceTest::RunTest(const FString&)
+{
+	auto Grid=MakeEmptyEvidenceGrid();TArray<float> C;C.Init(std::numeric_limits<float>::quiet_NaN(),16);
+	TBitArray<> O(false,16),N(false,16);for(int32 I=0;I<60;++I)Grid.Advance(1.f/60,C,O,N);
+	TestEqual(TEXT("Invalid input contributes no evidence"),Grid.Count(Grid.VerifiedEmpty()),0);
+	TestEqual(TEXT("No invalid dwell"),Grid.GetSamples()[0].EmptyDwell,0.f);return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellOccupiedFineEvidenceTest,
+	"Darkwell.PropLab.MovingRules.FastSweep.OccupiedSampleDoesNotBecomeEmpty",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDarkwellOccupiedFineEvidenceTest::RunTest(const FString&)
+{
+	auto Grid=MakeEmptyEvidenceGrid();TArray<float> C;C.Init(1,16);TBitArray<> O(true,16),N(false,16);
+	Grid.Advance(.1f,C,O,N);TestEqual(TEXT("Occupied footprints do not prove empty"),Grid.Count(Grid.VerifiedEmpty()),0);return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellSupersededFineEvidenceTest,
+	"Darkwell.PropLab.MovingRules.FastSweep.SupersededStillNotVerifiedEmpty",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDarkwellSupersededFineEvidenceTest::RunTest(const FString&)
+{
+	auto Grid=MakeEmptyEvidenceGrid();TArray<float> C;C.Init(1,16);TBitArray<> O(false,16),N(true,16);
+	Grid.Advance(.1f,C,O,N);N.Init(false,16);Grid.Advance(.1f,C,O,N);
+	TestEqual(TEXT("Terminal ownership remains"),Grid.Count(Grid.Superseded()),16);
+	TestFalse(TEXT("Ownership never manufactures an empty fact"),Grid.GetSamples()[0].bVerifiedEmpty);return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellUnobservedFineEvidenceTest,
+	"Darkwell.PropLab.MovingRules.FastSweep.UnobservedHistoryStillSurvives",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDarkwellUnobservedFineEvidenceTest::RunTest(const FString&)
+{
+	auto Grid=MakeEmptyEvidenceGrid();TArray<float> C;C.Init(0,16);TBitArray<> O(false,16),N(false,16);
+	for(int32 I=0;I<600;++I)Grid.Advance(1.f/60,C,O,N);
+	TestEqual(TEXT("No identity or time based clearing"),Grid.Count(Grid.Unresolved()),16);return true;
 }
 #endif

@@ -14,7 +14,7 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 		float InitialRemembered = 0;
 		float Opacity = 0;
 		float FrozenAAEnvelope = 0;
-		float EmptyDwell = 0;
+		float EmptyDwell = 0; // Diagnostic exposure at proof; NOT a consecutive-time confirmation gate.
 		bool bVerifiedEmpty = false; // Fact survives ownership changes; ownership never sets it.
 	};
 	static FGameplayTag NeverObserved();

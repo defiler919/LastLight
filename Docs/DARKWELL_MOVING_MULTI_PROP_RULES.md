@@ -1809,3 +1809,14 @@ samples reached by the same slow arc. Per-sample epoch/index/XY/state/opacity,
 coverage validity, occupancy/ownership, dwell, total/max-consecutive legal
 time and reset counts are in the report. This is a reproduced temporal and
 spatial evidence loss, not a new multi-epoch presentation policy.
+
+Checkpoint A: `6761cf3` (pushed). Checkpoint B replaces the *fine history*
+consecutive-time vote with a monotonic conservative spatial proof. A valid
+revision-matched footprint that is not occupied/owned commits VerifiedEmpty;
+the frozen .20-second opacity fade remains independent and continues offscreen.
+The old coarse/manual model and its .10-second constant are not changed.
+`EmptyDwell` remains diagnostic, not an authority threshold. Invalid, occupied,
+superseded and never-observed negative controls pass. Home B build succeeded;
+`FastSweep/CheckpointB_Report` is 6/6 clean, 75.35 seconds. Two-frame survivors
+are now zero, old proxies zero, dwell resets zero. The independent single-frame
+spatial miss remains 1,745 and is explicitly not claimed fixed at B.

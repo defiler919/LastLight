@@ -92,10 +92,16 @@ bool FDarkwellHistoryGridV2::AdvanceDirty(float DeltaSeconds,
 			&& Coverage[Index] >= FDarkwellSpatialPropMemory::LegalCoverage;
 		if (!S.bVerifiedEmpty)
 		{
-			if (bLegalEmpty) Activate(Index);
-			else
+			if (bLegalEmpty)
 			{
-				S.EmptyDwell = 0.0f;
+				// A revision-matched conservative footprint is a spatial proof,
+				// not an exposure-duration vote. Record the fact before fading.
+				// Leaving the view cannot revoke knowledge already obtained.
+				S.EmptyDwell += FMath::Min(DeltaSeconds, 1.f / 30.f);
+				S.bVerifiedEmpty = true;
+				S.State = VerifiedEmpty();
+				bOutTopologyChanged = true;
+				if (S.Opacity > 0.0f) Activate(Index);
 			}
 		}
 		else if (S.Opacity > 0.0f) Activate(Index);
@@ -121,26 +127,6 @@ bool FDarkwellHistoryGridV2::AdvanceDirty(float DeltaSeconds,
 			ActiveSamples.RemoveAtSwap(ActiveIndex, 1, EAllowShrinking::No);
 			bPresentationChanged = true;
 			continue;
-		}
-		if (!S.bVerifiedEmpty)
-		{
-			const bool bLegalEmpty = !Occupied[Index] && FMath::IsFinite(Coverage[Index])
-				&& Coverage[Index] >= FDarkwellSpatialPropMemory::LegalCoverage;
-			if (!bLegalEmpty)
-			{
-				S.EmptyDwell = 0.0f;
-				ActiveFlags[Index] = false;
-				ActiveSamples.RemoveAtSwap(ActiveIndex, 1, EAllowShrinking::No);
-				continue;
-			}
-			S.EmptyDwell += FMath::Min(Dt, 1.f / 30.f);
-			if (S.EmptyDwell + UE_SMALL_NUMBER >= FDarkwellSpatialPropMemory::EmptyConfirmationSeconds)
-			{
-				S.bVerifiedEmpty = true;
-				S.State = VerifiedEmpty();
-				bOutTopologyChanged = true;
-				bPresentationChanged = true;
-			}
 		}
 		if (S.bVerifiedEmpty)
 		{

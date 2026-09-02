@@ -2620,8 +2620,8 @@ bool FDarkwellFastSweepReproductionTest::RunTest(const FString&)
  const auto Fast=RunFastSweepEvidenceRoute(*this,2);
  const auto Extreme=RunFastSweepEvidenceRoute(*this,1);
  TestEqual(TEXT("Slow sweep resolves legally seen empty samples"),Slow.SurvivingSeenEmpty,0);
- TestTrue(TEXT("Baseline reproduces short-legal-dwell survivors"),Fast.SurvivingSeenEmpty>0);
- TestTrue(TEXT("Old gray survives alongside observed final 180 pose"),Fast.Proxies>0 && Fast.Records>=3);
+ TestEqual(TEXT("One legal proof survives immediately leaving the view"),Fast.SurvivingSeenEmpty,0);
+ TestTrue(TEXT("Final 180 pose is observed without retaining resolved old gray"),Fast.Proxies==0 && Fast.Records>=3);
  int32 SpatialMiss=0;
  for(const auto& D:Extreme.Final)
  {
@@ -2630,7 +2630,7 @@ bool FDarkwellFastSweepReproductionTest::RunTest(const FString&)
   SpatialMiss+=D.bSubmitted && S && S->LegalFrames>0 && (!F || F->LegalFrames==0);
  }
  TestTrue(TEXT("Extreme endpoints skip space seen by identical slow arc"),SpatialMiss>0);
- AddInfo(FString::Printf(TEXT("FAST_SWEEP_ROOT_CAUSE=BOTH dwell_survivors=%d spatial_missed=%d"),Fast.SurvivingSeenEmpty,SpatialMiss));
+ AddInfo(FString::Printf(TEXT("FAST_SWEEP_TEMPORAL_FIXED dwell_survivors=%d spatial_missed=%d"),Fast.SurvivingSeenEmpty,SpatialMiss));
  return true;
 }
 

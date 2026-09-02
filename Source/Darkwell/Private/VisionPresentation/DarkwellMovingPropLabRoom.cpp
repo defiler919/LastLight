@@ -1026,8 +1026,12 @@ bool ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	const auto* Fog = GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
 	FDarkwellFogVisualSourceSnapshot PreviousSource, CurrentSource;
 	TConstArrayView<FDarkwellFogVisualSegment> Occluders;
-	if (bCoverageDirty && Fog && Fog->GetHistoricalRotationSweep(
-		SweepPreviousDrawRevision,PreviousSource,CurrentSource,Occluders)
+	const bool bSupportedSweep = bCoverageDirty && Fog && Fog->GetHistoricalRotationSweep(
+		SweepPreviousDrawRevision,PreviousSource,CurrentSource,Occluders);
+	// Count conservative refusals (invalid/non-adjacent source, geometry motion,
+	// translated origin or ambiguous turn); never retry with newer world data.
+	if (bCoverageDirty && !bSupportedSweep) ++RuntimeFrame.SweepUnsupportedEvents;
+	if (bSupportedSweep
 		&& FDarkwellHistoricalVisibilitySweep::MayAffectBounds(PreviousSource,CurrentSource,Bounds))
 	{
 		FScopedHistoryRuntimeTimer SweepTimer(RuntimeFrame.SweepProofUs);
@@ -1130,7 +1134,7 @@ FString ADarkwellMovingPropLabRoom::GetHistoryRuntimeTelemetry() const
 	auto Format = [](const FHistoryRuntimeTelemetry& T)
 	{
 		return FString::Printf(
-			TEXT("{\"frame\":%llu,\"frames\":%llu,\"epochs\":%d,\"resident_samples\":%d,\"samples_scanned\":%llu,\"coverage_scans\":%llu,\"coverage_queries\":%llu,\"occupancy_tests\":%llu,\"geometry_tests\":%llu,\"ownership_tests\":%llu,\"texture_calls\":%llu,\"texture_uploads\":%llu,\"cap_calls\":%llu,\"cap_rebuilds\":%llu,\"refresh_us\":%.3f,\"rotation_log_us\":%.3f,\"report_us\":%.3f,\"fine_advance_us\":%.3f,\"tracked_us\":%.3f,\"game_thread_us\":%.3f,\"proxies\":%d,\"caps\":%d,\"textures\":%d,\"mids\":%d,\"fine_bytes\":%llu,\"records\":%d,\"working_set\":%llu,\"uobjects\":%d}"),
+			TEXT("{\"frame\":%llu,\"frames\":%llu,\"epochs\":%d,\"resident_samples\":%d,\"samples_scanned\":%llu,\"coverage_scans\":%llu,\"coverage_queries\":%llu,\"occupancy_tests\":%llu,\"geometry_tests\":%llu,\"ownership_tests\":%llu,\"texture_calls\":%llu,\"texture_uploads\":%llu,\"cap_calls\":%llu,\"cap_rebuilds\":%llu,\"refresh_us\":%.3f,\"rotation_log_us\":%.3f,\"report_us\":%.3f,\"fine_advance_us\":%.3f,\"tracked_us\":%.3f,\"game_thread_us\":%.3f,\"proxies\":%d,\"caps\":%d,\"textures\":%d,\"mids\":%d,\"fine_bytes\":%llu,\"records\":%d,\"working_set\":%llu,\"uobjects\":%d,\"sweep_candidates\":%llu,\"sweep_queries\":%llu,\"sweep_accepted\":%llu,\"sweep_budget_rejects\":%llu,\"sweep_unsupported_events\":%llu,\"sweep_proof_us\":%.3f,\"sweep_uniform_substeps\":0}"),
 			T.FrameNumber, T.FramesAccumulated, T.ActiveHistoricalEpochs,
 			T.FineSamplesResident, T.FineSamplesScanned, T.CoverageFullScans,
 			T.CoverageQueries, T.OccupancyTests, T.PrimitiveGeometryTests,
@@ -1140,7 +1144,9 @@ FString ADarkwellMovingPropLabRoom::GetHistoryRuntimeTelemetry() const
 			T.ReportHudUs, T.AdvanceFineHistoryUs, T.UpdateTrackedUs,
 			T.MovingPropLabGameThreadUs, T.ProxyCount, T.CapComponentCount,
 			T.TextureCount, T.MidCount, T.FineHistoryResidentBytes,
-			T.SpatialRecordCount, T.ProcessWorkingSetBytes, T.UObjectCount);
+			T.SpatialRecordCount, T.ProcessWorkingSetBytes, T.UObjectCount,
+			T.SweepCandidateSamples,T.SweepCoverageQueries,T.SweepAcceptedSamples,T.SweepBudgetRejects,
+			T.SweepUnsupportedEvents,T.SweepProofUs);
 	};
 	return FString::Printf(TEXT("{\"frame_data\":%s,\"window_total\":%s}"),
 		*Format(RuntimeFrame), *Format(RuntimeTotal));
@@ -4098,6 +4104,7 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	RuntimeTotal.SweepCoverageQueries += RuntimeFrame.SweepCoverageQueries;
 	RuntimeTotal.SweepAcceptedSamples += RuntimeFrame.SweepAcceptedSamples;
 	RuntimeTotal.SweepBudgetRejects += RuntimeFrame.SweepBudgetRejects;
+	RuntimeTotal.SweepUnsupportedEvents += RuntimeFrame.SweepUnsupportedEvents;
 	RuntimeTotal.SweepProofUs += RuntimeFrame.SweepProofUs;
 	RuntimeTotal.UpdateTrackedUs += RuntimeFrame.UpdateTrackedUs;
 	RuntimeTotal.MovingPropLabGameThreadUs += RuntimeFrame.MovingPropLabGameThreadUs;

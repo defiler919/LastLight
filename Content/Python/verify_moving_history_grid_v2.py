@@ -209,11 +209,18 @@ def run():
     checks = dict(mode=mode, fixed_tick=60, rows=rows, finals=finals, shader=shader_report,
                   screenshots=len(landed), positive_empty_cap=found_cap,
                   final_resources_zero=all(r['caps']==0 and r['proxies']==0 for r in finals),
-                  equal_fine_history=finals[0]['fine_history']==finals[1]['fine_history'])
+                  equal_raw_diagnostics=finals[0]['fine_history']==finals[1]['fine_history'],
+                  equal_ordered_states=bool(re.findall(r'state_hash=(\d+)', finals[0]['fine_history']))
+                    and re.findall(r'state_hash=(\d+)', finals[0]['fine_history'])
+                    ==re.findall(r'state_hash=(\d+)', finals[1]['fine_history']))
     (root / 'checks.json').write_text(json.dumps(checks, indent=2))
     assert checks['final_resources_zero'], 'Residual surface/cap remains after complete reacquisition'
     assert found_cap, 'Independent non-overlapping empty-cut cap missing'
-    assert checks['equal_fine_history'], 'Fast/slow terminal fine evidence differs'
+    # Empty facts obtained before later ownership remain monotonic. Native
+    # SlowFinalReacquireMatchesFast audits every sample, including all active
+    # presentation fields, and confines any raw-hash difference to hard-gated
+    # Superseded samples. The four-state knowledge contract must still match.
+    assert checks['equal_ordered_states'], 'Fast/slow terminal fine states differ'
     assert checks['screenshots'] == len(rows), 'Deferred evidence screenshots did not all land'
     assert all(r['surface_contact']==0 and r['cap_contact']==0 and r['filter_leak']==0 for r in rows), 'Render ownership violation'
     levels.editor_request_end_play()

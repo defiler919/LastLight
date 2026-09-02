@@ -92,6 +92,7 @@ public:
 		uint64 SweepCoverageQueries = 0;
 		uint64 SweepAcceptedSamples = 0;
 		uint64 SweepBudgetRejects = 0;
+		uint64 SweepUnsupportedEvents = 0;
 		double SweepProofUs = 0;
 		int32 ProxyCount = 0;
 		int32 CapComponentCount = 0;

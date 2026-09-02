@@ -1849,6 +1849,17 @@ event. There are **zero uniform substeps**, no repeated full grid per substep,
 no deferred replay against later geometry, and no added idle queries/scans.
 Five legal point queries per candidate is the maximum; occlusion may exit early.
 
+Scope limit: this proof supplies **historical empty-space evidence only**. It
+does not manufacture a new current-object observation or a newer ownership
+epoch at an intermediate pose. In the artificial one-frame 140-degree jump,
+neither endpoint observes the final current cabinet: it therefore retains two
+records and may retain genuinely occupied/unobserved old samples. All 1,745
+previously missed *empty* survivors disappear. The user composite regression
+uses a fully facing discrete frame before leaving, creates the third/final
+record, and requires exact four-state equality and zero resolved old proxies.
+Do not claim arbitrary moving-origin/full-turn/all-object-observation invariance
+from this bounded empty-evidence implementation.
+
 Initial C regression found an important hash distinction. The existing raw
 `EvidenceHash` contains not only four-state knowledge but also retained empty
 facts and opacity behind the Superseded hard-zero ownership gate. A slow
@@ -1873,3 +1884,155 @@ ordered state hash `13323734992896764684`, zero old proxies and three records.
 The one-frame 140-degree arc reduces the independently diagnosed spatial
 misses from 1,745 to zero. The separate 4-speed x 4-fps empty-footprint matrix
 also has exact full raw evidence hash equality (`14188568822265195139`).
+
+### Checkpoint D: regression and rendered pass-through evidence
+
+C is `6199a7b` (pushed). Its directed report is 16 total: 12 clean, 4 with
+warnings, 0 failed, 0 not-run, 304.80 seconds, process exit 0. The warnings
+are engine HTTP connectivity probes timing out at `google.com/generate_204`,
+not history correctness failures. D adds real FogVisual activation/publication
+tests: cached-wall occlusion, stale draw refusal, invalid-source gap, clean
+consecutive resumption, deactivation and reactivation. Unsupported events and
+budget refusals are exposed separately in runtime telemetry. Added assertions
+bound candidate counts and coverage queries and prohibit idle retries.
+
+`Content/Python/verify_moving_fast_sweep.py` drives a real D3D12/SM6 PIE at
+fixed 60 Hz. The fast path crosses 160 -> 90 -> 20 degrees with exactly ONE
+fully facing game frame, immediately leaves, and records 36 adjacent exit
+frames plus a settled gray-memory burst. The slow path crosses the identical
+arc in 280 frames. No visibility authority or history values are injected.
+Native tests use actual interaction focus and F; GPU automation invokes that
+same existing in-world control entry point. Both retain three records.
+
+Home GPU evidence directories (under `Saved/PropGameplayLab/MovingMulti/FastSweep`):
+
+- `GPU_20260903_003613`: normal gameplay camera, 85 rows / 85 PNGs, all checks
+  pass; both terminal old proxy/cap counts zero; complete normal editor exit.
+- `GPU_20260903_003829`: same legal route and resolution with a close-up
+  presentation-only camera, 85 / 85, all checks pass; complete normal exit.
+
+These are 2560x1400 editor screenshots with a 2233x911 PIE viewport, not reduced
+resolution or altered TSR. Final ordered per-epoch states match fast/slow in
+both captures: `4141937835291346275`, `4170176150748022068`. The slightly
+different middle snapshot from the native route is due to the GPU screenshot
+tick in preparation; it is identical between each GPU fast/slow pair.
+Opened and inspected the pre-sweep composite, one-frame crossing, early fade,
+and **12 consecutive close-up exit frames 12..23**: after the unchanged .20s
+fade there is one final cabinet, with no surviving middle-angle wing or cap
+sliver. Early fade remains intentionally visible; it is not declared a bug.
+All recorded surface-contact, cap-contact and hard-filter-leak counters are 0.
+`Shot` is deferred: JSON records request-time telemetry and the PNG renders on
+the following engine frame, possibly at the next yaw. The ledger now states
+this explicitly; no extra facing hold was inserted to accommodate screenshots.
+
+The previous held-reacquisition GPU driver remains available, including its
+independent positive cap and production-shader probe. Its comparison now uses
+the explicit ordered state hash, retaining raw diagnostic equality as a
+reported diagnostic and relying on the native full field audit described above.
+
+### Sweep event performance (final build, isolated NullRHI run)
+
+Full `DarkwellEditor Win64 Development` build for D succeeded in 17.06 seconds.
+The existing engine-header deprecations and non-preferred MSVC warning remain;
+there were no compiler errors. No other Unreal/GPU task ran during these
+performance measurements. These are Room game-thread timings, not GPU time.
+
+| Real Lab sweep | Event frames | Mean ms | p95 ms | p99 ms | Peak ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Slow 160 -> 20 at 60 Hz | 280 | 111.990 | 166.373 | 216.993 | 221.148 |
+| Fast, 30 Hz | 2 | 127.082 | 138.002 | 138.002 | 138.002 |
+| Fast, 60 Hz | 2 | 126.357 | 137.124 | 137.124 | 137.124 |
+| Fast, 120 Hz | 2 | 129.793 | 145.205 | 145.205 | 145.205 |
+| Fast, 144 Hz | 2 | 127.050 | 139.169 | 139.169 | 139.169 |
+| Artificial single-frame 140-degree arc | 1 | 190.671 | 190.671 | 190.671 | 190.671 |
+
+The one/two-frame percentiles are order statistics of those small event sets,
+not a statistically broad p99 claim. Two-frame routes already have discrete
+full coverage, so their additional analytic query count is zero. The single
+frame case evaluates 28,406 candidates / 142,030 proof queries, all accepted,
+with 0 budget rejections and 0 uniform substeps. Total existing + new coverage
+queries are 354,594 and fine samples touched are 82,272. Analytic proof time
+alone is 46.073 ms. Once settled, the same route returns to 0.086931 ms with
+zero coverage queries, fine scans, uploads or cap rebuilds; two-frame routes
+return to approximately 0.108 ms.
+
+**Remaining performance limitation:** changed-view events still invoke the
+pre-existing conservative coverage and contribution work. 137--191 ms spikes
+are not a 60-fps event-time success, even though they are bounded and the
+every-frame/idle scanning regression remains fixed. This task does not claim
+that the entire changed-view pipeline is now frame-budget optimized. Do not
+compare its two-epoch event cost directly to the old eight-epoch idle disaster
+of 1.487 seconds/frame, and do not hide it with a lowered rendering resolution.
+
+### Idle scaling and lifetime (same final isolated native run)
+
+| Historical epochs | Resident fine samples | Mean idle ms | p95 ms | p99 ms |
+| --- | ---: | ---: | ---: | ---: |
+| 0 | 0 | .071710 | .077000 | .086100 |
+| 1 | 32,640 | .072879 | .077700 | .090000 |
+| 2 | 84,096 | .074246 | .080200 | .091200 |
+| 4 | 213,888 | .076084 | .079100 | .093500 |
+| 8 | 415,712 | .080788 | .086900 | .099800 |
+
+All rows have zero fine scans, coverage/occupancy/geometry/ownership queries,
+texture updates/uploads and cap updates/rebuilds during the settled window.
+The separate 600-frame eight-epoch idle gate is .080832 ms (previous 93eb6e4
+home candidate .086 ms). A local geometry event scans 11,009 of 32,640 samples,
+then returns to zero work.
+
+The five-minute equivalent 18,000-tick soak averages .080661 ms; working set
+14,046,806,016 -> 14,047,170,560 bytes (**+0.348 MiB**), UObjects 81,564 ->
+81,564, stable resources proxy:8 / cap:10 / texture:10 / MID:24. Fifty repeats
+of the existing four-epoch reset/rebuild lifecycle fixture keep proxy:4 /
+cap:6 / texture:6 / MID:12; UObjects 82,849 -> 83,129 after garbage collection
+(within the existing bound), and the final explicit clear leaves no historical
+presentation resource. This is the established synthetic multi-epoch lifetime
+fixture, not a claim of 50 separate manually played F rotations.
+
+### Full regression and GPU preservation checks
+
+`FastSweep/Full_Report`: **77 total, 46 clean, 31 with warnings, 0 failed,
+0 not-run, 1013.88 seconds**, normal process exit 0. This is the complete
+`Darkwell.PropLab + Darkwell.FogVisual + Darkwell.SightWeave.M6P1` filter,
+including all prior mixed-cell, 120/128/145/157-degree, cap, offscreen, A-B-C,
+multi-prop, translate, mode and authority regressions. Warnings are engine HTTP
+connectivity/telemetry timeouts plus the existing deliberate duplicate-ID and
+64-record-capacity negative controls; they are not silently counted as clean.
+
+The prior Mode 2 held-reacquisition/positive-cap GPU route also passes on the
+final binary: `HistoryGridV2/GPU_Mode2_20260903_005317`, 105 rows / 105 PNGs,
+equal ordered states, zero final old resources. Opened west and northwest
+positive-control close-ups: the dark legal cut cap remains present. The actual
+production final-opacity shader probe checks 131,072 pixels from two real
+history textures, including 9,120 blocked-positive and 53,646 allowed-positive
+controls, with zero failures. It exits normally without the prior teardown AV.
+
+Reproducible native commands (PowerShell, repository root):
+
+```powershell
+.\Scripts\BuildEditor.ps1 -Configuration Development -EngineRoot 'D:\UE_5.8'
+& 'D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' `
+  'D:\UE_pro\Darkwell\Darkwell.uproject' -unattended -nop4 -nosplash -NullRHI `
+  '-ExecCmds=Automation RunTests Darkwell.PropLab+Darkwell.FogVisual+Darkwell.SightWeave.M6P1' `
+  '-TestExit=Automation Test Queue Empty' `
+  '-ReportExportPath=D:\UE_pro\Darkwell\Saved\PropGameplayLab\MovingMulti\FastSweep\Full_Report' `
+  '-abslog=D:\UE_pro\Darkwell\Saved\PropGameplayLab\MovingMulti\FastSweep\Full.log'
+```
+
+GPU pass-through command: `UnrealEditor.exe Darkwell.uproject -d3d12 -sm6
+-nosound -unattended -nop4 -nosplash -NoVSync -UseFixedTimeStep -FPS=60
+-PropLabMovingControls -PropLabAsyncCapture -CapResidualMode=2
+-ExecutePythonScript=D:\UE_pro\Darkwell\Content\Python\verify_moving_fast_sweep.py`.
+Optional `-FastSweepCloseView` changes only the forensic camera;
+`-CapResidualMode=1` repeats in the other presentation mode.
+
+Final Mode 1 fast-sweep run `FastSweep/GPU_20260903_010018`: 85/85 screenshots,
+all checks pass, same two ordered state hashes as both Mode 2 runs; opened
+fast and slow settled close-ups show the same single cabinet. Normal shutdown
+completed at 01:02 local time. No Unreal editor/commandlet or shader compiler
+was left running after the GPU runs.
+
+Host version note: the requested root `D:\UE_5.8` was used throughout, without
+changing the engine or project association. Its actual `Engine/Build/Build.version`
+reports **5.8.2, CL 56702186**, despite the repository guidance saying 5.8.1.
+These results describe that installed home binary, not an unperformed 5.8.1 run.

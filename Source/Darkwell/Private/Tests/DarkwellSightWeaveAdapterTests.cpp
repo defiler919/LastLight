@@ -26,6 +26,7 @@
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
+#include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
@@ -2619,6 +2620,8 @@ namespace
    Step(1,1.f/Fps);EventGt.Add(Room->GetHistoryRuntimeFrameTelemetryForTesting().MovingPropLabGameThreadUs);Observe(1.f/Fps);
   }
   const auto Event=Room->GetHistoryRuntimeTotalTelemetryForTesting();EventGt.Sort();
+  Test.TestTrue(TEXT("Sweep analytic candidate work is event-budget bounded"),Event.SweepCandidateSamples<=uint64(SweepFrames)*65536);
+  Test.TestTrue(TEXT("Sweep legal coverage queries are bounded by five per candidate"),Event.SweepCoverageQueries<=Event.SweepCandidateSamples*5);
   Test.AddInfo(FString::Printf(TEXT("FAST_SWEEP_COST frames=%d fps=%.0f avg_ms=%.3f p95_ms=%.3f p99_ms=%.3f peak_ms=%.3f analytic_substeps=0 candidates=%llu proof_queries=%llu accepted=%llu budget_rejects=%llu all_queries=%llu fine_touched=%llu proof_ms=%.3f"),
    SweepFrames,Fps,Event.MovingPropLabGameThreadUs/SweepFrames/1000,EventGt[FMath::Clamp(FMath::CeilToInt(.95*SweepFrames)-1,0,SweepFrames-1)]/1000,
    EventGt[FMath::Clamp(FMath::CeilToInt(.99*SweepFrames)-1,0,SweepFrames-1)]/1000,EventGt.Last()/1000,
@@ -2644,9 +2647,48 @@ namespace
   const auto Idle=Room->GetHistoryRuntimeTotalTelemetryForTesting();
   Test.TestEqual(TEXT("Sweep ends with zero continuing coverage work"),Idle.CoverageQueries,uint64(0));
   Test.TestEqual(TEXT("Sweep ends with zero continuing fine scans"),Idle.FineSamplesScanned,uint64(0));
+  Test.TestEqual(TEXT("Idle does not retry unsupported sweeps"),Idle.SweepUnsupportedEvents,uint64(0));
   Test.AddInfo(FString::Printf(TEXT("FAST_SWEEP_IDLE avg_us=%.3f queries=%llu fine=%llu uploads=%llu caps=%llu"),Idle.MovingPropLabGameThreadUs/120,Idle.CoverageQueries,Idle.FineSamplesScanned,Idle.TextureUploads,Idle.CapMeshRebuilds));
   Fixture->Destroy();return Result;
  }
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellFastSweepRevisionGuardTest,
+ "Darkwell.PropLab.MovingRules.FastSweep.AuthorityRevisionAndReactivationGuards", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellFastSweepRevisionGuardTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("SweepRevisionGuard"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ auto* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Fog=World->GetSubsystem<UDarkwellFogVisualSubsystem>();
+ if(!TestNotNull(TEXT("Real coverage subsystem exists"),Fog))return false;
+ FDarkwellFogVisualSourceSnapshot A;A.BodyRadiusCentimeters=10;A.ConeRangeCentimeters=1000;
+ A.ConeHalfAngleDegrees=25;A.bConeLegallyLive=true;A.AuthorityRevision=100;
+ A.ConeForward=FVector2D(1,0).GetRotated(-60);
+ auto B=A;B.ConeForward=FVector2D(1,0).GetRotated(60);++B.AuthorityRevision;
+ const TArray<FDarkwellFogVisualSegment> Wall{{FVector2D(250,-1000),FVector2D(250,1000)}};
+ TestTrue(TEXT("Real occluded activation succeeds"),Fog->ActivateP2(Fixture,A,Wall));
+ const uint64 FirstDraw=Fog->GetDiagnostics().CoverageDrawCount;
+ TestTrue(TEXT("Next lawful source is published"),Fog->UpdateSource(B));
+ FDarkwellFogVisualSourceSnapshot Previous,Current;TConstArrayView<FDarkwellFogVisualSegment> Occluders;
+ TestTrue(TEXT("Immediately preceding publication can supply sweep"),Fog->GetHistoricalRotationSweep(FirstDraw,Previous,Current,Occluders));
+ TestEqual(TEXT("Sweep uses actual activation's wall cache"),Occluders.Num(),1);
+ uint64 Queries=0;
+ TestFalse(TEXT("Published real sweep still cannot prove wall-hidden footprint"),
+  FDarkwellHistoricalVisibilitySweep::ProveEmptyFootprintCoverage(Previous,Current,Occluders,FBox2D(FVector2D(499,-1),FVector2D(501,1)),Queries));
+ TestFalse(TEXT("Stale draw revision cannot replay sweep"),Fog->GetHistoricalRotationSweep(FirstDraw-1,Previous,Current,Occluders));
+ const uint64 BeforeInvalid=Fog->GetDiagnostics().CoverageDrawCount;
+ TestFalse(TEXT("Invalid authority update is rejected"),Fog->UpdateSource(FDarkwellFogVisualSourceSnapshot()));
+ ++A.AuthorityRevision;TestTrue(TEXT("Valid publication resumes"),Fog->UpdateSource(A));
+ TestFalse(TEXT("Valid resume cannot bridge invalid authority gap"),Fog->GetHistoricalRotationSweep(BeforeInvalid,Previous,Current,Occluders));
+ const uint64 ResumedDraw=Fog->GetDiagnostics().CoverageDrawCount;
+ ++B.AuthorityRevision;Fog->UpdateSource(B);
+ TestTrue(TEXT("A fresh consecutive pair restores lawful sweep"),Fog->GetHistoricalRotationSweep(ResumedDraw,Previous,Current,Occluders));
+ Fog->Deactivate();TestFalse(TEXT("Inactive subsystem never replays prior evidence"),Fog->GetHistoricalRotationSweep(ResumedDraw,Previous,Current,Occluders));
+ TestTrue(TEXT("Reactivation succeeds"),Fog->ActivateP2(Fixture,A,Wall));
+ TestFalse(TEXT("Activation revision cannot bridge previous lifetime"),Fog->GetHistoricalRotationSweep(0,Previous,Current,Occluders));
+ Fog->Deactivate();Fixture->Destroy();return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellFastSweepReproductionTest,

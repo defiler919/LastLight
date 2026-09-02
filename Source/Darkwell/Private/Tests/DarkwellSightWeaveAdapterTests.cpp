@@ -2031,6 +2031,134 @@ bool FDarkwellEdgeContactSliverTest::RunTest(const FString&)
  Fixture->Destroy();return true;
 }
 
+namespace
+{
+ struct FDarkwellResidualOwnershipRouteResult
+ {
+  int32 MaxSurfaceContact=0;
+  int32 MaxCapContact=0;
+  int32 MaxFilterLeak=0;
+  int32 ViewsChecked=0;
+ };
+
+ FDarkwellResidualOwnershipRouteResult RunResidualOwnershipRoute(
+  FAutomationTestBase& Test,const bool bCheckFourViews)
+ {
+  using namespace Darkwell::SightWeaveAdapterTests;
+  FDarkwellResidualOwnershipRouteResult Result;
+  FTestWorld TestWorld(TEXT("ResidualOwnershipRoute"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+  UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+  auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,90,0));
+  auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+  auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+  if(!Test.TestNotNull(TEXT("Residual route Lab exists"),Room)||!Player||!Adapter)return Result;
+  Test.TestTrue(TEXT("Residual route authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+  Test.TestTrue(TEXT("Residual route reset"),Room->ResetRoom(Player));
+  auto Step=[&](int32 Frames=1){for(int32 Frame=0;Frame<Frames;++Frame)
+   {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+  const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+  auto* Control=Room->GetControlForTesting(EDarkwellMovingPropLabControlKind::VisibleRotate);
+  if(!Test.TestNotNull(TEXT("Residual route F control exists"),Control))return Result;
+  Player->SetActorLocation(FVector(-300,70,92));Player->SetActorRotation(FRotator(0,90,0));Step(90);
+  World->UpdateWorldComponents(true,false);Player->GetInteractionComponent()->UpdateFocusedActorFromWorld();
+  Test.TestEqual(TEXT("Residual route focuses VISIBLE ROTATE"),Player->GetInteractionComponent()->GetFocusedActor(),static_cast<AActor*>(Control));
+  Test.TestTrue(TEXT("Residual route starts through F"),Player->GetInteractionComponent()->TryInteract());
+  Player->SetActorRotation(FRotator(0,-90,0));Step(130);
+  bool bPartial=false;
+  for(int32 Yaw=150;Yaw>=130&&!bPartial;--Yaw)
+  {
+   Player->SetActorRotation(FRotator(0,float(Yaw),0));Step(2);
+   const float Ratio=Room->GetLastLegalCoverageRatioForTesting(RotateId);
+   bPartial=Ratio>=.06f&&Ratio<=.30f;
+  }
+  Test.TestTrue(TEXT("Residual route creates a partial intermediate epoch"),bPartial);
+  Step(4);Player->SetActorRotation(FRotator(0,-90,0));Step(303);
+  auto Accumulate=[&]()
+  {
+   Result.MaxSurfaceContact=FMath::Max(Result.MaxSurfaceContact,Room->GetCurrentRenderContactStaleSurfaceForTesting(RotateId));
+   Result.MaxCapContact=FMath::Max(Result.MaxCapContact,Room->GetCurrentRenderContactStaleCapForTesting(RotateId));
+   Result.MaxFilterLeak=FMath::Max(Result.MaxFilterLeak,Room->GetHardOwnershipFilterLeakForTesting(RotateId));
+  };
+  for(int32 Yaw=155;Yaw>=90;--Yaw)
+  {
+   Player->SetActorRotation(FRotator(0,float(Yaw),0));Step(2);Accumulate();
+  }
+  if(bCheckFourViews)
+  {
+   struct FView { FVector Location; float Yaw; };
+   const FView Views[]={{FVector(-300,70,92),90},{FVector(300,650,92),180},
+    {FVector(-300,1230,92),-90},{FVector(-900,650,92),0}};
+   for(const FView& View:Views)
+   {
+    Player->SetActorLocation(View.Location);Player->SetActorRotation(FRotator(0,View.Yaw,0));Step(30);Accumulate();++Result.ViewsChecked;
+   }
+  }
+  Test.AddInfo(FString::Printf(TEXT("views=%d surface_contact=%d cap_contact=%d filter_leak=%d telemetry=%s"),
+   Result.ViewsChecked,Result.MaxSurfaceContact,Result.MaxCapContact,Result.MaxFilterLeak,
+   *Room->GetResidualFragmentTelemetryForTesting(RotateId)));
+  Fixture->Destroy();return Result;
+ }
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHardOwnershipFilteringTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.HardOwnershipFiltering", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellHardOwnershipFilteringTest::RunTest(const FString&)
+{
+ const FDarkwellResidualOwnershipRouteResult Result=RunResidualOwnershipRoute(*this,false);
+ TestEqual(TEXT("Smooth history cannot filter back into hard current ownership"),Result.MaxFilterLeak,0);
+ TestEqual(TEXT("Filtered boundary submits no stale surface"),Result.MaxSurfaceContact,0);
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellFourViewStableResidualTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.FourViewStableResidual", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellFourViewStableResidualTest::RunTest(const FString&)
+{
+ const FDarkwellResidualOwnershipRouteResult Result=RunResidualOwnershipRoute(*this,true);
+ TestEqual(TEXT("Four distinct final viewpoints were checked"),Result.ViewsChecked,4);
+ TestEqual(TEXT("No viewpoint restores stale surface contact"),Result.MaxSurfaceContact,0);
+ TestEqual(TEXT("No viewpoint restores stale cap contact"),Result.MaxCapContact,0);
+ TestEqual(TEXT("No viewpoint restores filtered stale contribution"),Result.MaxFilterLeak,0);
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellVerifiedEmptyCapPositiveControlTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.VerifiedEmptyCapPositiveControl", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellVerifiedEmptyCapPositiveControlTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("VerifiedEmptyCapPositiveControl"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")));
+ UWorld* World=TestWorld.Get();
+ auto* Room=Spawn<ADarkwellManualStaleRoom>(*World,FVector(4000,0,0));
+ auto* Fixture=Spawn<ADarkwellPropGameplayLab>(*World,FVector::ZeroVector);
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(4500,150,92),FRotator(0,90,0));
+ auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ auto* Memory=World->GetSubsystem<UDarkwellRememberedPropSubsystem>();
+ TestTrue(TEXT("Positive control uses legal authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ Room->ResetRoom(Player);Room->Command({TEXT("stalemanual"),TEXT("mode"),TEXT("2")});
+ auto Step=[&](float Yaw,int32 Frames=1)
+ {Player->SetActorLocation(FVector(4500,150,92));Player->SetActorRotation(FRotator(0,Yaw,0));
+  for(int32 I=0;I<Frames;++I){Adapter->Tick(1.f/30);Memory->RefreshNowForTesting();Fixture->Tick(1.f/30);Room->UpdateObservation(1.f/30,Player);}};
+ for(float Yaw=-30;Yaw<=210;Yaw+=1)Step(Yaw,2);
+ Step(90,30);
+ Player->SetActorLocation(Room->SwitchPosition()+FVector(0,0,92));Player->SetActorRotation(FRotator(0,90,0));
+ for(int32 I=0;I<4;++I){Adapter->Tick(1.f/30);Memory->RefreshNowForTesting();Fixture->Tick(1.f/30);Room->UpdateObservation(1.f/30,Player);}
+ TestFalse(TEXT("Positive control actual cabinet is absent"),Room->HasActualCabinet());
+ bool bSawPartialVerified=false,bSawLegalCap=false;
+ for(float Yaw=-30;Yaw<=210&&!bSawLegalCap;Yaw+=.5f)
+ {
+  Step(Yaw,1);int32 Verified=0,Remembered=0;
+  for(const auto& Cell:Room->GetSpatialStateForTesting().GetCells())
+  {Verified+=Cell.InitialRemembered>0&&Cell.VerifiedEmpty>0;Remembered+=Cell.InitialRemembered>0;}
+  bSawPartialVerified|=Verified>0&&Verified<Remembered;
+  bSawLegalCap=bSawPartialVerified&&Room->GetStaleCapTriangleCount()>0
+   && Room->GetStaleCapComponentForTesting()->IsVisible();
+ }
+ TestTrue(TEXT("Real partial VerifiedEmpty evidence is reached"),bSawPartialVerified);
+ TestTrue(TEXT("Non-overlapping #343A40 VerifiedEmpty cap remains visible"),bSawLegalCap);
+ Fixture->Destroy();return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMovingPropStaleFlickerStabilityTest,
  "Darkwell.PropLab.MovingRules.InWorldControls.StaleEpochFlickerStability", Darkwell::SightWeaveAdapterTests::TestFlags)
 bool FDarkwellMovingPropStaleFlickerStabilityTest::RunTest(const FString&)

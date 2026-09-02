@@ -33,6 +33,12 @@ namespace Darkwell::MovingPropLab
 	// Render ownership is a closed-set presentation rule. This tolerance is one
 	// half millimetre in UE centimetres and never enters coverage or D/V/R state.
 	constexpr double RenderOwnershipContactTolerance = 0.05;
+	// Clipping must finish strictly outside the closed contact set. This 0.01 mm
+	// numeric margin only absorbs transform/intersection roundoff; diagnostics
+	// continue to measure contact against RenderOwnershipContactTolerance.
+	constexpr double RenderOwnershipClipPrecisionMargin = 0.001;
+	constexpr double RenderOwnershipClipClearance = RenderOwnershipContactTolerance
+		+ RenderOwnershipClipPrecisionMargin;
 	const FName MainId(TEXT("Lab.Moving.Cabinet"));
 	const FVector A(-1100.0f, 650.0f, 0.0f);
 	const FVector B(0.0f, 650.0f, 0.0f);
@@ -553,6 +559,7 @@ bool ADarkwellMovingPropLabRoom::ClipSegmentToGeometryProjection(
 	const FPrimitiveGeometrySnapshot& Geometry,
 	const FVector2D Start,
 	const FVector2D End,
+	const double WorldTolerance,
 	double& OutStartAlpha,
 	double& OutEndAlpha)
 {
@@ -579,8 +586,7 @@ bool ADarkwellMovingPropLabRoom::ClipSegmentToGeometryProjection(
 	const FVector Scale = Geometry.WorldTransform.GetScale3D().GetAbs();
 	const double MinimumScale = FMath::Max(UE_DOUBLE_SMALL_NUMBER,
 		FMath::Min(Scale.X, Scale.Y));
-	const double LocalTolerance = Darkwell::MovingPropLab::RenderOwnershipContactTolerance
-		/ MinimumScale;
+	const double LocalTolerance = WorldTolerance / MinimumScale;
 	OutStartAlpha = 0.0;
 	OutEndAlpha = 1.0;
 	for (int32 Axis = 0; Axis < 2; ++Axis)
@@ -801,7 +807,8 @@ bool ADarkwellMovingPropLabRoom::HasNewerObservedGeometryOverlapWithinFootprint(
 			double Alpha0 = 0.0;
 			double Alpha1 = 0.0;
 			if (!ClipSegmentToGeometryProjection(
-				Geometry, Corners[Edge], Corners[(Edge + 1) % 4], Alpha0, Alpha1))
+				Geometry, Corners[Edge], Corners[(Edge + 1) % 4],
+				Darkwell::MovingPropLab::RenderOwnershipClipClearance, Alpha0, Alpha1))
 			{
 				continue;
 			}
@@ -1414,7 +1421,9 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 					double Alpha0 = 0.0;
 					double Alpha1 = 0.0;
 					if (!ClipSegmentToGeometryProjection(CurrentGeometry,
-						FVector2D(Quad.A), FVector2D(Quad.B), Alpha0, Alpha1))
+						FVector2D(Quad.A), FVector2D(Quad.B),
+						Darkwell::MovingPropLab::RenderOwnershipContactTolerance,
+						Alpha0, Alpha1))
 					{
 						continue;
 					}
@@ -1620,6 +1629,17 @@ void ADarkwellMovingPropLabRoom::LogRotationFrame(const FTrackedProp& Prop) cons
 		Prop.Offending3DPrimitive, Prop.Offending3DWorldPosition.X,
 		Prop.Offending3DWorldPosition.Y, Prop.Offending3DWorldPosition.Z,
 		Prop.HiddenFreezeCount);
+	if (Prop.CurrentRenderContactStaleSurface > 0
+		|| Prop.CurrentRenderContactStaleCap > 0
+		|| Prop.HardOwnershipFilterLeak > 0)
+	{
+		UE_LOG(LogDarkwellMovingPropLab, Warning,
+			TEXT("ROTATION_RESIDUAL_FRAGMENTS surface=%d cap=%d filter=%d fragments=[%s]"),
+			Prop.CurrentRenderContactStaleSurface,
+			Prop.CurrentRenderContactStaleCap,
+			Prop.HardOwnershipFilterLeak,
+			*FString::Join(Prop.ResidualFragmentDiagnostics, TEXT("; ")));
+	}
 }
 
 void ADarkwellMovingPropLabRoom::UpdateTracked(
@@ -2250,6 +2270,20 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 			continue;
 		}
 		Signature = (Signature ^ Candidate.Epoch) * 1099511628211ull;
+		const FRecordVisual* CandidateVisual = Prop.Visuals.Find(Candidate.Epoch);
+		Signature = (Signature ^ (CandidateVisual && CandidateVisual->bPresentationRetired
+			? 1ull : 0ull)) * 1099511628211ull;
+		if (CandidateVisual)
+		{
+			for (int32 SuppressedIndex = 0;
+				SuppressedIndex < CandidateVisual->SuppressedByCurrentEvidence.Num();
+				++SuppressedIndex)
+			{
+				Signature = (Signature
+					^ (CandidateVisual->SuppressedByCurrentEvidence[SuppressedIndex] ? 1ull : 0ull))
+					* 1099511628211ull;
+			}
+		}
 		for (const FDarkwellSpatialPropMemory::FCell& CandidateCell
 			: Candidate.SpatialMemory.GetCells())
 		{
@@ -2375,7 +2409,9 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 					double Entry = 0.0;
 					double Exit = 0.0;
 					if (ClipSegmentToGeometryProjection(Geometry,
-						FVector2D(Bottom0), FVector2D(Bottom1), Entry, Exit))
+						FVector2D(Bottom0), FVector2D(Bottom1),
+						Darkwell::MovingPropLab::RenderOwnershipClipClearance,
+						Entry, Exit))
 					{
 						Breakpoints.Add(FMath::Clamp(Entry, 0.0, 1.0));
 						Breakpoints.Add(FMath::Clamp(Exit, 0.0, 1.0));
@@ -2434,9 +2470,9 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 						for (const FVector2D Interval : Remaining)
 						{
 							const double ClipMin = Newer.X
-								- Darkwell::MovingPropLab::RenderOwnershipContactTolerance;
+								- Darkwell::MovingPropLab::RenderOwnershipClipClearance;
 							const double ClipMax = Newer.Y
-								+ Darkwell::MovingPropLab::RenderOwnershipContactTolerance;
+								+ Darkwell::MovingPropLab::RenderOwnershipClipClearance;
 							if (ClipMax < Interval.X || ClipMin > Interval.Y)
 							{
 								Next.Add(Interval);

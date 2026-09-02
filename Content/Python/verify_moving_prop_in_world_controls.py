@@ -107,6 +107,13 @@ def sample(label, stable_id, capture=True):
             stable_name, 'current', '3d', 'overlap', 'stale', 'cap'),
         max_3d_render_ownership=diagnostic(
             stable_name, 'max', '3d', 'render', 'ownership', 'contributors'),
+        current_render_contact_stale_surface=diagnostic(
+            stable_name, 'current', 'render', 'contact', 'stale', 'surface'),
+        current_render_contact_stale_cap=diagnostic(
+            stable_name, 'current', 'render', 'contact', 'stale', 'cap'),
+        hard_ownership_filter_leak=diagnostic(
+            stable_name, 'hard', 'ownership', 'filter', 'leak'),
+        residual_fragments=room.get_residual_fragment_telemetry_for_testing(stable_name),
         legal_coverage=room.get_last_legal_coverage_ratio_for_testing(stable_name),
         coverage_valid=room.is_last_coverage_valid_for_testing(stable_name),
         coverage_zero_reason=room.get_last_coverage_zero_reason_for_testing(stable_name),
@@ -229,6 +236,26 @@ def run():
                for row in partial_final_rows) <= 1
     assert final_live['current_3d_overlap_stale_surface'] == 0
     assert final_live['current_3d_overlap_stale_cap'] == 0
+    four_view_rows = []
+    for label, x, y, yaw in (
+            ('south', -300, 70, 90), ('east', 300, 650, 180),
+            ('north', -300, 1230, -90), ('west', -900, 650, 0)):
+        pose(x, y, yaw)
+        # Let normal TSR settle after the evidence-only camera teleport before
+        # judging the same final ownership state from the next direction.
+        yield 2.0
+        four_view_rows.append(sample(
+            f'partial_rotation_final_four_view_{label}',
+            'Lab.InWorld.Rotate.Cabinet'))
+        # The screenshot request is asynchronous. Preserve this view until the
+        # capture is issued so the final west frame cannot be reset away.
+        yield 0.25
+    assert max(row['current_render_contact_stale_surface']
+               for row in four_view_rows) == 0
+    assert max(row['current_render_contact_stale_cap']
+               for row in four_view_rows) == 0
+    assert max(row['hard_ownership_filter_leak']
+               for row in four_view_rows) == 0
     # Repeat Scenario 2 while deliberately leaving legal view mid-rotation.
     # This reproduces the user's old/new-pose overlap case without a console.
     reset_current()

@@ -305,6 +305,7 @@ private:
 		const FPrimitiveGeometrySnapshot& Geometry,
 		FVector2D Start,
 		FVector2D End,
+		double WorldTolerance,
 		double& OutStartAlpha,
 		double& OutEndAlpha);
 	bool CollectCurrentOwnedVerticalIntervals(

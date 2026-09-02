@@ -1555,3 +1555,23 @@ pushed, recheck local/upstream/remote, LFS and the untouched uproject; only
 then schedule the authorized 60-second shutdown. Do not shut down with
 unsynced valuable work. This document and script are the only pending task
 files after runtime checkpoint fa05cbc; generated evidence is never staged.
+
+Final validated code + evidence-driver SHA (D):
+`6990b6cfc840a0379d1ea956b2dc472f7a708cf8` — pushed and verified equal to
+upstream and origin. All runtime files are identical to the built/tested
+`fa05cbc4d28fccdb9cd9ace93e6296edd50d0968`; the D closure adds only the
+validated Python driver and documentation. This final Git-status appendix
+is a documentation-only descendant. Its exact delivery SHA is the branch
+HEAD returned by the recovery command and is also recorded in the final
+Codex handoff, rather than a self-referential commit hash inside its own tree.
+
+Git/LFS closure at D: status contains only the preserved uproject newline
+difference; no staged files, no pending push, LFS status has no upload objects,
+LFS push dry-run is empty, `git lfs fsck` passes. `git diff --check` passes.
+`git fsck --no-reflogs` exits 0 with the existing dangling objects retained
+(`Saved/PropGameplayLab/MovingMulti/HistoryGridV2/Final_git_fsck.txt`). No
+new binary assets, captures, videos or generated directories are committed.
+No UnrealEditor, UnrealEditor-Cmd, UBT, dotnet, ShaderCompileWorker,
+LiveCodingConsole or Python evidence process remains at the final check.
+After this appendix is pushed, repeat the SHA/LFS/worktree checks immediately
+before scheduling shutdown; any mismatch blocks shutdown.

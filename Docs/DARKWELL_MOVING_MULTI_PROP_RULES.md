@@ -1279,3 +1279,54 @@ it must not be described as forced-100%-screen-percentage evidence.
 The Lab was reopened without a running route or PIE, for the user to click
 Play. The small Python handoff probe was closed and replaced with a plain
 Editor session, so no persistent evidence script remains in the user session.
+
+## 2026-09-02: mixed-cell HistoryGridV2 work (supersedes prior retest readiness)
+
+Starting branch: `codex/darkwell-prop-memory-gameplay-lab`.
+Starting HEAD/upstream/origin after fetch:
+`8073b8d1e09156f5968f5d5626ad9cf5c491a96e`.
+User manual PIE FAILED again. Video `2026-09-02 15-44-20.mp4` begins with
+an already-sealed partial gray pose and quickly reacquires the final cabinet.
+Read-only extraction retained 44 native consecutive transition frames under
+`Saved/PropGameplayLab/MovingMulti/CapResidual/UserFeedback_154420_Review`.
+The surviving epoch was approximately 157.66 degrees; actual was 180 degrees.
+Its existing proxy remained alive, rather than a new stale epoch being created.
+Zero aggregate render-contact counters did not prove the absence of visible
+residue. The older slow-scan evidence is retained, but is not acceptance of
+this fast-reacquisition case.
+
+Checkpoint A adds `FDarkwellHistoryGridV2` to each spatial observation record.
+Its fixed dimensions are the old grid dimensions multiplied by four on each
+axis, matching the existing presentation texels. Native evidence tags are
+NeverObserved, Unresolved, VerifiedEmpty, SupersededByNewerEvidence.
+Superseded is monotonic ownership, never a write to an empty-space fact.
+The old per-record D/V/R is unchanged and still supplies ALL rendering at A.
+V2 samples the same conservative SightWeave queries on the finer grid and
+records independent legal-empty dwell/fade and newer observed ownership.
+`GetFineHistoryTelemetry` exposes per-epoch counts, mixed original cells and
+fine empty samples which the old cell still retains.
+
+The frozen implementation has EnterSeconds=.20, ExitSeconds=.18,
+EmptyConfirmationSeconds=.10 and EmptyFadeSeconds=.20. V2 reuses these
+existing constants rather than reinterpreting .18 as an empty-fade duration.
+Mode 1 and Mode 2 selectors in the MOVING room share this history model;
+this does not change normal/manual-room Mode 0/1 contracts.
+No source geometry, materials, assets, maps, SightWeave interfaces or temporal
+constants are changed at A. The local uproject difference at task start is
+a missing final newline (not an EngineAssociation change); preserve it exactly.
+
+Evidence for this task is under `Saved/PropGameplayLab/MovingMulti/HistoryGridV2`;
+none of it is committed. Stage results and final recovery instructions follow.
+
+A validation: standard Editor Development final build succeeded (11 actions,
+32.27 seconds). `HistoryGridV2_A_Final/index.json`: 2/2 Success, 0 warnings,
+0 failures, 109.2771 seconds. The native route sealed approximately 151.22
+degrees, not the user's exact 157.66-degree video pose. Its fast and slow
+final V2 counts matched exactly: epoch 2 had never=6391, unresolved=0,
+empty=30735, superseded=24890. This particular legacy route also retired;
+it is NOT claimed to reproduce the user's persistent fragment. The pure
+mixed-cell test independently proves all three evidence states in one cell.
+An initial diagnostic-only run exposed premature diagnostic retirement;
+the final run keeps V2 updating after legacy rendering retires and restricts
+seeded knowledge to the original primitive footprint. Evidence is retained.
+Current stage status: PARTIAL — MIXED_CELL_HISTORY_WORK_IN_PROGRESS.

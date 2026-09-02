@@ -151,6 +151,7 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetObservationEpisodeForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetObservationStateForTesting(FName StableId) const;
 	float GetNewestHistoricalYawForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetFineHistoryTelemetry(FName StableId) const;
 	bool StartTrackedRotationForTesting(FName StableId, float TargetYaw, float Duration);
 	bool InjectInvalidCoverageOnceForTesting(FName StableId);
 
@@ -346,7 +347,8 @@ private:
 	FCoverageSnapshot SampleConservativeCoverage(
 		const FBox2D& Bounds,
 		uint64 TransformRevision,
-		uint64 GridRevision) const;
+		uint64 GridRevision, int32 Subdivision = 1) const;
+	void AdvanceFineHistory(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record, float DeltaSeconds);
 	bool IsOccupiedByActual(FVector2D Point, FName IgnoredStableId) const;
 	bool HasCurrentObservedContributionAt(const FTrackedProp& Prop, FVector2D Point) const;
 	bool HasNewerObservedContributionAt(

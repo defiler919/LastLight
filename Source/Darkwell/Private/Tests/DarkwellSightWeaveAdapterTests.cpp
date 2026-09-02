@@ -2046,11 +2046,12 @@ namespace
   int32 FalseOccupied=0;
   int32 FinalProxies=0;
   int32 FinalCaps=0;
+  FString FineHistory;
  };
 
  FDarkwellResidualOwnershipRouteResult RunResidualOwnershipRoute(
   FAutomationTestBase& Test,const bool bCheckFourViews,const int32 Mode=2,const bool bLateObservation=false,
-  const int32 ExtraHiddenFrames=0,const float PlayerY=70)
+  const int32 ExtraHiddenFrames=0,const float PlayerY=70,const bool bFastReacquire=false)
  {
   using namespace Darkwell::SightWeaveAdapterTests;
   FDarkwellResidualOwnershipRouteResult Result;
@@ -2097,11 +2098,13 @@ namespace
    Result.MaxFilterLeak=FMath::Max(Result.MaxFilterLeak,Room->GetHardOwnershipFilterLeakForTesting(RotateId));
    Result.OutsideSource=FMath::Max(Result.OutsideSource,Room->GetCapVerticesOutsideSourceForTesting(RotateId));
   };
-  for(int32 Yaw=155;Yaw>=90;--Yaw)
+  for(int32 Yaw=(bFastReacquire ? 90 : 155);Yaw>=90;--Yaw)
   {
    Player->SetActorRotation(FRotator(0,float(Yaw),0));Step(2);Accumulate();
   }
   Step(30);
+  Result.FineHistory=Room->GetFineHistoryTelemetry(RotateId);
+  Test.AddInfo(TEXT("HISTORY_GRID_V2 ")+Result.FineHistory);
   Result.FalseOccupied=Room->GetFalseOccupiedHistoryCountForTesting(RotateId);
   Result.FinalProxies=Room->GetVisibleHistoricalProxyCountForTesting(RotateId);
   Result.FinalCaps=Room->GetVisibleHistoricalCapCountForTesting(RotateId);
@@ -2125,6 +2128,20 @@ namespace
   PresentationMode->Set(PreviousMode,ECVF_SetByConsole);
   Fixture->Destroy();return Result;
  }
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellFineHistoryParallelTest,
+ "Darkwell.PropLab.MovingRules.HistoryGridV2.ParallelLateReacquire", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellFineHistoryParallelTest::RunTest(const FString&)
+{
+ for (const bool Fast : {true,false})
+ {
+  const auto Result=RunResidualOwnershipRoute(*this,false,2,true,53,100,Fast);
+  TestFalse(TEXT("Real partial rotation produced per-epoch fine diagnostics"),Result.FineHistory.IsEmpty());
+  AddInfo(FString::Printf(TEXT("PARALLEL_ONLY fast=%d legacy_proxy=%d legacy_cap=%d %s"),
+   Fast,Result.FinalProxies,Result.FinalCaps,*Result.FineHistory));
+ }
+ return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellCapPartialClipTest,

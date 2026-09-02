@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "VisionPresentation/DarkwellSpatialPropMemory.h"
+#include "VisionPresentation/DarkwellHistoryGridV2.h"
 
 /**
  * One player-observed world-space occupancy for a stable prop identity.
@@ -13,6 +14,7 @@ struct DARKWELL_API FDarkwellSpatialObservationRecord
 	uint32 Epoch = 0;
 	FTransform SnapshotTransform = FTransform::Identity;
 	FDarkwellSpatialPropMemory SpatialMemory;
+	FDarkwellHistoryGridV2 FineHistory;
 	bool bCurrentObservedLocation = false;
 };
 

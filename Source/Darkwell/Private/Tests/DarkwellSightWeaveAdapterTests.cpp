@@ -2468,28 +2468,37 @@ bool FDarkwellHistoryGridV2EpochScalingTelemetryTest::RunTest(const FString&)
  if(!TestNotNull(TEXT("History runtime Lab exists"),Room)||!Player||!Adapter)return false;
  TestTrue(TEXT("History runtime authority"),Adapter->RequestSightWeaveAuthority(Fixture));
  TestTrue(TEXT("History runtime reset"),Room->ResetRoom(Player));
- auto Step=[&](int32 Frames){for(int32 Frame=0;Frame<Frames;++Frame)
-  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ auto StepAndCollect=[&](int32 Frames,TArray<double>* GtSamples){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);
+   if(GtSamples)GtSamples->Add(Room->GetHistoryRuntimeFrameTelemetryForTesting().MovingPropLabGameThreadUs);}};
+ auto Step=[&](int32 Frames){StepAndCollect(Frames,nullptr);};
+ auto Percentile=[](const TArray<double>& Values,const double Fraction)
+ {
+  if(Values.IsEmpty())return 0.0;
+  TArray<double> Sorted=Values;Sorted.Sort();
+  return Sorted[FMath::Clamp(FMath::CeilToInt(Fraction*Sorted.Num())-1,0,Sorted.Num()-1)];
+ };
  const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
  for(const int32 Epochs:{0,1,2,4,8})
  {
   TestTrue(FString::Printf(TEXT("Configure %d historical epochs"),Epochs),
    Room->ConfigureHistoricalEpochCountForTesting(RotateId,Epochs));
-  Step(120);
+  TArray<double> ChangedGt;StepAndCollect(120,&ChangedGt);
   const auto T=Room->GetHistoryRuntimeTotalTelemetryForTesting();
   TestEqual(TEXT("Telemetry window frame count"),T.FramesAccumulated,uint64(120));
   TestEqual(TEXT("Resident epoch gauge"),T.ActiveHistoricalEpochs,Epochs);
   if(Epochs>0)TestTrue(TEXT("Fine samples are resident"),T.FineSamplesResident>0);
   const double Frames=FMath::Max<uint64>(1,T.FramesAccumulated);
-  AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_POST_REFACTOR epochs=%d resident_samples=%d fine_bytes=%llu samples_scanned_per_frame=%.3f coverage_queries_per_frame=%.3f occupancy_tests_per_frame=%.3f geometry_tests_per_frame=%.3f ownership_tests_per_frame=%.3f texture_calls_per_frame=%.3f texture_uploads_per_sec=%.3f cap_calls_per_frame=%.3f cap_rebuilds_per_sec=%.3f refresh_us_per_frame=%.3f rotation_log_us_per_frame=%.3f report_us_per_frame=%.3f advance_fine_us_per_frame=%.3f tracked_us_per_frame=%.3f gt_us_per_frame=%.3f working_set=%llu uobjects=%d resources=proxy:%d/cap:%d/texture:%d/mid:%d"),
+  AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_POST_REFACTOR epochs=%d resident_samples=%d fine_bytes=%llu samples_scanned_per_frame=%.3f coverage_queries_per_frame=%.3f occupancy_tests_per_frame=%.3f geometry_tests_per_frame=%.3f ownership_tests_per_frame=%.3f texture_calls_per_frame=%.3f texture_uploads_per_sec=%.3f cap_calls_per_frame=%.3f cap_rebuilds_per_sec=%.3f refresh_us_per_frame=%.3f rotation_log_us_per_frame=%.3f report_us_per_frame=%.3f advance_fine_us_per_frame=%.3f tracked_us_per_frame=%.3f gt_us_per_frame=%.3f gt_p95_us=%.3f gt_p99_us=%.3f working_set=%llu uobjects=%d resources=proxy:%d/cap:%d/texture:%d/mid:%d"),
    Epochs,T.FineSamplesResident,T.FineHistoryResidentBytes,T.FineSamplesScanned/Frames,
    T.CoverageQueries/Frames,T.OccupancyTests/Frames,T.PrimitiveGeometryTests/Frames,
    T.OwnershipTests/Frames,T.UpdateRecordTextureCalls/Frames,T.TextureUploads/Frames*60.0,
    T.UpdateRecordCapCalls/Frames,T.CapMeshRebuilds/Frames*60.0,
    T.RefreshContributionDiagnosticsUs/Frames,T.LogRotationFrameUs/Frames,T.ReportHudUs/Frames,
    T.AdvanceFineHistoryUs/Frames,T.UpdateTrackedUs/Frames,T.MovingPropLabGameThreadUs/Frames,
+   Percentile(ChangedGt,.95),Percentile(ChangedGt,.99),
    T.ProcessWorkingSetBytes,T.UObjectCount,T.ProxyCount,T.CapComponentCount,T.TextureCount,T.MidCount));
-  Room->ResetHistoryRuntimeTelemetryForTesting();Step(300);
+  Room->ResetHistoryRuntimeTelemetryForTesting();TArray<double> SteadyGt;StepAndCollect(300,&SteadyGt);
   const auto Steady=Room->GetHistoryRuntimeTotalTelemetryForTesting();
   TestEqual(TEXT("Steady epoch window scans no fine samples"),Steady.FineSamplesScanned,uint64(0));
   TestEqual(TEXT("Steady epoch window makes no coverage queries"),Steady.CoverageQueries,uint64(0));
@@ -2498,7 +2507,7 @@ bool FDarkwellHistoryGridV2EpochScalingTelemetryTest::RunTest(const FString&)
   TestEqual(TEXT("Steady epoch window makes no texture updates"),Steady.UpdateRecordTextureCalls,uint64(0));
   TestEqual(TEXT("Steady epoch window makes no cap updates"),Steady.UpdateRecordCapCalls,uint64(0));
   const double SteadyFrames=FMath::Max<uint64>(1,Steady.FramesAccumulated);
-  AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_STEADY epochs=%d resident_samples=%d fine_bytes=%llu samples_scanned_per_frame=%.3f coverage_queries_per_frame=%.3f occupancy_tests_per_frame=%.3f geometry_tests_per_frame=%.3f ownership_tests_per_frame=%.3f texture_calls_per_frame=%.3f texture_uploads_per_sec=%.3f cap_calls_per_frame=%.3f cap_rebuilds_per_sec=%.3f refresh_us_per_frame=%.3f rotation_log_us_per_frame=%.3f report_us_per_frame=%.3f advance_fine_us_per_frame=%.3f tracked_us_per_frame=%.3f gt_us_per_frame=%.3f working_set=%llu uobjects=%d resources=proxy:%d/cap:%d/texture:%d/mid:%d"),
+  AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_STEADY epochs=%d resident_samples=%d fine_bytes=%llu samples_scanned_per_frame=%.3f coverage_queries_per_frame=%.3f occupancy_tests_per_frame=%.3f geometry_tests_per_frame=%.3f ownership_tests_per_frame=%.3f texture_calls_per_frame=%.3f texture_uploads_per_sec=%.3f cap_calls_per_frame=%.3f cap_rebuilds_per_sec=%.3f refresh_us_per_frame=%.3f rotation_log_us_per_frame=%.3f report_us_per_frame=%.3f advance_fine_us_per_frame=%.3f tracked_us_per_frame=%.3f gt_us_per_frame=%.3f gt_p95_us=%.3f gt_p99_us=%.3f working_set=%llu uobjects=%d resources=proxy:%d/cap:%d/texture:%d/mid:%d"),
    Epochs,Steady.FineSamplesResident,Steady.FineHistoryResidentBytes,Steady.FineSamplesScanned/SteadyFrames,
    Steady.CoverageQueries/SteadyFrames,Steady.OccupancyTests/SteadyFrames,
    Steady.PrimitiveGeometryTests/SteadyFrames,Steady.OwnershipTests/SteadyFrames,
@@ -2507,6 +2516,7 @@ bool FDarkwellHistoryGridV2EpochScalingTelemetryTest::RunTest(const FString&)
    Steady.RefreshContributionDiagnosticsUs/SteadyFrames,Steady.LogRotationFrameUs/SteadyFrames,
    Steady.ReportHudUs/SteadyFrames,Steady.AdvanceFineHistoryUs/SteadyFrames,
    Steady.UpdateTrackedUs/SteadyFrames,Steady.MovingPropLabGameThreadUs/SteadyFrames,
+   Percentile(SteadyGt,.95),Percentile(SteadyGt,.99),
    Steady.ProcessWorkingSetBytes,Steady.UObjectCount,Steady.ProxyCount,Steady.CapComponentCount,
    Steady.TextureCount,Steady.MidCount));
  }

@@ -189,6 +189,7 @@ private:
 		int32 ProxyVisibilityTransitions = 0;
 		FIntPoint HistoricalTextureSize = FIntPoint::ZeroValue;
 		TBitArray<> SuppressedByCurrentEvidence;
+		TBitArray<> HardOwnershipFilterGuard;
 		TArray<FVector2D> CapSamplePoints;
 		TArray<FLinearColor> SubmittedPresentation;
 		TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> Materials;
@@ -320,6 +321,14 @@ private:
 		const FRecordVisual& OlderVisual,
 		uint32 OlderEpoch,
 		FVector2D Point) const;
+	bool HasNewerObservedGeometryOverlapWithinFootprint(
+		const FTrackedProp& Prop,
+		const FRecordVisual& OlderVisual,
+		uint32 OlderEpoch,
+		const FBox2D& Footprint) const;
+	TArray<FPrimitiveGeometrySnapshot> CollectNewerGeometrySnapshots(
+		const FTrackedProp& Prop,
+		uint32 OlderEpoch) const;
 	TArray<float> ConservativeCoverage(const FBox2D& Bounds) const;
 	FCoverageSnapshot SampleConservativeCoverage(
 		const FBox2D& Bounds,

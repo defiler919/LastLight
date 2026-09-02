@@ -2021,12 +2021,9 @@ bool FDarkwellEdgeContactSliverTest::RunTest(const FString&)
   MaxFilterLeak=FMath::Max(MaxFilterLeak,Room->GetHardOwnershipFilterLeakForTesting(RotateId));
   if(ResidualTelemetry.IsEmpty())ResidualTelemetry=Room->GetResidualFragmentTelemetryForTesting(RotateId);
  }
- // Checkpoint-A reproduction: volume-overlap telemetry is clean, but the exact
- // submitted fragments still contain a bilinear stale surface boundary and/or
- // a closed-set cap contact. Checkpoint B must invert these render assertions.
- TestTrue(TEXT("8747acd reproduces a submitted residual ownership fragment"),
-  MaxSurfaceContact>0||MaxCapContact>0);
- TestTrue(TEXT("8747acd reproduces hard-mask filtering leakage"),MaxFilterLeak>0);
+ TestEqual(TEXT("Closed-set ownership removes submitted stale surface contact"),MaxSurfaceContact,0);
+ TestEqual(TEXT("Exact segment clipping removes submitted stale cap contact"),MaxCapContact,0);
+ TestEqual(TEXT("Hard ownership remains zero after bilinear filtering"),MaxFilterLeak,0);
  TestEqual(TEXT("Legacy open-volume surface overlap misses the residual"),Room->GetCurrent3DOverlapStaleSurfaceForTesting(RotateId),0);
  TestEqual(TEXT("Legacy open-volume cap overlap misses the residual"),Room->GetCurrent3DOverlapStaleCapForTesting(RotateId),0);
  AddInfo(FString::Printf(TEXT("surface_contact=%d cap_contact=%d filter_leak=%d fragments=[%s]"),

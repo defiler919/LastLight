@@ -402,6 +402,8 @@ void ADarkwellMovingPropLabRoom::DestroyVisual(FRecordVisual& Visual)
 	Visual.CapSamplePoints.Reset();
 	Visual.CapQuads.Reset();
 	Visual.SubmittedPresentation.Reset();
+	Visual.SuppressedByCurrentEvidence.Reset();
+	Visual.HardOwnershipFilterGuard.Reset();
 }
 
 void ADarkwellMovingPropLabRoom::DestroyTracked()
@@ -712,8 +714,101 @@ bool ADarkwellMovingPropLabRoom::HasNewerObservedGeometryOverlapAt(
 		}
 		for (const FVector2D Newer : NewerIntervals)
 		{
-			if (FMath::Min(OldMaxZ, Newer.Y) - FMath::Max(OldMinZ, Newer.X)
-				> UE_KINDA_SMALL_NUMBER)
+			if (FMath::Min(OldMaxZ, Newer.Y)
+				+ Darkwell::MovingPropLab::RenderOwnershipContactTolerance
+				>= FMath::Max(OldMinZ, Newer.X))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+TArray<ADarkwellMovingPropLabRoom::FPrimitiveGeometrySnapshot>
+ADarkwellMovingPropLabRoom::CollectNewerGeometrySnapshots(
+	const FTrackedProp& Prop,
+	const uint32 OlderEpoch) const
+{
+	TArray<FPrimitiveGeometrySnapshot> Result;
+	for (const FDarkwellSpatialObservationRecord& Candidate : Prop.History.GetRecords())
+	{
+		if (Candidate.Epoch <= OlderEpoch)
+		{
+			continue;
+		}
+		if (Candidate.bCurrentObservedLocation)
+		{
+			if (const ADarkwellPropLabFurniture* Actual = Prop.bExists ? Prop.Actual.Get() : nullptr)
+			{
+				Result.Append(ActualPartGeometry(*Actual));
+			}
+			continue;
+		}
+		if (const FRecordVisual* Visual = Prop.Visuals.Find(Candidate.Epoch);
+			Visual && !Visual->bPresentationRetired)
+		{
+			Result.Append(Visual->PartGeometry);
+		}
+	}
+	return Result;
+}
+
+bool ADarkwellMovingPropLabRoom::HasNewerObservedGeometryOverlapWithinFootprint(
+	const FTrackedProp& Prop,
+	const FRecordVisual& OlderVisual,
+	const uint32 OlderEpoch,
+	const FBox2D& Footprint) const
+{
+	if (!Footprint.bIsValid)
+	{
+		return false;
+	}
+	auto TestPoint = [&](const FVector2D Point)
+	{
+		return HasNewerObservedGeometryOverlapAt(
+			Prop, OlderVisual, OlderEpoch, Point);
+	};
+	const FVector2D Center = Footprint.GetCenter();
+	const FVector2D Corners[] = {
+		Footprint.Min,
+		FVector2D(Footprint.Max.X, Footprint.Min.Y),
+		Footprint.Max,
+		FVector2D(Footprint.Min.X, Footprint.Max.Y)};
+	if (TestPoint(Center))
+	{
+		return true;
+	}
+	for (const FVector2D Corner : Corners)
+	{
+		if (TestPoint(Corner))
+		{
+			return true;
+		}
+	}
+	for (const FPrimitiveGeometrySnapshot& Geometry
+		: CollectNewerGeometrySnapshots(Prop, OlderEpoch))
+	{
+		const FVector LocalCenter = Geometry.LocalBounds.GetCenter();
+		const FVector WorldCenter = Geometry.WorldTransform.TransformPosition(LocalCenter);
+		const FVector2D ProjectedCenter(WorldCenter.X, WorldCenter.Y);
+		if (Footprint.IsInside(ProjectedCenter) && TestPoint(ProjectedCenter))
+		{
+			return true;
+		}
+		for (int32 Edge = 0; Edge < 4; ++Edge)
+		{
+			double Alpha0 = 0.0;
+			double Alpha1 = 0.0;
+			if (!ClipSegmentToGeometryProjection(
+				Geometry, Corners[Edge], Corners[(Edge + 1) % 4], Alpha0, Alpha1))
+			{
+				continue;
+			}
+			const FVector2D Contact = FMath::Lerp(
+				Corners[Edge], Corners[(Edge + 1) % 4],
+				FMath::Clamp((Alpha0 + Alpha1) * 0.5, 0.0, 1.0));
+			if (TestPoint(Contact))
 			{
 				return true;
 			}
@@ -926,6 +1021,10 @@ void ADarkwellMovingPropLabRoom::UpdateHistoricalContributionExclusion(
 	{
 		Visual->SuppressedByCurrentEvidence.Init(false, Size.X * Size.Y);
 	}
+	if (Visual->HardOwnershipFilterGuard.Num() != Size.X * Size.Y)
+	{
+		Visual->HardOwnershipFilterGuard.Init(false, Size.X * Size.Y);
+	}
 	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
 	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
 	for (int32 Y = 0; Y < Size.Y; ++Y)
@@ -933,25 +1032,40 @@ void ADarkwellMovingPropLabRoom::UpdateHistoricalContributionExclusion(
 		for (int32 X = 0; X < Size.X; ++X)
 		{
 			const int32 Index = Y * Size.X + X;
-			bool bSuperseded = false;
-			for (int32 SampleY = 0; SampleY < 3 && !bSuperseded; ++SampleY)
-			{
-				for (int32 SampleX = 0; SampleX < 3 && !bSuperseded; ++SampleX)
-				{
-					const FVector2D Offset(
-						FMath::Lerp(0.001f, 0.999f, SampleX * 0.5f),
-						FMath::Lerp(0.001f, 0.999f, SampleY * 0.5f));
-					bSuperseded = HasNewerObservedGeometryOverlapAt(
-						Prop, *Visual, Record.Epoch,
-						Bounds.Min + Step * (FVector2D(X, Y) + Offset));
-				}
-			}
+			const FVector2D Minimum = Bounds.Min + Step * FVector2D(X, Y);
+			const bool bSuperseded = HasNewerObservedGeometryOverlapWithinFootprint(
+				Prop, *Visual, Record.Epoch, FBox2D(Minimum, Minimum + Step));
 			if (!Visual->SuppressedByCurrentEvidence[Index] && bSuperseded)
 			{
 				// This is a monotonic presentation-ownership decision backed by new
 				// legal present evidence. It does not mark the old cell verified empty
 				// and does not alter D/V/R authority.
 				Visual->SuppressedByCurrentEvidence[Index] = true;
+			}
+		}
+	}
+	// TF_Bilinear has one-texel support. Keep the smooth historical signal, but
+	// zero exactly that filter support around hard current/newer ownership so a
+	// neighbouring stale B value cannot be reconstructed inside owned geometry.
+	for (int32 Y = 0; Y < Size.Y; ++Y)
+	{
+		for (int32 X = 0; X < Size.X; ++X)
+		{
+			if (!Visual->SuppressedByCurrentEvidence[Y * Size.X + X])
+			{
+				continue;
+			}
+			for (int32 DY = -1; DY <= 1; ++DY)
+			{
+				for (int32 DX = -1; DX <= 1; ++DX)
+				{
+					const int32 GuardX = X + DX;
+					const int32 GuardY = Y + DY;
+					if (GuardX >= 0 && GuardY >= 0 && GuardX < Size.X && GuardY < Size.Y)
+					{
+						Visual->HardOwnershipFilterGuard[GuardY * Size.X + GuardX] = true;
+					}
+				}
 			}
 		}
 	}
@@ -1828,6 +1942,10 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 		{
 			Visual.SuppressedByCurrentEvidence.Init(false, Size.X * Size.Y);
 		}
+		if (Visual.HardOwnershipFilterGuard.Num() != Size.X * Size.Y)
+		{
+			Visual.HardOwnershipFilterGuard.Init(false, Size.X * Size.Y);
+		}
 	}
 	const bool bTextureSizeChanged = Visual.Texture.IsValid()
 		&& (Visual.Texture->GetSizeX() != Size.X || Visual.Texture->GetSizeY() != Size.Y);
@@ -1927,11 +2045,11 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
 		return;
 	}
 	if (!Record.bCurrentObservedLocation
-		&& Visual->SuppressedByCurrentEvidence.Num() == Presentation.Num())
+		&& Visual->HardOwnershipFilterGuard.Num() == Presentation.Num())
 	{
 		for (int32 Index = 0; Index < Presentation.Num(); ++Index)
 		{
-			if (Visual->SuppressedByCurrentEvidence[Index])
+			if (Visual->HardOwnershipFilterGuard[Index])
 			{
 				// Current legally discovered geometry owns this world sample. The
 				// historical proxy remains a valid spatial record but contributes no
@@ -2182,6 +2300,59 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 		Visual->CapSamplePoints.Add(FVector2D(Center.X, Center.Y));
 		Visual->CapQuads.Add({A, B, C, D, PrimitiveIndex});
 	};
+	const TArray<FPrimitiveGeometrySnapshot> NewerGeometry = Record.bCurrentObservedLocation
+		? TArray<FPrimitiveGeometrySnapshot>()
+		: CollectNewerGeometrySnapshots(Prop, Record.Epoch);
+	auto AddNewerGridBreakpoints = [&](const FVector2D SegmentStart,
+		const FVector2D SegmentEnd, TArray<double>& Breakpoints)
+	{
+		const FVector2D Delta = SegmentEnd - SegmentStart;
+		for (const FDarkwellSpatialObservationRecord& Candidate : Prop.History.GetRecords())
+		{
+			if (Candidate.Epoch <= Record.Epoch)
+			{
+				continue;
+			}
+			const FBox2D& CandidateBounds = Candidate.SpatialMemory.GetBounds();
+			FIntPoint CandidateSize = Candidate.SpatialMemory.GetSize();
+			if (!Candidate.bCurrentObservedLocation)
+			{
+				CandidateSize *= Darkwell::MovingPropLab::PresentationSamples;
+			}
+			if (!CandidateBounds.bIsValid || CandidateSize.X <= 0 || CandidateSize.Y <= 0)
+			{
+				continue;
+			}
+			if (FMath::Abs(Delta.X) > UE_DOUBLE_SMALL_NUMBER)
+			{
+				for (int32 X = 0; X <= CandidateSize.X; ++X)
+				{
+					const double Coordinate = FMath::Lerp(
+						CandidateBounds.Min.X, CandidateBounds.Max.X,
+						static_cast<double>(X) / CandidateSize.X);
+					const double Alpha = (Coordinate - SegmentStart.X) / Delta.X;
+					if (Alpha > 0.0 && Alpha < 1.0)
+					{
+						Breakpoints.Add(Alpha);
+					}
+				}
+			}
+			if (FMath::Abs(Delta.Y) > UE_DOUBLE_SMALL_NUMBER)
+			{
+				for (int32 Y = 0; Y <= CandidateSize.Y; ++Y)
+				{
+					const double Coordinate = FMath::Lerp(
+						CandidateBounds.Min.Y, CandidateBounds.Max.Y,
+						static_cast<double>(Y) / CandidateSize.Y);
+					const double Alpha = (Coordinate - SegmentStart.Y) / Delta.Y;
+					if (Alpha > 0.0 && Alpha < 1.0)
+					{
+						Breakpoints.Add(Alpha);
+					}
+				}
+			}
+		}
+	};
 	auto AddQuad = [&](const FVector& A, const FVector& B, const FVector& C, const FVector& D,
 		const int32 PrimitiveIndex)
 	{
@@ -2196,69 +2367,101 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 			const FVector Bottom1 = FMath::Lerp(A, B, Alpha1);
 			const FVector Top1 = FMath::Lerp(D, C, Alpha1);
 			const FVector Top0 = FMath::Lerp(D, C, Alpha0);
-			const FVector2D Point(
-				(Bottom0.X + Bottom1.X) * 0.5,
-				(Bottom0.Y + Bottom1.Y) * 0.5);
-			double OldMinZ = FMath::Min(Bottom0.Z, Top0.Z);
-			double OldMaxZ = FMath::Max(Bottom0.Z, Top0.Z);
-			if (Visual->PartGeometry.IsValidIndex(PrimitiveIndex))
+			TArray<double> Breakpoints{0.0, 1.0};
+			if (!Record.bCurrentObservedLocation)
 			{
-				double GeometryMinZ = 0.0;
-				double GeometryMaxZ = 0.0;
-				if (!QueryVerticalInterval(
-					Visual->PartGeometry[PrimitiveIndex], Point,
-					GeometryMinZ, GeometryMaxZ))
+				for (const FPrimitiveGeometrySnapshot& Geometry : NewerGeometry)
+				{
+					double Entry = 0.0;
+					double Exit = 0.0;
+					if (ClipSegmentToGeometryProjection(Geometry,
+						FVector2D(Bottom0), FVector2D(Bottom1), Entry, Exit))
+					{
+						Breakpoints.Add(FMath::Clamp(Entry, 0.0, 1.0));
+						Breakpoints.Add(FMath::Clamp(Exit, 0.0, 1.0));
+					}
+				}
+				AddNewerGridBreakpoints(FVector2D(Bottom0), FVector2D(Bottom1), Breakpoints);
+			}
+			Breakpoints.Sort();
+			for (int32 Index = Breakpoints.Num() - 1; Index > 0; --Index)
+			{
+				if (FMath::IsNearlyEqual(Breakpoints[Index], Breakpoints[Index - 1], 1.0e-7))
+				{
+					Breakpoints.RemoveAt(Index);
+				}
+			}
+			for (int32 Span = 0; Span + 1 < Breakpoints.Num(); ++Span)
+			{
+				const double Span0 = Breakpoints[Span];
+				const double Span1 = Breakpoints[Span + 1];
+				if (Span1 - Span0 <= 1.0e-7)
 				{
 					continue;
 				}
-				OldMinZ = FMath::Max(OldMinZ, GeometryMinZ);
-				OldMaxZ = FMath::Min(OldMaxZ, GeometryMaxZ);
-			}
-			if (OldMaxZ - OldMinZ <= UE_KINDA_SMALL_NUMBER)
-			{
-				continue;
-			}
-			TArray<FVector2D> Remaining{FVector2D(OldMinZ, OldMaxZ)};
-			if (!Record.bCurrentObservedLocation)
-			{
-				TArray<FVector2D> NewerIntervals;
-				CollectNewerOwnedVerticalIntervals(
-					Prop, Record.Epoch, Point, NewerIntervals);
-				for (const FVector2D Newer : NewerIntervals)
+				const FVector SpanBottom0 = FMath::Lerp(Bottom0, Bottom1, Span0);
+				const FVector SpanBottom1 = FMath::Lerp(Bottom0, Bottom1, Span1);
+				const FVector SpanTop0 = FMath::Lerp(Top0, Top1, Span0);
+				const FVector SpanTop1 = FMath::Lerp(Top0, Top1, Span1);
+				const FVector2D Point(FMath::Lerp(
+					FVector2D(SpanBottom0), FVector2D(SpanBottom1), 0.5));
+				double OldMinZ = FMath::Min(SpanBottom0.Z, SpanTop0.Z);
+				double OldMaxZ = FMath::Max(SpanBottom0.Z, SpanTop0.Z);
+				if (Visual->PartGeometry.IsValidIndex(PrimitiveIndex))
 				{
-					TArray<FVector2D> Next;
-					for (const FVector2D Interval : Remaining)
+					double GeometryMinZ = 0.0;
+					double GeometryMaxZ = 0.0;
+					if (!QueryVerticalInterval(Visual->PartGeometry[PrimitiveIndex],
+						Point, GeometryMinZ, GeometryMaxZ))
 					{
-						if (Newer.Y <= Interval.X + UE_KINDA_SMALL_NUMBER
-							|| Newer.X >= Interval.Y - UE_KINDA_SMALL_NUMBER)
-						{
-							Next.Add(Interval);
-							continue;
-						}
-						if (Newer.X > Interval.X + UE_KINDA_SMALL_NUMBER)
-						{
-							Next.Add(FVector2D(Interval.X, FMath::Min(Newer.X, Interval.Y)));
-						}
-						if (Newer.Y < Interval.Y - UE_KINDA_SMALL_NUMBER)
-						{
-							Next.Add(FVector2D(FMath::Max(Newer.Y, Interval.X), Interval.Y));
-						}
+						continue;
 					}
-					Remaining = MoveTemp(Next);
-					if (Remaining.IsEmpty())
+					OldMinZ = FMath::Max(OldMinZ, GeometryMinZ);
+					OldMaxZ = FMath::Min(OldMaxZ, GeometryMaxZ);
+				}
+				if (OldMaxZ - OldMinZ <= UE_KINDA_SMALL_NUMBER)
+				{
+					continue;
+				}
+				TArray<FVector2D> Remaining{FVector2D(OldMinZ, OldMaxZ)};
+				if (!Record.bCurrentObservedLocation)
+				{
+					TArray<FVector2D> NewerIntervals;
+					CollectNewerOwnedVerticalIntervals(Prop, Record.Epoch, Point, NewerIntervals);
+					for (const FVector2D Newer : NewerIntervals)
 					{
-						break;
+						TArray<FVector2D> Next;
+						for (const FVector2D Interval : Remaining)
+						{
+							const double ClipMin = Newer.X
+								- Darkwell::MovingPropLab::RenderOwnershipContactTolerance;
+							const double ClipMax = Newer.Y
+								+ Darkwell::MovingPropLab::RenderOwnershipContactTolerance;
+							if (ClipMax < Interval.X || ClipMin > Interval.Y)
+							{
+								Next.Add(Interval);
+								continue;
+							}
+							if (ClipMin > Interval.X + UE_KINDA_SMALL_NUMBER)
+							{
+								Next.Add(FVector2D(Interval.X, FMath::Min(ClipMin, Interval.Y)));
+							}
+							if (ClipMax < Interval.Y - UE_KINDA_SMALL_NUMBER)
+							{
+								Next.Add(FVector2D(FMath::Max(ClipMax, Interval.X), Interval.Y));
+							}
+						}
+						Remaining = MoveTemp(Next);
 					}
 				}
-			}
-			for (const FVector2D Interval : Remaining)
-			{
-				AppendQuad(
-					FVector(Bottom0.X, Bottom0.Y, Interval.X),
-					FVector(Bottom1.X, Bottom1.Y, Interval.X),
-					FVector(Top1.X, Top1.Y, Interval.Y),
-					FVector(Top0.X, Top0.Y, Interval.Y),
-					PrimitiveIndex);
+				for (const FVector2D Interval : Remaining)
+				{
+					AppendQuad(
+						FVector(SpanBottom0.X, SpanBottom0.Y, Interval.X),
+						FVector(SpanBottom1.X, SpanBottom1.Y, Interval.X),
+						FVector(SpanTop1.X, SpanTop1.Y, Interval.Y),
+						FVector(SpanTop0.X, SpanTop0.Y, Interval.Y), PrimitiveIndex);
+				}
 			}
 		}
 	};

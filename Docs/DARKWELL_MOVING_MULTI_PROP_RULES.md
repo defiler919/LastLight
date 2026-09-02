@@ -2036,3 +2036,39 @@ Host version note: the requested root `D:\UE_5.8` was used throughout, without
 changing the engine or project association. Its actual `Engine/Build/Build.version`
 reports **5.8.2, CL 56702186**, despite the repository guidance saying 5.8.1.
 These results describe that installed home binary, not an unperformed 5.8.1 run.
+
+### Final handoff and next manual retest
+
+Branch: `codex/darkwell-prop-memory-gameplay-lab`. Checkpoints A `6761cf3`,
+B `b8958e0`, C `6199a7b`, D `a6e70be`; each was pushed before handoff. The final
+E documentation commit SHA is reported in the Codex reply (not self-referenced
+inside its own tree). Starting candidate remains `93eb6e4`; correctness stable
+`stable/moving-history-grid-v2-20260902` remains `404a582`, untouched.
+
+Final status: **PARTIAL — READY_FOR_USER_FAST_SWEEP_RETEST**.
+Automation is not user acceptance. The bounded fixed-origin empty-evidence
+scope and changed-view event spikes above remain explicit limitations.
+
+Tomorrow, fast-forward this branch and run the normal Lab map in D3D12/SM6.
+Confirm HUD `HISTORY GRID V2`, `MODE 2`, `SpatialEvidenceOnly`, `ENEMY 0`.
+Fully observe VISIBLE ROTATE at 0 degrees; use F; look away; briefly see a
+middle-angle fragment; look away until hidden completion at 180 degrees.
+Then sweep across the old fragment and final cabinet **as quickly as possible,
+immediately continuing away without holding the final view**. Wait for the
+unchanged .20-second fade. The final cabinet may now be gray, but previously
+proven-empty middle wings must not return. Repeat slowly, then at 30/60/120/144
+fps and in Mode 1; also verify a wall-hidden old fragment remains and a real
+partial empty cut still has a cap. Observe responsiveness during the sweep,
+not only while standing still. If a survivor remains, retain the exact screen
+sequence plus nearby `ROTATION_FRAME`, fine-state and runtime telemetry.
+
+Git/LFS closure uses `git diff --check`, clean status, no `.uproject` or binary
+asset changes, `git lfs status`, `git lfs fsck`, and equality of local HEAD,
+upstream and `git ls-remote` branch SHA. Generated reports/screenshots remain
+under ignored Saved; binaries, Intermediate and DDC are not committed.
+Final checks and the E SHA are recorded in the user-facing handoff.
+
+The user's direct latest message **explicitly authorizes shutdown**, overriding
+the pasted brief's earlier default of leaving Windows on. After all commits
+are pushed and verification processes have exited, request a delayed normal
+Windows shutdown without forcibly discarding unsaved work in unrelated apps.

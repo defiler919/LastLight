@@ -2049,7 +2049,8 @@ namespace
  };
 
  FDarkwellResidualOwnershipRouteResult RunResidualOwnershipRoute(
-  FAutomationTestBase& Test,const bool bCheckFourViews,const int32 Mode=2,const bool bLateObservation=false)
+  FAutomationTestBase& Test,const bool bCheckFourViews,const int32 Mode=2,const bool bLateObservation=false,
+  const int32 ExtraHiddenFrames=0,const float PlayerY=70)
  {
   using namespace Darkwell::SightWeaveAdapterTests;
   FDarkwellResidualOwnershipRouteResult Result;
@@ -2070,11 +2071,11 @@ namespace
   const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
   auto* Control=Room->GetControlForTesting(EDarkwellMovingPropLabControlKind::VisibleRotate);
   if(!Test.TestNotNull(TEXT("Residual route F control exists"),Control))return Result;
-  Player->SetActorLocation(FVector(-300,70,92));Player->SetActorRotation(FRotator(0,90,0));Step(90);
+  Player->SetActorLocation(FVector(-300,PlayerY,92));Player->SetActorRotation(FRotator(0,90,0));Step(90);
   World->UpdateWorldComponents(true,false);Player->GetInteractionComponent()->UpdateFocusedActorFromWorld();
   Test.TestEqual(TEXT("Residual route focuses VISIBLE ROTATE"),Player->GetInteractionComponent()->GetFocusedActor(),static_cast<AActor*>(Control));
   Test.TestTrue(TEXT("Residual route starts through F"),Player->GetInteractionComponent()->TryInteract());
-  Player->SetActorRotation(FRotator(0,-90,0));Step(bLateObservation ? 190 : 130);
+  Player->SetActorRotation(FRotator(0,-90,0));Step((bLateObservation ? 190 : 130)+ExtraHiddenFrames);
   bool bPartial=false;
   for(int32 Yaw=150;Yaw>=130&&!bPartial;--Yaw)
   {
@@ -2104,6 +2105,9 @@ namespace
   Result.FalseOccupied=Room->GetFalseOccupiedHistoryCountForTesting(RotateId);
   Result.FinalProxies=Room->GetVisibleHistoricalProxyCountForTesting(RotateId);
   Result.FinalCaps=Room->GetVisibleHistoricalCapCountForTesting(RotateId);
+  Test.AddInfo(FString::Printf(TEXT("RESIDUAL_RECHECK hidden_extra=%d player_y=%.1f sealed_yaw=%.4f proxies=%d caps=%d %s"),
+   ExtraHiddenFrames,PlayerY,Room->GetNewestHistoricalYawForTesting(RotateId),Result.FinalProxies,Result.FinalCaps,
+   *Room->GetResidualFragmentTelemetryForTesting(RotateId)));
   Test.AddInfo(Room->GetFalseOccupiedHistoryTelemetryForTesting(RotateId));
   if(bCheckFourViews)
   {
@@ -2197,6 +2201,24 @@ bool FDarkwellCurrentOwnedResidualZeroTest::RunTest(const FString&)
  TestEqual(TEXT("Legally observed empty holes inside aggregate bounds must not retain stale surfaces"),Result.FalseOccupied,0);
  TestEqual(TEXT("Full legal recheck leaves no rendered stale proxy"),Result.FinalProxies,0);
  TestEqual(TEXT("Full legal recheck leaves no rendered stale cap"),Result.FinalCaps,0);
+ const auto GpuPose=RunResidualOwnershipRoute(*this,true,2,true,15,100);
+ TestEqual(TEXT("Later GPU-like pose has zero owned surface contact"),GpuPose.MaxSurfaceContact,0);
+ TestEqual(TEXT("Later GPU-like pose has zero owned cap contact"),GpuPose.MaxCapContact,0);
+ TestEqual(TEXT("Later GPU-like pose has zero filtered ownership leakage"),GpuPose.MaxFilterLeak,0);
+ TestEqual(TEXT("Later GPU-like full recheck has no remaining proxy"),GpuPose.FinalProxies,0);
+ TestEqual(TEXT("Later GPU-like full recheck has no remaining cap"),GpuPose.FinalCaps,0);
+ const auto BoundaryPose=RunResidualOwnershipRoute(*this,true,2,true,20,100);
+ TestEqual(TEXT("GPU boundary pose has zero owned surface contact"),BoundaryPose.MaxSurfaceContact,0);
+ TestEqual(TEXT("GPU boundary pose has zero owned cap contact"),BoundaryPose.MaxCapContact,0);
+ TestEqual(TEXT("GPU boundary pose has zero filtered ownership leakage"),BoundaryPose.MaxFilterLeak,0);
+ TestEqual(TEXT("GPU boundary pose full recheck has no remaining proxy"),BoundaryPose.FinalProxies,0);
+ TestEqual(TEXT("GPU boundary pose full recheck has no remaining cap"),BoundaryPose.FinalCaps,0);
+ const auto LastEdgePose=RunResidualOwnershipRoute(*this,true,2,true,23,100);
+ TestEqual(TEXT("Final edge-pose has zero owned surface contact"),LastEdgePose.MaxSurfaceContact,0);
+ TestEqual(TEXT("Final edge-pose has zero owned cap contact"),LastEdgePose.MaxCapContact,0);
+ TestEqual(TEXT("Final edge-pose has zero filtered ownership leakage"),LastEdgePose.MaxFilterLeak,0);
+ TestEqual(TEXT("Final edge-pose full recheck has no remaining proxy"),LastEdgePose.FinalProxies,0);
+ TestEqual(TEXT("Final edge-pose full recheck has no remaining cap"),LastEdgePose.FinalCaps,0);
  return true;
 }
 

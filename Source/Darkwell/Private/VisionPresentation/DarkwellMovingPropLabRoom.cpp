@@ -3878,7 +3878,34 @@ FString ADarkwellMovingPropLabRoom::GetResidualFragmentTelemetryForTesting(
 	for (const auto& Pair : Prop->Visuals)
 	{
 		const auto* Record = Prop->History.FindRecord(Pair.Key);
-		if (!Record || Record->bCurrentObservedLocation || !Pair.Value.Cap.IsValid() || !Pair.Value.Cap->IsVisible()) continue;
+		if (!Record || Record->bCurrentObservedLocation || Pair.Value.bPresentationRetired) continue;
+		const FRecordVisual& Visual = Pair.Value;
+		const FIntPoint Coarse = Record->SpatialMemory.GetSize();
+		const int32 Samples = Darkwell::MovingPropLab::PresentationSamples;
+		const FIntPoint Fine = Coarse * Samples;
+		const FBox2D& Bounds = Record->SpatialMemory.GetBounds();
+		const FCoverageSnapshot Coverage = SampleConservativeCoverage(Bounds, Record->Epoch, Record->SpatialMemory.GetGeneration());
+		int32 Reported = 0;
+		for (int32 I = 0; I < Visual.SubmittedPresentation.Num() && Reported < 32; ++I)
+		{
+			const FLinearColor Submitted = Visual.SubmittedPresentation[I];
+			if (Submitted.B <= 0.0f || Submitted.A == 0.0f) continue;
+			const int32 CellIndex = (I / Fine.X / Samples) * Coarse.X + I % Fine.X / Samples;
+			const FVector2D Point = Bounds.Min + Bounds.GetSize() * FVector2D((I % Fine.X + .5) / Fine.X, (I / Fine.X + .5) / Fine.Y);
+			for (const auto& Geometry : Visual.PartGeometry)
+			{
+				double MinZ, MaxZ;
+				if (!QueryVerticalInterval(Geometry, Point, MinZ, MaxZ)) continue;
+				const auto& Cell = Record->SpatialMemory.GetCells()[CellIndex];
+				Result += FString::Printf(TEXT("\nepoch=%u primitive=%d type=STALE_SURFACE world=(%.4f,%.4f,%.4f..%.4f) legal=%.3f D=%.3f V=%.3f R=%.3f smooth=%.3f hard=%.0f material=M_MovingAccumulatedMemory component=%s retired=0"),
+					Pair.Key, Geometry.PrimitiveIndex, Point.X, Point.Y, MinZ, MaxZ,
+					Coverage.Values.IsValidIndex(CellIndex) ? Coverage.Values[CellIndex] : 0.0f,
+					Cell.DiscoveredPresent, Cell.VerifiedEmpty, Cell.RemainingStale, Submitted.B, Submitted.A, *GetNameSafe(Visual.Proxy.Get()));
+				++Reported;
+				break;
+			}
+		}
+		if (!Visual.Cap.IsValid() || !Visual.Cap->IsVisible()) continue;
 		for (const auto& Q : Pair.Value.CapQuads)
 		{
 			const FVector C = (Q.A+Q.B+Q.C+Q.D)*.25;

@@ -1129,3 +1129,137 @@ Corrected real-texture shader readback checked 131,072 pixels across two
 runtime textures: 3,339 blocked-positive-history samples and 66,934 allowed
 positive samples, zero errors. Final route/GPU and full regression are pending
 at this checkpoint; this is not user acceptance or final readiness.
+
+### Checkpoint C evidence ledger (2026-09-02)
+
+The pushed runtime correction is
+`66ba4f70d7533c5439f0d5477a28f148ffb16ddc`. Subsequent source changes add
+diagnostics only (up to 32 surviving surface samples per record, including
+world span, D/V/R, legal coverage, smooth signal, hard gate and component).
+Tests retain the early and late routes and add later observations near the
+GPU pose; no old failure sample or original assertion was removed.
+
+Mode classification remains **BUG_ALSO_REPRODUCED_MODE1**, specifically for
+the moving Lab selector. `DarkwellPropGameplayLab.cpp` selects fixed reveal
+for `bSpatialHistoryManaged`, and `BindSpatialState` sets
+`FixedRevealEnabled=1`. `DarkwellMovingPropLabRoom.cpp` shares history,
+proxy geometry, cap builder, suppression and material binding between mode
+selectors; the mode CVar is used for reset selection/HUD, not an independent
+moving rendering branch. Even selector 0 is not an independent moving-room
+control path. In contrast, `DarkwellManualStaleRoom::UpdateStaleCap` explicitly
+rejects `Mode != 2`, and its accumulated material binding is mode-2-only.
+Do not generalize this reproduction to the ordinary/manual mode-1 renderer.
+Those frozen manual paths and assets are unchanged.
+
+Final completed GPU routes use D3D12 / SM6 on the company RTX 4060. Original
+screenshots were opened, including near views and consecutive frames:
+
+| Selector | Saved directory suffix | Actual PNG count | Backbuffer | PNG including Editor UI | Shader samples |
+| --- | --- | ---: | --- | --- | ---: |
+| 2 | `GPU_Mode2_20260902_150751` | 126 | 1526x549 | 1920x1032 | 131,072 |
+| 1 | `GPU_Mode1_20260902_150951` | 126 | 1526x549 | 1920x1032 | 131,072 |
+
+Both complete Scene A and Scene B. Scene A full recheck has proxies=0,
+caps=0, surface contact=0, cap contact=0 and filtered ownership leak=0;
+four near camera angles and four player positions are retained. Scene B's
+real offscreen A-to-B movement followed by legal empty scanning produces a
+solid dark-gray cap, especially visible in `0123_B_cap_camera_west00000.png`
+and `0124_B_cap_camera_northwest00000.png`. The original southeast angle has
+the unchanged shelf in front; it alone was not sufficient visual evidence.
+Temporary stale-surface hiding is a separately named attribution frame and
+is always restored; it is not used as passing visual evidence.
+
+The GPU routes use the same scripted controls, player/camera positions and
+scan steps. They are **not frame-locked deterministic replay**: the sealed
+intermediate yaws were 127.28 degrees (mode 2) and 127.69 (mode 1).
+The native mode comparison uses identical fixed-step timing. No 1080p/1440p
+performance claim is made for these Editor captures; AA, TSR, dither,
+ShadowReplace and screen-percentage settings were not modified by this work.
+
+GPU final-gate readback uses actual proxy texture inputs and the loaded
+material's final HLSL expression. Mode 2: 3,413 blocked samples with positive
+smooth history and 67,069 allowed positive samples. Mode 1: 3,488 and 67,085.
+Across 262,144 readback samples, blocked output is exactly zero and allowed
+history is preserved within half-float readback tolerance; zero errors.
+This supplements CPU masks rather than assuming those masks prove GPU output.
+
+Preserved additional failure: `CheckpointC_GPU_Mode2.log` /
+`GPU_Mode2_20260902_150505` stopped at a deliberately stronger assertion,
+with one historical proxy still flagged visible after full current coverage
+(sealed yaw 127.95 degrees), caps=0, owned contacts=0 and filter leaks=0.
+The subsequent expanded diagnostic route did not reproduce that surviving
+proxy. This earlier run is not counted as successful GPU evidence, nor is
+its unexplained retained resource erased from the record. Native neighboring
+pose checks are being run before deciding the final handoff status.
+
+All evidence paths above are relative to
+`Saved/PropGameplayLab/MovingMulti/CapResidual/`; original failures, generated
+images and automation reports remain untracked. Material ownership is still
+the existing conservative XY domain, not arbitrary volumetric geometry.
+
+### Handoff result
+
+**PARTIAL — READY_FOR_USER_CAP_AND_RESIDUAL_RETEST**
+
+This means ready for a targeted user retest, not that every possible pose has
+been proven clean. User acceptance is still pending. In particular the
+127.95-degree preliminary GPU resource-count failure above remains a recorded
+limitation: its exact surviving proxy was not attributed before that run
+stopped. Do not describe it as a proven false positive or silently replace it
+with the two successful GPU runs.
+
+Final full regression: `CapResidual_CheckpointC_Full/index.json`,
+54/54 success (33 clean, 21 with warnings), 0 failed, 0 not-run,
+656.834 seconds. Command:
+`Automation RunTests Darkwell.PropLab+Darkwell.FogVisual+Darkwell.SightWeave.M6P1`.
+This includes all MovingRules, both mode selectors, positive cap controls,
+fixed geometry, symmetric gray-cap material, hidden shadows, cycles, normal
+Mode 0/1/manual behavior, FogVisual and M6P1.
+
+The same residual test was then extended without dropping either original
+pose and rerun separately in `CapResidual_CheckpointC_Boundary/index.json`:
+1/1 clean success, 0 warnings/failed/not-run, 149.845 seconds. All four sealed
+poses (112.6198, 122.5203, 126.8698, 129.4285 degrees) finish with proxies=0,
+caps=0 and zero owned contact/filter leakage, including four-view checks.
+These are deterministic neighboring-pose checks, not an assertion that the
+earlier exact 127.95 GPU event was reproduced. No further timing retries or
+tolerance changes were made after this bounded check.
+
+Standard target build before the full suite: `CheckpointC_FinalBuild.log`,
+5/5 actions, 22.63 seconds, succeeded. The last standard build after the test
+extension: `CheckpointC_BoundaryTestsBuild.log`, 4/4 actions, 18.41 seconds,
+succeeded. Both use `Scripts/BuildEditor.ps1 -Configuration Development
+-EngineRoot D:\UE_5.8`; these are normal incremental full-target builds,
+not Live Coding. The company engine identifies itself as
+5.8.2-56702186 (despite the older 5.8.1 guidance); no engine was upgraded.
+
+Retained warnings: MSVC 14.51 versus UE's preferred 14.50, existing UE header
+deprecations, connectivity probe timeouts, expected duplicate-ID rejection
+and capacity-limit test warnings. Fatal/assert/ensure/device-crash scan is
+zero for the final full suite and both completed GPU logs. Each of those
+logs also contains 13 `LogAutomationTest: Error: Condition failed` lines
+during engine initialization, before the requested tests/PIE; they are
+explicitly retained rather than reporting a literally error-free log.
+Full-suite automation report failures are zero. Failed shader-probe and
+earlier residual logs are separate and are not included in the passing count.
+
+No source changes were made to D/V/R, SightWeave, normal/manual presentation,
+production defaults, original geometry or frozen material assets. No maps
+were saved. `Darkwell.uproject` was never staged or edited: its actual
+pre-existing local diff is a missing final newline, not a changed GUID.
+Screenshots/video/Saved/Binaries/Intermediate/DDC/AutomationReports stay out
+of Git. The new moving-only material was created through Editor Python and
+pushed via Git LFS in checkpoint B.
+
+User retest (no console): open `L_ProjectFogPropGameplayLab`, click Play,
+use the labeled `VISIBLE ROTATE` F mechanism. Fully observe the 0-degree
+cabinet, start rotation and turn away during the one-second delay, briefly
+observe an edge during the later part of rotation, turn away again, then
+slowly reacquire the completed 180-degree cabinet. Inspect top, handle,
+corners and both sides. Also stop with a genuinely partial historical cut:
+the remaining gray body must have a dark-gray cap. For the independent empty
+cut, use `OFFSCREEN A -> B`, walk behind the wall onto the orange pressure
+plate, and return to scan old A. Use only the labeled reset mechanism between
+fresh runs. Retest the later-intermediate-angle case especially; reject any
+top fragment, hollow cut or duplicated surface. Existing masked/dither
+checker visuals during partial live reveal remain outside this task.

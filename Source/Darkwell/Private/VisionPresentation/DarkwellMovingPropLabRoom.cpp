@@ -2300,6 +2300,8 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	}
 	Visual->CapSignature = Signature;
 	FDynamicMesh3 Mesh;
+	Visual->CapExpected = Visual->CapGenerated = Visual->CapClipped = 0;
+	Visual->MissingHistoricalCuts = 0;
 	Visual->CapSamplePoints.Reset();
 	Visual->CapQuads.Reset();
 	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
@@ -2390,6 +2392,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	auto AddQuad = [&](const FVector& A, const FVector& B, const FVector& C, const FVector& D,
 		const int32 PrimitiveIndex)
 	{
+		++Visual->CapGenerated;
 		for (int32 Segment = 0; Segment < Darkwell::MovingPropLab::PresentationSamples;
 			++Segment)
 		{
@@ -2489,6 +2492,10 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 						}
 						Remaining = MoveTemp(Next);
 					}
+					if (Remaining.Num() != 1 || Remaining[0] != FVector2D(OldMinZ, OldMaxZ))
+					{
+						++Visual->CapClipped;
+					}
 				}
 				for (const FVector2D Interval : Remaining)
 				{
@@ -2535,6 +2542,23 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	{
 		for (int32 X = 0; X < Size.X; ++X)
 		{
+			// Independent positive diagnostic: a sealed partial discovery is still
+			// a real exposed history boundary, even without VerifiedEmpty evidence.
+			const auto& Cell = Cells[Y * Size.X + X];
+			if (bAbsent && Cell.InitialRemembered > 0 && Cell.VerifiedEmpty == 0)
+			{
+				for (const FIntPoint Offset : {FIntPoint(-1,0), FIntPoint(1,0), FIntPoint(0,-1), FIntPoint(0,1)})
+				{
+					const int32 NX = X + Offset.X, NY = Y + Offset.Y;
+					if (NX < 0 || NY < 0 || NX >= Size.X || NY >= Size.Y) continue;
+					const auto& Neighbor = Cells[NY * Size.X + NX];
+					if (Neighbor.InitialRemembered == 0 || Neighbor.VerifiedEmpty > 0)
+					{
+						++Visual->CapExpected;
+						Visual->MissingHistoricalCuts += !IsSubmitted(X, Y) || !IsCut(NX, NY);
+					}
+				}
+			}
 			if (!IsSubmitted(X, Y)) continue;
 			const double X0 = Bounds.Min.X + X * Step.X;
 			const double X1 = X0 + Step.X;
@@ -3730,6 +3754,94 @@ FString ADarkwellMovingPropLabRoom::Get3DOwnershipTelemetryForTesting(
 		Prop->ObservationEpisode,
 		Prop->Actual.IsValid() ? *Prop->Actual->GetActorTransform().ToHumanReadableString()
 			: TEXT("NONE"));
+}
+
+FString ADarkwellMovingPropLabRoom::GetFalseOccupiedHistoryTelemetryForTesting(FName StableId) const
+{
+	FString Result;
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	if (!Prop) return Result;
+	for (const auto& Record : Prop->History.GetRecords())
+	{
+		if (Record.bCurrentObservedLocation) continue;
+		const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
+		if (!Visual || Visual->bPresentationRetired) continue;
+		const auto Coverage = SampleConservativeCoverage(Record.SpatialMemory.GetBounds(), Record.Epoch, Record.SpatialMemory.GetGeneration());
+		if (!Coverage.bValid) continue;
+		const FIntPoint Size = Record.SpatialMemory.GetSize();
+		const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
+		for (int32 I = 0; I < Coverage.Values.Num(); ++I)
+		{
+			const auto& Cell = Record.SpatialMemory.GetCells()[I];
+			if (Coverage.Values[I] < FDarkwellSpatialPropMemory::LegalCoverage || Cell.StaleOpacity <= 0) continue;
+			const FVector2D Point = Bounds.Min + Bounds.GetSize() * FVector2D((I % Size.X + .5) / Size.X, (I / Size.X + .5) / Size.Y);
+			if (!IsOccupiedByActual(Point, NAME_None)) continue;
+			bool bOccupied = false;
+			for (const auto& Pair : Tracked)
+				if (Pair.Value.bExists && Pair.Value.Actual.IsValid())
+					for (const auto& Geometry : ActualPartGeometry(*Pair.Value.Actual.Get()))
+					{
+						double MinZ, MaxZ;
+						bOccupied |= QueryVerticalInterval(Geometry, Point, MinZ, MaxZ);
+					}
+			if (bOccupied) continue;
+			for (const auto& Geometry : Visual->PartGeometry)
+			{
+				double MinZ, MaxZ;
+				if (!QueryVerticalInterval(Geometry, Point, MinZ, MaxZ)) continue;
+				Result += FString::Printf(TEXT("epoch=%u primitive=%d type=STALE_SURFACE world=(%.4f,%.4f,%.4f..%.4f) legal=%.3f D=%.3f V=%.3f R=%.3f opacity=%.3f occupancy=AABB_FALSE_POSITIVE newer3D=0 material=M_ManualAccumulatedMemory component=%s retired=0;\n"),
+					Record.Epoch, Geometry.PrimitiveIndex, Point.X, Point.Y, MinZ, MaxZ, Coverage.Values[I],
+					Cell.DiscoveredPresent, Cell.VerifiedEmpty, Cell.RemainingStale, Cell.StaleOpacity, *GetNameSafe(Visual->Proxy.Get()));
+			}
+		}
+	}
+	return Result;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetFalseOccupiedHistoryCountForTesting(FName StableId) const
+{
+	TArray<FString> Lines;
+	GetFalseOccupiedHistoryTelemetryForTesting(StableId).ParseIntoArrayLines(Lines);
+	return Lines.Num();
+}
+
+int32 ADarkwellMovingPropLabRoom::GetMissingHistoricalCutCountForTesting(FName StableId) const
+{
+	int32 Count = 0;
+	if (const FTrackedProp* Prop = Tracked.Find(StableId))
+		for (const auto& Pair : Prop->Visuals) Count += Pair.Value.MissingHistoricalCuts;
+	return Count;
+}
+
+int32 ADarkwellMovingPropLabRoom::GetCapVerticesOutsideSourceForTesting(FName StableId) const
+{
+	int32 Count = 0;
+	if (const FTrackedProp* Prop = Tracked.Find(StableId))
+		for (const auto& Pair : Prop->Visuals)
+			for (const FCapQuadSnapshot& Quad : Pair.Value.CapQuads)
+			{
+				if (!Pair.Value.PartGeometry.IsValidIndex(Quad.PrimitiveIndex)) continue;
+				const auto& Part = Pair.Value.PartGeometry[Quad.PrimitiveIndex];
+				for (const FVector Point : {Quad.A, Quad.B, Quad.C, Quad.D})
+					Count += !Part.LocalBounds.ExpandBy(0.0001).IsInsideOrOn(
+						Part.WorldTransform.InverseTransformPosition(Point));
+			}
+	return Count;
+}
+
+FString ADarkwellMovingPropLabRoom::GetCapLifecycleTelemetryForTesting(FName StableId) const
+{
+	FString Result;
+	if (const FTrackedProp* Prop = Tracked.Find(StableId))
+		for (const auto& Pair : Prop->Visuals)
+		{
+			const FRecordVisual& V = Pair.Value;
+			Result += FString::Printf(TEXT("epoch=%u CAP_EXPECTED=%d CAP_GENERATED=%d CAP_CLIPPED=%d CAP_RENDERED=%d missing_candidate=%d retired=%d component=%s; "),
+				Pair.Key, V.CapExpected, V.CapGenerated, V.CapClipped,
+				V.Cap.IsValid() && V.Cap->IsVisible() ? V.CapTriangles : 0,
+				V.MissingHistoricalCuts, V.bPresentationRetired, *GetNameSafe(V.Cap.Get()));
+		}
+	return Result;
 }
 
 FString ADarkwellMovingPropLabRoom::GetResidualFragmentTelemetryForTesting(

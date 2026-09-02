@@ -2039,10 +2039,15 @@ namespace
   int32 MaxCapContact=0;
   int32 MaxFilterLeak=0;
   int32 ViewsChecked=0;
+  int32 MissingCuts=0;
+  int32 OutsideSource=0;
+  int32 VisibleCaps=0;
+  int32 Records=0;
+  int32 FalseOccupied=0;
  };
 
  FDarkwellResidualOwnershipRouteResult RunResidualOwnershipRoute(
-  FAutomationTestBase& Test,const bool bCheckFourViews)
+  FAutomationTestBase& Test,const bool bCheckFourViews,const int32 Mode=2,const bool bLateObservation=false)
  {
   using namespace Darkwell::SightWeaveAdapterTests;
   FDarkwellResidualOwnershipRouteResult Result;
@@ -2054,6 +2059,10 @@ namespace
   if(!Test.TestNotNull(TEXT("Residual route Lab exists"),Room)||!Player||!Adapter)return Result;
   Test.TestTrue(TEXT("Residual route authority"),Adapter->RequestSightWeaveAuthority(Fixture));
   Test.TestTrue(TEXT("Residual route reset"),Room->ResetRoom(Player));
+  IConsoleVariable* PresentationMode=IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ProjectFogVisual.PropPresentationMode"));
+  const int32 PreviousMode=PresentationMode->GetInt();
+  PresentationMode->Set(Mode,ECVF_SetByConsole);
+  Test.TestEqual(TEXT("Mode selector really accepted requested value"),PresentationMode->GetInt(),Mode);
   auto Step=[&](int32 Frames=1){for(int32 Frame=0;Frame<Frames;++Frame)
    {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
   const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
@@ -2063,7 +2072,7 @@ namespace
   World->UpdateWorldComponents(true,false);Player->GetInteractionComponent()->UpdateFocusedActorFromWorld();
   Test.TestEqual(TEXT("Residual route focuses VISIBLE ROTATE"),Player->GetInteractionComponent()->GetFocusedActor(),static_cast<AActor*>(Control));
   Test.TestTrue(TEXT("Residual route starts through F"),Player->GetInteractionComponent()->TryInteract());
-  Player->SetActorRotation(FRotator(0,-90,0));Step(130);
+  Player->SetActorRotation(FRotator(0,-90,0));Step(bLateObservation ? 190 : 130);
   bool bPartial=false;
   for(int32 Yaw=150;Yaw>=130&&!bPartial;--Yaw)
   {
@@ -2073,16 +2082,25 @@ namespace
   }
   Test.TestTrue(TEXT("Residual route creates a partial intermediate epoch"),bPartial);
   Step(4);Player->SetActorRotation(FRotator(0,-90,0));Step(303);
+  Result.MissingCuts=Room->GetMissingHistoricalCutCountForTesting(RotateId);
+  Result.OutsideSource=Room->GetCapVerticesOutsideSourceForTesting(RotateId);
+  Result.VisibleCaps=Room->GetVisibleHistoricalCapCountForTesting(RotateId);
+  Result.Records=Room->GetSpatialRecordCount(RotateId);
+  Test.AddInfo(FString::Printf(TEXT("MODE=%d %s"),Mode,*Room->GetCapLifecycleTelemetryForTesting(RotateId)));
   auto Accumulate=[&]()
   {
    Result.MaxSurfaceContact=FMath::Max(Result.MaxSurfaceContact,Room->GetCurrentRenderContactStaleSurfaceForTesting(RotateId));
    Result.MaxCapContact=FMath::Max(Result.MaxCapContact,Room->GetCurrentRenderContactStaleCapForTesting(RotateId));
    Result.MaxFilterLeak=FMath::Max(Result.MaxFilterLeak,Room->GetHardOwnershipFilterLeakForTesting(RotateId));
+   Result.OutsideSource=FMath::Max(Result.OutsideSource,Room->GetCapVerticesOutsideSourceForTesting(RotateId));
   };
   for(int32 Yaw=155;Yaw>=90;--Yaw)
   {
    Player->SetActorRotation(FRotator(0,float(Yaw),0));Step(2);Accumulate();
   }
+  Step(30);
+  Result.FalseOccupied=Room->GetFalseOccupiedHistoryCountForTesting(RotateId);
+  Test.AddInfo(Room->GetFalseOccupiedHistoryTelemetryForTesting(RotateId));
   if(bCheckFourViews)
   {
    struct FView { FVector Location; float Yaw; };
@@ -2096,8 +2114,47 @@ namespace
   Test.AddInfo(FString::Printf(TEXT("views=%d surface_contact=%d cap_contact=%d filter_leak=%d telemetry=%s"),
    Result.ViewsChecked,Result.MaxSurfaceContact,Result.MaxCapContact,Result.MaxFilterLeak,
    *Room->GetResidualFragmentTelemetryForTesting(RotateId)));
+  PresentationMode->Set(PreviousMode,ECVF_SetByConsole);
   Fixture->Destroy();return Result;
  }
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHistoricalCapLifecycleTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.ValidHistoricalCapSurvivesOwnershipClipping", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellHistoricalCapLifecycleTest::RunTest(const FString&)
+{
+ const auto Result=RunResidualOwnershipRoute(*this,false);
+ TestEqual(TEXT("Sealed real partial discovery must not lose its cut candidate"),Result.MissingCuts,0);
+ TestTrue(TEXT("Hidden partial history retains a rendered cap"),Result.VisibleCaps>0);
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellCurrentOwnedResidualZeroTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.CurrentOwnedResidualZero", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellCurrentOwnedResidualZeroTest::RunTest(const FString&)
+{
+ const auto Result=RunResidualOwnershipRoute(*this,true,2,true);
+ TestEqual(TEXT("Cap fragments must never protrude outside their original source primitive"),Result.OutsideSource,0);
+ TestEqual(TEXT("Current-owned stale surface is zero"),Result.MaxSurfaceContact,0);
+ TestEqual(TEXT("Current-owned stale cap is zero"),Result.MaxCapContact,0);
+ TestEqual(TEXT("Legally observed empty holes inside aggregate bounds must not retain stale surfaces"),Result.FalseOccupied,0);
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMode1Mode2ComparisonTest,
+ "Darkwell.PropLab.MovingRules.InWorldControls.Mode1Mode2Comparison", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellMode1Mode2ComparisonTest::RunTest(const FString&)
+{
+ const auto Mode1=RunResidualOwnershipRoute(*this,false,1,true);
+ const auto Mode2=RunResidualOwnershipRoute(*this,false,2,true);
+ TestEqual(TEXT("Moving Lab routes both CVar values through shared spatial history"),Mode1.Records,Mode2.Records);
+ TestEqual(TEXT("Moving Lab cap path is shared, unlike manual-room mode 1"),Mode1.VisibleCaps,Mode2.VisibleCaps);
+ TestEqual(TEXT("Same cap loss is reproduced by the mode 1 and 2 selectors"),Mode1.MissingCuts,Mode2.MissingCuts);
+ TestEqual(TEXT("Same geometry residual diagnostic in both selectors"),Mode1.OutsideSource,Mode2.OutsideSource);
+ TestEqual(TEXT("Same false occupancy residual diagnostic in both selectors"),Mode1.FalseOccupied,Mode2.FalseOccupied);
+ AddInfo(FString::Printf(TEXT("MOVING_LAB_SHARED_PATH Mode1 missing=%d outside=%d caps=%d; Mode2 missing=%d outside=%d caps=%d"),
+  Mode1.MissingCuts,Mode1.OutsideSource,Mode1.VisibleCaps,Mode2.MissingCuts,Mode2.OutsideSource,Mode2.VisibleCaps));
+ return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHardOwnershipFilteringTest,

@@ -133,6 +133,11 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetHardOwnershipFilterLeakForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString Get3DOwnershipTelemetryForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetResidualFragmentTelemetryForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetCapLifecycleTelemetryForTesting(FName StableId) const;
+	int32 GetMissingHistoricalCutCountForTesting(FName StableId) const;
+	int32 GetCapVerticesOutsideSourceForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetFalseOccupiedHistoryCountForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetFalseOccupiedHistoryTelemetryForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetNewestHistoricalDiscoveredCellCountForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") int32 GetNewestHistoricalCellCountForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") float GetLastLegalCoverageRatioForTesting(FName StableId) const;
@@ -183,6 +188,10 @@ private:
 		uint64 CapSignature = 0;
 		uint64 TextureSignature = 0;
 		int32 CapTriangles = 0;
+		int32 CapExpected = 0;
+		int32 CapGenerated = 0;
+		int32 CapClipped = 0;
+		int32 MissingHistoricalCuts = 0;
 		int32 ProxyCreationCount = 0;
 		int32 TextureCreationCount = 0;
 		int32 TextureUploadCount = 0;

@@ -957,3 +957,115 @@ Final state is **PARTIAL — READY_FOR_USER_ROTATED_EDGE_SLIVER_RETEST**. In
 
 The user has not accepted this edge correction yet. The DitherTemporalAA
 checker pattern during partial masked reveal is explicitly outside this fix.
+
+## 2026-09-02 cap-positive / current-residual follow-up (in progress)
+
+The new user PIE result **FAILS** the `5038cf82a79515cd64387e9ac5976201b6aec28b`
+checkpoint: a legitimate historical cut can be hollow, and a stable small
+stale-looking fragment remains above the final current cabinet. The previous
+49/49 automation and GPU claims do not supersede this user result. After
+`git fetch origin`, the branch, local HEAD, upstream, and remote were confirmed
+at that same SHA. No branch change or history rewrite was performed.
+
+Source audit findings below are hypotheses/incomplete evidence, not a claim
+that either user fragment has been conclusively attributed:
+
+- `UpdateRecordCap` loses the partial-discovery cut classification when a
+  current record is sealed: the absent branch requires `InitialRemembered > 0`
+  and `VerifiedEmpty > 0` on the cut side. A never-discovered neighbor has
+  neither. It also consults coarse ownership suppression before generating
+  candidate caps, rather than only subtracting newer geometry afterward.
+- Old primitive projection clipping checks the midpoint of a emitted span,
+  rather than clipping both span endpoints to the old transformed primitive.
+  A diagnostic now checks submitted cap vertices against their source bounds.
+- Correction to the earlier "after filtering" description: the actual source
+  upload zeros history RGB **before** the bilinear sampler. The material
+  migration script wires proxy opacity to `saturate(State.b)` and contains no
+  final hard-ownership multiplication. The one-texel support guard is a CPU
+  prefilter guard, not a final shader gate. Actual material/GPU sampling still
+  needs inspection before choosing a correction.
+- Moving Lab history, proxies, cap building, and exclusion contain no CVar
+  mode branch; reset selects mode 2 and spatial-history-managed furniture uses
+  fixed reveal. A new same-route mode-selector comparison is prepared. This
+  must not be confused with the ordinary/manual room's mode-1 implementation.
+  Runtime classification of the bug is still pending.
+
+Uncommitted diagnostic work is restricted to
+`DarkwellMovingPropLabRoom.h/.cpp`, `DarkwellSightWeaveAdapterTests.cpp`, and
+this document. It adds cap lifecycle counters, an original-geometry vertex
+check, and three targeted tests. It does not change cap generation decisions,
+ownership behavior, D/V/R, frozen AA/timing/material parameters, or maps.
+The permitted local `Darkwell.uproject` difference remains untouched.
+
+Execution is currently gated on closing the existing company Editor/Standalone
+session (PID 24268). Escape, Alt-F4, and the window close button did not close
+it through computer-use; querying its command line also returned no value.
+Permission-level mismatch is possible but not established. The user was asked
+to stop PIE and close that editor without saving maps or the project file.
+No unrelated process was stopped. The original visible session was preserved
+at `Saved/PropGameplayLab/MovingMulti/CapResidual/UserSessionBeforeEdits.png`.
+
+**This follow-up has run zero builds, zero automation tests, and zero new GPU
+routes. No new commit has been created or pushed.** Diagnostic changes are not
+yet a reliable checkpoint. Do not report READY_FOR_USER_CAP_AND_RESIDUAL_RETEST.
+
+Resume by confirming the retained diff and that the old editor is closed;
+then run the standard serial Development build and the new diagnostic tests
+before changing rendering behavior. Preserve failing reports for checkpoint A.
+After attribution, separate genuine cut candidates from ownership subtraction,
+validate the final material sample, and obtain both positive-cap and
+negative-residual D3D12 evidence before the final regression/push.
+
+### Checkpoint A: resumed after the user closed UE
+
+The user closed the old editor and the retained diagnostic work built
+successfully (7/7 actions, 42.09 seconds; subsequent targeted diagnostic builds
+also succeeded). No frozen runtime behavior was changed by this checkpoint.
+`CapResidual_CheckpointA` ran 3 tests in 104.697 seconds: 1 clean success,
+1 success with warnings, 1 failure. The failure is intentional reproduction:
+74 genuine partial-discovery history boundaries were expected after sealing
+epoch 2, but zero candidates/caps were generated. Both selectors really set
+their CVar values and reproduce the same missing-cut count.
+
+The earlier route sealed at roughly 53 degrees and did not reproduce the top
+fragment. The real GPU route sealed later; a separate late-observation variant
+now preserves the early route and tests approximately 112 degrees as well.
+Do not interpret the earlier `CurrentOwnedResidualZero` success as evidence
+against the user's failure.
+
+The D3D12 route `GPU_Mode2_20260902_141653` captured both positive empty-cut and
+negative current scenes; original images were opened. Actual backbuffer is
+1526x549, captures 1920x1032. The top sliver remains visible despite overlap
+diagnostics reporting zero. The subsequent attribution route
+`GPU_Mode2_20260902_142321` identifies it as `STALE_SURFACE`, epoch 2, primitive
+0, `SpatialMemory_Lab.InWorld.Rotate.Cabinet_Epoch2_0`, at approximately
+X=-366.87..-347.13, Y=692.41..694.88, Z=0..145. These old cells have legal
+coverage 1, D=1, V=0, R=1 and opacity=1, but no actual primitive occupies them.
+The broad aggregate actor bounds incorrectly block empty verification in the
+space next to the door/handle. This is distinct from ownership intrusion:
+the sliver lies outside actual newer geometry, so a current-overlap-only
+diagnostic correctly reports zero while missing the wrong occupancy decision.
+It is not demonstrated to be TSR noise, a current cap, or a retired component.
+
+The two user failures therefore have different immediate causes: loss of the
+sealed partial-discovery cut classification, and false-positive aggregate
+occupancy preventing legal empty evidence from reaching old history. Increasing
+render contact tolerance addresses neither. Actual material graph inspection
+also confirms the earlier prefilter-only ownership ordering; it still needs a
+real final shader gate and GPU readback verification.
+
+Preserved attribution-run failure: UE Python does not expose
+`GameplayStatics.begin_deferred_actor_spawn_from_class`. The forensic close-up
+helper was changed to temporarily position the existing camera only; player
+pose and SightWeave authority are untouched. This failure occurred after the
+world-space residual was recorded, before close-up capture. No missing shot is
+counted as evidence. Both failure logs and all original images remain in Saved.
+
+The late native route now reproduces both failures: 10 legally observed empty
+samples remain falsely occupied; cap vertices outside their own original
+primitive also reach 2. The Mode1/Mode2 comparison passes because both actual
+selectors reproduce the same incorrect result (71 missing cut candidates,
+2 protruding vertices, one visible historical cap). Classification for this
+moving Lab is **BUG_ALSO_REPRODUCED_MODE1**; its Mode 1 selector shares the
+Mode 2 moving presentation path, not the ordinary/manual Mode 1 semantics.
+This checkpoint intentionally preserves the failing behavior for reproduction.

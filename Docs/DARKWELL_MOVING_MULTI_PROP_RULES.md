@@ -1463,3 +1463,95 @@ The GPU driver uses the existing evidence mechanism entry, not physical
 keyboard F presses. Native automation covers Pawn focus/trace/TryInteract.
 Neither is represented as new user manual acceptance. The next user action
 after a READY handoff is manual PIE retest, not additional implementation.
+
+D diagnostic checkpoint pushed:
+`fa05cbc4d28fccdb9cd9ace93e6296edd50d0968`. This is the final runtime
+implementation SHA unless a later entry explicitly supersedes it. The final
+evidence/script closure commit follows it and does not change runtime files.
+The old coarse history still advances for comparison/legacy diagnostics;
+it no longer supplies moving historical surface or cap output. Current
+live D/V/R and unrelated Lab/manual-room rendering remain on their prior
+paths. StableID groups records but never erases a record by identity.
+
+Source scope relative to 8073b8d: the new fine model and its native tests,
+moving-room integration/diagnostics, spatial-record storage/lifecycle and
+adapter route assertions. The new GPU driver and this document complete
+the evidence scope. No Plugins, Config, maps, binary assets, materials or
+frozen `DarkwellSpatialPropMemory` files differ from the starting commit.
+The original uproject blob remains `e0e43e8ffd1a4b111a90feb1f85168b926363099`;
+the only allowed local difference is its missing final newline.
+
+Full D regression on the final runtime build:
+`Saved/AutomationReports/HistoryGridV2_D_Full/index.json` reports 60/60
+Success: 37 clean, 23 with warnings, 0 failed, 0 not run, 1379.841064 sec.
+UnrealEditor-Cmd exited normally with code 0. This includes all six new V2
+tests, Mode 1/2 shared-history comparison, visible translation/rotation,
+last-seen pose, fixed stale-epoch stability, offscreen A/B/C spatial evidence,
+multi-prop isolation, original manual-room cap/AA contracts and SightWeave
+adapter authority/lifecycle regression. No test or assertion was removed.
+
+```powershell
+.\Scripts\BuildEditor.ps1 -Configuration Development -EngineRoot 'D:\UE_5.8'
+& 'D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' `
+  'D:\UE_projects\LastLight\Darkwell.uproject' -unattended -nop4 -nosplash -NullRHI `
+  '-ExecCmds=Automation RunTests Darkwell.PropLab+Darkwell.FogVisual+Darkwell.SightWeave.M6P1' `
+  '-TestExit=Automation Test Queue Empty' `
+  '-ReportExportPath=D:\UE_projects\LastLight\Saved\AutomationReports\HistoryGridV2_D_Full'
+```
+
+Severe scan for the full suite: 0 fatal/assert/ensure/device-loss/unhandled
+exception signatures. There are 13 existing engine-initialization
+`LogAutomationTest: Error: Condition failed` lines before test execution;
+these are retained and this is NOT a claim of an error-free log. There are
+no other Error lines. The report contains 24 warning entries: 21 HTTP
+connectivity-probe timeouts, and three intentional duplicate-ID/capacity
+rejection warnings. Builds retain UE header API-deprecation C4996 warnings.
+All A/B/C/D build/test logs and earlier GPU runs remain under the evidence
+root. Git fsck also reports pre-existing dangling objects; they are retained,
+not pruned. None of these are silently converted into user acceptance.
+
+Final capture-drain verification:
+
+| Run | Original PNGs | Fast/slow terminal history | Final proxy/cap | Positive empty cap |
+| --- | ---: | --- | --- | --- |
+| GPU_Mode1_20260902_174710 | 106 | identical | 0 / 0 | present |
+| GPU_Mode2_20260902_175212 | 106 | identical | 0 / 0 | present |
+
+Cross-mode ordered fine-state hashes also match. Each run's GPU material
+probe checks 131072 samples, 9050 positive blocked and 59222 positive allowed
+controls, with 0 failures. Every sampled contact/filter-leak counter is zero.
+Both editor processes exited normally. Both final logs have 0 severe
+signatures, the same 13 startup condition errors, and no other Error lines.
+The agent opened all 30 consecutive fast-entry target crops and all 12+12
+stationary target crops in EACH mode, including both last frames after the
+capture-drain fix. No whole-object blink or persistent old fragment was seen
+in these sampled sequences. The Mode 2 slow-sweep sheet (22 views) and final
+positive deep-gray empty-cap image were also opened. Earlier four-direction
+closeups remain available. Frozen reveal dithering is still visible during
+entry; no claim of new AA behavior is made.
+
+All five GPU runs retain 518 original screenshots total (94+106+106+106+106),
+plus separate review sheets. Final comparison evidence is the last 106+106,
+not the earlier contaminated terminal frames. Every run uses D3D12/SM6,
+normal TSR, 100% screen percentage, actual 1526x549 game backbuffer inside
+1920x1032 editor screenshots. Fixed 1/60 simulation ticks and short adjacent
+bursts are functional evidence, not a measured 60fps/10-second GPU benchmark.
+The unchanged native stale-stability test supplies the longer state checks.
+
+Final implementation status:
+`PARTIAL — READY_FOR_USER_MIXED_CELL_HISTORY_RETEST`.
+HistoryGridV2 supplies moving historical surface and cap output; coarse
+history remains diagnostic. All requested new fine-state regressions and
+the original relevant suite pass. User manual PIE is still pending and has
+priority over this report. No formal-map integration or new Mode decision
+is included. Cost of fine queries, 64-record fail-closed capacity, world-XY
+granularity and arbitrary real-world input paths remain limitations requiring
+later explicit work/validation. Tomorrow: perform the manual route above
+before any further implementation.
+
+Unattended handoff follows the user's final shutdown instruction, superseding
+older requests to leave Play ready. After the closing text/script commit is
+pushed, recheck local/upstream/remote, LFS and the untouched uproject; only
+then schedule the authorized 60-second shutdown. Do not shut down with
+unsynced valuable work. This document and script are the only pending task
+files after runtime checkpoint fa05cbc; generated evidence is never staged.

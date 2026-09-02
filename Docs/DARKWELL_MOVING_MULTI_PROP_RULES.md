@@ -1263,3 +1263,19 @@ plate, and return to scan old A. Use only the labeled reset mechanism between
 fresh runs. Retest the later-intermediate-angle case especially; reject any
 top fragment, hollow cut or duplicated surface. Existing masked/dither
 checker visuals during partial live reveal remain outside this task.
+
+Final validation/code checkpoint C:
+`a1fd9349ebdf416eeedfb5dc6a2c082fc2cc8739` (pushed). A following documentation-only
+closure records these verified Git and renderer details; it changes no runtime.
+Local HEAD/upstream/origin matched at C, `git diff --check` passed,
+`git lfs fsck` passed, and `git lfs push --dry-run origin HEAD` listed no upload.
+`git fsck --no-reflogs` reported dangling objects (34 trees, 4 blobs, 1 commit),
+not missing/corrupt objects; they were not deleted or garbage-collected.
+
+Read-only renderer queries during handoff report `r.AntiAliasingMethod=4`
+(TSR), `r.ScreenPercentage=0` and secondary percentage=0, all constructor
+defaults. Thus this round preserves the existing automatic percentage policy;
+it must not be described as forced-100%-screen-percentage evidence.
+The Lab was reopened without a running route or PIE, for the user to click
+Play. The small Python handoff probe was closed and replaced with a plain
+Editor session, so no persistent evidence script remains in the user session.

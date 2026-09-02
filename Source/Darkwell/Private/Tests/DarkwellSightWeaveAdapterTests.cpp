@@ -1972,8 +1972,13 @@ bool FDarkwellPartialCurrentMultiEpoch3DOwnershipTest::RunTest(const FString&)
  TestEqual(TEXT("Full final reacquire keeps stale cap out of current OBB"),Room->GetCurrent3DOverlapStaleCapForTesting(RotateId),0);
  TestTrue(TEXT("Full final Live does not identity-clear all non-overlapping history"),Room->GetStaleEpochCountForTesting(RotateId)>0);
  TestTrue(TEXT("Multi-epoch final ownership remains one"),Room->GetMaxTotalContributorsForTesting(RotateId)<=1);
+	 const FString LiveDiagnosis=Room->GetMultiEpochCompositeDiagnosis(RotateId);
+	 Player->SetActorRotation(FRotator(0,-90,0));Step(30);
+	 const FString MemoryDiagnosis=Room->GetMultiEpochCompositeDiagnosis(RotateId);
  AddInfo(FString::Printf(TEXT("first_partial=%.6f second_partial=%.6f final_partial=%.6f stale=%d %s"),
   FirstPartial,SecondPartial,FinalPartial,Room->GetStaleEpochCountForTesting(RotateId),*Room->Get3DOwnershipTelemetryForTesting(RotateId)));
+	 AddInfo(TEXT("MULTI_EPOCH_LIVE_DIAGNOSIS\n")+LiveDiagnosis);
+	 AddInfo(TEXT("MULTI_EPOCH_MEMORY_DIAGNOSIS\n")+MemoryDiagnosis);
  Fixture->Destroy();return true;
 }
 
@@ -2047,6 +2052,7 @@ namespace
   int32 FinalProxies=0;
   int32 FinalCaps=0;
   FString FineHistory;
+	 FString CompositeDiagnosis;
   float SealedYaw=0;
  };
 
@@ -2121,6 +2127,7 @@ namespace
   Result.FalseOccupied=Room->GetFalseOccupiedHistoryCountForTesting(RotateId);
   Result.FinalProxies=Room->GetVisibleHistoricalProxyCountForTesting(RotateId);
   Result.FinalCaps=Room->GetVisibleHistoricalCapCountForTesting(RotateId);
+	 Result.CompositeDiagnosis=Room->GetMultiEpochCompositeDiagnosis(RotateId);
   Test.AddInfo(FString::Printf(TEXT("RESIDUAL_RECHECK hidden_extra=%d player_y=%.1f sealed_yaw=%.4f proxies=%d caps=%d %s"),
    ExtraHiddenFrames,PlayerY,Room->GetNewestHistoricalYawForTesting(RotateId),Result.FinalProxies,Result.FinalCaps,
    *Room->GetResidualFragmentTelemetryForTesting(RotateId)));
@@ -2440,6 +2447,57 @@ bool FDarkwellMovingPropStaleFlickerStabilityTest::RunTest(const FString&)
    Use(EDarkwellMovingPropLabControlKind::ResetCurrent));Step(2);
  }
  Fixture->Destroy();return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHistoryGridV2EpochScalingTelemetryTest,
+ "Darkwell.PropLab.MovingRules.HistoryRuntime.EpochScalingTelemetry", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellHistoryGridV2EpochScalingTelemetryTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("HistoryRuntimeEpochScaling"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,-90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("History runtime Lab exists"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("History runtime authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("History runtime reset"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ for(const int32 Epochs:{0,1,2,4,8})
+ {
+  TestTrue(FString::Printf(TEXT("Configure %d historical epochs"),Epochs),
+   Room->ConfigureHistoricalEpochCountForTesting(RotateId,Epochs));
+  Step(120);
+  const auto T=Room->GetHistoryRuntimeTotalTelemetryForTesting();
+  TestEqual(TEXT("Telemetry window frame count"),T.FramesAccumulated,uint64(120));
+  TestEqual(TEXT("Resident epoch gauge"),T.ActiveHistoricalEpochs,Epochs);
+  if(Epochs>0)TestTrue(TEXT("Fine samples are resident"),T.FineSamplesResident>0);
+  const double Frames=FMath::Max<uint64>(1,T.FramesAccumulated);
+  AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_BASELINE epochs=%d resident_samples=%d fine_bytes=%llu samples_scanned_per_frame=%.3f coverage_queries_per_frame=%.3f occupancy_tests_per_frame=%.3f geometry_tests_per_frame=%.3f ownership_tests_per_frame=%.3f texture_calls_per_frame=%.3f texture_uploads_per_sec=%.3f cap_calls_per_frame=%.3f cap_rebuilds_per_sec=%.3f refresh_us_per_frame=%.3f rotation_log_us_per_frame=%.3f report_us_per_frame=%.3f advance_fine_us_per_frame=%.3f tracked_us_per_frame=%.3f gt_us_per_frame=%.3f working_set=%llu uobjects=%d resources=proxy:%d/cap:%d/texture:%d/mid:%d"),
+   Epochs,T.FineSamplesResident,T.FineHistoryResidentBytes,T.FineSamplesScanned/Frames,
+   T.CoverageQueries/Frames,T.OccupancyTests/Frames,T.PrimitiveGeometryTests/Frames,
+   T.OwnershipTests/Frames,T.UpdateRecordTextureCalls/Frames,T.TextureUploads/Frames*60.0,
+   T.UpdateRecordCapCalls/Frames,T.CapMeshRebuilds/Frames*60.0,
+   T.RefreshContributionDiagnosticsUs/Frames,T.LogRotationFrameUs/Frames,T.ReportHudUs/Frames,
+   T.AdvanceFineHistoryUs/Frames,T.UpdateTrackedUs/Frames,T.MovingPropLabGameThreadUs/Frames,
+   T.ProcessWorkingSetBytes,T.UObjectCount,T.ProxyCount,T.CapComponentCount,T.TextureCount,T.MidCount));
+ }
+ Fixture->Destroy();return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMultiEpochCompositeDiagnosisTest,
+ "Darkwell.PropLab.MovingRules.HistoryRuntime.MultiEpochCompositeDiagnosis", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellMultiEpochCompositeDiagnosisTest::RunTest(const FString&)
+{
+ const auto Result=RunResidualOwnershipRoute(*this,false,2,true,0,100,true,157);
+ TestFalse(TEXT("Multi-epoch diagnosis is emitted"),Result.CompositeDiagnosis.IsEmpty());
+ TestTrue(TEXT("Multi-epoch diagnosis includes A/B/C/D counts"),
+  Result.CompositeDiagnosis.Contains(TEXT("A="))&&Result.CompositeDiagnosis.Contains(TEXT("B="))
+  &&Result.CompositeDiagnosis.Contains(TEXT("C="))&&Result.CompositeDiagnosis.Contains(TEXT("D=")));
+ AddInfo(TEXT("MULTI_EPOCH_COMPOSITE_DIAGNOSIS\n")+Result.CompositeDiagnosis);
+ return true;
 }
 
 #if WITH_EDITOR

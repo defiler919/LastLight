@@ -72,6 +72,38 @@ class DARKWELL_API ADarkwellMovingPropLabRoom final : public AActor
 	GENERATED_BODY()
 
 public:
+	struct FHistoryRuntimeTelemetry
+	{
+		uint64 FrameNumber = 0;
+		uint64 FramesAccumulated = 0;
+		int32 ActiveHistoricalEpochs = 0;
+		int32 FineSamplesResident = 0;
+		uint64 FineSamplesScanned = 0;
+		uint64 CoverageFullScans = 0;
+		uint64 CoverageQueries = 0;
+		uint64 OccupancyTests = 0;
+		uint64 PrimitiveGeometryTests = 0;
+		uint64 OwnershipTests = 0;
+		uint64 UpdateRecordTextureCalls = 0;
+		uint64 TextureUploads = 0;
+		uint64 UpdateRecordCapCalls = 0;
+		uint64 CapMeshRebuilds = 0;
+		int32 ProxyCount = 0;
+		int32 CapComponentCount = 0;
+		int32 TextureCount = 0;
+		int32 MidCount = 0;
+		int32 SpatialRecordCount = 0;
+		uint64 FineHistoryResidentBytes = 0;
+		uint64 ProcessWorkingSetBytes = 0;
+		int32 UObjectCount = 0;
+		double RefreshContributionDiagnosticsUs = 0.0;
+		double LogRotationFrameUs = 0.0;
+		double ReportHudUs = 0.0;
+		double AdvanceFineHistoryUs = 0.0;
+		double UpdateTrackedUs = 0.0;
+		double MovingPropLabGameThreadUs = 0.0;
+	};
+
 	ADarkwellMovingPropLabRoom();
 	virtual void BeginPlay() override;
 	virtual void EndPlay(EEndPlayReason::Type Reason) override;
@@ -152,6 +184,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetObservationStateForTesting(FName StableId) const;
 	float GetNewestHistoricalYawForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetFineHistoryTelemetry(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetHistoryRuntimeTelemetry() const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetMultiEpochCompositeDiagnosis(FName StableId) const;
+	FHistoryRuntimeTelemetry GetHistoryRuntimeFrameTelemetryForTesting() const { return RuntimeFrame; }
+	FHistoryRuntimeTelemetry GetHistoryRuntimeTotalTelemetryForTesting() const { return RuntimeTotal; }
+	void ResetHistoryRuntimeTelemetryForTesting();
+	bool ConfigureHistoricalEpochCountForTesting(FName StableId, int32 HistoricalEpochs);
 	bool StartTrackedRotationForTesting(FName StableId, float TargetYaw, float Duration);
 	bool InjectInvalidCoverageOnceForTesting(FName StableId);
 
@@ -308,12 +346,12 @@ private:
 	TArray<FBox> ActualPartBounds(const ADarkwellPropLabFurniture& Prop) const;
 	TArray<FPrimitiveGeometrySnapshot> ActualPartGeometry(
 		const ADarkwellPropLabFurniture& Prop) const;
-	static bool QueryVerticalInterval(
+	bool QueryVerticalInterval(
 		const FPrimitiveGeometrySnapshot& Geometry,
 		FVector2D Point,
 		double& OutMinZ,
 		double& OutMaxZ,
-		double ProjectionTolerance = 0.0);
+		double ProjectionTolerance = 0.0) const;
 	static bool ClipSegmentToGeometryProjection(
 		const FPrimitiveGeometrySnapshot& Geometry,
 		FVector2D Start,
@@ -375,6 +413,7 @@ private:
 	void ConfigureScenarioProps(int32 InScenario);
 	void UpdateDeterministicMotion(float DeltaSeconds);
 	void Report();
+	void FinalizeHistoryRuntimeTelemetry(uint64 UpdateRoomStartCycles);
 
 	UPROPERTY(VisibleAnywhere) TArray<TObjectPtr<UStaticMeshComponent>> Structure;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> PressurePlate;
@@ -400,4 +439,7 @@ private:
 	bool bInWorldScenarioSelected = false;
 	bool bInWorldFinished = false;
 	bool bPressureWaitingForExit = false;
+	mutable FHistoryRuntimeTelemetry RuntimeFrame;
+	mutable FHistoryRuntimeTelemetry RuntimeTotal;
+	uint64 RuntimeFrameSequence = 0;
 };

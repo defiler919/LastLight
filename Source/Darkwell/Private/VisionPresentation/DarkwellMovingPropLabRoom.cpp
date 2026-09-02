@@ -15,16 +15,35 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Gameplay/DarkwellGameplayTags.h"
 #include "HAL/IConsoleManager.h"
+#include "HAL/PlatformMemory.h"
+#include "HAL/PlatformTime.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Math/Float16Color.h"
 #include "Player/DarkwellCharacter.h"
 #include "UObject/ConstructorHelpers.h"
+#include "UObject/UObjectArray.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDarkwellMovingPropLab, Log, All);
+
+namespace
+{
+	struct FScopedHistoryRuntimeTimer
+	{
+		explicit FScopedHistoryRuntimeTimer(double& InMicroseconds)
+			: Microseconds(InMicroseconds), StartCycles(FPlatformTime::Cycles64()) {}
+		~FScopedHistoryRuntimeTimer()
+		{
+			Microseconds += FPlatformTime::ToMilliseconds64(
+				FPlatformTime::Cycles64() - StartCycles) * 1000.0;
+		}
+		double& Microseconds;
+		uint64 StartCycles;
+	};
+}
 
 namespace Darkwell::MovingPropLab
 {
@@ -517,8 +536,9 @@ bool ADarkwellMovingPropLabRoom::QueryVerticalInterval(
 	const FVector2D Point,
 	double& OutMinZ,
 	double& OutMaxZ,
-	const double ProjectionTolerance)
+	const double ProjectionTolerance) const
 {
+	++RuntimeFrame.PrimitiveGeometryTests;
 	if (!Geometry.LocalBounds.IsValid || Geometry.WorldTransform.ContainsNaN())
 	{
 		return false;
@@ -854,6 +874,8 @@ ADarkwellMovingPropLabRoom::SampleConservativeCoverage(
 	const uint64 TransformRevision,
 	const uint64 GridRevision, const int32 Subdivision) const
 {
+	++RuntimeFrame.OwnershipTests;
+	++RuntimeFrame.CoverageFullScans;
 	FCoverageSnapshot Result;
 	Result.TransformRevision = TransformRevision;
 	Result.GridRevision = GridRevision;
@@ -882,6 +904,7 @@ ADarkwellMovingPropLabRoom::SampleConservativeCoverage(
 	EDarkwellFogCoverageZeroReason AggregateZeroReason = EDarkwellFogCoverageZeroReason::None;
 	auto Sample = [&](const FVector2D Point)
 	{
+		++RuntimeFrame.CoverageQueries;
 		const FDarkwellFogVisualCoverageQuery Query = Fog->QueryLiveCoverageAtWorldPoint(Point);
 		if (!Query.bValid)
 		{
@@ -954,6 +977,7 @@ ADarkwellMovingPropLabRoom::SampleConservativeCoverage(
 void ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record, const float DeltaSeconds)
 {
+	FScopedHistoryRuntimeTimer Timer(RuntimeFrame.AdvanceFineHistoryUs);
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
 	if (!Visual || !Record.FineHistory.IsInitialized()) return;
 	const FCoverageSnapshot Coverage = SampleConservativeCoverage(Record.FineHistory.GetBounds(),
@@ -962,6 +986,7 @@ void ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	const FIntPoint Size = Record.FineHistory.GetSize();
 	const FBox2D& Bounds = Record.FineHistory.GetBounds();
 	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
+	RuntimeFrame.FineSamplesScanned += static_cast<uint64>(Size.X) * Size.Y;
 	TBitArray<> Occupied(false, Size.X * Size.Y);
 	for (int32 Y = 0; Y < Size.Y; ++Y) for (int32 X = 0; X < Size.X; ++X)
 	{
@@ -999,10 +1024,196 @@ FString ADarkwellMovingPropLabRoom::GetFineHistoryTelemetry(const FName StableId
 	return Result;
 }
 
+FString ADarkwellMovingPropLabRoom::GetHistoryRuntimeTelemetry() const
+{
+	auto Format = [](const FHistoryRuntimeTelemetry& T)
+	{
+		return FString::Printf(
+			TEXT("{\"frame\":%llu,\"frames\":%llu,\"epochs\":%d,\"resident_samples\":%d,\"samples_scanned\":%llu,\"coverage_scans\":%llu,\"coverage_queries\":%llu,\"occupancy_tests\":%llu,\"geometry_tests\":%llu,\"ownership_tests\":%llu,\"texture_calls\":%llu,\"texture_uploads\":%llu,\"cap_calls\":%llu,\"cap_rebuilds\":%llu,\"refresh_us\":%.3f,\"rotation_log_us\":%.3f,\"report_us\":%.3f,\"fine_advance_us\":%.3f,\"tracked_us\":%.3f,\"game_thread_us\":%.3f,\"proxies\":%d,\"caps\":%d,\"textures\":%d,\"mids\":%d,\"fine_bytes\":%llu,\"records\":%d,\"working_set\":%llu,\"uobjects\":%d}"),
+			T.FrameNumber, T.FramesAccumulated, T.ActiveHistoricalEpochs,
+			T.FineSamplesResident, T.FineSamplesScanned, T.CoverageFullScans,
+			T.CoverageQueries, T.OccupancyTests, T.PrimitiveGeometryTests,
+			T.OwnershipTests, T.UpdateRecordTextureCalls, T.TextureUploads,
+			T.UpdateRecordCapCalls, T.CapMeshRebuilds,
+			T.RefreshContributionDiagnosticsUs, T.LogRotationFrameUs,
+			T.ReportHudUs, T.AdvanceFineHistoryUs, T.UpdateTrackedUs,
+			T.MovingPropLabGameThreadUs, T.ProxyCount, T.CapComponentCount,
+			T.TextureCount, T.MidCount, T.FineHistoryResidentBytes,
+			T.SpatialRecordCount, T.ProcessWorkingSetBytes, T.UObjectCount);
+	};
+	return FString::Printf(TEXT("{\"frame_data\":%s,\"window_total\":%s}"),
+		*Format(RuntimeFrame), *Format(RuntimeTotal));
+}
+
+void ADarkwellMovingPropLabRoom::ResetHistoryRuntimeTelemetryForTesting()
+{
+	RuntimeFrame = FHistoryRuntimeTelemetry();
+	RuntimeTotal = FHistoryRuntimeTelemetry();
+}
+
+bool ADarkwellMovingPropLabRoom::ConfigureHistoricalEpochCountForTesting(
+	const FName StableId, const int32 HistoricalEpochs)
+{
+	if (HistoricalEpochs < 0
+		|| HistoricalEpochs > FDarkwellSpatialObservationHistory::MaxResidentRecords)
+	{
+		return false;
+	}
+	FTrackedProp* Prop = Tracked.Find(StableId);
+	ADarkwellPropLabFurniture* Actual = Prop ? Prop->Actual.Get() : nullptr;
+	if (!Prop || !Actual)
+	{
+		return false;
+	}
+	for (TPair<uint32, FRecordVisual>& Pair : Prop->Visuals)
+	{
+		DestroyVisual(Pair.Value);
+	}
+	Prop->Visuals.Reset();
+	Prop->History.Initialize(StableId);
+	Prop->ObservationState = EObservationState::NeverObserved;
+	Prop->HiddenFreezeCount = 0;
+	Prop->ObservationEpisode = 0;
+	for (int32 Index = 0; Index < HistoricalEpochs; ++Index)
+	{
+		const FTransform Pose(FRotator(0.0f, Index * 17.0f, 0.0f),
+			Prop->InitialTransform.GetLocation() + FVector(Index * 7.0f, 0.0f, 0.0f));
+		Actual->SetActorTransform(Pose);
+		Actual->SetActorHiddenInGame(false);
+		Actual->SetActorEnableCollision(true);
+		Prop->bExists = true;
+		Prop->LastPhysicalTransform = Pose;
+		const FBox2D Bounds = ActualBounds(*Actual);
+		const int32 CurrentIndex = Prop->History.BeginObservedLocation(
+			Pose, Bounds, Darkwell::MovingPropLab::CellSize);
+		if (CurrentIndex == INDEX_NONE)
+		{
+			return false;
+		}
+		FDarkwellSpatialObservationRecord& Current =
+			Prop->History.GetMutableRecords()[CurrentIndex];
+		TArray<float> FullCoverage;
+		FullCoverage.Init(1.0f, Current.SpatialMemory.GetCells().Num());
+		Prop->History.AdvanceCurrent(0.20f, FullCoverage);
+		Prop->ObservationState = EObservationState::ObservedArmed;
+		++Prop->ObservationEpisode;
+		EnsureRecordVisual(*Prop, Current);
+		if (!FreezeCurrentForHiddenMotion(*Prop, TEXT("TEST_EPOCH_SCALING")))
+		{
+			return false;
+		}
+	}
+	Actual->Memory->ApplySourceGeometryVisibility(false);
+	Actual->SetActorEnableCollision(false);
+	Actual->SetActorHiddenInGame(true);
+	Prop->bExists = false;
+	ResetHistoryRuntimeTelemetryForTesting();
+	return Prop->History.GetRecords().Num() == HistoricalEpochs;
+}
+
+FString ADarkwellMovingPropLabRoom::GetMultiEpochCompositeDiagnosis(
+	const FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	if (!Prop)
+	{
+		return TEXT("A=0 B=0 C=0 D=0 OTHER=0 MISSING=1");
+	}
+	int32 A = 0, B = 0, C = 0, D = 0, Other = 0;
+	TArray<FString> Samples;
+	uint32 NewestEpoch = 0;
+	for (const FDarkwellSpatialObservationRecord& Candidate : Prop->History.GetRecords())
+	{
+		NewestEpoch = FMath::Max(NewestEpoch, Candidate.Epoch);
+	}
+	for (const FDarkwellSpatialObservationRecord& Record : Prop->History.GetRecords())
+	{
+		if (Record.bCurrentObservedLocation || !Record.FineHistory.IsInitialized())
+		{
+			continue;
+		}
+		const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
+		if (!Visual || Visual->bPresentationRetired)
+		{
+			continue;
+		}
+		const FCoverageSnapshot Coverage = SampleConservativeCoverage(
+			Record.FineHistory.GetBounds(), Record.Epoch,
+			Record.SpatialMemory.GetGeneration(), FDarkwellHistoryGridV2::SamplesPerCell);
+		const FIntPoint Size = Record.FineHistory.GetSize();
+		const FBox2D& Bounds = Record.FineHistory.GetBounds();
+		const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
+		for (int32 Index = 0; Index < Record.FineHistory.GetSamples().Num(); ++Index)
+		{
+			const FDarkwellHistoryGridV2::FSample& State = Record.FineHistory.GetSamples()[Index];
+			const bool bSubmitted = Visual->SubmittedPresentation.IsValidIndex(Index)
+				&& Visual->SubmittedPresentation[Index].A > 0.0f
+				&& Visual->SubmittedPresentation[Index].B > 0.0f;
+			if (!bSubmitted)
+			{
+				continue;
+			}
+			const int32 X = Index % Size.X;
+			const int32 Y = Index / Size.X;
+			const FVector2D Minimum = Bounds.Min + Step * FVector2D(X, Y);
+			const FVector2D Point = Minimum + Step * 0.5f;
+			const bool bCoverageValid = Coverage.bValid && Coverage.Values.IsValidIndex(Index);
+			const float LegalCoverage = bCoverageValid ? Coverage.Values[Index] : 0.0f;
+			const bool bLegal = bCoverageValid
+				&& LegalCoverage >= FDarkwellSpatialPropMemory::LegalCoverage;
+			const bool bOccupied = IsOccupiedByActual(Point, NAME_None);
+			const bool bOwnership = State.State == FDarkwellHistoryGridV2::Superseded()
+				|| (Visual->SuppressedByCurrentEvidence.IsValidIndex(Index)
+					&& Visual->SuppressedByCurrentEvidence[Index])
+				|| HasNewerObservedGeometryOverlapWithinFootprint(
+					*Prop, *Visual, Record.Epoch, FBox2D(Minimum, Minimum + Step));
+			TCHAR Classification = TEXT('O');
+			if (State.State == FDarkwellHistoryGridV2::VerifiedEmpty()
+				|| State.State == FDarkwellHistoryGridV2::Superseded())
+			{
+				++D; Classification = TEXT('D');
+			}
+			else if (bOwnership)
+			{
+				++C; Classification = TEXT('C');
+			}
+			else if (State.State == FDarkwellHistoryGridV2::Unresolved() && !bOccupied && bLegal)
+			{
+				++A; Classification = TEXT('A');
+			}
+			else if (State.State == FDarkwellHistoryGridV2::Unresolved() && !bOccupied && !bLegal)
+			{
+				++B; Classification = TEXT('B');
+			}
+			else
+			{
+				++Other;
+			}
+			if (Samples.Num() < 64)
+			{
+				const TCHAR* StateName = State.State == FDarkwellHistoryGridV2::NeverObserved()
+					? TEXT("NeverObserved") : State.State == FDarkwellHistoryGridV2::Unresolved()
+						? TEXT("Unresolved") : State.State == FDarkwellHistoryGridV2::VerifiedEmpty()
+							? TEXT("VerifiedEmpty") : TEXT("SupersededByNewerEvidence");
+				Samples.Add(FString::Printf(
+					TEXT("class=%c epoch=%u xy=(%.3f,%.3f) state=%s opacity=%.4f coverage=%.4f coverage_valid=%d occupied=%d ownership=%d newer_epoch=%u geometry_overlap=%d initial=%.4f verified_empty=%d"),
+					Classification, Record.Epoch, Point.X, Point.Y, StateName,
+					State.Opacity, LegalCoverage, bCoverageValid ? 1 : 0,
+					bOccupied ? 1 : 0, bOwnership ? 1 : 0,
+					bOwnership ? NewestEpoch : 0, bOwnership ? 1 : 0,
+					State.InitialRemembered, State.bVerifiedEmpty ? 1 : 0));
+			}
+		}
+	}
+	return FString::Printf(TEXT("A=%d B=%d C=%d D=%d OTHER=%d surviving_visible=%d\n%s"),
+		A, B, C, D, Other, A + B + C + D + Other, *FString::Join(Samples, TEXT("\n")));
+}
+
 bool ADarkwellMovingPropLabRoom::IsOccupiedByActual(
 	const FVector2D Point,
 	const FName IgnoredStableId) const
 {
+	++RuntimeFrame.OccupancyTests;
 	for (const TPair<FName, FTrackedProp>& Pair : Tracked)
 	{
 		const FTrackedProp& Prop = Pair.Value;
@@ -1194,6 +1405,7 @@ void ADarkwellMovingPropLabRoom::RetireHistoricalPresentation(
 void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 	FTrackedProp& Prop) const
 {
+	FScopedHistoryRuntimeTimer Timer(RuntimeFrame.RefreshContributionDiagnosticsUs);
 	Prop.MaxSurfaceContributors = 0;
 	Prop.MaxCapContributors = 0;
 	Prop.MaxTotalContributors = 0;
@@ -1596,6 +1808,7 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 
 void ADarkwellMovingPropLabRoom::LogRotationFrame(const FTrackedProp& Prop) const
 {
+	FScopedHistoryRuntimeTimer Timer(RuntimeFrame.LogRotationFrameUs);
 	if (!bInWorldControls || Scenario != 2 || Prop.StableId != Darkwell::MovingPropLab::RotateId)
 	{
 		return;
@@ -1695,6 +1908,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 	FTrackedProp& Prop,
 	const float DeltaSeconds)
 {
+	FScopedHistoryRuntimeTimer Timer(RuntimeFrame.UpdateTrackedUs);
 	ADarkwellPropLabFurniture* Actual = Prop.bExists ? Prop.Actual.Get() : nullptr;
 	if (Actual)
 	{
@@ -2123,6 +2337,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
 	FTrackedProp& Prop,
 	FDarkwellSpatialObservationRecord& Record)
 {
+	++RuntimeFrame.UpdateRecordTextureCalls;
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
 	if (!Visual || !Visual->Texture.IsValid())
 	{
@@ -2173,6 +2388,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
 	}
 	Visual->TextureSignature = Signature;
 	++Visual->TextureUploadCount;
+	++RuntimeFrame.TextureUploads;
 	FFloat16Color* Pixels = new FFloat16Color[Presentation.Num()];
 	for (int32 Index = 0; Index < Presentation.Num(); ++Index)
 	{
@@ -2294,6 +2510,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	FTrackedProp& Prop,
 	FDarkwellSpatialObservationRecord& Record)
 {
+	++RuntimeFrame.UpdateRecordCapCalls;
 	using namespace UE::Geometry;
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
 	if (!Visual || !Visual->Cap.IsValid())
@@ -2319,6 +2536,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	const FIntPoint Size = bFineHistory ? Record.FineHistory.GetSize() : Record.SpatialMemory.GetSize();
 	if ((!bPresent && !bAbsent) || Cells.IsEmpty() || Visual->PartBounds.IsEmpty())
 	{
+		++RuntimeFrame.CapMeshRebuilds;
 		Visual->Cap->SetMesh(FDynamicMesh3());
 		Visual->Cap->SetVisibility(false);
 		Visual->CapTriangles = 0;
@@ -2410,6 +2628,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 		return;
 	}
 	Visual->CapSignature = Signature;
+	++RuntimeFrame.CapMeshRebuilds;
 	FDynamicMesh3 Mesh;
 	Visual->CapExpected = Visual->CapGenerated = Visual->CapClipped = 0;
 	Visual->MissingHistoricalCuts = 0;
@@ -3523,6 +3742,9 @@ void ADarkwellMovingPropLabRoom::UpdateRoom(
 	{
 		return;
 	}
+	RuntimeFrame = FHistoryRuntimeTelemetry();
+	RuntimeFrame.FrameNumber = ++RuntimeFrameSequence;
+	const uint64 UpdateRoomStartCycles = FPlatformTime::Cycles64();
 	UpdateInWorldAutomation(DeltaSeconds, Player);
 	const bool bWasMoving = bMotionActive;
 	UpdateDeterministicMotion(DeltaSeconds);
@@ -3536,6 +3758,63 @@ void ADarkwellMovingPropLabRoom::UpdateRoom(
 	}
 	UpdateInWorldAutomation(0.0f, Player);
 	Report();
+	FinalizeHistoryRuntimeTelemetry(UpdateRoomStartCycles);
+}
+
+void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
+	const uint64 UpdateRoomStartCycles)
+{
+	RuntimeFrame.MovingPropLabGameThreadUs = FPlatformTime::ToMilliseconds64(
+		FPlatformTime::Cycles64() - UpdateRoomStartCycles) * 1000.0;
+	for (const TPair<FName, FTrackedProp>& Pair : Tracked)
+	{
+		RuntimeFrame.SpatialRecordCount += Pair.Value.History.GetRecords().Num();
+		for (const FDarkwellSpatialObservationRecord& Record : Pair.Value.History.GetRecords())
+		{
+			if (!Record.bCurrentObservedLocation)
+			{
+				++RuntimeFrame.ActiveHistoricalEpochs;
+			}
+			RuntimeFrame.FineSamplesResident += Record.FineHistory.GetSamples().Num();
+		}
+	}
+	RuntimeFrame.FineHistoryResidentBytes = static_cast<uint64>(
+		RuntimeFrame.FineSamplesResident) * sizeof(FDarkwellHistoryGridV2::FSample);
+	RuntimeFrame.ProxyCount = GetTotalProxyCount();
+	RuntimeFrame.CapComponentCount = OwnedCaps.Num();
+	RuntimeFrame.TextureCount = OwnedTextures.Num();
+	RuntimeFrame.MidCount = OwnedMaterials.Num();
+	RuntimeFrame.ProcessWorkingSetBytes = FPlatformMemory::GetStats().UsedPhysical;
+	RuntimeFrame.UObjectCount = GUObjectArray.GetObjectArrayNum();
+
+	++RuntimeTotal.FramesAccumulated;
+	RuntimeTotal.FrameNumber = RuntimeFrame.FrameNumber;
+	RuntimeTotal.ActiveHistoricalEpochs = RuntimeFrame.ActiveHistoricalEpochs;
+	RuntimeTotal.FineSamplesResident = RuntimeFrame.FineSamplesResident;
+	RuntimeTotal.FineSamplesScanned += RuntimeFrame.FineSamplesScanned;
+	RuntimeTotal.CoverageFullScans += RuntimeFrame.CoverageFullScans;
+	RuntimeTotal.CoverageQueries += RuntimeFrame.CoverageQueries;
+	RuntimeTotal.OccupancyTests += RuntimeFrame.OccupancyTests;
+	RuntimeTotal.PrimitiveGeometryTests += RuntimeFrame.PrimitiveGeometryTests;
+	RuntimeTotal.OwnershipTests += RuntimeFrame.OwnershipTests;
+	RuntimeTotal.UpdateRecordTextureCalls += RuntimeFrame.UpdateRecordTextureCalls;
+	RuntimeTotal.TextureUploads += RuntimeFrame.TextureUploads;
+	RuntimeTotal.UpdateRecordCapCalls += RuntimeFrame.UpdateRecordCapCalls;
+	RuntimeTotal.CapMeshRebuilds += RuntimeFrame.CapMeshRebuilds;
+	RuntimeTotal.RefreshContributionDiagnosticsUs += RuntimeFrame.RefreshContributionDiagnosticsUs;
+	RuntimeTotal.LogRotationFrameUs += RuntimeFrame.LogRotationFrameUs;
+	RuntimeTotal.ReportHudUs += RuntimeFrame.ReportHudUs;
+	RuntimeTotal.AdvanceFineHistoryUs += RuntimeFrame.AdvanceFineHistoryUs;
+	RuntimeTotal.UpdateTrackedUs += RuntimeFrame.UpdateTrackedUs;
+	RuntimeTotal.MovingPropLabGameThreadUs += RuntimeFrame.MovingPropLabGameThreadUs;
+	RuntimeTotal.ProxyCount = RuntimeFrame.ProxyCount;
+	RuntimeTotal.CapComponentCount = RuntimeFrame.CapComponentCount;
+	RuntimeTotal.TextureCount = RuntimeFrame.TextureCount;
+	RuntimeTotal.MidCount = RuntimeFrame.MidCount;
+	RuntimeTotal.SpatialRecordCount = RuntimeFrame.SpatialRecordCount;
+	RuntimeTotal.FineHistoryResidentBytes = RuntimeFrame.FineHistoryResidentBytes;
+	RuntimeTotal.ProcessWorkingSetBytes = RuntimeFrame.ProcessWorkingSetBytes;
+	RuntimeTotal.UObjectCount = RuntimeFrame.UObjectCount;
 }
 
 int32 ADarkwellMovingPropLabRoom::GetTotalSpatialRecordCount() const
@@ -4293,6 +4572,7 @@ FString ADarkwellMovingPropLabRoom::GetTelemetry() const
 
 void ADarkwellMovingPropLabRoom::Report()
 {
+	FScopedHistoryRuntimeTimer Timer(RuntimeFrame.ReportHudUs);
 	const FString RotationDiagnostics = Scenario == 2
 		? FString::Printf(TEXT("\nROTATE: LIVE %d | STALE %d | PROXIES %d | CAPS %d\nSURFACE %d | CAP %d | TOTAL %d | COVERAGE %.1f%% VALID %d %s\nOBS EPISODE %d %s | TRANSFORM REV %lld | COVERAGE REV %lld | GRID REV %lld | SEALS %d"),
 			GetCurrentEpochCountForTesting(Darkwell::MovingPropLab::RotateId),

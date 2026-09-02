@@ -991,9 +991,10 @@ FString ADarkwellMovingPropLabRoom::GetFineHistoryTelemetry(const FName StableId
 			OldBlockedNewEmpty += Cell.InitialRemembered > 0 && Cell.VerifiedEmpty == 0
 				&& Grid.GetSamples()[Y * Fine.X + X].State == FDarkwellHistoryGridV2::VerifiedEmpty();
 		}
-		Result += FString::Printf(TEXT("epoch=%u fine=%dx%d never=%d unresolved=%d empty=%d superseded=%d mixed=%d oldBlockedNewEmpty=%d;"),
+		Result += FString::Printf(TEXT("epoch=%u fine=%dx%d never=%d unresolved=%d empty=%d superseded=%d mixed=%d oldBlockedNewEmpty=%d hash=%llu sample_bytes=%llu;"),
 			Record.Epoch, Fine.X, Fine.Y, Grid.Count(Grid.NeverObserved()), Grid.Count(Grid.Unresolved()),
-			Grid.Count(Grid.VerifiedEmpty()), Grid.Count(Grid.Superseded()), Grid.CountMixedCoarseCells(), OldBlockedNewEmpty);
+			Grid.Count(Grid.VerifiedEmpty()), Grid.Count(Grid.Superseded()), Grid.CountMixedCoarseCells(), OldBlockedNewEmpty,
+			Grid.EvidenceHash(), uint64(Grid.GetSamples().Num()) * sizeof(FDarkwellHistoryGridV2::FSample));
 	}
 	return Result;
 }
@@ -4312,7 +4313,7 @@ void ADarkwellMovingPropLabRoom::Report()
 			GetSealCountForTesting(Darkwell::MovingPropLab::RotateId))
 		: FString();
 	Status = FString::Printf(
-		TEXT("MOVING + MULTI PROP LAB | MODE %d | RULE SpatialEvidenceOnly | ENEMY 0\nScenario %d | Phase %d | Motion %s | Object position %s\nCurrent interaction: %s%s\nCompleted %d/6 | NEXT TEST: %s\nIdentities %d | Spatial records %d | Multi %d\nWalk to a labeled mechanism and press F. Console is not required."),
+		TEXT("MOVING + MULTI PROP LAB | MODE %d | RULE SpatialEvidenceOnly | HISTORY GRID V2 | ENEMY 0\nScenario %d | Phase %d | Motion %s | Object position %s\nCurrent interaction: %s%s\nCompleted %d/6 | NEXT TEST: %s\nIdentities %d | Spatial records %d | Multi %d\nWalk to a labeled mechanism and press F. Console is not required."),
 		Darkwell::PropLab::PresentationMode(GetWorld()), Scenario, ScenarioPhase,
 		*GetMotionState(), *GetObjectPositionLabel(), *CurrentInteraction, *RotationDiagnostics,
 		CompletedInWorldControls.Num(), *GetNextInWorldControlLabel(),

@@ -127,3 +127,18 @@ int32 FDarkwellHistoryGridV2::CountMixedCoarseCells() const
 	}
 	return Result;
 }
+uint64 FDarkwellHistoryGridV2::EvidenceHash() const
+{
+	uint64 Hash = 1469598103934665603ull;
+	for (const FSample& S : Samples)
+	{
+		const uint64 State = S.State == NeverObserved() ? 0 : S.State == Unresolved() ? 1
+			: S.State == VerifiedEmpty() ? 2 : 3;
+		const uint64 Bits = State | (uint64(S.bVerifiedEmpty) << 2)
+			| (uint64(S.InitialRemembered > 0) << 3)
+			| (uint64(FMath::RoundToInt(S.Opacity * 255)) << 8)
+			| (uint64(FMath::RoundToInt(S.FrozenAAEnvelope * 255)) << 16);
+		Hash = (Hash ^ Bits) * 1099511628211ull;
+	}
+	return Hash;
+}

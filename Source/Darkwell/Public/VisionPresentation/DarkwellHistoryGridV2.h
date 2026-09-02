@@ -33,6 +33,7 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	void BuildPresentation(TArray<FLinearColor>& OutPixels) const;
 	bool IsFullyVerifiedEmpty() const;
 	bool CanEmitCap(int32 RetainedIndex, int32 NeighborIndex) const;
+	uint64 EvidenceHash() const;
 	int32 Count(FGameplayTag State) const;
 	int32 CountMixedCoarseCells() const;
 private:

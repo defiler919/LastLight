@@ -1371,3 +1371,95 @@ empty samples were still inside coarse cells whose old V had not confirmed
 empty. These are grid diagnostics, not screen-pixel counts. They establish
 the coarse/fine evidence mismatch without changing thresholds or angles in
 runtime logic. D3D12 and the full regression are still pending after C.
+
+C pushed: `490a0a6524d75f0842e2dece492ca52644ed9298`.
+D diagnostics add a deterministic ordered fine-state hash (state, empty fact,
+initial discovery, opacity and frozen AA envelope), so equal state counts
+alone cannot satisfy fast/slow comparison. Hash output uses quantized display
+values and is diagnostic only. The HUD identifies HISTORY GRID V2.
+D standard Editor Development build succeeded (10 actions, 20.62 sec).
+
+Initial D3D12/SM6 Mode 2 run:
+`HistoryGridV2/GPU_Mode2_20260902_170720` contains 94 actual Shot captures.
+Its early `checks.json` directory count is 95 because one review contact
+sheet was created during capture; 94 is the original-frame count. Later
+driver counting explicitly matches the numbered capture filenames.
+Fast/slow final hashes matched, both with zero historical proxies/caps.
+The actual intermediate pose was about 154 degrees. Independent GPU shader
+readback: 131072 samples, 9050 positive blocked controls, 59222 positive
+allowed controls, 0 failures. Agent opened the 30 consecutive fast-entry
+frames, final four-direction closeups and 12 slow stationary frames.
+The earlier masked/dither appearance during entry is visible and retained;
+this task does not claim to remove the frozen reveal transition.
+Actual game backbuffer is 1526x549; Editor screenshots are 1920x1032.
+Rendering uses D3D12, SM6, TSR=4, ScreenPercentage=100. Fixed simulation
+step is 1/60 for matching routes; this is NOT measured 60fps performance.
+Mode 1 and the extended independent empty-cap positive control follow.
+
+Extended GPU runs `GPU_Mode1_20260902_171102` and
+`GPU_Mode2_20260902_171514`: 106 original captures each, both completed
+normally. Fast/slow terminal fine hashes match within each mode AND across
+the two modes (epoch 1: 973158155534630339; epoch 2: 7835464520961056169).
+Both modes use the same moving-room historical model. Each shader readback
+again checks 131072 samples with 9050 positive blocked / 59222 positive
+allowed controls and zero gate failures. Every recorded ownership/contact
+counter is zero. The slow scan contains original coarse cells with all three
+fine states simultaneously (for example yaw 147/141/138/135/132).
+The agent opened both modes' consecutive target crops, final south/east/
+north/west closeups and the independent offscreen A-to-B empty-cut views.
+The final cabinet has no remaining old surface/cap; the separate legal
+empty-cut control visibly retains a deep-gray cap, so this is not global
+cap suppression. All original images remain under Saved and outside Git.
+
+Capture limitation found by opening the images, despite passing counters:
+Shot is deferred. The `full_final` image was contaminated by the immediately
+following forensic camera move; the last stationary image was contaminated
+by the following reset/teleport. These frames are retained and are NOT
+claimed as stationary visual passes. Clear four-angle views and preceding
+stationary frames support the terminal result. The new driver now inserts
+capture-drain waits before these discontinuities and settles the restored
+camera before a stationary burst. This changes only evidence scheduling,
+not source code, temporal rules, sampling thresholds or the rotation path.
+The corrected capture run and full regression results are recorded below.
+
+Memory/coverage limits: a fine sample occupies 32 bytes in this Win64 build;
+the two tested epochs use 1044480 and 1914880 bytes of fine state, excluding
+textures/MIDs and the legacy diagnostic grid. Fine history is a world-XY
+grid aligned to the existing 4x4 presentation footprint, with the existing
+3D primitive/OBB guards retained; it is not a general stacked 3D voxel model.
+No production performance or memory-budget acceptance is claimed.
+
+Recovery / manual retest for this checkpoint (no console interaction):
+
+```powershell
+cd D:\UE_projects\LastLight
+git fetch origin
+git switch codex/darkwell-prop-memory-gameplay-lab
+git pull --ff-only
+git rev-parse HEAD
+& 'D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe' `
+  'D:\UE_projects\LastLight\Darkwell.uproject' `
+  '/Game/Maps/L_ProjectFogPropGameplayLab' -d3d12 -sm6 -PropLabMovingControls
+```
+
+1. Click Play; confirm HISTORY GRID V2 / MODE 2 / SpatialEvidenceOnly / ENEMY 0.
+2. Use the labeled local RESET control only to start an independent trial.
+   Walk to VISIBLE ROTATE and fully observe its original 0-degree cabinet.
+3. Press F at the mechanism, then turn away during its one-second wait.
+   During the middle/late rotation briefly observe only a corner/edge, then
+   turn away again and allow the four-second rotation to finish hidden.
+4. Start from the surviving gray fragment, as in the user's failed video.
+   Quickly sweep the final cabinet into legal view. Check both the cabinet
+   footprint and surrounding floor for old surface/cap fragments and overlap.
+   Turn away and back; erased portions must not reappear.
+5. Explicitly reset and repeat with a slow sweep. Also sample partial poses
+   near 120/128/145/157 degrees. Fully unobserved old space must remain until
+   legal evidence, while current-occupied old samples must not generate caps.
+6. Check OFFSCREEN A TO B (find B first), A TO B TO C and MULTI PROP. Seeing
+   a new location must not erase disjoint old locations through StableID.
+   Use VISIBLE TRANSLATE as the previously user-passed regression control.
+
+The GPU driver uses the existing evidence mechanism entry, not physical
+keyboard F presses. Native automation covers Pawn focus/trace/TryInteract.
+Neither is represented as new user manual acceptance. The next user action
+after a READY handoff is manual PIE retest, not additional implementation.

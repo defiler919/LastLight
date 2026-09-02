@@ -820,3 +820,140 @@ and 100% Screen Percentage, then use the world prompt and **F** only:
 
 The user has not yet accepted this correction. It does not change the frozen
 Mode 2 tag, production maps/defaults, or public SightWeave/StableID contracts.
+
+## 2026-09-02 rotated edge-sliver render-ownership closure
+
+This follow-up started from the company remote checkpoint
+`8747acd1dbcee57d773a6171d02230cd1b8ed046`. The user's stricter partial-hidden
+rotation retest confirmed that the earlier transformed-OBB correction removed
+the large duplicate pose, but still failed on two stable fragments: a small
+stale-looking piece above the current cabinet and a thin deep-gray cap strip on
+its lower/side surface. Both persisted from four viewpoints, so the result was
+treated as a real submitted fragment rather than TSR or screen-angle noise.
+
+### Fragment classification and root causes
+
+Per-fragment telemetry now records epoch, primitive, fragment type, texel or
+world vertices, normal, material, ownership, clip result, overlap/contact
+classification, nearest current primitive, and separation. The top fragment
+was `STALE_SURFACE`, not current reveal geometry or a retired component. A raw
+`SuppressedByCurrentEvidence` texel was zero, but its positive neighbor was
+bilinearly filtered back into current-owned render space. Smooth historical
+presentation and the hard ownership exclusion had been applied in the wrong
+order for the final sample.
+
+The lower strip was `STALE_CAP` using `M_ManualStaleCutCap`. The old cap
+subdivision could retain a quad whose center was outside the current OBB while
+an edge touched or crossed its closed projected boundary. Strict volume
+overlap also did not express render-safe coplanar/touching ownership. The first
+precision correction removed the large vertical residual but exposed a final
+0.09 cm-wide horizontal strip: cap generation and its diagnostic both used the
+same expanded projection boundary, so the exact split endpoint belonged to
+both closed sets forever.
+
+### Presentation-only correction
+
+Historical fade and 4x4 sampling remain smooth. A conservative one-texel guard,
+equal to the TF_Bilinear support, is derived from the raw hard ownership mask
+and multiplied into the submitted stale presentation after filtering. This
+prevents bilinear history from repopulating a location already owned by newer
+legal geometry; it does not write D/V/R or `VerifiedEmpty`.
+
+Cap boundaries are split at transformed primitive OBB projection entry/exit
+and spatial-grid breakpoints. Each resulting fragment is restricted to the old
+primitive, then newer/current owned vertical intervals are subtracted before
+the quad is submitted. Cap cache signatures include newer-record suppression
+and retirement state so the mesh cannot survive a relevant ownership change.
+
+Render contact is a closed presentation set with a named `0.05 cm` tolerance.
+Clipping uses `0.051 cm`: the additional `0.001 cm` (0.01 mm) is only a numeric
+roundoff margin, and diagnostics continue to judge contact at `0.05 cm`.
+Projection clipping therefore ends strictly outside the diagnostic closed set
+instead of sharing the same endpoint. This is not depth bias, polygon offset,
+geometry movement, whole-epoch hiding, or a larger knowledge/coverage epsilon.
+
+`SpatialEvidenceOnly`, StableID separation, observation epochs, D/V/R,
+`.20/.18`, 4x4 AA, the deep-gray `#343A40` cap, Mode 0/1, and public SightWeave
+contracts are unchanged. Non-overlapping unresolved stale history remains.
+`VerifiedEmptyCapPositiveControl` reaches real partial `VerifiedEmpty` evidence
+and verifies that its legal non-overlapping cap is still visible.
+
+### Published checkpoints
+
+- `13961cfef3d8659535e6abbcc5364b2d42b58be3` — `test: reproduce residual
+  rotated ownership sliver`; adds fragment attribution and the failing
+  render-contact regression.
+- `6d0f0f41922a4d6f265a7f6b63b3f30286828d3a` — `fix: close stale ownership
+  boundary slivers`; adds the hard ownership guard and conservative
+  surface/cap clipping.
+- `8d3e6018579d710a71828c21a50395da0b45b7af` — `test: close rotated ownership
+  edge regression`; adds the four named regressions, final closed-set endpoint
+  ownership, D3D12 telemetry, and four-view capture timing.
+
+### Build, automation, and GPU evidence
+
+The serial source build completed 7/7 actions successfully in 20.31 seconds.
+The final standard `DarkwellEditor Win64 Development` check was up to date and
+succeeded in 6.95 seconds. Its ignored log is
+`Saved/PropGameplayLab/MovingMulti/ResidualEdge/FinalBuild_20260902_100700.log`.
+Preserved build warning: installed MSVC 14.51 is newer than UE's preferred
+14.50 family; earlier compiled actions also retained existing UE header
+deprecation warnings.
+
+Focused reports retained under ignored `Saved/AutomationReports` include
+`ResidualEdge_PrecisionFocused_20260902_095000` (6/6 Success) and
+`ResidualEdge_EndpointOwnership_20260902_095200` (4/4 Success). The final filter
+`Darkwell.PropLab+Darkwell.FogVisual+Darkwell.SightWeave.M6P1` is
+`ResidualEdge_Final_20260902_100500`: **49/49 Success** (33 clean, 16 with
+preserved warnings, 0 failed/not-run), 376.289 seconds. It includes
+`EdgeContactSliver`, `FourViewStableResidual`, `HardOwnershipFiltering`,
+`VerifiedEmptyCapPositiveControl`, both prior partial-rotation tests, every
+MovingRules test, PropLab, FogVisual, and M6P1.
+
+Three final complete D3D12/SM6 Editor PIE routes used project TSR and 100%
+Screen Percentage. All passed with actual embedded viewport `1526x549`; engine
+captures were `1920x1032`. Logs and screenshot roots:
+
+- `Endpoint_D3D12_01.log`, `InWorldPIE_20260902_095415`: 493 screenshots;
+- `Endpoint_D3D12_02.log`, `InWorldPIE_20260902_095731`: 493 screenshots;
+- `Endpoint_D3D12_03_EvidenceFlush.log`, `InWorldPIE_20260902_100146`: 494
+  screenshots, including four separately landed final viewpoints.
+
+The third run's south/east/north/west original images are frames 0122-0125.
+The agent opened all four originals plus the full-live frame and the start,
+middle, and end of the ten-second adjacent-frame strip. South/east/west were
+stable with no top stale piece, deep-gray current-surface sliver, duplicate
+depth contributor, or Z-fighting. The north view was legally occluded by the
+opaque wall and showed no leak. The ten-second sequence did not change its
+submitted ownership. All four state rows recorded surface contact 0, cap
+contact 0, hard-filter leak 0, and maximum ownership 1.
+
+Earlier failures are deliberately retained. `CheckpointA_EdgeContact` exposed
+318 stale-surface/filter-leak samples. `CheckpointC_D3D12_Final01.log` exposed
+the initial cap contact at the 0.05 cm vertical boundary.
+`Precision_D3D12_01.log` then exposed the final 0.09 cm split-endpoint strip;
+this led to separating clipping clearance from diagnostic contact tolerance.
+Severe scans over the final automation, all three passing GPU logs, and final
+build found 0 assertion/fatal/unhandled/automation-failure/GPU-crash/D3D12
+device-error entries.
+
+### Required user retest
+
+Final state is **PARTIAL — READY_FOR_USER_ROTATED_EDGE_SLIVER_RETEST**. In
+`/Game/Maps/L_ProjectFogPropGameplayLab`, use normal D3D12/SM6, project TSR, and
+100% Screen Percentage, then use the in-world **VISIBLE ROTATE** control and
+**F** only:
+
+1. fully observe the 0-degree cabinet;
+2. start rotation, turn away, briefly expose only one mid-rotation corner or
+   edge, and turn away again;
+3. allow hidden completion to 180 degrees, then slowly reacquire the final
+   cabinet;
+4. inspect its top, bottom, cap endpoints, handle, and both sides from multiple
+   viewpoints;
+5. reject if a stale top fragment, deep-gray strip on the current surface,
+   duplicate surface, or Z-fighting returns; legal non-overlapping gray history
+   and its real `VerifiedEmpty` cap may remain.
+
+The user has not accepted this edge correction yet. The DitherTemporalAA
+checker pattern during partial masked reveal is explicitly outside this fix.

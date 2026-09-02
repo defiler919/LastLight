@@ -20,6 +20,8 @@ void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& Sealed
 	const FIntPoint Coarse = SealedMemory.GetSize();
 	Size = Coarse * SamplesPerCell;
 	Samples.SetNum(Size.X * Size.Y);
+	ActiveSamples.Reset();
+	ActiveFlags.Init(false, Samples.Num());
 	TArray<FLinearColor> FrozenPresentation;
 	SealedMemory.BuildConservativePresentation(SamplesPerCell, FrozenPresentation);
 	for (int32 Y = 0; Y < Size.Y; ++Y) for (int32 X = 0; X < Size.X; ++X)
@@ -47,28 +49,112 @@ void FDarkwellHistoryGridV2::RestrictToRecordedGeometry(const TBitArray<>& Footp
 bool FDarkwellHistoryGridV2::Advance(float DeltaSeconds, TConstArrayView<float> Coverage,
 	const TBitArray<>& Occupied, const TBitArray<>& Ownership)
 {
+	TArray<int32> Dirty;
+	Dirty.Reserve(Samples.Num());
+	for (int32 Index = 0; Index < Samples.Num(); ++Index)
+	{
+		Dirty.Add(Index);
+	}
+	bool bTopologyChanged = false;
+	return AdvanceDirty(DeltaSeconds, Coverage, Occupied, Ownership, Dirty, bTopologyChanged);
+}
+
+bool FDarkwellHistoryGridV2::AdvanceDirty(float DeltaSeconds,
+	TConstArrayView<float> Coverage, const TBitArray<>& Occupied,
+	const TBitArray<>& Ownership, TConstArrayView<int32> DirtyIndices,
+	bool& bOutTopologyChanged)
+{
+	bOutTopologyChanged = false;
 	if (!FMath::IsFinite(DeltaSeconds) || DeltaSeconds < 0 || Coverage.Num() != Samples.Num()
 		|| Occupied.Num() != Samples.Num() || Ownership.Num() != Samples.Num()) return false;
-	const float Dt = FMath::Min(DeltaSeconds, .20f);
-	for (int32 I = 0; I < Samples.Num(); ++I)
+	if (ActiveFlags.Num() != Samples.Num()) ActiveFlags.Init(false, Samples.Num());
+	auto Activate = [&](const int32 Index)
 	{
-		FSample& S = Samples[I];
-		if (Ownership[I]) S.State = Superseded();
-		if (S.State == Superseded()) continue; // Monotonic ownership, never an empty-space fact.
+		if (!ActiveFlags[Index])
+		{
+			ActiveFlags[Index] = true;
+			ActiveSamples.Add(Index);
+		}
+	};
+	for (const int32 Index : DirtyIndices)
+	{
+		if (!Samples.IsValidIndex(Index)) continue;
+		FSample& S = Samples[Index];
+		if (Ownership[Index])
+		{
+			if (S.State != Superseded()) bOutTopologyChanged = true;
+			S.State = Superseded();
+			S.EmptyDwell = 0.0f;
+			continue;
+		}
+		if (S.State == Superseded()) continue;
+		const bool bLegalEmpty = !Occupied[Index] && FMath::IsFinite(Coverage[Index])
+			&& Coverage[Index] >= FDarkwellSpatialPropMemory::LegalCoverage;
 		if (!S.bVerifiedEmpty)
 		{
-			const bool LegalEmpty = !Occupied[I] && FMath::IsFinite(Coverage[I])
-				&& Coverage[I] >= FDarkwellSpatialPropMemory::LegalCoverage;
-			S.EmptyDwell = LegalEmpty ? S.EmptyDwell + FMath::Min(Dt, 1.f / 30.f) : 0.f;
+			if (bLegalEmpty) Activate(Index);
+			else
+			{
+				S.EmptyDwell = 0.0f;
+			}
+		}
+		else if (S.Opacity > 0.0f) Activate(Index);
+	}
+
+	const float Dt = FMath::Min(DeltaSeconds, .20f);
+	bool bPresentationChanged = false;
+	for (int32 ActiveIndex = ActiveSamples.Num() - 1; ActiveIndex >= 0; --ActiveIndex)
+	{
+		const int32 Index = ActiveSamples[ActiveIndex];
+		if (!ActiveFlags.IsValidIndex(Index) || !ActiveFlags[Index])
+		{
+			ActiveSamples.RemoveAtSwap(ActiveIndex, 1, EAllowShrinking::No);
+			continue;
+		}
+		FSample& S = Samples[Index];
+		if (Ownership[Index])
+		{
+			if (S.State != Superseded()) bOutTopologyChanged = true;
+			S.State = Superseded();
+			S.EmptyDwell = 0.0f;
+			ActiveFlags[Index] = false;
+			ActiveSamples.RemoveAtSwap(ActiveIndex, 1, EAllowShrinking::No);
+			bPresentationChanged = true;
+			continue;
+		}
+		if (!S.bVerifiedEmpty)
+		{
+			const bool bLegalEmpty = !Occupied[Index] && FMath::IsFinite(Coverage[Index])
+				&& Coverage[Index] >= FDarkwellSpatialPropMemory::LegalCoverage;
+			if (!bLegalEmpty)
+			{
+				S.EmptyDwell = 0.0f;
+				ActiveFlags[Index] = false;
+				ActiveSamples.RemoveAtSwap(ActiveIndex, 1, EAllowShrinking::No);
+				continue;
+			}
+			S.EmptyDwell += FMath::Min(Dt, 1.f / 30.f);
 			if (S.EmptyDwell + UE_SMALL_NUMBER >= FDarkwellSpatialPropMemory::EmptyConfirmationSeconds)
 			{
 				S.bVerifiedEmpty = true;
 				S.State = VerifiedEmpty();
+				bOutTopologyChanged = true;
+				bPresentationChanged = true;
 			}
 		}
-		if (S.bVerifiedEmpty) S.Opacity = FMath::Max(0.f, S.Opacity - Dt / FDarkwellSpatialPropMemory::EmptyFadeSeconds);
+		if (S.bVerifiedEmpty)
+		{
+			const float PreviousOpacity = S.Opacity;
+			S.Opacity = FMath::Max(0.f, S.Opacity - Dt / FDarkwellSpatialPropMemory::EmptyFadeSeconds);
+			bPresentationChanged |= S.Opacity != PreviousOpacity;
+			if (S.Opacity <= 0.0f)
+			{
+				ActiveFlags[Index] = false;
+				ActiveSamples.RemoveAtSwap(ActiveIndex, 1, EAllowShrinking::No);
+			}
+		}
 	}
-	return true;
+	return bPresentationChanged || bOutTopologyChanged;
 }
 
 bool FDarkwellHistoryGridV2::HasResidualSurface() const

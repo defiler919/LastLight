@@ -25,6 +25,9 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	void RestrictToRecordedGeometry(const TBitArray<>& Footprint);
 	bool Advance(float DeltaSeconds, TConstArrayView<float> LegalCoverage,
 		const TBitArray<>& ActualOccupied, const TBitArray<>& NewerObservedOwnership);
+	bool AdvanceDirty(float DeltaSeconds, TConstArrayView<float> LegalCoverage,
+		const TBitArray<>& ActualOccupied, const TBitArray<>& NewerObservedOwnership,
+		TConstArrayView<int32> DirtyIndices, bool& bOutTopologyChanged);
 	FIntPoint GetSize() const { return Size; }
 	const FBox2D& GetBounds() const { return Bounds; }
 	TConstArrayView<FSample> GetSamples() const { return Samples; }
@@ -36,8 +39,11 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	uint64 EvidenceHash() const;
 	int32 Count(FGameplayTag State) const;
 	int32 CountMixedCoarseCells() const;
+	int32 GetActiveTransitionCount() const { return ActiveSamples.Num(); }
 private:
 	FBox2D Bounds;
 	FIntPoint Size = FIntPoint::ZeroValue;
 	TArray<FSample> Samples;
+	TArray<int32> ActiveSamples;
+	TBitArray<> ActiveFlags;
 };

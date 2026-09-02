@@ -21,6 +21,7 @@
 #include "SightWeaveStaticEnvironment.h"
 #include "SightWeaveWorldSubsystem.h"
 #include "UObject/Package.h"
+#include "UObject/GarbageCollection.h"
 #include "UObject/UObjectGlobals.h"
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
@@ -2053,6 +2054,7 @@ namespace
   int32 FinalCaps=0;
   FString FineHistory;
 	 FString CompositeDiagnosis;
+	 FString SealedFineHistory;
   float SealedYaw=0;
  };
 
@@ -2105,6 +2107,8 @@ namespace
   Test.TestTrue(TEXT("Residual route creates a partial intermediate epoch"),bPartial);
   Step(4);Player->SetActorRotation(FRotator(0,-90,0));Step(303);
   Result.SealedYaw=Room->GetNewestHistoricalYawForTesting(RotateId);
+	 Result.SealedFineHistory=Room->GetFineHistoryTelemetry(RotateId);
+	 Test.AddInfo(TEXT("SEALED_HISTORY_GRID_V2 ")+Result.SealedFineHistory);
   Result.MissingCuts=Room->GetMissingHistoricalCutCountForTesting(RotateId);
   Result.OutsideSource=Room->GetCapVerticesOutsideSourceForTesting(RotateId);
   Result.VisibleCaps=Room->GetVisibleHistoricalCapCountForTesting(RotateId);
@@ -2186,6 +2190,8 @@ bool FDarkwellFineSlowReacquireTest::RunTest(const FString&)
 {
  const auto Fast=RunResidualOwnershipRoute(*this,false,2,true,0,100,true,157);
  const auto Slow=RunResidualOwnershipRoute(*this,false,2,true,0,100,false,157);
+	 AddInfo(TEXT("FAST_SEALED ")+Fast.SealedFineHistory);
+	 AddInfo(TEXT("SLOW_SEALED ")+Slow.SealedFineHistory);
  TestEqual(TEXT("Same frozen pose"),Slow.SealedYaw,Fast.SealedYaw);
  TestEqual(TEXT("Same terminal fine state counts"),Slow.FineHistory,Fast.FineHistory);
  TestEqual(TEXT("Slow final has no stale proxy"),Slow.FinalProxies,0);
@@ -2475,7 +2481,7 @@ bool FDarkwellHistoryGridV2EpochScalingTelemetryTest::RunTest(const FString&)
   TestEqual(TEXT("Resident epoch gauge"),T.ActiveHistoricalEpochs,Epochs);
   if(Epochs>0)TestTrue(TEXT("Fine samples are resident"),T.FineSamplesResident>0);
   const double Frames=FMath::Max<uint64>(1,T.FramesAccumulated);
-  AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_BASELINE epochs=%d resident_samples=%d fine_bytes=%llu samples_scanned_per_frame=%.3f coverage_queries_per_frame=%.3f occupancy_tests_per_frame=%.3f geometry_tests_per_frame=%.3f ownership_tests_per_frame=%.3f texture_calls_per_frame=%.3f texture_uploads_per_sec=%.3f cap_calls_per_frame=%.3f cap_rebuilds_per_sec=%.3f refresh_us_per_frame=%.3f rotation_log_us_per_frame=%.3f report_us_per_frame=%.3f advance_fine_us_per_frame=%.3f tracked_us_per_frame=%.3f gt_us_per_frame=%.3f working_set=%llu uobjects=%d resources=proxy:%d/cap:%d/texture:%d/mid:%d"),
+  AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_POST_REFACTOR epochs=%d resident_samples=%d fine_bytes=%llu samples_scanned_per_frame=%.3f coverage_queries_per_frame=%.3f occupancy_tests_per_frame=%.3f geometry_tests_per_frame=%.3f ownership_tests_per_frame=%.3f texture_calls_per_frame=%.3f texture_uploads_per_sec=%.3f cap_calls_per_frame=%.3f cap_rebuilds_per_sec=%.3f refresh_us_per_frame=%.3f rotation_log_us_per_frame=%.3f report_us_per_frame=%.3f advance_fine_us_per_frame=%.3f tracked_us_per_frame=%.3f gt_us_per_frame=%.3f working_set=%llu uobjects=%d resources=proxy:%d/cap:%d/texture:%d/mid:%d"),
    Epochs,T.FineSamplesResident,T.FineHistoryResidentBytes,T.FineSamplesScanned/Frames,
    T.CoverageQueries/Frames,T.OccupancyTests/Frames,T.PrimitiveGeometryTests/Frames,
    T.OwnershipTests/Frames,T.UpdateRecordTextureCalls/Frames,T.TextureUploads/Frames*60.0,
@@ -2483,6 +2489,26 @@ bool FDarkwellHistoryGridV2EpochScalingTelemetryTest::RunTest(const FString&)
    T.RefreshContributionDiagnosticsUs/Frames,T.LogRotationFrameUs/Frames,T.ReportHudUs/Frames,
    T.AdvanceFineHistoryUs/Frames,T.UpdateTrackedUs/Frames,T.MovingPropLabGameThreadUs/Frames,
    T.ProcessWorkingSetBytes,T.UObjectCount,T.ProxyCount,T.CapComponentCount,T.TextureCount,T.MidCount));
+  Room->ResetHistoryRuntimeTelemetryForTesting();Step(300);
+  const auto Steady=Room->GetHistoryRuntimeTotalTelemetryForTesting();
+  TestEqual(TEXT("Steady epoch window scans no fine samples"),Steady.FineSamplesScanned,uint64(0));
+  TestEqual(TEXT("Steady epoch window makes no coverage queries"),Steady.CoverageQueries,uint64(0));
+  TestEqual(TEXT("Steady epoch window makes no occupancy tests"),Steady.OccupancyTests,uint64(0));
+  TestEqual(TEXT("Steady epoch window makes no ownership tests"),Steady.OwnershipTests,uint64(0));
+  TestEqual(TEXT("Steady epoch window makes no texture updates"),Steady.UpdateRecordTextureCalls,uint64(0));
+  TestEqual(TEXT("Steady epoch window makes no cap updates"),Steady.UpdateRecordCapCalls,uint64(0));
+  const double SteadyFrames=FMath::Max<uint64>(1,Steady.FramesAccumulated);
+  AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_STEADY epochs=%d resident_samples=%d fine_bytes=%llu samples_scanned_per_frame=%.3f coverage_queries_per_frame=%.3f occupancy_tests_per_frame=%.3f geometry_tests_per_frame=%.3f ownership_tests_per_frame=%.3f texture_calls_per_frame=%.3f texture_uploads_per_sec=%.3f cap_calls_per_frame=%.3f cap_rebuilds_per_sec=%.3f refresh_us_per_frame=%.3f rotation_log_us_per_frame=%.3f report_us_per_frame=%.3f advance_fine_us_per_frame=%.3f tracked_us_per_frame=%.3f gt_us_per_frame=%.3f working_set=%llu uobjects=%d resources=proxy:%d/cap:%d/texture:%d/mid:%d"),
+   Epochs,Steady.FineSamplesResident,Steady.FineHistoryResidentBytes,Steady.FineSamplesScanned/SteadyFrames,
+   Steady.CoverageQueries/SteadyFrames,Steady.OccupancyTests/SteadyFrames,
+   Steady.PrimitiveGeometryTests/SteadyFrames,Steady.OwnershipTests/SteadyFrames,
+   Steady.UpdateRecordTextureCalls/SteadyFrames,Steady.TextureUploads/SteadyFrames*60.0,
+   Steady.UpdateRecordCapCalls/SteadyFrames,Steady.CapMeshRebuilds/SteadyFrames*60.0,
+   Steady.RefreshContributionDiagnosticsUs/SteadyFrames,Steady.LogRotationFrameUs/SteadyFrames,
+   Steady.ReportHudUs/SteadyFrames,Steady.AdvanceFineHistoryUs/SteadyFrames,
+   Steady.UpdateTrackedUs/SteadyFrames,Steady.MovingPropLabGameThreadUs/SteadyFrames,
+   Steady.ProcessWorkingSetBytes,Steady.UObjectCount,Steady.ProxyCount,Steady.CapComponentCount,
+   Steady.TextureCount,Steady.MidCount));
  }
  Fixture->Destroy();return true;
 }
@@ -2498,6 +2524,171 @@ bool FDarkwellMultiEpochCompositeDiagnosisTest::RunTest(const FString&)
   &&Result.CompositeDiagnosis.Contains(TEXT("C="))&&Result.CompositeDiagnosis.Contains(TEXT("D=")));
  AddInfo(TEXT("MULTI_EPOCH_COMPOSITE_DIAGNOSIS\n")+Result.CompositeDiagnosis);
  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHistoryRuntimeIdleCostTest,
+ "Darkwell.PropLab.MovingRules.HistoryRuntime.HistoryGridV2IdleCost", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellHistoryRuntimeIdleCostTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("HistoryRuntimeIdleCost"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,-90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("Idle-cost Lab exists"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("Idle-cost authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Idle-cost reset"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ TestTrue(TEXT("Idle-cost configures eight historical epochs"),Room->ConfigureHistoricalEpochCountForTesting(RotateId,8));
+ Step(180);Room->ResetHistoryRuntimeTelemetryForTesting();Step(600);
+ const auto T=Room->GetHistoryRuntimeTotalTelemetryForTesting();
+ TestEqual(TEXT("Idle window retains eight epochs"),T.ActiveHistoricalEpochs,8);
+ TestEqual(TEXT("Idle window scans no fine samples"),T.FineSamplesScanned,uint64(0));
+ TestEqual(TEXT("Idle window performs no coverage scan"),T.CoverageFullScans,uint64(0));
+ TestEqual(TEXT("Idle window performs no coverage query"),T.CoverageQueries,uint64(0));
+ TestEqual(TEXT("Idle window performs no occupancy test"),T.OccupancyTests,uint64(0));
+ TestEqual(TEXT("Idle window performs no geometry test"),T.PrimitiveGeometryTests,uint64(0));
+ TestEqual(TEXT("Idle window performs no ownership test"),T.OwnershipTests,uint64(0));
+ TestEqual(TEXT("Idle window performs no texture update"),T.UpdateRecordTextureCalls,uint64(0));
+ TestEqual(TEXT("Idle window performs no texture upload"),T.TextureUploads,uint64(0));
+ TestEqual(TEXT("Idle window performs no cap update"),T.UpdateRecordCapCalls,uint64(0));
+ TestEqual(TEXT("Idle window performs no cap rebuild"),T.CapMeshRebuilds,uint64(0));
+ TestEqual(TEXT("Idle window performs no contribution refresh"),T.RefreshContributionDiagnosticsUs,0.0);
+ TestEqual(TEXT("Idle window performs no rotation diagnostic traversal"),T.LogRotationFrameUs,0.0);
+ const double MeanGt=T.MovingPropLabGameThreadUs/FMath::Max<uint64>(1,T.FramesAccumulated);
+ TestTrue(TEXT("Eight-epoch idle room stays below five milliseconds"),MeanGt<5000.0);
+ AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_IDLE frames=%llu epochs=%d resident=%d fine_bytes=%llu gt_us_per_frame=%.3f report_us_per_frame=%.3f working_set=%llu uobjects=%d resources=proxy:%d/cap:%d/texture:%d/mid:%d"),
+  T.FramesAccumulated,T.ActiveHistoricalEpochs,T.FineSamplesResident,T.FineHistoryResidentBytes,MeanGt,
+  T.ReportHudUs/FMath::Max<uint64>(1,T.FramesAccumulated),T.ProcessWorkingSetBytes,T.UObjectCount,
+  T.ProxyCount,T.CapComponentCount,T.TextureCount,T.MidCount));
+ Fixture->Destroy();return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHistoryRuntimeDirtyRegionTest,
+ "Darkwell.PropLab.MovingRules.HistoryRuntime.HistoryGridV2DirtyRegion", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellHistoryRuntimeDirtyRegionTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("HistoryRuntimeDirtyRegion"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,-90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("Dirty-region Lab exists"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("Dirty-region authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Dirty-region reset"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ const FName EventId(TEXT("Lab.InWorld.Multi.SmallBox"));
+ TestTrue(TEXT("Dirty-region configures one historical epoch"),Room->ConfigureHistoricalEpochCountForTesting(RotateId,1));
+	 Step(180);
+	 FTransform LocalChange=Room->GetTrackedTransform(RotateId);
+	 LocalChange.AddToTranslation(FVector(45,0,0));
+	 TestTrue(TEXT("Dirty-region moves one unrelated actual into a local overlap"),
+	  Room->SetTrackedTransformForTesting(EventId,LocalChange));
+ Room->ResetHistoryRuntimeTelemetryForTesting();Step(2);
+ const auto Changed=Room->GetHistoryRuntimeTotalTelemetryForTesting();
+ TestTrue(TEXT("Local geometry event scans at least one fine sample"),Changed.FineSamplesScanned>0);
+ TestTrue(TEXT("Local geometry event scans less than the resident grid"),
+  Changed.FineSamplesScanned<static_cast<uint64>(Changed.FineSamplesResident));
+	 TestTrue(TEXT("Local geometry event needs at most one current coverage scan"),Changed.CoverageFullScans<=1);
+ AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_DIRTY resident=%d scanned=%llu occupancy=%llu geometry=%llu ownership=%llu"),
+  Changed.FineSamplesResident,Changed.FineSamplesScanned,Changed.OccupancyTests,
+  Changed.PrimitiveGeometryTests,Changed.OwnershipTests));
+	 Step(60);Room->ResetHistoryRuntimeTelemetryForTesting();Step(120);
+ const auto Stable=Room->GetHistoryRuntimeTotalTelemetryForTesting();
+ TestEqual(TEXT("After local event settles, fine scans return to zero"),Stable.FineSamplesScanned,uint64(0));
+ TestEqual(TEXT("After local event settles, occupancy tests return to zero"),Stable.OccupancyTests,uint64(0));
+ TestEqual(TEXT("After local event settles, ownership tests return to zero"),Stable.OwnershipTests,uint64(0));
+ Fixture->Destroy();return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHistoryRuntimeResetLifetimeTest,
+ "Darkwell.PropLab.MovingRules.HistoryRuntime.RepeatedResetLifetime50", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellHistoryRuntimeResetLifetimeTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("HistoryRuntimeResetLifetime"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,-90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("Reset-lifetime Lab exists"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("Reset-lifetime authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Reset-lifetime reset"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ TestTrue(TEXT("Reset-lifetime baseline epochs"),Room->ConfigureHistoricalEpochCountForTesting(RotateId,4));Step(2);
+ const auto Baseline=Room->GetHistoryRuntimeFrameTelemetryForTesting();
+ for(int32 Cycle=0;Cycle<50;++Cycle)
+ {
+  TestTrue(FString::Printf(TEXT("Reset cycle %d rebuilds the same four epochs"),Cycle+1),
+   Room->ConfigureHistoricalEpochCountForTesting(RotateId,4));
+  Step(2);
+  const auto Current=Room->GetHistoryRuntimeFrameTelemetryForTesting();
+  TestEqual(TEXT("Proxy resources remain bounded"),Current.ProxyCount,Baseline.ProxyCount);
+  TestEqual(TEXT("Cap resources remain bounded"),Current.CapComponentCount,Baseline.CapComponentCount);
+  TestEqual(TEXT("Texture resources remain bounded"),Current.TextureCount,Baseline.TextureCount);
+	  TestEqual(TEXT("MID resources remain bounded"),Current.MidCount,Baseline.MidCount);
+	  if((Cycle+1)%5==0)CollectGarbage(RF_NoFlags,true);
+	 }
+ CollectGarbage(RF_NoFlags,true);Step(1);
+ const auto Final=Room->GetHistoryRuntimeFrameTelemetryForTesting();
+ TestTrue(TEXT("UObject count remains bounded after garbage collection"),Final.UObjectCount<=Baseline.UObjectCount+1024);
+ AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_RESET_50 baseline_uobjects=%d final_uobjects=%d working_set=%llu resources=proxy:%d/cap:%d/texture:%d/mid:%d"),
+  Baseline.UObjectCount,Final.UObjectCount,Final.ProcessWorkingSetBytes,Final.ProxyCount,
+  Final.CapComponentCount,Final.TextureCount,Final.MidCount));
+ TestTrue(TEXT("Reset-lifetime clears all synthetic epochs"),Room->ConfigureHistoricalEpochCountForTesting(RotateId,0));Step(2);
+ TestEqual(TEXT("No historical presentation resource survives clear"),
+  Room->GetHistoricalPresentationResourceCountForTesting(RotateId),0);
+ Fixture->Destroy();return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHistoryRuntimeLongSoakTest,
+ "Darkwell.PropLab.MovingRules.HistoryRuntime.LongSoakFiveMinutes", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellHistoryRuntimeLongSoakTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("HistoryRuntimeLongSoak"),CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")),true);
+ UWorld* World=TestWorld.Get();World->URL.AddOption(TEXT("PropLabOriginal"));World->URL.AddOption(TEXT("InWorldControls"));
+ auto* Player=Spawn<ADarkwellCharacter>(*World,FVector(-300,70,92),FRotator(0,-90,0));
+ auto* Fixture=World->SpawnActor<ADarkwellPropGameplayLab>();Fixture->PostInitializeComponents();Fixture->DispatchBeginPlay();
+ auto* Room=ADarkwellMovingPropLabRoom::FindActive(World);auto* Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ if(!TestNotNull(TEXT("Soak Lab exists"),Room)||!Player||!Adapter)return false;
+ TestTrue(TEXT("Soak authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+ TestTrue(TEXT("Soak reset"),Room->ResetRoom(Player));
+ auto Step=[&](int32 Frames){for(int32 Frame=0;Frame<Frames;++Frame)
+  {Adapter->Tick(1.f/60);Room->UpdateRoom(1.f/60,Player);Fixture->Tick(1.f/60);}};
+ const FName RotateId(TEXT("Lab.InWorld.Rotate.Cabinet"));
+ TestTrue(TEXT("Soak configures eight historical epochs"),Room->ConfigureHistoricalEpochCountForTesting(RotateId,8));
+ Step(180);const auto Start=Room->GetHistoryRuntimeFrameTelemetryForTesting();
+ Room->ResetHistoryRuntimeTelemetryForTesting();Step(18000);
+ const auto T=Room->GetHistoryRuntimeTotalTelemetryForTesting();
+ TestEqual(TEXT("Soak simulates five minutes at sixty Hz"),T.FramesAccumulated,uint64(18000));
+ TestEqual(TEXT("Soak scans no idle fine samples"),T.FineSamplesScanned,uint64(0));
+ TestEqual(TEXT("Soak performs no idle coverage query"),T.CoverageQueries,uint64(0));
+ TestEqual(TEXT("Soak performs no idle occupancy test"),T.OccupancyTests,uint64(0));
+ TestEqual(TEXT("Soak performs no idle ownership test"),T.OwnershipTests,uint64(0));
+ TestEqual(TEXT("Soak performs no texture upload"),T.TextureUploads,uint64(0));
+ TestEqual(TEXT("Soak performs no cap rebuild"),T.CapMeshRebuilds,uint64(0));
+ TestEqual(TEXT("Soak proxy count remains stable"),T.ProxyCount,Start.ProxyCount);
+ TestEqual(TEXT("Soak cap count remains stable"),T.CapComponentCount,Start.CapComponentCount);
+ TestEqual(TEXT("Soak texture count remains stable"),T.TextureCount,Start.TextureCount);
+ TestEqual(TEXT("Soak MID count remains stable"),T.MidCount,Start.MidCount);
+ TestTrue(TEXT("Soak UObject count remains stable"),T.UObjectCount<=Start.UObjectCount+64);
+ TestTrue(TEXT("Soak working set grows by less than 64 MiB"),
+  T.ProcessWorkingSetBytes<=Start.ProcessWorkingSetBytes+64ull*1024ull*1024ull);
+ const double MeanGt=T.MovingPropLabGameThreadUs/FMath::Max<uint64>(1,T.FramesAccumulated);
+ TestTrue(TEXT("Five-minute eight-epoch soak stays below five milliseconds"),MeanGt<5000.0);
+ AddInfo(FString::Printf(TEXT("HISTORY_RUNTIME_SOAK_5M frames=%llu gt_us_per_frame=%.3f start_working_set=%llu final_working_set=%llu start_uobjects=%d final_uobjects=%d resources=proxy:%d/cap:%d/texture:%d/mid:%d"),
+  T.FramesAccumulated,MeanGt,Start.ProcessWorkingSetBytes,T.ProcessWorkingSetBytes,
+  Start.UObjectCount,T.UObjectCount,T.ProxyCount,T.CapComponentCount,T.TextureCount,T.MidCount));
+ Fixture->Destroy();return true;
 }
 
 #if WITH_EDITOR

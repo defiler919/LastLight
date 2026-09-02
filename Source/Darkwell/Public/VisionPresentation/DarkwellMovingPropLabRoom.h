@@ -190,6 +190,7 @@ public:
 	FHistoryRuntimeTelemetry GetHistoryRuntimeTotalTelemetryForTesting() const { return RuntimeTotal; }
 	void ResetHistoryRuntimeTelemetryForTesting();
 	bool ConfigureHistoricalEpochCountForTesting(FName StableId, int32 HistoricalEpochs);
+	bool SetTrackedTransformForTesting(FName StableId, const FTransform& Transform);
 	bool StartTrackedRotationForTesting(FName StableId, float TargetYaw, float Duration);
 	bool InjectInvalidCoverageOnceForTesting(FName StableId);
 
@@ -243,6 +244,18 @@ private:
 		TArray<FVector2D> CapSamplePoints;
 		TArray<FLinearColor> SubmittedPresentation;
 		TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> Materials;
+		TArray<float> CachedCoarseCoverage;
+		TArray<float> CachedCoarseEvidence;
+		TArray<float> CachedFineCoverage;
+		TBitArray<> CachedFineOccupied;
+		TArray<FBox2D> CachedGeometryRegions;
+		uint64 CachedCoverageAuthorityRevision = MAX_uint64;
+		uint64 CachedCoverageDrawRevision = MAX_uint64;
+		uint64 ProcessedGeometryRevision = 0;
+		uint64 ProcessedOwnershipRevision = 0;
+		float CoarseEvidenceActiveSeconds = 0.0f;
+		bool bPresentationDirty = true;
+		bool bCapTopologyDirty = true;
 		bool bPresentationRetired = false;
 		bool bHasProxyVisibilitySample = false;
 		bool bLastProxyVisible = false;
@@ -263,6 +276,7 @@ private:
 		TMap<uint32, FRecordVisual> Visuals;
 		FTransform InitialTransform = FTransform::Identity;
 		FTransform LastPhysicalTransform = FTransform::Identity;
+		FTransform LastGeometryTransform = FTransform::Identity;
 		FVector Dimensions = FVector::ZeroVector;
 		FLinearColor Tint = FLinearColor::Gray;
 		int32 Shape = 0;
@@ -290,6 +304,12 @@ private:
 		uint64 CoverageAuthorityRevision = 0;
 		uint64 CoverageTransformRevision = 0;
 		uint64 CoverageGridRevision = 0;
+		TArray<float> CachedCurrentCoverage;
+		uint64 CachedCurrentAuthorityRevision = MAX_uint64;
+		uint64 CachedCurrentCoverageDrawRevision = MAX_uint64;
+		uint64 CachedCurrentTransformRevision = 0;
+		uint64 CachedCurrentGridRevision = 0;
+		float CurrentPresentationActiveSeconds = 0.0f;
 		FBox2D LastCoverageBounds;
 		FIntPoint LastCoverageSize = FIntPoint::ZeroValue;
 		FString LastCoverageZeroReason = TEXT("NOT_SAMPLED");
@@ -297,6 +317,7 @@ private:
 		bool bLastCoverageValid = false;
 		bool bInjectInvalidCoverageOnce = false;
 		bool bExists = false;
+		bool bDiagnosticsDirty = true;
 	};
 
 	struct FCoverageSnapshot
@@ -327,7 +348,7 @@ private:
 		const FTransform& Transform);
 	void DestroyTracked();
 	void DestroyTracked(FName StableId);
-	void DestroyVisual(FRecordVisual& Visual);
+	void DestroyVisual(FRecordVisual& Visual, bool bDiscardEvidence = true);
 	void ConfigureInWorldProps();
 	void SpawnInWorldControls();
 	void DestroyInWorldControls();
@@ -386,16 +407,21 @@ private:
 		const FBox2D& Bounds,
 		uint64 TransformRevision,
 		uint64 GridRevision, int32 Subdivision = 1) const;
-	void AdvanceFineHistory(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record, float DeltaSeconds);
+	bool AdvanceFineHistory(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record,
+		float DeltaSeconds, bool bCoverageDirty, TConstArrayView<int32> GeometryDirtyIndices);
 	bool IsOccupiedByActual(FVector2D Point, FName IgnoredStableId) const;
 	bool HasCurrentObservedContributionAt(const FTrackedProp& Prop, FVector2D Point) const;
 	bool HasNewerObservedContributionAt(
 		const FTrackedProp& Prop,
 		uint32 OlderEpoch,
 		FVector2D Point) const;
-	void UpdateHistoricalContributionExclusion(
+	bool UpdateHistoricalContributionExclusion(
 		FTrackedProp& Prop,
-		FDarkwellSpatialObservationRecord& Record);
+		FDarkwellSpatialObservationRecord& Record,
+		TConstArrayView<int32> DirtyIndices);
+	void BuildGeometryDirtyIndices(const FTrackedProp& Prop,
+		FDarkwellSpatialObservationRecord& Record, FRecordVisual& Visual,
+		TArray<int32>& OutDirtyIndices);
 	bool IsHistoricalPresentationResolved(
 		const FDarkwellSpatialObservationRecord& Record,
 		const FRecordVisual& Visual) const;
@@ -442,4 +468,6 @@ private:
 	mutable FHistoryRuntimeTelemetry RuntimeFrame;
 	mutable FHistoryRuntimeTelemetry RuntimeTotal;
 	uint64 RuntimeFrameSequence = 0;
+	uint64 GeometryRevision = 1;
+	uint64 OwnershipRevision = 1;
 };

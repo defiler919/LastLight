@@ -57,4 +57,26 @@ bool FDarkwellFineSurfaceTest::RunTest(const FString&)
 	TestFalse(TEXT("Ownership does not claim whole record verified empty"),Grid.IsFullyVerifiedEmpty());
 	return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellFineCapBoundaryTest,
+	"Darkwell.PropLab.MovingRules.HistoryGridV2.PositiveHistoricalCapAndNoCapForSupersededBoundary",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDarkwellFineCapBoundaryTest::RunTest(const FString&)
+{
+	FDarkwellSpatialPropMemory Old;
+	Old.Initialize(TEXT("Lab.Cap"),FBox2D(FVector2D(0),FVector2D(5,2.5)));
+	Old.BeginPresent(); Old.Advance(.2f,TArray<float>{1,0}); Old.BeginAbsent();
+	FDarkwellHistoryGridV2 Grid; Grid.Initialize(Old);
+	TestTrue(TEXT("Partial discovery has a legal fine boundary cap"),Grid.CanEmitCap(3,4));
+	TArray<float> Coverage; Coverage.Init(0,32); Coverage[2]=1;
+	TBitArray<> Occupied(false,32),Owned(false,32);Owned[4]=true;Occupied[4]=true;
+	for(int32 I=0;I<8;++I) Grid.Advance(1.f/60,Coverage,Occupied,Owned);
+	TestFalse(TEXT("Ownership is not a cut and must not emit cap"),Grid.CanEmitCap(3,4));
+	TestTrue(TEXT("Verified empty remains a positive cut"),Grid.CanEmitCap(3,2));
+	TestFalse(TEXT("Superseding neighbor did not manufacture empty knowledge"),Grid.GetSamples()[4].bVerifiedEmpty);
+	TestTrue(TEXT("Unresolved source and fading empty forbid retirement"),Grid.HasResidualSurface());
+	Owned.Init(true,32);Grid.Advance(1.f/60,Coverage,Occupied,Owned);
+	TestFalse(TEXT("All ownership-resolved surface can retire"),Grid.HasResidualSurface());
+	TestFalse(TEXT("Retiring output is not claiming all space empty"),Grid.IsFullyVerifiedEmpty());
+	return true;
+}
 #endif

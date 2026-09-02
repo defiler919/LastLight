@@ -2301,8 +2301,21 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	}
 	const bool bPresent = Record.SpatialMemory.IsPresent();
 	const bool bAbsent = Record.SpatialMemory.IsAbsent();
-	const TConstArrayView<FDarkwellSpatialPropMemory::FCell> Cells = Record.SpatialMemory.GetCells();
-	const FIntPoint Size = Record.SpatialMemory.GetSize();
+	const bool bFineHistory = !Record.bCurrentObservedLocation && Record.FineHistory.IsInitialized();
+	TArray<FDarkwellSpatialPropMemory::FCell> FineCells;
+	if (bFineHistory)
+	{
+		FineCells.SetNum(Record.FineHistory.GetSamples().Num());
+		for (int32 I = 0; I < FineCells.Num(); ++I)
+		{
+			const auto& S = Record.FineHistory.GetSamples()[I];
+			FineCells[I].InitialRemembered = S.State == FDarkwellHistoryGridV2::Unresolved() ? S.InitialRemembered : 0;
+			FineCells[I].VerifiedEmpty = S.bVerifiedEmpty ? 1.f : 0.f;
+		}
+	}
+	const TConstArrayView<FDarkwellSpatialPropMemory::FCell> Cells = bFineHistory
+		? TConstArrayView<FDarkwellSpatialPropMemory::FCell>(FineCells) : Record.SpatialMemory.GetCells();
+	const FIntPoint Size = bFineHistory ? Record.FineHistory.GetSize() : Record.SpatialMemory.GetSize();
 	if ((!bPresent && !bAbsent) || Cells.IsEmpty() || Visual->PartBounds.IsEmpty())
 	{
 		Visual->Cap->SetMesh(FDynamicMesh3());
@@ -2318,7 +2331,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 		{
 			return false;
 		}
-		const int32 Samples = Darkwell::MovingPropLab::PresentationSamples;
+		const int32 Samples = bFineHistory ? 1 : Darkwell::MovingPropLab::PresentationSamples;
 		const FIntPoint FineSize = Size * Samples;
 		if (Visual->SuppressedByCurrentEvidence.Num() != FineSize.X * FineSize.Y)
 		{
@@ -2351,6 +2364,8 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 		Signature = (Signature ^ Bits) * 1099511628211ull;
 	}
 	Signature = (Signature ^ Prop.TransformRevision) * 1099511628211ull;
+	for (const auto& S : Record.FineHistory.GetSamples())
+		Signature = (Signature ^ GetTypeHash(S.State)) * 1099511628211ull;
 	for (int32 Index = 0; Index < Visual->SuppressedByCurrentEvidence.Num(); ++Index)
 	{
 		Signature = (Signature ^ (Visual->SuppressedByCurrentEvidence[Index] ? 1ull : 0ull))
@@ -2363,6 +2378,8 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 			continue;
 		}
 		Signature = (Signature ^ Candidate.Epoch) * 1099511628211ull;
+		for (const auto& S : Candidate.FineHistory.GetSamples())
+			Signature = (Signature ^ GetTypeHash(S.State) ^ (S.Opacity > 0 ? 1ull : 0ull)) * 1099511628211ull;
 		const FRecordVisual* CandidateVisual = Prop.Visuals.Find(Candidate.Epoch);
 		Signature = (Signature ^ (CandidateVisual && CandidateVisual->bPresentationRetired
 			? 1ull : 0ull)) * 1099511628211ull;
@@ -2411,6 +2428,11 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	{
 		if (X < 0 || Y < 0 || X >= Size.X || Y >= Size.Y) return false;
 		const auto& Cell = Cells[Y * Size.X + X];
+		if (bFineHistory)
+		{
+			const auto State = Record.FineHistory.GetSamples()[Y * Size.X + X].State;
+			return State == FDarkwellHistoryGridV2::NeverObserved() || State == FDarkwellHistoryGridV2::VerifiedEmpty();
+		}
 		return bPresent ? Cell.DiscoveredPresent == 0
 			: Cell.InitialRemembered == 0 || Cell.VerifiedEmpty > 0;
 	};
@@ -2490,13 +2512,14 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 		const int32 PrimitiveIndex, const FVector2D RetainedSide)
 	{
 		++Visual->CapGenerated;
-		for (int32 Segment = 0; Segment < Darkwell::MovingPropLab::PresentationSamples;
+		const int32 Segments = bFineHistory ? 1 : Darkwell::MovingPropLab::PresentationSamples;
+		for (int32 Segment = 0; Segment < Segments;
 			++Segment)
 		{
 			const double Alpha0 = static_cast<double>(Segment)
-				/ Darkwell::MovingPropLab::PresentationSamples;
+				/ Segments;
 			const double Alpha1 = static_cast<double>(Segment + 1)
-				/ Darkwell::MovingPropLab::PresentationSamples;
+				/ Segments;
 			const FVector Bottom0 = FMath::Lerp(A, B, Alpha0);
 			const FVector Bottom1 = FMath::Lerp(A, B, Alpha1);
 			const FVector Top1 = FMath::Lerp(D, C, Alpha1);
@@ -2577,7 +2600,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 					// center lies just outside the newer mesh. Leaving a cap in that
 					// texel creates a detached strip with no remaining historical skin.
 					// This is post-candidate clipping only; never a new cut or V write.
-					const FIntPoint Fine = Size * Darkwell::MovingPropLab::PresentationSamples;
+					const FIntPoint Fine = Size * (bFineHistory ? 1 : Darkwell::MovingPropLab::PresentationSamples);
 					const FVector2D Support = Point + RetainedSide
 						* Darkwell::MovingPropLab::RenderOwnershipClipPrecisionMargin;
 					const FVector2D UV = (Support - Bounds.Min) / Bounds.GetSize();
@@ -2666,7 +2689,8 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 					const int32 NX = X + Offset.X, NY = Y + Offset.Y;
 					if (NX < 0 || NY < 0 || NX >= Size.X || NY >= Size.Y) continue;
 					const auto& Neighbor = Cells[NY * Size.X + NX];
-					if (Neighbor.InitialRemembered == 0 || Neighbor.VerifiedEmpty > 0)
+					if (bFineHistory ? Record.FineHistory.CanEmitCap(Y * Size.X + X, NY * Size.X + NX)
+						: (Neighbor.InitialRemembered == 0 || Neighbor.VerifiedEmpty > 0))
 					{
 						++Visual->CapExpected;
 						Visual->MissingHistoricalCuts += !IsSubmitted(X, Y) || !IsCut(NX, NY);

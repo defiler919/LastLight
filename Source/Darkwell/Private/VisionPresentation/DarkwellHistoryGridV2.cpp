@@ -104,6 +104,14 @@ int32 FDarkwellHistoryGridV2::Count(FGameplayTag State) const
 	for (const FSample& S : Samples) Result += S.State == State;
 	return Result;
 }
+bool FDarkwellHistoryGridV2::CanEmitCap(int32 RetainedIndex, int32 NeighborIndex) const
+{
+	if (!Samples.IsValidIndex(RetainedIndex) || !Samples.IsValidIndex(NeighborIndex)) return false;
+	const auto& Source = Samples[RetainedIndex];
+	const auto& Neighbor = Samples[NeighborIndex];
+	return Source.State == Unresolved() && Source.InitialRemembered > 0
+		&& (Neighbor.State == NeverObserved() || Neighbor.State == VerifiedEmpty());
+}
 int32 FDarkwellHistoryGridV2::CountMixedCoarseCells() const
 {
 	int32 Result = 0;

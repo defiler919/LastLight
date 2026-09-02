@@ -1344,3 +1344,30 @@ B standard build: succeeded, 30.58 seconds. `HistoryGridV2_B/index.json`:
 3/3 Success, 0 warnings/failures, 112.4748 seconds. The earlier route name/log
 label `ParallelLateReacquire`/`PARALLEL_ONLY` is retained in this intermediate
 test, but surface output at B is V2, not legacy. Fast/slow final counts agree.
+
+B pushed: `3a57861ea2b464bca96bb7c69f01edffae44b192`.
+C replaces historical cap candidates with fine-state boundaries. A retained
+Unresolved sample can close against NeverObserved or VerifiedEmpty; it cannot
+close against Superseded. Original transformed primitive clipping, newer
+geometry subtraction and render-contact checks remain final safety guards.
+Current/PRESENT cap generation remains on the frozen path. No epsilon,
+geometry, shadow, material or .20/.18 constant changes are involved.
+Fine unresolved samples and fading verified-empty samples prevent resource
+retirement; only after both those and legal cap triangles are absent are the
+proxy, cap, texture references and MIDs released. Authoritative records that
+are only ownership-resolved remain distinguishable from verified-empty
+records. The existing 64-record-per-identity capacity refuses new records
+rather than pretending they were erased by the player. This is a Lab bound,
+not a production memory optimization or a new global eviction policy.
+
+C validation: standard Editor Development succeeded (10 actions, 22.40 sec).
+`HistoryGridV2_C/index.json`: 6/6 Success (4 clean, 2 connectivity-probe
+timeout warnings), 0 failed, 341.2012 sec. Actual late sealed poses were
+120.752, 128.580, 144.648 and 156.716 degrees. All fast terminal proxy/cap
+counts were zero. The 156.716-degree slow route matched fast terminal state
+counts and also retired its proxy/cap. Positive fine cap and no-cap-for-
+superseded tests passed. At those four poses, respectively 3/241/91/254 fine
+empty samples were still inside coarse cells whose old V had not confirmed
+empty. These are grid diagnostics, not screen-pixel counts. They establish
+the coarse/fine evidence mismatch without changing thresholds or angles in
+runtime logic. D3D12 and the full regression are still pending after C.

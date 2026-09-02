@@ -32,6 +32,7 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	bool HasResidualSurface() const;
 	void BuildPresentation(TArray<FLinearColor>& OutPixels) const;
 	bool IsFullyVerifiedEmpty() const;
+	bool CanEmitCap(int32 RetainedIndex, int32 NeighborIndex) const;
 	int32 Count(FGameplayTag State) const;
 	int32 CountMixedCoarseCells() const;
 private:

@@ -2047,11 +2047,12 @@ namespace
   int32 FinalProxies=0;
   int32 FinalCaps=0;
   FString FineHistory;
+  float SealedYaw=0;
  };
 
  FDarkwellResidualOwnershipRouteResult RunResidualOwnershipRoute(
   FAutomationTestBase& Test,const bool bCheckFourViews,const int32 Mode=2,const bool bLateObservation=false,
-  const int32 ExtraHiddenFrames=0,const float PlayerY=70,const bool bFastReacquire=false)
+  const int32 ExtraHiddenFrames=0,const float PlayerY=70,const bool bFastReacquire=false,const float TargetLateYaw=0)
  {
   using namespace Darkwell::SightWeaveAdapterTests;
   FDarkwellResidualOwnershipRouteResult Result;
@@ -2076,16 +2077,28 @@ namespace
   World->UpdateWorldComponents(true,false);Player->GetInteractionComponent()->UpdateFocusedActorFromWorld();
   Test.TestEqual(TEXT("Residual route focuses VISIBLE ROTATE"),Player->GetInteractionComponent()->GetFocusedActor(),static_cast<AActor*>(Control));
   Test.TestTrue(TEXT("Residual route starts through F"),Player->GetInteractionComponent()->TryInteract());
-  Player->SetActorRotation(FRotator(0,-90,0));Step((bLateObservation ? 190 : 130)+ExtraHiddenFrames);
+  Player->SetActorRotation(FRotator(0,-90,0));
   bool bPartial=false;
+  if(TargetLateYaw>0)
+  {
+   for(int32 I=0;I<420 && FMath::Abs(Room->GetTrackedTransform(RotateId).Rotator().Yaw)<TargetLateYaw-5;++I) Step();
+   Player->SetActorRotation(FRotator(0,146,0));Step(2);
+   const float Ratio=Room->GetLastLegalCoverageRatioForTesting(RotateId);
+   bPartial=Ratio>0 && Ratio<.50f;
+  }
+  else
+  {
+  Step((bLateObservation ? 190 : 130)+ExtraHiddenFrames);
   for(int32 Yaw=150;Yaw>=130&&!bPartial;--Yaw)
   {
    Player->SetActorRotation(FRotator(0,float(Yaw),0));Step(2);
    const float Ratio=Room->GetLastLegalCoverageRatioForTesting(RotateId);
    bPartial=Ratio>=.06f&&Ratio<=.30f;
   }
+  }
   Test.TestTrue(TEXT("Residual route creates a partial intermediate epoch"),bPartial);
   Step(4);Player->SetActorRotation(FRotator(0,-90,0));Step(303);
+  Result.SealedYaw=Room->GetNewestHistoricalYawForTesting(RotateId);
   Result.MissingCuts=Room->GetMissingHistoricalCutCountForTesting(RotateId);
   Result.OutsideSource=Room->GetCapVerticesOutsideSourceForTesting(RotateId);
   Result.VisibleCaps=Room->GetVisibleHistoricalCapCountForTesting(RotateId);
@@ -2138,9 +2151,38 @@ bool FDarkwellFineHistoryParallelTest::RunTest(const FString&)
  {
   const auto Result=RunResidualOwnershipRoute(*this,false,2,true,53,100,Fast);
   TestFalse(TEXT("Real partial rotation produced per-epoch fine diagnostics"),Result.FineHistory.IsEmpty());
-  AddInfo(FString::Printf(TEXT("PARALLEL_ONLY fast=%d legacy_proxy=%d legacy_cap=%d %s"),
+  AddInfo(FString::Printf(TEXT("V2_REACQUIRE fast=%d proxy=%d cap=%d %s"),
    Fast,Result.FinalProxies,Result.FinalCaps,*Result.FineHistory));
  }
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellFineLateAnglesTest,
+ "Darkwell.PropLab.MovingRules.HistoryGridV2.LateRotationAnglesFastFinalReacquire", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellFineLateAnglesTest::RunTest(const FString&)
+{
+ for(const float Target : {120.f,128.f,145.f,157.f})
+ {
+  const auto R=RunResidualOwnershipRoute(*this,false,2,true,0,100,true,Target);
+  TestTrue(TEXT("Actual sealed late pose near requested test angle"),FMath::Abs(R.SealedYaw-Target)<10);
+  TestEqual(TEXT("Fast final pose contains no stale proxy"),R.FinalProxies,0);
+  TestEqual(TEXT("Fast final pose contains no stale cap"),R.FinalCaps,0);
+  TestEqual(TEXT("No surface render contact"),R.MaxSurfaceContact,0);
+  TestEqual(TEXT("No cap render contact"),R.MaxCapContact,0);
+  AddInfo(FString::Printf(TEXT("LATE_ANGLE target=%.1f actual=%.3f %s"),Target,R.SealedYaw,*R.FineHistory));
+ }
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellFineSlowReacquireTest,
+ "Darkwell.PropLab.MovingRules.HistoryGridV2.SlowFinalReacquireMatchesFast", Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellFineSlowReacquireTest::RunTest(const FString&)
+{
+ const auto Fast=RunResidualOwnershipRoute(*this,false,2,true,0,100,true,157);
+ const auto Slow=RunResidualOwnershipRoute(*this,false,2,true,0,100,false,157);
+ TestEqual(TEXT("Same frozen pose"),Slow.SealedYaw,Fast.SealedYaw);
+ TestEqual(TEXT("Same terminal fine state counts"),Slow.FineHistory,Fast.FineHistory);
+ TestEqual(TEXT("Slow final has no stale proxy"),Slow.FinalProxies,0);
+ TestEqual(TEXT("Slow final has no stale cap"),Slow.FinalCaps,0);
  return true;
 }
 

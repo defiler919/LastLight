@@ -1575,3 +1575,213 @@ No UnrealEditor, UnrealEditor-Cmd, UBT, dotnet, ShaderCompileWorker,
 LiveCodingConsole or Python evidence process remains at the final check.
 After this appendix is pushed, repeat the SHA/LFS/worktree checks immediately
 before scheduling shutdown; any mismatch blocks shutdown.
+
+## 2026-09-02 home HistoryGridV2 runtime-performance closure
+
+This section supersedes the preceding mixed-cell handoff status, but not its
+correctness rules. It uses evidence regenerated on the home machine under
+`D:\UE_pro\Darkwell`; no company `Saved`, screenshot, report, binary or chat
+state was treated as present. Older company evidence cited above remains
+historical context only. The immutable correctness baseline is
+`404a5820739638f1097eaae0aa7fba19733298c3`, and remote branch
+`stable/moving-history-grid-v2-20260902` still points to that commit. All work
+was made on `codex/darkwell-prop-memory-gameplay-lab`.
+
+The home baseline editor was built successfully with:
+
+```powershell
+.\Scripts\BuildEditor.ps1 -Configuration Development -EngineRoot 'D:\UE_5.8'
+```
+
+### Checkpoint A: measurement before optimization
+
+Checkpoint `9d75b70` (`test: diagnose history grid runtime cost and multi epoch
+residue`) added counters and deterministic fixtures without changing the
+HistoryGridV2 product rule. The same home executable path and fixture measured
+0/1/2/4/8 sealed epochs over fixed windows. The baseline report is
+`Saved/PropGameplayLab/MovingMulti/HistoryRuntime/CheckpointA_Percentiles_Report`.
+Times below are the instrumented MovingPropLab game-thread update, not a claim
+about rendered end-to-end frame rate.
+
+| Epochs | Resident samples / bytes | Fine scans/frame | Coverage queries/frame | Occupancy tests/frame | GT avg / p95 / p99 | Texture uploads/s | Cap rebuilds/s |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 0 / 0 | 0 | 32,522 | 0 | 12.655 / 13.622 / 15.425 ms | 13.0 | 1.0 |
+| 1 | 32,640 / 1,044,480 | 32,640 | 102,354 | 34,680 | 43.513 / 45.927 / 51.260 ms | 6.5 | 0.5 |
+| 2 | 84,096 / 2,691,072 | 84,096 | 212,275 | 89,352 | 109.312 / 112.402 / 117.008 ms | 13.5 | 2.5 |
+| 4 | 213,888 / 6,844,416 | 213,888 | 489,362 | 227,256 | 412.449 / 426.211 / 432.133 ms | 14.5 | 7.5 |
+| 8 | 415,712 / 13,302,784 | 415,712 | 920,516 | 441,694 | 1,486.886 / 1,529.140 / 1,547.373 ms | 42.5 | 17.5 |
+
+At eight epochs the old steady update additionally performed about 6.606
+million primitive geometry intersection tests per frame. `AdvanceFineHistory`
+alone averaged 273.131 ms and contribution refresh averaged 584.280 ms; the
+whole tracked update averaged 1,486.846 ms. This proves the long-session stall
+was principally an algorithmic `all epochs x all fine samples x every frame`
+cost, amplified by grid-sample-to-all-geometry testing and full diagnostics.
+Presentation calls also remained active while idle. Resident fine bytes grew
+with intentionally resident evidence, but the lifecycle tests below did not
+show an unbounded resource leak.
+
+The deterministic composite route reported:
+
+```text
+MULTI_EPOCH_LIVE_DIAGNOSIS   A=0 B=0 C=0 D=0 OTHER=0 surviving_visible=0
+MULTI_EPOCH_MEMORY_DIAGNOSIS A=0 B=0 C=0 D=0 OTHER=0 surviving_visible=0
+```
+
+Therefore the home fixture did **not reproduce** the user's compound cross/
+wing-shaped survivor. Zero survivors is not proof that the reported manual
+failure cannot occur, and it does not justify calling the symptom legal class
+B. No multi-epoch knowledge or presentation policy was changed. In particular,
+StableID still does not clear old epochs, legal Unresolved knowledge remains,
+and the SpatialEvidenceOnly contract is unchanged. A/C/D remain implementation
+bug categories if a later manual capture produces them; class B would require a
+separate user presentation-policy decision.
+
+### Checkpoint B/E: revision, event, and dirty-region update
+
+Checkpoint `f126011` (`perf: make moving prop history revision driven`) replaced
+the idle full traversal. Checkpoint `7f439f0` (`test: close history grid runtime
+performance regression`) added the final percentile and lifecycle acceptance
+coverage. The implementation keeps the 4x4 fine model and all four durable
+states (`NeverObserved`, `Unresolved`, `VerifiedEmpty`, and
+`SupersededByNewerEvidence`):
+
+- Coverage caches are keyed by authority, draw, player-transform, and grid
+  revisions. An unchanged coverage input does not query the whole grid again.
+- Changed current/newer primitive bounds are rasterized into intersecting fine
+  regions. The direction is geometry-to-grid, not every-grid-sample-to-all-
+  geometry.
+- Each record carries coverage, geometry/ownership, presentation, cap-topology,
+  and active-fade state. `VerifiedEmpty` opacity advances through an active
+  sample list; `SupersededByNewerEvidence` is a stable terminal presentation
+  state.
+- Texture work occurs only for presentation-dirty records and remains hash
+  gated. Cap topology is rebuilt only when topology changes. Unchanged records
+  produce no idle upload or DynamicMesh rebuild.
+- Heavy contribution diagnostics reuse cached results and rotation logging is
+  change-triggered/throttled. The diagnostic ability remains available.
+- Retired visual records release proxy/cap/texture/MID presentation resources,
+  while their evidence authority can still receive revisions. This preserves
+  the baseline fast/slow terminal result instead of freezing a retired record.
+
+No coarse fallback, precision reduction, periodic skip-frame rule, cap disable,
+depth offset, TSR/material parameter change, StableID global clear, or automatic
+Unresolved deletion was introduced. Texture dirty rectangles were not required
+for this pass because the stronger idle gate already reduces unchanged uploads
+to zero.
+
+The final post-refactor steady report is
+`Saved/PropGameplayLab/MovingMulti/HistoryRuntime/CheckpointB_Percentiles_Report`:
+
+| Epochs | Resident samples / bytes | Fine scans/frame | Coverage / occupancy/frame | GT avg / p95 / p99 | Texture uploads/s | Cap rebuilds/s |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 0 / 0 | 0 | 0 / 0 | 0.082 / 0.109 / 0.131 ms | 0 | 0 |
+| 1 | 32,640 / 1,044,480 | 0 | 0 / 0 | 0.078 / 0.088 / 0.095 ms | 0 | 0 |
+| 2 | 84,096 / 2,691,072 | 0 | 0 / 0 | 0.080 / 0.100 / 0.124 ms | 0 | 0 |
+| 4 | 213,888 / 6,844,416 | 0 | 0 / 0 | 0.084 / 0.107 / 0.141 ms | 0 | 0 |
+| 8 | 415,712 / 13,302,784 | 0 | 0 / 0 | 0.086 / 0.092 / 0.139 ms | 0 | 0 |
+
+Initialization and real revision events intentionally still perform bounded
+work; these steady numbers apply only after the fixture is unchanged. At eight
+epochs the resident fine-state allocation remains 13,302,784 bytes, while all
+fine scans, coverage queries, occupancy tests, geometry tests, ownership tests,
+texture/cap calls, uploads, rebuilds, refresh work and rotation-log work are
+zero in the steady measurement window. Idle cost no longer scales by scanning
+resident samples.
+
+### Home lifecycle and correctness evidence
+
+- `CheckpointB_DirtyRegionFix2_Report`: one moved primitive examined 11,009 of
+  32,640 resident samples, with 13,049 occupancy and 11,150 geometry tests; a
+  following unchanged update returned to zero heavy work.
+- `CheckpointB_ResetLifetimeFix_Report`: 50 reset/rotate/reacquire/reset cycles
+  passed. Periodic GC left UObject count 65,731 to 66,011 (+280, bounded by the
+  fixture threshold), with stable resource ledger proxy 4 / cap 6 / texture 6 /
+  MID 12 rather than cycle-over-cycle growth.
+- `CheckpointB_RuntimeAcceptance_Report`: the accepted idle and soak entries
+  passed (earlier dirty/reset entries in that combined exploratory report were
+  superseded by the two final reports above). Eight epochs were stationary for
+  600 frames with zero heavy counters and 84.422 microseconds/update. The
+  18,000-frame, five-minute-equivalent soak averaged 82.321 microseconds/update;
+  working set changed 3,073,409,024 to 3,073,802,240 bytes (+393,216 bytes, or
+  0.375 MiB), UObject count stayed 68,049, and resources stayed proxy 8 / cap 10
+  / texture 10 / MID 24.
+- `CheckpointB_HistoryGridV2_Final_Report`: all four selected HistoryGridV2
+  correctness groups passed, including 120/128/145/157 late poses, mixed cells,
+  parallel fast/slow reacquire, positive historical cap/no superseded cap,
+  ownership/fade, and exact fast/slow evidence equality.
+- `Final_Full_NullRHI_Report`: the full filter
+  `Darkwell.PropLab+Darkwell.FogVisual+Darkwell.SightWeave.M6P1` completed 66/66
+  (39 clean plus 27 with warnings), 0 failed, 0 not run, in 859.948 seconds.
+  The log has zero fatal/assert/ensure/device-loss/unhandled signatures. The 27
+  warning-bearing tests contain network/HTTP/EOS shutdown warnings and existing
+  intentional rejection diagnostics; they are not hidden as clean tests.
+
+GPU memory was not added: there was no easy, reliable per-process counter in
+the existing harness, and the task explicitly preferred skipping it over
+spending time on a questionable measurement. Working set, UObject count, fine
+bytes, spatial records, and proxy/cap/texture/MID ledgers remain available.
+
+### Final home D3D12/SM6 evidence and exit correction
+
+The accepted GPU run is:
+
+```text
+Saved/PropGameplayLab/MovingMulti/HistoryGridV2/GPU_Mode2_20260902_230736
+Saved/PropGameplayLab/MovingMulti/HistoryRuntime/Final_D3D12_Mode2_CompleteLedger.log
+```
+
+It ran the in-world moving-control route with fixed 1/60 simulation ticks on
+NVIDIA GeForce RTX 2070 SUPER, D3D12 and SM6.7. The evidence ledger contains
+106 rows and 106 original PNGs. Fast and slow terminal states both have full
+legal coverage, three epochs, zero proxy/cap, zero surface contact, zero cap
+contact and zero ownership-filter leak. Their ordered fine histories are exact
+matches (epoch-1 hash 973158155534630339; epoch-2 hash
+7835464520961056169). The independent empty-cut positive control is present.
+The material readback sampled 131,072 pixels: 9,050 positive blocked, 59,222
+positive allowed, and 0 failures. Representative partial-cap, terminal,
+stationary, four-angle and independent-cap PNGs were opened on the home machine;
+no terminal stale surface/cap leakage was seen, while the legal positive cap
+remained.
+
+An earlier otherwise-passing GPU attempt exposed a separate evidence-driver
+shutdown defect: after UE logged a complete exit, Windows showed the attached
+`0xc0000005` application-error dialog and recorded the same `ntdll.dll` offset
+plus FaultTolerantHeap. The driver had issued `QUIT_EDITOR` before unregistering
+its Slate Python tick. It now drains deferred screenshots and PIE teardown,
+unregisters the callback, and only then requests editor exit. Two subsequent
+runs exited with process code 0, complete `LogExit: Exiting` / closed logs, and
+no new Application Error or FaultTolerantHeap event in either run window. The
+final run also asserts 106 ledger rows equal 106 landed PNGs. The crashing run
+is retained as rejected diagnostic evidence and is not represented as passed.
+
+### Required next user retest
+
+```powershell
+cd D:\UE_pro\Darkwell
+git fetch origin
+git switch codex/darkwell-prop-memory-gameplay-lab
+git pull --ff-only
+.\Scripts\BuildEditor.ps1 -Configuration Development -EngineRoot 'D:\UE_5.8'
+& 'D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe' `
+  'D:\UE_pro\Darkwell\Darkwell.uproject' `
+  '/Game/Maps/L_ProjectFogPropGameplayLab' -d3d12 -sm6 -PropLabMovingControls
+```
+
+Confirm the HUD says `HISTORY GRID V2`, `MODE 2`, `SpatialEvidenceOnly`, and
+`ENEMY 0`. Run the exact manual compound route: fully remember 0 degrees,
+start rotation, look away, briefly see only a middle-angle fragment, look away
+through hidden completion, legally reacquire the final 180-degree cabinet,
+look away until the final cabinet itself is gray memory, then reacquire again.
+Check for a cross/wing survivor both outside and inside the final outline. Also
+repeat fast and slow reacquire, sample 120/128/145/157 degrees, confirm the
+independent positive cap, and spot-check OFFSCREEN A-to-B, A-to-B-to-C, VISIBLE
+TRANSLATE and MULTI PROP. During a several-minute idle period, check that PIE
+and the Windows desktop remain responsive. A new survivor needs a screenshot
+and its nearby `MULTI_EPOCH_*_DIAGNOSIS` log so A/B/C/D can be decided from the
+actual manual path.
+
+No user acceptance has been inferred from automation. Final implementation
+status for this checkpoint:
+
+`PARTIAL — READY_FOR_USER_HISTORY_RUNTIME_RETEST`

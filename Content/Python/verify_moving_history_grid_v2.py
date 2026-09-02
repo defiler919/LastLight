@@ -204,7 +204,7 @@ def run():
                 yield 1
                 restore_view(view)
             break
-    yield 3
+    yield 30  # The final Shot is asynchronous; include it in the evidence ledger.
     landed = [p for row in rows for p in root.glob(Path(row['file']).stem + '*.png')]
     checks = dict(mode=mode, fixed_tick=60, rows=rows, finals=finals, shader=shader_report,
                   screenshots=len(landed), positive_empty_cap=found_cap,
@@ -214,10 +214,10 @@ def run():
     assert checks['final_resources_zero'], 'Residual surface/cap remains after complete reacquisition'
     assert found_cap, 'Independent non-overlapping empty-cut cap missing'
     assert checks['equal_fine_history'], 'Fast/slow terminal fine evidence differs'
+    assert checks['screenshots'] == len(rows), 'Deferred evidence screenshots did not all land'
     assert all(r['surface_contact']==0 and r['cap_contact']==0 and r['filter_leak']==0 for r in rows), 'Render ownership violation'
     levels.editor_request_end_play()
-    yield 3
-    unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'QUIT_EDITOR')
+    yield 30  # Drain deferred screenshots and finish PIE teardown before editor shutdown.
 
 
 sequence = run()
@@ -234,12 +234,13 @@ def tick(_delta):
         frames_left = max(0, next(sequence)-1)
     except StopIteration:
         unreal.unregister_slate_post_tick_callback(handle)
+        unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'QUIT_EDITOR')
     except Exception as error:
         (root / 'failed.json').write_text(json.dumps(dict(error=repr(error), rows=rows), indent=2))
         unreal.log_error('HISTORY_V2_GPU_FAIL ' + traceback.format_exc())
         levels.editor_request_end_play()
-        unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'QUIT_EDITOR')
         unreal.unregister_slate_post_tick_callback(handle)
+        unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'QUIT_EDITOR')
 
 
 handle = unreal.register_slate_post_tick_callback(tick)

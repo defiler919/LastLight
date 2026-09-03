@@ -266,6 +266,10 @@ private:
  TArray<FActualOccupancySnapshot> FrameOccupancy;
  bool bUseFrameOccupancy=false, bFilterFrameOccupancy=false;
  TConstArrayView<const FActualOccupancySnapshot*> FrameOccupancyCandidates;
+ bool bUseNewerCandidates=false;
+ FName NewerCandidateId;
+ uint32 NewerCandidateEpoch=0;
+ TConstArrayView<const FDarkwellSpatialObservationRecord*> FrameNewerCandidates;
 	friend class FDarkwellCapPartialClipTest;
 	friend class FDarkwellCapCoplanarContactTest;
 	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);

@@ -13,7 +13,7 @@ unreal.EditorPythonScripting.set_keep_python_script_alive(True)
 levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
 assert levels.load_level('/Game/Maps/L_ProjectFogPropGameplayLab')
-root = Path(unreal.Paths.project_saved_dir()) / 'GrayObjectPolicy' / time.strftime('GPU_%Y%m%d_%H%M%S')
+root = (Path(unreal.Paths.project_saved_dir()) / 'GrayObjectPolicy' / time.strftime('GPU_%Y%m%d_%H%M%S')).resolve()
 root.mkdir(parents=True, exist_ok=False)
 rows = []
 player = controller = room = None
@@ -193,7 +193,7 @@ def run():
     yield from reset()
     pose(90)
     yield 45
-    for cycle in range(6):
+    for cycle in range(60 if '-GrayGpuLongInteraction' in unreal.SystemLibrary.get_command_line() else 6):
         trigger(-300,260)
         for frame in range(300):
             pose(90+80*math.sin((cycle*300+frame)*.012))

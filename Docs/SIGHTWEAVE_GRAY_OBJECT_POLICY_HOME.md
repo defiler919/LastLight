@@ -534,3 +534,41 @@ Original soak variants retain their original GC behavior. Peak resources and GC
 cost are explicitly reported. Build4 succeeded (16.35 s).
 Home_E6_ResourceGateCheck_20260903: **3/3** (2 clean, 1 warning), 10.443029 s tests /
 29.951799 s wall, exit 0, severe 0 (both short gates and PlayStopResourceLifetime).
+
+## Home E7 — ownership candidates during history growth
+
+E6 was pushed as `6f7ec57fc5dc7f9f96ae4059970835584fae029d`. Push succeeded;
+first ls-remote suffered a transport interruption, then retry verified all three
+matching development refs and the two unchanged protected refs.
+Home_E7_FifteenMinuteSoak_20260903 also failed and was stopped diagnostically
+(exit -1, 260.764628 s wall; no complete report). At frame 3,600 its enclosing
+p95 was 37.320 ms, 225 >33 ms steps, one >100 ms step and a 125-step slow run.
+At frame 5,979 the next window had p95 59.563 ms and 37 >100 ms steps. Live UObject
+slots fell from 66,199 to 63,100 after periodic GC, while retained evidence grew
+from 19 to 30 records. GC does not remove retained historical evidence.
+
+Remaining ownership queries repeatedly searched already-retired records and read
+current primitive transforms. Each historical update now builds the exact set of
+newer records that the original predicate permits (current, or non-retired
+historical), and reuses this set inside fine footprint queries. Current geometry
+comes from the existing same-update physical snapshot, with the old direct path
+as fallback. Scope guards prevent these temporary views escaping the update.
+No records, masks, or evidence facts are removed by this optimization.
+
+Home_E7_Build1 succeeded (28.61 s). Its first candidate run passed the full-update
+and diagnostic references but failed the 8-moving gate: p95 32.257 ms, four
+consecutive >33 ms frames. Reordering old/new geometry checks had made empty
+candidate cases more expensive. The original order was restored and explicit
+empty-candidate returns added; no eligibility condition changed. A source-edit
+substring check failed before writing, then the corrected edit and Build2
+succeeded (18.37 s). Follow-up results are recorded below.
+
+Home_E7_EmptyCandidates_20260903: **4/4** (3 clean, 1 warning), 14.801099 s tests /
+59.483215 s wall, exit 0, severe 0. Full-update sample replay and forced diagnostic
+recalculation both match. Enclosing 8-moving p95 10.632902 ms, peak 17.948400;
+32-static p95 13.349101, peak 60.348600. The latter has one isolated >33 ms step;
+no consecutive >33 or repeated >100. Idle p95 .162501/.571102 ms with no dense work.
+The prepared GPU driver now resolves an absolute evidence path; its optional
+LongInteraction run executes 60 rotation/view cycles (18,000 fixed steps, five
+simulated minutes) after the complete visual matrix. Runtime GPU validation is
+still pending; this is not yet visual or teardown evidence.

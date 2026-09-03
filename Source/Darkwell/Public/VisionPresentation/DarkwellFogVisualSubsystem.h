@@ -178,11 +178,17 @@ public:
 		TConstArrayView<FDarkwellFogVisualSegment>& OutOccluders) const;
 
 	bool IsActive() const { return Diagnostics.bActive; }
+	/** Optional forensic audit; disabled during timing runs. Exact positions, one revision/frame. */
+	void BeginCoverageAuditForTesting() { bCoverageAudit = true; AuditPoints.Reset(); AuditQueries = AuditDuplicates = 0; }
+	void EndCoverageAuditForTesting(uint64& Queries, uint64& Duplicates) { bCoverageAudit = false; Queries = AuditQueries; Duplicates = AuditDuplicates; AuditPoints.Reset(); }
 	UTextureRenderTarget2D* GetLiveCoverageTexture() const { return LiveCoverageTexture; }
 	const FDarkwellFogVisualMapping& GetMapping() const { return Mapping; }
 	const FDarkwellFogVisualDiagnostics& GetDiagnostics() const { return Diagnostics; }
 
 private:
+	bool bCoverageAudit = false;
+	mutable TSet<FVector2D> AuditPoints;
+	mutable uint64 AuditQueries = 0, AuditDuplicates = 0;
 	bool Activate(
 		ADarkwellVisionIntegrationFixture* Fixture,
 		const FDarkwellFogVisualSourceSnapshot& Source,

@@ -1,0 +1,129 @@
+# Gray object policy — home continuation
+
+Status: **PARTIAL — GRAY_OBJECT_POLICY_PERFORMANCE_BLOCKED**.
+User acceptance, a final gray stable branch and black-layer work remain pending.
+The prior **TEARDOWN BLOCKER RETAINED** is not cleared by NullRHI tests.
+
+## Source and environment
+
+Home checkout `D:\UE_pro\Darkwell`, engine `D:\UE_5.8`, development branch
+`codex/darkwell-prop-memory-gameplay-lab`. Starting HEAD, upstream and fetched
+remote all equal `ede6c69d85012b89710743232ce1a50bd91e8685`.
+Initial worktree and LFS status were clean; no `.uproject` delta existed here.
+The installed Build.version reports UE 5.8.2, CL 56702186 (the repository
+guidance says 5.8.1); the configured engine root is unchanged.
+No company unpushed work was retrieved, inferred or reused.
+Protected remote refs were verified, without changes:
+
+- `stable/sightweave-gray-core-20260903`: `7534163b9c5718700b610e7677f47fbaa79cf977`.
+- `stable/moving-history-grid-v2-20260902`: `404a5820739638f1097eaae0aa7fba19733298c3`.
+
+## Checkpoint A — home diagnostics
+
+The original ede6c69 executable was run before feature changes using
+`Scripts/RunGrayObjectPolicyTests.ps1 -RunName Home_A_20260903_Original
+-Tests Darkwell.PropLab.GrayPolicyBaseline`.
+EightChangedView completed: 600 updates, GT mean 11.722781 ms, p50 12.495100,
+p95 13.430300, p99 13.794700, peak 14.689400; 34,910.395 queries/frame.
+The subsequent original soak was deliberately interrupted for cost after
+243.584 wall seconds for the process. Exit -1, no final automation report.
+The completed case and interruption JSON are retained under
+`Saved/GrayObjectPolicy/Home_A_20260903_Original*`. This is not a soak pass.
+
+The diagnostic-only supplement adds isolated count fixtures, compact independent
+motion, synthetic history-count scaling, per-minute/partial-window log flushing,
+current sample counts, texture submissions versus actual GPU uploads, creation
+counts, source MIDs and claimed UObject slots. Exact duplicate-point hashing runs
+in a separate frame, outside GT measurement windows. No coverage value, sampling
+precision, presentation, capture or history rule was changed for these diagnostics.
+The runner now reserves a unique RunName directory, records source provenance,
+and treats missing/empty/failed/not-run reports as failure even with process exit 0.
+
+Builds use `Scripts/BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8`.
+Home_A_Build succeeded in 26.45 s; Home_A_Build2 also succeeded. Existing MSVC and
+engine deprecation warnings are retained. No Live Coding evidence is used.
+
+`Home_A_Matrix_20260903` uses `Darkwell.PropLab.GrayHomeBaseline` plus the original
+static positive/negative case and `-GrayBaselineWallBudgetSeconds=180`.
+The bounded soak deliberately reports failure, not a fifteen-minute success.
+The first EightMoving fixture also failed: the single-motion helper correctly
+rejects a second active group. Its timing is excluded from multi-moving evidence.
+The corrected fixture explicitly updates each prop's motion state and pose and
+checks that every target begins legally visible. Original failures are retained.
+
+### Cost reproduced before feature implementation
+
+All numbers below measure the MovingPropLab game-thread update in NullRHI,
+not a rendered engine frame or GPU time. Synthetic history tests explicitly
+seed 1/2/4/8 histories and then turn the view; this is separate from natural
+interaction. Remaining histories can be legally resolved during each window.
+
+| Case | Updates | Mean ms | p50 ms | p95 ms | p99 ms | Peak ms | Queries/update |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Eight static changed view, supplement | 600 | 12.222 | 12.820 | 14.508 | 15.157 | 16.821 | 34910.395 |
+| Natural interaction, deliberately bounded | 1980 | 76.241 | 73.305 | 129.917 | 185.555 | 212.866 | 187925.066 |
+| One history changed view | 120 | 40.078 | 39.651 | 52.995 | 54.496 | 54.648 | 125034.933 |
+| Two histories changed view | 120 | 79.668 | 73.827 | 112.790 | 113.467 | 113.475 | 229362.883 |
+| Four histories changed view | 120 | 256.816 | 241.555 | 403.369 | 434.374 | 435.783 | 499224.508 |
+| Eight histories changed view | 120 | 849.276 | 806.804 | 1668.305 | 1736.695 | 1772.017 | 922654.958 |
+
+The separate eight-static audit counted 36,393 point queries, 10,683 exact
+duplicates in one revision/frame. Static settled idle averaged 0.025196 ms,
+zero queries/scans/submissions/cap rebuilds. The bounded interaction's settled
+600-update idle averaged 0.060517 ms with the same zero-work counters.
+Synthetic 4/8-history idle windows retained a first-frame cost spike (115/582 ms);
+these are preserved, not silently trimmed from the reported statistics.
+
+The bounded interaction scanned 99,651,605 historical samples and touched
+5,473.996 current samples/update; 3,888 texture submissions, zero real GPU
+uploads, 36 texture creations, 24 room-owned MID creations and 423 cap rebuilds.
+It ended with 3 historical records, 5 total records, 1 proxy, 3 caps, 9 textures,
+3 historical MIDs, 67,796 UObject array slots and 2,745,823,232 bytes working set.
+The first matrix's MID count excludes source MIDs; the corrected measurement
+explicitly includes them. Claimed UObject slots are distinguished from the
+array high-water size in the corrected telemetry.
+
+These results establish a performance blocker, not a performance acceptance.
+The full 54,000-update interactive soak, functional Reveal integration, full
+regression, D3D12 originals, BuildPlugin and three normal GPU exits remain open.
+
+### Corrected short matrix
+
+Home_A_Build3: standard Editor Development build succeeded, 8 actions, 19.55 s.
+The corrected run is `Saved/GrayObjectPolicy/Home_A_Corrected_20260903/`.
+The one-object fixture is explicitly placed in legal view; the initial matrix's
+one-object origin was outside coverage and its timings are excluded. Compact
+eight-moving fixtures begin with all eight sources legally visible. Motion and
+view rotation then proceed independently for 600 updates, followed by settled
+idle. All before/after comparisons must use these corrected same trajectories.
+
+| Case | Mean ms | p50 ms | p95 ms | p99 ms | Peak ms | Queries/update |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| One static changed view | 2.107 | 2.118 | 2.481 | 2.541 | 2.703 | 6372.000 |
+| One moving plus changed view | 16.639 | 17.538 | 20.764 | 36.019 | 39.215 | 40534.640 |
+| Eight moving plus changed view | 121.127 | 130.018 | 147.679 | 155.852 | 161.973 | 267049.487 |
+
+Eight-moving ends with 12 histories, 5 proxies/caps/textures, 39 source+history
+MIDs and 66,344 claimed UObject slots; 2,613,784,576 bytes working set. Across
+600 updates it scanned 63,066,212 historical samples, touched 2,445.300 current
+samples/update, submitted 3,570 textures (zero GPU uploads in NullRHI), created
+43 textures and 45 MIDs, and rebuilt 446 caps. Settled 600-update idle averages
+0.029399 ms and performs no queries/scans/uploads/cap rebuilds or creations.
+The separately instrumented frame has 351,264 queries / 46,181 duplicates.
+One-static audit: 6,372 / 2,001; one-moving audit: 56,420 / 6,580.
+
+The original static control test observes 22.9412% legal coverage. StationaryOnly
+seals one partial history with one visible cap; Never seals zero with zero caps
+and historical resources. COVERAGE EDGE's Never assignment remains a negative
+control; this run does not claim all stationary capture is broken.
+
+Final A corrected short report: **5/5**, 2 clean + 3 successful with HTTP timeout
+warnings, 0 failed/not-run, 154.315277 seconds, process exit 0, severe scan 0.
+The earlier matrix is separately **8 total, 2 clean + 4 warnings, 2 failed**,
+459.495239 seconds, process exit 0 but runner exit 1. The two failures are the
+replaced multi-motion fixture and the explicitly budget-stopped soak.
+This checkpoint records reliable short/synthetic baseline evidence and preserves
+the permitted high-cost soak interruption; it does not claim a fifteen-minute pass.
+Git diff was inspected; generated evidence remains ignored. The containing
+`test: record home gray policy baseline and cost blockers` commit is pushed
+before beginning plugin feature implementation.

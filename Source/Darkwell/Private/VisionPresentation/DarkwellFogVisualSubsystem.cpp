@@ -363,6 +363,13 @@ float UDarkwellFogVisualSubsystem::EvaluateLiveCoverageAtWorldPoint(
 FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryLiveCoverageAtWorldPoint(
 	const FVector2D& WorldPosition) const
 {
+	if (bCoverageAudit)
+	{
+		++AuditQueries;
+		bool bAlreadyPresent = false;
+		AuditPoints.Add(WorldPosition, &bAlreadyPresent);
+		AuditDuplicates += bAlreadyPresent ? 1 : 0;
+	}
 	FDarkwellFogVisualCoverageQuery Result;
 	if (Diagnostics.bActive)
 		Result = FDarkwellContinuousVisibilityBuilder::QuerySourceCoverage(LastSource, WorldPosition, CachedOccluderSegments);

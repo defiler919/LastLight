@@ -84,6 +84,10 @@ public:
 		uint64 FineSamplesScanned = 0;
 		uint64 CoverageFullScans = 0;
 		uint64 CoverageQueries = 0;
+		uint64 CurrentSamplesTouched = 0;
+		uint64 TextureCreations = 0;
+		uint64 MidCreations = 0;
+		uint64 GpuTextureUploads = 0;
 		uint64 OccupancyTests = 0;
 		uint64 PrimitiveGeometryTests = 0;
 		uint64 OwnershipTests = 0;
@@ -101,10 +105,12 @@ public:
 		int32 CapComponentCount = 0;
 		int32 TextureCount = 0;
 		int32 MidCount = 0;
+		int32 SourceMidCount = 0;
 		int32 SpatialRecordCount = 0;
 		uint64 FineHistoryResidentBytes = 0;
 		uint64 ProcessWorkingSetBytes = 0;
 		int32 UObjectCount = 0;
+		int32 LiveUObjectCount = 0;
 		double RefreshContributionDiagnosticsUs = 0.0;
 		double LogRotationFrameUs = 0.0;
 		double ReportHudUs = 0.0;

@@ -1,5 +1,9 @@
 # Gray object policy work and evidence
 
+Home continuation and newly generated evidence are recorded in
+[SIGHTWEAVE_GRAY_OBJECT_POLICY_HOME.md](SIGHTWEAVE_GRAY_OBJECT_POLICY_HOME.md).
+The earlier company Saved paths below are historical references only.
+
 Status: **PARTIAL — implementation and validation in progress**. No user acceptance,
 final gray stable branch, or black-layer work is authorized by this document.
 

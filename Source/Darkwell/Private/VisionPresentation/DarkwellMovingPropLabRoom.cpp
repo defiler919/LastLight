@@ -366,6 +366,7 @@ void ADarkwellMovingPropLabRoom::BindRoomPresentation(
 	for (int32 Index = 0; Index < Structure.Num(); ++Index)
 	{
 		UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Parent, this);
+		++RuntimeFrame.MidCreations;
 		Material->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"), Raw);
 		Material->SetVectorParameterValue(TEXT("FogWorldMin"), FLinearColor(Min.X, Min.Y, 0, 0));
 		Material->SetVectorParameterValue(TEXT("FogWorldInvExtent"), FLinearColor(Inv.X, Inv.Y, 0, 0));
@@ -413,6 +414,7 @@ ADarkwellPropLabFurniture* ADarkwellMovingPropLabRoom::SpawnTracked(
 	}
 	for (UStaticMeshComponent* Part : Actor->Memory->GetMemoryPrimitives())
 	{
+		RuntimeFrame.MidCreations += Cast<UMaterialInstanceDynamic>(Part->GetMaterial(0)) ? 1 : 0;
 		Part->SetCastShadow(true);
 		Part->SetCastHiddenShadow(true);
 	}
@@ -2359,6 +2361,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
                     Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
                     Prop.CurrentLive.WritePartRasters(Query,!ObjectPolicy->IsHistoryEligible() || ObjectPolicy->IsSightWeaveMoving());
                     RuntimeFrame.CoverageQueries += Prop.CurrentLive.Queries;
+                    RuntimeFrame.CurrentSamplesTouched += Prop.CurrentLive.SamplesTouched;
                 }
 				if (bCoverageDirty || Prop.CurrentPresentationActiveSeconds > 0.0f)
 				{
@@ -2714,6 +2717,7 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 		Texture->UpdateResource();
 		Visual.Texture = Texture;
 		++Visual.TextureCreationCount;
+		++RuntimeFrame.TextureCreations;
 		Visual.TextureSignature = 0;
 		OwnedTextures.Add(Texture);
 		if (bTextureSizeChanged)
@@ -2805,6 +2809,7 @@ void ADarkwellMovingPropLabRoom::UpdateCurrentPartTextures(FTrackedProp& Prop,FR
    auto& Bulk=Texture->GetPlatformData()->Mips[0].BulkData;
    FMemory::Memzero(Bulk.Lock(LOCK_READ_WRITE),Bulk.GetBulkDataSize()); Bulk.Unlock(); Texture->UpdateResource();
    Visual.LiveTextures[I]=Texture; OwnedTextures.Add(Texture); ++Visual.LiveTextureCreations;
+   ++RuntimeFrame.TextureCreations;
   }
   auto& Pixels=Visual.LivePixels[I];
   const auto Size=Part.Raster.BuildConservativePresentation(4,Pixels);
@@ -2815,6 +2820,7 @@ void ADarkwellMovingPropLabRoom::UpdateCurrentPartTextures(FTrackedProp& Prop,FR
   {
    if(Texture->GetResource())
    {
+   ++RuntimeFrame.GpuTextureUploads;
    auto* Upload=new FFloat16Color[Atlas.X*Atlas.Y];
    FDarkwellCurrentLiveGrid::CopyAtlasWithClampBorder(Pixels,Size,Atlas,MakeArrayView(Upload,Atlas.X*Atlas.Y));
    auto* Region=new FUpdateTextureRegion2D(0,0,0,0,Atlas.X,Atlas.Y);
@@ -2893,6 +2899,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
     // NullRHI has no texture resource; UTexture2D does not call DataCleanupFunc
     // in that case. Keep CPU submission diagnostics without leaking a buffer.
     if(!Visual->Texture->GetResource()) return;
+	++RuntimeFrame.GpuTextureUploads;
 	FFloat16Color* Pixels = new FFloat16Color[Presentation.Num()];
 	for (int32 Index = 0; Index < Presentation.Num(); ++Index)
 	{
@@ -2977,6 +2984,7 @@ void ADarkwellMovingPropLabRoom::BindProxyMaterial(
 	for (UStaticMeshComponent* Mesh : Meshes)
 	{
 		UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Parent, this);
+		++RuntimeFrame.MidCreations;
 		Material->SetTextureParameterValue(TEXT("SpatialStateTexture"), Visual->Texture.Get());
 		Material->SetVectorParameterValue(TEXT("SpatialMinInv"),
 			FLinearColor(Bounds.Min.X, Bounds.Min.Y, Inv.X, Inv.Y));
@@ -4011,7 +4019,7 @@ bool ADarkwellMovingPropLabRoom::SetMultiCount(
 	const int32 Count,
 	ADarkwellCharacter* Player)
 {
-	if ((Count != 2 && Count != 8 && Count != 32) || FindActive(GetWorld()) != this)
+	if ((Count != 1 && Count != 2 && Count != 8 && Count != 32) || FindActive(GetWorld()) != this)
 	{
 		return false;
 	}
@@ -4296,6 +4304,9 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	for (const TPair<FName, FTrackedProp>& Pair : Tracked)
 	{
 		RuntimeFrame.SpatialRecordCount += Pair.Value.History.GetRecords().Num();
+		if (const ADarkwellPropLabFurniture* Source = Pair.Value.Actual.Get())
+			for (const UStaticMeshComponent* Part : Source->Memory->GetMemoryPrimitives())
+				RuntimeFrame.SourceMidCount += Part && Cast<UMaterialInstanceDynamic>(Part->GetMaterial(0)) ? 1 : 0;
 		for (const FDarkwellSpatialObservationRecord& Record : Pair.Value.History.GetRecords())
 		{
 			if (!Record.bCurrentObservedLocation)
@@ -4313,6 +4324,7 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	RuntimeFrame.MidCount = OwnedMaterials.Num();
 	RuntimeFrame.ProcessWorkingSetBytes = FPlatformMemory::GetStats().UsedPhysical;
 	RuntimeFrame.UObjectCount = GUObjectArray.GetObjectArrayNum();
+	RuntimeFrame.LiveUObjectCount = GUObjectArray.GetObjectArrayNumMinusAvailable();
 
 	++RuntimeTotal.FramesAccumulated;
 	RuntimeTotal.FrameNumber = RuntimeFrame.FrameNumber;
@@ -4321,6 +4333,10 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	RuntimeTotal.FineSamplesScanned += RuntimeFrame.FineSamplesScanned;
 	RuntimeTotal.CoverageFullScans += RuntimeFrame.CoverageFullScans;
 	RuntimeTotal.CoverageQueries += RuntimeFrame.CoverageQueries;
+	RuntimeTotal.CurrentSamplesTouched += RuntimeFrame.CurrentSamplesTouched;
+	RuntimeTotal.TextureCreations += RuntimeFrame.TextureCreations;
+	RuntimeTotal.MidCreations += RuntimeFrame.MidCreations;
+	RuntimeTotal.GpuTextureUploads += RuntimeFrame.GpuTextureUploads;
 	RuntimeTotal.OccupancyTests += RuntimeFrame.OccupancyTests;
 	RuntimeTotal.PrimitiveGeometryTests += RuntimeFrame.PrimitiveGeometryTests;
 	RuntimeTotal.OwnershipTests += RuntimeFrame.OwnershipTests;
@@ -4344,10 +4360,12 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	RuntimeTotal.CapComponentCount = RuntimeFrame.CapComponentCount;
 	RuntimeTotal.TextureCount = RuntimeFrame.TextureCount;
 	RuntimeTotal.MidCount = RuntimeFrame.MidCount;
+	RuntimeTotal.SourceMidCount = RuntimeFrame.SourceMidCount;
 	RuntimeTotal.SpatialRecordCount = RuntimeFrame.SpatialRecordCount;
 	RuntimeTotal.FineHistoryResidentBytes = RuntimeFrame.FineHistoryResidentBytes;
 	RuntimeTotal.ProcessWorkingSetBytes = RuntimeFrame.ProcessWorkingSetBytes;
 	RuntimeTotal.UObjectCount = RuntimeFrame.UObjectCount;
+	RuntimeTotal.LiveUObjectCount = RuntimeFrame.LiveUObjectCount;
 }
 
 int32 ADarkwellMovingPropLabRoom::GetTotalSpatialRecordCount() const

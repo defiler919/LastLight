@@ -2815,11 +2815,8 @@ void ADarkwellMovingPropLabRoom::UpdateCurrentPartTextures(FTrackedProp& Prop,FR
   {
    if(Texture->GetResource())
    {
-   // Clear unused atlas texels as its active rectangle changes at 90 degrees.
-   // Bilinear filtering must never sample a previous pose from the padding.
    auto* Upload=new FFloat16Color[Atlas.X*Atlas.Y];
-   FMemory::Memzero(Upload,Atlas.X*Atlas.Y*sizeof(FFloat16Color));
-   for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X) Upload[Y*Atlas.X+X]=FFloat16Color(Pixels[Y*Size.X+X]);
+   FDarkwellCurrentLiveGrid::CopyAtlasWithClampBorder(Pixels,Size,Atlas,MakeArrayView(Upload,Atlas.X*Atlas.Y));
    auto* Region=new FUpdateTextureRegion2D(0,0,0,0,Atlas.X,Atlas.Y);
    Texture->UpdateTextureRegions(0,1,Region,Atlas.X*sizeof(FFloat16Color),sizeof(FFloat16Color),reinterpret_cast<uint8*>(Upload),
     [](uint8* Data,const FUpdateTextureRegion2D* R){delete[] reinterpret_cast<FFloat16Color*>(Data);delete R;});

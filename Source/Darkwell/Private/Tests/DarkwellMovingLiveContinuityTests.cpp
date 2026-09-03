@@ -289,4 +289,28 @@ bool FDarkwellMovingLiveContract::RunTest(const FString& Case)
  if(Never) TestEqual(TEXT("Never remains zero after repeat view loss"),F.Room->GetHistoricalPresentationResourceCountForTesting(Id),0);
  return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMovingLiveAtlasClamp,
+ "Darkwell.PropLab.MovingLiveContinuity.CurrentAtlasBilinearBoundary", EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellMovingLiveAtlasClamp::RunTest(const FString&)
+{
+ const FIntPoint Atlas(28,28); TArray<FFloat16Color> Packed;Packed.SetNumUninitialized(Atlas.X*Atlas.Y);
+ for(const FIntPoint Size : {FIntPoint(24,8),FIntPoint(8,24),FIntPoint(4,4)})
+ {
+  TArray<FLinearColor> Pixels;Pixels.Init(FLinearColor(1,1,0,1),Size.X*Size.Y);
+  FDarkwellCurrentLiveGrid::CopyAtlasWithClampBorder(Pixels,Size,Atlas,Packed);
+  // GPU bilinear at the maximum XY corner averages these four texels.
+  float Alpha=0;
+  for(int32 Y=Size.Y-1;Y<=Size.Y;++Y) for(int32 X=Size.X-1;X<=Size.X;++X) Alpha+=Packed[Y*Atlas.X+X].R.GetFloat()*.25f;
+  TestEqual(TEXT("Solid physical corner remains one, not old zero-padding quarter-alpha"),Alpha,1.f);
+  for(int32 Y=0;Y<Atlas.Y;++Y) for(int32 X=0;X<Atlas.X;++X)
+   if(X>Size.X || Y>Size.Y) TestEqual(TEXT("Old larger pose is cleared outside clamp border"),Packed[Y*Atlas.X+X].R.GetFloat(),0.f);
+  for(int32 Y=0;Y<Size.Y;++Y) Pixels[Y*Size.X+Size.X-1]=FLinearColor::Transparent;
+  Pixels[0]=FLinearColor(.25,.5,0,1);
+  FDarkwellCurrentLiveGrid::CopyAtlasWithClampBorder(Pixels,Size,Atlas,Packed);
+  for(int32 Y=0;Y<=Size.Y;++Y) TestEqual(TEXT("Illegal boundary stays strictly zero, no coverage dilation"),Packed[Y*Atlas.X+Size.X].R.GetFloat(),0.f);
+  TestEqual(TEXT("Existing inward AA values are unchanged"),Packed[0].R.GetFloat(),.25f);
+  TestEqual(TEXT("Existing live blend is unchanged"),Packed[0].G.GetFloat(),.5f);
+ }
+ return true;
+}
 #endif

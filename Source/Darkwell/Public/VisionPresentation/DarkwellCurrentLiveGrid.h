@@ -1,5 +1,6 @@
 #pragma once
 #include "CoreMinimal.h"
+#include "Math/Float16Color.h"
 #include "VisionPresentation/DarkwellSpatialPropMemory.h"
 
 /** Project adapter state for rigid, upright (XY/yaw) primitive observations.
@@ -33,6 +34,10 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  /** Exact primitive-local evidence query, including fine historical ownership. */
  bool HasObservedContributionAt(FVector2D World,int32 PrimitiveIndex=INDEX_NONE) const;
  uint64 StateHash() const;
+ /** Preserve clamp sampling at the active rectangle inside a reusable atlas.
+  * One duplicated border texel, not new coverage or an expanded AA footprint. */
+ static void CopyAtlasWithClampBorder(TConstArrayView<FLinearColor> Pixels,FIntPoint Size,
+  FIntPoint Atlas,TArrayView<FFloat16Color> Out);
  TArray<FPart> Parts;
  FTransform LastLegalPose=FTransform::Identity;
  bool bFullyObservedAtPose=false;

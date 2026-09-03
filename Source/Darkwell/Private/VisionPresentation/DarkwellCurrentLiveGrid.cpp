@@ -146,3 +146,17 @@ uint64 FDarkwellCurrentLiveGrid::StateHash() const
   { H=(H^uint64(FMath::RoundToInt(V*100000)))*1099511628211ull; }
  return H;
 }
+void FDarkwellCurrentLiveGrid::CopyAtlasWithClampBorder(TConstArrayView<FLinearColor> Pixels,
+ FIntPoint Size,FIntPoint Atlas,TArrayView<FFloat16Color> Out)
+{
+ check(Size.X>0 && Size.Y>0 && Size.X<Atlas.X && Size.Y<Atlas.Y);
+ check(Pixels.Num()==Size.X*Size.Y && Out.Num()==Atlas.X*Atlas.Y);
+ FMemory::Memzero(Out.GetData(),Out.Num()*sizeof(FFloat16Color));
+ // At the physical maximum bound bilinear reads half the last texel and
+ // half the next texel. Zero padding would make a fully observed side 50%
+ // dithered. Reproduce TA_Clamp of the logical texture without changing its
+ // coordinates, interior AA samples or legal gate. Illegal edge texels stay
+ // zero. All other padding is cleared, including a previous larger rectangle.
+ for(int32 Y=0;Y<=Size.Y;++Y) for(int32 X=0;X<=Size.X;++X)
+  Out[Y*Atlas.X+X]=FFloat16Color(Pixels[FMath::Min(Y,Size.Y-1)*Size.X+FMath::Min(X,Size.X-1)]);
+}

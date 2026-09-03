@@ -30,6 +30,9 @@ struct DARKWELL_API FDarkwellSpatialPropMemory
  void BeginAbsent();
  /** One conservative legal coverage value per fixed cell, from the existing adapter. */
  bool Advance(float DeltaSeconds,TConstArrayView<float> Coverage);
+ /** Derived current raster only. Evidence is supplied by stable local samples;
+  * never call Initialize/BeginPresent for an ordinary rigid pose update. */
+ TArrayView<FCell> PrepareCurrentRaster(const FBox2D& InBounds,FIntPoint InSize,int32 Capacity=0);
  bool IsPresent() const;
  bool IsAbsent() const;
  FName GetStableId() const { return StableId; }

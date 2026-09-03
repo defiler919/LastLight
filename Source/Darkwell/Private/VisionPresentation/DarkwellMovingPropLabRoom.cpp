@@ -37,13 +37,16 @@ FString ADarkwellMovingPropLabRoom::GetMovingLiveTelemetry(FName Id) const
 	const auto& R=P->History.GetRecords()[P->History.GetCurrentIndex()];
 	const auto& M=R.SpatialMemory; const auto* V=P->Visuals.Find(R.Epoch);
 	double AMin=1, AMax=0, ASum=0, LMin=1, LMax=0, LSum=0; int32 D=0;
-	for(const auto& C:M.GetCells()) { AMin=FMath::Min(AMin,double(C.AppearanceBlend)); AMax=FMath::Max(AMax,double(C.AppearanceBlend)); ASum+=C.AppearanceBlend;
+	TArray<FDarkwellSpatialPropMemory::FCell> DiagnosticCells;
+    if(P->LocalEpoch==R.Epoch) for(const auto& Part:P->CurrentLive.Parts) DiagnosticCells.Append(Part.Local.GetCells());
+    else DiagnosticCells.Append(M.GetCells());
+	for(const auto& C:DiagnosticCells) { AMin=FMath::Min(AMin,double(C.AppearanceBlend)); AMax=FMath::Max(AMax,double(C.AppearanceBlend)); ASum+=C.AppearanceBlend;
 		LMin=FMath::Min(LMin,double(C.LiveBlend)); LMax=FMath::Max(LMax,double(C.LiveBlend)); LSum+=C.LiveBlend; D+=C.DiscoveredPresent>0; }
 	int32 Visible=0; if(P->Actual.IsValid()) for(const auto& Part:P->Actual->Parts) Visible+=Part && Part->IsVisible();
-	const int32 N=FMath::Max(1,M.GetCells().Num()); const auto B=M.GetBounds(); const auto S=M.GetSize();
+	const int32 N=FMath::Max(1,DiagnosticCells.Num()); const auto B=M.GetBounds(); const auto S=M.GetSize();
 	return FString::Printf(TEXT("{\"current\":1,\"epoch\":%u,\"stale\":%d,\"pose_updates\":%llu,\"initialize\":%llu,\"begin_present\":%llu,\"transform_revision\":%llu,\"grid\":[%d,%d],\"bounds\":[%.6f,%.6f,%.6f,%.6f],\"discovered\":%d,\"appearance\":[%.6f,%.6f,%.6f],\"live\":[%.6f,%.6f,%.6f],\"coverage\":%.6f,\"valid\":%d,\"visible_primitives\":%d,\"texture_creations\":%d,\"texture_uploads\":%d,\"presentation_hash\":\"%llu\",\"yaw\":%.6f}"),
 		R.Epoch,GetStaleEpochCountForTesting(Id),R.PoseUpdates,M.GetInitializeCount(),M.GetBeginPresentCount(),P->TransformRevision,S.X,S.Y,B.Min.X,B.Min.Y,B.Max.X,B.Max.Y,D,
-		AMin,ASum/N,AMax,LMin,LSum/N,LMax,P->LastLegalCoverageRatio,P->bLastCoverageValid,Visible,V?V->TextureCreationCount:0,V?V->TextureUploadCount:0,V?V->TextureSignature:0,R.SnapshotTransform.Rotator().Yaw);
+		AMin,ASum/N,AMax,LMin,LSum/N,LMax,P->LastLegalCoverageRatio,P->bLastCoverageValid,Visible,V?V->TextureCreationCount+V->LiveTextureCreations:0,V?V->TextureUploadCount+V->LiveTextureUploads:0,V?V->TextureSignature:0,R.SnapshotTransform.Rotator().Yaw);
 }
 
 namespace
@@ -472,6 +475,8 @@ void ADarkwellMovingPropLabRoom::DestroyVisual(
 	Visual.Proxy.Reset();
 	Visual.Cap.Reset();
 	Visual.Texture.Reset();
+	for(auto& Texture:Visual.LiveTextures) OwnedTextures.Remove(Texture.Get());
+	Visual.LiveTextures.Reset(); Visual.LivePixels.Reset(); Visual.LiveSignatures.Reset();
 	Visual.Materials.Reset();
 	Visual.CapTriangles = 0;
 	Visual.CapSamplePoints.Reset();
@@ -2260,8 +2265,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			{
 				if (bTransformChanged)
 				{
-					Prop.History.RebaseCurrentObservedLocation(
-						Transform, Bounds, Darkwell::MovingPropLab::CellSize);
+					// Pose/evidence are committed together after descriptor validation below.
 					FDarkwellSpatialObservationRecord& Current =
 						Prop.History.GetMutableRecords()[Prop.History.GetCurrentIndex()];
 					FRecordVisual& Visual = Prop.Visuals.FindOrAdd(Current.Epoch);
@@ -2299,9 +2303,34 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			if (CoverageSnapshot.bValid
 				&& CoverageSnapshot.TransformRevision == Prop.TransformRevision
 				&& CoverageSnapshot.GridRevision == Prop.GridRevision
-				&& Coverage.Num() == Current.SpatialMemory.GetCells().Num())
+				&& Coverage.Num() == CoverageSize.X*CoverageSize.Y)
 			{
-				Prop.History.AdvanceCurrent(DeltaSeconds, Coverage);
+				TArray<FDarkwellCurrentLiveGrid::FDescriptor> Descriptors;
+                for(const UStaticMeshComponent* Part:Actual->Memory->GetMemoryPrimitives())
+                    if(Part && Part->GetStaticMesh()) Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),Part->GetRelativeTransform()});
+                if(Prop.LocalEpoch!=Current.Epoch)
+                {
+                    Prop.CurrentLive.ResetGeometry(Prop.StableId,Descriptors,Transform);
+                    Prop.LocalEpoch=Current.Epoch;
+                }
+                if(!Prop.CurrentLive.MatchesGeometry(Descriptors,Transform))
+                {
+                    Actual->Memory->ApplySourceGeometryVisibility(false);
+                    Prop.LastCoverageZeroReason=TEXT("GEOMETRY_RESET_REQUIRED");
+                    return;
+                }
+                auto Query=[&](FVector2D Point) {
+                    const auto Q=Fog->QueryLiveCoverageAtWorldPoint(Point);
+                    return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision
+                        && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision ? Q.Coverage : 0.f;
+                };
+                if(bTransformChanged) Prop.History.UpdateCurrentObservedPosePreservingEvidence(Transform);
+                if(bCoverageDirty || bTransformChanged || Prop.CurrentPresentationActiveSeconds>0)
+                {
+                    Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query);
+                    Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
+                    Prop.CurrentLive.WritePartRasters(Query,!ObjectPolicy->IsHistoryEligible() || ObjectPolicy->IsSightWeaveMoving());
+                }
 				if (bCoverageDirty || Prop.CurrentPresentationActiveSeconds > 0.0f)
 				{
 					++OwnershipRevision;
@@ -2313,6 +2342,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 				|| Prop.CurrentPresentationActiveSeconds > 0.0f)
 			{
 				UpdateRecordTexture(Prop, Current);
+                UpdateCurrentPartTextures(Prop, Prop.Visuals.FindChecked(Current.Epoch));
 				UpdateRecordCap(Prop, Current);
 				Prop.CurrentPresentationActiveSeconds = FMath::Max(
 					0.0f, Prop.CurrentPresentationActiveSeconds - DeltaSeconds);
@@ -2320,9 +2350,8 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			if (FRecordVisual* CurrentVisual = Prop.Visuals.Find(Current.Epoch);
 				CurrentVisual && CurrentVisual->Texture.IsValid())
 			{
-				Actual->BindSpatialState(CurrentVisual->Texture.Get(),
-					Current.SpatialMemory.GetBounds());
-				Actual->Memory->ApplySourceGeometryVisibility(true);
+				// Original primitives use independent current raster bindings.
+				Actual->Memory->ApplySourceGeometryVisibility(CoverageSnapshot.bValid);
 			}
 		}
 		else
@@ -2491,8 +2520,17 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	if (ADarkwellPropLabFurniture* Actual = Prop.Actual.Get())
 	{
 		Actual->Memory->ApplySourceGeometryVisibility(false);
+        for(const UStaticMeshComponent* Part:Actual->Memory->GetMemoryPrimitives())
+            if(auto* MID=Cast<UMaterialInstanceDynamic>(Part->GetMaterial(0))) {
+                MID->SetTextureParameterValue(TEXT("SpatialStateTexture"),nullptr);
+                MID->SetScalarParameterValue(TEXT("SpatialReady"),0);
+            }
 	}
-	if (!Prop.History.FreezeCurrentForHiddenMovement())
+	if (FRecordVisual* V=Prop.Visuals.Find(Epoch)) {
+        for(auto& T:V->LiveTextures) OwnedTextures.Remove(T.Get());
+        V->LiveTextures.Reset(); V->LivePixels.Reset(); V->LiveSignatures.Reset();
+    }
+    if (!Prop.History.FreezeCurrentForHiddenMovement())
 	{
 		return false;
 	}
@@ -2545,7 +2583,14 @@ void ADarkwellMovingPropLabRoom::AbandonCurrentObservationWithoutHistory(FTracke
 	if (Index == INDEX_NONE) return;
 	const uint32 Epoch = Prop.History.GetRecords()[Index].Epoch;
 	if (ADarkwellPropLabFurniture* Actual = Prop.Actual.Get())
-		Actual->Memory->ApplySourceGeometryVisibility(false);
+    {
+        Actual->Memory->ApplySourceGeometryVisibility(false);
+        for(const UStaticMeshComponent* Part:Actual->Memory->GetMemoryPrimitives())
+            if(auto* MID=Cast<UMaterialInstanceDynamic>(Part->GetMaterial(0))) {
+                MID->SetTextureParameterValue(TEXT("SpatialStateTexture"),nullptr);
+                MID->SetScalarParameterValue(TEXT("SpatialReady"),0);
+            }
+    }
 	if (FRecordVisual* Visual = Prop.Visuals.Find(Epoch)) DestroyVisual(*Visual);
 	Prop.Visuals.Remove(Epoch);
 	Prop.History.AbandonCurrentObservationWithoutHistory();
@@ -2602,7 +2647,8 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 	{
 		return;
 	}
-	const FIntPoint Size = Record.SpatialMemory.GetSize()
+	const FIntPoint Size = (Record.bCurrentObservedLocation && Prop.LocalEpoch == Record.Epoch
+        ? Prop.CurrentLive.AtlasCells : Record.SpatialMemory.GetSize())
 		* Darkwell::MovingPropLab::PresentationSamples;
 	if (!Record.bCurrentObservedLocation)
 	{
@@ -2626,7 +2672,8 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 		&& (Visual.Texture->GetSizeX() != Size.X || Visual.Texture->GetSizeY() != Size.Y);
 	if (!Visual.Texture.IsValid() || bTextureSizeChanged)
 	{
-		UTexture2D* Texture = UTexture2D::CreateTransient(Size.X, Size.Y, PF_FloatRGBA);
+		if(Visual.Texture.IsValid()) OwnedTextures.Remove(Visual.Texture.Get());
+        UTexture2D* Texture = UTexture2D::CreateTransient(Size.X, Size.Y, PF_FloatRGBA);
 		Texture->SRGB = false;
 		Texture->Filter = TF_Bilinear;
 		Texture->AddressX = TA_Clamp;
@@ -2710,6 +2757,51 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 		Visual.bHasProxyVisibilitySample = true;
 		Visual.bLastProxyVisible = bVisible;
 	}
+}
+
+void ADarkwellMovingPropLabRoom::UpdateCurrentPartTextures(FTrackedProp& Prop,FRecordVisual& Visual)
+{
+ auto* Actual=Prop.Actual.Get(); if(!Actual) return;
+ const auto Sources=Actual->Memory->GetMemoryPrimitives();
+ const int32 Count=Prop.CurrentLive.Parts.Num();
+ Visual.LiveTextures.SetNum(Count); Visual.LivePixels.SetNum(Count); Visual.LiveSignatures.SetNum(Count);
+ for(int32 I=0;I<Count;++I)
+ {
+  const auto& Part=Prop.CurrentLive.Parts[I]; const auto Atlas=Part.AtlasCells*4;
+  UTexture2D* Texture=Visual.LiveTextures[I].Get();
+  if(!Texture)
+  {
+   Texture=UTexture2D::CreateTransient(Atlas.X,Atlas.Y,PF_FloatRGBA);
+   Texture->SRGB=false; Texture->Filter=TF_Bilinear; Texture->AddressX=TA_Clamp; Texture->AddressY=TA_Clamp; Texture->NeverStream=true;
+   auto& Bulk=Texture->GetPlatformData()->Mips[0].BulkData;
+   FMemory::Memzero(Bulk.Lock(LOCK_READ_WRITE),Bulk.GetBulkDataSize()); Bulk.Unlock(); Texture->UpdateResource();
+   Visual.LiveTextures[I]=Texture; OwnedTextures.Add(Texture); ++Visual.LiveTextureCreations;
+  }
+  auto& Pixels=Visual.LivePixels[I];
+  const auto Size=Part.Raster.BuildConservativePresentation(4,Pixels);
+  uint64 Hash=1469598103934665603ull;
+  for(const auto& Pixel:Pixels) for(float V : {Pixel.R,Pixel.G,Pixel.B,Pixel.A}) { uint32 Bits; FMemory::Memcpy(&Bits,&V,4); Hash=(Hash^Bits)*1099511628211ull; }
+  Hash=(Hash^uint64(Size.X))*1099511628211ull; Hash=(Hash^uint64(Size.Y))*1099511628211ull;
+  if(Hash!=Visual.LiveSignatures[I])
+  {
+   // Clear unused atlas texels as its active rectangle changes at 90 degrees.
+   // Bilinear filtering must never sample a previous pose from the padding.
+   auto* Upload=new FFloat16Color[Atlas.X*Atlas.Y];
+   FMemory::Memzero(Upload,Atlas.X*Atlas.Y*sizeof(FFloat16Color));
+   for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X) Upload[Y*Atlas.X+X]=FFloat16Color(Pixels[Y*Size.X+X]);
+   auto* Region=new FUpdateTextureRegion2D(0,0,0,0,Atlas.X,Atlas.Y);
+   Texture->UpdateTextureRegions(0,1,Region,Atlas.X*sizeof(FFloat16Color),sizeof(FFloat16Color),reinterpret_cast<uint8*>(Upload),
+    [](uint8* Data,const FUpdateTextureRegion2D* R){delete[] reinterpret_cast<FFloat16Color*>(Data);delete R;});
+   ++Visual.LiveTextureUploads; ++RuntimeFrame.TextureUploads; Visual.LiveSignatures[I]=Hash;
+  }
+  if(Sources.IsValidIndex(I)) if(auto* Material=Cast<UMaterialInstanceDynamic>(Sources[I]->GetMaterial(0)))
+  {
+   const auto Bounds=Part.Raster.GetBounds(); const auto Extent=Bounds.GetSize()*FVector2D(Atlas)/FVector2D(Size);
+   Material->SetTextureParameterValue(TEXT("SpatialStateTexture"),Texture);
+   Material->SetVectorParameterValue(TEXT("SpatialMinInv"),FLinearColor(Bounds.Min.X,Bounds.Min.Y,1/Extent.X,1/Extent.Y));
+   Material->SetScalarParameterValue(TEXT("SpatialReady"),1); Material->SetScalarParameterValue(TEXT("FixedRevealEnabled"),1);
+  }
+ }
 }
 
 void ADarkwellMovingPropLabRoom::UpdateRecordTexture(

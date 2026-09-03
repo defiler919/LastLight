@@ -36,6 +36,7 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 		const FTransform& SnapshotTransform,
 		const FBox2D& WorldBounds,
 		float CellSize = 2.5f);
+	bool UpdateCurrentObservedPosePreservingEvidence(const FTransform& Pose);
 	bool FreezeCurrentForHiddenMovement();
 	/** Drops only the unsealed live observation. Does not manufacture empty evidence. */
 	bool AbandonCurrentObservationWithoutHistory();

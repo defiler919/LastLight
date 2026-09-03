@@ -56,12 +56,21 @@ bool FDarkwellSpatialObservationHistory::RebaseCurrentObservedLocation(
 		return false;
 	}
 	FDarkwellSpatialObservationRecord& Record = Records[CurrentIndex];
+	const FIntPoint Size(FMath::CeilToInt(WorldBounds.GetSize().X/CellSize),FMath::CeilToInt(WorldBounds.GetSize().Y/CellSize));
+	// Compatibility for fixed-footprint callers. Shape changes require the host's
+	// explicit geometry reset; never silently destroy observation evidence here.
+	if(Size!=Record.SpatialMemory.GetSize()) return false;
 	++Record.PoseUpdates;
 	Record.SnapshotTransform = SnapshotTransform;
-	Record.SpatialMemory.Initialize(StableId, WorldBounds, CellSize);
-	Record.SpatialMemory.BeginPresent();
+	Record.SpatialMemory.PrepareCurrentRaster(WorldBounds,Size);
 	Record.bCurrentObservedLocation = true;
 	return true;
+}
+
+bool FDarkwellSpatialObservationHistory::UpdateCurrentObservedPosePreservingEvidence(const FTransform& Pose)
+{
+	if(!Records.IsValidIndex(CurrentIndex)) return false;
+	auto& Record=Records[CurrentIndex]; Record.SnapshotTransform=Pose; ++Record.PoseUpdates; return true;
 }
 
 bool FDarkwellSpatialObservationHistory::FreezeCurrentForHiddenMovement()

@@ -5,6 +5,7 @@
 #include "Interaction/DarkwellInteractable.h"
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 #include "VisionPresentation/DarkwellSpatialObservationHistory.h"
+#include "VisionPresentation/DarkwellCurrentLiveGrid.h"
 #include "SightWeaveObjectPolicy.h"
 #include "DarkwellMovingPropLabRoom.generated.h"
 
@@ -253,6 +254,10 @@ private:
 		uint32 Epoch = 0;
 		TWeakObjectPtr<AActor> Proxy;
 		TWeakObjectPtr<UTexture2D> Texture;
+		TArray<TWeakObjectPtr<UTexture2D>> LiveTextures;
+		TArray<TArray<FLinearColor>> LivePixels;
+		TArray<uint64> LiveSignatures;
+		int32 LiveTextureCreations=0,LiveTextureUploads=0;
 		TWeakObjectPtr<UDynamicMeshComponent> Cap;
 		TArray<FBox> PartBounds;
 		TArray<FPrimitiveGeometrySnapshot> PartGeometry;
@@ -304,6 +309,8 @@ private:
 		TWeakObjectPtr<USightWeaveObjectPolicyComponent> ObjectPolicy;
 		uint64 ProcessedMovingRevision = 0;
 		FDarkwellSpatialObservationHistory History;
+		FDarkwellCurrentLiveGrid CurrentLive;
+		uint32 LocalEpoch=0;
 		TMap<uint32, FRecordVisual> Visuals;
 		FTransform InitialTransform = FTransform::Identity;
 		FTransform LastPhysicalTransform = FTransform::Identity;
@@ -467,6 +474,7 @@ private:
 	bool SetTrackedExists(FName StableId, bool bExists);
 	void EnsureRecordVisual(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
 	void UpdateRecordTexture(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
+	void UpdateCurrentPartTextures(FTrackedProp& Prop, FRecordVisual& Visual);
 	void UpdateRecordCap(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
 	AActor* SpawnMemoryProxy(const FTrackedProp& Prop, const FDarkwellSpatialObservationRecord& Record);
 	void BindProxyMaterial(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record, AActor* Proxy);

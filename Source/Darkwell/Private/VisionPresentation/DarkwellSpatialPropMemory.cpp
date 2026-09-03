@@ -16,6 +16,15 @@ void FDarkwellSpatialPropMemory::Initialize(FName InStableId,const FBox2D& InBou
  Cells.Empty(); Cells.SetNum(Size.X*Size.Y);
 }
 bool FDarkwellSpatialPropMemory::IsPresent() const { return ActualState==Darkwell::SpatialPropMemory::Present; }
+TArrayView<FDarkwellSpatialPropMemory::FCell> FDarkwellSpatialPropMemory::PrepareCurrentRaster(
+ const FBox2D& InBounds,FIntPoint InSize,int32 Capacity)
+{
+ check(IsPresent() && InBounds.bIsValid && InSize.X>0 && InSize.Y>0);
+ Bounds=InBounds; Size=InSize;
+ Cells.Reserve(FMath::Max(Capacity,Size.X*Size.Y));
+ Cells.SetNum(Size.X*Size.Y,EAllowShrinking::No);
+ return Cells;
+}
 bool FDarkwellSpatialPropMemory::IsAbsent() const { return ActualState==Darkwell::SpatialPropMemory::Absent; }
 void FDarkwellSpatialPropMemory::BeginPresent()
 {

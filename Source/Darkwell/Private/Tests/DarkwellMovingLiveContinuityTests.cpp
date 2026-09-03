@@ -59,7 +59,7 @@ namespace Darkwell::MovingLiveTests
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMovingLiveReproduction,
- "Darkwell.PropLab.MovingLiveContinuity.DestructiveRebaseReproduction", EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+ "Darkwell.PropLab.MovingLiveContinuity.ContinuousVisibleRotationDoesNotResetLive", EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
 bool FDarkwellMovingLiveReproduction::RunTest(const FString&)
 {
  using namespace Darkwell::MovingLiveTests;
@@ -71,13 +71,16 @@ bool FDarkwellMovingLiveReproduction::RunTest(const FString&)
  int32 Collapsed=0;
  for(int32 I=0;I<240;++I) {
   F.Step(); const FString Row=F.Room->GetMovingLiveTelemetry(Id);
+  TestTrue(TEXT("Stable interior appearance every motion frame"),Row.Contains(TEXT("\"appearance\":[1.000000,1.000000,1.000000]")));
+  TestTrue(TEXT("Fixed four current textures across world AABB changes"),Row.Contains(TEXT("\"texture_creations\":4,")));
   AddInfo(FString::Printf(TEXT("MOVING_LIVE_FRAME %d "),I)+Row);
   if(Row.Contains(TEXT("\"appearance\":[0.083333,0.083333,0.083333]"))) ++Collapsed;
   TestEqual(TEXT("Single current epoch"),F.Room->GetCurrentEpochCountForTesting(Id),1);
   TestEqual(TEXT("No stale epoch during continuous sight"),F.Room->GetStaleEpochCountForTesting(Id),0);
  }
- // Baseline diagnostic assertion, replaced by the same route's positive contract in checkpoint B.
- TestTrue(TEXT("Known destructive rebase reproduced for sustained motion"),Collapsed>=200);
+ // Exact same 240-frame baseline route now asserts preserved local evidence.
+ TestEqual(TEXT("No repeated appearance collapse"),Collapsed,0);
+ TestTrue(TEXT("Ordinary pose changes never reinitialize"),F.Room->GetMovingLiveTelemetry(Id).Contains(TEXT("\"initialize\":1,")));
  AddInfo(FString::Printf(TEXT("MOVING_LIVE_BASELINE_COLLAPSED=%d/240"),Collapsed));
  return true;
 }

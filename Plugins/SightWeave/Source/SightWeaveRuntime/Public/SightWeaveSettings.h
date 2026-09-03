@@ -5,6 +5,7 @@
 #include "SightWeaveGeometry.h"
 #include "SightWeaveSparseAtlas.h"
 #include "SightWeaveTypes.h"
+#include "SightWeaveObjectPolicy.h"
 
 #include "SightWeaveSettings.generated.h"
 
@@ -15,6 +16,10 @@ class SIGHTWEAVERUNTIME_API USightWeaveSettings final : public UDeveloperSetting
 
 public:
 	USightWeaveSettings();
+
+	/** Resolved once when an optional object policy component registers. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Object History")
+	ESightWeaveHistoryMode DefaultHistoryMode = ESightWeaveHistoryMode::Always;
 
 	virtual FName GetCategoryName() const override;
 	virtual FName GetSectionName() const override;

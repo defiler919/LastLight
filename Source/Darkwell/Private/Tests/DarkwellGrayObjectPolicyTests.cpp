@@ -437,4 +437,44 @@ bool FDarkwellGrayHistoryCapacityCurrentTest::RunTest(const FString&)
  return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellRepeatedHistoryEvidenceParity,
+ "Darkwell.PropLab.GrayObjectPolicy.RepeatedHistoryEvidenceMatchesFullUpdate",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellRepeatedHistoryEvidenceParity::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ TArray<uint64> Reference; uint64 Reuses=0, OwnershipReuses=0;
+ for(bool Full:{true,false})
+ {
+  FRoom F; F.Room->bForceFullHistoryEvidenceForTesting=Full;
+  for(int32 Frame=0;Frame<150;++Frame)
+  {
+   F.Face(Frame%20<10?90:-90);
+   if(Frame==120) { auto P=F.Room->GetTrackedTransform(Id); P.SetRotation(FQuat(FRotator(0,15,0))); F.Room->SetTrackedTransformForTesting(Id,P); }
+   F.Step();
+   if(!Full) { const auto T=F.Room->GetHistoryRuntimeFrameTelemetryForTesting(); Reuses+=T.HistoryGeometryReuseHits; OwnershipReuses+=T.HistoryOwnershipReuseHits; }
+   uint64 Hash=1469598103934665603ull;
+   auto Mix=[&](uint64 V){Hash=(Hash^V)*1099511628211ull;};
+   for(FName Target:{Id,FName(TEXT("Lab.Moving.Cabinet"))})
+   {
+    TArray<ADarkwellMovingPropLabRoom::FFineEvidenceDiagnostic> Samples;
+    F.Room->GetFineEvidenceDiagnosticsForTesting(Target,Samples); Mix(Samples.Num());
+    for(const auto& D:Samples)
+    {
+     Mix(D.Epoch); Mix(D.Index); Mix(GetTypeHash(D.Sample.State)); Mix(D.Sample.bVerifiedEmpty);
+     for(float V:{D.Sample.Opacity,D.Sample.InitialRemembered,D.Sample.FrozenAAEnvelope,D.Sample.EmptyDwell,D.Coverage}) Mix(FMath::RoundToInt(V*1000000));
+     Mix(D.bOccupied); Mix(D.bOwned); Mix(D.bValid); Mix(D.bSubmitted);
+    }
+   }
+   if(Full) Reference.Add(Hash);
+   else if(!TestEqual(*FString::Printf(TEXT("Repeated history equals full original evidence at frame %d"),Frame),Hash,Reference[Frame])) return false;
+  }
+  TestTrue(TEXT("Reference and optimized replay both retain repeated history"),F.Room->GetStaleEpochCountForTesting(Id)>=4);
+ }
+ TestTrue(TEXT("Replay actually exercises exact geometry reuse"),Reuses>0);
+ TestTrue(TEXT("Replay actually exercises exact ownership reuse"),OwnershipReuses>0);
+ AddInfo(FString::Printf(TEXT("Repeated history geometry reuse hits=%llu ownership reuse hits=%llu"),Reuses,OwnershipReuses));
+ return true;
+}
+
 #endif

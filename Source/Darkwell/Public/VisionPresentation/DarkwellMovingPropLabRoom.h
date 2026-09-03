@@ -92,6 +92,8 @@ public:
 		uint64 GpuTextureUploads = 0;
 		uint64 OccupancyTests = 0;
   uint64 OccupancyCacheHits = 0;
+		uint64 HistoryGeometryReuseHits = 0;
+		uint64 HistoryOwnershipReuseHits = 0;
 		uint64 PrimitiveGeometryTests = 0;
 		uint64 OwnershipTests = 0;
 		uint64 UpdateRecordTextureCalls = 0;
@@ -269,6 +271,7 @@ private:
  bool bUseFrameOccupancy=false, bFilterFrameOccupancy=false;
  TConstArrayView<const FActualOccupancySnapshot*> FrameOccupancyCandidates;
  mutable TMap<FVector2D,bool> FrameOccupancyPoints;
+ bool bCacheFrameOccupancyPoints=false;
  bool bUseNewerCandidates=false;
  FName NewerCandidateId;
  uint32 NewerCandidateMaximumEpoch=0;
@@ -333,6 +336,27 @@ private:
 		bool bHasProxyVisibilitySample = false;
 		bool bLastProxyVisible = false;
 	};
+	struct FHistoryGeometryReuse
+	{
+		FName StableId;
+		FBox2D Bounds;
+		FIntPoint Size;
+		uint64 PreviousGeometryRevision = 0, PreviousOwnershipRevision = 0;
+		TArray<FPrimitiveGeometrySnapshot> BeforePhysical, BeforeNewer, AfterNewer;
+		TBitArray<> Occupied;
+		TArray<int32> DirtyIndices;
+	};
+	TArray<FHistoryGeometryReuse> FrameHistoryGeometry;
+	struct FHistoryOwnershipReuse
+	{
+		FName StableId;
+		FBox2D Bounds;
+		FIntPoint Size;
+		TArray<FPrimitiveGeometrySnapshot> OldGeometry;
+		TArray<uint32> NewerEpochs;
+		TBitArray<> Evaluated, Overlap;
+	};
+	TArray<FHistoryOwnershipReuse> FrameHistoryOwnership;
 
 	enum class EObservationState : uint8
 	{

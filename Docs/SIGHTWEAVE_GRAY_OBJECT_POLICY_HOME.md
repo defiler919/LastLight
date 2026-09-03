@@ -739,3 +739,55 @@ invalid-revision recovery, repeated view loss and moving observation. All stored
 fine-evidence hashes stay unchanged. Existing no-moving-history cases and the
 240-frame full-update parity replay pass. Long-run cost remains unvalidated by
 this short recovery checkpoint; status stays performance-blocked.
+
+## Home recovery C2 — exact repeated-history work reuse
+
+C1 was pushed as `9ea27f0c9241a39a6865cae388dae53ef5496bb1`; local, upstream
+and remote matched. No capacity eviction or historical-state rule was changed.
+The user subsequently authorized unattended safe shutdown only after all valuable
+work and handoff are committed/pushed, LFS integrity passes, all three refs match,
+protected refs remain unchanged, and owned validation/writer processes have ended.
+Use the requested non-forced 60-second shutdown and recheck during the countdown;
+cancel immediately if synchronization or local-work safety cannot be confirmed.
+
+`Home_Recovery_GrowthDiagnostic_20260903` tested C1 for the explicit 180-second
+wall budget: 8,350 active steps, **failed**, editor exit 0 / runner exit 1,
+180.506546 s test / 200.400311 s wall, severe 0. At 3,600 steps CPU p95 35.830 ms;
+last window p95 88.557 ms, 42 records, 37 >100 ms steps, longest >33 run 193.
+Lost-live checks were zero active and idle; this did not yet reach capacity.
+The bounded run is not a full 54,000-step result.
+
+Geometry dirty indices and exact physical occupancy can now be shared within a
+fixed frame by records with identical raster, prior geometry/revisions and newer
+geometry. Historical ownership checks share exact fine-cell results only when
+old geometry and the complete eligible newer-epoch set match. Records are processed
+in increasing epoch order: matched newer candidates have not yet been modified,
+and current was processed before the historical phase. Diagnostics cannot read
+this cache. Both caches are bounded to 64 scratch entries, falling back to original
+queries when full; small scenes with no reusable history avoid their setup cost.
+Full-reference tests disable these caches. Terminal Superseded samples avoid
+redundant writes without changing any evidence or state transition. A fully dirty
+fine raster marks its entire coarse raster directly using the identical mapping.
+
+The first geometry-only build succeeded (23.44 s). Its 5 selected tests passed,
+but a misspelled HistoryGridV2 selector matched nothing. The corrected suite in
+`Home_HistoryGeometry_Growth_20260903` passes all six original HistoryGridV2 cases;
+its separate 180-second growth case still fails. Combined 7 tests: 6 passed,
+1 failed, 250.602524 s tests / 271.437530 s wall, editor exit 0 / runner exit 1,
+severe 0. Growth reached 47 records, 4 >100 ms steps, longest >33 run 142;
+lost-live checks remained zero. First-window p95 improved to 32.420 ms but
+geometry-query totals were unchanged, identifying repeated ownership checks.
+These failures are preserved before the additional ownership reuse.
+
+Home_HistoryOwnership_Build1_20260904: standard Editor Development succeeded,
+9 actions, 20.72 s. Home_HistoryOwnership_Targeted_20260904: **11/11** (5 clean,
+6 with warnings), 89.481796 s tests / 109.182189 s wall, process/runner exit 0,
+severe 0. Includes all six original HistoryGridV2 cases, capacity/current,
+240-frame original full-update parity, repeated-history full-update parity and
+both short performance gates. The repeated replay verifies every retained fine
+sample at each of 150 frames and actually uses 57 geometry and 29,988 ownership
+cache hits. 8-moving CPU p95 10.638300 ms / peak 15.814900; 32-static p95
+12.453400 / peak 57.523500, one isolated >33 ms step, no >100 ms steps.
+The complete post-recovery 54,000-step soak, full automation, actual GPU evidence,
+BuildPlugin and normal GPU-exit proof remain pending. Performance-blocked status
+is retained until long-growth evidence supports a change.

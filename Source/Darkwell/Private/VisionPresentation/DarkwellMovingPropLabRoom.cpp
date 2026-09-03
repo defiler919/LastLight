@@ -1360,7 +1360,7 @@ bool ADarkwellMovingPropLabRoom::IsOccupiedByActual(
   if(bFilterFrameOccupancy && FrameOccupancyCandidates.IsEmpty()) return false;
   // Every physical pose is fixed for this UpdateRoom. Historical ROI candidates
   // include every actor that can contain this point; cache exact coordinates only.
-  bool UseCache=IgnoredStableId.IsNone();
+  bool UseCache=bCacheFrameOccupancyPoints && IgnoredStableId.IsNone();
 #if WITH_DEV_AUTOMATION_TESTS
   UseCache &= !bForceFullHistoryEvidenceForTesting;
 #endif
@@ -1472,6 +1472,39 @@ void ADarkwellMovingPropLabRoom::BuildGeometryDirtyIndices(
 	const FIntPoint Size = Record.FineHistory.GetSize();
 	const FBox2D& Bounds = Record.FineHistory.GetBounds();
 	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
+ bool Reuse=bUseFrameOccupancy && Prop.History.GetRecords().Num()-(Prop.History.GetCurrentIndex()!=INDEX_NONE?1:0)>1;
+#if WITH_DEV_AUTOMATION_TESTS
+ Reuse &= !bForceFullHistoryEvidenceForTesting;
+#endif
+ auto SameGeometry=[](const TArray<FPrimitiveGeometrySnapshot>& A,const TArray<FPrimitiveGeometrySnapshot>& B)
+ {
+  if(A.Num()!=B.Num()) return false;
+  for(int32 I=0;I<A.Num();++I)
+   if(A[I].PrimitiveIndex!=B[I].PrimitiveIndex || A[I].LocalBounds.Min!=B[I].LocalBounds.Min
+    || A[I].LocalBounds.Max!=B[I].LocalBounds.Max || !A[I].WorldTransform.Equals(B[I].WorldTransform,0)) return false;
+  return true;
+ };
+ if(Reuse) for(const auto& Cached:FrameHistoryGeometry)
+  if(Cached.StableId==Prop.StableId && Cached.Size==Size && Cached.Bounds.Min==Bounds.Min && Cached.Bounds.Max==Bounds.Max
+   && Cached.PreviousGeometryRevision==Visual.ProcessedGeometryRevision && Cached.PreviousOwnershipRevision==Visual.ProcessedOwnershipRevision
+   && SameGeometry(Cached.BeforePhysical,Visual.CachedPhysicalGeometry)
+   && SameGeometry(Cached.BeforeNewer,Visual.CachedNewerGeometry) && SameGeometry(Cached.AfterNewer,NewerGeometry))
+  {
+   Visual.CachedFineOccupied=Cached.Occupied; OutDirtyIndices=Cached.DirtyIndices;
+   Visual.CachedPhysicalGeometry=MoveTemp(PhysicalGeometry); Visual.CachedNewerGeometry=MoveTemp(NewerGeometry);
+   Visual.ProcessedGeometryRevision=GeometryRevision; Visual.ProcessedOwnershipRevision=Prop.ObservationOwnershipRevision;
+   ++RuntimeFrame.HistoryGeometryReuseHits;
+   return;
+  }
+ // Cache size bounds scratch memory only. A full cache uses the original path.
+ FHistoryGeometryReuse* Cached=nullptr;
+ if(Reuse && FrameHistoryGeometry.Num()<64)
+ {
+  Cached=&FrameHistoryGeometry.AddDefaulted_GetRef(); Cached->StableId=Prop.StableId; Cached->Bounds=Bounds; Cached->Size=Size;
+  Cached->PreviousGeometryRevision=Visual.ProcessedGeometryRevision; Cached->PreviousOwnershipRevision=Visual.ProcessedOwnershipRevision;
+  Cached->BeforePhysical=Visual.CachedPhysicalGeometry; Cached->BeforeNewer=Visual.CachedNewerGeometry; Cached->AfterNewer=NewerGeometry;
+ }
+
 	TBitArray<> Dirty(false, Size.X * Size.Y);
 	auto MarkRegion = [&](const FBox2D& Region)
 	{
@@ -1522,6 +1555,7 @@ void ADarkwellMovingPropLabRoom::BuildGeometryDirtyIndices(
 		Visual.CachedFineOccupied[Index] = IsOccupiedByActual(Point, NAME_None);
 		OutDirtyIndices.Add(Index);
 	}
+ if(Cached) { Cached->Occupied=Visual.CachedFineOccupied; Cached->DirtyIndices=OutDirtyIndices; }
 }
 
 bool ADarkwellMovingPropLabRoom::UpdateHistoricalContributionExclusion(
@@ -1551,6 +1585,40 @@ bool ADarkwellMovingPropLabRoom::UpdateHistoricalContributionExclusion(
 	bool bChanged = false;
 	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
 	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
+ FHistoryOwnershipReuse* Cached=nullptr;
+ bool Reuse=bUseFrameOccupancy && Prop.History.GetRecords().Num()>2 && bUseNewerCandidates && NewerCandidateId==Prop.StableId;
+#if WITH_DEV_AUTOMATION_TESTS
+ Reuse &= !bForceFullHistoryEvidenceForTesting;
+#endif
+ if(Reuse)
+ {
+  TArray<uint32> NewerEpochs;
+  for(const auto* C:FrameNewerCandidates)
+   if(C->Epoch>Record.Epoch && (C->bCurrentObservedLocation || (Prop.Visuals.Find(C->Epoch) && !Prop.Visuals.FindChecked(C->Epoch).bPresentationRetired))) NewerEpochs.Add(C->Epoch);
+  if(NewerEpochs.IsEmpty()) return false;
+  auto SameOldGeometry=[&](const TArray<FPrimitiveGeometrySnapshot>& A)
+  {
+   const auto& B=Visual->PartGeometry;
+   if(A.Num()!=B.Num()) return false;
+   for(int32 I=0;I<A.Num();++I)
+    if(A[I].PrimitiveIndex!=B[I].PrimitiveIndex || A[I].LocalBounds.Min!=B[I].LocalBounds.Min || A[I].LocalBounds.Max!=B[I].LocalBounds.Max
+     || !A[I].WorldTransform.Equals(B[I].WorldTransform,0)) return false;
+   return true;
+  };
+  // History updates run in strictly increasing epoch order. The matching set
+  // of newer candidates has not yet been updated for any reader in this phase.
+  // Current was already updated. This cache is never queried by later diagnostics.
+  for(auto& Entry:FrameHistoryOwnership)
+   if(Entry.StableId==Prop.StableId && Entry.Size==Size && Entry.Bounds.Min==Bounds.Min && Entry.Bounds.Max==Bounds.Max
+    && Entry.NewerEpochs==NewerEpochs && SameOldGeometry(Entry.OldGeometry)) { Cached=&Entry; break; }
+  if(!Cached && FrameHistoryOwnership.Num()<64)
+  {
+   Cached=&FrameHistoryOwnership.AddDefaulted_GetRef(); Cached->StableId=Prop.StableId; Cached->Bounds=Bounds; Cached->Size=Size;
+   Cached->OldGeometry=Visual->PartGeometry; Cached->NewerEpochs=MoveTemp(NewerEpochs);
+   Cached->Evaluated.Init(false,Size.X*Size.Y); Cached->Overlap.Init(false,Size.X*Size.Y);
+  }
+ }
+
 	for (const int32 Index : DirtyIndices)
 	{
 		if (!Visual->SuppressedByCurrentEvidence.IsValidIndex(Index)
@@ -1561,8 +1629,14 @@ bool ADarkwellMovingPropLabRoom::UpdateHistoricalContributionExclusion(
 		const int32 X = Index % Size.X;
 		const int32 Y = Index / Size.X;
 		const FVector2D Minimum = Bounds.Min + Step * FVector2D(X, Y);
-		if (HasNewerObservedGeometryOverlapWithinFootprint(
-			Prop, *Visual, Record.Epoch, FBox2D(Minimum, Minimum + Step)))
+  bool Overlap=false;
+  if(Cached && Cached->Evaluated[Index]) { Overlap=Cached->Overlap[Index]; ++RuntimeFrame.HistoryOwnershipReuseHits; }
+  else
+  {
+   Overlap=HasNewerObservedGeometryOverlapWithinFootprint(Prop,*Visual,Record.Epoch,FBox2D(Minimum,Minimum+Step));
+   if(Cached) { Cached->Evaluated[Index]=true; Cached->Overlap[Index]=Overlap; }
+  }
+		if (Overlap)
 		{
 			// This is a monotonic presentation-ownership decision backed by new
 			// legal present evidence. It does not mark the old cell verified empty.
@@ -2605,6 +2679,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
   TBitArray<> CoarseDirty(false,CoarseCount);
   if(Visual->CachedCoarseOccupied.Num()!=CoarseCount)
   { Visual->CachedCoarseOccupied.Init(false,CoarseCount); CoarseDirty.Init(true,CoarseCount); }
+  else if(!GeometryDirtyIndices.IsEmpty() && GeometryDirtyIndices.Num()==Record->FineHistory.GetSamples().Num()) CoarseDirty.Init(true,CoarseCount);
   else
   {
    const int32 FineX=Record->FineHistory.GetSize().X;
@@ -4506,7 +4581,10 @@ void ADarkwellMovingPropLabRoom::UpdateRoom(
 	}
  // Motion has advanced every actor. Snapshot physical bounds/primitives once
  // for all history occupancy queries in this update, including other identities.
- FrameOccupancy.Reset(); FrameOccupancyPoints.Reset();
+ FrameOccupancy.Reset(); FrameOccupancyPoints.Reset(); FrameHistoryGeometry.Reset(); FrameHistoryOwnership.Reset();
+ bCacheFrameOccupancyPoints=false;
+ for(const auto& Pair:Tracked)
+  bCacheFrameOccupancyPoints |= Pair.Value.History.GetRecords().Num()-(Pair.Value.History.GetCurrentIndex()!=INDEX_NONE?1:0)>1;
  bool PhysicalMotion=false;
  for(const auto& Pair:Tracked)
   if(const auto* A=Pair.Value.bExists?Pair.Value.Actual.Get():nullptr; A && A->GetActorEnableCollision())
@@ -4569,6 +4647,8 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	RuntimeTotal.GpuTextureUploads += RuntimeFrame.GpuTextureUploads;
 	RuntimeTotal.OccupancyTests += RuntimeFrame.OccupancyTests;
  RuntimeTotal.OccupancyCacheHits += RuntimeFrame.OccupancyCacheHits;
+ RuntimeTotal.HistoryGeometryReuseHits += RuntimeFrame.HistoryGeometryReuseHits;
+ RuntimeTotal.HistoryOwnershipReuseHits += RuntimeFrame.HistoryOwnershipReuseHits;
 	RuntimeTotal.PrimitiveGeometryTests += RuntimeFrame.PrimitiveGeometryTests;
 	RuntimeTotal.OwnershipTests += RuntimeFrame.OwnershipTests;
 	RuntimeTotal.UpdateRecordTextureCalls += RuntimeFrame.UpdateRecordTextureCalls;

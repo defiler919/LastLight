@@ -92,6 +92,9 @@ bool FDarkwellHistoryGridV2::AdvanceDirty(float DeltaSeconds,
 	{
 		if (!Samples.IsValidIndex(Index)) continue;
 		FSample& S = Samples[Index];
+		// Superseded is terminal in the existing state machine. Its evidence and
+		// zero dwell cannot change again; avoid rewriting every retained epoch.
+		if (S.State == Superseded()) continue;
 		if (Ownership[Index])
 		{
 			if (S.State != Superseded()) bOutTopologyChanged = true;
@@ -99,7 +102,6 @@ bool FDarkwellHistoryGridV2::AdvanceDirty(float DeltaSeconds,
 			S.EmptyDwell = 0.0f;
 			continue;
 		}
-		if (S.State == Superseded()) continue;
 		const bool bLegalEmpty = !Occupied[Index] && FMath::IsFinite(Coverage[Index])
 			&& Coverage[Index] >= FDarkwellSpatialPropMemory::LegalCoverage;
 		if (!S.bVerifiedEmpty)

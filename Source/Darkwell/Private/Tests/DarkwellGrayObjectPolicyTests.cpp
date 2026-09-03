@@ -443,7 +443,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellRepeatedHistoryEvidenceParity,
 bool FDarkwellRepeatedHistoryEvidenceParity::RunTest(const FString&)
 {
  using namespace Darkwell::GrayObjectPolicyTests;
- TArray<uint64> Reference; uint64 Reuses=0, OwnershipReuses=0, CoverageReuses=0;
+ TArray<uint64> Reference; uint64 Reuses=0, OwnershipReuses=0, CoverageReuses=0, OccupancySamplesReused=0;
  for(bool Full:{true,false})
  {
   FRoom F; F.Room->bForceFullHistoryEvidenceForTesting=Full;
@@ -452,13 +452,23 @@ bool FDarkwellRepeatedHistoryEvidenceParity::RunTest(const FString&)
    F.Face(Frame%20<10?90:-90);
    if(Frame==120) { auto P=F.Room->GetTrackedTransform(Id); P.SetRotation(FQuat(FRotator(0,15,0))); F.Room->SetTrackedTransformForTesting(Id,P); }
    F.Step();
-   if(!Full) { const auto T=F.Room->GetHistoryRuntimeFrameTelemetryForTesting(); Reuses+=T.HistoryGeometryReuseHits; OwnershipReuses+=T.HistoryOwnershipReuseHits; CoverageReuses+=T.HistoryCoverageReuseHits; }
+   if(!Full) { const auto T=F.Room->GetHistoryRuntimeFrameTelemetryForTesting(); Reuses+=T.HistoryGeometryReuseHits; OwnershipReuses+=T.HistoryOwnershipReuseHits; CoverageReuses+=T.HistoryCoverageReuseHits; OccupancySamplesReused+=T.HistoryOccupancySamplesReused; }
    uint64 Hash=1469598103934665603ull;
    auto Mix=[&](uint64 V){Hash=(Hash^V)*1099511628211ull;};
    for(FName Target:{Id,FName(TEXT("Lab.Moving.Cabinet"))})
    {
     TArray<ADarkwellMovingPropLabRoom::FFineEvidenceDiagnostic> Samples;
     F.Room->GetFineEvidenceDiagnosticsForTesting(Target,Samples); Mix(Samples.Num());
+    // Coarse diagnostic fields and their distinct center occupancy must also
+    // stay identical when physical and ownership dirty regions are separated.
+    const auto& Prop=F.Room->Tracked.FindChecked(Target);
+    for(const auto& Record:Prop.History.GetRecords()) if(!Record.bCurrentObservedLocation)
+    {
+     const auto* Visual=Prop.Visuals.Find(Record.Epoch);
+     for(const auto& Cell:Record.SpatialMemory.GetCells())
+      for(float V:{Cell.InitialRemembered,Cell.RemainingStale,Cell.StaleOpacity,Cell.VerifiedEmpty,Cell.EmptyDwell,Cell.CurrentLegalCoverage}) Mix(GetTypeHash(V));
+     if(Visual) for(TConstSetBitIterator<> It(Visual->CachedCoarseOccupied);It;++It) Mix(It.GetIndex()+1);
+    }
     for(const auto& D:Samples)
     {
      Mix(D.Epoch); Mix(D.Index); Mix(GetTypeHash(D.Sample.State)); Mix(D.Sample.bVerifiedEmpty);
@@ -474,7 +484,8 @@ bool FDarkwellRepeatedHistoryEvidenceParity::RunTest(const FString&)
  TestTrue(TEXT("Replay actually exercises exact geometry reuse"),Reuses>0);
  TestTrue(TEXT("Replay actually exercises exact ownership reuse"),OwnershipReuses>0);
  TestTrue(TEXT("Replay actually exercises canonical coverage-delta reuse"),CoverageReuses>0);
- AddInfo(FString::Printf(TEXT("Repeated history geometry reuse hits=%llu ownership reuse hits=%llu coverage reuse hits=%llu"),Reuses,OwnershipReuses,CoverageReuses));
+ TestTrue(TEXT("Ownership-only updates reuse physical occupancy"),OccupancySamplesReused>0);
+ AddInfo(FString::Printf(TEXT("Repeated history geometry reuse hits=%llu ownership reuse hits=%llu coverage reuse hits=%llu occupancy samples reused=%llu"),Reuses,OwnershipReuses,CoverageReuses,OccupancySamplesReused));
  return true;
 }
 

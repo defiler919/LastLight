@@ -841,3 +841,46 @@ Repeated-history full-reference parity uses 57 geometry, 29,988 ownership and
 C3 complete automation/long-growth, GPU, packaging and three GPU exits remain
 pending at this checkpoint. PARTIAL — PERFORMANCE_BLOCKED; teardown blocker
 retained. No final gray Stable or manual-acceptance claim.
+
+
+## Home recovery C3 complete automation and C4 physical-work split
+
+C3 checkpoint `7787cd45920636993fe0dfd3fb2d551ee7326d53` ran
+`Home_Recovery_FullAutomation_20260904`: 188 tests, 153 clean, 33 warning,
+2 failed, 0 not-run; 6044.690918 s tests / 6066.104711 s wall, Editor exit 0,
+runner exit 1, severe 0. The strict FifteenMinuteInteractiveSoak completed all
+54,000 active + 600 idle steps and failed only unchanged performance assertions:
+3 steps >100 ms, longest >33 ms run 148. Current lost checks were 0; peak records
+187, textures 12, caps 3, MIDs 33, live UObjects 77,471 and working set
+4,771,012,608 bytes; measured periodic GC totaled 536.548093 ms. Final idle had
+186 records, no proxies, 2 caps, 8 textures, 27 MIDs, 62,636 live UObjects and
+4,771,024,896 bytes; step p95 .683900 ms. This full-suite process inherited
+uncollected transient worlds from earlier tests, so its process high-water is not
+an isolated-room steady-state memory measurement. The legacy GrayPolicyBaseline
+54,000-step test completed its workload but was marked failed by an unrelated
+Epic HTTP socket_send_failure logged during that test; its final window also
+records the known old-policy cost (p95 150.332900 ms, peak 221.148600 ms).
+The networking event is not reclassified as a pass; complete log/report remain.
+
+C4 separates physical occupancy dirty regions from ownership/view dirty regions.
+Ownership changes still advance every original evidence candidate, while unchanged
+world geometry reuses its exact fine occupancy. Physical transforms are compared
+exactly and update fine/coarse occupancy; same-frame fine results may be shared,
+while every record still refreshes affected coarse centers. The terminal-evidence
+bitset also limits sweep candidates; the force-full oracle continues the original
+all-sample route. No evidence, state, opacity, release or history-capacity rule changes.
+Public/runtime performance telemetry now exposes all reuse counters.
+
+`Home_OwnershipPhysicalSplit_Build1_20260904`: standard Editor Development build
+succeeded, 9 actions, 21.00 s. The first 57-test run exposed a new coarse-state
+oracle mismatch at the real frame-120 rotation (56/57, Editor exit 0, severe 0);
+that failed evidence is retained. The fix preserves coarse physical updates.
+Rebuild succeeded, 9 actions, 20.06 s. The focused original/full parity test
+passed, then `Home_OwnershipPhysicalSplit_Targeted2_20260904` passed **57/57**
+(51 clean, 6 warnings), 213.661652 s tests / 232.762752 s wall, exits 0, severe 0.
+The repeated replay uses 57 geometry, 29,988 ownership, 35 coverage and 1,345,809
+fine occupancy reuse hits, while matching every fine/coarse evidence field each
+frame. 8-moving step p95/peak 10.150500/15.359398 ms; 32-static
+11.883002/53.659000 ms (one isolated >33 ms, none >100), with 76,314 occupancy
+samples reused. Long-growth remains to be rerun on C4; status remains PARTIAL —
+GRAY_OBJECT_POLICY_PERFORMANCE_BLOCKED and TEARDOWN BLOCKER RETAINED.

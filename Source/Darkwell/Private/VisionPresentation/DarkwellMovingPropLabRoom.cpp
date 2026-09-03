@@ -1135,8 +1135,11 @@ bool ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	{
 		FScopedHistoryRuntimeTimer SweepTimer(RuntimeFrame.SweepProofUs);
 		const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X,Size.Y);
-		for (int32 Index=0;Index<SampleCount;++Index)
+        TBitArray<> SweepCandidates(true,SampleCount);
+        if(FilterTerminal) Record.FineHistory.FilterMutableEvidence(SweepCandidates);
+        for(TConstSetBitIterator<> Candidate(SweepCandidates);Candidate;++Candidate)
 		{
+            const int32 Index=Candidate.GetIndex();
 			const auto& Sample = Record.FineHistory.GetSamples()[Index];
 			if (Sample.bVerifiedEmpty || Sample.State == FDarkwellHistoryGridV2::Superseded()
 				|| Visual->CachedFineOccupied[Index] || Visual->SuppressedByCurrentEvidence[Index]
@@ -1234,11 +1237,13 @@ FString ADarkwellMovingPropLabRoom::GetHistoryRuntimeTelemetry() const
 	auto Format = [](const FHistoryRuntimeTelemetry& T)
 	{
 		return FString::Printf(
-			TEXT("{\"frame\":%llu,\"frames\":%llu,\"epochs\":%d,\"resident_samples\":%d,\"samples_scanned\":%llu,\"coverage_scans\":%llu,\"coverage_queries\":%llu,\"occupancy_tests\":%llu,\"geometry_tests\":%llu,\"ownership_tests\":%llu,\"texture_calls\":%llu,\"texture_uploads\":%llu,\"cap_calls\":%llu,\"cap_rebuilds\":%llu,\"refresh_us\":%.3f,\"rotation_log_us\":%.3f,\"report_us\":%.3f,\"fine_advance_us\":%.3f,\"tracked_us\":%.3f,\"game_thread_us\":%.3f,\"proxies\":%d,\"caps\":%d,\"textures\":%d,\"mids\":%d,\"fine_bytes\":%llu,\"records\":%d,\"working_set\":%llu,\"uobjects\":%d,\"sweep_candidates\":%llu,\"sweep_queries\":%llu,\"sweep_accepted\":%llu,\"sweep_budget_rejects\":%llu,\"sweep_unsupported_events\":%llu,\"sweep_proof_us\":%.3f,\"sweep_uniform_substeps\":0}"),
+			TEXT("{\"frame\":%llu,\"frames\":%llu,\"epochs\":%d,\"resident_samples\":%d,\"samples_scanned\":%llu,\"coverage_scans\":%llu,\"coverage_queries\":%llu,\"occupancy_tests\":%llu,\"geometry_tests\":%llu,\"ownership_tests\":%llu,\"occupancy_hits\":%llu,\"history_geometry_reuse\":%llu,\"history_ownership_reuse\":%llu,\"history_coverage_reuse\":%llu,\"occupancy_samples_reused\":%llu,\"texture_calls\":%llu,\"texture_uploads\":%llu,\"cap_calls\":%llu,\"cap_rebuilds\":%llu,\"refresh_us\":%.3f,\"rotation_log_us\":%.3f,\"report_us\":%.3f,\"fine_advance_us\":%.3f,\"tracked_us\":%.3f,\"game_thread_us\":%.3f,\"proxies\":%d,\"caps\":%d,\"textures\":%d,\"mids\":%d,\"fine_bytes\":%llu,\"records\":%d,\"working_set\":%llu,\"uobjects\":%d,\"sweep_candidates\":%llu,\"sweep_queries\":%llu,\"sweep_accepted\":%llu,\"sweep_budget_rejects\":%llu,\"sweep_unsupported_events\":%llu,\"sweep_proof_us\":%.3f,\"sweep_uniform_substeps\":0}"),
 			T.FrameNumber, T.FramesAccumulated, T.ActiveHistoricalEpochs,
 			T.FineSamplesResident, T.FineSamplesScanned, T.CoverageFullScans,
 			T.CoverageQueries, T.OccupancyTests, T.PrimitiveGeometryTests,
-			T.OwnershipTests, T.UpdateRecordTextureCalls, T.TextureUploads,
+			T.OwnershipTests, T.OccupancyCacheHits, T.HistoryGeometryReuseHits,
+            T.HistoryOwnershipReuseHits, T.HistoryCoverageReuseHits, T.HistoryOccupancySamplesReused,
+            T.UpdateRecordTextureCalls, T.TextureUploads,
 			T.UpdateRecordCapCalls, T.CapMeshRebuilds,
 			T.RefreshContributionDiagnosticsUs, T.LogRotationFrameUs,
 			T.ReportHudUs, T.AdvanceFineHistoryUs, T.UpdateTrackedUs,
@@ -1524,9 +1529,10 @@ bool ADarkwellMovingPropLabRoom::HasNewerObservedContributionAt(
 
 void ADarkwellMovingPropLabRoom::BuildGeometryDirtyIndices(
 	const FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record,
-	FRecordVisual& Visual, TArray<int32>& OutDirtyIndices)
+	FRecordVisual& Visual, TArray<int32>& OutDirtyIndices, TArray<int32>& OutPhysicalDirtyIndices)
 {
 	OutDirtyIndices.Reset();
+	OutPhysicalDirtyIndices.Reset();
 	if (!Record.FineHistory.IsInitialized()
 		|| (Visual.ProcessedGeometryRevision == GeometryRevision
 			&& Visual.ProcessedOwnershipRevision == Prop.ObservationOwnershipRevision))
@@ -1558,7 +1564,7 @@ void ADarkwellMovingPropLabRoom::BuildGeometryDirtyIndices(
    && SameGeometry(Cached.BeforePhysical,Visual.CachedPhysicalGeometry)
    && SameGeometry(Cached.BeforeNewer,Visual.CachedNewerGeometry) && SameGeometry(Cached.AfterNewer,NewerGeometry))
   {
-   Visual.CachedFineOccupied=Cached.Occupied; OutDirtyIndices=Cached.DirtyIndices;
+   Visual.CachedFineOccupied=Cached.Occupied; OutDirtyIndices=Cached.DirtyIndices; OutPhysicalDirtyIndices=Cached.PhysicalDirtyIndices; RuntimeFrame.HistoryOccupancySamplesReused+=OutDirtyIndices.Num();
    Visual.CachedPhysicalGeometry=MoveTemp(PhysicalGeometry); Visual.CachedNewerGeometry=MoveTemp(NewerGeometry);
    Visual.ProcessedGeometryRevision=GeometryRevision; Visual.ProcessedOwnershipRevision=Prop.ObservationOwnershipRevision;
    ++RuntimeFrame.HistoryGeometryReuseHits;
@@ -1587,28 +1593,36 @@ void ADarkwellMovingPropLabRoom::BuildGeometryDirtyIndices(
 			for (int32 X = MinX; X <= MaxX; ++X) Dirty[Y * Size.X + X] = true;
 	};
  auto GeometryRegion=[](const FPrimitiveGeometrySnapshot& G) { const auto B=G.LocalBounds.TransformBy(G.WorldTransform); return FBox2D(FVector2D(B.Min),FVector2D(B.Max)); };
- auto MarkChanged=[&](const TArray<FPrimitiveGeometrySnapshot>& Before,const TArray<FPrimitiveGeometrySnapshot>& After)
+ auto MarkChanged=[&](const TArray<FPrimitiveGeometrySnapshot>& Before,const TArray<FPrimitiveGeometrySnapshot>& After,double Tolerance)
  {
   const int32 N=FMath::Max(Before.Num(),After.Num());
   for(int32 I=0;I<N;++I)
   {
-   if(Before.IsValidIndex(I) && After.IsValidIndex(I) && Before[I].LocalBounds.Equals(After[I].LocalBounds,1.e-6)
-    && Before[I].WorldTransform.Equals(After[I].WorldTransform,1.e-6)) continue;
+   if(Before.IsValidIndex(I) && After.IsValidIndex(I) && Before[I].LocalBounds.Equals(After[I].LocalBounds,Tolerance)
+    && Before[I].WorldTransform.Equals(After[I].WorldTransform,Tolerance)) continue;
    if(Before.IsValidIndex(I)) MarkRegion(GeometryRegion(Before[I]));
    if(After.IsValidIndex(I)) MarkRegion(GeometryRegion(After[I]));
   }
  };
- if(Visual.ProcessedGeometryRevision==0) Dirty.Init(true,Size.X*Size.Y);
- else
+ // Occupancy depends only on physical geometry. Ownership/view changes still
+ // dirty evidence, but cannot invalidate a previously exact occupancy result.
+ // Exact physical comparison also prevents sub-tolerance motion from leaving a
+ // stale occupancy cache that a later ownership-only update would reuse.
+ if(Visual.ProcessedGeometryRevision==0 || Visual.CachedFineOccupied.Num()!=Size.X*Size.Y) Dirty.Init(true,Size.X*Size.Y);
+ else MarkChanged(Visual.CachedPhysicalGeometry,PhysicalGeometry,0);
+ TBitArray<> PhysicalDirty=Dirty;
+ if(Visual.ProcessedGeometryRevision!=0)
  {
-  MarkChanged(Visual.CachedPhysicalGeometry,PhysicalGeometry);
-  MarkChanged(Visual.CachedNewerGeometry,NewerGeometry);
+  MarkChanged(Visual.CachedNewerGeometry,NewerGeometry,1.e-6);
   if(Visual.ProcessedOwnershipRevision!=Prop.ObservationOwnershipRevision)
   {
    for(const auto& G:Visual.CachedNewerGeometry) MarkRegion(GeometryRegion(G));
    for(const auto& G:NewerGeometry) MarkRegion(GeometryRegion(G));
   }
  }
+#if WITH_DEV_AUTOMATION_TESTS
+ if(bForceFullHistoryEvidenceForTesting) PhysicalDirty=Dirty;
+#endif
  Visual.CachedPhysicalGeometry=MoveTemp(PhysicalGeometry); Visual.CachedNewerGeometry=MoveTemp(NewerGeometry);
  Visual.ProcessedGeometryRevision=GeometryRevision;
  Visual.ProcessedOwnershipRevision=Prop.ObservationOwnershipRevision;
@@ -1617,13 +1631,18 @@ void ADarkwellMovingPropLabRoom::BuildGeometryDirtyIndices(
 	for (TConstSetBitIterator<> It(Dirty); It; ++It)
 	{
 		const int32 Index = It.GetIndex();
-		const int32 X = Index % Size.X;
-		const int32 Y = Index / Size.X;
-		const FVector2D Point = Bounds.Min + Step * FVector2D(X + 0.5, Y + 0.5);
-		Visual.CachedFineOccupied[Index] = IsOccupiedByActual(Point, NAME_None);
+        if(PhysicalDirty[Index])
+        {
+            const int32 X = Index % Size.X;
+            const int32 Y = Index / Size.X;
+            const FVector2D Point = Bounds.Min + Step * FVector2D(X + 0.5, Y + 0.5);
+            Visual.CachedFineOccupied[Index] = IsOccupiedByActual(Point, NAME_None);
+            OutPhysicalDirtyIndices.Add(Index);
+        }
+        else ++RuntimeFrame.HistoryOccupancySamplesReused;
 		OutDirtyIndices.Add(Index);
 	}
- if(Cached) { Cached->Occupied=Visual.CachedFineOccupied; Cached->DirtyIndices=OutDirtyIndices; }
+ if(Cached) { Cached->Occupied=Visual.CachedFineOccupied; Cached->DirtyIndices=OutDirtyIndices; Cached->PhysicalDirtyIndices=OutPhysicalDirtyIndices; }
 }
 
 bool ADarkwellMovingPropLabRoom::UpdateHistoricalContributionExclusion(
@@ -2738,8 +2757,8 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 				Visual->CoarseEvidenceActiveSeconds = 0.5f;
 			}
 		}
-		TArray<int32> GeometryDirtyIndices;
-		BuildGeometryDirtyIndices(Prop, *Record, *Visual, GeometryDirtyIndices);
+		TArray<int32> GeometryDirtyIndices, PhysicalDirtyIndices;
+		BuildGeometryDirtyIndices(Prop, *Record, *Visual, GeometryDirtyIndices, PhysicalDirtyIndices);
 		const FIntPoint CoarseSize=Record->SpatialMemory.GetSize();
   const FBox2D& CoarseBounds=Record->SpatialMemory.GetBounds();
   const FVector2D CoarseStep=CoarseBounds.GetSize()/FVector2D(CoarseSize.X,CoarseSize.Y);
@@ -2747,11 +2766,11 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
   TBitArray<> CoarseDirty(false,CoarseCount);
   if(Visual->CachedCoarseOccupied.Num()!=CoarseCount)
   { Visual->CachedCoarseOccupied.Init(false,CoarseCount); CoarseDirty.Init(true,CoarseCount); }
-  else if(!GeometryDirtyIndices.IsEmpty() && GeometryDirtyIndices.Num()==Record->FineHistory.GetSamples().Num()) CoarseDirty.Init(true,CoarseCount);
+  else if(!PhysicalDirtyIndices.IsEmpty() && PhysicalDirtyIndices.Num()==Record->FineHistory.GetSamples().Num()) CoarseDirty.Init(true,CoarseCount);
   else
   {
    const int32 FineX=Record->FineHistory.GetSize().X;
-   for(const int32 I:GeometryDirtyIndices)
+   for(const int32 I:PhysicalDirtyIndices)
     CoarseDirty[(I/FineX/FDarkwellHistoryGridV2::SamplesPerCell)*CoarseSize.X+(I%FineX/FDarkwellHistoryGridV2::SamplesPerCell)]=true;
   }
 #if WITH_DEV_AUTOMATION_TESTS
@@ -4718,6 +4737,7 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
  RuntimeTotal.HistoryGeometryReuseHits += RuntimeFrame.HistoryGeometryReuseHits;
  RuntimeTotal.HistoryOwnershipReuseHits += RuntimeFrame.HistoryOwnershipReuseHits;
  RuntimeTotal.HistoryCoverageReuseHits += RuntimeFrame.HistoryCoverageReuseHits;
+	RuntimeTotal.HistoryOccupancySamplesReused += RuntimeFrame.HistoryOccupancySamplesReused;
 	RuntimeTotal.PrimitiveGeometryTests += RuntimeFrame.PrimitiveGeometryTests;
 	RuntimeTotal.OwnershipTests += RuntimeFrame.OwnershipTests;
 	RuntimeTotal.UpdateRecordTextureCalls += RuntimeFrame.UpdateRecordTextureCalls;

@@ -7,6 +7,46 @@ The earlier company Saved paths below are historical references only.
 Status: **PARTIAL — implementation and validation in progress**. No user acceptance,
 final gray stable branch, or black-layer work is authorized by this document.
 
+## Home recovery entry, 2026-09-04
+
+The historical company starting state below is not the recovery starting point.
+This home work originally started at `ede6c69d85012b89710743232ce1a50bd91e8685`;
+interruption recovery started at the verified remote checkpoint
+`2a155c81e2a74e3c4373d4a2dab71c45cfab489c`. Company unpushed files were not recovered.
+The home recovery audit found six unstaged text files, no unpushed commits, no
+staged changes and no local `.uproject` delta. Salvage was audited, built, tested
+and pushed before the subsequent implementation.
+
+Recovery checkpoints, each immediately pushed and triple-verified:
+
+- Salvage: `34f3bb9d1403cb2946c1cddc5b5d81d96e374b2b`.
+- C1, independent current admission: `9ea27f0c9241a39a6865cae388dae53ef5496bb1`.
+- C2, exact repeated-history geometry/ownership: `c0352bbd44ee2b0729244501e245f4e971113461`.
+- C3, exact planar projection/coverage/terminal work: `7787cd45920636993fe0dfd3fb2d551ee7326d53`.
+
+C2 completed 54,000 active + 600 idle steps with complete report/log, normal Editor
+exit and zero lost-current checks, including 78 capacity-capture refusals. It
+failed performance gates: 84 >100 ms steps and a longest >33 ms run of 241.
+C3 builds and passes 57/57 targeted tests; full automation is still running at
+this document update. No unfinished run is a pass. Detailed source provenance,
+measured costs, capacity/resource limits and all earlier checkpoint SHAs are in HOME.
+The final status stays PARTIAL — GRAY_OBJECT_POLICY_PERFORMANCE_BLOCKED with
+TEARDOWN BLOCKER RETAINED until actual rendered exit evidence closes it.
+
+Current contract: per-field Reveal / MinimumObservedSpanCm / History, resolved
+once at registration; DARKWELL WholeObjectAfterSpan / 100 cm / StationaryOnly;
+plugin no-config SpatialPartial / 100 cm / Always. Current uses one independent
+unsealed reserve alongside at most 64 sealed histories. Capture refusal cannot
+evict retained knowledge or consume the next legal current observation. Only
+fully VerifiedEmpty permits release; Superseded ownership is not empty evidence.
+
+Next window must fetch and compare HEAD/upstream/remote, read HOME's latest entry,
+inspect worktree/LFS and any remaining owned test processes, and preserve local
+`.uproject`/asset changes. Use unique runner names; do not rerun an old evidence
+path. Do not move either protected ref or create the final gray Stable before
+manual acceptance. User now authorizes safe non-forced shutdown after all valuable
+work and final handoff are pushed, Git/LFS are closed, and all writers have ended.
+
 ## Starting state
 
 Actual start, local/upstream/remote after fetch and fast-forward-only pull:

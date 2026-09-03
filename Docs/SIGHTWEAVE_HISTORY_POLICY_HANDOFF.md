@@ -1,5 +1,19 @@
 # SightWeave object history capture policy
 
+## Home recovery continuation, 2026-09-04
+
+The sections below preserve the earlier history-only checkpoint. Current combined
+Reveal/Span/History API, project defaults, capacity/current separation, performance
+failures and verification evidence are maintained in
+[SIGHTWEAVE_GRAY_OBJECT_POLICY_HOME.md](SIGHTWEAVE_GRAY_OBJECT_POLICY_HOME.md).
+Latest verified implementation checkpoint at this update:
+`7787cd45920636993fe0dfd3fb2d551ee7326d53` (local/upstream/remote all matched).
+DARKWELL now selects WholeObjectAfterSpan / 100 cm / StationaryOnly; plugin defaults
+remain SpatialPartial / 100 cm / Always. History capacity cannot consume the live
+observation reserve. Fully VerifiedEmpty is the only record-release criterion;
+Superseded remains stored evidence. This is PARTIAL, with long-growth performance
+and final GPU/packaging/exit verification still open; no final Stable is created.
+
 ## Scope and frozen starting point
 
 Work remains on `codex/darkwell-prop-memory-gameplay-lab`.

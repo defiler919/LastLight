@@ -95,6 +95,7 @@ public:
 		uint64 HistoryGeometryReuseHits = 0;
 		uint64 HistoryOwnershipReuseHits = 0;
 		uint64 HistoryCoverageReuseHits = 0;
+		uint64 HistoryOccupancySamplesReused = 0;
 		uint64 PrimitiveGeometryTests = 0;
 		uint64 OwnershipTests = 0;
 		uint64 UpdateRecordTextureCalls = 0;
@@ -284,6 +285,7 @@ private:
 	friend class FDarkwellCapCoplanarContactTest;
 	friend class FDarkwellGrayHistoryCapacityCurrentTest;
 	friend class FDarkwellPlanarProjectionParity;
+	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);
 
 	struct FCapQuadSnapshot
@@ -350,7 +352,7 @@ private:
 		uint64 PreviousGeometryRevision = 0, PreviousOwnershipRevision = 0;
 		TArray<FPrimitiveGeometrySnapshot> BeforePhysical, BeforeNewer, AfterNewer;
 		TBitArray<> Occupied;
-		TArray<int32> DirtyIndices;
+		TArray<int32> DirtyIndices, PhysicalDirtyIndices;
 	};
 	TArray<FHistoryGeometryReuse> FrameHistoryGeometry;
 	struct FHistoryOwnershipReuse
@@ -550,7 +552,7 @@ private:
 		TConstArrayView<int32> DirtyIndices);
 	void BuildGeometryDirtyIndices(const FTrackedProp& Prop,
 		FDarkwellSpatialObservationRecord& Record, FRecordVisual& Visual,
-		TArray<int32>& OutDirtyIndices);
+		TArray<int32>& OutDirtyIndices, TArray<int32>& OutPhysicalDirtyIndices);
 	bool IsHistoricalPresentationResolved(
 		const FDarkwellSpatialObservationRecord& Record,
 		const FRecordVisual& Visual) const;

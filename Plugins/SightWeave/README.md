@@ -130,5 +130,6 @@ occlusion checks and any additional host gates; never write its permission into
 the world coverage field. SpatialPartial does not use confirmation thresholds.
 
 Generic tests: `SightWeave.ObjectPolicy` and `SightWeave.RevealPolicy`. Host integration and evidence:
-`Docs/SIGHTWEAVE_HISTORY_POLICY_HANDOFF.md` in DARKWELL (documentation only;
+`Docs/SIGHTWEAVE_GRAY_OBJECT_POLICY_HOME.md` and
+`Docs/SIGHTWEAVE_GRAY_OBJECT_POLICY_HANDOFF.md` in DARKWELL (documentation only;
 the plugin and its tests have no dependency on that host module).

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "HAL/ThreadSafeBool.h"
 #include "SceneViewExtension.h"
 #include "SightWeaveMemory.h"
 #include "SightWeavePresentation.h"

@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "GameFramework/Actor.h"
+#include "UObject/UnrealType.h"
 
 namespace SightWeave::ObjectPolicyTests
 {
@@ -84,6 +85,37 @@ bool FSightWeavePolicyRegistrationTest::RunTest(const FString&)
 	GetMutableDefault<USightWeaveSettings>()->DefaultHistoryMode = OriginalDefault;
 	GEngine->DestroyWorldContext(World);
 	World->DestroyWorld(true);
+	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightWeavePolicyConfigSerializationTest,
+	"SightWeave.ObjectPolicy.ConfigSerializationAndPublicSurface", SightWeave::ObjectPolicyTests::Flags)
+bool FSightWeavePolicyConfigSerializationTest::RunTest(const FString&)
+{
+	const FProperty* Property = FindFProperty<FProperty>(USightWeaveSettings::StaticClass(), TEXT("DefaultHistoryMode"));
+	if (!TestNotNull(TEXT("Config property"), Property)) return false;
+	TestTrue(TEXT("Default history mode participates in config serialization"), Property->HasAnyPropertyFlags(CPF_Config));
+	USightWeaveSettings* Source = NewObject<USightWeaveSettings>();
+	USightWeaveSettings* Destination = NewObject<USightWeaveSettings>();
+	for (auto Mode : {ESightWeaveHistoryMode::Always, ESightWeaveHistoryMode::StationaryOnly, ESightWeaveHistoryMode::Never})
+	{
+		Source->DefaultHistoryMode = Mode;
+		FString Text;
+		// Data == Delta explicitly exports even a zero/default enum (normal delta
+		// export omits Always == 0, which would test an empty string instead).
+		TestTrue(TEXT("Config value exported explicitly"),
+			Property->ExportText_InContainer(0, Text, Source, Source, Source, PPF_None));
+		TestNotNull(TEXT("Config value can be imported"), Property->ImportText_InContainer(*Text, Destination, Destination, PPF_None));
+		TestTrue(TEXT("Config history mode round trips"), Destination->DefaultHistoryMode == Mode);
+	}
+	TestTrue(TEXT("Persistent default was not changed"), GetDefault<USightWeaveSettings>()->DefaultHistoryMode == ESightWeaveHistoryMode::Always);
+	const UClass* Class = USightWeaveObjectPolicyComponent::StaticClass();
+	TestNull(TEXT("No unimplemented RevealMode option"), FindFProperty<FProperty>(Class,TEXT("RevealMode")));
+	TestNull(TEXT("No unimplemented ConfirmationCoverage option"), FindFProperty<FProperty>(Class,TEXT("ConfirmationCoverage")));
+	for(const TCHAR* Name : {TEXT("SetSightWeaveMoving"),TEXT("IsSightWeaveMoving"),TEXT("GetResolvedHistoryMode")})
+	{
+		const UFunction* Function = Class->FindFunctionByName(Name);
+		TestTrue(TEXT("Public API is Blueprint callable/pure"), Function && Function->HasAnyFunctionFlags(FUNC_BlueprintCallable));
+	}
 	return true;
 }
 #endif

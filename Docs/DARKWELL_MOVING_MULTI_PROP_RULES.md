@@ -2072,3 +2072,32 @@ The user's direct latest message **explicitly authorizes shutdown**, overriding
 the pasted brief's earlier default of leaving Windows on. After all commits
 are pushed and verification processes have exited, request a delayed normal
 Windows shutdown without forcibly discarding unsaved work in unrelated apps.
+
+## 2026-09-03 object history capture policy task
+
+The new task starts at `7534163b9c5718700b610e7677f47fbaa79cf977`, verified against
+the remote branch. Before source edits, `stable/sightweave-gray-core-20260903`
+was pushed at that exact commit; `stable/moving-history-grid-v2-20260902` remains
+at `404a5820739638f1097eaae0aa7fba19733298c3`. The new stable branch freezes the
+previous gray-core candidate only, not final user acceptance or new policies.
+
+The plugin now provides generic Always / StationaryOnly / Never capture policy,
+project default Always, per-object overrides, resolved registration-time policy,
+and explicit idempotent motion APIs. DARKWELL consumes those at its current
+observation lifecycle boundary without moving HistoryGridV2 into the plugin.
+The complete lifecycle contract, public API, validation ledger, checkpoint SHAs,
+performance limitations and no-console manual route are maintained in
+[SIGHTWEAVE_HISTORY_POLICY_HANDOFF.md](SIGHTWEAVE_HISTORY_POLICY_HANDOFF.md).
+
+Ordinary Moving Lab launches remain inherited Always. The optional
+`-PropLabHistoryPolicies` launch fixture assigns StationaryOnly to VISIBLE ROTATE
+and the multi low cabinet, Never to COVERAGE EDGE and the multi box, and leaves
+other props inherited Always. Existing F controls start these tests; no new map
+or console input is needed. Only explicit reset recreates a zone.
+
+SpatialEvidenceOnly is unchanged: capture policy cannot identity-clear old
+records or claim old occupancy is empty. The next stage is WholeObject +
+Confirmation Threshold; it is not part of this implementation and black-layer
+work remains deferred. This task's latest computer-state instruction supersedes
+the historical shutdown paragraph above: **leave the computer on** after stopping
+PIE, command-line editors and evidence scripts.

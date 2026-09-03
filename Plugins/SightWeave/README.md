@@ -42,3 +42,59 @@ Scripts/BuildEditor.ps1 -Configuration Development -EngineRoot D:\UE_5.8
 The idempotent `Content/Python/create_sightweave_lab.py` script rebuilds 20 M2 fixture zones using normal Unreal asset APIs. The map contains real floor, vision, legal-illumination, occluder, hard-suppression, dynamic-door, and no-tick debug-query components; it has no `/Game/` or `/Script/Darkwell` dependency.
 
 For standalone validation, use Unreal Automation Tool's `BuildPlugin` command against `SightWeave.uplugin` and a temporary package directory outside the repository.
+
+## Object history capture policy
+
+`SightWeaveObjectPolicy.h` adds a host-neutral capture contract. This controls
+whether a **new Live observation may become gray history**; it does not decide
+legal visibility, empty-space knowledge, unknown/black presentation, or identity.
+Hosts consume it at their observation capture/lifecycle boundary. The plugin
+does not own the DARKWELL HistoryGridV2 renderer.
+
+Project Settings > SightWeave > Object History provides **Default History Mode**,
+initially **Always**. Add the optional `USightWeaveObjectPolicyComponent` to an
+object to choose **Use Project Default** or **Override** and a History Mode:
+
+- **Always**: allow stationary and observed moving last-seen capture.
+- **StationaryOnly**: no new moving history; abandon an unsealed moving
+  observation on coverage loss. Motion end requires fresh legal stationary
+  observation before capture can rearm. Previously sealed history is unaffected.
+- **Never**: Live-only; no historical epochs/grids/proxies/caps/textures/MIDs.
+  Transient state needed to show current Live remains permitted.
+
+Configure before registration. `OnRegister` resolves once into
+`FResolvedSightWeaveObjectPolicy`; runtime reads do not query config/reflection.
+This component has no Tick and does not register a second subject identity.
+Authoring changes require an explicit host reset plus re-registration; version
+one does not migrate history during an arbitrary runtime policy change.
+
+```cpp
+#include "SightWeaveObjectPolicy.h"
+
+auto* Policy = NewObject<USightWeaveObjectPolicyComponent>(Actor);
+Policy->PolicySource = ESightWeaveObjectPolicySource::Override;
+Policy->HistoryMode = ESightWeaveHistoryMode::StationaryOnly;
+Actor->AddInstanceComponent(Policy);
+Policy->RegisterComponent();
+Policy->SetSightWeaveMoving(true);  // before motion starts
+// ... game-owned movement; no automatic transform detection ...
+Policy->SetSightWeaveMoving(false);
+```
+
+Blueprint/C++: `SetSightWeaveMoving`, `IsSightWeaveMoving`,
+`GetResolvedHistoryMode`, `GetMovingRevision`, `IsHistoryEligible`,
+`RequiresFreshStationaryObservation`. There is one idempotent motion Boolean,
+no Begin/End stack or negative depth. Only actual changes increment revision.
+The C++ adapter calls `NotifyLegalObservation` after valid spatial evidence.
+The plain `FSightWeaveObjectHistoryCapture` and resolver can also be consumed by
+non-component hosts.
+
+The adapter must abandon ineligible **current** observations without sealing,
+retain qualified older histories, and avoid identity-based invalidation.
+StationaryOnly/Never are not permission to erase all records for a StableID.
+No WholeObject, confirmation threshold, profile, automatic motion detector or
+world/region/black options are exposed by this API.
+
+Generic tests: `SightWeave.ObjectPolicy`. Host integration and evidence:
+`Docs/SIGHTWEAVE_HISTORY_POLICY_HANDOFF.md` in DARKWELL (documentation only;
+the plugin and its tests have no dependency on that host module).

@@ -4,9 +4,11 @@
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "RenderingThread.h"
+#include "SceneView.h"
 #include "ScreenPass.h"
 #include "SightWeaveSparseAtlasRenderState.h"
 #include "SightWeaveRenderWorldSubsystem.h"
+#include "TextureResource.h"
 
 namespace
 {

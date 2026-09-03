@@ -2,9 +2,9 @@
 
 namespace
 {
- constexpr double CellSize=2.5;
+ constexpr double CurrentLocalSampleSizeCm=2.5;
  FBox2D XY(const FBox& B) { return FBox2D(FVector2D(B.Min),FVector2D(B.Max)); }
- FIntPoint GridSize(const FBox2D& B) { return FIntPoint(FMath::CeilToInt(B.GetSize().X/CellSize),FMath::CeilToInt(B.GetSize().Y/CellSize)); }
+ FIntPoint GridSize(const FBox2D& B) { return FIntPoint(FMath::CeilToInt(B.GetSize().X/CurrentLocalSampleSizeCm),FMath::CeilToInt(B.GetSize().Y/CurrentLocalSampleSizeCm)); }
  bool Upright(const FTransform& T) { return T.GetRotation().RotateVector(FVector::UpVector).Equals(FVector::UpVector,1.e-5); }
 }
 bool FDarkwellCurrentLiveGrid::FDescriptor::Matches(const FDescriptor& O) const
@@ -24,11 +24,11 @@ void FDarkwellCurrentLiveGrid::ResetGeometry(FName Id,TConstArrayView<FDescripto
   // Each primitive axis has a fixed <=2.5 cm physical footprint; a thin
   // door/handle does not inherit the body width as its Y sample density.
   P.Local.Initialize(Id,B,FMath::Max(Ext.X,Ext.Y)); P.Local.BeginPresent();
-  P.Local.PrepareCurrentRaster(B,FIntPoint(FMath::Max(1,FMath::CeilToInt(Ext.X*Scale.X/CellSize)),FMath::Max(1,FMath::CeilToInt(Ext.Y*Scale.Y/CellSize))));
+  P.Local.PrepareCurrentRaster(B,FIntPoint(FMath::Max(1,FMath::CeilToInt(Ext.X*Scale.X/CurrentLocalSampleSizeCm)),FMath::Max(1,FMath::CeilToInt(Ext.Y*Scale.Y/CurrentLocalSampleSizeCm))));
   P.Coverage.SetNumZeroed(P.Local.GetCells().Num()); P.ObservedAtPose.Init(false,P.Coverage.Num());
   const auto LS=P.Local.GetSize(); P.Corners.SetNumZeroed((LS.X+1)*(LS.Y+1));
   const double Diameter=FVector2D(Ext.X*Scale.X,Ext.Y*Scale.Y).Size();
-  const int32 MaxCells=FMath::CeilToInt(Diameter/CellSize)+2;
+  const int32 MaxCells=FMath::CeilToInt(Diameter/CurrentLocalSampleSizeCm)+2;
   P.AtlasCells=FIntPoint(MaxCells,MaxCells);
   const auto WB=XY(D.LocalBounds.TransformBy(P.Pose));
   P.Raster.Initialize(Id,WB); P.Raster.BeginPresent();
@@ -36,7 +36,7 @@ void FDarkwellCurrentLiveGrid::ResetGeometry(FName Id,TConstArrayView<FDescripto
   const FBox ActorBounds=D.LocalBounds.TransformBy(D.RelativeTransform);
   Radius=FMath::Max(Radius,FVector2D(ActorBounds.GetCenter()).Size()+FVector2D(ActorBounds.GetExtent()).Size());
  }
- const int32 MaxCells=FMath::CeilToInt(2*Radius*RegisteredScale.GetAbs().GetMax()/CellSize)+2;
+ const int32 MaxCells=FMath::CeilToInt(2*Radius*RegisteredScale.GetAbs().GetMax()/CurrentLocalSampleSizeCm)+2;
  AtlasCells=FIntPoint(MaxCells,MaxCells);
 }
 bool FDarkwellCurrentLiveGrid::MatchesGeometry(TConstArrayView<FDescriptor> D,const FTransform& Pose) const

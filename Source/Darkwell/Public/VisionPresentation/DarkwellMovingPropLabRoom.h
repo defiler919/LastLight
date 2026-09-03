@@ -7,6 +7,7 @@
 #include "VisionPresentation/DarkwellSpatialObservationHistory.h"
 #include "VisionPresentation/DarkwellCurrentLiveGrid.h"
 #include "SightWeaveObjectPolicy.h"
+#include "SightWeaveRevealObservation.h"
 #include "DarkwellMovingPropLabRoom.generated.h"
 
 class ADarkwellCharacter;
@@ -224,6 +225,13 @@ public:
 	/** Explicit per-object reset/re-registration, never an in-place mode change. */
 	UFUNCTION(BlueprintCallable, Category="Lab|History Policy")
 	bool ResetTrackedPolicyForLab(FName StableId, ESightWeaveHistoryMode Mode);
+	UFUNCTION(BlueprintCallable, Category="Lab|Object Policy")
+	bool ResetTrackedRevealPolicyForLab(FName StableId, ESightWeaveRevealMode RevealMode, float MinimumSpanCm, ESightWeaveHistoryMode HistoryMode);
+	UFUNCTION(BlueprintPure, Category="Lab|Object Policy")
+	FString GetRevealPolicyTelemetry(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Object Policy")
+	bool IsRevealConfirmedForTesting(FName StableId) const;
+	float GetCurrentPresentationMinimumForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|History Policy")
 	FString GetHistoryPolicyTelemetry(FName StableId) const;
 	USightWeaveObjectPolicyComponent* GetObjectPolicyForTesting(FName StableId) const;
@@ -316,6 +324,8 @@ private:
 		uint64 ProcessedMovingRevision = 0;
 		FDarkwellSpatialObservationHistory History;
 		FDarkwellCurrentLiveGrid CurrentLive;
+		FSightWeaveRevealObservation RevealObservation;
+		TBitArray<> CurrentLegalObservationMask;
 		uint32 LocalEpoch=0;
 		TMap<uint32, FRecordVisual> Visuals;
 		FTransform InitialTransform = FTransform::Identity;
@@ -391,7 +401,9 @@ private:
 		FLinearColor Tint,
 		const FTransform& Transform,
 		ESightWeaveObjectPolicySource PolicySource = ESightWeaveObjectPolicySource::UseProjectDefault,
-		ESightWeaveHistoryMode HistoryMode = ESightWeaveHistoryMode::Always);
+		ESightWeaveHistoryMode HistoryMode = ESightWeaveHistoryMode::Always,
+		const FResolvedSightWeaveObjectPolicy* PerFieldPolicy = nullptr);
+	bool IsCaptureEligible(const FTrackedProp& Prop) const;
 	void DestroyTracked();
 	void DestroyTracked(FName StableId);
 	void DestroyVisual(FRecordVisual& Visual, bool bDiscardEvidence = true);

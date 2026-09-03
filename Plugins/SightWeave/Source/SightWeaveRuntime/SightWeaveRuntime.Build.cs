@@ -11,7 +11,8 @@ public class SightWeaveRuntime : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
-			"DeveloperSettings"
+			"DeveloperSettings",
+			"GameplayTags"
 		});
 	}
 }

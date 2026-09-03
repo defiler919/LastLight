@@ -159,3 +159,47 @@ registration/isolation, real INI loading and Blueprint public-surface validation
 `Home_B_Plugin_20260903`: **10/10 clean**, 0 warning/failure/not-run, 0.080738 s,
 process exit 0 and severe scan 0. Diff reviewed; only the named source, config,
 tests and documentation files are staged in this checkpoint.
+
+## Checkpoint C — continuous span confirmation
+
+B was pushed as `2946912b51383212937ce7e6b64c76413fa99f4a`, with local/upstream/
+remote equality verified. `FSightWeaveRevealObservation` now owns per-object
+Unobserved/Tentative/Confirmed native Gameplay Tag state. It unions only legal
+footprint bits, measures continuous local X/Y runs in world cm, clamps to the
+largest footprint run, requires first legal contact for zero, preserves tentative
+state on invalid revisions, clears on real contact loss and retains confirmation
+through rigid motion. Confirmed releases tentative bits and stops span evaluation.
+
+The Lab derives a fixed actor-local footprint from its registered primitives and
+supplies current legal observations independently from alpha. The 100 cm fixture
+at yaw 146 measures **79.059 cm**, remains tentative, and creates no history,
+proxy or historical cap. Full legal observation confirms; subsequent partial
+contact still presents the complete object after normal entry. Full presentation
+uses a separate occlusion gate and never changes world Coverage or other objects.
+Whole view loss freezes only a capture-eligible confirmed pose; otherwise the
+unsealed current is abandoned. Previously sealed histories retain spatial rules.
+
+An explicit Lab per-object reset API sets all three fields before registration.
+No global reveal runtime switch exists. The old HistoryPolicy, MovingLiveContinuity
+and adapter suites scope their original SpatialPartial/Always test configuration,
+retaining all gameplay assertions despite the new project defaults.
+
+Home_C_Build initially failed only because the new native test chained assignments
+to Unreal bit references (whose bool assignment returns void). Separate assignments
+correct the fixture. Home_C_Build2 succeeded, 9 actions, 13.12 s. Home_C_Focused:
+48 total, 38 clean + 9 warnings + 1 failed, 150.758423 s, severe scan 0. The failure
+was the new wall fixture's observer and prop being on the same side; its expected
+zero coverage correctly failed with coverage 1. The corrected fixture uses the
+existing divider at y=0 with the observer at (500,-600), without changing occlusion
+rules. All old history and moving continuity assertions passed in that run.
+
+The rate test supplies the same partial/full legal observations at 30/60/120/144
+Hz and confirms at the same physical span, independent of entry alpha. This is
+not yet evidence for a completely skipped intermediate positive observation.
+Performance remains blocked until E; C deliberately makes no cheap-path claim.
+Home_C_Build3 succeeded, 6.08 s. Corrected `Home_C_Corrected_20260903` passes
+**23/23 clean**, 15.455410 s, process exit 0, severe scan 0. It includes a real
+world query at a still-out-of-cone position while the confirmed object presents
+fully, and the corrected opaque-divider rejection. Together with the preceding
+focused run all 48 distinct tests have passing evidence; this is not labeled a
+single 48/48 run. No GPU result is claimed at C.

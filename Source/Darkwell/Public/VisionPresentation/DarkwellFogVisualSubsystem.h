@@ -172,6 +172,8 @@ public:
 	/** Same analytic query with validity, revision and zero-reason diagnostics. */
 	FDarkwellFogVisualCoverageQuery QueryLiveCoverageAtWorldPoint(
 		const FVector2D& WorldPosition) const;
+	/** Object-only post-confirmation gate. Does not write/expand legal coverage. */
+	FDarkwellFogVisualCoverageQuery QueryObjectOcclusionAtWorldPoint(const FVector2D& WorldPosition) const;
 	/** Only the immediately preceding valid publication may supply a sweep. */
 	bool GetHistoricalRotationSweep(uint64 PreviousDrawRevision,
 		FDarkwellFogVisualSourceSnapshot& OutPrevious, FDarkwellFogVisualSourceSnapshot& OutCurrent,

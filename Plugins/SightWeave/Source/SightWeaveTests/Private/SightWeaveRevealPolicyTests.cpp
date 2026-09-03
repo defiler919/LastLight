@@ -68,7 +68,7 @@ bool FSightWeaveRevealPolicyTest::RunTest(const FString& Case)
   for(const TCHAR* N : {TEXT("bOverrideRevealMode"),TEXT("RevealMode"),TEXT("bOverrideMinimumObservedSpan"),TEXT("MinimumObservedSpanCm"),TEXT("bOverrideHistoryMode"),TEXT("HistoryMode"),TEXT("PolicySource")})
   {
    const FProperty* P=FindFProperty<FProperty>(C,N);
-   TestTrue(TEXT("Serializable Blueprint authoring field"),P && P->HasAnyPropertyFlags(CPF_Edit|CPF_BlueprintVisible) && !P->HasAnyPropertyFlags(CPF_Transient));
+   TestTrue(TEXT("Serializable Blueprint authoring field"),P && P->HasAllPropertyFlags(CPF_Edit|CPF_BlueprintVisible) && !P->HasAnyPropertyFlags(CPF_Transient));
   }
   for(const TCHAR* N : {TEXT("GetResolvedRevealMode"),TEXT("GetResolvedMinimumObservedSpanCm"),TEXT("GetResolvedHistoryMode"),TEXT("SetSightWeaveMoving")})
   {

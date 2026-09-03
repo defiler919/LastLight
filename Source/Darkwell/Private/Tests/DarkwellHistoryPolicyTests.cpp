@@ -1,4 +1,5 @@
 #if WITH_DEV_AUTOMATION_TESTS
+#include "DarkwellLegacyObjectPolicyFixture.h"
 #include "Misc/AutomationTest.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -14,6 +15,7 @@ namespace Darkwell::HistoryPolicyTests
 	using Mode = ESightWeaveHistoryMode;
 	struct FRoom
 	{
+		FDarkwellLegacyObjectPolicyFixture LegacyPolicy;
 		UWorld* World;
 		ADarkwellCharacter* Player;
 		ADarkwellPropGameplayLab* Fixture;

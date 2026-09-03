@@ -1,4 +1,5 @@
 #if WITH_DEV_AUTOMATION_TESTS
+#include "DarkwellLegacyObjectPolicyFixture.h"
 
 #include "AI/DarkwellStalkerCharacter.h"
 #include "Combat/DarkwellLoadoutComponent.h"
@@ -97,6 +98,7 @@ namespace Darkwell::SightWeaveAdapterTests
 		UWorld* Get() const { return World; }
 
 	private:
+		FDarkwellLegacyObjectPolicyFixture LegacyPolicy;
 		UWorld* World = nullptr;
 	};
 

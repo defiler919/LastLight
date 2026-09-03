@@ -113,6 +113,22 @@ The host must consume the resolved Reveal fields at its observation boundary;
 merely attaching authoring metadata does not implement a host renderer.
 No profile, automatic motion detector or world/region/black option is exposed.
 
+`FSightWeaveRevealObservation` is the plain per-registration observation state.
+Initialize it with the object's fixed local XY footprint and physical cell step
+in world centimeters. Supply only legal samples from a valid matching revision.
+It unions tentative samples during one continuous contact session, measures the
+longest X row or Y column run without crossing holes, and clamps the threshold
+to the largest possible footprint run. Zero still requires a real legal sample.
+Valid contact loss clears tentative bits; invalid data preserves them. Confirmed
+persists through rigid motion and view loss until explicit reset/re-registration
+or incompatible topology. Confirmed state releases tentative storage and performs
+no further span scans. Native Gameplay Tags describe its durable states.
+
+The host's historical capture gate is the independent history qualification AND
+(SpatialPartial OR Confirmed). WholeObject presentation must still pass object
+occlusion checks and any additional host gates; never write its permission into
+the world coverage field. SpatialPartial does not use confirmation thresholds.
+
 Generic tests: `SightWeave.ObjectPolicy` and `SightWeave.RevealPolicy`. Host integration and evidence:
 `Docs/SIGHTWEAVE_HISTORY_POLICY_HANDOFF.md` in DARKWELL (documentation only;
 the plugin and its tests have no dependency on that host module).

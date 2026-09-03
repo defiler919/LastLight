@@ -378,6 +378,18 @@ FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryLiveCoverageAt
 	return Result;
 }
 
+FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryObjectOcclusionAtWorldPoint(const FVector2D& Point) const
+{
+	FDarkwellFogVisualCoverageQuery Result;
+	Result.AuthorityRevision=Diagnostics.LastAuthorityRevision; Result.CoverageDrawRevision=Diagnostics.CoverageDrawCount;
+	Result.bValid=Diagnostics.bActive && LastSource.IsValid() && FMath::IsFinite(Point.X) && FMath::IsFinite(Point.Y);
+	if(!Result.bValid) return Result;
+	const bool Body=LastSource.BodyRadiusCentimeters>0 && !FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(LastSource.BodyCenter,Point,CachedOccluderSegments);
+	const bool Cone=LastSource.bConeLegallyLive && !FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(LastSource.ConeOrigin,Point,CachedOccluderSegments);
+	Result.Coverage=Body || Cone?1.f:0.f;
+	return Result;
+}
+
 FDarkwellFogVisualCoverageQuery FDarkwellContinuousVisibilityBuilder::QuerySourceCoverage(
 	const FDarkwellFogVisualSourceSnapshot& Source, const FVector2D& WorldPosition,
 	const TConstArrayView<FDarkwellFogVisualSegment> Occluders)

@@ -38,6 +38,66 @@ void FDarkwellCurrentLiveGrid::ResetGeometry(FName Id,TConstArrayView<FDescripto
  }
  const int32 MaxCells=FMath::CeilToInt(2*Radius*RegisteredScale.GetAbs().GetMax()/CurrentLocalSampleSizeCm)+2;
  AtlasCells=FIntPoint(MaxCells,MaxCells);
+ WholeAppearance.Initialize(Id,FBox2D(FVector2D(0),FVector2D(1)),1); WholeAppearance.BeginPresent();
+ FBox ObjectBounds(ForceInit);
+ for(const auto& P:Parts) ObjectBounds+=P.Geometry.LocalBounds.TransformBy(P.Geometry.RelativeTransform);
+ const auto B=XY(ObjectBounds); const auto E=B.GetSize();
+ ObservationSize=FIntPoint(FMath::Max(1,FMath::CeilToInt(E.X*FMath::Abs(RegisteredScale.X)/CurrentLocalSampleSizeCm)),FMath::Max(1,FMath::CeilToInt(E.Y*FMath::Abs(RegisteredScale.Y)/CurrentLocalSampleSizeCm)));
+ const auto Step=E/FVector2D(ObservationSize); ObservationStepCm=Step*FVector2D(RegisteredScale.GetAbs());
+ ObservationFootprint.Init(false,ObservationSize.X*ObservationSize.Y);
+ ObservationPartIndices.SetNum(Parts.Num());
+ for(int32 PartIndex=0;PartIndex<Parts.Num();++PartIndex)
+ {
+  const auto& P=Parts[PartIndex]; auto& Indices=ObservationPartIndices[PartIndex]; Indices.Init(INDEX_NONE,ObservationFootprint.Num());
+  for(int32 I=0;I<Indices.Num();++I)
+  {
+   const auto Center=B.Min+Step*FVector2D(I%ObservationSize.X+.5,I/ObservationSize.X+.5);
+   const auto L=FVector2D(P.Geometry.RelativeTransform.InverseTransformPosition(FVector(Center,0)));
+   const auto PB=P.Local.GetBounds(); const auto PS=P.Local.GetSize();
+   if(!PB.IsInside(L)) continue;
+   const auto UV=(L-PB.Min)/PB.GetSize();
+   Indices[I]=FMath::Clamp(FMath::FloorToInt(UV.Y*PS.Y),0,PS.Y-1)*PS.X+FMath::Clamp(FMath::FloorToInt(UV.X*PS.X),0,PS.X-1);
+   ObservationFootprint[I]=true;
+  }
+ }
+}
+
+void FDarkwellCurrentLiveGrid::BuildCurrentLegalObservationMask(TBitArray<>& Out) const
+{
+ Out.Init(false,ObservationFootprint.Num());
+ for(int32 PartIndex=0;PartIndex<Parts.Num();++PartIndex)
+ {
+  const auto& P=Parts[PartIndex]; const auto& Indices=ObservationPartIndices[PartIndex];
+  for(int32 I=0;I<Indices.Num();++I)
+   if(Indices[I]!=INDEX_NONE && P.Coverage[Indices[I]]>=FDarkwellSpatialPropMemory::LegalCoverage) Out[I]=true;
+ }
+}
+
+void FDarkwellCurrentLiveGrid::ApplyWholeObjectPresentation(float Dt,FDarkwellSpatialPropMemory& Snapshot,
+ TFunctionRef<float(FVector2D)> OcclusionPermission)
+{
+ WholeAppearance.Advance(Dt,TArray<float>{1.f});
+ const auto Appearance=WholeAppearance.GetCells()[0];
+ bool bWholeUnoccluded=true;
+ auto Apply=[&](FDarkwellSpatialPropMemory& Raster)
+ {
+  const auto B=Raster.GetBounds(); const auto S=Raster.GetSize(); const auto Step=B.GetSize()/FVector2D(S);
+  auto Cells=Raster.PrepareCurrentRaster(B,S);
+  for(int32 I=0;I<Cells.Num();++I)
+  {
+   const auto Min=B.Min+Step*FVector2D(I%S.X,I/S.X); float Gate=1;
+   for(auto O : {FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)}) Gate=FMath::Min(Gate,OcclusionPermission(Min+Step*O));
+   auto& C=Cells[I]; const bool Allowed=Gate>=FDarkwellSpatialPropMemory::LegalCoverage;
+   bWholeUnoccluded &= Allowed;
+   C.DiscoveredPresent=Allowed?1:0;
+   C.AppearanceBlend=Allowed?FMath::Max(C.AppearanceBlend,Appearance.AppearanceBlend):0;
+   C.LiveBlend=Allowed?FMath::Max(C.LiveBlend,Appearance.LiveBlend):0;
+   // CurrentLegalCoverage remains the real field. Whole permission never feeds it.
+  }
+ };
+ for(auto& P:Parts) { P.bWholePresentation=true; Apply(P.Raster); }
+ Apply(Snapshot);
+ bFullyObservedAtPose=bWholeUnoccluded;
 }
 bool FDarkwellCurrentLiveGrid::MatchesGeometry(TConstArrayView<FDescriptor> D,const FTransform& Pose) const
 {
@@ -133,6 +193,16 @@ bool FDarkwellCurrentLiveGrid::HasObservedContributionAt(FVector2D World,int32 P
  for(int32 I=0;I<Parts.Num();++I)
  {
   if(PrimitiveIndex!=INDEX_NONE && PrimitiveIndex!=I) continue;
+  const auto& P=Parts[I];
+  if(P.bWholePresentation)
+  {
+   const auto L=FVector2D(P.Pose.InverseTransformPosition(FVector(World,P.Pose.GetLocation().Z)));
+   if(!P.Local.GetBounds().IsInside(L)) continue;
+   const auto B=P.Raster.GetBounds(); const auto S=P.Raster.GetSize(); const auto UV=(World-B.Min)/B.GetSize();
+   const int32 Cell=FMath::Clamp(FMath::FloorToInt(UV.Y*S.Y),0,S.Y-1)*S.X+FMath::Clamp(FMath::FloorToInt(UV.X*S.X),0,S.X-1);
+   if(P.Raster.GetCells()[Cell].DiscoveredPresent>0) return true;
+   continue;
+  }
   const auto C=Sample(Parts[I],World,false);
   if(C.DiscoveredPresent>0 && C.AppearanceBlend>0) return true;
  }

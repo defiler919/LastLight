@@ -385,7 +385,8 @@ ADarkwellPropLabFurniture* ADarkwellMovingPropLabRoom::SpawnTracked(
 	const FLinearColor Tint,
 	const FTransform& Transform,
 	ESightWeaveObjectPolicySource PolicySource,
-	ESightWeaveHistoryMode HistoryMode)
+	ESightWeaveHistoryMode HistoryMode,
+	const FResolvedSightWeaveObjectPolicy* PerFieldPolicy)
 {
 	if (StableId.IsNone() || Tracked.Contains(StableId))
 	{
@@ -438,6 +439,12 @@ ADarkwellPropLabFurniture* ADarkwellMovingPropLabRoom::SpawnTracked(
 	USightWeaveObjectPolicyComponent* ObjectPolicy = NewObject<USightWeaveObjectPolicyComponent>(Actor);
 	ObjectPolicy->PolicySource = PolicySource;
 	ObjectPolicy->HistoryMode = HistoryMode;
+	if(PerFieldPolicy)
+	{
+		ObjectPolicy->bOverrideRevealMode=true; ObjectPolicy->RevealMode=PerFieldPolicy->RevealMode;
+		ObjectPolicy->bOverrideMinimumObservedSpan=true; ObjectPolicy->MinimumObservedSpanCm=PerFieldPolicy->MinimumObservedSpanCm;
+		ObjectPolicy->bOverrideHistoryMode=true; ObjectPolicy->HistoryMode=PerFieldPolicy->HistoryMode;
+	}
 	Actor->AddInstanceComponent(ObjectPolicy);
 	ObjectPolicy->RegisterComponent();
 
@@ -2182,6 +2189,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 	USightWeaveObjectPolicyComponent* ObjectPolicy = Prop.ObjectPolicy.Get();
 	check(ObjectPolicy);
 	const ESightWeaveHistoryMode HistoryMode = ObjectPolicy->GetResolvedHistoryMode();
+	const bool bWhole=ObjectPolicy->GetResolvedRevealMode()==ESightWeaveRevealMode::WholeObjectAfterSpan;
 	if (Prop.ProcessedMovingRevision != static_cast<uint64>(ObjectPolicy->GetMovingRevision()))
 	{
 		Prop.ProcessedMovingRevision = ObjectPolicy->GetMovingRevision();
@@ -2267,11 +2275,36 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		Prop.CoverageTransformRevision = CoverageSnapshot.TransformRevision;
 		Prop.CoverageGridRevision = CoverageSnapshot.GridRevision;
 		Prop.LastCoverageZeroReason = CoverageSnapshot.ZeroReason;
-		const bool bAnyLegal = CoverageSnapshot.bValid
+		bool bAnyLegal = CoverageSnapshot.bValid
 			&& Coverage.ContainsByPredicate([](const float Value)
 			{
 				return Value >= FDarkwellSpatialPropMemory::LegalCoverage;
 			});
+		if(bWhole && CoverageSnapshot.bValid)
+		{
+			TArray<FDarkwellCurrentLiveGrid::FDescriptor> Descriptors;
+			for(const UStaticMeshComponent* Part:Actual->Memory->GetMemoryPrimitives())
+				if(Part && Part->GetStaticMesh()) Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),Part->GetRelativeTransform()});
+			if(!Prop.CurrentLive.MatchesGeometry(Descriptors,Transform))
+			{
+				if(!Prop.CurrentLive.Parts.IsEmpty()) AbandonCurrentObservationWithoutHistory(Prop);
+				Prop.CurrentLive.ResetGeometry(Prop.StableId,Descriptors,Transform);
+				Prop.RevealObservation.Initialize(ObjectPolicy->GetResolvedPolicy(),Prop.CurrentLive.ObservationSize,Prop.CurrentLive.ObservationStepCm,Prop.CurrentLive.ObservationFootprint);
+			}
+			if(bCoverageDirty || bTransformChanged || Prop.CurrentPresentationActiveSeconds>0)
+			{
+				auto Query=[&](FVector2D Point) {
+					const auto Q=Fog->QueryLiveCoverageAtWorldPoint(Point);
+					return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f;
+				};
+				Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query);
+				RuntimeFrame.CoverageQueries+=Prop.CurrentLive.Queries;
+				RuntimeFrame.CurrentSamplesTouched+=Prop.CurrentLive.SamplesTouched;
+				Prop.CurrentLive.BuildCurrentLegalObservationMask(Prop.CurrentLegalObservationMask);
+			}
+			Prop.RevealObservation.Observe(true,Prop.CurrentLegalObservationMask);
+			bAnyLegal=Prop.CurrentLegalObservationMask.CountSetBits()>0;
+		}
 		int32 LegalCells = 0;
 		for (const float Value : Coverage)
 		{
@@ -2286,7 +2319,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		if (bAnyLegal) ObjectPolicy->NotifyLegalObservation();
 		// Never and an unqualified moving observation have no gray fallback. Invalid
 		// authority cannot arm capture; dropping a transient live record writes no V.
-		if (!bAnyLegal && !ObjectPolicy->IsHistoryEligible())
+		if (!bAnyLegal && !IsCaptureEligible(Prop) && (!bWhole || CoverageSnapshot.bValid))
 			AbandonCurrentObservationWithoutHistory(Prop);
 		int32 CurrentIndex = Prop.History.GetCurrentIndex();
 		if (CoverageSnapshot.bValid && CurrentIndex != INDEX_NONE)
@@ -2304,7 +2337,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 				}
 				Prop.ObservationState = EObservationState::ObservedArmed;
 			}
-			else if ((bTransformChanged || HistoryMode == ESightWeaveHistoryMode::StationaryOnly)
+			else if ((bWhole || bTransformChanged || HistoryMode == ESightWeaveHistoryMode::StationaryOnly)
 				&& Prop.ObservationState == EObservationState::ObservedArmed)
 			{
 				FreezeCurrentForHiddenMotion(Prop, TEXT("VALID_OBSERVED_TO_UNOBSERVED"));
@@ -2340,7 +2373,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
                     if(Part && Part->GetStaticMesh()) Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),Part->GetRelativeTransform()});
                 if(Prop.LocalEpoch!=Current.Epoch)
                 {
-                    Prop.CurrentLive.ResetGeometry(Prop.StableId,Descriptors,Transform);
+                    if(!bWhole) Prop.CurrentLive.ResetGeometry(Prop.StableId,Descriptors,Transform);
                     Prop.LocalEpoch=Current.Epoch;
                 }
                 if(!Prop.CurrentLive.MatchesGeometry(Descriptors,Transform))
@@ -2357,11 +2390,21 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
                 if(bTransformChanged) Prop.History.UpdateCurrentObservedPosePreservingEvidence(Transform);
                 if(bCoverageDirty || bTransformChanged || Prop.CurrentPresentationActiveSeconds>0)
                 {
-                    Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query);
+                    if(!bWhole) Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query);
+                    else Prop.CurrentLive.Queries=0;
                     Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
-                    Prop.CurrentLive.WritePartRasters(Query,!ObjectPolicy->IsHistoryEligible() || ObjectPolicy->IsSightWeaveMoving());
+                    Prop.CurrentLive.WritePartRasters(Query,!IsCaptureEligible(Prop) || ObjectPolicy->IsSightWeaveMoving());
+                    if(bWhole && Prop.RevealObservation.IsConfirmed() && bAnyLegal)
+                    {
+                        auto Occlusion=[&](FVector2D Point) {
+                            ++RuntimeFrame.CoverageQueries;
+                            const auto Q=Fog->QueryObjectOcclusionAtWorldPoint(Point);
+                            return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f;
+                        };
+                        Prop.CurrentLive.ApplyWholeObjectPresentation(DeltaSeconds,Current.SpatialMemory,Occlusion);
+                    }
                     RuntimeFrame.CoverageQueries += Prop.CurrentLive.Queries;
-                    RuntimeFrame.CurrentSamplesTouched += Prop.CurrentLive.SamplesTouched;
+                    if(!bWhole) RuntimeFrame.CurrentSamplesTouched += Prop.CurrentLive.SamplesTouched;
                 }
 				if (bCoverageDirty || Prop.CurrentPresentationActiveSeconds > 0.0f)
 				{
@@ -2528,7 +2571,7 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	FTrackedProp& Prop,
 	const TCHAR* Reason)
 {
-	if (!Prop.ObjectPolicy->IsHistoryEligible())
+	if (!IsCaptureEligible(Prop))
 	{
 		AbandonCurrentObservationWithoutHistory(Prop);
 		return false;
@@ -2742,7 +2785,7 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 			Visual.PartGeometry = ActualPartGeometry(*Actual);
 		}
 	}
-	if (Record.bCurrentObservedLocation && !Prop.ObjectPolicy->IsHistoryEligible() && Visual.Cap.IsValid())
+	if (Record.bCurrentObservedLocation && !IsCaptureEligible(Prop) && Visual.Cap.IsValid())
 	{
 		OwnedCaps.Remove(Visual.Cap.Get());
 		Visual.Cap->DestroyComponent();
@@ -2751,7 +2794,7 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 		Visual.CapTriangles = 0;
 		Visual.CapSignature = 0;
 	}
-	if (!Visual.Cap.IsValid() && (!Record.bCurrentObservedLocation || Prop.ObjectPolicy->IsHistoryEligible()))
+	if (!Visual.Cap.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
 	{
 		UDynamicMeshComponent* Cap = NewObject<UDynamicMeshComponent>(
 			this, *FString::Printf(TEXT("MovingCap_%s_%u"), *Prop.StableId.ToString(), Record.Epoch));
@@ -2859,7 +2902,7 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
 	}
 	else Size = Record.SpatialMemory.BuildConservativePresentation(
 		Darkwell::MovingPropLab::PresentationSamples, Presentation,
-		Record.bCurrentObservedLocation && !Prop.ObjectPolicy->IsHistoryEligible());
+		Record.bCurrentObservedLocation && !IsCaptureEligible(Prop));
 	if (Size.X <= 0 || Presentation.Num() != Size.X * Size.Y)
 	{
 		return;
@@ -5171,6 +5214,47 @@ bool ADarkwellMovingPropLabRoom::ResetTrackedPolicyForLab(FName StableId, ESight
 	DestroyTracked(StableId);
 	return SpawnTracked(StableId, Shape, Dimensions, Tint, Transform,
 		ESightWeaveObjectPolicySource::Override, Mode) != nullptr;
+}
+
+bool ADarkwellMovingPropLabRoom::IsCaptureEligible(const FTrackedProp& Prop) const
+{
+	return Prop.ObjectPolicy.IsValid() && Prop.ObjectPolicy->IsHistoryEligible()
+		&& (Prop.ObjectPolicy->GetResolvedRevealMode()==ESightWeaveRevealMode::SpatialPartial || Prop.RevealObservation.IsConfirmed());
+}
+
+bool ADarkwellMovingPropLabRoom::ResetTrackedRevealPolicyForLab(FName StableId,
+	ESightWeaveRevealMode RevealMode,float MinimumSpanCm,ESightWeaveHistoryMode HistoryMode)
+{
+	const FTrackedProp* Prop=Tracked.Find(StableId);
+	if(!Prop || bMotionActive || !FMath::IsFinite(MinimumSpanCm) || MinimumSpanCm<0) return false;
+	const auto Transform=Prop->InitialTransform; const auto Dimensions=Prop->Dimensions;
+	const auto Tint=Prop->Tint; const int32 Shape=Prop->Shape;
+	FResolvedSightWeaveObjectPolicy Policy; Policy.RevealMode=RevealMode; Policy.MinimumObservedSpanCm=MinimumSpanCm; Policy.HistoryMode=HistoryMode;
+	DestroyTracked(StableId);
+	return SpawnTracked(StableId,Shape,Dimensions,Tint,Transform,ESightWeaveObjectPolicySource::UseProjectDefault,HistoryMode,&Policy)!=nullptr;
+}
+
+bool ADarkwellMovingPropLabRoom::IsRevealConfirmedForTesting(FName StableId) const
+{
+	const auto* Prop=Tracked.Find(StableId); return Prop && Prop->RevealObservation.IsConfirmed();
+}
+
+float ADarkwellMovingPropLabRoom::GetCurrentPresentationMinimumForTesting(FName StableId) const
+{
+	const auto* Prop=Tracked.Find(StableId); if(!Prop || Prop->History.GetCurrentIndex()==INDEX_NONE) return 0;
+	const auto& Record=Prop->History.GetRecords()[Prop->History.GetCurrentIndex()];
+	const auto* Visual=Prop->Visuals.Find(Record.Epoch); if(!Visual || Visual->LivePixels.IsEmpty()) return 0;
+	float Minimum=1;
+	for(const auto& Pixels:Visual->LivePixels) for(const auto& P:Pixels) Minimum=FMath::Min(Minimum,P.R);
+	return Minimum;
+}
+
+FString ADarkwellMovingPropLabRoom::GetRevealPolicyTelemetry(FName StableId) const
+{
+	const auto* Prop=Tracked.Find(StableId); if(!Prop) return TEXT("{}");
+	const auto P=Prop->ObjectPolicy->GetResolvedPolicy();
+	return FString::Printf(TEXT("{\"reveal_mode\":%d,\"history_mode\":%d,\"minimum_span_cm\":%.3f,\"effective_span_cm\":%.3f,\"observed_span_cm\":%.3f,\"confirmed\":%s,\"legal_samples\":%d,\"tentative_samples\":%d,\"history_eligible\":%s,\"capture_eligible\":%s}"),
+		int32(P.RevealMode),int32(P.HistoryMode),P.MinimumObservedSpanCm,Prop->RevealObservation.GetEffectiveMinimumSpanCm(),Prop->RevealObservation.GetObservedSpanCm(),Prop->RevealObservation.IsConfirmed()?TEXT("true"):TEXT("false"),Prop->CurrentLegalObservationMask.CountSetBits(),Prop->RevealObservation.GetTentativeMask().CountSetBits(),Prop->ObjectPolicy->IsHistoryEligible()?TEXT("true"):TEXT("false"),IsCaptureEligible(*Prop)?TEXT("true"):TEXT("false"));
 }
 
 bool ADarkwellMovingPropLabRoom::IsCurrentSourceVisibleForTesting(FName StableId) const

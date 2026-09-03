@@ -25,12 +25,20 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
   TBitArray<> ObservedAtPose;
   FTransform Pose=FTransform::Identity;
   FIntPoint AtlasCells=FIntPoint::ZeroValue;
+  bool bWholePresentation=false;
  };
  void ResetGeometry(FName Id,TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose);
  bool MatchesGeometry(TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose) const;
  bool Advance(float Dt,const FTransform& ActorPose,TFunctionRef<float(FVector2D)> LegalCoverage);
  void WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds);
  void WritePartRasters(TFunctionRef<float(FVector2D)> LegalCoverage,bool bTransient);
+ /** Object-local continuous footprint, independent of presentation alpha. */
+ void BuildCurrentLegalObservationMask(TBitArray<>& Out) const;
+ void ApplyWholeObjectPresentation(float Dt,FDarkwellSpatialPropMemory& Snapshot,
+  TFunctionRef<float(FVector2D)> OcclusionPermission);
+ FIntPoint ObservationSize=FIntPoint::ZeroValue;
+ FVector2D ObservationStepCm=FVector2D::ZeroVector;
+ TBitArray<> ObservationFootprint;
  /** Exact primitive-local evidence query, including fine historical ownership. */
  bool HasObservedContributionAt(FVector2D World,int32 PrimitiveIndex=INDEX_NONE) const;
  uint64 StateHash() const;
@@ -44,6 +52,8 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  uint64 Updates=0, GeometryResets=0, Queries=0, SamplesTouched=0;
  FIntPoint AtlasCells=FIntPoint::ZeroValue;
 private:
+ TArray<TArray<int32>> ObservationPartIndices;
+ FDarkwellSpatialPropMemory WholeAppearance;
  static FDarkwellSpatialPropMemory::FCell Sample(const FPart& P,FVector2D World,bool bClamp);
  FVector RegisteredScale=FVector::OneVector;
 };

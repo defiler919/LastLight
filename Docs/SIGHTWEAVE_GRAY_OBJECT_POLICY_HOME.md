@@ -908,3 +908,89 @@ billions of repeated fine-occupancy evaluations (2,339,499,907 in the late
 retained history. An architectural/product decision on long-lived history
 representation or retention is the accurate next performance entry; do not guess
 an eviction policy. GPU, packaging and exit validation follow separately.
+
+
+## Home recovery final GPU, package and automation closeout
+
+The C4 soak documentation was pushed as
+`78f72f980d5162fe7eda3cb19f68f7b9e1464426`. The final test-harness/code
+checkpoint is `38f9721438e81bb35579dc9afcfcd7aa194be9b5`. It makes the rendered
+runner wait for the actual GUI Editor process and preserve its exit code, drives
+the selected room's real in-world F control, waits for motion-state transitions,
+uses state-relative history assertions, and exposes only two Lab testing bridges:
+room-scoped control activation and the existing native rotation helper. The
+standard Editor Development build succeeded before this checkpoint (7 actions,
+17.44 s after the final UFUNCTION change). The final focused native run
+`Home_GPUBridge_Targeted_20260904` passed **47/47** (44 clean, 3 warnings),
+81.964035 s tests / 101.612792 s wall, Editor/runner exit 0 and severe 0.
+
+All failed rendered-driver attempts are retained. Exit1 had the original GUI
+launcher race and then selected the wrong generic reset control. Exit2 fixed the
+wait but retained that control error and returned 0xC0000005. Exit3/4 exposed
+stale absolute motion/resource assertions. Exit5 sampled before motion began;
+Exit6 reset while rotation was active; Exit7 reused the intentionally one-shot F
+control and returned 0xC0000005; Exit8 exposed an invalid absolute slow-sweep
+history count; Exit9 reused the one-shot control in the repeated-cycle phase and
+returned 0xC0000005. Exit3-6 and Exit8 returned process 0 but contain the explicit
+`GRAY_GPU_FAIL` severe marker, so none is a pass. These fixture failures were
+corrected without changing gray-policy semantics, deleting history or weakening
+ownership checks.
+
+Three consecutive runs on the identical final driver and source then exited
+normally. `Home_GPU_Exit10_20260904`: exit 0, 102.210776 s, severe 0;
+`Home_GPU_Exit11_20260904`: exit 0, 102.391932 s, severe 0; and
+`Home_GPU_Exit12_Long_20260904`: exit 0, 571.654162 s, severe 0. Every summary
+has `gpu_pass`, `pie_stopped`, `callback_unregistered` and `d3d12_sm6` true.
+Exit10 wrote 25 original 2560x1440 PNGs under `GPU_20260904_031722`; the long
+run wrote 79 under `GPU_20260904_032343` and completed all 60 real rotation
+cycles. Structured samples report `MAX_3D_RENDER_OWNERSHIP=1` and
+`HARD_OWNERSHIP_FILTER_LEAK=0` at early, middle and final cycles. Original-image
+review covered Whole below threshold/full/history, Partial current/history/cap,
+Whole and Partial moving negatives, Never negatives, six-policy overview,
+wall occlusion, fast/slow sweep and cycles 0/19/39/59. No visible duplicate layer,
+ownership leak or occlusion break was found. This is automated rendered evidence,
+not user acceptance.
+
+`BuildPlugin` first hit a full D: drive twice. The first wrapper lost valid process
+status while its redirected log filled and inherited a stale shell exit value;
+the corrected wrapper recorded the second attempt as failure 902. Those failures
+are environment evidence, not build passes. To recover space, only regenerable
+non-asset package files and the root generated `Intermediate` directory were
+removed. Four copied `.umap` files were
+detected and deliberately retained; no `.uasset` or `.umap` was removed or
+rewritten. The fresh `Home_BuildPlugin_20260904_034518` run succeeded, UAT exit 0,
+184.402276 s. Its log contains UnrealEditor Win64 Development, UnrealGame Win64
+Development and UnrealGame Win64 Shipping, ending `BUILD SUCCESSFUL`; package
+`Saved/SW_Home_BP_20260904_034518` has 303 files and is about .62 GB.
+
+`Home_Final_FullAutomation_20260904` is the final-source complete selector:
+**188 total, 152 clean, 35 warnings, 1 failed, 0 not-run**; 5781.248047 s tests /
+5811.064235 s wall, Editor exit 0, runner exit 1, severe 0. The sole failed test is
+`Darkwell.PropLab.GrayHomeBaseline.FifteenMinuteInteractiveSoak`; every error is
+one of its unchanged p95/continuous-33-ms performance assertions. It completed
+all 54,000 active plus 600 idle steps. Final active-window step p50/p95/p99/peak
+was 25.557201/45.257099/75.198699/86.132199 ms; one step exceeded 100 ms over
+the complete run and the longest consecutive >33 ms run was 199. Current lost
+checks were **0**. Peak resources were 187 records, 12 textures, 3 caps, 33 MIDs,
+77,479 live UObjects and 4,869,718,016 bytes working set; measured periodic GC
+was 527.097497 ms. Final idle retained 186 records / 184 histories, 0 proxies,
+2 caps, 8 textures and 27 MIDs; live UObjects were 62,638 and working set
+4,869,787,648 bytes. Idle step p50/p95/p99/peak was
+.656899/.672203/.685301/.723798 ms, with zero history scans, queries, submissions,
+uploads, creations, cap rebuilds or reuse work.
+
+The non-gating 54,000-step companion completed in 1104.666138 s. The legacy
+`GrayPolicyBaseline.FifteenMinuteInteraction` completed in 2877.958984 s and
+passed its diagnostic contract; its final window p95 was 152.475300 ms and peak
+228.601200 ms, with 341,867,102 history scans and about 4.80 GB working set.
+The final suite therefore proves a substantial performance improvement and zero
+capacity-related Current loss, but the strict 33 ms gate remains unsatisfied.
+
+Final status is **PARTIAL — GRAY_OBJECT_POLICY_PERFORMANCE_BLOCKED**. Current
+observation is independent from the 64-history store; no eviction, overwrite,
+automatic clear or fabricated VerifiedEmpty state was added. The remaining work
+requires a product/architecture decision about long-lived history representation
+or retention. The next user session should first test the rendered Lab manually:
+Whole below/above 100 cm, Partial cut/cap, Always/StationaryOnly/Never while
+moving and stopped, wall occlusion, fast/slow rotation, and repeated rotations
+after capacity. Only explicit user acceptance may create the final gray Stable.

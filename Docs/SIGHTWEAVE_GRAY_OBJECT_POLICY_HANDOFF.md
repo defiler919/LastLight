@@ -4,8 +4,10 @@ Home continuation and newly generated evidence are recorded in
 [SIGHTWEAVE_GRAY_OBJECT_POLICY_HOME.md](SIGHTWEAVE_GRAY_OBJECT_POLICY_HOME.md).
 The earlier company Saved paths below are historical references only.
 
-Status: **PARTIAL — implementation and validation in progress**. No user acceptance,
-final gray stable branch, or black-layer work is authorized by this document.
+Status: **PARTIAL — GRAY_OBJECT_POLICY_PERFORMANCE_BLOCKED**. Automated build,
+rendered D3D12/SM6, packaging, complete automation and normal teardown evidence
+are closed. No user acceptance, final gray stable branch, or black-layer work is
+authorized by this document.
 
 ## Home recovery entry, 2026-09-04
 
@@ -23,15 +25,25 @@ Recovery checkpoints, each immediately pushed and triple-verified:
 - C1, independent current admission: `9ea27f0c9241a39a6865cae388dae53ef5496bb1`.
 - C2, exact repeated-history geometry/ownership: `c0352bbd44ee2b0729244501e245f4e971113461`.
 - C3, exact planar projection/coverage/terminal work: `7787cd45920636993fe0dfd3fb2d551ee7326d53`.
+- C4, physical/ownership dirty-work split: `faa8d0122bea78381035ce0c79bfc71b859b9fd2`.
+- C4 complete-soak documentation: `78f72f980d5162fe7eda3cb19f68f7b9e1464426`.
+- Final GPU runner and room-scoped test bridge: `38f9721438e81bb35579dc9afcfcd7aa194be9b5`.
 
-C2 completed 54,000 active + 600 idle steps with complete report/log, normal Editor
-exit and zero lost-current checks, including 78 capacity-capture refusals. It
-failed performance gates: 84 >100 ms steps and a longest >33 ms run of 241.
-C3 builds and passes 57/57 targeted tests; full automation is still running at
-this document update. No unfinished run is a pass. Detailed source provenance,
-measured costs, capacity/resource limits and all earlier checkpoint SHAs are in HOME.
-The final status stays PARTIAL — GRAY_OBJECT_POLICY_PERFORMANCE_BLOCKED with
-TEARDOWN BLOCKER RETAINED until actual rendered exit evidence closes it.
+C4 completed 54,000 active + 600 idle steps with complete report/log, normal
+Editor exit and zero lost-current checks. It removed all >100 ms steps in the
+isolated run, but final-window p95 was 44.499200 ms and the longest consecutive
+>33 ms run was 148. Detailed source provenance, measured costs, capacity/resource
+limits and every earlier checkpoint SHA are in HOME.
+
+Final-source `Home_Final_FullAutomation_20260904` ran all 188 selected tests:
+152 clean, 35 warnings, 1 failed, 0 not-run; 5781.248047 s tests / 5811.064235 s
+wall, Editor exit 0, severe 0. The sole failure is the unchanged strict performance
+gate in `GrayHomeBaseline.FifteenMinuteInteractiveSoak`; it completed 54,000+600,
+lost Current zero times, and ended with step p95 45.257099 ms / peak 86.132199 ms.
+Peak resources were 187 records, 12 textures, 3 caps, 33 MIDs, 77,479 live
+UObjects and 4,869,718,016 bytes working set. Idle p95 was .672203 ms with all
+heavy-work counters zero. The legacy diagnostic also completed: p95 152.475300 ms,
+peak 228.601200 ms. Performance is materially improved but still blocked.
 
 Current contract: per-field Reveal / MinimumObservedSpanCm / History, resolved
 once at registration; DARKWELL WholeObjectAfterSpan / 100 cm / StationaryOnly;
@@ -40,12 +52,22 @@ unsealed reserve alongside at most 64 sealed histories. Capture refusal cannot
 evict retained knowledge or consume the next legal current observation. Only
 fully VerifiedEmpty permits release; Superseded ownership is not empty evidence.
 
-Next window must fetch and compare HEAD/upstream/remote, read HOME's latest entry,
-inspect worktree/LFS and any remaining owned test processes, and preserve local
-`.uproject`/asset changes. Use unique runner names; do not rerun an old evidence
-path. Do not move either protected ref or create the final gray Stable before
-manual acceptance. User now authorizes safe non-forced shutdown after all valuable
-work and final handoff are pushed, Git/LFS are closed, and all writers have ended.
+Final rendered evidence has three consecutive normal exits on identical source:
+Exit10 and Exit11 are 102-second short matrices; Exit12 is a 571.654162-second,
+60-cycle long interaction. All have process exit 0, severe 0, D3D12/SM6 true,
+GPU pass true, PIE stopped and callback unregistered. The long run wrote 79
+original 2560x1440 PNGs; ownership stayed <=1 and hard leak stayed zero. Failed
+Exit1-9 evidence is retained and is not reclassified. The final focused native
+run passed 47/47. Final `BuildPlugin` succeeded for UnrealEditor Development,
+UnrealGame Development and UnrealGame Shipping, UAT exit 0.
+
+Next window must fetch and compare HEAD/upstream/remote, read HOME's final entry,
+inspect worktree/LFS and preserve local `.uproject`/asset changes. The accurate
+implementation entry is the remaining long-lived history representation/retention
+decision; do not invent eviction. For manual acceptance, exercise Whole below and
+above 100 cm, Partial cut/cap, all three History policies through motion/stop,
+wall occlusion, fast/slow sweep, repeated rotation and capacity. Do not move either
+protected ref or create the final gray Stable before explicit user acceptance.
 
 ## Starting state
 

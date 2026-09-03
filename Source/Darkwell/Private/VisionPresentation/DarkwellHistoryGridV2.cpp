@@ -22,6 +22,7 @@ void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& Sealed
 	Samples.SetNum(Size.X * Size.Y);
 	ActiveSamples.Reset();
 	ActiveFlags.Init(false, Samples.Num());
+	MutableEvidence.Init(true, Samples.Num());
 	TArray<FLinearColor> FrozenPresentation;
 	SealedMemory.BuildConservativePresentation(SamplesPerCell, FrozenPresentation);
 	for (int32 Y = 0; Y < Size.Y; ++Y) for (int32 X = 0; X < Size.X; ++X)
@@ -55,6 +56,7 @@ void FDarkwellHistoryGridV2::RestrictToRecordedGeometry(const TBitArray<>& Footp
 	{
 		Samples[I].InitialRemembered = Samples[I].Opacity = 0;
 		Samples[I].State = NeverObserved();
+		MutableEvidence[I] = true;
 	}
 }
 
@@ -99,6 +101,7 @@ bool FDarkwellHistoryGridV2::AdvanceDirty(float DeltaSeconds,
 		{
 			if (S.State != Superseded()) bOutTopologyChanged = true;
 			S.State = Superseded();
+			MutableEvidence[Index] = false;
 			S.EmptyDwell = 0.0f;
 			continue;
 		}
@@ -136,6 +139,7 @@ bool FDarkwellHistoryGridV2::AdvanceDirty(float DeltaSeconds,
 		{
 			if (S.State != Superseded()) bOutTopologyChanged = true;
 			S.State = Superseded();
+			MutableEvidence[Index] = false;
 			S.EmptyDwell = 0.0f;
 			ActiveFlags[Index] = false;
 			ActiveSamples.RemoveAtSwap(ActiveIndex, 1, EAllowShrinking::No);
@@ -155,6 +159,12 @@ bool FDarkwellHistoryGridV2::AdvanceDirty(float DeltaSeconds,
 		}
 	}
 	return bPresentationChanged || bOutTopologyChanged;
+}
+
+void FDarkwellHistoryGridV2::FilterMutableEvidence(TBitArray<>& CandidateIndices) const
+{
+ check(CandidateIndices.Num()==MutableEvidence.Num());
+ CandidateIndices.CombineWithBitwiseAND(MutableEvidence,EBitwiseOperatorFlags::MinSize);
 }
 
 bool FDarkwellHistoryGridV2::HasResidualSurface() const

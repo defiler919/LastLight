@@ -43,10 +43,13 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	int32 Count(FGameplayTag State) const;
 	int32 CountMixedCoarseCells() const;
 	int32 GetActiveTransitionCount() const { return ActiveSamples.Num(); }
+	/** Superseded evidence is terminal; its stored facts remain resident. */
+	void FilterMutableEvidence(TBitArray<>& CandidateIndices) const;
 private:
 	FBox2D Bounds;
 	FIntPoint Size = FIntPoint::ZeroValue;
 	TArray<FSample> Samples;
 	TArray<int32> ActiveSamples;
 	TBitArray<> ActiveFlags;
+	TBitArray<> MutableEvidence;
 };

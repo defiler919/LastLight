@@ -78,11 +78,11 @@ namespace Darkwell::GrayPolicyBaseline
   TArray<double> Times, Steps;
   double RefreshUs=0,FineUs=0, AdapterUs=0, RoomWallUs=0, FixtureUs=0;
   int32 Slow33=0, Slow100=0, Run33=0, MaxRun33=0;
-  uint64 Occupancy=0, OccupancyHits=0, GeometryTests=0, GeometryReuse=0, OwnershipReuse=0;
+  uint64 Occupancy=0, OccupancyHits=0, GeometryTests=0, GeometryReuse=0, OwnershipReuse=0, CoverageReuse=0;
   uint64 Queries=0, Computations=0, CacheHits=0, Scans=0, Submissions=0, Uploads=0, Caps=0, Samples=0, Textures=0, Mids=0;
   void Add(const ADarkwellMovingPropLabRoom::FHistoryRuntimeTelemetry& P, const FRoom& F)
   {
-   OwnershipReuse+=P.HistoryOwnershipReuseHits; GeometryReuse+=P.HistoryGeometryReuseHits; Occupancy+=P.OccupancyTests; OccupancyHits+=P.OccupancyCacheHits; GeometryTests+=P.PrimitiveGeometryTests;
+   CoverageReuse+=P.HistoryCoverageReuseHits; OwnershipReuse+=P.HistoryOwnershipReuseHits; GeometryReuse+=P.HistoryGeometryReuseHits; Occupancy+=P.OccupancyTests; OccupancyHits+=P.OccupancyCacheHits; GeometryTests+=P.PrimitiveGeometryTests;
    Steps.Add(F.StepUs); AdapterUs+=F.AdapterUs; RoomWallUs+=F.RoomUs; FixtureUs+=F.FixtureUs;
    Slow33+=F.StepUs>33000; Slow100+=F.StepUs>100000; Run33=F.StepUs>33000?Run33+1:0; MaxRun33=FMath::Max(MaxRun33,Run33);
    Times.Add(P.MovingPropLabGameThreadUs); Queries+=P.CoverageQueries; Computations+=P.CoverageComputations; CacheHits+=P.CoverageCacheHits; Scans+=P.FineSamplesScanned;
@@ -92,8 +92,8 @@ namespace Darkwell::GrayPolicyBaseline
   FString Report(const FString& Case,int32 Frame,int32 Tracked,const ADarkwellMovingPropLabRoom::FHistoryRuntimeTelemetry& P)
   {
    double Sum=0; for(double T:Times) Sum+=T; Times.Sort(); Steps.Sort(); const int32 N=Times.Num();
-   return FString::Printf(TEXT("GRAY_HOME_PERF case=%s frame=%d tracked=%d mean_us=%.3f p50_us=%.3f p95_us=%.3f p99_us=%.3f peak_us=%.3f queries_per_frame=%.3f computations_per_frame=%.3f cache_hits_per_frame=%.3f current_samples_per_frame=%.3f history_scans=%llu submissions=%llu gpu_uploads=%llu texture_creations=%llu mid_creations=%llu cap_rebuilds=%llu active_history=%d records=%d proxies=%d caps=%d textures=%d mids=%d uobjects=%d live_uobjects=%d working_set=%llu refresh_mean_us=%.3f fine_mean_us=%.3f step_p50_us=%.3f step_p95_us=%.3f step_p99_us=%.3f step_peak_us=%.3f adapter_mean_us=%.3f room_wall_mean_us=%.3f fixture_mean_us=%.3f over33=%d over100=%d max_consecutive33=%d occupancy_queries=%llu occupancy_hits=%llu geometry_tests=%llu history_geometry_reuse=%llu history_ownership_reuse=%llu"),
-    *Case,Frame,Tracked,Sum/N,Times[N/2],Times[FMath::Min(N-1,int32(N*.95))],Times[FMath::Min(N-1,int32(N*.99))],Times.Last(),double(Queries)/N,double(Computations)/N,double(CacheHits)/N,double(Samples)/N,Scans,Submissions,Uploads,Textures,Mids,Caps,P.ActiveHistoricalEpochs,P.SpatialRecordCount,P.ProxyCount,P.CapComponentCount,P.TextureCount,P.MidCount+P.SourceMidCount,P.UObjectCount,P.LiveUObjectCount,P.ProcessWorkingSetBytes,RefreshUs/N,FineUs/N,Steps[N/2],Steps[FMath::Min(N-1,int32(N*.95))],Steps[FMath::Min(N-1,int32(N*.99))],Steps.Last(),AdapterUs/N,RoomWallUs/N,FixtureUs/N,Slow33,Slow100,MaxRun33,Occupancy,OccupancyHits,GeometryTests,GeometryReuse,OwnershipReuse);
+   return FString::Printf(TEXT("GRAY_HOME_PERF case=%s frame=%d tracked=%d mean_us=%.3f p50_us=%.3f p95_us=%.3f p99_us=%.3f peak_us=%.3f queries_per_frame=%.3f computations_per_frame=%.3f cache_hits_per_frame=%.3f current_samples_per_frame=%.3f history_scans=%llu submissions=%llu gpu_uploads=%llu texture_creations=%llu mid_creations=%llu cap_rebuilds=%llu active_history=%d records=%d proxies=%d caps=%d textures=%d mids=%d uobjects=%d live_uobjects=%d working_set=%llu refresh_mean_us=%.3f fine_mean_us=%.3f step_p50_us=%.3f step_p95_us=%.3f step_p99_us=%.3f step_peak_us=%.3f adapter_mean_us=%.3f room_wall_mean_us=%.3f fixture_mean_us=%.3f over33=%d over100=%d max_consecutive33=%d occupancy_queries=%llu occupancy_hits=%llu geometry_tests=%llu history_geometry_reuse=%llu history_ownership_reuse=%llu history_coverage_reuse=%llu"),
+    *Case,Frame,Tracked,Sum/N,Times[N/2],Times[FMath::Min(N-1,int32(N*.95))],Times[FMath::Min(N-1,int32(N*.99))],Times.Last(),double(Queries)/N,double(Computations)/N,double(CacheHits)/N,double(Samples)/N,Scans,Submissions,Uploads,Textures,Mids,Caps,P.ActiveHistoricalEpochs,P.SpatialRecordCount,P.ProxyCount,P.CapComponentCount,P.TextureCount,P.MidCount+P.SourceMidCount,P.UObjectCount,P.LiveUObjectCount,P.ProcessWorkingSetBytes,RefreshUs/N,FineUs/N,Steps[N/2],Steps[FMath::Min(N-1,int32(N*.95))],Steps[FMath::Min(N-1,int32(N*.99))],Steps.Last(),AdapterUs/N,RoomWallUs/N,FixtureUs/N,Slow33,Slow100,MaxRun33,Occupancy,OccupancyHits,GeometryTests,GeometryReuse,OwnershipReuse,CoverageReuse);
   }
  };
 }

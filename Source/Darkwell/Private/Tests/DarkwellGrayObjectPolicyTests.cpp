@@ -443,7 +443,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellRepeatedHistoryEvidenceParity,
 bool FDarkwellRepeatedHistoryEvidenceParity::RunTest(const FString&)
 {
  using namespace Darkwell::GrayObjectPolicyTests;
- TArray<uint64> Reference; uint64 Reuses=0, OwnershipReuses=0;
+ TArray<uint64> Reference; uint64 Reuses=0, OwnershipReuses=0, CoverageReuses=0;
  for(bool Full:{true,false})
  {
   FRoom F; F.Room->bForceFullHistoryEvidenceForTesting=Full;
@@ -452,7 +452,7 @@ bool FDarkwellRepeatedHistoryEvidenceParity::RunTest(const FString&)
    F.Face(Frame%20<10?90:-90);
    if(Frame==120) { auto P=F.Room->GetTrackedTransform(Id); P.SetRotation(FQuat(FRotator(0,15,0))); F.Room->SetTrackedTransformForTesting(Id,P); }
    F.Step();
-   if(!Full) { const auto T=F.Room->GetHistoryRuntimeFrameTelemetryForTesting(); Reuses+=T.HistoryGeometryReuseHits; OwnershipReuses+=T.HistoryOwnershipReuseHits; }
+   if(!Full) { const auto T=F.Room->GetHistoryRuntimeFrameTelemetryForTesting(); Reuses+=T.HistoryGeometryReuseHits; OwnershipReuses+=T.HistoryOwnershipReuseHits; CoverageReuses+=T.HistoryCoverageReuseHits; }
    uint64 Hash=1469598103934665603ull;
    auto Mix=[&](uint64 V){Hash=(Hash^V)*1099511628211ull;};
    for(FName Target:{Id,FName(TEXT("Lab.Moving.Cabinet"))})
@@ -473,7 +473,42 @@ bool FDarkwellRepeatedHistoryEvidenceParity::RunTest(const FString&)
  }
  TestTrue(TEXT("Replay actually exercises exact geometry reuse"),Reuses>0);
  TestTrue(TEXT("Replay actually exercises exact ownership reuse"),OwnershipReuses>0);
- AddInfo(FString::Printf(TEXT("Repeated history geometry reuse hits=%llu ownership reuse hits=%llu"),Reuses,OwnershipReuses));
+ TestTrue(TEXT("Replay actually exercises canonical coverage-delta reuse"),CoverageReuses>0);
+ AddInfo(FString::Printf(TEXT("Repeated history geometry reuse hits=%llu ownership reuse hits=%llu coverage reuse hits=%llu"),Reuses,OwnershipReuses,CoverageReuses));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPlanarProjectionParity,
+ "Darkwell.PropLab.GrayObjectPolicy.PlanarProjectionMatchesOriginalSlab",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellPlanarProjectionParity::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ FRoom F; int32 Planar=0,Fallback=0,Queries=0;
+ for(double Yaw:{0.,7.,45.,90.,179.,270.}) for(double Pitch:{0.,17.,90.})
+ for(FVector Scale:{FVector(1),FVector(-1,2,.5),FVector(1,2,-.5),FVector(0,1,1),FVector(1,1,0)})
+ {
+  ADarkwellMovingPropLabRoom::FPrimitiveGeometrySnapshot G;
+  G.LocalBounds=FBox(FVector(-75,-37.5,0),FVector(75,37.5,145));
+  G.WorldTransform=FTransform(FRotator(Pitch,Yaw,0),FVector(-300,650,13),Scale); G.CachePlanarProjection();
+  G.bCachedPlanarProjection?++Planar:++Fallback;
+  for(double Tolerance:{0.,.02,.25})
+  for(double X:{-76.,-75.0001,-75.,-74.9999,0.,74.9999,75.,75.0001,76.})
+  for(double Y:{-38.,-37.5001,-37.5,-37.4999,0.,37.4999,37.5,37.5001,38.})
+  {
+   const FVector2D P(G.WorldTransform.TransformPosition(FVector(X,Y,30)));
+   double Min=0,Max=0,ExpectedMin=0,ExpectedMax=0;
+   F.Room->bForceFullHistoryEvidenceForTesting=true;
+   const bool Expected=F.Room->QueryVerticalInterval(G,P,ExpectedMin,ExpectedMax,Tolerance);
+   F.Room->bForceFullHistoryEvidenceForTesting=false;
+   const bool Actual=F.Room->QueryVerticalInterval(G,P,Min,Max,Tolerance);
+   if(!TestEqual(TEXT("Cached planar coverage equals original slab predicate"),Actual,Expected)) return false;
+   if(Expected && (!TestTrue(TEXT("Exact lower interval"),Min==ExpectedMin) || !TestTrue(TEXT("Exact upper interval"),Max==ExpectedMax))) return false;
+   ++Queries;
+  }
+ }
+ TestTrue(TEXT("Positive planar cache and tilted/singular fallbacks exercised"),Planar>0 && Fallback>0);
+ AddInfo(FString::Printf(TEXT("Planar slab parity: %d queries, %d cached transforms, %d fallbacks"),Queries,Planar,Fallback));
  return true;
 }
 

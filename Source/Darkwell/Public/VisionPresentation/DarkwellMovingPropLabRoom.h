@@ -94,6 +94,7 @@ public:
   uint64 OccupancyCacheHits = 0;
 		uint64 HistoryGeometryReuseHits = 0;
 		uint64 HistoryOwnershipReuseHits = 0;
+		uint64 HistoryCoverageReuseHits = 0;
 		uint64 PrimitiveGeometryTests = 0;
 		uint64 OwnershipTests = 0;
 		uint64 UpdateRecordTextureCalls = 0;
@@ -262,6 +263,9 @@ private:
 		FBox LocalBounds = FBox(ForceInit);
 		FTransform WorldTransform = FTransform::Identity;
 		int32 PrimitiveIndex = INDEX_NONE;
+		bool bCachedPlanarProjection = false;
+		double PlanarMinZ = 0, PlanarMaxZ = 0, ToleranceScale = 1;
+		void CachePlanarProjection();
 	};
  struct FActualOccupancySnapshot
  {
@@ -279,6 +283,7 @@ private:
 	friend class FDarkwellCapPartialClipTest;
 	friend class FDarkwellCapCoplanarContactTest;
 	friend class FDarkwellGrayHistoryCapacityCurrentTest;
+	friend class FDarkwellPlanarProjectionParity;
 	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);
 
 	struct FCapQuadSnapshot
@@ -322,6 +327,7 @@ private:
 		TArray<float> CachedCoarseCoverage;
 		TArray<float> CachedCoarseEvidence;
 		TArray<float> CachedFineCoverage;
+		uint64 CachedFineAuthorityRevision = MAX_uint64, CachedFineDrawRevision = MAX_uint64;
 		TBitArray<> CachedFineOccupied, CachedCoarseOccupied;
 		TArray<FBox2D> CachedGeometryRegions;
   TArray<FPrimitiveGeometrySnapshot> CachedPhysicalGeometry, CachedNewerGeometry;
@@ -357,6 +363,17 @@ private:
 		TBitArray<> Evaluated, Overlap;
 	};
 	TArray<FHistoryOwnershipReuse> FrameHistoryOwnership;
+	struct FHistoryCoverageReuse
+	{
+		FBox2D Bounds;
+		FIntPoint Size;
+		bool bPreviousValid = false;
+		uint64 PreviousAuthority = MAX_uint64, PreviousDraw = MAX_uint64;
+		uint64 Authority = MAX_uint64, Draw = MAX_uint64;
+		TArray<float> Values;
+		TBitArray<> Crossings;
+	};
+	TArray<FHistoryCoverageReuse> FrameHistoryCoverage;
 
 	enum class EObservationState : uint8
 	{

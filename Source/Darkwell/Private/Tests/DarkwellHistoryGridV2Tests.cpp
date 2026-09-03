@@ -146,4 +146,30 @@ bool FDarkwellUnobservedFineEvidenceTest::RunTest(const FString&)
 	for(int32 I=0;I<600;++I)Grid.Advance(1.f/60,C,O,N);
 	TestEqual(TEXT("No identity or time based clearing"),Grid.Count(Grid.Unresolved()),16);return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMutableEvidenceMaskTest,
+ "Darkwell.PropLab.MovingRules.HistoryGridV2.MutableMaskPreservesTerminalEvidence",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellMutableEvidenceMaskTest::RunTest(const FString&)
+{
+ FDarkwellSpatialPropMemory Old;
+ Old.Initialize(TEXT("Lab.Terminal"),FBox2D(FVector2D(0),FVector2D(2.5)));
+ Old.BeginPresent(); Old.Advance(.2f,TArray<float>{1}); Old.BeginAbsent();
+ FDarkwellHistoryGridV2 Grid; Grid.Initialize(Old);
+ TArray<float> Legal; Legal.Init(0,16); TBitArray<> Occupied(false,16),Owned(false,16);
+ auto CheckMask=[&]()
+ {
+  const uint64 Evidence=Grid.EvidenceHash(); TBitArray<> Dirty(true,16); Grid.FilterMutableEvidence(Dirty);
+  TestEqual(TEXT("Work selection cannot alter stored evidence"),Grid.EvidenceHash(),Evidence);
+  for(int32 I=0;I<16;++I) TestEqual(TEXT("Only terminal superseded samples leave the work set"),bool(Dirty[I]),Grid.GetSamples()[I].State!=Grid.Superseded());
+ };
+ CheckMask(); Owned[1]=true; Legal[0]=1; Grid.Advance(1.f/60,Legal,Occupied,Owned); CheckMask();
+ Owned.Init(false,16); Legal.Init(1,16); Grid.Advance(1.f/60,Legal,Occupied,Owned); CheckMask();
+ TestFalse(TEXT("Skipping superseded sample does not invent empty evidence"),Grid.GetSamples()[1].bVerifiedEmpty);
+ Owned[0]=true; Grid.Advance(1.f/60,Legal,Occupied,Owned); CheckMask();
+ TestTrue(TEXT("Pre-existing verified-empty fact survives later ownership"),Grid.GetSamples()[0].bVerifiedEmpty);
+ TBitArray<> Footprint(true,16); Footprint[1]=false; Grid.RestrictToRecordedGeometry(Footprint); CheckMask();
+ Grid.Initialize(Old); CheckMask();
+ return true;
+}
+
 #endif

@@ -791,3 +791,53 @@ cache hits. 8-moving CPU p95 10.638300 ms / peak 15.814900; 32-static p95
 The complete post-recovery 54,000-step soak, full automation, actual GPU evidence,
 BuildPlugin and normal GPU-exit proof remain pending. Performance-blocked status
 is retained until long-growth evidence supports a change.
+
+
+## Home recovery C2 complete soak and C3 exact projection/coverage reuse
+
+C2 was pushed as `c0352bbd44ee2b0729244501e245f4e971113461`.
+`Home_Recovery_CompleteSoak_20260904` ran that clean checkpoint through all
+54,000 active plus 600 idle steps. Complete report/log/source and analysis.json
+are retained under its Saved/GrayObjectPolicy directory. Result: **0/1, failed**,
+Editor exit 0, runner exit 1, severe 0; 1744.407715 s test / 1767.038435 s wall.
+All failures are performance gates. Current Live lost checks are **0 active and
+0 idle**, despite 78 original capacity-capture refusals. Capacity no longer blocks
+current admission. The 64 sealed-history cap still rejects further captures;
+there is no automatic eviction, and only fully VerifiedEmpty history can release.
+
+C2 has 84 steps >100 ms, longest consecutive >33 ms run 241, worst reported
+window step p95 81.649400 ms and overall step peak 120.235000 ms. Weighted room
+mean grows from 8.880445 ms in minute 1 to 43.130611 ms in minute 15; performance
+remains blocked. Peak records 187, textures 12, caps 3, total MIDs 33, live UObjects
+66,199, working set 3,290,890,240 bytes. Fifteen measured GC pauses total
+486.882895 ms and are included in step timing. Final idle: 186 records / 184
+historical, 0 proxies, 2 caps, 8 textures, 27 MIDs, 62,636 live UObjects, working
+set 3,290,996,736 bytes. Allocator high-water memory does not return to the old
+1.26 GB result. Idle room mean/p95 .220643/.227200 ms and step p50/p95/p99/peak
+.356700/.365298/.378601/.415098 ms. Idle queries, scans, samples, submissions,
+uploads, texture/MID creation, cap rebuilds and reuse counters are zero.
+All timings are native CPU fixture/adapter/room/GC steps, not rendered GPU frames.
+
+C3 caches the exact vertical slab for finite pure world-Z rotations; tilted or
+singular transforms use the original slab algorithm. It preserves the original
+inverse transform, inclusive tolerance and interval arithmetic. Frame-local
+coverage reuse requires identical raster and previous authority/draw revisions;
+it copies exact coverage values and threshold-crossing bits before geometry union.
+A bounded 64-entry cache falls back to original sampling. A terminal-state bitset
+omits already Superseded samples from future dirty work without deleting evidence,
+changing opacity/facts, fabricating VerifiedEmpty, or releasing records/resources.
+The full-reference replay disables all three optimizations.
+
+`Home_ProjectionCoverage_Build1_20260904`: full Editor Development build succeeded,
+12 actions, 20.83 s. `Home_ProjectionCoverage_Targeted_20260904`: **57/57** (51 clean,
+6 with warnings), 220.572754 s tests / 239.833789 s wall; Editor/runner exit 0,
+severe 0. Includes GrayObjectPolicy, all HistoryGridV2 and FastSweep cases plus
+both short performance gates. The planar oracle checks 21,870 queries across
+24 eligible and 66 fallback transforms using direct equality for returned intervals.
+Repeated-history full-reference parity uses 57 geometry, 29,988 ownership and
+35 coverage reuse hits; terminal-mask evidence/reinitialization tests pass.
+8-moving step p95/peak 9.718198/15.199203 ms; 32-static 11.944599/53.659700 ms
+(one isolated >33 ms step); no >100 ms steps. Idle step p95 .159699/.574902 ms.
+C3 complete automation/long-growth, GPU, packaging and three GPU exits remain
+pending at this checkpoint. PARTIAL — PERFORMANCE_BLOCKED; teardown blocker
+retained. No final gray Stable or manual-acceptance claim.

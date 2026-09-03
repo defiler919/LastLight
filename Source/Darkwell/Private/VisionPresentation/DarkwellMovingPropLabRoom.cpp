@@ -612,10 +612,27 @@ ADarkwellMovingPropLabRoom::ActualPartGeometry(
 			Geometry.LocalBounds = Part->GetStaticMesh()->GetBounds().GetBox();
 			Geometry.WorldTransform = Part->GetComponentTransform();
 			Geometry.PrimitiveIndex = PrimitiveIndex;
+			Geometry.CachePlanarProjection();
 		}
 		++PrimitiveIndex;
 	}
 	return Result;
+}
+
+void ADarkwellMovingPropLabRoom::FPrimitiveGeometrySnapshot::CachePlanarProjection()
+{
+ bCachedPlanarProjection=false;
+ const auto Rotation=WorldTransform.GetRotation();
+ if(!LocalBounds.IsValid || WorldTransform.ContainsNaN() || Rotation.X!=0 || Rotation.Y!=0) return;
+ const FVector Direction=WorldTransform.InverseTransformVector(FVector::UpVector);
+ if(Direction.X!=0 || Direction.Y!=0 || FMath::Abs(Direction.Z)<=UE_DOUBLE_SMALL_NUMBER) return;
+ const double OriginZ=WorldTransform.InverseTransformPosition(FVector::ZeroVector).Z;
+ PlanarMinZ=(LocalBounds.Min.Z-OriginZ)/Direction.Z;
+ PlanarMaxZ=(LocalBounds.Max.Z-OriginZ)/Direction.Z;
+ if(PlanarMinZ>PlanarMaxZ) Swap(PlanarMinZ,PlanarMaxZ);
+ const FVector Scale=WorldTransform.GetScale3D().GetAbs();
+ ToleranceScale=FMath::Max(UE_DOUBLE_SMALL_NUMBER,FMath::Min(Scale.X,Scale.Y));
+ bCachedPlanarProjection=true;
 }
 
 bool ADarkwellMovingPropLabRoom::QueryVerticalInterval(
@@ -626,6 +643,27 @@ bool ADarkwellMovingPropLabRoom::QueryVerticalInterval(
 	const double ProjectionTolerance) const
 {
 	++RuntimeFrame.PrimitiveGeometryTests;
+ bool UsePlanar=Geometry.bCachedPlanarProjection && FMath::IsFinite(Point.X) && FMath::IsFinite(Point.Y);
+#if WITH_DEV_AUTOMATION_TESTS
+ UsePlanar &= !bForceFullHistoryEvidenceForTesting;
+#endif
+ if(UsePlanar)
+ {
+  // Pure world-Z rotation makes inverse local Z independent of the query XY.
+  // Preserve the original inverse transform, division, inclusive tolerance and
+  // interval arithmetic exactly; tilted and singular geometry uses the full slab.
+  const FVector Local=Geometry.WorldTransform.InverseTransformPosition(FVector(Point.X,Point.Y,0));
+  const double Tolerance=ProjectionTolerance/Geometry.ToleranceScale;
+  for(int32 Axis=0;Axis<2;++Axis)
+  {
+   const double Minimum=Geometry.LocalBounds.Min[Axis]-Tolerance;
+   const double Maximum=Geometry.LocalBounds.Max[Axis]+Tolerance;
+   if(Local[Axis]<Minimum-UE_KINDA_SMALL_NUMBER || Local[Axis]>Maximum+UE_KINDA_SMALL_NUMBER) return false;
+  }
+  OutMinZ=Geometry.PlanarMinZ; OutMaxZ=Geometry.PlanarMaxZ;
+  return OutMaxZ-OutMinZ>UE_KINDA_SMALL_NUMBER;
+ }
+
 	if (!Geometry.LocalBounds.IsValid || Geometry.WorldTransform.ContainsNaN())
 	{
 		return false;
@@ -1026,14 +1064,39 @@ bool ADarkwellMovingPropLabRoom::AdvanceFineHistory(
  TBitArray<> DirtyMask(false,SampleCount);
 	if (bCoverageDirty)
 	{
-		const FCoverageSnapshot Coverage = SampleConservativeCoverage(Bounds,
-			Record.Epoch, Record.SpatialMemory.GetGeneration(),
-			FDarkwellHistoryGridV2::SamplesPerCell);
-		if (!Coverage.bValid) return false;
-		const bool Existing=Visual->CachedFineCoverage.Num()==SampleCount;
-  for(int32 I=0;I<SampleCount;++I)
-   if(!Existing || (Coverage.Values[I]>=FDarkwellSpatialPropMemory::LegalCoverage)!=(Visual->CachedFineCoverage[I]>=FDarkwellSpatialPropMemory::LegalCoverage)) DirtyMask[I]=true;
-  Visual->CachedFineCoverage = Coverage.Values;
+  const bool Existing=Visual->CachedFineCoverage.Num()==SampleCount;
+  bool Reuse=bUseFrameOccupancy && Prop.History.GetRecords().Num()-(Prop.History.GetCurrentIndex()!=INDEX_NONE?1:0)>1;
+#if WITH_DEV_AUTOMATION_TESTS
+  Reuse &= !bForceFullHistoryEvidenceForTesting;
+#endif
+  const FHistoryCoverageReuse* Cached=nullptr;
+  if(Reuse) for(const auto& Entry:FrameHistoryCoverage)
+   if(Entry.Size==Size && Entry.Bounds.Min==Bounds.Min && Entry.Bounds.Max==Bounds.Max
+    && Entry.bPreviousValid==Existing && (!Existing || (Entry.PreviousAuthority==Visual->CachedFineAuthorityRevision && Entry.PreviousDraw==Visual->CachedFineDrawRevision)))
+   { Cached=&Entry; break; }
+  if(Cached)
+  {
+   Visual->CachedFineCoverage=Cached->Values; DirtyMask=Cached->Crossings;
+   Visual->CachedFineAuthorityRevision=Cached->Authority; Visual->CachedFineDrawRevision=Cached->Draw;
+   ++RuntimeFrame.HistoryCoverageReuseHits;
+  }
+  else
+  {
+   const FCoverageSnapshot Coverage=SampleConservativeCoverage(Bounds,Record.Epoch,
+    Record.SpatialMemory.GetGeneration(),FDarkwellHistoryGridV2::SamplesPerCell);
+   if(!Coverage.bValid) return false;
+   for(int32 I=0;I<SampleCount;++I)
+    if(!Existing || (Coverage.Values[I]>=FDarkwellSpatialPropMemory::LegalCoverage)!=(Visual->CachedFineCoverage[I]>=FDarkwellSpatialPropMemory::LegalCoverage)) DirtyMask[I]=true;
+   if(Reuse && FrameHistoryCoverage.Num()<64)
+   {
+    auto& Entry=FrameHistoryCoverage.AddDefaulted_GetRef(); Entry.Bounds=Bounds; Entry.Size=Size; Entry.bPreviousValid=Existing;
+    Entry.PreviousAuthority=Visual->CachedFineAuthorityRevision; Entry.PreviousDraw=Visual->CachedFineDrawRevision;
+    Entry.Authority=Coverage.AuthorityRevision; Entry.Draw=Coverage.CoverageRevision;
+    Entry.Values=Coverage.Values; Entry.Crossings=DirtyMask;
+   }
+   Visual->CachedFineCoverage=Coverage.Values;
+   Visual->CachedFineAuthorityRevision=Coverage.AuthorityRevision; Visual->CachedFineDrawRevision=Coverage.CoverageRevision;
+  }
 	}
 	if (Visual->CachedFineCoverage.Num() != SampleCount) return false;
 	if (Visual->CachedFineOccupied.Num() != SampleCount)
@@ -1046,6 +1109,11 @@ bool ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	{
 		if (DirtyMask.IsValidIndex(Index)) DirtyMask[Index] = true;
 	}
+ bool FilterTerminal=true;
+#if WITH_DEV_AUTOMATION_TESTS
+ FilterTerminal=!bForceFullHistoryEvidenceForTesting;
+#endif
+ if(FilterTerminal) Record.FineHistory.FilterMutableEvidence(DirtyMask);
 	TArray<int32> DirtyIndices;
 	DirtyIndices.Reserve(bCoverageDirty ? SampleCount : GeometryDirtyIndices.Num());
 	for (TConstSetBitIterator<> It(DirtyMask); It; ++It) DirtyIndices.Add(It.GetIndex());
@@ -4581,7 +4649,7 @@ void ADarkwellMovingPropLabRoom::UpdateRoom(
 	}
  // Motion has advanced every actor. Snapshot physical bounds/primitives once
  // for all history occupancy queries in this update, including other identities.
- FrameOccupancy.Reset(); FrameOccupancyPoints.Reset(); FrameHistoryGeometry.Reset(); FrameHistoryOwnership.Reset();
+ FrameOccupancy.Reset(); FrameOccupancyPoints.Reset(); FrameHistoryGeometry.Reset(); FrameHistoryOwnership.Reset(); FrameHistoryCoverage.Reset();
  bCacheFrameOccupancyPoints=false;
  for(const auto& Pair:Tracked)
   bCacheFrameOccupancyPoints |= Pair.Value.History.GetRecords().Num()-(Pair.Value.History.GetCurrentIndex()!=INDEX_NONE?1:0)>1;
@@ -4649,6 +4717,7 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
  RuntimeTotal.OccupancyCacheHits += RuntimeFrame.OccupancyCacheHits;
  RuntimeTotal.HistoryGeometryReuseHits += RuntimeFrame.HistoryGeometryReuseHits;
  RuntimeTotal.HistoryOwnershipReuseHits += RuntimeFrame.HistoryOwnershipReuseHits;
+ RuntimeTotal.HistoryCoverageReuseHits += RuntimeFrame.HistoryCoverageReuseHits;
 	RuntimeTotal.PrimitiveGeometryTests += RuntimeFrame.PrimitiveGeometryTests;
 	RuntimeTotal.OwnershipTests += RuntimeFrame.OwnershipTests;
 	RuntimeTotal.UpdateRecordTextureCalls += RuntimeFrame.UpdateRecordTextureCalls;

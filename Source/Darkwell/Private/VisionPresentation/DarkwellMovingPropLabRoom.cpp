@@ -44,9 +44,14 @@ FString ADarkwellMovingPropLabRoom::GetMovingLiveTelemetry(FName Id) const
 		LMin=FMath::Min(LMin,double(C.LiveBlend)); LMax=FMath::Max(LMax,double(C.LiveBlend)); LSum+=C.LiveBlend; D+=C.DiscoveredPresent>0; }
 	int32 Visible=0; if(P->Actual.IsValid()) for(const auto& Part:P->Actual->Parts) Visible+=Part && Part->IsVisible();
 	const int32 N=FMath::Max(1,DiagnosticCells.Num()); const auto B=M.GetBounds(); const auto S=M.GetSize();
-	return FString::Printf(TEXT("{\"current\":1,\"epoch\":%u,\"stale\":%d,\"pose_updates\":%llu,\"initialize\":%llu,\"begin_present\":%llu,\"transform_revision\":%llu,\"grid\":[%d,%d],\"bounds\":[%.6f,%.6f,%.6f,%.6f],\"discovered\":%d,\"appearance\":[%.6f,%.6f,%.6f],\"live\":[%.6f,%.6f,%.6f],\"coverage\":%.6f,\"valid\":%d,\"visible_primitives\":%d,\"texture_creations\":%d,\"texture_uploads\":%d,\"presentation_hash\":\"%llu\",\"yaw\":%.6f}"),
+	FString Result = FString::Printf(TEXT("{\"current\":1,\"epoch\":%u,\"stale\":%d,\"pose_updates\":%llu,\"initialize\":%llu,\"begin_present\":%llu,\"transform_revision\":%llu,\"grid\":[%d,%d],\"bounds\":[%.6f,%.6f,%.6f,%.6f],\"discovered\":%d,\"appearance\":[%.6f,%.6f,%.6f],\"live\":[%.6f,%.6f,%.6f],\"coverage\":%.6f,\"valid\":%d,\"visible_primitives\":%d,\"texture_creations\":%d,\"texture_uploads\":%d,\"presentation_hash\":\"%llu\",\"yaw\":%.6f}"),
 		R.Epoch,GetStaleEpochCountForTesting(Id),R.PoseUpdates,M.GetInitializeCount(),M.GetBeginPresentCount(),P->TransformRevision,S.X,S.Y,B.Min.X,B.Min.Y,B.Max.X,B.Max.Y,D,
 		AMin,ASum/N,AMax,LMin,LSum/N,LMax,P->LastLegalCoverageRatio,P->bLastCoverageValid,Visible,V?V->TextureCreationCount+V->LiveTextureCreations:0,V?V->TextureUploadCount+V->LiveTextureUploads:0,V?V->TextureSignature:0,R.SnapshotTransform.Rotator().Yaw);
+    Result.LeftChopInline(1);
+    Result += FString::Printf(TEXT(",\"local_state_hash\":\"%llu\",\"local_samples_touched\":%llu,\"local_coverage_queries\":%llu,\"geometry_resets\":%llu,\"fully_observed_pose\":%d}"),
+        P->CurrentLive.StateHash(), P->CurrentLive.SamplesTouched, P->CurrentLive.Queries, P->CurrentLive.GeometryResets, P->CurrentLive.bFullyObservedAtPose);
+    return Result;
+
 }
 
 namespace
@@ -719,6 +724,9 @@ bool ADarkwellMovingPropLabRoom::CollectCurrentOwnedVerticalIntervals(
 	{
 		return false;
 	}
+    const int32 CurrentIndex=Prop.History.GetCurrentIndex();
+    const bool LocalCurrent=CurrentIndex!=INDEX_NONE && Prop.LocalEpoch==Prop.History.GetRecords()[CurrentIndex].Epoch;
+    if(LocalCurrent && (!Prop.bLastCoverageValid || !Prop.History.GetRecords()[CurrentIndex].SnapshotTransform.Equals(Actual->GetActorTransform()))) return false;
 	for (const FPrimitiveGeometrySnapshot& Geometry : ActualPartGeometry(*Actual))
 	{
 		if (ProjectionTolerance > 0.0)
@@ -726,8 +734,11 @@ bool ADarkwellMovingPropLabRoom::CollectCurrentOwnedVerticalIntervals(
 			FVector Local = Geometry.WorldTransform.InverseTransformPosition(FVector(Point, Geometry.WorldTransform.GetLocation().Z));
 			Local.X = FMath::Clamp(Local.X, Geometry.LocalBounds.Min.X + 1.e-6, Geometry.LocalBounds.Max.X - 1.e-6);
 			Local.Y = FMath::Clamp(Local.Y, Geometry.LocalBounds.Min.Y + 1.e-6, Geometry.LocalBounds.Max.Y - 1.e-6);
-			if (!HasCurrentObservedContributionAt(Prop, FVector2D(Geometry.WorldTransform.TransformPosition(Local)))) continue;
+			const FVector2D EvidencePoint(Geometry.WorldTransform.TransformPosition(Local));
+            if (LocalCurrent ? !Prop.CurrentLive.HasObservedContributionAt(EvidencePoint,Geometry.PrimitiveIndex)
+                : !HasCurrentObservedContributionAt(Prop,EvidencePoint)) continue;
 		}
+        else if(LocalCurrent && !Prop.CurrentLive.HasObservedContributionAt(Point,Geometry.PrimitiveIndex)) continue;
 		double MinimumZ = 0.0;
 		double MaximumZ = 0.0;
 		if (QueryVerticalInterval(Geometry, Point, MinimumZ, MaximumZ, ProjectionTolerance))
@@ -1402,6 +1413,9 @@ bool ADarkwellMovingPropLabRoom::HasCurrentObservedContributionAt(
 		return false;
 	}
 	const FDarkwellSpatialObservationRecord& Current = Prop.History.GetRecords()[CurrentIndex];
+    if(Prop.LocalEpoch==Current.Epoch)
+        return Prop.bLastCoverageValid && Current.SnapshotTransform.Equals(Actual->GetActorTransform())
+            && Prop.CurrentLive.HasObservedContributionAt(Point);
 	const FBox2D& Bounds = Current.SpatialMemory.GetBounds();
 	const FIntPoint Size = Current.SpatialMemory.GetSize();
 	if (!Bounds.bIsValid || Size.X <= 0 || Size.Y <= 0 || !Bounds.IsInside(Point))
@@ -1659,6 +1673,20 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 	Prop.Offending3DEpoch = 0;
 	Prop.Offending3DPrimitive = INDEX_NONE;
 	Prop.Offending3DWorldPosition = FVector::ZeroVector;
+    // With one current epoch, no historical epoch and no cap geometry there
+    // cannot be a current/stale pair. Avoid a quadratic forensic sample walk.
+    if(Prop.History.GetRecords().Num()==1 && Prop.History.GetCurrentIndex()==0)
+    {
+        const auto* CurrentVisual=Prop.Visuals.Find(Prop.History.GetRecords()[0].Epoch);
+        if(CurrentVisual && CurrentVisual->CapTriangles==0)
+        {
+            const bool Visible=Prop.Actual.IsValid() && Prop.Actual->Memory->GetMemoryPrimitives().ContainsByPredicate(
+                [](const UStaticMeshComponent* P){return P && P->IsVisible();});
+            Prop.MaxSurfaceContributors=Visible?1:0;
+            Prop.MaxTotalContributors=Prop.MaxSurfaceContributors;
+            return;
+        }
+    }
 	TArray<FVector2D> SamplePoints;
 	auto SurfaceContributorsAt = [&](const FVector2D Point)
 	{
@@ -2330,6 +2358,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
                     Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query);
                     Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
                     Prop.CurrentLive.WritePartRasters(Query,!ObjectPolicy->IsHistoryEligible() || ObjectPolicy->IsSightWeaveMoving());
+                    RuntimeFrame.CoverageQueries += Prop.CurrentLive.Queries;
                 }
 				if (bCoverageDirty || Prop.CurrentPresentationActiveSeconds > 0.0f)
 				{
@@ -2784,6 +2813,8 @@ void ADarkwellMovingPropLabRoom::UpdateCurrentPartTextures(FTrackedProp& Prop,FR
   Hash=(Hash^uint64(Size.X))*1099511628211ull; Hash=(Hash^uint64(Size.Y))*1099511628211ull;
   if(Hash!=Visual.LiveSignatures[I])
   {
+   if(Texture->GetResource())
+   {
    // Clear unused atlas texels as its active rectangle changes at 90 degrees.
    // Bilinear filtering must never sample a previous pose from the padding.
    auto* Upload=new FFloat16Color[Atlas.X*Atlas.Y];
@@ -2792,6 +2823,7 @@ void ADarkwellMovingPropLabRoom::UpdateCurrentPartTextures(FTrackedProp& Prop,FR
    auto* Region=new FUpdateTextureRegion2D(0,0,0,0,Atlas.X,Atlas.Y);
    Texture->UpdateTextureRegions(0,1,Region,Atlas.X*sizeof(FFloat16Color),sizeof(FFloat16Color),reinterpret_cast<uint8*>(Upload),
     [](uint8* Data,const FUpdateTextureRegion2D* R){delete[] reinterpret_cast<FFloat16Color*>(Data);delete R;});
+   }
    ++Visual.LiveTextureUploads; ++RuntimeFrame.TextureUploads; Visual.LiveSignatures[I]=Hash;
   }
   if(Sources.IsValidIndex(I)) if(auto* Material=Cast<UMaterialInstanceDynamic>(Sources[I]->GetMaterial(0)))
@@ -2861,6 +2893,9 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
 	Visual->TextureSignature = Signature;
 	++Visual->TextureUploadCount;
 	++RuntimeFrame.TextureUploads;
+    // NullRHI has no texture resource; UTexture2D does not call DataCleanupFunc
+    // in that case. Keep CPU submission diagnostics without leaking a buffer.
+    if(!Visual->Texture->GetResource()) return;
 	FFloat16Color* Pixels = new FFloat16Color[Presentation.Num()];
 	for (int32 Index = 0; Index < Presentation.Num(); ++Index)
 	{
@@ -2989,6 +3024,15 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	{
 		return;
 	}
+    // Full per-primitive discovery has no cut boundary. The empty area of the
+    // world AABB outside rotated geometry is not an undiscovered cabinet part.
+    if(Record.bCurrentObservedLocation && Prop.LocalEpoch==Record.Epoch && Prop.CurrentLive.bFullyObservedAtPose)
+    {
+        if(Visual->CapTriangles>0) { ++RuntimeFrame.CapMeshRebuilds; Visual->Cap->SetMesh(FDynamicMesh3()); }
+        Visual->Cap->SetVisibility(false); Visual->CapTriangles=0; Visual->CapSignature=0;
+        Visual->CapQuads.Reset(); Visual->CapSamplePoints.Reset();
+        return;
+    }
 	const bool bPresent = Record.SpatialMemory.IsPresent();
 	const bool bAbsent = Record.SpatialMemory.IsAbsent();
 	const bool bFineHistory = !Record.bCurrentObservedLocation && Record.FineHistory.IsInitialized();
@@ -4375,12 +4419,32 @@ bool ADarkwellMovingPropLabRoom::DoSpatialRecordTexturesMatchForTesting(
 	{
 		const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
 		const UTexture2D* Texture = Visual ? Visual->Texture.Get() : nullptr;
-		const FIntPoint Expected = Record.SpatialMemory.GetSize()
+		const FIntPoint Expected = (Record.bCurrentObservedLocation && Prop->LocalEpoch==Record.Epoch
+            ? Prop->CurrentLive.AtlasCells : Record.SpatialMemory.GetSize())
 			* Darkwell::MovingPropLab::PresentationSamples;
 		if (!Texture || Texture->GetSizeX() != Expected.X || Texture->GetSizeY() != Expected.Y)
 		{
 			return false;
 		}
+        if(Record.bCurrentObservedLocation && Prop->LocalEpoch==Record.Epoch)
+        {
+            if(!Prop->Actual.IsValid() || !Visual) return false;
+            const auto Sources=Prop->Actual->Memory->GetMemoryPrimitives();
+            if(Sources.Num()!=Prop->CurrentLive.Parts.Num() || Visual->LiveTextures.Num()!=Sources.Num()) return false;
+            for(int32 I=0;I<Sources.Num();++I)
+            {
+                const auto& Part=Prop->CurrentLive.Parts[I]; const auto Atlas=Part.AtlasCells*4;
+                const auto Logical=Part.Raster.GetSize()*4; const auto B=Part.Raster.GetBounds();
+                auto* MID=Cast<UMaterialInstanceDynamic>(Sources[I]->GetMaterial(0));
+                const auto* LiveTexture=Visual->LiveTextures[I].Get();
+                if(!MID || !LiveTexture || LiveTexture->GetSizeX()!=Atlas.X || LiveTexture->GetSizeY()!=Atlas.Y
+                    || Logical.X>Atlas.X || Logical.Y>Atlas.Y || Visual->LivePixels[I].Num()!=Logical.X*Logical.Y
+                    || MID->K2_GetTextureParameterValue(TEXT("SpatialStateTexture"))!=LiveTexture) return false;
+                const FVector2D Extent=B.GetSize()*FVector2D(Atlas)/FVector2D(Logical);
+                if(!MID->K2_GetVectorParameterValue(TEXT("SpatialMinInv")).Equals(
+                    FLinearColor(B.Min.X,B.Min.Y,1/Extent.X,1/Extent.Y),1.e-5f)) return false;
+            }
+        }
 	}
 	return true;
 }

@@ -30,9 +30,12 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  bool Advance(float Dt,const FTransform& ActorPose,TFunctionRef<float(FVector2D)> LegalCoverage);
  void WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds);
  void WritePartRasters(TFunctionRef<float(FVector2D)> LegalCoverage,bool bTransient);
+ /** Exact primitive-local evidence query, including fine historical ownership. */
+ bool HasObservedContributionAt(FVector2D World,int32 PrimitiveIndex=INDEX_NONE) const;
  uint64 StateHash() const;
  TArray<FPart> Parts;
  FTransform LastLegalPose=FTransform::Identity;
+ bool bFullyObservedAtPose=false;
  uint64 Updates=0, GeometryResets=0, Queries=0, SamplesTouched=0;
  FIntPoint AtlasCells=FIntPoint::ZeroValue;
 private:

@@ -21,7 +21,10 @@ void FDarkwellCurrentLiveGrid::ResetGeometry(FName Id,TConstArrayView<FDescripto
   auto& P=Parts.AddDefaulted_GetRef(); P.Geometry=D; P.Pose=D.RelativeTransform*ActorPose;
   const FVector Scale=P.Pose.GetScale3D().GetAbs();
   const auto B=XY(D.LocalBounds); const auto Ext=B.GetSize();
-  P.Local.Initialize(Id,B,CellSize/FMath::Max(Scale.X,Scale.Y)); P.Local.BeginPresent();
+  // Each primitive axis has a fixed <=2.5 cm physical footprint; a thin
+  // door/handle does not inherit the body width as its Y sample density.
+  P.Local.Initialize(Id,B,FMath::Max(Ext.X,Ext.Y)); P.Local.BeginPresent();
+  P.Local.PrepareCurrentRaster(B,FIntPoint(FMath::Max(1,FMath::CeilToInt(Ext.X*Scale.X/CellSize)),FMath::Max(1,FMath::CeilToInt(Ext.Y*Scale.Y/CellSize))));
   P.Coverage.SetNumZeroed(P.Local.GetCells().Num()); P.ObservedAtPose.Init(false,P.Coverage.Num());
   const auto LS=P.Local.GetSize(); P.Corners.SetNumZeroed((LS.X+1)*(LS.Y+1));
   const double Diameter=FVector2D(Ext.X*Scale.X,Ext.Y*Scale.Y).Size();
@@ -45,7 +48,7 @@ bool FDarkwellCurrentLiveGrid::MatchesGeometry(TConstArrayView<FDescriptor> D,co
 bool FDarkwellCurrentLiveGrid::Advance(float Dt,const FTransform& ActorPose,TFunctionRef<float(FVector2D)> Query)
 {
  if(!Upright(ActorPose)) return false;
- ++Updates; Queries=0; SamplesTouched=0;
+ ++Updates; Queries=0; SamplesTouched=0; bFullyObservedAtPose=true;
  for(auto& P:Parts)
  {
   const auto Pose=P.Geometry.RelativeTransform*ActorPose;
@@ -61,6 +64,7 @@ bool FDarkwellCurrentLiveGrid::Advance(float Dt,const FTransform& ActorPose,TFun
    if(P.Coverage[I]>=FDarkwellSpatialPropMemory::LegalCoverage) P.ObservedAtPose[I]=true;
   }
   P.Local.Advance(Dt,P.Coverage); SamplesTouched+=P.Coverage.Num();
+  for(int32 I=0;I<P.Coverage.Num();++I) bFullyObservedAtPose &= P.ObservedAtPose[I] && P.Local.GetCells()[I].DiscoveredPresent>0;
  }
  LastLegalPose=ActorPose;
  return true;
@@ -81,6 +85,16 @@ void FDarkwellCurrentLiveGrid::WriteWorldSnapshot(FDarkwellSpatialPropMemory& Ou
 {
  const auto S=GridSize(Bounds); auto Cells=Out.PrepareCurrentRaster(Bounds,S,AtlasCells.X*AtlasCells.Y);
  const auto Step=Bounds.GetSize()/FVector2D(S);
+ FDarkwellSpatialPropMemory::FCell CompleteEnvelope;
+ if(bFullyObservedAtPose)
+ {
+  CompleteEnvelope.DiscoveredPresent=1;
+  CompleteEnvelope.AppearanceBlend=CompleteEnvelope.LiveBlend=1;
+  for(const auto& P:Parts) for(const auto& C:P.Local.GetCells()) {
+   CompleteEnvelope.AppearanceBlend=FMath::Min(CompleteEnvelope.AppearanceBlend,C.AppearanceBlend);
+   CompleteEnvelope.LiveBlend=FMath::Min(CompleteEnvelope.LiveBlend,C.LiveBlend);
+  }
+ }
  for(int32 Y=0;Y<S.Y;++Y) for(int32 X=0;X<S.X;++X)
  {
   auto& C=Cells[Y*S.X+X]; C={}; const auto World=Bounds.Min+Step*FVector2D(X+.5,Y+.5);
@@ -89,6 +103,11 @@ void FDarkwellCurrentLiveGrid::WriteWorldSnapshot(FDarkwellSpatialPropMemory& Ou
    const auto V=Sample(P,World,false);
    if(V.DiscoveredPresent>C.DiscoveredPresent || V.AppearanceBlend>C.AppearanceBlend) C=V;
   }
+  // The compatibility world raster describes a geometry-clipped envelope.
+  // Once every real primitive sample is observed, holes outside geometry are
+  // not observation cuts. Match the original fully observed snapshot envelope;
+  // neither source rendering nor fine ownership reads these padding cells.
+  if(C.DiscoveredPresent==0 && bFullyObservedAtPose) C=CompleteEnvelope;
  }
 }
 void FDarkwellCurrentLiveGrid::WritePartRasters(TFunctionRef<float(FVector2D)> Query,bool bTransient)
@@ -108,6 +127,16 @@ void FDarkwellCurrentLiveGrid::WritePartRasters(TFunctionRef<float(FVector2D)> Q
    Cells[Y*S.X+X]=C;
   }
  }
+}
+bool FDarkwellCurrentLiveGrid::HasObservedContributionAt(FVector2D World,int32 PrimitiveIndex) const
+{
+ for(int32 I=0;I<Parts.Num();++I)
+ {
+  if(PrimitiveIndex!=INDEX_NONE && PrimitiveIndex!=I) continue;
+  const auto C=Sample(Parts[I],World,false);
+  if(C.DiscoveredPresent>0 && C.AppearanceBlend>0) return true;
+ }
+ return false;
 }
 uint64 FDarkwellCurrentLiveGrid::StateHash() const
 {

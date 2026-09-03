@@ -18,9 +18,10 @@ if ($LongInteraction) { $extraArgs += '-GrayGpuLongInteraction' }
 [ordered]@{head=(& git -C $repo rev-parse HEAD);started=$begin.ToString('o');driver_hash=(Get-FileHash -LiteralPath $driver).Hash} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'source.json')
 & git -C $repo diff --binary | Set-Content -LiteralPath (Join-Path $evidence 'source.patch')
 Copy-Item -LiteralPath $driver -Destination (Join-Path $evidence 'driver.py')
-& "$EngineRoot/Engine/Binaries/Win64/UnrealEditor.exe" "$repo/Darkwell.uproject" /Game/Maps/L_ProjectFogPropGameplayLab -d3d12 -sm6 -PropLabMovingControls -PropLabGrayObjectPolicies -PropLabAsyncCapture -nosound -unattended -UseFixedTimeStep -FPS=60 "-ExecutePythonScript=$driver" "-abslog=$log" @extraArgs *> (Join-Path $evidence "$RunName.stdout.txt")
-$code = $LASTEXITCODE
-$content = Get-Content -LiteralPath $log -Raw
+$editorArguments = @("$repo/Darkwell.uproject", '/Game/Maps/L_ProjectFogPropGameplayLab', '-d3d12', '-sm6', '-PropLabMovingControls', '-PropLabGrayObjectPolicies', '-PropLabAsyncCapture', '-nosound', '-unattended', '-UseFixedTimeStep', '-FPS=60', "-ExecutePythonScript=$driver", "-abslog=$log") + $extraArgs
+$process = Start-Process -FilePath "$EngineRoot/Engine/Binaries/Win64/UnrealEditor.exe" -ArgumentList $editorArguments -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput (Join-Path $evidence "$RunName.stdout.txt") -RedirectStandardError (Join-Path $evidence "$RunName.stderr.txt")
+$code = $process.ExitCode
+$content = if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Raw } else { '' }
 $summary = [ordered]@{run=$RunName;exit_code=$code;wall_seconds=((Get-Date)-$begin).TotalSeconds}
 $summary.severe_lines = @(Select-String -LiteralPath $log -Pattern 'Fatal error:|Assertion failed:|Ensure condition failed:|GPU crashed|DXGI_ERROR_DEVICE_REMOVED|DXGI_ERROR_DEVICE_HUNG|EXCEPTION_ACCESS_VIOLATION|GRAY_GPU_FAIL').Count
 $summary.gpu_pass = $content.Contains('GRAY_GPU_PASS ')

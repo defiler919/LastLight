@@ -163,6 +163,8 @@ public:
 	FText GetInWorldControlPrompt(EDarkwellMovingPropLabControlKind Kind) const;
 	FText GetInWorldControlDisplay(EDarkwellMovingPropLabControlKind Kind) const;
 	FColor GetInWorldControlColor(EDarkwellMovingPropLabControlKind Kind) const;
+	UFUNCTION(BlueprintCallable, Category="Lab|Testing")
+	bool TriggerInWorldControlForTesting(EDarkwellMovingPropLabControlKind Kind, ADarkwellCharacter* Character);
 	ADarkwellMovingPropLabControl* GetControlForTesting(EDarkwellMovingPropLabControlKind Kind) const;
 	int32 GetHiddenFreezeCountForTesting(FName StableId) const;
 	int32 GetHistoricalProxyVisibilityTransitionsForTesting(FName StableId) const;
@@ -230,6 +232,7 @@ public:
 	void ResetHistoryRuntimeTelemetryForTesting();
 	bool ConfigureHistoricalEpochCountForTesting(FName StableId, int32 HistoricalEpochs);
 	bool SetTrackedTransformForTesting(FName StableId, const FTransform& Transform);
+	UFUNCTION(BlueprintCallable, Category="Lab|Testing")
 	bool StartTrackedRotationForTesting(FName StableId, float TargetYaw, float Duration);
 	bool InjectInvalidCoverageOnceForTesting(FName StableId);
 	/** Explicit per-object reset/re-registration, never an in-place mode change. */

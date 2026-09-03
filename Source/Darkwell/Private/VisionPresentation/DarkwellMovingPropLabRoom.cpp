@@ -4216,6 +4216,13 @@ FColor ADarkwellMovingPropLabRoom::GetInWorldControlColor(
 	return FColor(90, 255, 150);
 }
 
+bool ADarkwellMovingPropLabRoom::TriggerInWorldControlForTesting(
+    const EDarkwellMovingPropLabControlKind Kind, ADarkwellCharacter* Character)
+{
+    ADarkwellMovingPropLabControl* Control=GetControlForTesting(Kind);
+    return Control && Control->TriggerForLabEvidence(Character);
+}
+
 ADarkwellMovingPropLabControl* ADarkwellMovingPropLabRoom::GetControlForTesting(
 	const EDarkwellMovingPropLabControlKind Kind) const
 {

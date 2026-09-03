@@ -38,10 +38,9 @@ def pose(yaw, x=-300, y=100, target=(-300,650,75)):
     camera.set_world_rotation(unreal.MathLibrary.find_look_at_rotation(origin,unreal.Vector(*target)),False,True)
 
 
-def trigger(x,y):
-    controls = unreal.GameplayStatics.get_all_actors_of_class(world(),unreal.DarkwellMovingPropLabControl)
-    found = [a for a in controls if abs(a.get_actor_location().x-x)<2 and abs(a.get_actor_location().y-y)<2]
-    assert len(found)==1 and found[0].trigger_for_lab_evidence(player)
+def trigger(kind):
+    assert room.trigger_in_world_control_for_testing(kind,player)
+
 
 
 def sample(label,target=None,shot=True):
@@ -69,9 +68,21 @@ def sample(label,target=None,shot=True):
 
 
 def reset(reveal=R.WHOLE_OBJECT_AFTER_SPAN,history=H.STATIONARY_ONLY):
-    trigger(1500,-1050)
+    for _ in range(360):
+        if 'MOVING 0' in room.get_history_policy_telemetry(sid):
+            break
+        yield 1
+    else:
+        raise AssertionError('previous F rotation did not finish before reset')
+    # A completed manual scenario must use its real magenta F reset before the
+    # same control can run again. The initial call correctly returns false.
+    room.trigger_in_world_control_for_testing(unreal.DarkwellMovingPropLabControlKind.RESET_CURRENT,player)
     yield 5
+    # This native Lab API is itself the target-only explicit reset and policy
+    # assignment. The magenta F control is only active inside a selected manual
+    # scenario, so it cannot serve as a generic policy reset.
     assert room.reset_tracked_reveal_policy_for_lab(sid,reveal,100,history)
+    yield 5
 
 
 def run():
@@ -121,14 +132,20 @@ def run():
         yield from reset(reveal)
         pose(90)
         yield 45
-        trigger(-300,260)
-        yield 45
+        before_motion=sample(f'{reveal.name}_before_motion',shot=False)
+        trigger(unreal.DarkwellMovingPropLabControlKind.VISIBLE_ROTATE)
+        for _ in range(180):
+            yield 1
+            if not json.loads(room.get_reveal_policy_telemetry(sid))['history_eligible']:
+                break
+        else:
+            raise AssertionError('F rotation never entered moving-ineligible state')
         sample(f'{reveal.name}_moving_live')
         yield 3
         pose(-90)
         yield 45
         off=sample(f'{reveal.name}_moving_no_new_gray')
-        assert off['stale']==off['resources']==0
+        assert off['current']==0 and off['stale']==before_motion['stale'] and off['resources']==before_motion['resources']
         yield 180
     for reveal in (R.WHOLE_OBJECT_AFTER_SPAN,R.SPATIAL_PARTIAL):
         yield from reset(reveal,H.NEVER)
@@ -182,19 +199,20 @@ def run():
         yield from reset()
         pose(0)
         yield 20
+        before_sweep=sample(('fast' if fast else 'slow')+'_sweep_before',shot=False)
         for yaw in ([160] if fast else range(5,161,5)):
             pose(yaw)
             yield 1
         yield 30
         row=sample('fast_sweep' if fast else 'slow_sweep')
-        assert row['policy']['confirmed'] and row['stale']==1 and row['coverage']==0
+        assert row['policy']['confirmed'] and row['stale']==before_sweep['stale']+1 and row['coverage']==0
         yield 3
     # Repeated actual rotation and look changes, with ownership checks each second.
     yield from reset()
     pose(90)
     yield 45
     for cycle in range(60 if '-GrayGpuLongInteraction' in unreal.SystemLibrary.get_command_line() else 6):
-        trigger(-300,260)
+        assert room.start_tracked_rotation_for_testing(sid,180 if cycle%2==0 else 0,4)
         for frame in range(300):
             pose(90+80*math.sin((cycle*300+frame)*.012))
             yield 1

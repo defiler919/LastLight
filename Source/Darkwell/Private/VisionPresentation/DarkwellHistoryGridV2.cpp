@@ -36,6 +36,18 @@ void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& Sealed
 	}
 }
 
+void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& SealedMemory, const TBitArray<>& CaptureMask)
+{
+ Initialize(SealedMemory);
+ check(CaptureMask.Num()==Samples.Num());
+ for(int32 I=0;I<Samples.Num();++I)
+ {
+  auto& Sample=Samples[I];
+  Sample.InitialRemembered=Sample.Opacity=CaptureMask[I]?1.f:0.f;
+  Sample.State=CaptureMask[I]?Unresolved():NeverObserved();
+ }
+}
+
 void FDarkwellHistoryGridV2::RestrictToRecordedGeometry(const TBitArray<>& Footprint)
 {
 	check(Footprint.Num() == Samples.Num());

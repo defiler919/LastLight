@@ -22,6 +22,7 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	static FGameplayTag VerifiedEmpty();
 	static FGameplayTag Superseded();
 	void Initialize(const FDarkwellSpatialPropMemory& SealedMemory);
+	void Initialize(const FDarkwellSpatialPropMemory& SealedMemory, const TBitArray<>& CaptureMask);
 	void RestrictToRecordedGeometry(const TBitArray<>& Footprint);
 	bool Advance(float DeltaSeconds, TConstArrayView<float> LegalCoverage,
 		const TBitArray<>& ActualOccupied, const TBitArray<>& NewerObservedOwnership);

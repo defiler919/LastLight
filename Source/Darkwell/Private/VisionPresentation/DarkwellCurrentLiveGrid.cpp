@@ -25,7 +25,7 @@ void FDarkwellCurrentLiveGrid::ResetGeometry(FName Id,TConstArrayView<FDescripto
   // door/handle does not inherit the body width as its Y sample density.
   P.Local.Initialize(Id,B,FMath::Max(Ext.X,Ext.Y)); P.Local.BeginPresent();
   P.Local.PrepareCurrentRaster(B,FIntPoint(FMath::Max(1,FMath::CeilToInt(Ext.X*Scale.X/CurrentLocalSampleSizeCm)),FMath::Max(1,FMath::CeilToInt(Ext.Y*Scale.Y/CurrentLocalSampleSizeCm))));
-  P.Coverage.SetNumZeroed(P.Local.GetCells().Num()); P.ObservedAtPose.Init(false,P.Coverage.Num());
+  P.Coverage.SetNumZeroed(P.Local.GetCells().Num()); P.LastLegalCaptureMask.Init(false,P.Coverage.Num()); P.CurrentLegalObservationMask.Init(false,P.Coverage.Num());
   const auto LS=P.Local.GetSize(); P.Corners.SetNumZeroed((LS.X+1)*(LS.Y+1));
   const double Diameter=FVector2D(Ext.X*Scale.X,Ext.Y*Scale.Y).Size();
   const int32 MaxCells=FMath::CeilToInt(Diameter/CurrentLocalSampleSizeCm)+2;
@@ -69,7 +69,7 @@ void FDarkwellCurrentLiveGrid::BuildCurrentLegalObservationMask(TBitArray<>& Out
  {
   const auto& P=Parts[PartIndex]; const auto& Indices=ObservationPartIndices[PartIndex];
   for(int32 I=0;I<Indices.Num();++I)
-   if(Indices[I]!=INDEX_NONE && P.Coverage[Indices[I]]>=FDarkwellSpatialPropMemory::LegalCoverage) Out[I]=true;
+   if(Indices[I]!=INDEX_NONE && P.CurrentLegalObservationMask[Indices[I]]) Out[I]=true;
  }
 }
 
@@ -113,7 +113,7 @@ bool FDarkwellCurrentLiveGrid::Advance(float Dt,const FTransform& ActorPose,TFun
  {
   const auto Pose=P.Geometry.RelativeTransform*ActorPose;
   const bool Moved=!Pose.Equals(P.Pose,1.e-6);
-  P.Pose=Pose; if(Moved) P.ObservedAtPose.SetRange(0,P.ObservedAtPose.Num(),false);
+  P.Pose=Pose; if(Moved) P.LastLegalCaptureMask.SetRange(0,P.LastLegalCaptureMask.Num(),false);
   const auto B=P.Local.GetBounds(); const auto S=P.Local.GetSize(); const auto Step=B.GetSize()/FVector2D(S);
   auto Legal=[&](FVector2D Local) { ++Queries; const float V=Query(FVector2D(Pose.TransformPosition(FVector(Local,P.Geometry.LocalBounds.GetCenter().Z)))); return FMath::IsFinite(V)?FMath::Clamp(V,0.f,1.f):0.f; };
   for(int32 Y=0;Y<=S.Y;++Y) for(int32 X=0;X<=S.X;++X) P.Corners[Y*(S.X+1)+X]=Legal(B.Min+Step*FVector2D(X,Y));
@@ -121,10 +121,11 @@ bool FDarkwellCurrentLiveGrid::Advance(float Dt,const FTransform& ActorPose,TFun
   {
    const int32 I=Y*S.X+X,K=Y*(S.X+1)+X;
    P.Coverage[I]=FMath::Min(Legal(B.Min+Step*FVector2D(X+.5,Y+.5)),FMath::Min(FMath::Min(P.Corners[K],P.Corners[K+1]),FMath::Min(P.Corners[K+S.X+1],P.Corners[K+S.X+2])));
-   if(P.Coverage[I]>=FDarkwellSpatialPropMemory::LegalCoverage) P.ObservedAtPose[I]=true;
+   P.CurrentLegalObservationMask[I]=P.Coverage[I]>=FDarkwellSpatialPropMemory::LegalCoverage;
+   if(P.CurrentLegalObservationMask[I]) P.LastLegalCaptureMask[I]=true;
   }
   P.Local.Advance(Dt,P.Coverage); SamplesTouched+=P.Coverage.Num();
-  for(int32 I=0;I<P.Coverage.Num();++I) bFullyObservedAtPose &= P.ObservedAtPose[I] && P.Local.GetCells()[I].DiscoveredPresent>0;
+  for(int32 I=0;I<P.Coverage.Num();++I) bFullyObservedAtPose &= P.LastLegalCaptureMask[I] && P.Local.GetCells()[I].DiscoveredPresent>0;
  }
  LastLegalPose=ActorPose;
  return true;
@@ -138,7 +139,7 @@ FDarkwellSpatialPropMemory::FCell FDarkwellCurrentLiveGrid::Sample(const FPart& 
  const int32 I=FMath::Clamp(FMath::FloorToInt(UV.Y*S.Y),0,S.Y-1)*S.X+FMath::Clamp(FMath::FloorToInt(UV.X*S.X),0,S.X-1);
  auto C=P.Local.GetCells()[I];
  // Preserved appearance is not knowledge of the new world position.
- if(!P.ObservedAtPose[I]) { C.DiscoveredPresent=0; C.AppearanceBlend=0; C.LiveBlend=0; }
+ if(!P.LastLegalCaptureMask[I]) { C.DiscoveredPresent=0; C.AppearanceBlend=0; C.LiveBlend=0; }
  return C;
 }
 void FDarkwellCurrentLiveGrid::WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds)

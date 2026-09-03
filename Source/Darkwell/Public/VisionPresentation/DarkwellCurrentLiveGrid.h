@@ -22,7 +22,8 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
   FDescriptor Geometry;
   FDarkwellSpatialPropMemory Local, Raster;
   TArray<float> Coverage, Corners;
-  TBitArray<> ObservedAtPose;
+  // Current contact and accumulated knowledge at the last legal rigid pose.
+  TBitArray<> CurrentLegalObservationMask, LastLegalCaptureMask;
   FTransform Pose=FTransform::Identity;
   FIntPoint AtlasCells=FIntPoint::ZeroValue;
   bool bWholePresentation=false;

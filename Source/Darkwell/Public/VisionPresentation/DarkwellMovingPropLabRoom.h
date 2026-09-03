@@ -231,6 +231,7 @@ public:
 	FString GetRevealPolicyTelemetry(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Object Policy")
 	bool IsRevealConfirmedForTesting(FName StableId) const;
+	bool GetNewestCaptureMasksForTesting(FName Id,TBitArray<>& Capture,TBitArray<>& Frozen) const;
 	float GetCurrentPresentationMinimumForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|History Policy")
 	FString GetHistoryPolicyTelemetry(FName StableId) const;

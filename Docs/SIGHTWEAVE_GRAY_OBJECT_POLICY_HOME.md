@@ -203,3 +203,51 @@ world query at a still-out-of-cone position while the confirmed object presents
 fully, and the corrected opaque-divider rejection. Together with the preceding
 focused run all 48 distinct tests have passing evidence; this is not labeled a
 single 48/48 run. No GPU result is claimed at C.
+
+
+## Home Checkpoint D — explicit partial capture and static controls
+
+C was pushed as `b242b98d19d5295908800ee0bf848b1ad73f516b` and all three
+local/upstream/remote refs matched. D names the primitive-local
+`CurrentLegalObservationMask` and `LastLegalCaptureMask` separately from the
+plugin's tentative confirmation mask. On sealing, the record captures binary
+DiscoveredPresent knowledge at the existing fine resolution, restricts it to
+recorded real geometry, and initializes FineHistory from that immutable mask.
+AppearanceBlend, LiveBlend and FrozenAAEnvelope remain presentation fields.
+No `.20` entry, dither result or last-frame alpha controls historical membership.
+The previous code already acquired binary D on first legal contact; this change
+makes that contract explicit and adds exact mask equality coverage.
+
+Launch the same Lab with `-PropLabMovingControls -PropLabGrayObjectPolicies`
+(or world URL `?InWorldControls?GrayObjectPolicies`) for six extra static controls,
+IDs `Lab.Gray.Static.0` through `.5`. They are Whole/Always, Whole/StationaryOnly,
+Whole/Never, Partial/Always, Partial/StationaryOnly, Partial/Never. Labels include
+STATIC WHOLE MEMORY, STATIC PARTIAL MEMORY, and STATIC NEVER CONTROL. The original
+nine objects remain; the main, rotate, edge, multi-high, multi-low and multi-box
+fixtures also cover the six independent combinations. COVERAGE EDGE explicitly
+uses Partial/Never and is a negative control. Optional legacy HistoryPolicies
+now explicitly supplies Always for its original unoverridden objects, so changing
+project fallback does not silently change that compatibility fixture.
+
+New project cases assert partial static gray and legal caps, ignored span threshold,
+no new StationaryOnly moving history, Never's zero historical resources, exact
+frozen/capture mask equality, one-frame versus settled appearance equality, static
+positive/negative controls, six simultaneous registrations, independent motion and
+confirmation, pre-motion history retention, target-only reset and three destroyed
+world/room/policy lifetimes with GC. Static test controls are moved into the known
+contact fixture for reproducible angles; labels in the manual room stay at their
+separate display positions.
+
+Home_D_Build1 preserved two compile failures in new code (incorrect standalone
+policy header name and unsupported TBitArray compound AND). Both are corrected
+without gameplay changes. Home_D_Build2 succeeded. D evidence is under
+`Saved/GrayObjectPolicy/Home_D_Focused_20260903`.
+
+`Home_D_Focused_20260903`: **60/60**, 50 clean and 10 engine/network warnings,
+173.323868 s test time, 193.540206 s wall, process exit 0, severe scan 0.
+Build2: 12.77 s. Diff review also found the Gray Lab fixture could override an
+explicit legacy History reset; its fallback now only applies to inherited policy.
+An additional coexistence assertion exercises the explicit reset priority.
+
+Home_D_Build3 succeeded (12.68 s). Home_D_ExplicitOverride_20260903 passes
+1/1 clean, 0.060444 s, exit 0, severe scan 0. No GPU claim at D.

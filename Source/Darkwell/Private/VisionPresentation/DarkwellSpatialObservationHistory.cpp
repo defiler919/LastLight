@@ -80,7 +80,12 @@ bool FDarkwellSpatialObservationHistory::FreezeCurrentForHiddenMovement()
 		return false;
 	}
 	FDarkwellSpatialObservationRecord& Record = Records[CurrentIndex];
-	Record.SpatialMemory.BeginAbsent();
+	const auto Size=Record.SpatialMemory.GetSize();
+ const int32 K=FDarkwellHistoryGridV2::SamplesPerCell;
+ Record.LastLegalCaptureMask.Init(false,Size.X*Size.Y*K*K);
+ for(int32 Y=0;Y<Size.Y*K;++Y) for(int32 X=0;X<Size.X*K;++X)
+  Record.LastLegalCaptureMask[Y*Size.X*K+X]=Record.SpatialMemory.GetCells()[(Y/K)*Size.X+X/K].DiscoveredPresent>0;
+ Record.SpatialMemory.BeginAbsent();
 	Record.bCurrentObservedLocation = false;
 	CurrentIndex = INDEX_NONE;
 	return true;

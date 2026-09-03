@@ -420,11 +420,13 @@ ADarkwellPropLabFurniture* ADarkwellMovingPropLabRoom::SpawnTracked(
 		Part->SetCastHiddenShadow(true);
 	}
 	Actor->Memory->ApplySourceGeometryVisibility(false);
-	// Optional Lab launch fixture. Default launch remains entirely Always/inherited.
+	// Optional compatibility fixture explicitly preserves its original history matrix.
 	if (PolicySource == ESightWeaveObjectPolicySource::UseProjectDefault
 		&& (FParse::Param(FCommandLine::Get(), TEXT("PropLabHistoryPolicies"))
 			|| GetWorld()->URL.HasOption(TEXT("HistoryPolicies"))))
 	{
+        PolicySource=ESightWeaveObjectPolicySource::Override;
+        HistoryMode=ESightWeaveHistoryMode::Always;
 		if (StableId == Darkwell::MovingPropLab::RotateId || StableId == Darkwell::MovingPropLab::MultiLowId)
 		{
 			PolicySource = ESightWeaveObjectPolicySource::Override;
@@ -436,6 +438,21 @@ ADarkwellPropLabFurniture* ADarkwellMovingPropLabRoom::SpawnTracked(
 			HistoryMode = ESightWeaveHistoryMode::Never;
 		}
 	}
+ const bool GrayFixture=FParse::Param(FCommandLine::Get(),TEXT("PropLabGrayObjectPolicies")) || GetWorld()->URL.HasOption(TEXT("GrayObjectPolicies"));
+ FResolvedSightWeaveObjectPolicy FixturePolicy;
+ if(GrayFixture && !PerFieldPolicy && PolicySource==ESightWeaveObjectPolicySource::UseProjectDefault)
+ {
+  // These overrides are resolved once for this registration, including zone resets.
+  FixturePolicy.MinimumObservedSpanCm=100;
+  FixturePolicy.RevealMode=ESightWeaveRevealMode::WholeObjectAfterSpan;
+  FixturePolicy.HistoryMode=ESightWeaveHistoryMode::StationaryOnly;
+  if(StableId==Darkwell::MovingPropLab::MainId) FixturePolicy.HistoryMode=ESightWeaveHistoryMode::Always;
+  if(StableId==Darkwell::MovingPropLab::EdgeId || StableId==Darkwell::MovingPropLab::MultiHighId || StableId==Darkwell::MovingPropLab::MultiLowId)
+   FixturePolicy.RevealMode=ESightWeaveRevealMode::SpatialPartial;
+  if(StableId==Darkwell::MovingPropLab::MultiHighId) FixturePolicy.HistoryMode=ESightWeaveHistoryMode::Always;
+  if(StableId==Darkwell::MovingPropLab::EdgeId || StableId==Darkwell::MovingPropLab::MultiBoxId) FixturePolicy.HistoryMode=ESightWeaveHistoryMode::Never;
+  PerFieldPolicy=&FixturePolicy;
+ }
 	USightWeaveObjectPolicyComponent* ObjectPolicy = NewObject<USightWeaveObjectPolicyComponent>(Actor);
 	ObjectPolicy->PolicySource = PolicySource;
 	ObjectPolicy->HistoryMode = HistoryMode;
@@ -2613,7 +2630,7 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	++Prop.HiddenFreezeCount;
 	if (FDarkwellSpatialObservationRecord* Historical = Prop.History.FindRecord(Epoch))
 	{
-		Historical->FineHistory.Initialize(Historical->SpatialMemory);
+		Historical->FineHistory.Initialize(Historical->SpatialMemory, Historical->LastLegalCaptureMask);
 		EnsureRecordVisual(Prop, *Historical);
 		if (FRecordVisual* SealedVisual = Prop.Visuals.Find(Epoch))
 		{
@@ -2635,6 +2652,7 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 				}
 			}
 			Historical->FineHistory.RestrictToRecordedGeometry(Footprint);
+			for(int32 I=0;I<Footprint.Num();++I) if(!Footprint[I]) Historical->LastLegalCaptureMask[I]=false;
 		}
 		UpdateRecordTexture(Prop, *Historical);
 		UpdateRecordCap(Prop, *Historical);
@@ -3537,6 +3555,28 @@ void ADarkwellMovingPropLabRoom::ConfigureInWorldProps()
 		FLinearColor(.26f, .58f, .34f), FTransform(FVector(0, -650, 0)));
 	SpawnTracked(Darkwell::MovingPropLab::MultiBoxId, 8, FVector(65, 65, 65),
 		FLinearColor(.62f, .22f, .32f), FTransform(FVector(700, -650, 0)));
+ if(FParse::Param(FCommandLine::Get(),TEXT("PropLabGrayObjectPolicies")) || GetWorld()->URL.HasOption(TEXT("GrayObjectPolicies")))
+ {
+  const TCHAR* Labels[]{TEXT("WHOLE / ALWAYS"),TEXT("STATIC WHOLE MEMORY"),TEXT("WHOLE / NEVER"),
+   TEXT("PARTIAL / ALWAYS"),TEXT("STATIC PARTIAL MEMORY"),TEXT("STATIC NEVER CONTROL")};
+  for(int32 I=0;I<6;++I)
+  {
+   FResolvedSightWeaveObjectPolicy Policy;
+   Policy.RevealMode=I<3?ESightWeaveRevealMode::WholeObjectAfterSpan:ESightWeaveRevealMode::SpatialPartial;
+   Policy.MinimumObservedSpanCm=100;
+   Policy.HistoryMode=I%3==0?ESightWeaveHistoryMode::Always:I%3==1?ESightWeaveHistoryMode::StationaryOnly:ESightWeaveHistoryMode::Never;
+   auto* Object=SpawnTracked(*FString::Printf(TEXT("Lab.Gray.Static.%d"),I),0,FVector(150,75,145),
+    FLinearColor(.2f+.1f*I,.45f,.5f),FTransform(FVector(-1400+500*I,-900,0)),ESightWeaveObjectPolicySource::UseProjectDefault,Policy.HistoryMode,&Policy);
+   if(Object)
+   {
+    auto* Label=NewObject<UTextRenderComponent>(Object); Object->AddInstanceComponent(Label);
+    Label->SetupAttachment(Object->GetRootComponent()); Label->SetRelativeLocation(FVector(0,60,170));
+    Label->SetRelativeRotation(FRotator(0,90,0)); Label->SetHorizontalAlignment(EHTA_Center);
+    Label->SetWorldSize(18); Label->SetText(FText::FromString(Labels[I])); Label->SetTextRenderColor(I%3==2?FColor::Orange:FColor::Green);
+    Label->RegisterComponent();
+   }
+  }
+ }
 	Scenario = 0;
 	ScenarioPhase = 0;
 	MultiCount = 4;
@@ -5374,4 +5414,15 @@ void ADarkwellMovingPropLabRoom::Command(const TArray<FString>& Args)
 	UE_LOG(LogDarkwellMovingPropLab, Display,
 		TEXT("MOVING_RULES_COMMAND %s handled=%d telemetry=%s"),
 		*FString::Join(Args, TEXT(" ")), bHandled, *GetTelemetry());
+}
+
+bool ADarkwellMovingPropLabRoom::GetNewestCaptureMasksForTesting(FName Id,TBitArray<>& Capture,TBitArray<>& Frozen) const
+{
+ Capture.Empty(); Frozen.Empty(); const auto* P=Tracked.Find(Id); if(!P) return false;
+ const FDarkwellSpatialObservationRecord* Latest=nullptr;
+ for(const auto& R:P->History.GetRecords()) if(!R.bCurrentObservedLocation && R.FineHistory.IsInitialized() && (!Latest || R.Epoch>Latest->Epoch)) Latest=&R;
+ if(!Latest) return false;
+ Capture=Latest->LastLegalCaptureMask; Frozen.Init(false,Latest->FineHistory.GetSamples().Num());
+ for(int32 I=0;I<Frozen.Num();++I) Frozen[I]=Latest->FineHistory.GetSamples()[I].InitialRemembered>0;
+ return true;
 }

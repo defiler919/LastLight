@@ -15,6 +15,8 @@ struct DARKWELL_API FDarkwellSpatialObservationRecord
 	FTransform SnapshotTransform = FTransform::Identity;
 	FDarkwellSpatialPropMemory SpatialMemory;
 	FDarkwellHistoryGridV2 FineHistory;
+	/** Immutable binary capture at fine-grid resolution, independent of alpha/AA. */
+	TBitArray<> LastLegalCaptureMask;
 	bool bCurrentObservedLocation = false;
 	uint64 PoseUpdates = 0;
 };

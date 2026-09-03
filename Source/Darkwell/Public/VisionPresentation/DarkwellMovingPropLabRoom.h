@@ -85,6 +85,7 @@ public:
 		uint64 FineSamplesScanned = 0;
 		uint64 CoverageFullScans = 0;
 		uint64 CoverageQueries = 0;
+  uint64 CoverageComputations=0, CoverageCacheHits=0;
 		uint64 CurrentSamplesTouched = 0;
 		uint64 TextureCreations = 0;
 		uint64 MidCreations = 0;
@@ -232,6 +233,8 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Object Policy")
 	bool IsRevealConfirmedForTesting(FName StableId) const;
 	bool GetNewestCaptureMasksForTesting(FName Id,TBitArray<>& Capture,TBitArray<>& Frozen) const;
+	uint64 GetRevealSpanEvaluationsForTesting(FName Id) const;
+ bool IsWholePresentationUniformForTesting(FName Id) const;
 	float GetCurrentPresentationMinimumForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|History Policy")
 	FString GetHistoryPolicyTelemetry(FName StableId) const;
@@ -327,6 +330,7 @@ private:
 		FDarkwellCurrentLiveGrid CurrentLive;
 		FSightWeaveRevealObservation RevealObservation;
 		TBitArray<> CurrentLegalObservationMask;
+  bool bCachedWholeLegalContact=false;
 		uint32 LocalEpoch=0;
 		TMap<uint32, FRecordVisual> Visuals;
 		FTransform InitialTransform = FTransform::Identity;

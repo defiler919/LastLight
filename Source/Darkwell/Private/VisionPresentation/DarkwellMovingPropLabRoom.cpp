@@ -2237,19 +2237,37 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 				Prop.CurrentLive.ResetGeometry(Prop.StableId,Descriptors,Transform);
 				Prop.RevealObservation.Initialize(ObjectPolicy->GetResolvedPolicy(),Prop.CurrentLive.ObservationSize,Prop.CurrentLive.ObservationStepCm,Prop.CurrentLive.ObservationFootprint);
 			}
-			if(bCoverageDirty || bTransformChanged || Prop.CurrentPresentationActiveSeconds>0)
-			{
-				auto Query=[&](FVector2D Point) {
-					const auto Q=Fog->QueryLiveCoverageAtWorldPoint(Point);
-					return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f;
-				};
-				Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query);
-				RuntimeFrame.CoverageQueries+=Prop.CurrentLive.Queries;
-				RuntimeFrame.CurrentSamplesTouched+=Prop.CurrentLive.SamplesTouched;
-				Prop.CurrentLive.BuildCurrentLegalObservationMask(Prop.CurrentLegalObservationMask);
-			}
-			Prop.RevealObservation.Observe(true,Prop.CurrentLegalObservationMask);
-			bAnyLegal=Prop.CurrentLegalObservationMask.CountSetBits()>0;
+   auto Query=[&](FVector2D Point) { const auto Q=Fog->QueryLiveCoverageAtWorldPoint(Point); return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f; };
+   auto Uniform=[&](const FBox2D& B,float& V) { return Fog->TryUniformCoverage(B,V); };
+   if(Prop.RevealObservation.IsConfirmed())
+   {
+    Prop.CurrentLegalObservationMask.Empty();
+    if(bCoverageDirty || bTransformChanged)
+    {
+     Prop.bCachedWholeLegalContact=Prop.CurrentLive.HasAnyLegalObservation(Transform,Query,Uniform);
+     RuntimeFrame.CoverageQueries+=Prop.CurrentLive.Queries;
+     RuntimeFrame.CurrentSamplesTouched+=Prop.CurrentLive.SamplesTouched;
+    }
+    bAnyLegal=Prop.bCachedWholeLegalContact;
+   }
+   else
+   {
+    if(bCoverageDirty || bTransformChanged || Prop.CurrentPresentationActiveSeconds>0)
+    {
+     float Value;
+     if(Uniform(Bounds,Value) && Value==0) Prop.CurrentLegalObservationMask.Init(false,Prop.CurrentLive.ObservationFootprint.Num());
+     else
+     {
+      Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query,Uniform);
+      RuntimeFrame.CoverageQueries+=Prop.CurrentLive.Queries;
+      RuntimeFrame.CurrentSamplesTouched+=Prop.CurrentLive.SamplesTouched;
+      Prop.CurrentLive.BuildCurrentLegalObservationMask(Prop.CurrentLegalObservationMask);
+     }
+    }
+    Prop.RevealObservation.Observe(true,Prop.CurrentLegalObservationMask);
+    bAnyLegal=Prop.CurrentLegalObservationMask.CountSetBits()>0;
+    Prop.bCachedWholeLegalContact=bAnyLegal;
+   }
 		}
 		int32 LegalCells = 0;
 		for (const float Value : Coverage)
@@ -2336,21 +2354,26 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
                 if(bTransformChanged) Prop.History.UpdateCurrentObservedPosePreservingEvidence(Transform);
                 if(bCoverageDirty || bTransformChanged || Prop.CurrentPresentationActiveSeconds>0)
                 {
-                    if(!bWhole) Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query);
-                    else Prop.CurrentLive.Queries=0;
-                    Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
-                    Prop.CurrentLive.WritePartRasters(Query,!IsCaptureEligible(Prop) || ObjectPolicy->IsSightWeaveMoving());
-                    if(bWhole && Prop.RevealObservation.IsConfirmed() && bAnyLegal)
+                    auto Uniform=[&](const FBox2D& B,float& V) { return Fog->TryUniformCoverage(B,V); };
+                    if(bWhole && Prop.RevealObservation.IsConfirmed() && bAnyLegal && Fog->IsObjectOcclusionFree(Bounds))
                     {
-                        auto Occlusion=[&](FVector2D Point) {
-                            ++RuntimeFrame.CoverageQueries;
-                            const auto Q=Fog->QueryObjectOcclusionAtWorldPoint(Point);
-                            return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f;
-                        };
-                        Prop.CurrentLive.ApplyWholeObjectPresentation(DeltaSeconds,Current.SpatialMemory,Occlusion);
+                     Prop.CurrentLive.AdvanceWholeUnoccluded(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage);
+                     Prop.CurrentLegalObservationMask.Empty();
                     }
-                    RuntimeFrame.CoverageQueries += Prop.CurrentLive.Queries;
-                    if(!bWhole) RuntimeFrame.CurrentSamplesTouched += Prop.CurrentLive.SamplesTouched;
+                    else
+                    {
+                     if(!bWhole || Prop.RevealObservation.IsConfirmed()) Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query,Uniform);
+                     else Prop.CurrentLive.Queries=0;
+                     Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
+                     Prop.CurrentLive.WritePartRasters(Query,!IsCaptureEligible(Prop) || ObjectPolicy->IsSightWeaveMoving(),Uniform);
+                     if(bWhole && Prop.RevealObservation.IsConfirmed() && bAnyLegal)
+                     {
+                      auto Occlusion=[&](FVector2D Point) { ++RuntimeFrame.CoverageQueries; const auto Q=Fog->QueryObjectOcclusionAtWorldPoint(Point); return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f; };
+                      Prop.CurrentLive.ApplyWholeObjectPresentation(DeltaSeconds,Current.SpatialMemory,Occlusion);
+                     }
+                     RuntimeFrame.CoverageQueries += Prop.CurrentLive.Queries;
+                     if(!bWhole || Prop.RevealObservation.IsConfirmed()) RuntimeFrame.CurrentSamplesTouched += Prop.CurrentLive.SamplesTouched;
+                    }
                 }
 				if (bCoverageDirty || Prop.CurrentPresentationActiveSeconds > 0.0f)
 				{
@@ -2362,7 +2385,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			if (bCoverageDirty || bTransformChanged
 				|| Prop.CurrentPresentationActiveSeconds > 0.0f)
 			{
-				UpdateRecordTexture(Prop, Current);
+                if(!Prop.CurrentLive.IsUniformWholePresentation()) UpdateRecordTexture(Prop, Current);
                 UpdateCurrentPartTextures(Prop, Prop.Visuals.FindChecked(Current.Epoch));
 				UpdateRecordCap(Prop, Current);
 				Prop.CurrentPresentationActiveSeconds = FMath::Max(
@@ -2378,6 +2401,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		else
 		{
 			Actual->Memory->ApplySourceGeometryVisibility(false);
+            Prop.CurrentPresentationActiveSeconds=FMath::Max(0.f,Prop.CurrentPresentationActiveSeconds-DeltaSeconds);
 		}
 		if (!bTransformChanged || CoverageSnapshot.bValid)
 		{
@@ -2802,17 +2826,31 @@ void ADarkwellMovingPropLabRoom::UpdateCurrentPartTextures(FTrackedProp& Prop,FR
    ++RuntimeFrame.TextureCreations;
   }
   auto& Pixels=Visual.LivePixels[I];
-  const auto Size=Part.Raster.BuildConservativePresentation(4,Pixels);
+  FIntPoint Size;
   uint64 Hash=1469598103934665603ull;
-  for(const auto& Pixel:Pixels) for(float V : {Pixel.R,Pixel.G,Pixel.B,Pixel.A}) { uint32 Bits; FMemory::Memcpy(&Bits,&V,4); Hash=(Hash^Bits)*1099511628211ull; }
-  Hash=(Hash^uint64(Size.X))*1099511628211ull; Hash=(Hash^uint64(Size.Y))*1099511628211ull;
+  if(Part.bUniformWholePresentation)
+  {
+   // Same full-size atlas, filled with an exact constant only when RGB changes.
+   // Rigid pose changes only update its bounds; they do not rebuild a local grid.
+   Size=Atlas;
+   for(float V:{Part.WholePixel.R,Part.WholePixel.G,Part.WholePixel.B,Part.WholePixel.A}) { uint32 Bits; FMemory::Memcpy(&Bits,&V,4); Hash=(Hash^Bits)*1099511628211ull; }
+   Hash=(Hash^0x57484f4c45ull)*1099511628211ull;
+   if(Hash!=Visual.LiveSignatures[I]) Pixels.Init(Part.WholePixel,Atlas.X*Atlas.Y);
+  }
+  else
+  {
+   Size=Part.Raster.BuildConservativePresentation(4,Pixels);
+   for(const auto& Pixel:Pixels) for(float V : {Pixel.R,Pixel.G,Pixel.B,Pixel.A}) { uint32 Bits; FMemory::Memcpy(&Bits,&V,4); Hash=(Hash^Bits)*1099511628211ull; }
+   Hash=(Hash^uint64(Size.X))*1099511628211ull; Hash=(Hash^uint64(Size.Y))*1099511628211ull;
+  }
   if(Hash!=Visual.LiveSignatures[I])
   {
    if(Texture->GetResource())
    {
    ++RuntimeFrame.GpuTextureUploads;
    auto* Upload=new FFloat16Color[Atlas.X*Atlas.Y];
-   FDarkwellCurrentLiveGrid::CopyAtlasWithClampBorder(Pixels,Size,Atlas,MakeArrayView(Upload,Atlas.X*Atlas.Y));
+   if(Part.bUniformWholePresentation) for(int32 K=0;K<Atlas.X*Atlas.Y;++K) Upload[K]=FFloat16Color(Part.WholePixel);
+   else FDarkwellCurrentLiveGrid::CopyAtlasWithClampBorder(Pixels,Size,Atlas,MakeArrayView(Upload,Atlas.X*Atlas.Y));
    auto* Region=new FUpdateTextureRegion2D(0,0,0,0,Atlas.X,Atlas.Y);
    Texture->UpdateTextureRegions(0,1,Region,Atlas.X*sizeof(FFloat16Color),sizeof(FFloat16Color),reinterpret_cast<uint8*>(Upload),
     [](uint8* Data,const FUpdateTextureRegion2D* R){delete[] reinterpret_cast<FFloat16Color*>(Data);delete R;});
@@ -2821,7 +2859,7 @@ void ADarkwellMovingPropLabRoom::UpdateCurrentPartTextures(FTrackedProp& Prop,FR
   }
   if(Sources.IsValidIndex(I)) if(auto* Material=Cast<UMaterialInstanceDynamic>(Sources[I]->GetMaterial(0)))
   {
-   const auto Bounds=Part.Raster.GetBounds(); const auto Extent=Bounds.GetSize()*FVector2D(Atlas)/FVector2D(Size);
+   const auto Bounds=Part.bUniformWholePresentation?Part.WholeBounds:Part.Raster.GetBounds(); const auto Extent=Bounds.GetSize()*FVector2D(Atlas)/FVector2D(Size);
    Material->SetTextureParameterValue(TEXT("SpatialStateTexture"),Texture);
    Material->SetVectorParameterValue(TEXT("SpatialMinInv"),FLinearColor(Bounds.Min.X,Bounds.Min.Y,1/Extent.X,1/Extent.Y));
    Material->SetScalarParameterValue(TEXT("SpatialReady"),1); Material->SetScalarParameterValue(TEXT("FixedRevealEnabled"),1);
@@ -4292,6 +4330,9 @@ void ADarkwellMovingPropLabRoom::UpdateRoom(
 	RuntimeFrame = FHistoryRuntimeTelemetry();
 	RuntimeFrame.FrameNumber = ++RuntimeFrameSequence;
 	const uint64 UpdateRoomStartCycles = FPlatformTime::Cycles64();
+ const auto* CoverageFog=GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
+ const uint64 ComputationsBefore=CoverageFog?CoverageFog->GetCoverageComputationsForTesting():0;
+ const uint64 HitsBefore=CoverageFog?CoverageFog->GetCoverageCacheHitsForTesting():0;
 	UpdateInWorldAutomation(DeltaSeconds, Player);
 	const bool bWasMoving = bMotionActive;
 	UpdateDeterministicMotion(DeltaSeconds);
@@ -4305,6 +4346,8 @@ void ADarkwellMovingPropLabRoom::UpdateRoom(
 	}
 	UpdateInWorldAutomation(0.0f, Player);
 	Report();
+ RuntimeFrame.CoverageComputations=CoverageFog?CoverageFog->GetCoverageComputationsForTesting()-ComputationsBefore:0;
+ RuntimeFrame.CoverageCacheHits=CoverageFog?CoverageFog->GetCoverageCacheHitsForTesting()-HitsBefore:0;
 	FinalizeHistoryRuntimeTelemetry(UpdateRoomStartCycles);
 }
 
@@ -4345,6 +4388,7 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	RuntimeTotal.FineSamplesScanned += RuntimeFrame.FineSamplesScanned;
 	RuntimeTotal.CoverageFullScans += RuntimeFrame.CoverageFullScans;
 	RuntimeTotal.CoverageQueries += RuntimeFrame.CoverageQueries;
+ RuntimeTotal.CoverageComputations+=RuntimeFrame.CoverageComputations; RuntimeTotal.CoverageCacheHits+=RuntimeFrame.CoverageCacheHits;
 	RuntimeTotal.CurrentSamplesTouched += RuntimeFrame.CurrentSamplesTouched;
 	RuntimeTotal.TextureCreations += RuntimeFrame.TextureCreations;
 	RuntimeTotal.MidCreations += RuntimeFrame.MidCreations;
@@ -5354,4 +5398,13 @@ bool ADarkwellMovingPropLabRoom::GetNewestCaptureMasksForTesting(FName Id,TBitAr
  Capture=Latest->LastLegalCaptureMask; Frozen.Init(false,Latest->FineHistory.GetSamples().Num());
  for(int32 I=0;I<Frozen.Num();++I) Frozen[I]=Latest->FineHistory.GetSamples()[I].InitialRemembered>0;
  return true;
+}
+
+uint64 ADarkwellMovingPropLabRoom::GetRevealSpanEvaluationsForTesting(FName Id) const
+{ const auto* P=Tracked.Find(Id); return P?P->RevealObservation.GetSpanEvaluations():0; }
+bool ADarkwellMovingPropLabRoom::IsWholePresentationUniformForTesting(FName Id) const
+{
+ const auto* P=Tracked.Find(Id);
+ return P && P->CurrentLive.IsUniformWholePresentation() && P->CurrentLegalObservationMask.Num()==0
+  && P->RevealObservation.GetTentativeMask().Num()==0 && P->CurrentLive.SamplesTouched==0;
 }

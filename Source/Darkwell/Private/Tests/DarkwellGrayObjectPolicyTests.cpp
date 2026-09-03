@@ -59,7 +59,7 @@ void FDarkwellGrayObjectPolicyTest::GetTests(TArray<FString>& Names,TArray<FStri
   TEXT("StaticPartialStationaryOnlyRetainsGray"),TEXT("StaticNeverDoesNotRetainGray"),
   TEXT("CoverageEdgeNeverIsExpectedNegativeControl"),TEXT("SixPolicyCombinationsCoexist"),
   TEXT("MotionStateAndRevealPolicyIsolation"),TEXT("ExistingHistoryNotIdentityCleared"),
-  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime"),TEXT("CanonicalRasterMatchesOriginalSamples")})
+  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime"),TEXT("CanonicalRasterMatchesOriginalSamples"),TEXT("ConfirmedWholeStopsSpanAndDenseObservationWork")})
  { Names.Add(N); Commands.Add(N); }
 }
 bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
@@ -214,6 +214,22 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
  F.Face(90); F.Step(30);
  TestTrue(TEXT("Threshold reached"),F.Room->IsRevealConfirmedForTesting(Id));
  TestEqual(TEXT("Whole source presents every pixel after normal entry"),F.Room->GetCurrentPresentationMinimumForTesting(Id),1.f);
+ if(Case==TEXT("ConfirmedWholeStopsSpanAndDenseObservationWork"))
+ {
+  const uint64 Evaluations=F.Room->GetRevealSpanEvaluationsForTesting(Id);
+  F.Room->GetObjectPolicyForTesting(Id)->SetSightWeaveMoving(true);
+  const FTransform Initial=F.Room->GetTrackedTransform(Id);
+  for(int32 I=0;I<60;++I)
+  {
+   auto Pose=Initial; Pose.SetRotation(FQuat(FRotator(0,I*.7f,0))); F.Room->SetTrackedTransformForTesting(Id,Pose); F.Step();
+   TestTrue(TEXT("Confirmed unoccluded source uses uniform full-resolution atlas and no observation masks"),F.Room->IsWholePresentationUniformForTesting(Id));
+   TestEqual(TEXT("Confirmed rigid motion never recalculates span"),F.Room->GetRevealSpanEvaluationsForTesting(Id),Evaluations);
+   TestEqual(TEXT("Every actual source pixel remains full"),F.Room->GetCurrentPresentationMinimumForTesting(Id),1.f);
+  }
+  F.Face(-90); F.Step(60); F.Room->ResetHistoryRuntimeTelemetryForTesting(); F.Step(30);
+  TestEqual(TEXT("Settled loss performs no dense current work"),F.Room->GetHistoryRuntimeTotalTelemetryForTesting().CurrentSamplesTouched,uint64(0));
+  return true;
+ }
  if(Case==TEXT("WholeObjectThresholdConfirmsFullObject") || Case==TEXT("WholeObjectDoesNotExpandWorldCoverage"))
  {
   F.Face(146); F.Step(30);

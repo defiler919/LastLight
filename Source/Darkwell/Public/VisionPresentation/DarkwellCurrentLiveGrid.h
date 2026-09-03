@@ -26,13 +26,18 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
   TBitArray<> CurrentLegalObservationMask, LastLegalCaptureMask;
   FTransform Pose=FTransform::Identity;
   FIntPoint AtlasCells=FIntPoint::ZeroValue;
-  bool bWholePresentation=false;
+  bool bWholePresentation=false, bUniformWholePresentation=false;
+  FBox2D WholeBounds;
+  FLinearColor WholePixel;
  };
  void ResetGeometry(FName Id,TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose);
  bool MatchesGeometry(TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose) const;
- bool Advance(float Dt,const FTransform& ActorPose,TFunctionRef<float(FVector2D)> LegalCoverage);
+ bool Advance(float Dt,const FTransform& ActorPose,TFunctionRef<float(FVector2D)> LegalCoverage,TFunction<bool(const FBox2D&,float&)> Uniform={});
  void WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds);
- void WritePartRasters(TFunctionRef<float(FVector2D)> LegalCoverage,bool bTransient);
+ void WritePartRasters(TFunctionRef<float(FVector2D)> LegalCoverage,bool bTransient,TFunction<bool(const FBox2D&,float&)> Uniform={});
+ bool HasAnyLegalObservation(const FTransform& ActorPose,TFunctionRef<float(FVector2D)> Query,TFunctionRef<bool(const FBox2D&,float&)> Uniform);
+ void AdvanceWholeUnoccluded(float Dt,const FTransform& ActorPose,FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,TConstArrayView<float> Coverage);
+ bool IsUniformWholePresentation() const { return !Parts.IsEmpty() && Parts[0].bUniformWholePresentation; }
  /** Object-local continuous footprint, independent of presentation alpha. */
  void BuildCurrentLegalObservationMask(TBitArray<>& Out) const;
  void ApplyWholeObjectPresentation(float Dt,FDarkwellSpatialPropMemory& Snapshot,

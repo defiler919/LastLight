@@ -283,3 +283,46 @@ Home_E1_Build2 succeeded. Home_E1_RasterParity_20260903 passes 10/10 clean,
 0.602728 s, exit 0, severe scan 0. It compares seven real world view revisions
 and every raster cell against the original five independent point samples,
 then asserts repeat raster requests perform zero new point computations.
+
+
+## Home E2 — confirmed Whole presentation specialization
+
+E1 was pushed as `5b713e32889b87996dc698c52f87963682351d98` with matching refs.
+Confirmed objects use an existential exact-footprint contact query, release their
+observation masks and no longer call span evaluation. When the complete object
+ray fan is unoccluded, current RGB uses an exact constant in the **same full-size
+atlas**. No raster/texture resolution is lowered. A rigid move updates bounds;
+unchanged constant RGB performs no atlas rebuild/hash walk/upload. Canonical world
+coverage remains separate, and a dense world capture snapshot remains available
+for unchanged fine-history sealing. Wall-intersecting objects retain the precise
+occlusion path. Partial grids also reuse proven uniform coverage where possible.
+The absent-current transition timer now decays, restoring zero idle observation
+work. Telemetry separates high-level requests from actual computations/cache hits.
+
+Home_E2_Build1 failed only because the added telemetry accumulator accidentally
+matched a line in the original baseline test; the extra references were removed.
+Home_E2_Build2 succeeded. Home_E2_PolicyPerf_20260903 passes 29/29 behavioral/test
+cases (28 clean, 1 warning), 147.634857 s, exit 0, severe scan 0. **This is not a
+performance gate pass**; the benchmark cases report measurements without hiding
+threshold violations.
+
+| Home trajectory | mean / p50 / p95 / p99 / peak ms | requests / computations per frame | current samples/frame | history scans |
+|---|---|---|---|---|
+| 8 moving + changed view | 14.292 / 11.382 / 29.622 / 29.880 / 33.196 | 454.543 / 242.335 | 55.718 | 17,239,076 |
+| 32 static + changed view | 169.686 / 169.976 / 272.497 / 276.891 / 283.098 | 11,344.465 / 5,373.880 | 1,171.032 | 126,067,028 |
+
+The 8-object route includes its original stationary pause; five records are
+legitimately sealed there, not while moving. End counts: 5 records, 5 proxies,
+5 cap components, 5 textures, 39 total MIDs; idle p95 .0305 ms. The 32-object
+route ends with 29 historical / 30 total records, 22 proxies, 23 cap components,
+26 textures, 162 total MIDs; idle p95 .0915 ms. Both idle windows have zero
+queries, computations, current samples, history scans, submissions or creations.
+Whole captures more complete knowledge than A's old Partial/Always fixture, so
+E2 exposes a severe history/diagnostic cost increase. E3 must resolve this;
+these numbers are retained as failures, not summarized as a successful speedup.
+
+Home_E2_Build3 succeeded (20.99 s). Home_E2_Regression_20260903 passes 22/22,
+15 clean + 7 warnings, 103.038063 s, exit 0, severe scan 0. All old HistoryPolicy
+and MovingLiveContinuity assertions remain intact. The new dedicated test checks
+60 rigid poses: no confirmed span evaluation, no dense observation masks, a full
+source atlas every frame, and zero current sample work after settled view loss.

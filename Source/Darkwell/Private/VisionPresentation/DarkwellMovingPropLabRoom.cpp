@@ -2387,7 +2387,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
          int32 SweptIndex=Prop.History.GetCurrentIndex();
          if(SweptIndex==INDEX_NONE)
          {
-          SweptIndex=Prop.History.BeginObservedLocation(Transform,Bounds,Darkwell::MovingPropLab::CellSize);
+          SweptIndex=Prop.History.BeginCurrentObservation(Transform,Bounds,Darkwell::MovingPropLab::CellSize);
           if(SweptIndex!=INDEX_NONE) { ++Prop.ObservationEpisode; ++GeometryRevision; ++Prop.ObservationOwnershipRevision; }
          }
          if(SweptIndex!=INDEX_NONE)
@@ -2437,7 +2437,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		CurrentIndex = Prop.History.GetCurrentIndex();
 		if (CoverageSnapshot.bValid && CurrentIndex == INDEX_NONE && bAnyLegal)
 		{
-			const int32 NewIndex = Prop.History.BeginObservedLocation(
+			const int32 NewIndex = Prop.History.BeginCurrentObservation(
 				Transform, Bounds, Darkwell::MovingPropLab::CellSize);
 			if (NewIndex != INDEX_NONE)
 			{
@@ -2706,6 +2706,14 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	if (CurrentIndex == INDEX_NONE
 		|| Prop.ObservationState != EObservationState::ObservedArmed)
 	{
+		return false;
+	}
+	if (!Prop.History.CanSealCurrentObservation())
+	{
+		// Reject only this capture. Existing history is untouched, and the next
+		// legal observation can immediately acquire the independent live slot.
+		Prop.History.FreezeCurrentForHiddenMovement(); // Records the capacity diagnostic.
+		AbandonCurrentObservationWithoutHistory(Prop);
 		return false;
 	}
 	FDarkwellSpatialObservationRecord& Current =

@@ -386,4 +386,55 @@ bool FDarkwellIncrementalHistoryEvidenceParity::RunTest(const FString&)
  return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellGrayHistoryCapacityCurrentTest,
+ "Darkwell.PropLab.GrayObjectPolicy.CurrentLiveAtHistoryCapacity",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellGrayHistoryCapacityCurrentTest::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ for(Reveal Mode:{Reveal::WholeObjectAfterSpan,Reveal::SpatialPartial})
+ {
+  FRoom F; F.Room->ResetTrackedRevealPolicyForLab(Id,Mode,100,History::StationaryOnly);
+  F.Face(90); F.Step(15);
+  auto& Prop=F.Room->Tracked.FindChecked(Id);
+  F.Room->AbandonCurrentObservationWithoutHistory(Prop);
+  Prop.History.Initialize(Id);
+  // Synthetic small, distant observation records isolate admission capacity.
+  // Real live coverage, motion, capture and presentation still run normally.
+  for(int32 I=0;I<Prop.History.MaxResidentRecords;++I)
+  {
+   const FVector2D P(10000+I*25,10000);
+   const int32 Index=Prop.History.BeginObservedLocation(FTransform(FVector(P,0)),FBox2D(P,P+FVector2D(2.5)),2.5f);
+   Prop.History.AdvanceCurrent(.2f,TArray<float>{1}); Prop.History.FreezeCurrentForHiddenMovement();
+   auto& R=Prop.History.GetMutableRecords()[Index]; R.FineHistory.Initialize(R.SpatialMemory,R.LastLegalCaptureMask);
+  }
+  TArray<uint64> Before;
+  for(const auto& R:Prop.History.GetRecords()) Before.Add(R.FineHistory.EvidenceHash());
+  for(int32 Cycle=0;Cycle<3;++Cycle)
+  {
+   F.Face(90); F.Step(15);
+   TestTrue(TEXT("Current source is visible with all 64 historical slots occupied"),F.Room->IsCurrentSourceVisibleForTesting(Id));
+   TestEqual(TEXT("One live record coexists with full history"),F.Room->GetCurrentEpochCountForTesting(Id),1);
+   if(Cycle==1)
+   {
+    Prop.bInjectInvalidCoverageOnce=true; const int32 BeforeIndex=Prop.History.GetCurrentIndex(); F.Step();
+    TestEqual(TEXT("Invalid revision preserves independent current"),Prop.History.GetCurrentIndex(),BeforeIndex);
+    F.Step(); TestTrue(TEXT("Legal current recovers after invalid publication"),F.Room->IsCurrentSourceVisibleForTesting(Id));
+   }
+   F.Face(-90); F.Step(15);
+   TestEqual(TEXT("Rejected capture does not grow or replace history"),F.Room->GetStaleEpochCountForTesting(Id),64);
+   TestEqual(TEXT("View loss releases only the transient current"),F.Room->GetCurrentEpochCountForTesting(Id),0);
+  }
+  F.Face(90); F.Step(15); auto* Policy=F.Room->GetObjectPolicyForTesting(Id);
+  Policy->SetSightWeaveMoving(true);
+  auto Pose=F.Room->GetTrackedTransform(Id); Pose.SetRotation(FQuat(FRotator(0,30,0)));
+  F.Room->SetTrackedTransformForTesting(Id,Pose); F.Step(15);
+  TestTrue(TEXT("Moving live remains visible at historical capacity"),F.Room->IsCurrentSourceVisibleForTesting(Id));
+  F.Face(-90); F.Step(15);
+  TestEqual(TEXT("Moving view loss adds no historical record"),F.Room->GetStaleEpochCountForTesting(Id),64);
+  for(int32 I=0;I<64;++I) TestEqual(TEXT("All stored history evidence remains intact"),Prop.History.GetRecords()[I].FineHistory.EvidenceHash(),Before[I]);
+ }
+ return true;
+}
+
 #endif

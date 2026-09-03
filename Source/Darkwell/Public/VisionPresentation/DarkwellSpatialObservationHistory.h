@@ -34,6 +34,10 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 		const FTransform& SnapshotTransform,
 		const FBox2D& WorldBounds,
 		float CellSize = 2.5f);
+	/** Live admission is independent of the 64 sealed-history slots. */
+	int32 BeginCurrentObservation(const FTransform& SnapshotTransform,
+		const FBox2D& WorldBounds, float CellSize = 2.5f);
+	bool CanSealCurrentObservation() const { return CurrentIndex != INDEX_NONE && Records.Num() <= MaxResidentRecords; }
 	bool RebaseCurrentObservedLocation(
 		const FTransform& SnapshotTransform,
 		const FBox2D& WorldBounds,
@@ -65,6 +69,8 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 	const FDarkwellSpatialObservationRecord* FindRecord(uint32 Epoch) const;
 
 private:
+	int32 BeginObservation(const FTransform& SnapshotTransform,
+		const FBox2D& WorldBounds, float CellSize, int32 ResidentLimit);
 	static bool IsFullyErased(const FDarkwellSpatialObservationRecord& Record);
 
 	FName StableId;

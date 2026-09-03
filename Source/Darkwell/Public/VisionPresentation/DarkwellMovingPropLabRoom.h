@@ -275,6 +275,7 @@ private:
  TConstArrayView<const FDarkwellSpatialObservationRecord*> FrameNewerCandidates;
 	friend class FDarkwellCapPartialClipTest;
 	friend class FDarkwellCapCoplanarContactTest;
+	friend class FDarkwellGrayHistoryCapacityCurrentTest;
 	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);
 
 	struct FCapQuadSnapshot

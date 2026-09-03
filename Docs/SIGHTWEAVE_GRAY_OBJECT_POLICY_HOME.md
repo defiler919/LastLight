@@ -712,3 +712,30 @@ unfixed here. Final 54,000-step validation of subsequent fixes, full automation,
 D3D12/SM6, BuildPlugin, three GPU exits and final handoff remain pending.
 The status remains PARTIAL — GRAY_OBJECT_POLICY_PERFORMANCE_BLOCKED;
 TEARDOWN BLOCKER RETAINED. No final gray Stable is created.
+
+## Home recovery C1 — independent current admission
+
+Salvage was pushed as `34f3bb9d1403cb2946c1cddc5b5d81d96e374b2b`; all three
+refs matched, worktree/LFS were clean and protected refs unchanged.
+`BeginCurrentObservation` now has one unsealed live reserve independent of the
+64 sealed-history slots. The contiguous record view remains compatible; maximum
+storage is 64 sealed records plus one current. Existing `BeginObservedLocation`
+and its CapacityFailsClosed test keep the old strict 64-resident behavior.
+Sealing cannot convert the reserve into a 65th history. On rejected capture the
+host discards only the unsealed observation and its presentation resources.
+The next real legal observation can immediately use the live reserve again.
+Existing history is never evicted, overwritten or marked empty by capacity.
+A diagnostic is emitted per refused capture rather than every live update.
+
+Home_CurrentCapacity_Build1_20260903: standard Editor Development build succeeded,
+11 actions, 39.74 s. Home_CurrentCapacity_Targeted_20260903: **9/9** (6 clean,
+3 with expected capacity warnings), 8.375164 s tests / 33.826738 s wall, process
+and runner exit 0, severe 0. Original spatial-history tests remain unchanged.
+New model coverage fills all 64 histories, advances current, rejects capture,
+repeats re-entry, preserves ordering/evidence, and resumes capture only after
+legitimate verified-empty release. The host test uses synthetic small distant
+records to isolate full storage and runs real Whole/Partial current coverage,
+invalid-revision recovery, repeated view loss and moving observation. All stored
+fine-evidence hashes stay unchanged. Existing no-moving-history cases and the
+240-frame full-update parity replay pass. Long-run cost remains unvalidated by
+this short recovery checkpoint; status stays performance-blocked.

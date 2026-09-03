@@ -16,6 +16,21 @@ int32 FDarkwellSpatialObservationHistory::BeginObservedLocation(
 	const FBox2D& WorldBounds,
 	const float CellSize)
 {
+	return BeginObservation(SnapshotTransform, WorldBounds, CellSize, MaxResidentRecords);
+}
+
+int32 FDarkwellSpatialObservationHistory::BeginCurrentObservation(
+	const FTransform& SnapshotTransform, const FBox2D& WorldBounds, const float CellSize)
+{
+	// One unsealed observation has its own admission budget. Storage remains a
+	// contiguous view for existing consumers; it never becomes a 65th history.
+	return BeginObservation(SnapshotTransform, WorldBounds, CellSize, MaxResidentRecords + 1);
+}
+
+int32 FDarkwellSpatialObservationHistory::BeginObservation(
+	const FTransform& SnapshotTransform, const FBox2D& WorldBounds,
+	const float CellSize, const int32 ResidentLimit)
+{
 	if (StableId.IsNone() || !WorldBounds.bIsValid || CellSize <= 0.0f)
 	{
 		return INDEX_NONE;
@@ -24,7 +39,7 @@ int32 FDarkwellSpatialObservationHistory::BeginObservedLocation(
 	{
 		return CurrentIndex;
 	}
-	if (Records.Num() >= MaxResidentRecords)
+	if (Records.Num() >= ResidentLimit)
 	{
 		++OverflowRejectCount;
 		UE_LOG(
@@ -77,6 +92,14 @@ bool FDarkwellSpatialObservationHistory::FreezeCurrentForHiddenMovement()
 {
 	if (!Records.IsValidIndex(CurrentIndex))
 	{
+		return false;
+	}
+	if (!CanSealCurrentObservation())
+	{
+		++OverflowRejectCount;
+		UE_LOG(LogDarkwellSpatialObservationHistory, Warning,
+			TEXT("History capture capacity reached; current observation remains independent id=%s histories=%d"),
+			*StableId.ToString(), Records.Num() - 1);
 		return false;
 	}
 	FDarkwellSpatialObservationRecord& Record = Records[CurrentIndex];

@@ -134,5 +134,44 @@ bool FDarkwellSpatialHistoryCapacityTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHistoryIndependentCurrentTest,
+ "Darkwell.PropLab.MovingRules.SpatialHistory.CurrentAdmissionIndependentOfHistoryCapacity",
+ Darkwell::SpatialObservationHistoryTests::Flags)
+bool FDarkwellHistoryIndependentCurrentTest::RunTest(const FString&)
+{
+ using namespace Darkwell::SpatialObservationHistoryTests;
+ FDarkwellSpatialObservationHistory H; H.Initialize(TEXT("Capacity.Live"));
+ const TArray<float> Full{1,1};
+ for(int32 I=0;I<H.MaxResidentRecords;++I)
+ {
+  TestTrue(TEXT("Independent current accepted"),H.BeginCurrentObservation(FTransform(FVector(I*25,0,0)),Bounds(I*25),10)!=INDEX_NONE);
+  H.AdvanceCurrent(.2f,Full); TestTrue(TEXT("Capture below history capacity"),H.FreezeCurrentForHiddenMovement());
+ }
+ for(int32 Cycle=0;Cycle<3;++Cycle)
+ {
+  const int32 Live=H.BeginCurrentObservation(FTransform(FVector(9999,0,0)),Bounds(9999),10);
+  if(!TestEqual(TEXT("Full history retains one independent live slot"),Live,H.MaxResidentRecords)) return false;
+  H.AdvanceCurrent(.2f,Full);
+  TestEqual(TEXT("Legal current evidence can advance at capacity"),H.GetRecords()[Live].SpatialMemory.GetCells()[0].DiscoveredPresent,1.f);
+  TestFalse(TEXT("Capacity prevents only a new historical capture"),H.FreezeCurrentForHiddenMovement());
+  TestEqual(TEXT("Rejected capture leaves current intact"),H.GetCurrentIndex(),Live);
+  TestEqual(TEXT("Total storage has a fixed independent current reserve"),H.GetRecords().Num(),H.MaxResidentRecords+1);
+  for(int32 I=0;I<H.MaxResidentRecords;++I)
+  {
+   const auto& R=H.GetRecords()[I];
+   TestEqual(TEXT("Stored epochs remain unchanged"),R.Epoch,uint32(I+1));
+   TestEqual(TEXT("Existing history cannot be cleared on capacity"),R.SpatialMemory.GetCells()[0].RemainingStale,1.f);
+  }
+  H.AbandonCurrentObservationWithoutHistory();
+ }
+ TestEqual(TEXT("One diagnostic per rejected capture, never per live update"),H.GetOverflowRejectCount(),uint64(3));
+ Advance(H,H.GetRecords()[0].Epoch,Full);
+ TestEqual(TEXT("Only legal empty evidence frees historical capacity"),H.ReleaseFullyErasedRecords(),1);
+ const int32 Live=H.BeginCurrentObservation(FTransform(FVector(9000,0,0)),Bounds(9000),10);
+ TestTrue(TEXT("Epoch ordering survives repeated rejected capture"),H.GetRecords()[Live].Epoch>67);
+ TestTrue(TEXT("Capture resumes when evidence legitimately frees a slot"),H.FreezeCurrentForHiddenMovement());
+ return true;
+}
+
 #endif
 

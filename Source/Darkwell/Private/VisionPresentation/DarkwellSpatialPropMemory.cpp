@@ -86,14 +86,25 @@ FLinearColor FDarkwellSpatialPropMemory::Presentation(int32 Index) const
  return FLinearColor(0,0,C.StaleOpacity,C.CurrentLegalCoverage);
 }
 
-FIntPoint FDarkwellSpatialPropMemory::BuildConservativePresentation(int32 SamplesPerCell,TArray<FLinearColor>& OutPixels) const
+FIntPoint FDarkwellSpatialPropMemory::BuildConservativePresentation(int32 SamplesPerCell,TArray<FLinearColor>& OutPixels,
+ bool bTransientLiveOnly) const
 {
  OutPixels.Reset();
  if(SamplesPerCell<2 || Cells.IsEmpty()) return FIntPoint::ZeroValue;
  const FIntPoint ResultSize=Size*SamplesPerCell;
  OutPixels.SetNumUninitialized(ResultSize.X*ResultSize.Y);
  TArray<FLinearColor> Coarse; Coarse.SetNumUninitialized(Cells.Num());
- for(int32 I=0;I<Cells.Num();++I) Coarse[I]=Presentation(I);
+ for(int32 I=0;I<Cells.Num();++I)
+ {
+  Coarse[I]=Presentation(I);
+  // Optional current-only presentation view; does not mutate D/V/R. Feeding the
+  // existing inward AA builder prevents bilinear spill at newly hidden edges.
+  if(bTransientLiveOnly)
+  {
+   if(Coarse[I].A<LegalCoverage) Coarse[I].R=0;
+   Coarse[I].B=0;
+  }
+ }
  auto Channel=[](const FLinearColor& P,int32 C) { return C==0?P.R:C==1?P.G:C==2?P.B:P.A; };
  auto Visible=[&](int32 X,int32 Y,int32 C)
  { return X>=0 && Y>=0 && X<Size.X && Y<Size.Y && Channel(Coarse[Y*Size.X+X],C)>0; };

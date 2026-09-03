@@ -358,7 +358,9 @@ ADarkwellPropLabFurniture* ADarkwellMovingPropLabRoom::SpawnTracked(
 	const int32 Shape,
 	const FVector Dimensions,
 	const FLinearColor Tint,
-	const FTransform& Transform)
+	const FTransform& Transform,
+	ESightWeaveObjectPolicySource PolicySource,
+	ESightWeaveHistoryMode HistoryMode)
 {
 	if (StableId.IsNone() || Tracked.Contains(StableId))
 	{
@@ -391,8 +393,30 @@ ADarkwellPropLabFurniture* ADarkwellMovingPropLabRoom::SpawnTracked(
 		Part->SetCastHiddenShadow(true);
 	}
 	Actor->Memory->ApplySourceGeometryVisibility(false);
+	// Optional Lab launch fixture. Default launch remains entirely Always/inherited.
+	if (PolicySource == ESightWeaveObjectPolicySource::UseProjectDefault
+		&& (FParse::Param(FCommandLine::Get(), TEXT("PropLabHistoryPolicies"))
+			|| GetWorld()->URL.HasOption(TEXT("HistoryPolicies"))))
+	{
+		if (StableId == Darkwell::MovingPropLab::RotateId || StableId == Darkwell::MovingPropLab::MultiLowId)
+		{
+			PolicySource = ESightWeaveObjectPolicySource::Override;
+			HistoryMode = ESightWeaveHistoryMode::StationaryOnly;
+		}
+		if (StableId == Darkwell::MovingPropLab::EdgeId || StableId == Darkwell::MovingPropLab::MultiBoxId)
+		{
+			PolicySource = ESightWeaveObjectPolicySource::Override;
+			HistoryMode = ESightWeaveHistoryMode::Never;
+		}
+	}
+	USightWeaveObjectPolicyComponent* ObjectPolicy = NewObject<USightWeaveObjectPolicyComponent>(Actor);
+	ObjectPolicy->PolicySource = PolicySource;
+	ObjectPolicy->HistoryMode = HistoryMode;
+	Actor->AddInstanceComponent(ObjectPolicy);
+	ObjectPolicy->RegisterComponent();
 
 	FTrackedProp& Prop = Tracked.Add(StableId);
+	Prop.ObjectPolicy = ObjectPolicy;
 	Prop.StableId = StableId;
 	Prop.Actual = Actor;
 	Prop.InitialTransform = Transform;
@@ -2104,6 +2128,15 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 {
 	FScopedHistoryRuntimeTimer Timer(RuntimeFrame.UpdateTrackedUs);
 	bool bHistoryChangedThisFrame = false;
+	USightWeaveObjectPolicyComponent* ObjectPolicy = Prop.ObjectPolicy.Get();
+	check(ObjectPolicy);
+	const ESightWeaveHistoryMode HistoryMode = ObjectPolicy->GetResolvedHistoryMode();
+	if (Prop.ProcessedMovingRevision != static_cast<uint64>(ObjectPolicy->GetMovingRevision()))
+	{
+		Prop.ProcessedMovingRevision = ObjectPolicy->GetMovingRevision();
+		Prop.CurrentPresentationActiveSeconds = 0.5f;
+		Prop.bDiagnosticsDirty = true;
+	}
 	ADarkwellPropLabFurniture* Actual = Prop.bExists ? Prop.Actual.Get() : nullptr;
 	if (Actual)
 	{
@@ -2199,6 +2232,11 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		// Observation lifecycle is driven only by revision-matched authoritative
 		// samples. Invalid/not-ready data may fail closed visually, but never writes
 		// player knowledge, seals an epoch, or rearms a later seal.
+		if (bAnyLegal) ObjectPolicy->NotifyLegalObservation();
+		// Never and an unqualified moving observation have no gray fallback. Invalid
+		// authority cannot arm capture; dropping a transient live record writes no V.
+		if (!bAnyLegal && !ObjectPolicy->IsHistoryEligible())
+			AbandonCurrentObservationWithoutHistory(Prop);
 		int32 CurrentIndex = Prop.History.GetCurrentIndex();
 		if (CoverageSnapshot.bValid && CurrentIndex != INDEX_NONE)
 		{
@@ -2216,7 +2254,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 				}
 				Prop.ObservationState = EObservationState::ObservedArmed;
 			}
-			else if (bTransformChanged
+			else if ((bTransformChanged || HistoryMode == ESightWeaveHistoryMode::StationaryOnly)
 				&& Prop.ObservationState == EObservationState::ObservedArmed)
 			{
 				FreezeCurrentForHiddenMotion(Prop, TEXT("VALID_OBSERVED_TO_UNOBSERVED"));
@@ -2413,6 +2451,11 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	FTrackedProp& Prop,
 	const TCHAR* Reason)
 {
+	if (!Prop.ObjectPolicy->IsHistoryEligible())
+	{
+		AbandonCurrentObservationWithoutHistory(Prop);
+		return false;
+	}
 	const int32 CurrentIndex = Prop.History.GetCurrentIndex();
 	if (CurrentIndex == INDEX_NONE
 		|| Prop.ObservationState != EObservationState::ObservedArmed)
@@ -2478,6 +2521,22 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 		Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeY() : 0,
 		Visual ? Visual->TextureUploadCount : 0);
 	return true;
+}
+
+void ADarkwellMovingPropLabRoom::AbandonCurrentObservationWithoutHistory(FTrackedProp& Prop)
+{
+	const int32 Index = Prop.History.GetCurrentIndex();
+	if (Index == INDEX_NONE) return;
+	const uint32 Epoch = Prop.History.GetRecords()[Index].Epoch;
+	if (ADarkwellPropLabFurniture* Actual = Prop.Actual.Get())
+		Actual->Memory->ApplySourceGeometryVisibility(false);
+	if (FRecordVisual* Visual = Prop.Visuals.Find(Epoch)) DestroyVisual(*Visual);
+	Prop.Visuals.Remove(Epoch);
+	Prop.History.AbandonCurrentObservationWithoutHistory();
+	Prop.ObservationState = EObservationState::NeverObserved;
+	Prop.bDiagnosticsDirty = true;
+	++GeometryRevision;
+	++OwnershipRevision;
 }
 
 bool ADarkwellMovingPropLabRoom::SetTrackedExists(
@@ -2587,7 +2646,16 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 			Visual.PartGeometry = ActualPartGeometry(*Actual);
 		}
 	}
-	if (!Visual.Cap.IsValid())
+	if (Record.bCurrentObservedLocation && !Prop.ObjectPolicy->IsHistoryEligible() && Visual.Cap.IsValid())
+	{
+		OwnedCaps.Remove(Visual.Cap.Get());
+		Visual.Cap->DestroyComponent();
+		Visual.Cap.Reset();
+		Visual.CapQuads.Reset();
+		Visual.CapTriangles = 0;
+		Visual.CapSignature = 0;
+	}
+	if (!Visual.Cap.IsValid() && (!Record.bCurrentObservedLocation || Prop.ObjectPolicy->IsHistoryEligible()))
 	{
 		UDynamicMeshComponent* Cap = NewObject<UDynamicMeshComponent>(
 			this, *FString::Printf(TEXT("MovingCap_%s_%u"), *Prop.StableId.ToString(), Record.Epoch));
@@ -2647,7 +2715,8 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
 		Size = Record.FineHistory.GetSize();
 	}
 	else Size = Record.SpatialMemory.BuildConservativePresentation(
-		Darkwell::MovingPropLab::PresentationSamples, Presentation);
+		Darkwell::MovingPropLab::PresentationSamples, Presentation,
+		Record.bCurrentObservedLocation && !Prop.ObjectPolicy->IsHistoryEligible());
 	if (Size.X <= 0 || Presentation.Num() != Size.X * Size.Y)
 	{
 		return;
@@ -3584,7 +3653,12 @@ FText ADarkwellMovingPropLabRoom::GetInWorldControlDisplay(
 			*GetLastCoverageZeroReasonForTesting(Darkwell::MovingPropLab::RotateId),
 			GetSealCountForTesting(Darkwell::MovingPropLab::RotateId))
 		: FString();
-	return FText::FromString(FString::Printf(TEXT("%s\n[%s]%s"), Name, *State, *Diagnostics));
+	const FName Id = GetInWorldPropId(Kind);
+	const USightWeaveObjectPolicyComponent* Policy = GetObjectPolicyForTesting(Id);
+	const TCHAR* PolicyName = !Policy ? TEXT("")
+		: Policy->GetResolvedHistoryMode() == ESightWeaveHistoryMode::Always ? TEXT(" | Always")
+		: Policy->GetResolvedHistoryMode() == ESightWeaveHistoryMode::StationaryOnly ? TEXT(" | StationaryOnly") : TEXT(" | Never");
+	return FText::FromString(FString::Printf(TEXT("%s\n[%s]%s%s"), Name, *State, PolicyName, *Diagnostics));
 }
 
 FColor ADarkwellMovingPropLabRoom::GetInWorldControlColor(
@@ -3860,6 +3934,7 @@ void ADarkwellMovingPropLabRoom::UpdatePressurePlate(ADarkwellCharacter* Player)
 		: (bFirstMove ? Darkwell::MovingPropLab::AbcB : Darkwell::MovingPropLab::AbcC);
 	// Seal exactly one fixed stale epoch while the source is still at A/B. This
 	// precedes the first interpolated transform and prevents a one-frame overlap.
+	Prop->ObjectPolicy->SetSightWeaveMoving(true);
 	FreezeCurrentForHiddenMotion(*Prop, bFirstMove ? TEXT("PRESSURE_A_TO_B") : TEXT("PRESSURE_B_TO_C"));
 	StartMotion(Actual, FTransform(Target), 4.0f);
 	bPressureWaitingForExit = true;
@@ -3979,6 +4054,10 @@ void ADarkwellMovingPropLabRoom::CompleteInWorldMotionGroup()
 
 void ADarkwellMovingPropLabRoom::StopMotion()
 {
+	for (const FActiveMotion& Motion : ActiveMotions)
+		if (ADarkwellPropLabFurniture* Actual = Motion.Prop.Get())
+			if (FTrackedProp* Prop = Tracked.Find(Actual->StableId))
+				Prop->ObjectPolicy->SetSightWeaveMoving(false);
 	bMotionActive = false;
 	ActiveMotions.Reset();
 }
@@ -3992,6 +4071,8 @@ void ADarkwellMovingPropLabRoom::StartMotion(
 	{
 		return;
 	}
+	if (FTrackedProp* TrackedProp = Tracked.Find(Prop->StableId))
+		TrackedProp->ObjectPolicy->SetSightWeaveMoving(true);
 	FActiveMotion& Motion = ActiveMotions.AddDefaulted_GetRef();
 	Motion.Prop = Prop;
 	Motion.Start = Prop->GetActorTransform();
@@ -4023,6 +4104,8 @@ void ADarkwellMovingPropLabRoom::UpdateDeterministicMotion(const float DeltaSeco
 		Actual->SetActorTransform(Transform);
 		if (Alpha >= 1.0f)
 		{
+			if (FTrackedProp* Prop = Tracked.Find(Actual->StableId))
+				Prop->ObjectPolicy->SetSightWeaveMoving(false);
 			ActiveMotions.RemoveAtSwap(Index);
 		}
 	}
@@ -4884,6 +4967,61 @@ FString ADarkwellMovingPropLabRoom::GetTelemetry() const
 		Current, Historical, Caps, MultiCount);
 }
 
+USightWeaveObjectPolicyComponent* ADarkwellMovingPropLabRoom::GetObjectPolicyForTesting(FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	return Prop ? Prop->ObjectPolicy.Get() : nullptr;
+}
+
+bool ADarkwellMovingPropLabRoom::ResetTrackedPolicyForLab(FName StableId, ESightWeaveHistoryMode Mode)
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	if (!Prop || bMotionActive) return false;
+	const FTransform Transform = Prop->InitialTransform;
+	const FVector Dimensions = Prop->Dimensions;
+	const FLinearColor Tint = Prop->Tint;
+	const int32 Shape = Prop->Shape;
+	DestroyTracked(StableId);
+	return SpawnTracked(StableId, Shape, Dimensions, Tint, Transform,
+		ESightWeaveObjectPolicySource::Override, Mode) != nullptr;
+}
+
+bool ADarkwellMovingPropLabRoom::IsCurrentSourceVisibleForTesting(FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	if (!Prop || !Prop->Actual.IsValid()) return false;
+	for (const UStaticMeshComponent* Mesh : Prop->Actual->Memory->GetMemoryPrimitives())
+		if (Mesh && Mesh->IsVisible()) return true;
+	return false;
+}
+
+bool ADarkwellMovingPropLabRoom::CurrentHasOnlyLivePresentationForTesting(FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	if (!Prop) return false;
+	const int32 Index = Prop->History.GetCurrentIndex();
+	if (Index == INDEX_NONE) return true;
+	const FRecordVisual* Visual = Prop->Visuals.Find(Prop->History.GetRecords()[Index].Epoch);
+	if (!Visual) return false;
+	for (const FLinearColor& Pixel : Visual->SubmittedPresentation)
+		if (Pixel.B > 0 || (Pixel.A < FDarkwellSpatialPropMemory::LegalCoverage && Pixel.R > 0)) return false;
+	return true;
+}
+
+FString ADarkwellMovingPropLabRoom::GetHistoryPolicyTelemetry(FName StableId) const
+{
+	const FTrackedProp* Prop = Tracked.Find(StableId);
+	if (!Prop || !Prop->ObjectPolicy.IsValid()) return TEXT("HISTORY MODE: UNREGISTERED");
+	const auto* Policy = Prop->ObjectPolicy.Get();
+	const auto Mode = Policy->GetResolvedHistoryMode();
+	const TCHAR* Name = Mode == ESightWeaveHistoryMode::Always ? TEXT("Always")
+		: Mode == ESightWeaveHistoryMode::StationaryOnly ? TEXT("StationaryOnly") : TEXT("Never");
+	return FString::Printf(TEXT("HISTORY MODE %s | MOVING %d | HISTORY ELIGIBLE %d | FRESH REQUIRED %d\nCURRENT RECORDS %d | STALE RECORDS %d | PROXIES %d | CAPS %d"),
+		Name, Policy->IsSightWeaveMoving(), Policy->IsHistoryEligible(), Policy->RequiresFreshStationaryObservation(),
+		GetCurrentEpochCountForTesting(StableId), GetStaleEpochCountForTesting(StableId),
+		GetVisibleHistoricalProxyCountForTesting(StableId), GetVisibleHistoricalCapCountForTesting(StableId));
+}
+
 void ADarkwellMovingPropLabRoom::Report()
 {
 	FScopedHistoryRuntimeTimer Timer(RuntimeFrame.ReportHudUs);
@@ -4912,6 +5050,9 @@ void ADarkwellMovingPropLabRoom::Report()
 		*GetMotionState(), *GetObjectPositionLabel(), *CurrentInteraction, *RotationDiagnostics,
 		CompletedInWorldControls.Num(), *GetNextInWorldControlLabel(),
 		Tracked.Num(), GetTotalSpatialRecordCount(), MultiCount);
+	const FName PolicyId = ActiveControl == EDarkwellMovingPropLabControlKind::MultiProp
+		? Darkwell::MovingPropLab::MultiLowId : GetInWorldPropId(ActiveControl);
+	if (!PolicyId.IsNone()) Status += TEXT("\n") + GetHistoryPolicyTelemetry(PolicyId);
 	for (ADarkwellMovingPropLabControl* Control : InWorldControls)
 	{
 		if (IsValid(Control)) Control->RefreshDisplay();

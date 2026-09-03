@@ -5,6 +5,7 @@
 #include "Interaction/DarkwellInteractable.h"
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 #include "VisionPresentation/DarkwellSpatialObservationHistory.h"
+#include "SightWeaveObjectPolicy.h"
 #include "DarkwellMovingPropLabRoom.generated.h"
 
 class ADarkwellCharacter;
@@ -212,6 +213,14 @@ public:
 	bool SetTrackedTransformForTesting(FName StableId, const FTransform& Transform);
 	bool StartTrackedRotationForTesting(FName StableId, float TargetYaw, float Duration);
 	bool InjectInvalidCoverageOnceForTesting(FName StableId);
+	/** Explicit per-object reset/re-registration, never an in-place mode change. */
+	UFUNCTION(BlueprintCallable, Category="Lab|History Policy")
+	bool ResetTrackedPolicyForLab(FName StableId, ESightWeaveHistoryMode Mode);
+	UFUNCTION(BlueprintPure, Category="Lab|History Policy")
+	FString GetHistoryPolicyTelemetry(FName StableId) const;
+	USightWeaveObjectPolicyComponent* GetObjectPolicyForTesting(FName StableId) const;
+	bool IsCurrentSourceVisibleForTesting(FName StableId) const;
+	bool CurrentHasOnlyLivePresentationForTesting(FName StableId) const;
 
 	bool SelectScenario(int32 InScenario, ADarkwellCharacter* Player);
 	bool AdvanceScenario(ADarkwellCharacter* Player);
@@ -291,6 +300,8 @@ private:
 	{
 		FName StableId;
 		TWeakObjectPtr<ADarkwellPropLabFurniture> Actual;
+		TWeakObjectPtr<USightWeaveObjectPolicyComponent> ObjectPolicy;
+		uint64 ProcessedMovingRevision = 0;
 		FDarkwellSpatialObservationHistory History;
 		TMap<uint32, FRecordVisual> Visuals;
 		FTransform InitialTransform = FTransform::Identity;
@@ -364,7 +375,9 @@ private:
 		int32 Shape,
 		FVector Dimensions,
 		FLinearColor Tint,
-		const FTransform& Transform);
+		const FTransform& Transform,
+		ESightWeaveObjectPolicySource PolicySource = ESightWeaveObjectPolicySource::UseProjectDefault,
+		ESightWeaveHistoryMode HistoryMode = ESightWeaveHistoryMode::Always);
 	void DestroyTracked();
 	void DestroyTracked(FName StableId);
 	void DestroyVisual(FRecordVisual& Visual, bool bDiscardEvidence = true);
@@ -377,6 +390,7 @@ private:
 	void MarkActiveInWorldControlCompleted();
 	FString GetNextInWorldControlLabel() const;
 	bool FreezeCurrentForHiddenMotion(FTrackedProp& Prop, const TCHAR* Reason);
+	void AbandonCurrentObservationWithoutHistory(FTrackedProp& Prop);
 	void StartMotion(ADarkwellPropLabFurniture* Prop, const FTransform& Target, float Duration);
 	void UpdateInWorldAutomation(float DeltaSeconds, ADarkwellCharacter* Player);
 	void UpdatePressurePlate(ADarkwellCharacter* Player);

@@ -40,7 +40,8 @@ struct DARKWELL_API FDarkwellSpatialPropMemory
  /** R: current source opacity; G: live/gray blend; B: existing proxy opacity. */
  FLinearColor Presentation(int32 Index) const;
  /** Builds a denser, inward-feathered display field without mutating D/V/R authority. */
- FIntPoint BuildConservativePresentation(int32 SamplesPerCell,TArray<FLinearColor>& OutPixels) const;
+ FIntPoint BuildConservativePresentation(int32 SamplesPerCell,TArray<FLinearColor>& OutPixels,
+  bool bTransientLiveOnly=false) const;
 private:
  FName StableId;
  FGameplayTag ActualState;

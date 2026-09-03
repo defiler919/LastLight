@@ -84,6 +84,16 @@ bool FDarkwellSpatialObservationHistory::AdvanceCurrent(
 		&& Records[CurrentIndex].SpatialMemory.Advance(DeltaSeconds, Coverage);
 }
 
+bool FDarkwellSpatialObservationHistory::AbandonCurrentObservationWithoutHistory()
+{
+	if (!Records.IsValidIndex(CurrentIndex)) return false;
+	check(Records[CurrentIndex].bCurrentObservedLocation);
+	Records.RemoveAt(CurrentIndex);
+	CurrentIndex = INDEX_NONE;
+	// NextEpoch remains monotonic; sealed records and their evidence are untouched.
+	return true;
+}
+
 bool FDarkwellSpatialObservationHistory::AdvanceHistorical(
 	const uint32 Epoch,
 	const float DeltaSeconds,

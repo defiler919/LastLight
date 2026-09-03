@@ -36,6 +36,8 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 		const FBox2D& WorldBounds,
 		float CellSize = 2.5f);
 	bool FreezeCurrentForHiddenMovement();
+	/** Drops only the unsealed live observation. Does not manufacture empty evidence. */
+	bool AbandonCurrentObservationWithoutHistory();
 	bool AdvanceCurrent(float DeltaSeconds, TConstArrayView<float> Coverage);
 	bool AdvanceHistorical(
 		uint32 Epoch,

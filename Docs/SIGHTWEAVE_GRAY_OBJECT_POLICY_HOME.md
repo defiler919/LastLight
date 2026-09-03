@@ -884,3 +884,27 @@ frame. 8-moving step p95/peak 10.150500/15.359398 ms; 32-static
 11.883002/53.659000 ms (one isolated >33 ms, none >100), with 76,314 occupancy
 samples reused. Long-growth remains to be rerun on C4; status remains PARTIAL —
 GRAY_OBJECT_POLICY_PERFORMANCE_BLOCKED and TEARDOWN BLOCKER RETAINED.
+
+
+## Home recovery C4 complete 54,000-step evidence
+
+C4 was pushed as `faa8d0122bea78381035ce0c79bfc71b859b9fd2`; local,
+upstream and remote matched and protected refs were unchanged.
+`Home_PhysicalSplit_CompleteSoak_20260904` completed 54,000 active plus 600 idle
+steps on that clean checkpoint. Complete log/report/source remain in the unique
+evidence directory. Result: 0/1, failed only unchanged performance assertions;
+1113.551025 s test / 1132.575995 s wall, Editor exit 0, runner exit 1, severe 0.
+Current lost checks were 0. Capacity/record peak remained 187, with 12 textures,
+3 caps, 33 MIDs, 66,199 live UObjects and 3,278,741,504 bytes working set.
+Measured periodic GC totaled 469.768699 ms. There were **0** steps >100 ms, but
+the longest >33 ms run remained 148 and the final window step p95 was 44.499200 ms
+(peak 86.895902 ms). Thus performance remains blocked. Final idle: 186 records /
+184 historical, 0 proxies, 2 caps, 8 textures, 27 MIDs, 62,636 live UObjects,
+3,279,233,024 bytes; room mean/p95 .527021/.549900 ms and step p50/p95/p99/peak
+.656400/.693597/.833601/.871100 ms. Idle heavy-work and reuse counters were zero.
+No record was evicted or cleared as a performance workaround. C4 eliminates
+billions of repeated fine-occupancy evaluations (2,339,499,907 in the late
+52,568-step window), but remaining evidence/ownership cost still grows with
+retained history. An architectural/product decision on long-lived history
+representation or retention is the accurate next performance entry; do not guess
+an eviction policy. GPU, packaging and exit validation follow separately.

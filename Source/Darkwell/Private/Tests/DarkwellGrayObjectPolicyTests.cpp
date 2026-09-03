@@ -59,7 +59,7 @@ void FDarkwellGrayObjectPolicyTest::GetTests(TArray<FString>& Names,TArray<FStri
   TEXT("StaticPartialStationaryOnlyRetainsGray"),TEXT("StaticNeverDoesNotRetainGray"),
   TEXT("CoverageEdgeNeverIsExpectedNegativeControl"),TEXT("SixPolicyCombinationsCoexist"),
   TEXT("MotionStateAndRevealPolicyIsolation"),TEXT("ExistingHistoryNotIdentityCleared"),
-  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime"),TEXT("CanonicalRasterMatchesOriginalSamples"),TEXT("ConfirmedWholeStopsSpanAndDenseObservationWork"),TEXT("CachedDiagnosticsMatchForcedDiagnostics"),TEXT("FramePhysicalCacheMatchesGeometryOracle")})
+  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime"),TEXT("CanonicalRasterMatchesOriginalSamples"),TEXT("ConfirmedWholeStopsSpanAndDenseObservationWork"),TEXT("CachedDiagnosticsMatchForcedDiagnostics"),TEXT("FramePhysicalCacheMatchesGeometryOracle"),TEXT("WholeObjectConfirmedRespectsPartialWall")})
  { Names.Add(N); Commands.Add(N); }
 }
 bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
@@ -242,6 +242,24 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
  F.Face(90); F.Step(30);
  TestTrue(TEXT("Threshold reached"),F.Room->IsRevealConfirmedForTesting(Id));
  TestEqual(TEXT("Whole source presents every pixel after normal entry"),F.Room->GetCurrentPresentationMinimumForTesting(Id),1.f);
+ if(Case==TEXT("WholeObjectConfirmedRespectsPartialWall"))
+ {
+  auto Pose=F.Room->GetTrackedTransform(Id); Pose.SetLocation(FVector(500,0,0)); F.Room->SetTrackedTransformForTesting(Id,Pose);
+  F.Player->SetActorLocation(FVector(500,-600,92)); F.Player->SetActorRotation(FRotator(0,90,0)); F.Step(30);
+  TestTrue(TEXT("Confirmed state persists at partial opaque wall"),F.Room->IsRevealConfirmedForTesting(Id));
+  TestTrue(TEXT("Actual legal portion stays visible"),F.Room->IsCurrentSourceVisibleForTesting(Id));
+  TestTrue(TEXT("Real wall cuts legal coverage"),F.Room->GetLastLegalCoverageRatioForTesting(Id)>0 && F.Room->GetLastLegalCoverageRatioForTesting(Id)<1);
+  TestEqual(TEXT("Confirmed presentation cannot reveal wall-hidden pixels"),F.Room->GetCurrentPresentationMinimumForTesting(Id),0.f);
+  auto* Fog=F.World->GetSubsystem<UDarkwellFogVisualSubsystem>();
+  for(auto Point:{FVector2D(500,-20),FVector2D(500,20)})
+  {
+   const auto Q=Fog->QueryObjectOcclusionAtWorldPoint(Point); const auto Count=Fog->GetCoverageComputationsForTesting();
+   const auto Again=Fog->QueryObjectOcclusionAtWorldPoint(Point);
+   TestEqual(TEXT("Occlusion cache never recomputes same point/revision"),Fog->GetCoverageComputationsForTesting(),Count);
+   TestTrue(TEXT("Object-only occlusion remains exact on both wall sides"),Q.bValid && Again.Coverage==Q.Coverage && Q.Coverage==(Point.Y<0?1.f:0.f));
+  }
+  return true;
+ }
  if(Case==TEXT("ConfirmedWholeStopsSpanAndDenseObservationWork"))
  {
   const uint64 Evaluations=F.Room->GetRevealSpanEvaluationsForTesting(Id);
@@ -269,6 +287,20 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
  }
  if(Case==TEXT("WholeObjectFastSlowConfirmationEquivalent"))
  {
+  TBitArray<> Reference;
+  for(float Dt:{1.f/30,1.f/60,1.f/120,1.f/144}) for(bool Fast:{false,true})
+  {
+   F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::WholeObjectAfterSpan,100,History::StationaryOnly);
+   F.Face(0); F.Step(1,Dt); TestFalse(TEXT("Starting endpoint never sees target"),F.Room->IsRevealConfirmedForTesting(Id));
+   if(Fast) { F.Face(160); F.Step(1,Dt); }
+   else for(int32 Angle=5;Angle<=160;Angle+=5) { F.Face(Angle); F.Step(1,Dt); }
+   TestTrue(TEXT("Skipped positive interval and slow observation both confirm"),F.Room->IsRevealConfirmedForTesting(Id));
+   TestEqual(TEXT("Current endpoint remains outside legal field"),F.Room->GetLastLegalCoverageRatioForTesting(Id),0.f);
+   TestFalse(TEXT("Swept observation cannot show illegal current endpoint"),F.Room->IsCurrentSourceVisibleForTesting(Id));
+   TBitArray<> Capture,Frozen; TestTrue(TEXT("Stationary swept observation seals gray"),F.Room->GetNewestCaptureMasksForTesting(Id,Capture,Frozen));
+   TestTrue(TEXT("Swept gray uses binary knowledge"),Capture==Frozen && Capture.CountSetBits()>0);
+   if(Reference.Num()==0) Reference=Capture; else TestTrue(TEXT("Fast/slow capture masks identical at all four rates"),Capture==Reference);
+  }
   for(float Dt : {1.f/30,1.f/60,1.f/120,1.f/144})
   {
    F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::WholeObjectAfterSpan,100,History::StationaryOnly);

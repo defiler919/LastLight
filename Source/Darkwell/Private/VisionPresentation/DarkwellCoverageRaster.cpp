@@ -81,7 +81,7 @@ void UDarkwellFogVisualSubsystem::RefreshCanonicalCoverageCache() const
  if(CanonicalAuthority!=Diagnostics.LastAuthorityRevision || CanonicalDraw!=Diagnostics.CoverageDrawCount || bCanonicalActive!=Diagnostics.bActive)
  {
   CanonicalAuthority=Diagnostics.LastAuthorityRevision; CanonicalDraw=Diagnostics.CoverageDrawCount; bCanonicalActive=Diagnostics.bActive;
-  CanonicalPoints.Reset(); CanonicalRasters.Reset();
+  CanonicalPoints.Reset(); CanonicalOcclusionPoints.Reset(); CanonicalRasters.Reset();
  }
 }
 bool UDarkwellFogVisualSubsystem::TryUniformCoverage(const FBox2D& Bounds,float& Value) const

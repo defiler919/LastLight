@@ -384,6 +384,9 @@ FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryLiveCoverageAt
 
 FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryObjectOcclusionAtWorldPoint(const FVector2D& Point) const
 {
+ RefreshCanonicalCoverageCache();
+ if(const auto* Cached=CanonicalOcclusionPoints.Find(Point)) { ++CanonicalCacheHits; return *Cached; }
+ ++CanonicalComputations;
 	FDarkwellFogVisualCoverageQuery Result;
 	Result.AuthorityRevision=Diagnostics.LastAuthorityRevision; Result.CoverageDrawRevision=Diagnostics.CoverageDrawCount;
 	Result.bValid=Diagnostics.bActive && LastSource.IsValid() && FMath::IsFinite(Point.X) && FMath::IsFinite(Point.Y);
@@ -391,6 +394,7 @@ FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryObjectOcclusio
 	const bool Body=LastSource.BodyRadiusCentimeters>0 && !FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(LastSource.BodyCenter,Point,CachedOccluderSegments);
 	const bool Cone=LastSource.bConeLegallyLive && !FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(LastSource.ConeOrigin,Point,CachedOccluderSegments);
 	Result.Coverage=Body || Cone?1.f:0.f;
+ CanonicalOcclusionPoints.Add(Point,Result);
 	return Result;
 }
 
@@ -499,7 +503,7 @@ void UDarkwellFogVisualSubsystem::Deactivate()
 	PreviousSource = FDarkwellFogVisualSourceSnapshot();
 	bSourceContinuityValid = false;
 	CachedOccluderSegments.Reset();
- CanonicalPoints.Reset(); CanonicalRasters.Reset(); CanonicalAuthority=CanonicalDraw=MAX_uint64;
+ CanonicalPoints.Reset(); CanonicalOcclusionPoints.Reset(); CanonicalRasters.Reset(); CanonicalAuthority=CanonicalDraw=MAX_uint64;
 	Diagnostics = FDarkwellFogVisualDiagnostics();
 	DiagnosticReadbackFrameCount = 0;
 }
@@ -511,7 +515,7 @@ bool UDarkwellFogVisualSubsystem::UpdateOccluderParameters(
 	{
 		return false;
 	}
- CanonicalPoints.Reset(); CanonicalRasters.Reset();
+ CanonicalPoints.Reset(); CanonicalOcclusionPoints.Reset(); CanonicalRasters.Reset();
 	CachedOccluderSegments.Reset(Segments.Num());
 	for (const FDarkwellFogVisualSegment& Segment : Segments)
 	{

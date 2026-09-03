@@ -84,4 +84,28 @@ bool FDarkwellSweepFrameInvariantTest::RunTest(const FString&)
 	}
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPositiveSweepEndpointBoundTest,
+ "Darkwell.PropLab.MovingRules.FastSweep.PositiveObservationEndpointBound",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellPositiveSweepEndpointBoundTest::RunTest(const FString&)
+{
+ int32 Rejected=0,Skipped=0;
+ for(double Distance:{30.,100.,500.}) for(double Bearing:{-90.,-30.,0.,20.,80.}) for(double Start:{-120.,-50.,0.,70.}) for(double Turn:{.5,10.,30.,80.,160.})
+ {
+  const auto A=SweepSource(Start),B=SweepSource(Start+Turn);
+  const FVector2D Center=FVector2D(FMath::Cos(FMath::DegreesToRadians(Bearing)),FMath::Sin(FMath::DegreesToRadians(Bearing)))*Distance;
+  const FBox2D Bounds(Center-FVector2D(5),Center+FVector2D(5));
+  const FVector2D Points[]{Center+FVector2D(-1.25,-1.25),Center+FVector2D(1.25,-1.25),Center+FVector2D(1.25,1.25),Center+FVector2D(-1.25,1.25),Center};
+  auto Legal=[&](const FDarkwellFogVisualSourceSnapshot& S){ for(auto P:Points) if(FDarkwellContinuousVisibilityBuilder::QuerySourceCoverage(S,P,{}).Coverage<.99f) return false; return true; };
+  if(Legal(A) || Legal(B)) continue;
+  uint64 Queries=0; const bool Interior=FDarkwellHistoricalVisibilitySweep::ProvePointSetCoverage(A,B,{},Points,Queries);
+  if(!FDarkwellHistoricalVisibilitySweep::MayAddIntermediateSamples(A,B,Bounds))
+  { ++Rejected; TestFalse(TEXT("Cheap short-interval rejection never loses a real intermediate footprint"),Interior); }
+  else if(Interior) ++Skipped;
+ }
+ TestTrue(TEXT("Short intervals exercise cheap rejection"),Rejected>0);
+ TestTrue(TEXT("Large intervals retain actual skipped observations"),Skipped>0);
+ return true;
+}
 #endif

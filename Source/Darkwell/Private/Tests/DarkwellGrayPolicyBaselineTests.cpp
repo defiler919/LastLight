@@ -1,5 +1,6 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
+#include "DarkwellLegacyObjectPolicyFixture.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Engine/Engine.h"
@@ -197,6 +198,7 @@ void FDarkwellGrayPolicyBaseline::GetTests(TArray<FString>& Names,TArray<FString
 bool FDarkwellGrayPolicyBaseline::RunTest(const FString& Case)
 {
  using namespace Darkwell::GrayPolicyBaseline;
+ FDarkwellLegacyObjectPolicyFixture LegacyPolicy;
  FRoom F;
  if(Case==TEXT("StaticPartialPositiveAndNeverNegative"))
  {

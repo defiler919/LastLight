@@ -2168,6 +2168,9 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 	if (Actual)
 	{
 		const FTransform Transform = Actual->GetActorTransform();
+  bool bSweptLegalContact=false;
+  const bool bPreviousCoverageValid=Prop.bLastCoverageValid;
+  const uint64 PreviousCurrentDraw=Prop.CachedCurrentCoverageDrawRevision;
 		const FBox2D Bounds = ActualBounds(*Actual);
 		const bool bTransformChanged = !Darkwell::MovingPropLab::TransformsMatch(
 			Prop.LastPhysicalTransform, Transform);
@@ -2287,10 +2290,34 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
       Prop.CurrentLive.BuildCurrentLegalObservationMask(Prop.CurrentLegalObservationMask);
      }
     }
-    Prop.RevealObservation.Observe(true,Prop.CurrentLegalObservationMask);
     bAnyLegal=Prop.CurrentLegalObservationMask.CountSetBits()>0;
-    Prop.bCachedWholeLegalContact=bAnyLegal;
    }
+   TBitArray<> SweptMask;
+   if((!Prop.RevealObservation.IsConfirmed() || !bAnyLegal) && bCoverageDirty && bPreviousCoverageValid
+    && !ObjectPolicy->IsSightWeaveMoving() && Transform.Equals(Prop.LastPhysicalTransform,1.e-6))
+   {
+    FDarkwellFogVisualSourceSnapshot Previous,Current; TConstArrayView<FDarkwellFogVisualSegment> Occluders;
+    if(Fog->GetHistoricalRotationSweep(PreviousCurrentDraw,Previous,Current,Occluders)
+     && FDarkwellHistoricalVisibilitySweep::MayAddIntermediateSamples(Previous,Current,Bounds))
+    {
+     bSweptLegalContact=Prop.CurrentLive.BuildSweptObservationMask(Transform,Previous,Current,Occluders,SweptMask,Prop.RevealObservation.IsConfirmed());
+     RuntimeFrame.CoverageQueries+=Prop.CurrentLive.Queries;
+     RuntimeFrame.SweepCoverageQueries+=Prop.CurrentLive.Queries;
+     RuntimeFrame.CurrentSamplesTouched+=Prop.CurrentLive.SamplesTouched;
+    }
+   }
+   if(!Prop.RevealObservation.IsConfirmed())
+   {
+    if(bSweptLegalContact)
+    {
+     TBitArray<> SessionMask=Prop.CurrentLegalObservationMask;
+     for(TConstSetBitIterator<> It(SweptMask);It;++It) SessionMask[It.GetIndex()]=true;
+     Prop.RevealObservation.Observe(true,SessionMask);
+     if(!bAnyLegal && !Prop.RevealObservation.IsConfirmed()) Prop.RevealObservation.Observe(true,Prop.CurrentLegalObservationMask);
+    }
+    else Prop.RevealObservation.Observe(true,Prop.CurrentLegalObservationMask);
+   }
+   Prop.bCachedWholeLegalContact=bAnyLegal;
 		}
 		int32 LegalCells = 0;
 		for (const float Value : Coverage)
@@ -2303,7 +2330,35 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		// Observation lifecycle is driven only by revision-matched authoritative
 		// samples. Invalid/not-ready data may fail closed visually, but never writes
 		// player knowledge, seals an epoch, or rearms a later seal.
-		if (bAnyLegal) ObjectPolicy->NotifyLegalObservation();
+		if (bAnyLegal || bSweptLegalContact) ObjectPolicy->NotifyLegalObservation();
+        if(bWhole && bSweptLegalContact && !bAnyLegal && Prop.RevealObservation.IsConfirmed() && IsCaptureEligible(Prop))
+        {
+         // A stationary object was legally seen inside this supported interval.
+         // Seal that pose directly; never show an out-of-view current source.
+         int32 SweptIndex=Prop.History.GetCurrentIndex();
+         if(SweptIndex==INDEX_NONE)
+         {
+          SweptIndex=Prop.History.BeginObservedLocation(Transform,Bounds,Darkwell::MovingPropLab::CellSize);
+          if(SweptIndex!=INDEX_NONE) { ++Prop.ObservationEpisode; ++GeometryRevision; ++Prop.ObservationOwnershipRevision; }
+         }
+         if(SweptIndex!=INDEX_NONE)
+         {
+          auto& Current=Prop.History.GetMutableRecords()[SweptIndex]; Prop.LocalEpoch=Current.Epoch;
+          if(Fog->IsObjectOcclusionFree(Bounds)) Prop.CurrentLive.AdvanceWholeUnoccluded(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage);
+          else
+          {
+           auto Query=[&](FVector2D P){++RuntimeFrame.CoverageQueries;return Fog->QueryLiveCoverageAtWorldPoint(P).Coverage;};
+           Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query);
+           Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
+           Prop.CurrentLive.WritePartRasters(Query,false);
+           auto Occlusion=[&](FVector2D P){++RuntimeFrame.CoverageQueries;return Fog->QueryObjectOcclusionAtWorldPoint(P).Coverage;};
+           Prop.CurrentLive.ApplyWholeObjectPresentation(DeltaSeconds,Current.SpatialMemory,Occlusion);
+          }
+          Prop.ObservationState=EObservationState::ObservedArmed;
+          FreezeCurrentForHiddenMotion(Prop,TEXT("SWEPT_LEGAL_OBSERVATION"));
+          Prop.bDiagnosticsDirty=true; Prop.CurrentPresentationActiveSeconds=0;
+         }
+        }
 		// Never and an unqualified moving observation have no gray fallback. Invalid
 		// authority cannot arm capture; dropping a transient live record writes no V.
 		if (!bAnyLegal && !IsCaptureEligible(Prop) && (!bWhole || CoverageSnapshot.bValid))

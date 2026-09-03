@@ -43,10 +43,33 @@ bool FDarkwellHistoricalVisibilitySweep::ProveEmptyFootprintCoverage(
 	const FBox2D& Footprint, uint64& OutCoverageQueries)
 {
 	if (!MayAffectBounds(A,B,Footprint)) return false;
-	const double Turn = Delta(A,B), Start = Yaw(A.ConeForward);
-	double Low = FMath::Min(0.0,Turn), High = FMath::Max(0.0,Turn);
-	const FVector2D Points[] = {Footprint.Min, FVector2D(Footprint.Max.X,Footprint.Min.Y),
-		Footprint.Max, FVector2D(Footprint.Min.X,Footprint.Max.Y), Footprint.GetCenter()};
+ const FVector2D Points[] = {Footprint.Min,FVector2D(Footprint.Max.X,Footprint.Min.Y),Footprint.Max,
+  FVector2D(Footprint.Min.X,Footprint.Max.Y),Footprint.GetCenter()};
+ return ProvePointSetCoverage(A,B,Occluders,Points,OutCoverageQueries);
+}
+
+bool FDarkwellHistoricalVisibilitySweep::MayAddIntermediateSamples(const FDarkwellFogVisualSourceSnapshot& A,
+ const FDarkwellFogVisualSourceSnapshot& B,const FBox2D& Bounds)
+{
+ if(!MayAffectBounds(A,B,Bounds)) return false;
+ const auto O=A.ConeOrigin;
+ const double Distance=FVector2D::Distance(O,FVector2D(FMath::Clamp(O.X,Bounds.Min.X,Bounds.Max.X),FMath::Clamp(O.Y,Bounds.Min.Y,Bounds.Max.Y)));
+ if(Distance<=4) return true;
+ // Original current cells have <=2.5 cm axes and <4 cm diameter. At fixed
+ // origin, their common legal angular interval has this conservative lower
+ // bound. A shorter rotation cannot contain a missed complete interval.
+ const double Window=2*FMath::DegreesToRadians(double(A.ConeHalfAngleDegrees))
+  -2*FMath::Asin(FMath::Min(1.,1.225/Distance))-2*FMath::Asin(4./Distance);
+ return FMath::Abs(Delta(A,B))>Window-1.e-6;
+}
+
+bool FDarkwellHistoricalVisibilitySweep::ProvePointSetCoverage(const FDarkwellFogVisualSourceSnapshot& A,
+ const FDarkwellFogVisualSourceSnapshot& B,TConstArrayView<FDarkwellFogVisualSegment> Occluders,
+ TConstArrayView<FVector2D> Points,uint64& OutCoverageQueries)
+{
+ if(!IsSupported(A,B) || Points.IsEmpty()) return false;
+ const double Turn=Delta(A,B),Start=Yaw(A.ConeForward);
+ double Low=FMath::Min(0.,Turn),High=FMath::Max(0.,Turn);
 	// Same 2.5cm signed-distance transition and .99 legal threshold as FogVisual.
 	// Interval intersection proves simultaneous footprint coverage, not a per-corner UNION.
 	const double Margin = (FDarkwellSpatialPropMemory::LegalCoverage - .5) * 2.5;

@@ -2,6 +2,8 @@
 #include "CoreMinimal.h"
 #include "Math/Float16Color.h"
 #include "VisionPresentation/DarkwellSpatialPropMemory.h"
+struct FDarkwellFogVisualSourceSnapshot;
+struct FDarkwellFogVisualSegment;
 
 /** Project adapter state for rigid, upright (XY/yaw) primitive observations.
  * No identity registry, texture, actor, historical evidence or coverage authority.
@@ -36,6 +38,9 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  void WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds);
  void WritePartRasters(TFunctionRef<float(FVector2D)> LegalCoverage,bool bTransient,TFunction<bool(const FBox2D&,float&)> Uniform={});
  bool HasAnyLegalObservation(const FTransform& ActorPose,TFunctionRef<float(FVector2D)> Query,TFunctionRef<bool(const FBox2D&,float&)> Uniform);
+ bool BuildSweptObservationMask(const FTransform& ActorPose,const FDarkwellFogVisualSourceSnapshot& Previous,
+  const FDarkwellFogVisualSourceSnapshot& Current,TConstArrayView<FDarkwellFogVisualSegment> Occluders,
+  TBitArray<>& Out,bool bContactOnly);
  void AdvanceWholeUnoccluded(float Dt,const FTransform& ActorPose,FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,TConstArrayView<float> Coverage);
  bool IsUniformWholePresentation() const { return !Parts.IsEmpty() && Parts[0].bUniformWholePresentation; }
  /** Object-local continuous footprint, independent of presentation alpha. */

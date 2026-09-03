@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellCurrentLiveGrid.h"
+#include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 
 namespace
 {
@@ -282,4 +283,31 @@ void FDarkwellCurrentLiveGrid::CopyAtlasWithClampBorder(TConstArrayView<FLinearC
  // zero. All other padding is cleared, including a previous larger rectangle.
  for(int32 Y=0;Y<=Size.Y;++Y) for(int32 X=0;X<=Size.X;++X)
   Out[Y*Atlas.X+X]=FFloat16Color(Pixels[FMath::Min(Y,Size.Y-1)*Size.X+FMath::Min(X,Size.X-1)]);
+}
+
+bool FDarkwellCurrentLiveGrid::BuildSweptObservationMask(const FTransform& ActorPose,
+ const FDarkwellFogVisualSourceSnapshot& Previous,const FDarkwellFogVisualSourceSnapshot& Current,
+ TConstArrayView<FDarkwellFogVisualSegment> Occluders,TBitArray<>& Out,bool bContactOnly)
+{
+ Queries=0; SamplesTouched=0; Out.Empty();
+ if(!bContactOnly) Out.Init(false,ObservationFootprint.Num());
+ bool Contact=false;
+ for(int32 PartIndex=0;PartIndex<Parts.Num();++PartIndex)
+ {
+  const auto& P=Parts[PartIndex]; const auto Pose=P.Geometry.RelativeTransform*ActorPose;
+  const auto B=P.Local.GetBounds(); const auto S=P.Local.GetSize(); const auto Step=B.GetSize()/FVector2D(S);
+  TBitArray<> Swept(false,S.X*S.Y);
+  for(int32 Y=0;Y<S.Y;++Y) for(int32 X=0;X<S.X;++X)
+  {
+   FVector2D Points[5]; int32 K=0;
+   for(auto O:{FVector2D(0),FVector2D(1,0),FVector2D(1),FVector2D(0,1),FVector2D(.5)})
+   { const auto L=B.Min+Step*(FVector2D(X,Y)+O); Points[K++]=FVector2D(Pose.TransformPosition(FVector(L,P.Geometry.LocalBounds.GetCenter().Z))); }
+   ++SamplesTouched;
+   if(FDarkwellHistoricalVisibilitySweep::ProvePointSetCoverage(Previous,Current,Occluders,Points,Queries))
+   { Contact=true; if(bContactOnly) return true; Swept[Y*S.X+X]=true; }
+  }
+  if(!bContactOnly) for(int32 I=0;I<Out.Num();++I)
+   if(ObservationPartIndices[PartIndex][I]!=INDEX_NONE && Swept[ObservationPartIndices[PartIndex][I]]) Out[I]=true;
+ }
+ return Contact;
 }

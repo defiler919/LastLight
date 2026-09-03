@@ -207,7 +207,7 @@ private:
  void RefreshCanonicalCoverageCache() const;
  mutable uint64 CanonicalAuthority=MAX_uint64,CanonicalDraw=MAX_uint64;
  mutable bool bCanonicalActive=false;
- mutable TMap<FVector2D,FDarkwellFogVisualCoverageQuery> CanonicalPoints;
+ mutable TMap<FVector2D,FDarkwellFogVisualCoverageQuery> CanonicalPoints, CanonicalOcclusionPoints;
  mutable TMap<FCoverageRasterKey,FCachedCoverageRaster> CanonicalRasters;
  mutable uint64 CanonicalComputations=0,CanonicalCacheHits=0;
  bool bCoverageAudit = false;

@@ -377,3 +377,47 @@ The larger E3 regression is running as `Home_E3_Regression_20260903`; its select
 includes the complete new object-policy suite, old HistoryGridV2, FastSweep,
 InWorldControls, dirty-region and idle-cost tests. Its final result is recorded
 in the follow-up below when available.
+
+
+E3 follow-up: `Home_E3_Regression_20260903` passes **65/65** (52 clean,
+13 warnings), 513.549683 s tests / 533.032107 s wall, process exit 0, severe
+scan 0. Old late-angle, fast sweep, positive cap, overlap, in-world control,
+dirty-region and idle assertions are retained. E3 was pushed as
+`471be18c4510713bf592ab2b0b0bcca4cc32b408`, with all three refs matching.
+
+## Home E4 — observations between rendered frames
+
+The original fixed-origin rotation proof now exposes an exact point-set entry,
+while its original historical rectangle wrapper retains the same five points and
+math. Whole observation can prove the original rotated primitive sample footprint
+inside a supported interval. Tentative union occurs before genuine end-of-interval
+loss clears an unconfirmed session. A confirmed stationary swept observation can
+seal its pose directly, without ever displaying an illegal current endpoint.
+Moving objects, invalid publications, changed origins and ambiguous >=170-degree
+turns do not invent intermediate knowledge. A lower bound on each original cell's
+legal angular interval avoids dense sweep work for normal small input changes.
+
+`WholeObjectFastSlowConfirmationEquivalent` now also compares a 0-to-160-degree
+one-frame turn with a 5-degree incremental route at 30/60/120/144 Hz. Both endpoints
+of the fast turn miss the cabinet. Every route confirms, keeps the final current
+source hidden and produces exactly the same binary frozen/capture mask. This
+supersedes C's explicitly recorded limited endpoint-only evidence.
+
+The original GrayPolicyBaseline suite is now explicitly scoped to its original
+SpatialPartial/Always settings, just like the other pre-policy suites. Its static
+positive and Never negative assertions are unchanged. GrayHomeBaseline continues
+to use current project defaults. Object-occlusion queries have their own exact
+revision cache, separate from world coverage; neither can read the other's values.
+
+Home_E4_Build1 succeeded (21.10 s). Home_E4_PositiveSweep_20260903: **42/42 clean**,
+116.341606 s, exit 0, severe scan 0. This includes the original FastSweep suite
+and the expanded project policy suite. Additional short-interval proof and
+confirmed partial-wall/cache checks are validated in the follow-up below.
+
+Home_E4_Build2 succeeded. Home_E4_ProofGuards_20260903: **13/13 clean**,
+4.906801 s tests / 25.174823 s wall, exit 0, severe scan 0. Confirmed Whole
+retains the real partial-wall cut; object occlusion caches remain distinct from
+world knowledge. The short-turn optimization is checked against the exact
+continuous point-set proof over distances, bearings and turn magnitudes.
+The GT metric above measures Room.UpdateRoom, not total editor/game frame time;
+subsequent performance instrumentation must expose the enclosing fixture step.

@@ -34,6 +34,8 @@ struct DARKWELL_API FDarkwellSpatialPropMemory
  bool IsAbsent() const;
  FName GetStableId() const { return StableId; }
  uint32 GetGeneration() const { return Generation; }
+ uint64 GetInitializeCount() const { return InitializeCount; }
+ uint64 GetBeginPresentCount() const { return BeginPresentCount; }
  const FBox2D& GetBounds() const { return Bounds; }
  FIntPoint GetSize() const { return Size; }
  TConstArrayView<FCell> GetCells() const { return Cells; }
@@ -46,6 +48,7 @@ private:
  FName StableId;
  FGameplayTag ActualState;
  uint32 Generation=0;
+ uint64 InitializeCount=0, BeginPresentCount=0;
  FBox2D Bounds;
  FIntPoint Size=FIntPoint::ZeroValue;
  TArray<FCell> Cells;

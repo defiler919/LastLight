@@ -73,6 +73,7 @@ class DARKWELL_API ADarkwellMovingPropLabRoom final : public AActor
 	GENERATED_BODY()
 
 public:
+	UFUNCTION(BlueprintPure, Category="Lab") FString GetMovingLiveTelemetry(FName StableId) const;
 	struct FHistoryRuntimeTelemetry
 	{
 		uint64 FrameNumber = 0;

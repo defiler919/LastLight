@@ -9,6 +9,7 @@ namespace Darkwell::SpatialPropMemory
 
 void FDarkwellSpatialPropMemory::Initialize(FName InStableId,const FBox2D& InBounds,float CellSize)
 {
+ ++InitializeCount;
  StableId=InStableId; Bounds=InBounds; Generation=0; ActualState=FGameplayTag();
  check(InBounds.bIsValid && CellSize>0 && InBounds.GetSize().GetMin()>0);
  Size=FIntPoint(FMath::CeilToInt(InBounds.GetSize().X/CellSize),FMath::CeilToInt(InBounds.GetSize().Y/CellSize));
@@ -18,6 +19,7 @@ bool FDarkwellSpatialPropMemory::IsPresent() const { return ActualState==Darkwel
 bool FDarkwellSpatialPropMemory::IsAbsent() const { return ActualState==Darkwell::SpatialPropMemory::Absent; }
 void FDarkwellSpatialPropMemory::BeginPresent()
 {
+ ++BeginPresentCount;
  ++Generation; ActualState=Darkwell::SpatialPropMemory::Present;
  for(FCell& C:Cells)
  {

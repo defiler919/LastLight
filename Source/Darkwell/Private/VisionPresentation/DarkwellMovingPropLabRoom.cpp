@@ -30,6 +30,22 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogDarkwellMovingPropLab, Log, All);
 
+FString ADarkwellMovingPropLabRoom::GetMovingLiveTelemetry(FName Id) const
+{
+	const FTrackedProp* P=Tracked.Find(Id);
+	if(!P || P->History.GetCurrentIndex()==INDEX_NONE) return TEXT("{\"current\":0}");
+	const auto& R=P->History.GetRecords()[P->History.GetCurrentIndex()];
+	const auto& M=R.SpatialMemory; const auto* V=P->Visuals.Find(R.Epoch);
+	double AMin=1, AMax=0, ASum=0, LMin=1, LMax=0, LSum=0; int32 D=0;
+	for(const auto& C:M.GetCells()) { AMin=FMath::Min(AMin,double(C.AppearanceBlend)); AMax=FMath::Max(AMax,double(C.AppearanceBlend)); ASum+=C.AppearanceBlend;
+		LMin=FMath::Min(LMin,double(C.LiveBlend)); LMax=FMath::Max(LMax,double(C.LiveBlend)); LSum+=C.LiveBlend; D+=C.DiscoveredPresent>0; }
+	int32 Visible=0; if(P->Actual.IsValid()) for(const auto& Part:P->Actual->Parts) Visible+=Part && Part->IsVisible();
+	const int32 N=FMath::Max(1,M.GetCells().Num()); const auto B=M.GetBounds(); const auto S=M.GetSize();
+	return FString::Printf(TEXT("{\"current\":1,\"epoch\":%u,\"stale\":%d,\"pose_updates\":%llu,\"initialize\":%llu,\"begin_present\":%llu,\"transform_revision\":%llu,\"grid\":[%d,%d],\"bounds\":[%.6f,%.6f,%.6f,%.6f],\"discovered\":%d,\"appearance\":[%.6f,%.6f,%.6f],\"live\":[%.6f,%.6f,%.6f],\"coverage\":%.6f,\"valid\":%d,\"visible_primitives\":%d,\"texture_creations\":%d,\"texture_uploads\":%d,\"presentation_hash\":\"%llu\",\"yaw\":%.6f}"),
+		R.Epoch,GetStaleEpochCountForTesting(Id),R.PoseUpdates,M.GetInitializeCount(),M.GetBeginPresentCount(),P->TransformRevision,S.X,S.Y,B.Min.X,B.Min.Y,B.Max.X,B.Max.Y,D,
+		AMin,ASum/N,AMax,LMin,LSum/N,LMax,P->LastLegalCoverageRatio,P->bLastCoverageValid,Visible,V?V->TextureCreationCount:0,V?V->TextureUploadCount:0,V?V->TextureSignature:0,R.SnapshotTransform.Rotator().Yaw);
+}
+
 namespace
 {
 	struct FScopedHistoryRuntimeTimer

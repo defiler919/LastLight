@@ -56,6 +56,7 @@ bool FDarkwellSpatialObservationHistory::RebaseCurrentObservedLocation(
 		return false;
 	}
 	FDarkwellSpatialObservationRecord& Record = Records[CurrentIndex];
+	++Record.PoseUpdates;
 	Record.SnapshotTransform = SnapshotTransform;
 	Record.SpatialMemory.Initialize(StableId, WorldBounds, CellSize);
 	Record.SpatialMemory.BeginPresent();

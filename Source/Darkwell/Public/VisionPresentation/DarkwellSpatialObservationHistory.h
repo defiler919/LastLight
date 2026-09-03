@@ -16,6 +16,7 @@ struct DARKWELL_API FDarkwellSpatialObservationRecord
 	FDarkwellSpatialPropMemory SpatialMemory;
 	FDarkwellHistoryGridV2 FineHistory;
 	bool bCurrentObservedLocation = false;
+	uint64 PoseUpdates = 0;
 };
 
 /**

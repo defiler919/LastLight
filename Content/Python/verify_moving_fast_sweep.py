@@ -149,22 +149,34 @@ def run():
     unreal.log('FAST_SWEEP_GPU_PASS ' + str(root))
     levels.editor_request_end_play()
     yield 30
+    assert editor.get_game_world() is None, 'PIE did not stop'
+    unreal.log('FAST_SWEEP_GPU_PIE_STOPPED')
 
 
 sequence = run()
 frames_left = 0
+last_game_time = None
 
 
 def tick(_delta):
-    global frames_left
-    if frames_left > 0:
-        frames_left -= 1
-        return
+    global frames_left, last_game_time
     try:
         assert time.monotonic()-start < 900, 'GPU route exceeded 15 minutes'
+        # Slate may tick twice without a game tick (e.g. a deferred screenshot).
+        # Route yields are fixed GAME frames; counting both changes the hidden
+        # rotation's partial observation by one pose before the sweep begins.
+        game_world = world()
+        game_time = unreal.GameplayStatics.get_time_seconds(game_world) if game_world else None
+        if game_time is not None and game_time == last_game_time:
+            return
+        last_game_time = game_time
+        if frames_left > 0:
+            frames_left -= 1
+            return
         frames_left = max(0, next(sequence)-1)
     except StopIteration:
         unreal.unregister_slate_post_tick_callback(handle)
+        unreal.log('FAST_SWEEP_GPU_CALLBACK_UNREGISTERED')
         unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'QUIT_EDITOR')
     except Exception as error:
         (root / 'failed.json').write_text(json.dumps(dict(error=repr(error), rows=rows), indent=2))

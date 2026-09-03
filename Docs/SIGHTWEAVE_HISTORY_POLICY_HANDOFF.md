@@ -341,3 +341,31 @@ directories stay outside Git. Neither stable branch is moved after creation.
 Final development and stable refs are checked after push and reported alongside
 the final checkpoint SHA. Stop automated UE/PIE/scripts; ordinary Lab editor
 may remain open with Play stopped. **Keep the computer on.**
+
+## 2026-09-03 — moving Live continuity follow-up
+
+See [SIGHTWEAVE_MOVING_LIVE_CONTINUITY_HANDOFF.md](SIGHTWEAVE_MOVING_LIVE_CONTINUITY_HANDOFF.md).
+This later work begins at `2dda647164e99224e9624f7a9e98af0c7370d5b9` and does
+not replace the history-policy evidence or failures above. Runtime follow-up:
+`b977fea9e2ef01e384af7ac5287aecd0a693d030` (all preceding checkpoints listed in
+the new handoff). Ordinary rigid motion now preserves per-original-primitive local
+Live evidence instead of destructive Rebase/Initialize/BeginPresent. A GPU-discovered
+current-atlas border sampling issue was also corrected without changing AA or materials.
+
+Final standard Editor Development build passed; full regression **102/102**
+(66 clean, 36 warnings, 0 failed/not-run, 819.961303711 s, exit 0). Final D3D12/SM6
+evidence: 607 original PNGs at the recorded 1526x549 game viewport, with near-view
+three-policy rotation, partial coverage, two consecutive FastSweep passes and
+positive historical cap. This is not strict 1080p performance evidence.
+
+The previous abnormal exit was reproduced once in this task after a PASS marker
+and normal log closure: **0xC0000005, teardown blocker remains open**. Final two
+FastSweep passes each landed 85/85, stopped PIE, unregistered callbacks and exited
+0; those successes do not erase the earlier failure. Windows Application Error
+IDs 1000/1001 had no matching entry available at the recorded query time.
+
+Status: **PARTIAL — READY_FOR_USER_MOVING_LIVE_CONTINUITY_RETEST**. User manual
+PIE is still required. Always/StationaryOnly/Never, .20/.18, 4x4 AA, dark-gray caps,
+SpatialEvidenceOnly and both stable branches are preserved. Plugin source was
+unchanged this round; no new BuildPlugin claim. WholeObject + Confirmation
+Threshold remains a later task only after this manual retest passes.

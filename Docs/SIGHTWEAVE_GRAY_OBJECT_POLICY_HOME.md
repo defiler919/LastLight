@@ -102,6 +102,7 @@ idle. All before/after comparisons must use these corrected same trajectories.
 | One static changed view | 2.107 | 2.118 | 2.481 | 2.541 | 2.703 | 6372.000 |
 | One moving plus changed view | 16.639 | 17.538 | 20.764 | 36.019 | 39.215 | 40534.640 |
 | Eight moving plus changed view | 121.127 | 130.018 | 147.679 | 155.852 | 161.973 | 267049.487 |
+| Thirty-two static changed view | 53.406 | 54.283 | 59.354 | 62.657 | 63.578 | 152061.435 |
 
 Eight-moving ends with 12 histories, 5 proxies/caps/textures, 39 source+history
 MIDs and 66,344 claimed UObject slots; 2,613,784,576 bytes working set. Across
@@ -127,3 +128,34 @@ the permitted high-cost soak interruption; it does not claim a fifteen-minute pa
 Git diff was inspected; generated evidence remains ignored. The containing
 `test: record home gray policy baseline and cost blockers` commit is pushed
 before beginning plugin feature implementation.
+
+## Checkpoint B — plugin policy contract
+
+Home A was pushed as `d47fd0f74846ef89288fd9fc188ed1a6fc1b898d`; local/upstream/
+remote equality and clean worktree/LFS status were verified before B source edits.
+
+`ESightWeaveRevealMode` contains only WholeObjectAfterSpan and SpatialPartial.
+`FResolvedSightWeaveObjectPolicy` carries RevealMode, MinimumObservedSpanCm and
+HistoryMode. The new resolver consumes plain default/override data; the old
+history-only overload remains. Components resolve all authoring/config fields
+once in OnRegister. Runtime getters read the cached policy only.
+
+Native plugin defaults remain SpatialPartial / 100 cm / Always. DARKWELL's
+`Config/DefaultGame.ini` explicitly supplies WholeObjectAfterSpan / 100 cm /
+StationaryOnly. All three fields permit independent component overrides.
+Legacy PolicySource/HistoryMode retain names and enum values; legacy Override
+affects History only and remains effective when new flags deserialize false.
+Blueprint queries add GetResolvedRevealMode and GetResolvedMinimumObservedSpanCm.
+
+This checkpoint supplies the policy contract; the Lab consumes Reveal in C.
+It does not yet claim whole-object rendering or confirmation behavior. The
+old plugin tests remain, with their pre-feature absence assertion updated to
+require the newly implemented Reveal field. No old gameplay assertion was removed.
+
+Home_B_Build: standard Editor Win64 Development succeeded, 25 actions, 28.93 s.
+Native tests add all eight per-field override combinations across both Reveal
+and all three History defaults, legacy property deserialization, cached
+registration/isolation, real INI loading and Blueprint public-surface validation.
+`Home_B_Plugin_20260903`: **10/10 clean**, 0 warning/failure/not-run, 0.080738 s,
+process exit 0 and severe scan 0. Diff reviewed; only the named source, config,
+tests and documentation files are staged in this checkpoint.

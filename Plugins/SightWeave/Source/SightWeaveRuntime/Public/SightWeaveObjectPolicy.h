@@ -4,6 +4,14 @@
 #include "Components/ActorComponent.h"
 #include "SightWeaveObjectPolicy.generated.h"
 
+/** Object-local presentation permission; never changes world visibility authority. */
+UENUM(BlueprintType)
+enum class ESightWeaveRevealMode : uint8
+{
+	WholeObjectAfterSpan,
+	SpatialPartial
+};
+
 /** Controls capture of gray object history, never visibility/empty-space authority. */
 UENUM(BlueprintType)
 enum class ESightWeaveHistoryMode : uint8
@@ -20,15 +28,33 @@ enum class ESightWeaveObjectPolicySource : uint8
 	Override
 };
 
+/** Ordinary registration input. Legacy Source affects History only. */
+struct SIGHTWEAVERUNTIME_API FSightWeaveObjectPolicyOverrides
+{
+	bool bOverrideRevealMode = false;
+	ESightWeaveRevealMode RevealMode = ESightWeaveRevealMode::SpatialPartial;
+	bool bOverrideMinimumObservedSpan = false;
+	float MinimumObservedSpanCm = 100.f;
+	bool bOverrideHistoryMode = false;
+	ESightWeaveHistoryMode HistoryMode = ESightWeaveHistoryMode::Always;
+	ESightWeaveObjectPolicySource PolicySource = ESightWeaveObjectPolicySource::UseProjectDefault;
+};
+
 USTRUCT(BlueprintType)
 struct SIGHTWEAVERUNTIME_API FResolvedSightWeaveObjectPolicy
 {
 	GENERATED_BODY()
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="SightWeave|Object Reveal")
+	ESightWeaveRevealMode RevealMode = ESightWeaveRevealMode::SpatialPartial;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="SightWeave|Object Reveal", meta=(Units="cm"))
+	float MinimumObservedSpanCm = 100.f;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="SightWeave|Object History")
 	ESightWeaveHistoryMode HistoryMode = ESightWeaveHistoryMode::Always;
 
 	static FResolvedSightWeaveObjectPolicy Resolve(ESightWeaveHistoryMode ProjectDefault,
 		ESightWeaveObjectPolicySource Source, ESightWeaveHistoryMode Override);
+	static FResolvedSightWeaveObjectPolicy Resolve(const FResolvedSightWeaveObjectPolicy& Defaults,
+		const FSightWeaveObjectPolicyOverrides& Overrides);
 };
 
 /** Explicit per-object capture lifecycle. Contains no identity, transform or world evidence. */
@@ -59,10 +85,23 @@ class SIGHTWEAVERUNTIME_API USightWeaveObjectPolicyComponent final : public UAct
 	GENERATED_BODY()
 public:
 	USightWeaveObjectPolicyComponent();
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="SightWeave|Object Reveal")
+	bool bOverrideRevealMode = false;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="SightWeave|Object Reveal", meta=(EditCondition="bOverrideRevealMode"))
+	ESightWeaveRevealMode RevealMode = ESightWeaveRevealMode::SpatialPartial;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="SightWeave|Object Reveal")
+	bool bOverrideMinimumObservedSpan = false;
+	/** World centimeters. Zero means first genuine legal sample, never unconditional reveal. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="SightWeave|Object Reveal",
+		meta=(EditCondition="bOverrideMinimumObservedSpan", ClampMin="0", Units="cm"))
+	float MinimumObservedSpanCm = 100.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="SightWeave|Object History")
+	bool bOverrideHistoryMode = false;
+	/** Compatibility: Override still overrides HistoryMode; it never overrides Reveal fields. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="SightWeave|Object History")
 	ESightWeaveObjectPolicySource PolicySource = ESightWeaveObjectPolicySource::UseProjectDefault;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="SightWeave|Object History",
-		meta=(EditCondition="PolicySource == ESightWeaveObjectPolicySource::Override"))
+		meta=(EditCondition="bOverrideHistoryMode || PolicySource == ESightWeaveObjectPolicySource::Override"))
 	ESightWeaveHistoryMode HistoryMode = ESightWeaveHistoryMode::Always;
 
 	UFUNCTION(BlueprintCallable, Category="SightWeave|Object History")
@@ -71,6 +110,10 @@ public:
 	bool IsSightWeaveMoving() const { return Capture.IsMoving(); }
 	UFUNCTION(BlueprintPure, Category="SightWeave|Object History")
 	ESightWeaveHistoryMode GetResolvedHistoryMode() const { return Capture.GetPolicy().HistoryMode; }
+	UFUNCTION(BlueprintPure, Category="SightWeave|Object Reveal")
+	ESightWeaveRevealMode GetResolvedRevealMode() const { return Capture.GetPolicy().RevealMode; }
+	UFUNCTION(BlueprintPure, Category="SightWeave|Object Reveal")
+	float GetResolvedMinimumObservedSpanCm() const { return Capture.GetPolicy().MinimumObservedSpanCm; }
 	UFUNCTION(BlueprintPure, Category="SightWeave|Object History")
 	int64 GetMovingRevision() const { return static_cast<int64>(Capture.GetMovingRevision()); }
 	UFUNCTION(BlueprintPure, Category="SightWeave|Object History")

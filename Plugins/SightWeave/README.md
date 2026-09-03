@@ -43,7 +43,7 @@ The idempotent `Content/Python/create_sightweave_lab.py` script rebuilds 20 M2 f
 
 For standalone validation, use Unreal Automation Tool's `BuildPlugin` command against `SightWeave.uplugin` and a temporary package directory outside the repository.
 
-## Object history capture policy
+## Per-object reveal and history policy
 
 `SightWeaveObjectPolicy.h` adds a host-neutral capture contract. This controls
 whether a **new Live observation may become gray history**; it does not decide
@@ -51,9 +51,13 @@ legal visibility, empty-space knowledge, unknown/black presentation, or identity
 Hosts consume it at their observation capture/lifecycle boundary. The plugin
 does not own the DARKWELL HistoryGridV2 renderer.
 
-Project Settings > SightWeave > Object History provides **Default History Mode**,
-initially **Always**. Add the optional `USightWeaveObjectPolicyComponent` to an
-object to choose **Use Project Default** or **Override** and a History Mode:
+Project Settings > SightWeave provides independent Default Reveal Mode,
+Default Minimum Observed Span (world cm), and Default History Mode. Native
+no-config defaults are **SpatialPartial / 100 cm / Always** for compatibility.
+These are fallbacks only. Each `USightWeaveObjectPolicyComponent` can independently
+override RevealMode, MinimumObservedSpanCm and HistoryMode using the corresponding
+`bOverrideRevealMode`, `bOverrideMinimumObservedSpan` and `bOverrideHistoryMode` fields.
+Reveal modes are **WholeObjectAfterSpan** and **SpatialPartial**. History modes are:
 
 - **Always**: allow stationary and observed moving last-seen capture.
 - **StationaryOnly**: no new moving history; abandon an unsealed moving
@@ -72,7 +76,11 @@ one does not migrate history during an arbitrary runtime policy change.
 #include "SightWeaveObjectPolicy.h"
 
 auto* Policy = NewObject<USightWeaveObjectPolicyComponent>(Actor);
-Policy->PolicySource = ESightWeaveObjectPolicySource::Override;
+Policy->bOverrideRevealMode = true;
+Policy->RevealMode = ESightWeaveRevealMode::WholeObjectAfterSpan;
+Policy->bOverrideMinimumObservedSpan = true;
+Policy->MinimumObservedSpanCm = 100.f;
+Policy->bOverrideHistoryMode = true;
 Policy->HistoryMode = ESightWeaveHistoryMode::StationaryOnly;
 Actor->AddInstanceComponent(Policy);
 Policy->RegisterComponent();
@@ -82,6 +90,7 @@ Policy->SetSightWeaveMoving(false);
 ```
 
 Blueprint/C++: `SetSightWeaveMoving`, `IsSightWeaveMoving`,
+`GetResolvedRevealMode`, `GetResolvedMinimumObservedSpanCm`,
 `GetResolvedHistoryMode`, `GetMovingRevision`, `IsHistoryEligible`,
 `RequiresFreshStationaryObservation`. There is one idempotent motion Boolean,
 no Begin/End stack or negative depth. Only actual changes increment revision.
@@ -92,9 +101,18 @@ non-component hosts.
 The adapter must abandon ineligible **current** observations without sealing,
 retain qualified older histories, and avoid identity-based invalidation.
 StationaryOnly/Never are not permission to erase all records for a StableID.
-No WholeObject, confirmation threshold, profile, automatic motion detector or
-world/region/black options are exposed by this API.
+Legacy `PolicySource` and `HistoryMode` retain their serialized names and enum
+values. Legacy `PolicySource=Override` still overrides History only, even when
+the newly added override flag is false. `UseProjectDefault` cannot suppress an
+explicit per-field override. Legacy Source never overrides Reveal or span.
+The old history-only resolver overload remains source compatible.
 
-Generic tests: `SightWeave.ObjectPolicy`. Host integration and evidence:
+Reveal is object presentation permission and cannot alter legal world coverage,
+explore the floor, reveal neighbors or bypass occlusion/future black-layer gates.
+The host must consume the resolved Reveal fields at its observation boundary;
+merely attaching authoring metadata does not implement a host renderer.
+No profile, automatic motion detector or world/region/black option is exposed.
+
+Generic tests: `SightWeave.ObjectPolicy` and `SightWeave.RevealPolicy`. Host integration and evidence:
 `Docs/SIGHTWEAVE_HISTORY_POLICY_HANDOFF.md` in DARKWELL (documentation only;
 the plugin and its tests have no dependency on that host module).

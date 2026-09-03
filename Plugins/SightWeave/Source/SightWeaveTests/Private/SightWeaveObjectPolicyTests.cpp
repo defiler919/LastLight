@@ -18,7 +18,7 @@ bool FSightWeaveObjectOverrideTest::RunTest(const FString&)
 {
 	using Mode = ESightWeaveHistoryMode;
 	using Source = ESightWeaveObjectPolicySource;
-	TestTrue(TEXT("Default config preserves capture"), GetDefault<USightWeaveSettings>()->DefaultHistoryMode == Mode::Always);
+	TestTrue(TEXT("Native no-config policy preserves capture"), FResolvedSightWeaveObjectPolicy().HistoryMode == Mode::Always);
 	for (const Mode Default : {Mode::Always, Mode::StationaryOnly, Mode::Never})
 		for (const Mode Override : {Mode::Always, Mode::StationaryOnly, Mode::Never})
 		{
@@ -91,6 +91,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightWeavePolicyConfigSerializationTest,
 	"SightWeave.ObjectPolicy.ConfigSerializationAndPublicSurface", SightWeave::ObjectPolicyTests::Flags)
 bool FSightWeavePolicyConfigSerializationTest::RunTest(const FString&)
 {
+	const auto OriginalDefault = GetDefault<USightWeaveSettings>()->DefaultHistoryMode;
 	const FProperty* Property = FindFProperty<FProperty>(USightWeaveSettings::StaticClass(), TEXT("DefaultHistoryMode"));
 	if (!TestNotNull(TEXT("Config property"), Property)) return false;
 	TestTrue(TEXT("Default history mode participates in config serialization"), Property->HasAnyPropertyFlags(CPF_Config));
@@ -107,9 +108,9 @@ bool FSightWeavePolicyConfigSerializationTest::RunTest(const FString&)
 		TestNotNull(TEXT("Config value can be imported"), Property->ImportText_InContainer(*Text, Destination, Destination, PPF_None));
 		TestTrue(TEXT("Config history mode round trips"), Destination->DefaultHistoryMode == Mode);
 	}
-	TestTrue(TEXT("Persistent default was not changed"), GetDefault<USightWeaveSettings>()->DefaultHistoryMode == ESightWeaveHistoryMode::Always);
+	TestTrue(TEXT("Persistent host default was not changed"), GetDefault<USightWeaveSettings>()->DefaultHistoryMode == OriginalDefault);
 	const UClass* Class = USightWeaveObjectPolicyComponent::StaticClass();
-	TestNull(TEXT("No unimplemented RevealMode option"), FindFProperty<FProperty>(Class,TEXT("RevealMode")));
+	TestNotNull(TEXT("Implemented per-object RevealMode option"), FindFProperty<FProperty>(Class,TEXT("RevealMode")));
 	TestNull(TEXT("No unimplemented ConfirmationCoverage option"), FindFProperty<FProperty>(Class,TEXT("ConfirmationCoverage")));
 	for(const TCHAR* Name : {TEXT("SetSightWeaveMoving"),TEXT("IsSightWeaveMoving"),TEXT("GetResolvedHistoryMode")})
 	{

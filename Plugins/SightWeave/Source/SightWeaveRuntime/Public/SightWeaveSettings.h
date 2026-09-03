@@ -16,6 +16,11 @@ class SIGHTWEAVERUNTIME_API USightWeaveSettings final : public UDeveloperSetting
 
 public:
 	USightWeaveSettings();
+	/** Fallbacks only; each object may independently override each field. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Object Reveal")
+	ESightWeaveRevealMode DefaultRevealMode = ESightWeaveRevealMode::SpatialPartial;
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Object Reveal", meta=(ClampMin="0", Units="cm"))
+	float DefaultMinimumObservedSpanCm = 100.f;
 
 	/** Resolved once when an optional object policy component registers. */
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Object History")

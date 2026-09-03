@@ -251,3 +251,35 @@ An additional coexistence assertion exercises the explicit reset priority.
 
 Home_D_Build3 succeeded (12.68 s). Home_D_ExplicitOverride_20260903 passes
 1/1 clean, 0.060444 s, exit 0, severe scan 0. No GPU claim at D.
+
+
+## Home E1 — canonical coverage (intermediate performance checkpoint)
+
+D was pushed as `34fd2c72106ca641fb8a9e9b53e28701acec9c07` with matching refs.
+The project adapter now shares exact point queries and conservative rasters within
+one authority/draw revision. Cache keys retain exact world coordinates and raster
+size; no quantization or frame skipping is used. Deactivation and occluder updates
+invalidate cache state. Lifecycle and coarse/fine history request the same raster
+API. Recursive tiles only reuse proven constant 0/1 values; ambiguous cells retain
+the existing five samples and 2.5 cm / fine-grid resolution. An occlusion-free proof
+checks the entire origin-to-rectangle ray fan, including short internal walls.
+
+Home_E1_Build1 succeeded (21.81 s). Home_E1_Canonical_20260903: **36/36**,
+35 clean + 1 warning, 38.073055 s, process exit 0, severe scan 0. The independent
+oracle comparison exercised 513 positive, 3800 negative and 967 ambiguous tiles.
+This includes all 26 D object-policy cases and the existing FogVisual suite.
+
+Intermediate OneChangedView (project Whole/StationaryOnly, same home trajectory):
+mean 4.710014 ms, p50 2.9928, p95 8.3207, p99 9.5066, peak 13.9848;
+5736.317 high-level queries/frame, 702 current samples/frame, 10,553,197 history
+scans, 162 submissions, 0 NullRHI GPU uploads, 6 texture / 6 MID creations,
+20 cap rebuilds, two sealed records. Idle p95 .0817 ms, but current sample/query
+telemetry exposed continued work after live loss; that is carried into E2.
+This is not a performance pass or a like-for-like speedup over A: A used the old
+SpatialPartial/Always defaults and had a different history lifecycle. Confirmed
+Whole specialization and history/diagnostic costs remain open.
+
+Home_E1_Build2 succeeded. Home_E1_RasterParity_20260903 passes 10/10 clean,
+0.602728 s, exit 0, severe scan 0. It compares seven real world view revisions
+and every raster cell against the original five independent point samples,
+then asserts repeat raster requests perform zero new point computations.

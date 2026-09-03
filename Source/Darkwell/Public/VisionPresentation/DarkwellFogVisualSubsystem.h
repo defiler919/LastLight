@@ -93,7 +93,11 @@ public:
 	static FDarkwellFogVisualCoverageQuery QuerySourceCoverage(
 		const FDarkwellFogVisualSourceSnapshot& Source, const FVector2D& WorldPosition,
 		TConstArrayView<FDarkwellFogVisualSegment> Occluders);
-	static float EvaluateNoOcclusionCoverage(
+	/** Exact 0/1 proof for an entire rectangle; false means sample at original precision. */
+ static bool TryUniformCoverage(const FDarkwellFogVisualSourceSnapshot& Source,const FBox2D& Bounds,
+  TConstArrayView<FDarkwellFogVisualSegment> Occluders,float& Value);
+ static bool IsOcclusionFree(const FVector2D& Origin,const FBox2D& Bounds,TConstArrayView<FDarkwellFogVisualSegment> Occluders);
+ static float EvaluateNoOcclusionCoverage(
 		const FDarkwellFogVisualSourceSnapshot& Source,
 		const FVector2D& WorldPosition,
 		float TransitionWidthCentimeters);
@@ -181,14 +185,32 @@ public:
 
 	bool IsActive() const { return Diagnostics.bActive; }
 	/** Optional forensic audit; disabled during timing runs. Exact positions, one revision/frame. */
-	void BeginCoverageAuditForTesting() { bCoverageAudit = true; AuditPoints.Reset(); AuditQueries = AuditDuplicates = 0; }
+	bool TryUniformCoverage(const FBox2D& Bounds,float& Value) const;
+ bool IsObjectOcclusionFree(const FBox2D& Bounds) const;
+ FDarkwellFogVisualCoverageQuery QueryCanonicalCoverageRaster(const FBox2D& Bounds,FIntPoint Size,TArray<float>& Values,uint64& QueryRequests) const;
+ uint64 GetCoverageComputationsForTesting() const { return CanonicalComputations; }
+ uint64 GetCoverageCacheHitsForTesting() const { return CanonicalCacheHits; }
+ void BeginCoverageAuditForTesting() { bCoverageAudit = true; AuditPoints.Reset(); AuditQueries = AuditDuplicates = 0; }
 	void EndCoverageAuditForTesting(uint64& Queries, uint64& Duplicates) { bCoverageAudit = false; Queries = AuditQueries; Duplicates = AuditDuplicates; AuditPoints.Reset(); }
 	UTextureRenderTarget2D* GetLiveCoverageTexture() const { return LiveCoverageTexture; }
 	const FDarkwellFogVisualMapping& GetMapping() const { return Mapping; }
 	const FDarkwellFogVisualDiagnostics& GetDiagnostics() const { return Diagnostics; }
 
 private:
-	bool bCoverageAudit = false;
+	struct FCoverageRasterKey
+ {
+  FVector2D Min,Max; FIntPoint Size;
+  bool operator==(const FCoverageRasterKey& O) const { return Min==O.Min && Max==O.Max && Size==O.Size; }
+  friend uint32 GetTypeHash(const FCoverageRasterKey& K) { return HashCombine(HashCombine(GetTypeHash(K.Min),GetTypeHash(K.Max)),GetTypeHash(K.Size)); }
+ };
+ struct FCachedCoverageRaster { TArray<float> Values; FDarkwellFogVisualCoverageQuery Result; };
+ void RefreshCanonicalCoverageCache() const;
+ mutable uint64 CanonicalAuthority=MAX_uint64,CanonicalDraw=MAX_uint64;
+ mutable bool bCanonicalActive=false;
+ mutable TMap<FVector2D,FDarkwellFogVisualCoverageQuery> CanonicalPoints;
+ mutable TMap<FCoverageRasterKey,FCachedCoverageRaster> CanonicalRasters;
+ mutable uint64 CanonicalComputations=0,CanonicalCacheHits=0;
+ bool bCoverageAudit = false;
 	mutable TSet<FVector2D> AuditPoints;
 	mutable uint64 AuditQueries = 0, AuditDuplicates = 0;
 	bool Activate(

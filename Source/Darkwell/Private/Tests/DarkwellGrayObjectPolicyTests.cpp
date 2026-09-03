@@ -59,7 +59,7 @@ void FDarkwellGrayObjectPolicyTest::GetTests(TArray<FString>& Names,TArray<FStri
   TEXT("StaticPartialStationaryOnlyRetainsGray"),TEXT("StaticNeverDoesNotRetainGray"),
   TEXT("CoverageEdgeNeverIsExpectedNegativeControl"),TEXT("SixPolicyCombinationsCoexist"),
   TEXT("MotionStateAndRevealPolicyIsolation"),TEXT("ExistingHistoryNotIdentityCleared"),
-  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime")})
+  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime"),TEXT("CanonicalRasterMatchesOriginalSamples")})
  { Names.Add(N); Commands.Add(N); }
 }
 bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
@@ -80,6 +80,29 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
  }
  const bool Matrix=Case.Contains(TEXT("Coexist")) || Case.Contains(TEXT("Isolation")) || Case.Contains(TEXT("ResetClears")) || Case.StartsWith(TEXT("Static")) || Case.StartsWith(TEXT("CoverageEdge"));
  FRoom F(Matrix);
+ if(Case==TEXT("CanonicalRasterMatchesOriginalSamples"))
+ {
+  auto* Fog=F.World->GetSubsystem<UDarkwellFogVisualSubsystem>();
+  const FBox2D B(FVector2D(-375,612.5),FVector2D(-225,692.5)); const FIntPoint Size(61,33);
+  const auto Step=B.GetSize()/FVector2D(Size);
+  for(float Yaw:{-90.f,0.f,90.f,135.f,146.f,150.f,270.f})
+  {
+   F.Face(Yaw); F.Step(); TArray<float> Values,Again; uint64 Requests=0;
+   const auto Q=Fog->QueryCanonicalCoverageRaster(B,Size,Values,Requests);
+   TestTrue(TEXT("Valid canonical publication"),Q.bValid);
+   for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X)
+   {
+    float Oracle=1;
+    for(auto O:{FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)})
+     Oracle=FMath::Min(Oracle,Fog->QueryLiveCoverageAtWorldPoint(B.Min+Step*(FVector2D(X,Y)+O)).Coverage);
+    if(!TestEqual(TEXT("Canonical raster equals original five exact samples"),Values[Y*Size.X+X],Oracle)) return false;
+   }
+   const auto Computations=Fog->GetCoverageComputationsForTesting(); const uint64 BeforeRequests=Requests;
+   Fog->QueryCanonicalCoverageRaster(B,Size,Again,Requests);
+   TestTrue(TEXT("Raster shared without repeat point computations"),Again==Values && Requests==BeforeRequests && Fog->GetCoverageComputationsForTesting()==Computations);
+  }
+  return true;
+ }
  if(Matrix)
  {
   TestEqual(TEXT("Six explicit static controls coexist with original nine"),F.Room->GetTrackedIdentityCount(),15);

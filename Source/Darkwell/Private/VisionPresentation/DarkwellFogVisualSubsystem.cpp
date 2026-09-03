@@ -370,11 +370,15 @@ FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryLiveCoverageAt
 		AuditPoints.Add(WorldPosition, &bAlreadyPresent);
 		AuditDuplicates += bAlreadyPresent ? 1 : 0;
 	}
-	FDarkwellFogVisualCoverageQuery Result;
-	if (Diagnostics.bActive)
-		Result = FDarkwellContinuousVisibilityBuilder::QuerySourceCoverage(LastSource, WorldPosition, CachedOccluderSegments);
+ RefreshCanonicalCoverageCache();
+ if(const auto* Cached=CanonicalPoints.Find(WorldPosition)) { ++CanonicalCacheHits; return *Cached; }
+ ++CanonicalComputations;
+ FDarkwellFogVisualCoverageQuery Result;
+ if (Diagnostics.bActive)
+  Result = FDarkwellContinuousVisibilityBuilder::QuerySourceCoverage(LastSource, WorldPosition, CachedOccluderSegments);
 	Result.AuthorityRevision = Diagnostics.LastAuthorityRevision;
 	Result.CoverageDrawRevision = Diagnostics.CoverageDrawCount;
+ if(FMath::IsFinite(WorldPosition.X) && FMath::IsFinite(WorldPosition.Y)) CanonicalPoints.Add(WorldPosition,Result);
 	return Result;
 }
 
@@ -495,6 +499,7 @@ void UDarkwellFogVisualSubsystem::Deactivate()
 	PreviousSource = FDarkwellFogVisualSourceSnapshot();
 	bSourceContinuityValid = false;
 	CachedOccluderSegments.Reset();
+ CanonicalPoints.Reset(); CanonicalRasters.Reset(); CanonicalAuthority=CanonicalDraw=MAX_uint64;
 	Diagnostics = FDarkwellFogVisualDiagnostics();
 	DiagnosticReadbackFrameCount = 0;
 }
@@ -506,6 +511,7 @@ bool UDarkwellFogVisualSubsystem::UpdateOccluderParameters(
 	{
 		return false;
 	}
+ CanonicalPoints.Reset(); CanonicalRasters.Reset();
 	CachedOccluderSegments.Reset(Segments.Num());
 	for (const FDarkwellFogVisualSegment& Segment : Segments)
 	{

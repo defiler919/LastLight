@@ -988,82 +988,11 @@ ADarkwellMovingPropLabRoom::SampleConservativeCoverage(
 		Result.ZeroReason = TEXT("GRID_INVALID");
 		return Result;
 	}
-	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
-	TArray<float> Corners;
-	Corners.SetNumUninitialized((Size.X + 1) * (Size.Y + 1));
-	Result.Values.SetNumUninitialized(Size.X * Size.Y);
-	Result.bValid = true;
-	bool bRevisionInitialized = false;
-	EDarkwellFogCoverageZeroReason AggregateZeroReason = EDarkwellFogCoverageZeroReason::None;
-	auto Sample = [&](const FVector2D Point)
-	{
-		++RuntimeFrame.CoverageQueries;
-		const FDarkwellFogVisualCoverageQuery Query = Fog->QueryLiveCoverageAtWorldPoint(Point);
-		if (!Query.bValid)
-		{
-			Result.bValid = false;
-			AggregateZeroReason = Query.ZeroReason;
-			return 0.0f;
-		}
-		if (!bRevisionInitialized)
-		{
-			Result.AuthorityRevision = Query.AuthorityRevision;
-			Result.CoverageRevision = Query.CoverageDrawRevision;
-			bRevisionInitialized = true;
-		}
-		else if (Result.AuthorityRevision != Query.AuthorityRevision
-			|| Result.CoverageRevision != Query.CoverageDrawRevision)
-		{
-			Result.bValid = false;
-			Result.ZeroReason = TEXT("REVISION_MISMATCH");
-		}
-		if (Query.Coverage <= 0.0f && AggregateZeroReason == EDarkwellFogCoverageZeroReason::None)
-		{
-			AggregateZeroReason = Query.ZeroReason;
-		}
-		return Query.Coverage;
-	};
-	for (int32 Y = 0; Y <= Size.Y; ++Y)
-	{
-		for (int32 X = 0; X <= Size.X; ++X)
-		{
-			Corners[Y * (Size.X + 1) + X] = Sample(
-				Bounds.Min + Step * FVector2D(X, Y));
-		}
-	}
-	for (int32 Y = 0; Y < Size.Y; ++Y)
-	{
-		for (int32 X = 0; X < Size.X; ++X)
-		{
-			const int32 Corner = Y * (Size.X + 1) + X;
-			float Value = FMath::Min(
-				FMath::Min(Corners[Corner], Corners[Corner + 1]),
-				FMath::Min(Corners[Corner + Size.X + 1], Corners[Corner + Size.X + 2]));
-			Value = FMath::Min(Value, Sample(
-				Bounds.Min + Step * FVector2D(X + .5f, Y + .5f)));
-			Result.Values[Y * Size.X + X] = Value;
-		}
-	}
-	if (!Result.bValid)
-	{
-		if (Result.ZeroReason == TEXT("NOT_SAMPLED"))
-		{
-			Result.ZeroReason = Darkwell::MovingPropLab::CoverageZeroReasonName(AggregateZeroReason);
-		}
-		return Result;
-	}
-	float Maximum = 0.0f;
-	for (const float Value : Result.Values)
-	{
-		Maximum = FMath::Max(Maximum, Value);
-	}
-	const bool bAnyLegal = Result.Values.ContainsByPredicate([](const float Value)
-	{
-		return Value >= FDarkwellSpatialPropMemory::LegalCoverage;
-	});
-	Result.ZeroReason = bAnyLegal ? TEXT("NONE")
-		: (Maximum > 0.0f ? TEXT("BELOW_LEGAL_THRESHOLD")
-			: Darkwell::MovingPropLab::CoverageZeroReasonName(AggregateZeroReason));
+ const auto Query=Fog->QueryCanonicalCoverageRaster(Bounds,Size,Result.Values,RuntimeFrame.CoverageQueries);
+ Result.bValid=Query.bValid; Result.AuthorityRevision=Query.AuthorityRevision; Result.CoverageRevision=Query.CoverageDrawRevision;
+ const bool Any=Result.Values.ContainsByPredicate([](float V){return V>=FDarkwellSpatialPropMemory::LegalCoverage;});
+ const bool Positive=Result.Values.ContainsByPredicate([](float V){return V>0;});
+ Result.ZeroReason=Any?TEXT("NONE"):Positive?TEXT("BELOW_LEGAL_THRESHOLD"):Darkwell::MovingPropLab::CoverageZeroReasonName(Query.ZeroReason);
 	return Result;
 }
 

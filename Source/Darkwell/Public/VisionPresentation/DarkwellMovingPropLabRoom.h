@@ -233,7 +233,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Object Policy")
 	bool IsRevealConfirmedForTesting(FName StableId) const;
 	bool GetNewestCaptureMasksForTesting(FName Id,TBitArray<>& Capture,TBitArray<>& Frozen) const;
-	uint64 GetRevealSpanEvaluationsForTesting(FName Id) const;
+	bool DoesFrameOccupancyMatchOracleForTesting(FName Id);
+ void ForceContributionRefreshForTesting(FName Id);
+ uint64 GetRevealSpanEvaluationsForTesting(FName Id) const;
  bool IsWholePresentationUniformForTesting(FName Id) const;
 	float GetCurrentPresentationMinimumForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|History Policy")
@@ -254,6 +256,13 @@ private:
 		FTransform WorldTransform = FTransform::Identity;
 		int32 PrimitiveIndex = INDEX_NONE;
 	};
+ struct FActualOccupancySnapshot
+ {
+  FName StableId; FBox2D Bounds; TArray<FPrimitiveGeometrySnapshot> Geometry;
+ };
+ TArray<FActualOccupancySnapshot> FrameOccupancy;
+ bool bUseFrameOccupancy=false, bFilterFrameOccupancy=false;
+ TConstArrayView<const FActualOccupancySnapshot*> FrameOccupancyCandidates;
 	friend class FDarkwellCapPartialClipTest;
 	friend class FDarkwellCapCoplanarContactTest;
 	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);
@@ -301,6 +310,7 @@ private:
 		TArray<float> CachedFineCoverage;
 		TBitArray<> CachedFineOccupied;
 		TArray<FBox2D> CachedGeometryRegions;
+  TArray<FPrimitiveGeometrySnapshot> CachedPhysicalGeometry, CachedNewerGeometry;
 		uint64 CachedCoverageAuthorityRevision = MAX_uint64;
 		uint64 CachedCoverageDrawRevision = MAX_uint64;
 		uint64 ProcessedGeometryRevision = 0;
@@ -331,6 +341,7 @@ private:
 		FSightWeaveRevealObservation RevealObservation;
 		TBitArray<> CurrentLegalObservationMask;
   bool bCachedWholeLegalContact=false;
+  uint64 ObservationOwnershipRevision=1;
 		uint32 LocalEpoch=0;
 		TMap<uint32, FRecordVisual> Visuals;
 		FTransform InitialTransform = FTransform::Identity;
@@ -377,6 +388,7 @@ private:
 		bool bInjectInvalidCoverageOnce = false;
 		bool bExists = false;
 		bool bDiagnosticsDirty = true;
+  uint64 DiagnosticSignature=0;
 	};
 
 	struct FCoverageSnapshot
@@ -535,5 +547,4 @@ private:
 	mutable FHistoryRuntimeTelemetry RuntimeTotal;
 	uint64 RuntimeFrameSequence = 0;
 	uint64 GeometryRevision = 1;
-	uint64 OwnershipRevision = 1;
 };

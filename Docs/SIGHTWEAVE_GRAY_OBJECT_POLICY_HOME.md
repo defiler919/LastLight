@@ -326,3 +326,54 @@ Home_E2_Build3 succeeded (20.99 s). Home_E2_Regression_20260903 passes 22/22,
 and MovingLiveContinuity assertions remain intact. The new dedicated test checks
 60 rigid poses: no confirmed span evaluation, no dense observation masks, a full
 source atlas every frame, and zero current sample work after settled view loss.
+
+
+## Home E3 — historical geometry and contributor diagnostics
+
+E2 was pushed as `f5257a110f3e1cfb435a4a5998dc0d3d30a49b92`, with matching refs.
+No thresholds or old assertions are relaxed. Contributor diagnostics now cache
+against their rendered inputs and geometry instead of repeating on every authority
+revision. Cap-point lookups preserve the original .25 cm predicate using adjacent
+spatial buckets. A dedicated test compares cached results with forced diagnostic
+recalculation through multiple view revisions and two historical records.
+
+Physical occupancy snapshots are collected after all deterministic motion for the
+frame. Every historical query reuses those exact primitive transforms and bounds;
+region candidates reject only AABBs that cannot intersect that record. A separate
+oracle test compares cached occupancy to direct live-geometry queries at six rotated
+poses. Ownership revisions are per identity, since another object's reveal never
+owns this identity's historical surface. Physical changes still invalidate global
+occupancy. Dirty regions compare old/new primitive geometry, marking only changed
+regions plus this identity's changed newer-knowledge footprint.
+
+Incremental evidence (benchmark runners passing is not a performance-gate claim):
+
+| E3 intermediate run | trajectory | mean / p95 / peak ms | tests / process |
+|---|---|---|---|
+| DiagnosticsPerf | EightMoving | 11.024 / 27.034 / 31.166 | 3/3; exit 0; severe 0 |
+| DiagnosticsPerf | ThirtyTwoChangedView | 74.024 / 159.988 / 171.115 | 3/3; exit 0; severe 0 |
+| PhysicalCachePerf | EightMoving | 4.635 / 10.948 / 13.162 | 3/3; exit 0; severe 0 |
+| PhysicalCachePerf | ThirtyTwoChangedView | 16.382 / 31.872 / 60.564 | 3/3; exit 0; severe 0 |
+| CandidatesPerf | EightMoving | 4.675 / 11.068 / 15.760 | 4/4; exit 0; severe 0 |
+| CandidatesPerf | ThirtyTwoChangedView | 14.339 / 27.006 / 57.808 | 4/4; exit 0; severe 0 |
+
+All evidence remains in its original unique Saved run. Build1 failed on `auto*`
+deduction from a TObjectPtr array; using the declared component pointer type fixed
+it. Build2/3/4 succeeded. Full behavioral regression and final dirty-region timing
+are still pending at this point in the checkpoint.
+
+
+Final E3 dirty-geometry run (`Home_E3_DirtyGeometryPerf_20260903`): 4/4,
+3 clean + 1 warning, 24.471907 s, exit 0, severe scan 0. Build5 succeeded.
+8 moving: mean 4.659392 ms, p50 .7588, p95 10.9781, p99 11.2027,
+peak 12.8931. 32 static: mean 6.334754 ms, p50 5.1222, p95 11.8204,
+p99 17.4771, peak 59.1153. Both p95 targets are met in this run; the isolated
+59 ms peak is retained. Consecutive slow-frame counts, 15-minute interaction,
+full automation, real GPU output and packaging remain required before handoff.
+The unchanged request/computation counts demonstrate that these gains are from
+physical geometry and diagnostic reuse, not omitted legal coverage samples.
+
+The larger E3 regression is running as `Home_E3_Regression_20260903`; its selector
+includes the complete new object-policy suite, old HistoryGridV2, FastSweep,
+InWorldControls, dirty-region and idle-cost tests. Its final result is recorded
+in the follow-up below when available.

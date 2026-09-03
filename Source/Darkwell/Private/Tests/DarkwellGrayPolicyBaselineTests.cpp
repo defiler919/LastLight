@@ -65,18 +65,19 @@ namespace Darkwell::GrayPolicyBaseline
  struct FMeasurements
  {
   TArray<double> Times;
+  double RefreshUs=0,FineUs=0;
   uint64 Queries=0, Computations=0, CacheHits=0, Scans=0, Submissions=0, Uploads=0, Caps=0, Samples=0, Textures=0, Mids=0;
   void Add(const ADarkwellMovingPropLabRoom::FHistoryRuntimeTelemetry& P)
   {
    Times.Add(P.MovingPropLabGameThreadUs); Queries+=P.CoverageQueries; Computations+=P.CoverageComputations; CacheHits+=P.CoverageCacheHits; Scans+=P.FineSamplesScanned;
    Submissions+=P.TextureUploads; Uploads+=P.GpuTextureUploads; Caps+=P.CapMeshRebuilds;
-   Samples+=P.CurrentSamplesTouched; Textures+=P.TextureCreations; Mids+=P.MidCreations;
+   RefreshUs+=P.RefreshContributionDiagnosticsUs; FineUs+=P.AdvanceFineHistoryUs; Samples+=P.CurrentSamplesTouched; Textures+=P.TextureCreations; Mids+=P.MidCreations;
   }
   FString Report(const FString& Case,int32 Frame,int32 Tracked,const ADarkwellMovingPropLabRoom::FHistoryRuntimeTelemetry& P)
   {
    double Sum=0; for(double T:Times) Sum+=T; Times.Sort(); const int32 N=Times.Num();
-   return FString::Printf(TEXT("GRAY_HOME_PERF case=%s frame=%d tracked=%d mean_us=%.3f p50_us=%.3f p95_us=%.3f p99_us=%.3f peak_us=%.3f queries_per_frame=%.3f computations_per_frame=%.3f cache_hits_per_frame=%.3f current_samples_per_frame=%.3f history_scans=%llu submissions=%llu gpu_uploads=%llu texture_creations=%llu mid_creations=%llu cap_rebuilds=%llu active_history=%d records=%d proxies=%d caps=%d textures=%d mids=%d uobjects=%d live_uobjects=%d working_set=%llu"),
-    *Case,Frame,Tracked,Sum/N,Times[N/2],Times[FMath::Min(N-1,int32(N*.95))],Times[FMath::Min(N-1,int32(N*.99))],Times.Last(),double(Queries)/N,double(Computations)/N,double(CacheHits)/N,double(Samples)/N,Scans,Submissions,Uploads,Textures,Mids,Caps,P.ActiveHistoricalEpochs,P.SpatialRecordCount,P.ProxyCount,P.CapComponentCount,P.TextureCount,P.MidCount+P.SourceMidCount,P.UObjectCount,P.LiveUObjectCount,P.ProcessWorkingSetBytes);
+   return FString::Printf(TEXT("GRAY_HOME_PERF case=%s frame=%d tracked=%d mean_us=%.3f p50_us=%.3f p95_us=%.3f p99_us=%.3f peak_us=%.3f queries_per_frame=%.3f computations_per_frame=%.3f cache_hits_per_frame=%.3f current_samples_per_frame=%.3f history_scans=%llu submissions=%llu gpu_uploads=%llu texture_creations=%llu mid_creations=%llu cap_rebuilds=%llu active_history=%d records=%d proxies=%d caps=%d textures=%d mids=%d uobjects=%d live_uobjects=%d working_set=%llu refresh_mean_us=%.3f fine_mean_us=%.3f"),
+    *Case,Frame,Tracked,Sum/N,Times[N/2],Times[FMath::Min(N-1,int32(N*.95))],Times[FMath::Min(N-1,int32(N*.99))],Times.Last(),double(Queries)/N,double(Computations)/N,double(CacheHits)/N,double(Samples)/N,Scans,Submissions,Uploads,Textures,Mids,Caps,P.ActiveHistoricalEpochs,P.SpatialRecordCount,P.ProxyCount,P.CapComponentCount,P.TextureCount,P.MidCount+P.SourceMidCount,P.UObjectCount,P.LiveUObjectCount,P.ProcessWorkingSetBytes,RefreshUs/N,FineUs/N);
   }
  };
 }

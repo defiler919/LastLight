@@ -59,7 +59,7 @@ void FDarkwellGrayObjectPolicyTest::GetTests(TArray<FString>& Names,TArray<FStri
   TEXT("StaticPartialStationaryOnlyRetainsGray"),TEXT("StaticNeverDoesNotRetainGray"),
   TEXT("CoverageEdgeNeverIsExpectedNegativeControl"),TEXT("SixPolicyCombinationsCoexist"),
   TEXT("MotionStateAndRevealPolicyIsolation"),TEXT("ExistingHistoryNotIdentityCleared"),
-  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime"),TEXT("CanonicalRasterMatchesOriginalSamples"),TEXT("ConfirmedWholeStopsSpanAndDenseObservationWork")})
+  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime"),TEXT("CanonicalRasterMatchesOriginalSamples"),TEXT("ConfirmedWholeStopsSpanAndDenseObservationWork"),TEXT("CachedDiagnosticsMatchForcedDiagnostics"),TEXT("FramePhysicalCacheMatchesGeometryOracle")})
  { Names.Add(N); Commands.Add(N); }
 }
 bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
@@ -80,6 +80,34 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
  }
  const bool Matrix=Case.Contains(TEXT("Coexist")) || Case.Contains(TEXT("Isolation")) || Case.Contains(TEXT("ResetClears")) || Case.StartsWith(TEXT("Static")) || Case.StartsWith(TEXT("CoverageEdge"));
  FRoom F(Matrix);
+ if(Case==TEXT("FramePhysicalCacheMatchesGeometryOracle"))
+ {
+  F.Face(90); F.Step(30); F.Face(-90); F.Step(30);
+  const auto Initial=F.Room->GetTrackedTransform(Id);
+  for(float Angle:{0.f,7.f,45.f,89.f,135.f,180.f})
+  {
+   auto Pose=Initial; Pose.SetRotation(FQuat(FRotator(0,Angle,0))); F.Room->SetTrackedTransformForTesting(Id,Pose); F.Step();
+   TestTrue(TEXT("Cached physical primitives match direct live geometry at rotated historical samples"),F.Room->DoesFrameOccupancyMatchOracleForTesting(Id));
+  }
+  return true;
+ }
+ if(Case==TEXT("CachedDiagnosticsMatchForcedDiagnostics"))
+ {
+  F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::Always);
+  F.Face(90); F.Step(30);
+  TestTrue(TEXT("Multiple independent history records"),F.Room->ConfigureHistoricalEpochCountForTesting(Id,2));
+  for(float Yaw:{-90.f,90.f,135.f,146.f,150.f,270.f,270.f})
+  {
+   F.Face(Yaw); F.Step(3);
+   const auto Surface=F.Room->GetMaxSurfaceContributorsForTesting(Id),Cap=F.Room->GetMaxCapContributorsForTesting(Id);
+   const auto Diagnosis=F.Room->Get3DOwnershipTelemetryForTesting(Id);
+   F.Room->ForceContributionRefreshForTesting(Id);
+   TestEqual(TEXT("Cached surface contributors match forced full recalculation"),F.Room->GetMaxSurfaceContributorsForTesting(Id),Surface);
+   TestEqual(TEXT("Cached cap index preserves contributor count"),F.Room->GetMaxCapContributorsForTesting(Id),Cap);
+   TestEqual(TEXT("Cached 3D diagnostics match forced recalculation"),F.Room->Get3DOwnershipTelemetryForTesting(Id),Diagnosis);
+  }
+  return true;
+ }
  if(Case==TEXT("CanonicalRasterMatchesOriginalSamples"))
  {
   auto* Fog=F.World->GetSubsystem<UDarkwellFogVisualSubsystem>();

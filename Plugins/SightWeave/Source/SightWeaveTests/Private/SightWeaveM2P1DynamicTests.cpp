@@ -245,4 +245,38 @@ bool FSightWeaveM2P1DynamicMultiWorldIsolationTest::RunTest(const FString& Param
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightWeaveAtomicSourceGroupTransform,
+ "SightWeave.ObjectPolicy.AtomicSourceGroupTransform",
+ SightWeave::M2P1::DynamicTests::TestFlags)
+bool FSightWeaveAtomicSourceGroupTransform::RunTest(const FString& Parameters)
+{
+ using namespace SightWeave::M2P1::DynamicTests;
+ FTestWorld W(TEXT("AtomicSourceGroup")); auto* S=W.GetSubsystem();
+ TestTrue(TEXT("Floor"),S->RegisterFloor(Floor(),nullptr));
+ auto V=Vision(); const auto A=S->RegisterVisionSource(V,nullptr);
+ V.Range=500; const auto B=S->RegisterVisionSource(V,nullptr);
+ FSightWeaveIlluminationSourceDescription L; L.KnowledgeOwnerId=Local; L.FloorId=Ground;
+ L.Range=700; L.Transform=V.Transform; L.HeightRange=V.HeightRange;
+ const auto C=S->RegisterIlluminationSource(L,nullptr);
+ TestTrue(TEXT("Light"),C.IsValid());
+ const FSightWeaveVisionSourceHandle Vs[]={A,B}; const FSightWeaveIlluminationSourceHandle Ls[]={C};
+ const auto Held=S->GetPublishedSnapshot(); const auto Prior=S->GetRevision().GetValue();
+ const FTransform Pose(FRotator(0,63,0),FVector(300,200,100));
+ TestTrue(TEXT("One coherent publication"),S->UpdateSourceGroupTransform(Vs,Ls,Pose));
+ TestEqual(TEXT("Exactly one authority revision"),S->GetRevision().GetValue(),Prior+1);
+ const auto Next=S->GetPublishedSnapshot();
+ for(const auto& Source:Next.VisionSources) TestTrue(TEXT("Vision pose"),Source.Description.Transform.Equals(Pose,0));
+ TestTrue(TEXT("Light pose"),Next.IlluminationSources[0].Description.Transform.Equals(Pose,0));
+ TestEqual(TEXT("Metadata retained"),Next.VisionSources[1].Description.Range,500.f);
+ TestTrue(TEXT("Held publication immutable"),Held.VisionSources[0].Description.Transform.Equals(Vision().Transform,0));
+ TestTrue(TEXT("Unchanged no-op"),S->UpdateSourceGroupTransform(Vs,Ls,Pose));
+ TestEqual(TEXT("No duplicate publication"),S->GetRevision().GetValue(),Prior+1);
+ const FSightWeaveIlluminationSourceHandle Bad[]={FSightWeaveIlluminationSourceHandle(99999)};
+ TestFalse(TEXT("Reject invalid group atomically"),S->UpdateSourceGroupTransform(Vs,Bad,FTransform::Identity));
+ TestEqual(TEXT("Rejected group does not publish"),S->GetRevision().GetValue(),Prior+1);
+ TestTrue(TEXT("Rejected group leaves sources unchanged"),S->GetPublishedSnapshot().VisionSources[0].Description.Transform.Equals(Pose,0));
+ return true;
+}
+
 #endif

@@ -45,9 +45,17 @@ namespace Darkwell::GrayPolicyBaseline
 		}
 		~FRoom() { Fixture->Destroy(); World->DestroyWorld(true); GEngine->DestroyWorldContext(World); }
 		void Face(float Yaw) { Player->SetActorLocation(FVector(-300,100,92)); Player->SetActorRotation(FRotator(0,Yaw,0)); }
+		double StepUs=0, AdapterUs=0, RoomUs=0, FixtureUs=0;
 		void Step(int32 Frames=1)
 		{
-			for (int32 I=0; I<Frames; ++I) { Adapter->Tick(1.f/60); Room->UpdateRoom(1.f/60,Player); Fixture->Tick(1.f/60); }
+			for (int32 I=0; I<Frames; ++I)
+   {
+    const double A=FPlatformTime::Seconds(); Adapter->Tick(1.f/60);
+    const double B=FPlatformTime::Seconds(); Room->UpdateRoom(1.f/60,Player);
+    const double C=FPlatformTime::Seconds(); Fixture->Tick(1.f/60);
+    const double D=FPlatformTime::Seconds();
+    StepUs=(D-A)*1e6; AdapterUs=(B-A)*1e6; RoomUs=(C-B)*1e6; FixtureUs=(D-C)*1e6;
+   }
 		}
 		bool UseRotation()
 		{
@@ -65,20 +73,23 @@ namespace Darkwell::GrayPolicyBaseline
 {
  struct FMeasurements
  {
-  TArray<double> Times;
-  double RefreshUs=0,FineUs=0;
+  TArray<double> Times, Steps;
+  double RefreshUs=0,FineUs=0, AdapterUs=0, RoomWallUs=0, FixtureUs=0;
+  int32 Slow33=0, Slow100=0, Run33=0, MaxRun33=0;
   uint64 Queries=0, Computations=0, CacheHits=0, Scans=0, Submissions=0, Uploads=0, Caps=0, Samples=0, Textures=0, Mids=0;
-  void Add(const ADarkwellMovingPropLabRoom::FHistoryRuntimeTelemetry& P)
+  void Add(const ADarkwellMovingPropLabRoom::FHistoryRuntimeTelemetry& P, const FRoom& F)
   {
+   Steps.Add(F.StepUs); AdapterUs+=F.AdapterUs; RoomWallUs+=F.RoomUs; FixtureUs+=F.FixtureUs;
+   Slow33+=F.StepUs>33000; Slow100+=F.StepUs>100000; Run33=F.StepUs>33000?Run33+1:0; MaxRun33=FMath::Max(MaxRun33,Run33);
    Times.Add(P.MovingPropLabGameThreadUs); Queries+=P.CoverageQueries; Computations+=P.CoverageComputations; CacheHits+=P.CoverageCacheHits; Scans+=P.FineSamplesScanned;
    Submissions+=P.TextureUploads; Uploads+=P.GpuTextureUploads; Caps+=P.CapMeshRebuilds;
    RefreshUs+=P.RefreshContributionDiagnosticsUs; FineUs+=P.AdvanceFineHistoryUs; Samples+=P.CurrentSamplesTouched; Textures+=P.TextureCreations; Mids+=P.MidCreations;
   }
   FString Report(const FString& Case,int32 Frame,int32 Tracked,const ADarkwellMovingPropLabRoom::FHistoryRuntimeTelemetry& P)
   {
-   double Sum=0; for(double T:Times) Sum+=T; Times.Sort(); const int32 N=Times.Num();
-   return FString::Printf(TEXT("GRAY_HOME_PERF case=%s frame=%d tracked=%d mean_us=%.3f p50_us=%.3f p95_us=%.3f p99_us=%.3f peak_us=%.3f queries_per_frame=%.3f computations_per_frame=%.3f cache_hits_per_frame=%.3f current_samples_per_frame=%.3f history_scans=%llu submissions=%llu gpu_uploads=%llu texture_creations=%llu mid_creations=%llu cap_rebuilds=%llu active_history=%d records=%d proxies=%d caps=%d textures=%d mids=%d uobjects=%d live_uobjects=%d working_set=%llu refresh_mean_us=%.3f fine_mean_us=%.3f"),
-    *Case,Frame,Tracked,Sum/N,Times[N/2],Times[FMath::Min(N-1,int32(N*.95))],Times[FMath::Min(N-1,int32(N*.99))],Times.Last(),double(Queries)/N,double(Computations)/N,double(CacheHits)/N,double(Samples)/N,Scans,Submissions,Uploads,Textures,Mids,Caps,P.ActiveHistoricalEpochs,P.SpatialRecordCount,P.ProxyCount,P.CapComponentCount,P.TextureCount,P.MidCount+P.SourceMidCount,P.UObjectCount,P.LiveUObjectCount,P.ProcessWorkingSetBytes,RefreshUs/N,FineUs/N);
+   double Sum=0; for(double T:Times) Sum+=T; Times.Sort(); Steps.Sort(); const int32 N=Times.Num();
+   return FString::Printf(TEXT("GRAY_HOME_PERF case=%s frame=%d tracked=%d mean_us=%.3f p50_us=%.3f p95_us=%.3f p99_us=%.3f peak_us=%.3f queries_per_frame=%.3f computations_per_frame=%.3f cache_hits_per_frame=%.3f current_samples_per_frame=%.3f history_scans=%llu submissions=%llu gpu_uploads=%llu texture_creations=%llu mid_creations=%llu cap_rebuilds=%llu active_history=%d records=%d proxies=%d caps=%d textures=%d mids=%d uobjects=%d live_uobjects=%d working_set=%llu refresh_mean_us=%.3f fine_mean_us=%.3f step_p50_us=%.3f step_p95_us=%.3f step_p99_us=%.3f step_peak_us=%.3f adapter_mean_us=%.3f room_wall_mean_us=%.3f fixture_mean_us=%.3f over33=%d over100=%d max_consecutive33=%d"),
+    *Case,Frame,Tracked,Sum/N,Times[N/2],Times[FMath::Min(N-1,int32(N*.95))],Times[FMath::Min(N-1,int32(N*.99))],Times.Last(),double(Queries)/N,double(Computations)/N,double(CacheHits)/N,double(Samples)/N,Scans,Submissions,Uploads,Textures,Mids,Caps,P.ActiveHistoricalEpochs,P.SpatialRecordCount,P.ProxyCount,P.CapComponentCount,P.TextureCount,P.MidCount+P.SourceMidCount,P.UObjectCount,P.LiveUObjectCount,P.ProcessWorkingSetBytes,RefreshUs/N,FineUs/N,Steps[N/2],Steps[FMath::Min(N-1,int32(N*.95))],Steps[FMath::Min(N-1,int32(N*.99))],Steps.Last(),AdapterUs/N,RoomWallUs/N,FixtureUs/N,Slow33,Slow100,MaxRun33);
   }
  };
 }
@@ -87,7 +98,7 @@ IMPLEMENT_COMPLEX_AUTOMATION_TEST(FDarkwellGrayHomeBaseline,
  "Darkwell.PropLab.GrayHomeBaseline", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 void FDarkwellGrayHomeBaseline::GetTests(TArray<FString>& Names,TArray<FString>& Commands) const
 {
- for(const TCHAR* N : {TEXT("OneChangedView"),TEXT("EightChangedView"),TEXT("ThirtyTwoChangedView"),TEXT("OneMoving"),TEXT("EightMoving"),TEXT("HistoryGrowth"),TEXT("FifteenMinuteInteraction")})
+ for(const TCHAR* N : {TEXT("OneChangedView"),TEXT("EightChangedView"),TEXT("ThirtyTwoChangedView"),TEXT("OneMoving"),TEXT("EightMoving"),TEXT("HistoryGrowth"),TEXT("FifteenMinuteInteraction"),TEXT("EightMovingPerformanceGate"),TEXT("ThirtyTwoChangedViewPerformanceGate"),TEXT("FifteenMinuteInteractiveSoak")})
  { Names.Add(N); Commands.Add(N); }
 }
 bool FDarkwellGrayHomeBaseline::RunTest(const FString& Case)
@@ -95,7 +106,8 @@ bool FDarkwellGrayHomeBaseline::RunTest(const FString& Case)
  using namespace Darkwell::GrayPolicyBaseline;
  FRoom F;
  auto* Fog=F.World->GetSubsystem<UDarkwellFogVisualSubsystem>();
- const bool Soak=Case==TEXT("FifteenMinuteInteraction"), Growth=Case==TEXT("HistoryGrowth");
+ const bool Soak=Case==TEXT("FifteenMinuteInteraction") || Case==TEXT("FifteenMinuteInteractiveSoak"), Growth=Case==TEXT("HistoryGrowth");
+ const bool Gate=Case.EndsWith(TEXT("PerformanceGate")) || Case==TEXT("FifteenMinuteInteractiveSoak");
  const bool Moving=Case.Contains(TEXT("Moving")) || Soak;
  const int32 Count=Case.StartsWith(TEXT("ThirtyTwo"))?32:Case.StartsWith(TEXT("Eight"))?8:1;
  if(!Soak && !Growth) TestTrue(TEXT("Isolated count fixture"),F.Room->SetMultiCount(Count,F.Player));
@@ -121,6 +133,7 @@ bool FDarkwellGrayHomeBaseline::RunTest(const FString& Case)
   const double Begin=FPlatformTime::Seconds();
   double LastReportTime=Begin;
   FMeasurements M;
+  int32 TotalSlow100=0, Run33=0, MaxRun33=0;
   TArray<FTransform> MotionStarts;
   for(int32 I=0;I<Frames;++I)
   {
@@ -153,11 +166,18 @@ bool FDarkwellGrayHomeBaseline::RunTest(const FString& Case)
      }
     F.Player->SetActorRotation(FRotator(0,Soak?90.f+80.f*FMath::Sin(I*.012f):float(I%720)*.5f,0));
    }
-   F.Step(); M.Add(F.Room->GetHistoryRuntimeFrameTelemetryForTesting());
+   F.Step(); M.Add(F.Room->GetHistoryRuntimeFrameTelemetryForTesting(),F);
+   TotalSlow100+=F.StepUs>100000; Run33=F.StepUs>33000?Run33+1:0; MaxRun33=FMath::Max(MaxRun33,Run33);
    const bool Stop=Soak && WallBudget>0 && FPlatformTime::Seconds()-Begin>=WallBudget;
    if((I+1)%3600==0 || I+1==Frames || Stop || (Soak && FPlatformTime::Seconds()-LastReportTime>=60))
    {
     const FString Row=M.Report(Label,I+1,F.Room->GetTrackedIdentityCount(),F.Room->GetHistoryRuntimeFrameTelemetryForTesting());
+    if(Gate)
+    {
+     TestTrue(*FString::Printf(TEXT("%s enclosing step p95 budget frame %d"),*Label,I+1),M.Steps[FMath::Min(M.Steps.Num()-1,int32(M.Steps.Num()*.95))]<(Animate?16600:1000));
+     TestTrue(TEXT("No consecutive enclosing steps over 33 ms"),MaxRun33<=1);
+     TestTrue(TEXT("No repeated enclosing steps over 100 ms"),TotalSlow100<=1);
+    }
     // Persist every simulated minute even if an expensive diagnostic run is interrupted.
     UE_LOG(LogTemp,Display,TEXT("%s wall_seconds=%.3f"),*Row,FPlatformTime::Seconds()-Begin); AddInfo(Row); M=FMeasurements{}; LastReportTime=FPlatformTime::Seconds();
    }

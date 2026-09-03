@@ -421,3 +421,63 @@ world knowledge. The short-turn optimization is checked against the exact
 continuous point-set proof over distances, bearings and turn magnitudes.
 The GT metric above measures Room.UpdateRoom, not total editor/game frame time;
 subsequent performance instrumentation must expose the enclosing fixture step.
+
+## Home E5 — enclosing CPU step gates and world publication cost
+
+E4 was pushed as `37296366b49598d8b4f517148216879d9d5ad3eb`; local,
+upstream and remote matched. The original Room GT metric did not include adapter
+publication. The new gate times Adapter.Tick + Room.UpdateRoom (including its
+telemetry finalization) + Fixture.Tick. It reports both scopes, per-stage means,
+p50/p95/p99/peak, >33/>100 counts and longest consecutive >33 run. This is a CPU
+fixture step, not an assertion about the complete rendered editor frame.
+The original baseline tests/trajectories remain; new explicit PerformanceGate
+variants and FifteenMinuteInteractiveSoak enforce p95 <16.6 ms, idle p95 <1 ms,
+no consecutive >33 ms and no repeated >100 ms. No samples are trimmed.
+
+Home_E5_StepScope_20260903 failed both gates: enclosing p95 27.489/26.335 ms
+(8 moving/32 static), adapter mean 12.990/13.023 ms. The process exited 0 but
+the runner correctly returned 1. Opt-in `-GrayProfileAdapter` localized the cost
+to dynamic authority, not fog material submission. Home_E5_AdapterProfile_20260903
+passes its diagnostic case (1/1, 8.183379 s, exit 0); it is not a performance pass.
+
+World exploration rasterization now skips polygon-disjoint tiles/rows with a
+conservative margin; original scanline positions, crossings, inclusive boundary
+bias, precision and packed bytes remain unchanged. The byte-for-byte reference
+retains the old full-row loop. This first optimization alone still failed both
+gates: enclosing p95 19.219/20.028 ms, adapter means 7.005/7.059 ms. Its parity
+case passed. The attempted MemoryAuthority selector had no matching cases;
+correct `SightWeave.M3P5.Memory.Authority` and Modifier selectors run below.
+
+The adapter previously moved its body, cone and light through three separate
+publications. Native `UpdateSourceGroupTransform` validates all group handles and
+the transform before mutation, preserves source metadata and publishes their
+coherent final pose once. Existing single-source APIs are unchanged. Tests check
+one revision, immutable held snapshots, no-op updates, and rejection with no
+partial mutation. Memory writing still uses the legal final world snapshot;
+object reveal permission never enters it.
+
+Home_E5_Build1 failed because a text edit also matched the legacy accumulator;
+the edit was scoped correctly and Build2/3/4/5 succeeded (Build5 24.81 s).
+Home_E5_AtomicPerf_20260903: **21/21** (19 clean, 2 warnings), 11.154674 s tests /
+31.920989 s wall, exit 0, severe 0. Includes memory authority/modifier, M6P1,
+object-policy, raster parity and atomic publication tests plus both gates.
+
+| E5 final case | Room mean / p95 / peak ms | enclosing p50 / p95 / p99 / peak ms | >33 / >100 / longest >33 |
+|---|---|---|---|
+| EightMovingPerformanceGate | 4.630 / 11.004 / 12.813 | 3.817 / 13.795 / 14.094 / 16.229 | 0 / 0 / 0 |
+| ThirtyTwoChangedViewPerformanceGate | 6.167 / 11.680 / 57.344 | 8.383 / 14.775 / 19.553 / 60.653 | 1 / 0 / 1 |
+
+Enclosing idle p95 .164/.570 ms, with zero queries, scans, current samples,
+uploads, texture/MID creations and cap rebuilds. Adapter mean 2.389/2.412 ms.
+8 moving retains 5 records/proxies/caps/textures and 39 total MIDs; 32 static
+retains 30 records, 22 proxies, 23 caps, 26 textures, 162 total MIDs. History scans,
+legal coverage requests and current samples exactly match the E2/E3 trajectories.
+This passes the short CPU gates, including the retained isolated 60.653 ms peak;
+15-minute resource/cost stability, D3D12 and complete automation remain pending.
+
+Home_E5_PolicyRegression_20260903: **52/52 clean**, 107.619957 s tests /
+131.239407 s wall, exit 0, severe 0. Complete GrayObjectPolicy, FogVisual and
+original FastSweep tests retain their assertions after atomic source publication.
+The GPU Python driver and its unique-run PowerShell wrapper are included as
+prepared validation tools; Python compile and PowerShell parse succeed, while
+actual D3D12 execution/results are still pending and are recorded separately.

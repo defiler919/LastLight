@@ -528,4 +528,25 @@ bool FSightWeaveM3P5ClearBlockPriorityTest::RunTest(const FString& Parameters)
 
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightWeaveMemoryRowCullingParity,
+ "SightWeave.ObjectPolicy.WorldMemoryRasterRowCullingParity",
+ EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FSightWeaveMemoryRowCullingParity::RunTest(const FString& Parameters)
+{
+ FSightWeaveMemoryScopeKey Scope; Scope.FloorOrigin=FVector2D(-1800,-1200);
+ for(int32 Angle=0;Angle<360;Angle+=13)
+  for(double Offset:{0.0,0.000001,1.25,160.0,319.999999})
+  {
+   TArray<FVector> V;
+   for(int32 I=0;I<12;++I)
+   { const double A=FMath::DegreesToRadians(Angle+I*30.0); const double R=I%2?230:80;
+     V.Emplace(-1400+Offset+FMath::Cos(A)*R,-850+FMath::Sin(A)*R,0); }
+   for(int32 X=-1;X<6;++X) for(int32 Y=-1;Y<6;++Y)
+    if(!SightWeaveMemoryRasterMatchesFullRowsForTesting(V,Scope,FIntPoint(X,Y)))
+      return TestTrue(TEXT("Culled rows exactly match original raster bytes"),false);
+  }
+ return true;
+}
+
 #endif

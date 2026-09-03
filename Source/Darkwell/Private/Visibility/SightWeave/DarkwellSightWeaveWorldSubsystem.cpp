@@ -377,17 +377,23 @@ void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 #else
 	constexpr int32 SurfaceProofMode = 0;
 #endif
-	if (SurfaceProofMode != 1)
-	{
-		UpdateDynamicAuthority();
-		UpdateSubjectAuthority();
-	}
+	const double GrayProfileStart=FPlatformTime::Seconds();
+ if (SurfaceProofMode != 1) { UpdateDynamicAuthority(); }
+ const double GrayProfileDynamic=FPlatformTime::Seconds();
+ if (SurfaceProofMode != 1) { UpdateSubjectAuthority(); }
+ const double GrayProfileSubject=FPlatformTime::Seconds();
 	if (FogVisualSubsystem
 		&& !FogVisualSubsystem->UpdateSource(BuildFogVisualSourceSnapshot()))
 	{
 		RollbackToLegacy(TEXT("DARKWELL continuous fog source update failed"), true);
 		return;
 	}
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+ static int32 GrayProfileCount=0;
+ if(FParse::Param(FCommandLine::Get(),TEXT("GrayProfileAdapter")) && ++GrayProfileCount%100==0)
+  UE_LOG(LogDarkwellSightWeave,Display,TEXT("GRAY_ADAPTER dynamic_us=%.3f subject_us=%.3f fog_us=%.3f"),
+   (GrayProfileDynamic-GrayProfileStart)*1e6,(GrayProfileSubject-GrayProfileDynamic)*1e6,(FPlatformTime::Seconds()-GrayProfileSubject)*1e6);
+#endif
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	if (Darkwell::SightWeaveAdapter::CVarDiagnosticLogGameTransforms.GetValueOnGameThread() != 0)
 	{
@@ -888,9 +894,9 @@ void UDarkwellSightWeaveWorldSubsystem::UpdateDynamicAuthority()
 		BodyDescription.Transform = Transform;
 		ConeDescription.Transform = Transform;
 		TorchDescription.Transform = Transform;
-		RuntimeSubsystem->UpdateVisionSourceTransform(BodyVisionHandle, Transform);
-		RuntimeSubsystem->UpdateVisionSourceTransform(ConeVisionHandle, Transform);
-		RuntimeSubsystem->UpdateIlluminationSourceTransform(TorchIlluminationHandle, Transform);
+  const FSightWeaveVisionSourceHandle VisionHandles[]={BodyVisionHandle,ConeVisionHandle};
+  const FSightWeaveIlluminationSourceHandle IlluminationHandles[]={TorchIlluminationHandle};
+  RuntimeSubsystem->UpdateSourceGroupTransform(VisionHandles,IlluminationHandles,Transform);
 	}
 	const float HalfAngle = FMath::Lerp(
 		52.0f, 35.0f, Character->GetShotgunAimProgress());

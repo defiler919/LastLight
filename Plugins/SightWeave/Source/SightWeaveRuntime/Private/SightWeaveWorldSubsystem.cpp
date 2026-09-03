@@ -558,6 +558,29 @@ bool USightWeaveWorldSubsystem::UpdateVisionSourceTransform(
 	return true;
 }
 
+bool USightWeaveWorldSubsystem::UpdateSourceGroupTransform(
+ TConstArrayView<FSightWeaveVisionSourceHandle> VisionHandles,
+ TConstArrayView<FSightWeaveIlluminationSourceHandle> IlluminationHandles,const FTransform& Transform)
+{
+ check(IsInGameThread());
+ if(!bSightWeaveInitialized || Transform.ContainsNaN()) return false;
+ bool bChanged=false;
+ for(const auto H:VisionHandles)
+ { const auto* D=VisionSources.Find(H.GetValue()); if(!D) return false; bChanged|=!D->Transform.Equals(Transform,0.0); }
+ for(const auto H:IlluminationHandles)
+ { const auto* D=IlluminationSources.Find(H.GetValue()); if(!D) return false; bChanged|=!D->Transform.Equals(Transform,0.0); }
+ if(!bChanged) return true;
+ AdvanceRevision();
+ for(const auto H:VisionHandles)
+ { auto& D=VisionSources.FindChecked(H.GetValue()); if(D.Transform.Equals(Transform,0.0)) continue;
+   D.Transform=Transform; DirtyVisionSources.Add(H.GetValue()); PendingVisionSnapshotRebuilds.Add(H.GetValue()); VisionSourceRevisions.FindChecked(H.GetValue())=Revision; }
+ for(const auto H:IlluminationHandles)
+ { auto& D=IlluminationSources.FindChecked(H.GetValue()); if(D.Transform.Equals(Transform,0.0)) continue;
+   D.Transform=Transform; DirtyIlluminationSources.Add(H.GetValue()); PendingIlluminationSnapshotRebuilds.Add(H.GetValue()); IlluminationSourceRevisions.FindChecked(H.GetValue())=Revision; }
+ PublishSnapshot();
+ return true;
+}
+
 bool USightWeaveWorldSubsystem::UnregisterVisionSource(const FSightWeaveVisionSourceHandle Handle)
 {
 	if (!bSightWeaveInitialized || VisionSources.Remove(Handle.GetValue()) == 0)

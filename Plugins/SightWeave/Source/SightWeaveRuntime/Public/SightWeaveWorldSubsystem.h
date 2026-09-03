@@ -163,6 +163,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "SightWeave|Vision")
 	bool UpdateVisionSourceTransform(FSightWeaveVisionSourceHandle Handle, const FTransform& Transform);
 
+ /** Atomically move attached source groups. Validate all handles before any change;
+  * publish the final coherent pose once, preserving non-transform metadata. */
+ bool UpdateSourceGroupTransform(TConstArrayView<FSightWeaveVisionSourceHandle> VisionHandles,
+  TConstArrayView<FSightWeaveIlluminationSourceHandle> IlluminationHandles,const FTransform& Transform);
+
 	UFUNCTION(BlueprintCallable, Category = "SightWeave|Vision")
 	bool UnregisterVisionSource(FSightWeaveVisionSourceHandle Handle);
 

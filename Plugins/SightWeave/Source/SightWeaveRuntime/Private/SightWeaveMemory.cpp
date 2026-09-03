@@ -138,7 +138,7 @@ namespace SightWeaveMemoryPrivate
 		TConstArrayView<FVector> Vertices,
 		const FSightWeaveMemoryScopeKey& Scope,
 		const FIntPoint LogicalCoordinate,
-		TArray<uint8>& InOutBits)
+		TArray<uint8>& InOutBits, const bool bCullEmptyRows = true)
 	{
 		if (Vertices.Num() < 3)
 		{
@@ -148,8 +148,20 @@ namespace SightWeaveMemoryPrivate
 		const double InteriorSpan = SightWeave::Memory::InteriorTileSize * CentimetersPerTexel;
 		const FVector2D TileMinimum = Scope.FloorOrigin
 			+ FVector2D(LogicalCoordinate) * InteriorSpan;
+		int32 FirstRow=0, EndRow=SightWeave::Memory::InteriorTileSize;
+  if(bCullEmptyRows)
+  {
+   FBox2D Bounds(ForceInit);
+   for(const FVector& V:Vertices) Bounds+=FVector2D(V.X,V.Y);
+   // Padding keeps the original inclusive scanline bias at tile boundaries.
+   const double Padding=CentimetersPerTexel*(1.0+TileBoundaryBias);
+   if(Bounds.Max.X<TileMinimum.X-Padding || Bounds.Min.X>TileMinimum.X+InteriorSpan+Padding
+    || Bounds.Max.Y<TileMinimum.Y-Padding || Bounds.Min.Y>TileMinimum.Y+InteriorSpan+Padding) return;
+   FirstRow=FMath::Clamp(FMath::FloorToInt((Bounds.Min.Y-TileMinimum.Y)/CentimetersPerTexel)-1,0,EndRow);
+   EndRow=FMath::Clamp(FMath::CeilToInt((Bounds.Max.Y-TileMinimum.Y)/CentimetersPerTexel)+1,FirstRow,EndRow);
+  }
 		TArray<double, TInlineAllocator<64>> Crossings;
-		for (int32 Row = 0; Row < SightWeave::Memory::InteriorTileSize; ++Row)
+		for (int32 Row = FirstRow; Row < EndRow; ++Row)
 		{
 			const double SampleY = TileMinimum.Y
 				+ (static_cast<double>(Row) + 0.5) * CentimetersPerTexel;
@@ -1270,3 +1282,14 @@ const FSightWeavePackedMemoryTile* FSightWeaveMemoryAuthority::FindTile(
 			return Tile.Key.LogicalCoordinate == LogicalCoordinate;
 		});
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+bool SightWeaveMemoryRasterMatchesFullRowsForTesting(TConstArrayView<FVector> Vertices,
+ const FSightWeaveMemoryScopeKey& Scope,FIntPoint Tile)
+{
+ TArray<uint8> A,B; A.SetNumZeroed(SightWeave::Memory::PackedBytesPerTile); B=A;
+ SightWeaveMemoryPrivate::RasterizePolygon(Vertices,Scope,Tile,A,true);
+ SightWeaveMemoryPrivate::RasterizePolygon(Vertices,Scope,Tile,B,false);
+ return A==B;
+}
+#endif

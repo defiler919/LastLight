@@ -302,3 +302,8 @@ private:
 	bool bNeedsFullRebuild = false;
 	bool bModifierStateDirty = false;
 };
+
+#if WITH_DEV_AUTOMATION_TESTS
+SIGHTWEAVERUNTIME_API bool SightWeaveMemoryRasterMatchesFullRowsForTesting(TConstArrayView<FVector> Vertices,
+ const FSightWeaveMemoryScopeKey& Scope,FIntPoint Tile);
+#endif

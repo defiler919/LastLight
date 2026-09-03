@@ -325,4 +325,49 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
  else TestTrue(TEXT("Confirmed full static gray history exists"),F.Room->GetNewestHistoricalDiscoveredCellCountForTesting(Id)>0);
  return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellIncrementalHistoryEvidenceParity,
+ "Darkwell.PropLab.GrayObjectPolicy.IncrementalHistoryEvidenceMatchesFullUpdate",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellIncrementalHistoryEvidenceParity::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ TArray<uint64> Reference;
+ for(bool Full:{true,false})
+ {
+  FRoom F; F.Room->bForceFullHistoryEvidenceForTesting=Full;
+  F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::StationaryOnly);
+  for(int32 Frame=0;Frame<240;++Frame)
+  {
+   if(Frame==0) F.Face(146);
+   if(Frame==15 || Frame==110) F.Face(-90);
+   if(Frame==45) TestTrue(TEXT("Real motion in replay"),F.Room->StartTrackedRotationForTesting(Id,180,1));
+   if(Frame==75) F.Face(90);
+   if(Frame==140) F.Face(0);
+   if(Frame==141) F.Face(160);
+   if(Frame==170 || Frame==215) F.Face(80);
+   if(Frame==195) F.Face(150);
+   F.Step();
+   TArray<ADarkwellMovingPropLabRoom::FFineEvidenceDiagnostic> Samples;
+   F.Room->GetFineEvidenceDiagnosticsForTesting(Id,Samples);
+   uint64 Hash=1469598103934665603ull;
+   auto Mix=[&](uint64 V){Hash=(Hash^V)*1099511628211ull;};
+   Mix(Samples.Num());
+   for(const auto& D:Samples)
+   {
+    Mix(D.Epoch); Mix(D.Index); Mix(GetTypeHash(D.Sample.State));
+    Mix(D.Sample.bVerifiedEmpty); Mix(FMath::RoundToInt(D.Sample.Opacity*1000000));
+    Mix(FMath::RoundToInt(D.Sample.InitialRemembered*1000000));
+    Mix(FMath::RoundToInt(D.Sample.FrozenAAEnvelope*1000000));
+    Mix(FMath::RoundToInt(D.Sample.EmptyDwell*1000000));
+    Mix(D.bOccupied); Mix(D.bOwned); Mix(D.bValid); Mix(D.bSubmitted);
+    Mix(FMath::RoundToInt(D.Coverage*1000000));
+   }
+   if(Full) Reference.Add(Hash);
+   else if(!TestEqual(*FString::Printf(TEXT("Full-update reference matches every sample at frame %d"),Frame),Hash,Reference[Frame])) return false;
+  }
+ }
+ return true;
+}
+
 #endif

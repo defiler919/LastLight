@@ -3,6 +3,8 @@
 #include "DarkwellLegacyObjectPolicyFixture.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
+#include "UObject/StrongObjectPtr.h"
+#include "UObject/GarbageCollection.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Player/DarkwellCharacter.h"
@@ -105,6 +107,7 @@ bool FDarkwellGrayHomeBaseline::RunTest(const FString& Case)
 {
  using namespace Darkwell::GrayPolicyBaseline;
  FRoom F;
+ TStrongObjectPtr<UWorld> WorldGuard(F.World);
  auto* Fog=F.World->GetSubsystem<UDarkwellFogVisualSubsystem>();
  const bool Soak=Case==TEXT("FifteenMinuteInteraction") || Case==TEXT("FifteenMinuteInteractiveSoak"), Growth=Case==TEXT("HistoryGrowth");
  const bool Gate=Case.EndsWith(TEXT("PerformanceGate")) || Case==TEXT("FifteenMinuteInteractiveSoak");
@@ -133,7 +136,8 @@ bool FDarkwellGrayHomeBaseline::RunTest(const FString& Case)
   const double Begin=FPlatformTime::Seconds();
   double LastReportTime=Begin;
   FMeasurements M;
-  int32 TotalSlow100=0, Run33=0, MaxRun33=0;
+  int32 TotalSlow100=0, Run33=0, MaxRun33=0, LostLiveChecks=0, MaxRecords=0, MaxTextures=0, MaxCaps=0, MaxMids=0, MaxLiveObjects=0;
+  uint64 MaxWorkingSet=0; double GcUs=0;
   TArray<FTransform> MotionStarts;
   for(int32 I=0;I<Frames;++I)
   {
@@ -166,7 +170,19 @@ bool FDarkwellGrayHomeBaseline::RunTest(const FString& Case)
      }
     F.Player->SetActorRotation(FRotator(0,Soak?90.f+80.f*FMath::Sin(I*.012f):float(I%720)*.5f,0));
    }
-   F.Step(); M.Add(F.Room->GetHistoryRuntimeFrameTelemetryForTesting(),F);
+   F.Step();
+   // A synchronous automation loop does not tick the engine's periodic GC.
+   // Emulate its normal cadence only in the new soak, and include its full pause.
+   if(Soak && Gate && (I+1)%3600==0)
+   { const double StartGc=FPlatformTime::Seconds(); CollectGarbage(RF_NoFlags,true); const double Pause=(FPlatformTime::Seconds()-StartGc)*1e6; F.StepUs+=Pause; GcUs+=Pause; }
+   const auto P=F.Room->GetHistoryRuntimeFrameTelemetryForTesting(); M.Add(P,F);
+   MaxRecords=FMath::Max(MaxRecords,P.SpatialRecordCount); MaxTextures=FMath::Max(MaxTextures,P.TextureCount);
+   MaxCaps=FMath::Max(MaxCaps,P.CapComponentCount); MaxMids=FMath::Max(MaxMids,P.MidCount+P.SourceMidCount);
+   MaxLiveObjects=FMath::Max(MaxLiveObjects,P.LiveUObjectCount); MaxWorkingSet=FMath::Max(MaxWorkingSet,P.ProcessWorkingSetBytes);
+   if(Soak && Gate && I%60==0)
+    for(FName Target:{Id,FName(TEXT("Lab.Moving.Cabinet")),FName(TEXT("Lab.InWorld.Hidden.Cabinet"))})
+     if(F.Room->IsRevealConfirmedForTesting(Target) && F.Room->GetLastLegalCoverageRatioForTesting(Target)>.5f && !F.Room->IsCurrentSourceVisibleForTesting(Target)) ++LostLiveChecks;
+
    TotalSlow100+=F.StepUs>100000; Run33=F.StepUs>33000?Run33+1:0; MaxRun33=FMath::Max(MaxRun33,Run33);
    const bool Stop=Soak && WallBudget>0 && FPlatformTime::Seconds()-Begin>=WallBudget;
    if((I+1)%3600==0 || I+1==Frames || Stop || (Soak && FPlatformTime::Seconds()-LastReportTime>=60))
@@ -182,6 +198,13 @@ bool FDarkwellGrayHomeBaseline::RunTest(const FString& Case)
     UE_LOG(LogTemp,Display,TEXT("%s wall_seconds=%.3f"),*Row,FPlatformTime::Seconds()-Begin); AddInfo(Row); M=FMeasurements{}; LastReportTime=FPlatformTime::Seconds();
    }
    if(Stop) { bBudgetExceeded=true; AddError(TEXT("Soak deliberately interrupted at diagnostic wall budget; NOT a fifteen-minute pass. Completed samples retained.")); break; }
+  }
+  if(Gate)
+  {
+   TestEqual(TEXT("Legal confirmed current remains visible throughout long interaction"),LostLiveChecks,0);
+   TestTrue(TEXT("Existing per-object record bound respected"),MaxRecords<=F.Room->GetTrackedIdentityCount()*FDarkwellSpatialObservationHistory::MaxResidentRecords);
+   TestTrue(TEXT("Owned presentation resources bounded by retained records and source primitives"),MaxTextures<=MaxRecords*4+F.Room->GetTrackedIdentityCount()*4 && MaxCaps<=MaxRecords+F.Room->GetTrackedIdentityCount());
+   AddInfo(FString::Printf(TEXT("GRAY_HOME_RESOURCES case=%s records_peak=%d textures_peak=%d caps_peak=%d mids_peak=%d live_uobjects_peak=%d working_set_peak=%llu lost_live_checks=%d periodic_gc_us=%.3f over100_total=%d longest_over33=%d"),*Label,MaxRecords,MaxTextures,MaxCaps,MaxMids,MaxLiveObjects,MaxWorkingSet,LostLiveChecks,GcUs,TotalSlow100,MaxRun33));
   }
  };
  if(Growth)

@@ -519,7 +519,7 @@ void ADarkwellMovingPropLabRoom::DestroyVisual(
 		Visual.CachedCoarseCoverage.Reset();
 		Visual.CachedCoarseEvidence.Reset();
 		Visual.CachedFineCoverage.Reset();
-		Visual.CachedFineOccupied.Reset();
+		Visual.CachedFineOccupied.Reset(); Visual.CachedCoarseOccupied.Reset();
 		Visual.CachedGeometryRegions.Reset(); Visual.CachedPhysicalGeometry.Reset(); Visual.CachedNewerGeometry.Reset();
 	}
 }
@@ -1007,23 +1007,25 @@ bool ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	const FIntPoint Size = Record.FineHistory.GetSize();
 	const FBox2D& Bounds = Record.FineHistory.GetBounds();
 	const int32 SampleCount = Size.X * Size.Y;
+ TBitArray<> DirtyMask(false,SampleCount);
 	if (bCoverageDirty)
 	{
 		const FCoverageSnapshot Coverage = SampleConservativeCoverage(Bounds,
 			Record.Epoch, Record.SpatialMemory.GetGeneration(),
 			FDarkwellHistoryGridV2::SamplesPerCell);
 		if (!Coverage.bValid) return false;
-		Visual->CachedFineCoverage = Coverage.Values;
+		const bool Existing=Visual->CachedFineCoverage.Num()==SampleCount;
+  for(int32 I=0;I<SampleCount;++I)
+   if(!Existing || (Coverage.Values[I]>=FDarkwellSpatialPropMemory::LegalCoverage)!=(Visual->CachedFineCoverage[I]>=FDarkwellSpatialPropMemory::LegalCoverage)) DirtyMask[I]=true;
+  Visual->CachedFineCoverage = Coverage.Values;
 	}
 	if (Visual->CachedFineCoverage.Num() != SampleCount) return false;
 	if (Visual->CachedFineOccupied.Num() != SampleCount)
 		Visual->CachedFineOccupied.Init(false, SampleCount);
 
-	TBitArray<> DirtyMask(false, SampleCount);
-	if (bCoverageDirty)
-	{
-		DirtyMask.Init(true, SampleCount);
-	}
+#if WITH_DEV_AUTOMATION_TESTS
+ if(bForceFullHistoryEvidenceForTesting && bCoverageDirty) DirtyMask.Init(true,SampleCount);
+#endif
 	for (const int32 Index : GeometryDirtyIndices)
 	{
 		if (DirtyMask.IsValidIndex(Index)) DirtyMask[Index] = true;
@@ -1031,8 +1033,7 @@ bool ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	TArray<int32> DirtyIndices;
 	DirtyIndices.Reserve(bCoverageDirty ? SampleCount : GeometryDirtyIndices.Num());
 	for (TConstSetBitIterator<> It(DirtyMask); It; ++It) DirtyIndices.Add(It.GetIndex());
-	RuntimeFrame.FineSamplesScanned += DirtyIndices.Num()
-		+ Record.FineHistory.GetActiveTransitionCount();
+
 	TArray<float> SweepEvidence;
 	const auto* Fog = GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
 	FDarkwellFogVisualSourceSnapshot PreviousSource, CurrentSource;
@@ -1042,12 +1043,15 @@ bool ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 	// Count conservative refusals (invalid/non-adjacent source, geometry motion,
 	// translated origin or ambiguous turn); never retry with newer world data.
 	if (bCoverageDirty && !bSupportedSweep) ++RuntimeFrame.SweepUnsupportedEvents;
-	if (bSupportedSweep
-		&& FDarkwellHistoricalVisibilitySweep::MayAffectBounds(PreviousSource,CurrentSource,Bounds))
+ bool bSweepMayAdd=bSupportedSweep && FDarkwellHistoricalVisibilitySweep::MayAddIntermediateSamples(PreviousSource,CurrentSource,Bounds);
+#if WITH_DEV_AUTOMATION_TESTS
+ if(bForceFullHistoryEvidenceForTesting) bSweepMayAdd=bSupportedSweep && FDarkwellHistoricalVisibilitySweep::MayAffectBounds(PreviousSource,CurrentSource,Bounds);
+#endif
+	if (bSweepMayAdd)
 	{
 		FScopedHistoryRuntimeTimer SweepTimer(RuntimeFrame.SweepProofUs);
 		const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X,Size.Y);
-		for (const int32 Index : DirtyIndices)
+		for (int32 Index=0;Index<SampleCount;++Index)
 		{
 			const auto& Sample = Record.FineHistory.GetSamples()[Index];
 			if (Sample.bVerifiedEmpty || Sample.State == FDarkwellHistoryGridV2::Superseded()
@@ -1067,11 +1071,12 @@ bool ADarkwellMovingPropLabRoom::AdvanceFineHistory(
 			if (bProven)
 			{
 				if (SweepEvidence.IsEmpty()) SweepEvidence = Visual->CachedFineCoverage;
-				SweepEvidence[Index] = 1; ++RuntimeFrame.SweepAcceptedSamples;
+				SweepEvidence[Index] = 1; if(!DirtyMask[Index]) { DirtyMask[Index]=true; DirtyIndices.Add(Index); } ++RuntimeFrame.SweepAcceptedSamples;
 			}
 		}
 	}
-	bool bTopologyChanged = false;
+	RuntimeFrame.FineSamplesScanned += DirtyIndices.Num()+Record.FineHistory.GetActiveTransitionCount();
+ bool bTopologyChanged = false;
 	// Evidence owns historical output; the old coarse fields remain diagnostic.
 	const bool bPresentationChanged = Record.FineHistory.AdvanceDirty(
 		DeltaSeconds, SweepEvidence.IsEmpty() ? Visual->CachedFineCoverage : SweepEvidence, Visual->CachedFineOccupied,
@@ -2535,21 +2540,31 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		}
 		TArray<int32> GeometryDirtyIndices;
 		BuildGeometryDirtyIndices(Prop, *Record, *Visual, GeometryDirtyIndices);
-		if (bCoverageDirty || !GeometryDirtyIndices.IsEmpty())
-		{
-			Visual->CachedCoarseEvidence = Visual->CachedCoarseCoverage;
-			const FIntPoint CoarseSize = Record->SpatialMemory.GetSize();
-			const FBox2D& CoarseBounds = Record->SpatialMemory.GetBounds();
-			const FVector2D CoarseStep = CoarseBounds.GetSize()
-				/ FVector2D(CoarseSize.X, CoarseSize.Y);
-			for (int32 Y = 0; Y < CoarseSize.Y; ++Y)
-				for (int32 X = 0; X < CoarseSize.X; ++X)
-					if (Visual->CachedCoarseEvidence.IsValidIndex(Y * CoarseSize.X + X)
-						&& IsOccupiedByActual(CoarseBounds.Min
-							+ CoarseStep * FVector2D(X + 0.5f, Y + 0.5f), NAME_None))
-						Visual->CachedCoarseEvidence[Y * CoarseSize.X + X] = 0.0f;
-			Visual->CoarseEvidenceActiveSeconds = 0.5f;
-		}
+		const FIntPoint CoarseSize=Record->SpatialMemory.GetSize();
+  const FBox2D& CoarseBounds=Record->SpatialMemory.GetBounds();
+  const FVector2D CoarseStep=CoarseBounds.GetSize()/FVector2D(CoarseSize.X,CoarseSize.Y);
+  const int32 CoarseCount=CoarseSize.X*CoarseSize.Y;
+  TBitArray<> CoarseDirty(false,CoarseCount);
+  if(Visual->CachedCoarseOccupied.Num()!=CoarseCount)
+  { Visual->CachedCoarseOccupied.Init(false,CoarseCount); CoarseDirty.Init(true,CoarseCount); }
+  else
+  {
+   const int32 FineX=Record->FineHistory.GetSize().X;
+   for(const int32 I:GeometryDirtyIndices)
+    CoarseDirty[(I/FineX/FDarkwellHistoryGridV2::SamplesPerCell)*CoarseSize.X+(I%FineX/FDarkwellHistoryGridV2::SamplesPerCell)]=true;
+  }
+#if WITH_DEV_AUTOMATION_TESTS
+  if(bForceFullHistoryEvidenceForTesting && bCoverageDirty) CoarseDirty.Init(true,CoarseCount);
+#endif
+  for(TConstSetBitIterator<> It(CoarseDirty);It;++It)
+  { const int32 I=It.GetIndex(); Visual->CachedCoarseOccupied[I]=IsOccupiedByActual(CoarseBounds.Min+CoarseStep*FVector2D(I%CoarseSize.X+.5,I/CoarseSize.X+.5),NAME_None); }
+  if(bCoverageDirty || !GeometryDirtyIndices.IsEmpty())
+  {
+   Visual->CachedCoarseEvidence=Visual->CachedCoarseCoverage;
+   for(TConstSetBitIterator<> It(Visual->CachedCoarseOccupied);It;++It)
+    if(Visual->CachedCoarseEvidence.IsValidIndex(It.GetIndex())) Visual->CachedCoarseEvidence[It.GetIndex()]=0;
+   Visual->CoarseEvidenceActiveSeconds=.5f;
+  }
 		if (Visual->CoarseEvidenceActiveSeconds > 0.0f
 			&& Visual->CachedCoarseEvidence.Num() == Record->SpatialMemory.GetCells().Num())
 		{

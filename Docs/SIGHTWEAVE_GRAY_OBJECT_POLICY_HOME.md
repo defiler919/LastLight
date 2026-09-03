@@ -481,3 +481,56 @@ original FastSweep tests retain their assertions after atomic source publication
 The GPU Python driver and its unique-run PowerShell wrapper are included as
 prepared validation tools; Python compile and PowerShell parse succeed, while
 actual D3D12 execution/results are still pending and are recorded separately.
+
+## Home E6 — long-run diagnostic failure and incremental history evidence
+
+E5 was pushed as `4902a511b06f498af575c001281706b80bcb7e0c` with matching
+local/upstream/remote refs and unchanged protected refs.
+Home_E6_FifteenMinuteSoak_20260903 did **not** pass. The first 3,600-frame
+window had enclosing p95 40.009 ms, 290 >33 ms steps, 4 >100 ms steps, a 131-step
+slow run and 19 records. At frame 7,200 the most recent window reached p95
+72.187 ms, peak 161.569 ms, 24 >100 ms steps, a 199-step slow run and 36 records.
+Intermediate wall-minute rows are retained too. The process was stopped after
+318.156 wall seconds after these conclusive failures; exit -1, no complete
+report. interruption.json records the verified owned process and reason.
+This is diagnostic failure, never fifteen-minute evidence.
+
+The retained records accumulated repeated work. The user explicitly forbids
+using automatic history clearing as a performance fix: all historical records,
+frozen masks and existing verified-empty release rules are therefore unchanged.
+Fine state updates now select actual legal-coverage threshold crossings, physical
+or observation-ownership changes, and active fades. Cached diagnostic coverage is
+still refreshed. A conservative angular bound avoids continuous interval proof
+only when a sample cannot enter and leave legal coverage between both endpoints;
+large turns retain the exact full proof. Coarse occupancy is cached by geometry
+changes, retaining its original center query rather than approximating it from
+fine cells. These are work-selection changes, not lower sampling precision.
+
+An initial edit failed because Python's Windows default decoder treated UTF-8 as
+GBK. Only an unused cache member had changed; the resulting header-only Build1
+succeeded, but its redundant test run was stopped and explicitly excluded
+(Home_E6_DirtyEvidence_20260903, exit -1). The runtime edit was reapplied using
+explicit UTF-8; Build2 succeeded (16.52 s).
+Home_E6_DirtyEvidence2_20260903: **51/51** (46 clean, 5 warnings), 190.636826 s tests /
+214.005096 s wall, exit 0, severe 0. Includes all object policy, FastSweep,
+HistoryGridV2 and both enclosing CPU gates, without relaxing old assertions.
+8 moving enclosing p95 14.056 ms, peak 16.470, no >33 ms steps. 32 static enclosing
+p95 13.136 ms, peak 61.790, one isolated >33 ms step and none >100 ms.
+32-static history scans fall from 126,067,028 to 577,496, with identical coverage
+requests, presentation submissions, captures and retained resource counts.
+A separate 240-frame replay against the original full-update evidence path is
+pending below; it hashes every retained sample's state, empty fact, opacity,
+capture values, occupancy, ownership, submission and diagnostic coverage.
+
+Home_E6_Build3 succeeded (25.12 s). Home_E6_FullUpdateParity_20260903:
+**1/1 clean**, 5.412233 s, exit 0, severe 0. Every sample matches the full reference
+at every one of 240 frames, including real rotation, partial observation, view
+loss, reacquisition and a 160-degree one-frame sweep.
+The new soak also checks visible confirmed sources throughout the trajectory and
+owned resource bounds. It roots its test world and runs normal-cadence GC every
+simulated minute because this synchronous fixture does not run the engine tick's
+GC scheduler; each complete GC pause is included in enclosing-step statistics.
+Original soak variants retain their original GC behavior. Peak resources and GC
+cost are explicitly reported. Build4 succeeded (16.35 s).
+Home_E6_ResourceGateCheck_20260903: **3/3** (2 clean, 1 warning), 10.443029 s tests /
+29.951799 s wall, exit 0, severe 0 (both short gates and PlayStopResourceLifetime).

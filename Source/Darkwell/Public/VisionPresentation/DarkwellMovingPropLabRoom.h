@@ -203,6 +203,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetFineHistoryTelemetry(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetHistoryRuntimeTelemetry() const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetMultiEpochCompositeDiagnosis(FName StableId) const;
+#if WITH_DEV_AUTOMATION_TESTS
+ bool bForceFullHistoryEvidenceForTesting=false;
+#endif
 	FHistoryRuntimeTelemetry GetHistoryRuntimeFrameTelemetryForTesting() const { return RuntimeFrame; }
 	struct FFineEvidenceDiagnostic
 	{
@@ -308,7 +311,7 @@ private:
 		TArray<float> CachedCoarseCoverage;
 		TArray<float> CachedCoarseEvidence;
 		TArray<float> CachedFineCoverage;
-		TBitArray<> CachedFineOccupied;
+		TBitArray<> CachedFineOccupied, CachedCoarseOccupied;
 		TArray<FBox2D> CachedGeometryRegions;
   TArray<FPrimitiveGeometrySnapshot> CachedPhysicalGeometry, CachedNewerGeometry;
 		uint64 CachedCoverageAuthorityRevision = MAX_uint64;

@@ -787,22 +787,18 @@ bool ADarkwellMovingPropLabRoom::CollectNewerOwnedVerticalIntervals(
 	TArray<FVector2D>& OutIntervals, const double ProjectionTolerance) const
 {
 	OutIntervals.Reset();
- TArray<const FDarkwellSpatialObservationRecord*,TInlineAllocator<64>> FallbackCandidates;
- TConstArrayView<const FDarkwellSpatialObservationRecord*> Candidates;
- if(bUseNewerCandidates && NewerCandidateId==Prop.StableId && NewerCandidateEpoch==OlderEpoch) Candidates=FrameNewerCandidates;
- else { for(const auto& C:Prop.History.GetRecords()) FallbackCandidates.Add(&C); Candidates=FallbackCandidates; }
- for(const auto* CandidatePtr:Candidates)
- { const auto& Candidate=*CandidatePtr;
+ auto ProcessCandidate=[&](const FDarkwellSpatialObservationRecord& Candidate)
+ {
 		if (Candidate.Epoch <= OlderEpoch)
 		{
-			continue;
+			return;
 		}
 		if (Candidate.bCurrentObservedLocation)
 		{
 			TArray<FVector2D> CurrentIntervals;
 			CollectCurrentOwnedVerticalIntervals(Prop, Point, CurrentIntervals, ProjectionTolerance);
 			OutIntervals.Append(CurrentIntervals);
-			continue;
+			return;
 		}
 		const FRecordVisual* Visual = Prop.Visuals.Find(Candidate.Epoch);
 		const FBox2D& Bounds = Candidate.SpatialMemory.GetBounds();
@@ -811,7 +807,7 @@ bool ADarkwellMovingPropLabRoom::CollectNewerOwnedVerticalIntervals(
 		if (!Visual || Visual->bPresentationRetired || (ProjectionTolerance == 0.0 && !Bounds.IsInside(Point))
 			|| Fine.X <= 0 || Fine.Y <= 0)
 		{
-			continue;
+			return;
 		}
 		const FVector2D Relative = (Point - Bounds.Min) / Bounds.GetSize();
 		const int32 FineX = FMath::Clamp(FMath::FloorToInt(Relative.X * Fine.X), 0, Fine.X - 1);
@@ -824,7 +820,7 @@ bool ADarkwellMovingPropLabRoom::CollectNewerOwnedVerticalIntervals(
 		if (bSuppressed || !Candidate.SpatialMemory.GetCells().IsValidIndex(CellIndex)
 			|| Darkwell::MovingPropLab::HistoricalOpacity(Candidate, FineIndex, CellIndex) <= 0.0f)
 		{
-			continue;
+			return;
 		}
 		for (const FPrimitiveGeometrySnapshot& Geometry : Visual->PartGeometry)
 		{
@@ -835,8 +831,11 @@ bool ADarkwellMovingPropLabRoom::CollectNewerOwnedVerticalIntervals(
 				OutIntervals.Add(FVector2D(MinimumZ, MaximumZ));
 			}
 		}
-	}
-	return !OutIntervals.IsEmpty();
+ };
+ if(bUseNewerCandidates && NewerCandidateId==Prop.StableId)
+  { for(const auto* C:FrameNewerCandidates) ProcessCandidate(*C); }
+ else { for(const auto& C:Prop.History.GetRecords()) ProcessCandidate(C); }
+ return !OutIntervals.IsEmpty();
 }
 
 bool ADarkwellMovingPropLabRoom::HasNewerObservedGeometryOverlapAt(
@@ -845,7 +844,7 @@ bool ADarkwellMovingPropLabRoom::HasNewerObservedGeometryOverlapAt(
 	const uint32 OlderEpoch,
 	const FVector2D Point) const
 {
- if(bUseNewerCandidates && NewerCandidateId==Prop.StableId && NewerCandidateEpoch==OlderEpoch && FrameNewerCandidates.IsEmpty()) return false;
+ if(bUseNewerCandidates && NewerCandidateId==Prop.StableId && (FrameNewerCandidates.IsEmpty() || NewerCandidateMaximumEpoch<=OlderEpoch)) return false;
 	TArray<FVector2D> NewerIntervals;
 	if (!CollectNewerOwnedVerticalIntervals(Prop, OlderEpoch, Point, NewerIntervals))
 	{
@@ -878,15 +877,11 @@ ADarkwellMovingPropLabRoom::CollectNewerGeometrySnapshots(
 	const uint32 OlderEpoch) const
 {
 	TArray<FPrimitiveGeometrySnapshot> Result;
- TArray<const FDarkwellSpatialObservationRecord*,TInlineAllocator<64>> FallbackCandidates;
- TConstArrayView<const FDarkwellSpatialObservationRecord*> Candidates;
- if(bUseNewerCandidates && NewerCandidateId==Prop.StableId && NewerCandidateEpoch==OlderEpoch) Candidates=FrameNewerCandidates;
- else { for(const auto& C:Prop.History.GetRecords()) FallbackCandidates.Add(&C); Candidates=FallbackCandidates; }
- for(const auto* CandidatePtr:Candidates)
- { const auto& Candidate=*CandidatePtr;
+ auto ProcessCandidate=[&](const FDarkwellSpatialObservationRecord& Candidate)
+ {
 		if (Candidate.Epoch <= OlderEpoch)
 		{
-			continue;
+			return;
 		}
 		if (Candidate.bCurrentObservedLocation)
 		{
@@ -897,15 +892,18 @@ ADarkwellMovingPropLabRoom::CollectNewerGeometrySnapshots(
      if(Snapshot.StableId==Prop.StableId) { Result.Append(Snapshot.Geometry); Found=true; break; }
     if(!Found) Result.Append(ActualPartGeometry(*Actual));
 			}
-			continue;
+			return;
 		}
 		if (const FRecordVisual* Visual = Prop.Visuals.Find(Candidate.Epoch);
 			Visual && !Visual->bPresentationRetired)
 		{
 			Result.Append(Visual->PartGeometry);
 		}
-	}
-	return Result;
+ };
+ if(bUseNewerCandidates && NewerCandidateId==Prop.StableId)
+  { for(const auto* C:FrameNewerCandidates) ProcessCandidate(*C); }
+ else { for(const auto& C:Prop.History.GetRecords()) ProcessCandidate(C); }
+ return Result;
 }
 
 bool ADarkwellMovingPropLabRoom::HasNewerObservedGeometryOverlapWithinFootprint(
@@ -914,7 +912,7 @@ bool ADarkwellMovingPropLabRoom::HasNewerObservedGeometryOverlapWithinFootprint(
 	const uint32 OlderEpoch,
 	const FBox2D& Footprint) const
 {
- if(bUseNewerCandidates && NewerCandidateId==Prop.StableId && NewerCandidateEpoch==OlderEpoch && FrameNewerCandidates.IsEmpty()) return false;
+ if(bUseNewerCandidates && NewerCandidateId==Prop.StableId && (FrameNewerCandidates.IsEmpty() || NewerCandidateMaximumEpoch<=OlderEpoch)) return false;
 	if (!Footprint.bIsValid)
 	{
 		return false;
@@ -1359,15 +1357,24 @@ bool ADarkwellMovingPropLabRoom::IsOccupiedByActual(
 	++RuntimeFrame.OccupancyTests;
  if(bUseFrameOccupancy)
  {
+  if(bFilterFrameOccupancy && FrameOccupancyCandidates.IsEmpty()) return false;
+  // Every physical pose is fixed for this UpdateRoom. Historical ROI candidates
+  // include every actor that can contain this point; cache exact coordinates only.
+  bool UseCache=IgnoredStableId.IsNone();
+#if WITH_DEV_AUTOMATION_TESTS
+  UseCache &= !bForceFullHistoryEvidenceForTesting;
+#endif
+  if(UseCache) if(const bool* Cached=FrameOccupancyPoints.Find(Point)) { ++RuntimeFrame.OccupancyCacheHits; return *Cached; }
+  auto Remember=[&](bool Value) { if(UseCache && FrameOccupancyPoints.Num()<131072) FrameOccupancyPoints.Add(Point,Value); return Value; };
   auto Occupies=[&](const FActualOccupancySnapshot& S)
   {
    if(S.StableId==IgnoredStableId || !S.Bounds.IsInside(Point)) return false;
    for(const auto& Geometry:S.Geometry) { double MinZ,MaxZ; if(QueryVerticalInterval(Geometry,Point,MinZ,MaxZ)) return true; }
    return false;
   };
-  if(bFilterFrameOccupancy) { for(const auto* S:FrameOccupancyCandidates) if(Occupies(*S)) return true; }
-  else for(const auto& S:FrameOccupancy) if(Occupies(S)) return true;
-  return false;
+  if(bFilterFrameOccupancy) { for(const auto* S:FrameOccupancyCandidates) if(Occupies(*S)) return Remember(true); }
+  else for(const auto& S:FrameOccupancy) if(Occupies(S)) return Remember(true);
+  return Remember(false);
  }
 	for (const TPair<FName, FTrackedProp>& Pair : Tracked)
 	{
@@ -1697,19 +1704,19 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 	auto SurfaceContributorsAt = [&](const FVector2D Point)
 	{
 		int32 Contributors = HasCurrentObservedContributionAt(Prop, Point) ? 1 : 0;
-		for (const FDarkwellSpatialObservationRecord& Historical : Prop.History.GetRecords())
+		auto CountHistorical = [&](const FDarkwellSpatialObservationRecord& Historical)
 		{
 			if (Historical.bCurrentObservedLocation
 				|| !Historical.SpatialMemory.GetBounds().IsInside(Point))
 			{
-				continue;
+				return;
 			}
 			const FRecordVisual* Visual = Prop.Visuals.Find(Historical.Epoch);
 			const FIntPoint Coarse = Historical.SpatialMemory.GetSize();
 			const FIntPoint Fine = Coarse * Darkwell::MovingPropLab::PresentationSamples;
 			if (!Visual || Visual->bPresentationRetired || Fine.X <= 0 || Fine.Y <= 0)
 			{
-				continue;
+				return;
 			}
 			const FVector2D Relative = (Point - Historical.SpatialMemory.GetBounds().Min)
 				/ Historical.SpatialMemory.GetBounds().GetSize();
@@ -1725,7 +1732,10 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 			{
 				++Contributors;
 			}
-		}
+		};
+  if(bUseNewerCandidates && NewerCandidateId==Prop.StableId)
+   { for(const auto* C:FrameNewerCandidates) CountHistorical(*C); }
+  else { for(const auto& C:Prop.History.GetRecords()) CountHistorical(C); }
 		return Contributors;
 	};
  // Preserve the original .25 cm Equals predicate. Buckets only narrow its
@@ -1743,6 +1753,15 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
     for(const auto& C:*Candidates) if(C.Value.Equals(Point,.25f)) Epochs.AddUnique(C.Key);
   return Epochs.Num();
  };
+ // Repeated epochs at an identical world raster contribute the same diagnostic
+ // sample positions. Keep one such grid; all distinct positions and cap points
+ // retain the original predicates. This does not alter any stored evidence.
+ struct FDiagnosticRaster { FBox2D Bounds; FIntPoint Size; };
+ TArray<FDiagnosticRaster,TInlineAllocator<8>> DiagnosticRasters;
+ bool ReuseRaster=true;
+#if WITH_DEV_AUTOMATION_TESTS
+ ReuseRaster=!bForceFullHistoryEvidenceForTesting;
+#endif
 	for (const FDarkwellSpatialObservationRecord& SampleRecord : Prop.History.GetRecords())
 	{
 		const FIntPoint SampleSize = SampleRecord.SpatialMemory.GetSize()
@@ -1752,6 +1771,13 @@ void ADarkwellMovingPropLabRoom::RefreshContributionDiagnostics(
 		{
 			continue;
 		}
+  if(ReuseRaster)
+  {
+   if(DiagnosticRasters.ContainsByPredicate([&](const FDiagnosticRaster& R) {
+    return R.Size==SampleSize && R.Bounds.Min==SampleBounds.Min && R.Bounds.Max==SampleBounds.Max;
+   })) continue;
+   DiagnosticRasters.Add({SampleBounds,SampleSize});
+  }
 		const FVector2D Step = SampleBounds.GetSize() / FVector2D(SampleSize.X, SampleSize.Y);
 		for (int32 Y = 0; Y < SampleSize.Y; ++Y)
 		{
@@ -2510,6 +2536,20 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		}
 	}
 
+ // Current creation is complete. Record addresses remain stable through history
+ // and diagnostics; erasure happens at the end, after the last candidate query.
+ TArray<const FDarkwellSpatialObservationRecord*,TInlineAllocator<8>> NewerCandidates;
+ uint32 MaximumCandidateEpoch=0;
+ for(const auto& C:Prop.History.GetRecords())
+  if(C.bCurrentObservedLocation || (Prop.Visuals.Find(C.Epoch) && !Prop.Visuals.FindChecked(C.Epoch).bPresentationRetired))
+  { NewerCandidates.Add(&C); MaximumCandidateEpoch=FMath::Max(MaximumCandidateEpoch,C.Epoch); }
+ TGuardValue<bool> NewerScope(bUseNewerCandidates,true);
+ TGuardValue<FName> IdScope(NewerCandidateId,Prop.StableId);
+ TGuardValue<uint32> EpochScope(NewerCandidateMaximumEpoch,MaximumCandidateEpoch);
+ TGuardValue<TConstArrayView<const FDarkwellSpatialObservationRecord*>> NewerViewScope(FrameNewerCandidates,MakeArrayView(NewerCandidates));
+#if WITH_DEV_AUTOMATION_TESTS
+ if(bForceFullHistoryEvidenceForTesting) bUseNewerCandidates=false;
+#endif
 	TArray<uint32> HistoricalEpochs;
 	for (FDarkwellSpatialObservationRecord& Record : Prop.History.GetMutableRecords())
 	{
@@ -2530,17 +2570,6 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
          if(S.Bounds.Intersect(Record->SpatialMemory.GetBounds())) OccupancyCandidates.Add(&S);
         TGuardValue<bool> FilterScope(bFilterFrameOccupancy,bUseFrameOccupancy);
         TGuardValue<TConstArrayView<const FActualOccupancySnapshot*>> CandidateScope(FrameOccupancyCandidates,MakeArrayView(OccupancyCandidates));
-  TArray<const FDarkwellSpatialObservationRecord*,TInlineAllocator<8>> NewerCandidates;
-  for(const auto& C:Prop.History.GetRecords())
-   if(C.Epoch>Epoch)
-    if(C.bCurrentObservedLocation || (Prop.Visuals.Find(C.Epoch) && !Prop.Visuals.FindChecked(C.Epoch).bPresentationRetired)) NewerCandidates.Add(&C);
-  TGuardValue<bool> NewerScope(bUseNewerCandidates,true);
-  TGuardValue<FName> IdScope(NewerCandidateId,Prop.StableId);
-  TGuardValue<uint32> EpochScope(NewerCandidateEpoch,Epoch);
-  TGuardValue<TConstArrayView<const FDarkwellSpatialObservationRecord*>> NewerViewScope(FrameNewerCandidates,MakeArrayView(NewerCandidates));
-#if WITH_DEV_AUTOMATION_TESTS
-  if(bForceFullHistoryEvidenceForTesting) bUseNewerCandidates=false;
-#endif
 		EnsureRecordVisual(Prop, *Record);
 		FRecordVisual* Visual = Prop.Visuals.Find(Epoch);
 		if (!Visual) continue;
@@ -4469,7 +4498,7 @@ void ADarkwellMovingPropLabRoom::UpdateRoom(
 	}
  // Motion has advanced every actor. Snapshot physical bounds/primitives once
  // for all history occupancy queries in this update, including other identities.
- FrameOccupancy.Reset();
+ FrameOccupancy.Reset(); FrameOccupancyPoints.Reset();
  bool PhysicalMotion=false;
  for(const auto& Pair:Tracked)
   if(const auto* A=Pair.Value.bExists?Pair.Value.Actual.Get():nullptr; A && A->GetActorEnableCollision())
@@ -4531,6 +4560,7 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	RuntimeTotal.MidCreations += RuntimeFrame.MidCreations;
 	RuntimeTotal.GpuTextureUploads += RuntimeFrame.GpuTextureUploads;
 	RuntimeTotal.OccupancyTests += RuntimeFrame.OccupancyTests;
+ RuntimeTotal.OccupancyCacheHits += RuntimeFrame.OccupancyCacheHits;
 	RuntimeTotal.PrimitiveGeometryTests += RuntimeFrame.PrimitiveGeometryTests;
 	RuntimeTotal.OwnershipTests += RuntimeFrame.OwnershipTests;
 	RuntimeTotal.UpdateRecordTextureCalls += RuntimeFrame.UpdateRecordTextureCalls;
@@ -5547,7 +5577,12 @@ bool ADarkwellMovingPropLabRoom::IsWholePresentationUniformForTesting(FName Id) 
 }
 
 void ADarkwellMovingPropLabRoom::ForceContributionRefreshForTesting(FName Id)
-{ if(auto* P=Tracked.Find(Id)) { P->DiagnosticSignature=0; RefreshContributionDiagnostics(*P); } }
+{
+#if WITH_DEV_AUTOMATION_TESTS
+ TGuardValue<bool> ReferenceScope(bForceFullHistoryEvidenceForTesting,true);
+#endif
+ if(auto* P=Tracked.Find(Id)) { P->DiagnosticSignature=0; RefreshContributionDiagnostics(*P); }
+}
 
 bool ADarkwellMovingPropLabRoom::DoesFrameOccupancyMatchOracleForTesting(FName Id)
 {
@@ -5566,3 +5601,24 @@ bool ADarkwellMovingPropLabRoom::DoesFrameOccupancyMatchOracleForTesting(FName I
  }
  return Tested;
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+TArray<TWeakObjectPtr<UObject>> ADarkwellMovingPropLabRoom::GetOwnedPresentationObjectsForTesting() const
+{
+ TArray<TWeakObjectPtr<UObject>> Objects;
+ for(const auto& T:OwnedTextures) Objects.Add(T.Get());
+ for(const auto& M:OwnedMaterials) Objects.Add(M.Get());
+ for(const auto& C:OwnedCaps) Objects.Add(C.Get());
+ for(const auto& Pair:Tracked)
+ {
+  const auto& Prop=Pair.Value;
+  Objects.Add(Prop.Actual.Get()); Objects.Add(Prop.ObjectPolicy.Get());
+  for(const auto& Visual:Prop.Visuals) if(Visual.Value.Proxy.IsValid()) Objects.Add(Visual.Value.Proxy.Get());
+  if(const auto* Actual=Prop.Actual.Get())
+   for(const UStaticMeshComponent* Part:Actual->Memory->GetMemoryPrimitives()) if(Part)
+    for(int32 Index=0;Index<Part->GetNumMaterials();++Index)
+     if(auto* Material=Cast<UMaterialInstanceDynamic>(Part->GetMaterial(Index))) Objects.Add(Material);
+ }
+ return Objects;
+}
+#endif

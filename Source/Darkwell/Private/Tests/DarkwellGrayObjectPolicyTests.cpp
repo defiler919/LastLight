@@ -59,7 +59,7 @@ void FDarkwellGrayObjectPolicyTest::GetTests(TArray<FString>& Names,TArray<FStri
   TEXT("StaticPartialStationaryOnlyRetainsGray"),TEXT("StaticNeverDoesNotRetainGray"),
   TEXT("CoverageEdgeNeverIsExpectedNegativeControl"),TEXT("SixPolicyCombinationsCoexist"),
   TEXT("MotionStateAndRevealPolicyIsolation"),TEXT("ExistingHistoryNotIdentityCleared"),
-  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime"),TEXT("CanonicalRasterMatchesOriginalSamples"),TEXT("ConfirmedWholeStopsSpanAndDenseObservationWork"),TEXT("CachedDiagnosticsMatchForcedDiagnostics"),TEXT("FramePhysicalCacheMatchesGeometryOracle"),TEXT("WholeObjectConfirmedRespectsPartialWall")})
+  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime"),TEXT("CanonicalRasterMatchesOriginalSamples"),TEXT("ConfirmedWholeStopsSpanAndDenseObservationWork"),TEXT("CachedDiagnosticsMatchForcedDiagnostics"),TEXT("RepeatedPoseDiagnosticsMatchFullScan"),TEXT("FramePhysicalCacheMatchesGeometryOracle"),TEXT("WholeObjectConfirmedRespectsPartialWall")})
  { Names.Add(N); Commands.Add(N); }
 }
 bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
@@ -70,11 +70,17 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
   TArray<TWeakObjectPtr<UObject>> Owned;
   for(int32 Cycle=0;Cycle<3;++Cycle)
   {
-   { FRoom Life; Life.Face(90); Life.Step(15); Life.Face(-90); Life.Step(15);
+   { FRoom Life;
+     if(Cycle==1) Life.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::StationaryOnly);
+     Life.Face(Cycle==1?146:90); Life.Step(15); Life.Face(-90); Life.Step(15);
+     if(Cycle==1) TestTrue(TEXT("Positive partial cap allocation before teardown"),Life.Room->GetVisibleHistoricalCapCountForTesting(Id)>0);
      TestTrue(TEXT("Positive historical resource allocation"),Life.Room->GetHistoricalPresentationResourceCountForTesting(Id)>0);
+     auto Resources=Life.Room->GetOwnedPresentationObjectsForTesting();
+     TestTrue(TEXT("Track concrete source, texture, material, proxy and cap allocations"),Resources.Num()>Life.Room->GetTrackedIdentityCount()*2);
+     Owned.Append(Resources);
      Owned.Add(Life.World); Owned.Add(Life.Room); Owned.Add(Life.Room->GetObjectPolicyForTesting(Id)); }
    CollectGarbage(RF_NoFlags);
-   for(auto P:Owned) TestFalse(TEXT("Destroyed world, room and policy are reclaimed"),P.IsValid());
+   for(auto P:Owned) TestFalse(TEXT("Destroyed world, room, policies and concrete presentation objects are reclaimed"),P.IsValid());
   }
   return true;
  }
@@ -91,11 +97,21 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
   }
   return true;
  }
- if(Case==TEXT("CachedDiagnosticsMatchForcedDiagnostics"))
+ if(Case==TEXT("CachedDiagnosticsMatchForcedDiagnostics") || Case==TEXT("RepeatedPoseDiagnosticsMatchFullScan"))
  {
-  F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::Always);
-  F.Face(90); F.Step(30);
-  TestTrue(TEXT("Multiple independent history records"),F.Room->ConfigureHistoricalEpochCountForTesting(Id,2));
+  if(Case==TEXT("RepeatedPoseDiagnosticsMatchFullScan"))
+  {
+   F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::StationaryOnly);
+   for(int32 Cycle=0;Cycle<8;++Cycle) { F.Face(146); F.Step(12); F.Face(-90); F.Step(12); }
+   TestTrue(TEXT("Repeated real observation retains several epochs at the same pose"),F.Room->GetSpatialRecordCount(Id)>=4);
+   TestTrue(TEXT("Partial history exercises cap contributor diagnostics"),F.Room->GetVisibleHistoricalCapCountForTesting(Id)>0);
+  }
+  else
+  {
+   F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::Always);
+   F.Face(90); F.Step(30);
+   TestTrue(TEXT("Multiple independent history records"),F.Room->ConfigureHistoricalEpochCountForTesting(Id,2));
+  }
   for(float Yaw:{-90.f,90.f,135.f,146.f,150.f,270.f,270.f})
   {
    F.Face(Yaw); F.Step(3);

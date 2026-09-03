@@ -576,7 +576,7 @@ simulated minutes) after the complete visual matrix. Runtime GPU validation is
 still pending; this is not yet visual or teardown evidence.
 
 
-## Home E8 — complete-soak run and capacity failure (in progress)
+## Home E8 — complete-soak run and capacity failure
 
 E7 was pushed as `2acd9a61d0dab43c38edf9043f2cc16fcc02714e` with matching
 local/upstream/remote and unchanged protected refs.
@@ -603,3 +603,112 @@ The existing CapacityFailsClosed test and 64-record limit are unchanged. No old
 history has been automatically cleared to avoid this failure. Peak resource
 counts, final visibility assertions, idle recovery and normal process exit are
 still pending. This intermediate checkpoint is failure evidence, not a pass.
+
+### E8 complete result (E7 executable)
+
+The run finished all **54,000 active + 600 idle steps**. Automation **0/1**,
+one failed test, no not-run tests, 5,914.513672 s test / 5,936.792222 s process
+wall time. Editor process exit **0**, runner exit **1**, severe scan **0**.
+This is a complete failing soak, not an interrupted diagnostic. There were
+21,313 original capacity-warning events; AutomationController replay repeats
+those messages in the log and must not be counted as additional events.
+
+Enclosing CPU steps exceeded 100 ms **20,647** times, with **241** consecutive
+steps above 33 ms. Worst reported-window p95 was **1,158.734698 ms**; overall
+peak **1,228.885699 ms**. Confirmed sources with legal coverage > .5 failed the
+visibility check **327** times during active interaction and **10** times in idle.
+The retained 64-record guard and the current-source dependence on a current
+record explain the capacity failure. No capacity change or automatic historical
+clearing was introduced.
+
+Per-minute room means below combine all complete subwindows with their actual
+step counts. The p95 column is the worst reported-window enclosing p95 in that
+minute, **not a pooled percentile**; all unrounded mean/p50/p95/p99/peak and work
+counters remain in the run log.
+
+| Simulated minute | Room mean ms | Worst window step p95 ms | Step peak ms | End records |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 8.677 | 32.419 | 92.627 | 19 |
+| 2 | 21.300 | 57.475 | 141.205 | 36 |
+| 3 | 36.597 | 108.965 | 210.807 | 54 |
+| 4 | 50.666 | 144.747 | 259.214 | 72 |
+| 5 | 64.624 | 157.000 | 356.328 | 89 |
+| 6 | 74.920 | 257.393 | 409.202 | 106 |
+| 7 | 94.335 | 362.864 | 494.841 | 124 |
+| 8 | 105.652 | 401.588 | 573.358 | 142 |
+| 9 | 119.263 | 440.323 | 648.690 | 159 |
+| 10 | 137.362 | 936.809 | 1064.242 | 166 |
+| 11 | 156.369 | 757.216 | 832.536 | 170 |
+| 12 | 158.329 | 800.700 | 949.321 | 174 |
+| 13 | 172.184 | 954.766 | 1058.945 | 178 |
+| 14 | 180.364 | 1037.030 | 1147.914 | 181 |
+| 15 | 216.994 | 1158.735 | 1228.886 | 185 |
+
+Peaks: 185 records, 12 owned textures, 3 caps, 36 total MIDs, 66,199 live UObjects
+(including the initial pre-GC population), 3,227,230,208-byte working set. Existing
+record/resource-bound assertions passed. Fifteen periodic GC pauses totalled
+519.1398 ms and are included in enclosing-step measurements. Final idle retained
+185 records / 2 proxies / 3 caps / 6 textures / 33 MIDs, with 62,752 live UObjects
+and 1,262,960,640-byte working set. Idle room mean/p95 .284197/.300300 ms;
+enclosing p50/p95/p99/peak .424601/.455000/.477500/.524197 ms. Idle queries,
+scans, submissions, texture/MID creations and cap rebuilds are all zero. Idle
+performance recovered, but current visibility did not; this remains a blocker.
+
+### E8 pending exact-query reuse and stronger teardown coverage
+
+Physical occupancy now caches exact world points within a single fixed physical
+snapshot, bounded to 131,072 cache entries and falling back to the unchanged
+query when full. Newer active-record candidates remain scoped through historical
+updates and diagnostics; fallback queries no longer allocate candidate arrays.
+Diagnostic rasters with identical bounds and dimensions contribute the same
+sample positions and are visited once. Distinct grids and all cap sample points
+retain their original predicates. No stored record, mask or sample is removed.
+Forced full diagnostics retain the original repeated-grid loop; an added real
+repeated-pose test compares its results with the optimized path.
+
+PlayStopResourceLifetime additionally captures weak references to actual sources,
+policies, textures, MIDs, proxies and caps across Whole / Partial / Whole worlds,
+including positive partial-cap allocation. All must be reclaimed after each
+world teardown and GC. The GPU driver uses engine-verified digit-aware Python
+names `get3d_ownership_telemetry_for_testing` and
+`get_max3d_render_ownership_contributors_for_testing`. Build and validation of
+these pending changes are recorded below once finished.
+
+## Recovery salvage checkpoint — 2026-09-03
+
+Recovery fetched origin and verified HEAD/upstream/remote all at
+`2a155c81e2a74e3c4373d4a2dab71c45cfab489c`. There were no unpushed commits,
+no staged changes, and exactly six modified text files: the GPU Python driver,
+this document, two test sources, and MovingPropLabRoom.cpp/.h. No asset or
+`.uproject` delta existed. Git diff/check/cached and LFS status were inspected.
+No residual Editor, Editor-Cmd, ShaderCompileWorker or related test process was
+running. The E8 report and log were complete; its failed result above is retained.
+
+All six local files were audited. Candidate pointers are scoped after current
+creation and before record erasure; every candidate still uses the original
+eligibility predicate. Occupancy reuse uses exact points within the same fixed
+physical snapshot. Diagnostic reuse removes only identical sample positions.
+No historical record or evidence is deleted. The first E8 build failed on a
+TObjectPtr range-loop deduction in the new resource test helper; the explicit
+UStaticMeshComponent pointer fixed it. E8 Build2 succeeded in 14.11 s.
+`Home_Salvage_Build_20260903` re-ran the standard Editor Development build:
+Succeeded, target up to date, 1.52 s. GPU-driver Python syntax also passes.
+
+`Home_Salvage_Targeted_20260903` passes **7/7** (5 clean, 2 with warnings),
+55.686329 s test / 128.538703 s process wall; process/runner exit 0, severe 0.
+Tests: IncrementalHistoryEvidenceMatchesFullUpdate,
+CachedDiagnosticsMatchForcedDiagnostics, RepeatedPoseDiagnosticsMatchFullScan,
+FramePhysicalCacheMatchesGeometryOracle, PlayStopResourceLifetime,
+EightMovingPerformanceGate and ThirtyTwoChangedViewPerformanceGate.
+The resource test reclaims concrete sources, policies, textures, MIDs, proxies
+and caps across all three test worlds. CPU step p95 14.475700 / 13.287898 ms;
+peaks 21.584701 / 69.931198 ms; the latter is one isolated >33 ms step.
+No >100 ms steps; idle step p95 .159603 / .647198 ms. These are short CPU gates,
+not long-growth, rendered-frame, GPU or three-normal-GPU-exit evidence.
+
+This salvage saves the audited and minimally validated changes before the
+next implementation. Historical capacity versus current observation remains
+unfixed here. Final 54,000-step validation of subsequent fixes, full automation,
+D3D12/SM6, BuildPlugin, three GPU exits and final handoff remain pending.
+The status remains PARTIAL — GRAY_OBJECT_POLICY_PERFORMANCE_BLOCKED;
+TEARDOWN BLOCKER RETAINED. No final gray Stable is created.

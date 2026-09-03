@@ -91,6 +91,7 @@ public:
 		uint64 MidCreations = 0;
 		uint64 GpuTextureUploads = 0;
 		uint64 OccupancyTests = 0;
+  uint64 OccupancyCacheHits = 0;
 		uint64 PrimitiveGeometryTests = 0;
 		uint64 OwnershipTests = 0;
 		uint64 UpdateRecordTextureCalls = 0;
@@ -205,6 +206,7 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetMultiEpochCompositeDiagnosis(FName StableId) const;
 #if WITH_DEV_AUTOMATION_TESTS
  bool bForceFullHistoryEvidenceForTesting=false;
+ TArray<TWeakObjectPtr<UObject>> GetOwnedPresentationObjectsForTesting() const;
 #endif
 	FHistoryRuntimeTelemetry GetHistoryRuntimeFrameTelemetryForTesting() const { return RuntimeFrame; }
 	struct FFineEvidenceDiagnostic
@@ -266,9 +268,10 @@ private:
  TArray<FActualOccupancySnapshot> FrameOccupancy;
  bool bUseFrameOccupancy=false, bFilterFrameOccupancy=false;
  TConstArrayView<const FActualOccupancySnapshot*> FrameOccupancyCandidates;
+ mutable TMap<FVector2D,bool> FrameOccupancyPoints;
  bool bUseNewerCandidates=false;
  FName NewerCandidateId;
- uint32 NewerCandidateEpoch=0;
+ uint32 NewerCandidateMaximumEpoch=0;
  TConstArrayView<const FDarkwellSpatialObservationRecord*> FrameNewerCandidates;
 	friend class FDarkwellCapPartialClipTest;
 	friend class FDarkwellCapCoplanarContactTest;

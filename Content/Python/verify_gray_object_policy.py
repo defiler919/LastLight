@@ -53,7 +53,7 @@ def sample(label,target=None,shot=True):
         resources=room.get_historical_presentation_resource_count_for_testing(target),
         policy=json.loads(room.get_reveal_policy_telemetry(target)),history=room.get_history_policy_telemetry(target),
         runtime=json.loads(room.get_history_runtime_telemetry()),live=json.loads(room.get_moving_live_telemetry(target)),
-        ownership=room.get_3d_ownership_telemetry_for_testing(target),
+        ownership=room.get3d_ownership_telemetry_for_testing(target),
         viewport=list(controller.get_viewport_size()),
         screen_percentage=unreal.SystemLibrary.get_console_variable_float_value('r.ScreenPercentage'),
         anti_aliasing_method=unreal.SystemLibrary.get_console_variable_int_value('r.AntiAliasingMethod'))
@@ -63,7 +63,7 @@ def sample(label,target=None,shot=True):
         unreal.SystemLibrary.execute_console_command(world(),f'Shot SHOWUI filename="{(root/row["file"]).as_posix()}"')
     rows.append(row)
     unreal.log('GRAY_GPU_FRAME '+json.dumps(row))
-    assert room.get_max_3d_render_ownership_contributors_for_testing(target)<=1,row
+    assert room.get_max3d_render_ownership_contributors_for_testing(target)<=1,row
     assert room.get_hard_ownership_filter_leak_for_testing(target)==0,row
     return row
 

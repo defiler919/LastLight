@@ -12,6 +12,8 @@ remote all equal `ede6c69d85012b89710743232ce1a50bd91e8685`.
 Initial worktree and LFS status were clean; no `.uproject` delta existed here.
 The installed Build.version reports UE 5.8.2, CL 56702186 (the repository
 guidance says 5.8.1); the configured engine root is unchanged.
+Home hardware: AMD Ryzen 9 3900X (12 cores / 24 threads), 32 GB installed RAM,
+NVIDIA GeForce RTX 2070 SUPER, Windows driver 32.0.16.1088.
 No company unpushed work was retrieved, inferred or reused.
 Protected remote refs were verified, without changes:
 
@@ -572,3 +574,32 @@ The prepared GPU driver now resolves an absolute evidence path; its optional
 LongInteraction run executes 60 rotation/view cycles (18,000 fixed steps, five
 simulated minutes) after the complete visual matrix. Runtime GPU validation is
 still pending; this is not yet visual or teardown evidence.
+
+
+## Home E8 — complete-soak run and capacity failure (in progress)
+
+E7 was pushed as `2acd9a61d0dab43c38edf9043f2cc16fcc02714e` with matching
+local/upstream/remote and unchanged protected refs.
+`Home_E8_FifteenMinuteSoak_20260903` runs the complete 54,000-step
+`Darkwell.PropLab.GrayHomeBaseline.FifteenMinuteInteractiveSoak` on that E7 binary,
+without a diagnostic wall budget. At this documentation checkpoint it is still
+running: **36,000/54,000 steps, not a completed fifteen-minute result**.
+The source.json and source.patch captured at launch identify the tested source.
+Later local query-cache edits have not been built and are not part of this run.
+No build, GPU editor or packaging job is running alongside the soak.
+
+The failure is established before completion. At 3,600 steps the enclosing p95
+was 32.419 ms; at 21,600 it was 154.635 ms with 106 retained records. At 33,615,
+p95 reached 936.809 ms and peak 1,064.242 ms. Window rows, including the shorter
+wall-minute rows, remain untrimmed in the unique run log. These CPU measurements
+include adapter, room, fixture and periodic GC; they do not represent a GPU frame.
+
+At 13:37:48 UTC the existing per-object capacity guard first rejected a new
+observation for Lab.Moving.Cabinet after 64 resident records. At step 36,000 there
+were 166 total records and 2,585 capacity warnings. The existing current-source
+path requires a current observation record, so this guard also threatens current
+visibility; the soak's explicit lost-live check will provide the final count.
+The existing CapacityFailsClosed test and 64-record limit are unchanged. No old
+history has been automatically cleared to avoid this failure. Peak resource
+counts, final visibility assertions, idle recovery and normal process exit are
+still pending. This intermediate checkpoint is failure evidence, not a pass.

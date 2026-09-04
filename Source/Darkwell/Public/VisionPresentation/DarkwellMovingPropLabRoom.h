@@ -81,6 +81,9 @@ public:
 		uint64 FrameNumber = 0;
 		uint64 FramesAccumulated = 0;
 		int32 ActiveHistoricalEpochs = 0;
+		int32 CandidateHistoricalEpochs = 0;
+		int32 SleepingHistoricalEpochs = 0;
+		int32 DirtyTileCount = 0;
 		int32 FineSamplesResident = 0;
 		uint64 FineSamplesScanned = 0;
 		uint64 CoverageFullScans = 0;
@@ -260,6 +263,13 @@ public:
 	bool AdvanceScenario(ADarkwellCharacter* Player);
 	bool SetMultiCount(int32 Count, ADarkwellCharacter* Player);
 	void StopMotion();
+	/** Dedicated V2-map entry points. They retain the same authoritative history path. */
+	bool ConfigureForGrayPolicyLab(ADarkwellCharacter* Player);
+	bool ResetGrayPolicyRoom(int32 RoomIndex);
+	bool ToggleGrayPolicyMovingSubject();
+	bool StartGrayPolicyMotion(bool bRotate);
+	bool SetGrayPolicyStressMode(int32 Mode);
+	FName GetGrayPolicyMovingSubject() const;
 
 private:
 	struct FPrimitiveGeometrySnapshot
@@ -572,6 +582,8 @@ private:
 	void BindProxyMaterial(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record, AActor* Proxy);
 	void TeleportPlayer(ADarkwellCharacter* Player, FVector Location, float Yaw) const;
 	void ConfigureScenarioProps(int32 InScenario);
+	void ConfigureGrayPolicyLabProps();
+	void DestroyGrayStressProps();
 	void UpdateDeterministicMotion(float DeltaSeconds);
 	void Report();
 	void FinalizeHistoryRuntimeTelemetry(uint64 UpdateRoomStartCycles);
@@ -600,6 +612,9 @@ private:
 	bool bInWorldScenarioSelected = false;
 	bool bInWorldFinished = false;
 	bool bPressureWaitingForExit = false;
+	bool bGrayPolicyLab = false;
+	bool bGrayPartialMovingActive = false;
+	int32 GrayStressMode = 0;
 	mutable FHistoryRuntimeTelemetry RuntimeFrame;
 	mutable FHistoryRuntimeTelemetry RuntimeTotal;
 	uint64 RuntimeFrameSequence = 0;

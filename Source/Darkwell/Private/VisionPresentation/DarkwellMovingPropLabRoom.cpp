@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellMovingPropLabRoom.h"
+#include "VisionPresentation/DarkwellGrayPolicyLab.h"
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 
 #include "Camera/CameraComponent.h"
@@ -296,10 +297,11 @@ ADarkwellMovingPropLabRoom::ADarkwellMovingPropLabRoom()
 void ADarkwellMovingPropLabRoom::BeginPlay()
 {
 	Super::BeginPlay();
+	bGrayPolicyLab = Darkwell::GrayPolicyLab::IsWorld(GetWorld());
 	bInWorldControls = Darkwell::MovingPropLab::IsInWorldControlRequest(GetWorld());
 	const bool bActive = FindActive(GetWorld()) == this;
-	SetActorHiddenInGame(!bActive);
-	SetActorEnableCollision(bActive);
+	SetActorHiddenInGame(!bActive || bGrayPolicyLab);
+	SetActorEnableCollision(bActive && !bGrayPolicyLab);
 	PressurePlate->SetVisibility(bActive && bInWorldControls);
 	PressureLabel->SetVisibility(bActive && bInWorldControls);
 	if (bActive && bInWorldControls)
@@ -318,8 +320,9 @@ void ADarkwellMovingPropLabRoom::EndPlay(const EEndPlayReason::Type Reason)
 ADarkwellMovingPropLabRoom* ADarkwellMovingPropLabRoom::FindActive(const UWorld* World)
 {
 	if (!Darkwell::PropLab::IsLabWorld(World)
+		|| (!Darkwell::GrayPolicyLab::IsWorld(World)
 		|| (!World->URL.HasOption(TEXT("MoveRules"))
-			&& !Darkwell::MovingPropLab::IsInWorldControlRequest(World)))
+			&& !Darkwell::MovingPropLab::IsInWorldControlRequest(World))))
 	{
 		return nullptr;
 	}
@@ -332,6 +335,10 @@ ADarkwellMovingPropLabRoom* ADarkwellMovingPropLabRoom::FindActive(const UWorld*
 
 FBox2D ADarkwellMovingPropLabRoom::FloorBounds() const
 {
+	if (bGrayPolicyLab)
+	{
+		return FBox2D(FVector2D(-7800, -7900), FVector2D(7800, 7900));
+	}
 	return FBox2D(
 		FVector2D(GetActorLocation()) + FVector2D(-1800, -1200),
 		FVector2D(GetActorLocation()) + FVector2D(1800, 1200));
@@ -1261,6 +1268,224 @@ void ADarkwellMovingPropLabRoom::ResetHistoryRuntimeTelemetryForTesting()
 {
 	RuntimeFrame = FHistoryRuntimeTelemetry();
 	RuntimeTotal = FHistoryRuntimeTelemetry();
+}
+
+void ADarkwellMovingPropLabRoom::ConfigureGrayPolicyLabProps()
+{
+	DestroyTracked();
+	bGrayPartialMovingActive = false;
+	GrayStressMode = 0;
+	auto SpawnPolicy = [this](const TCHAR* Id, const FVector& Position, const FVector& Dimensions,
+		const int32 Shape, const FLinearColor& Tint, const ESightWeaveRevealMode Reveal,
+		const ESightWeaveHistoryMode History)
+	{
+		FResolvedSightWeaveObjectPolicy Policy;
+		Policy.RevealMode = Reveal;
+		Policy.MinimumObservedSpanCm = 100.0f;
+		Policy.HistoryMode = History;
+		return SpawnTracked(FName(Id), Shape, Dimensions, Tint, FTransform(Position),
+			ESightWeaveObjectPolicySource::UseProjectDefault, History, &Policy);
+	};
+	SpawnPolicy(TEXT("Lab.V2.Whole"), FVector(-6000, -3150, 0), FVector(180, 80, 150), 0,
+		FLinearColor(.20f, .48f, .68f), ESightWeaveRevealMode::WholeObjectAfterSpan,
+		ESightWeaveHistoryMode::StationaryOnly);
+	SpawnPolicy(TEXT("Lab.V2.Partial"), FVector(0, -6150, 0), FVector(620, 75, 115), 4,
+		FLinearColor(.62f, .42f, .18f), ESightWeaveRevealMode::SpatialPartial,
+		ESightWeaveHistoryMode::StationaryOnly);
+	SpawnPolicy(TEXT("Lab.V2.MoveWhole"), FVector(5750, -3150, 0), FVector(170, 80, 145), 0,
+		FLinearColor(.22f, .58f, .38f), ESightWeaveRevealMode::WholeObjectAfterSpan,
+		ESightWeaveHistoryMode::StationaryOnly);
+	auto* PartialMoving = SpawnPolicy(TEXT("Lab.V2.MovePartial"), FVector(6250, -3150, 0), FVector(230, 70, 120), 4,
+		FLinearColor(.50f, .32f, .68f), ESightWeaveRevealMode::SpatialPartial,
+		ESightWeaveHistoryMode::StationaryOnly);
+	if (FTrackedProp* Prop = Tracked.Find(TEXT("Lab.V2.MovePartial")))
+	{
+		PartialMoving->SetActorHiddenInGame(true);
+		PartialMoving->SetActorEnableCollision(false);
+		Prop->bExists = false;
+	}
+	SpawnPolicy(TEXT("Lab.V2.Never"), FVector(-6000, 3850, 0), FVector(170, 80, 145), 0,
+		FLinearColor(.72f, .25f, .22f), ESightWeaveRevealMode::SpatialPartial,
+		ESightWeaveHistoryMode::Never);
+	SpawnPolicy(TEXT("Lab.V2.OcclusionWhole"), FVector(-450, 7000, 0), FVector(180, 75, 145), 0,
+		FLinearColor(.20f, .50f, .70f), ESightWeaveRevealMode::WholeObjectAfterSpan,
+		ESightWeaveHistoryMode::StationaryOnly);
+	SpawnPolicy(TEXT("Lab.V2.OcclusionPartial"), FVector(450, 7000, 0), FVector(260, 70, 115), 4,
+		FLinearColor(.62f, .40f, .20f), ESightWeaveRevealMode::SpatialPartial,
+		ESightWeaveHistoryMode::StationaryOnly);
+}
+
+bool ADarkwellMovingPropLabRoom::ConfigureForGrayPolicyLab(ADarkwellCharacter* Player)
+{
+	if (!Player || FindActive(GetWorld()) != this || !Darkwell::GrayPolicyLab::IsWorld(GetWorld()))
+	{
+		return false;
+	}
+	bGrayPolicyLab = true;
+	bInWorldControls = false;
+	ConfigureGrayPolicyLabProps();
+	Player->RestorePersistentState(Player->GetActorTransform(), Player->GetMaxHealth(),
+		DarkwellGameplayTags::State_Player_Alive, FGameplayTag());
+	Player->GetLoadoutComponent()->RestorePersistentState(2, 100, 0, 100,
+		DarkwellGameplayTags::Equipment_Left_Shotgun, DarkwellGameplayTags::Equipment_Right_Torch);
+	bStarted = true;
+	ResetHistoryRuntimeTelemetryForTesting();
+	return Tracked.Num() == 7;
+}
+
+bool ADarkwellMovingPropLabRoom::ResetGrayPolicyRoom(const int32 RoomIndex)
+{
+	if (!bGrayPolicyLab || RoomIndex < 1 || RoomIndex > 6) return false;
+	StopMotion();
+	auto Respawn = [this](const TCHAR* Id, const FVector& Position, const FVector& Dimensions,
+		const int32 Shape, const FLinearColor& Tint, const ESightWeaveRevealMode Reveal,
+		const ESightWeaveHistoryMode History)
+	{
+		DestroyTracked(FName(Id));
+		FResolvedSightWeaveObjectPolicy Policy;
+		Policy.RevealMode = Reveal; Policy.MinimumObservedSpanCm = 100.0f; Policy.HistoryMode = History;
+		return SpawnTracked(FName(Id), Shape, Dimensions, Tint, FTransform(Position),
+			ESightWeaveObjectPolicySource::UseProjectDefault, History, &Policy);
+	};
+	if (RoomIndex == 1)
+	{
+		Respawn(TEXT("Lab.V2.Whole"), FVector(-6000, -3150, 0), FVector(180, 80, 150), 0,
+			FLinearColor(.20f, .48f, .68f), ESightWeaveRevealMode::WholeObjectAfterSpan, ESightWeaveHistoryMode::StationaryOnly);
+	}
+	else if (RoomIndex == 2)
+	{
+		Respawn(TEXT("Lab.V2.Partial"), FVector(0, -6150, 0), FVector(620, 75, 115), 4,
+			FLinearColor(.62f, .42f, .18f), ESightWeaveRevealMode::SpatialPartial, ESightWeaveHistoryMode::StationaryOnly);
+	}
+	else if (RoomIndex == 3)
+	{
+		Respawn(TEXT("Lab.V2.MoveWhole"), FVector(5750, -3150, 0), FVector(170, 80, 145), 0,
+			FLinearColor(.22f, .58f, .38f), ESightWeaveRevealMode::WholeObjectAfterSpan, ESightWeaveHistoryMode::StationaryOnly);
+		Respawn(TEXT("Lab.V2.MovePartial"), FVector(6250, -3150, 0), FVector(230, 70, 120), 4,
+			FLinearColor(.50f, .32f, .68f), ESightWeaveRevealMode::SpatialPartial, ESightWeaveHistoryMode::StationaryOnly);
+		const FName HiddenId = bGrayPartialMovingActive ? FName(TEXT("Lab.V2.MoveWhole")) : FName(TEXT("Lab.V2.MovePartial"));
+		if (FTrackedProp* Hidden = Tracked.Find(HiddenId))
+		{
+			auto* Actor = Hidden->Actual.Get();
+			Actor->SetActorHiddenInGame(true); Actor->SetActorEnableCollision(false); Hidden->bExists = false;
+		}
+	}
+	else if (RoomIndex == 4)
+	{
+		Respawn(TEXT("Lab.V2.Never"), FVector(-6000, 3850, 0), FVector(170, 80, 145), 0,
+			FLinearColor(.72f, .25f, .22f), ESightWeaveRevealMode::SpatialPartial, ESightWeaveHistoryMode::Never);
+	}
+	else if (RoomIndex == 5)
+	{
+		Respawn(TEXT("Lab.V2.OcclusionWhole"), FVector(-450, 7000, 0), FVector(180, 75, 145), 0,
+			FLinearColor(.20f, .50f, .70f), ESightWeaveRevealMode::WholeObjectAfterSpan, ESightWeaveHistoryMode::StationaryOnly);
+		Respawn(TEXT("Lab.V2.OcclusionPartial"), FVector(450, 7000, 0), FVector(260, 70, 115), 4,
+			FLinearColor(.62f, .40f, .20f), ESightWeaveRevealMode::SpatialPartial, ESightWeaveHistoryMode::StationaryOnly);
+	}
+	else SetGrayPolicyStressMode(0);
+	ResetHistoryRuntimeTelemetryForTesting();
+	return true;
+}
+
+FName ADarkwellMovingPropLabRoom::GetGrayPolicyMovingSubject() const
+{
+	return bGrayPartialMovingActive ? FName(TEXT("Lab.V2.MovePartial")) : FName(TEXT("Lab.V2.MoveWhole"));
+}
+
+bool ADarkwellMovingPropLabRoom::ToggleGrayPolicyMovingSubject()
+{
+	if (!bGrayPolicyLab || bMotionActive) return false;
+	bGrayPartialMovingActive = !bGrayPartialMovingActive;
+	return ResetGrayPolicyRoom(3);
+}
+
+bool ADarkwellMovingPropLabRoom::StartGrayPolicyMotion(const bool bRotate)
+{
+	if (!bGrayPolicyLab || bMotionActive) return false;
+	FTrackedProp* Prop = Tracked.Find(GetGrayPolicyMovingSubject());
+	ADarkwellPropLabFurniture* Actual = Prop ? Prop->Actual.Get() : nullptr;
+	if (!Prop || !Actual || !Prop->bExists) return false;
+	const FTransform Start = Actual->GetActorTransform();
+	const FTransform Target(bRotate ? FRotator(0, Start.Rotator().Yaw + 180.0f, 0) : Start.Rotator(),
+		Start.GetLocation() + (bRotate ? FVector::ZeroVector : FVector(0, 500, 0)));
+	StartMotion(Actual, Target, bRotate ? 3.0f : 4.0f);
+	return true;
+}
+
+void ADarkwellMovingPropLabRoom::DestroyGrayStressProps()
+{
+	TArray<FName> Remove;
+	for (const auto& Pair : Tracked)
+	{
+		if (Pair.Key.ToString().StartsWith(TEXT("Lab.V2.Stress"))) Remove.Add(Pair.Key);
+	}
+	for (const FName Id : Remove) DestroyTracked(Id);
+}
+
+bool ADarkwellMovingPropLabRoom::SetGrayPolicyStressMode(const int32 Mode)
+{
+	if (!bGrayPolicyLab || Mode < 0 || Mode > 7 || bMotionActive) return false;
+	DestroyGrayStressProps();
+	GrayStressMode = Mode;
+	if (Mode == 0)
+	{
+		ResetHistoryRuntimeTelemetryForTesting();
+		return true;
+	}
+	auto SpawnStress = [this](const int32 Index, const FVector& Position,
+		const ESightWeaveRevealMode Reveal = ESightWeaveRevealMode::WholeObjectAfterSpan,
+		const ESightWeaveHistoryMode History = ESightWeaveHistoryMode::StationaryOnly)
+	{
+		const FName Id(*FString::Printf(TEXT("Lab.V2.Stress.%03d"), Index));
+		FResolvedSightWeaveObjectPolicy Policy;
+		Policy.RevealMode = Reveal; Policy.MinimumObservedSpanCm = 100.0f; Policy.HistoryMode = History;
+		return SpawnTracked(Id, 0, FVector(48, 48, 90), FLinearColor(.28f, .46f, .62f), FTransform(Position),
+			ESightWeaveObjectPolicySource::UseProjectDefault, History, &Policy);
+	};
+	const FVector Center(6000, 3850, 0);
+	if (Mode <= 3)
+	{
+		const int32 Count = Mode == 1 ? 1 : Mode == 2 ? 8 : 32;
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			SpawnStress(Index, Center + FVector((Index % 8 - 3.5f) * 120.0f, (Index / 8) * 120.0f, 0));
+		}
+	}
+	else if (Mode == 4)
+	{
+		for (int32 Index = 0; Index < 8; ++Index)
+		{
+			ADarkwellPropLabFurniture* Actor = SpawnStress(Index, Center + FVector((Index % 4) * 18.0f, (Index / 4) * 18.0f, 0));
+			if (!Actor || !ConfigureHistoricalEpochCountForTesting(Actor->StableId, 8)) return false;
+		}
+	}
+	else if (Mode == 5)
+	{
+		ADarkwellPropLabFurniture* Actor = SpawnStress(0, Center);
+		if (!Actor || !ConfigureHistoricalEpochCountForTesting(Actor->StableId, 64)) return false;
+	}
+	else if (Mode == 6)
+	{
+		const FVector Starts[] = {Center, FVector(-6000, -3150, 0), FVector(-6000, 3850, 0)};
+		const int32 Counts[] = {64, 64, 56};
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			ADarkwellPropLabFurniture* Actor = SpawnStress(Index, Starts[Index]);
+			if (!Actor || !ConfigureHistoricalEpochCountForTesting(Actor->StableId, Counts[Index])) return false;
+		}
+	}
+	else
+	{
+		for (int32 Index = 0; Index < 6; ++Index)
+		{
+			const auto Reveal = Index < 3 ? ESightWeaveRevealMode::WholeObjectAfterSpan : ESightWeaveRevealMode::SpatialPartial;
+			const auto History = Index % 3 == 0 ? ESightWeaveHistoryMode::Always
+				: Index % 3 == 1 ? ESightWeaveHistoryMode::StationaryOnly : ESightWeaveHistoryMode::Never;
+			SpawnStress(Index, Center + FVector((Index - 2.5f) * 160.0f, 0, 0), Reveal, History);
+		}
+	}
+	ResetHistoryRuntimeTelemetryForTesting();
+	return true;
 }
 
 bool ADarkwellMovingPropLabRoom::ConfigureHistoricalEpochCountForTesting(
@@ -4713,6 +4938,7 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 			if (!Record.bCurrentObservedLocation)
 			{
 				++RuntimeFrame.ActiveHistoricalEpochs;
+				++RuntimeFrame.CandidateHistoricalEpochs;
 			}
 			RuntimeFrame.FineSamplesResident += Record.FineHistory.GetSamples().Num();
 		}
@@ -4730,6 +4956,9 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	++RuntimeTotal.FramesAccumulated;
 	RuntimeTotal.FrameNumber = RuntimeFrame.FrameNumber;
 	RuntimeTotal.ActiveHistoricalEpochs = RuntimeFrame.ActiveHistoricalEpochs;
+	RuntimeTotal.CandidateHistoricalEpochs = RuntimeFrame.CandidateHistoricalEpochs;
+	RuntimeTotal.SleepingHistoricalEpochs = RuntimeFrame.SleepingHistoricalEpochs;
+	RuntimeTotal.DirtyTileCount = RuntimeFrame.DirtyTileCount;
 	RuntimeTotal.FineSamplesResident = RuntimeFrame.FineSamplesResident;
 	RuntimeTotal.FineSamplesScanned += RuntimeFrame.FineSamplesScanned;
 	RuntimeTotal.CoverageFullScans += RuntimeFrame.CoverageFullScans;

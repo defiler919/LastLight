@@ -24,7 +24,10 @@ public class Darkwell : ModuleRules
 		{
 			"SightWeaveRuntime",
 			"GeometryCore",
-			"GeometryFramework"
+			"GeometryFramework",
+			"Slate",
+			"SlateCore",
+			"UMG"
 		});
 
 		if (Target.Type != TargetType.Server)

@@ -285,3 +285,14 @@ Black-layer work was not started because this task explicitly scoped it out and
 the gray runtime performance gate remains open. No final gray stable branch was
 created because automated evidence is not user acceptance; only the user's real
 manual pass authorizes that stable point.
+
+## 2026-09-04 confirmed-Whole view-edge follow-up
+
+The shared confirmed-Whole Current/Freeze path was corrected on checkpoints
+`28c3160`, `f4cb788` and `8eeca5a`. Cone edges now affect object-level contact but
+cannot cut the confirmed object; real wall occlusion remains a transient gate,
+Whole freeze comes from registered-primitive FullGeometryMask, and Whole caps are
+zero. SpatialPartial is unchanged. D3D12/SM6 original-image review and the new
+8-test matrix passed; see `SIGHTWEAVE_CONFIRMED_WHOLE_VIEW_EDGE_HANDOFF.md`.
+Status is `PARTIAL — READY_FOR_USER_CONFIRMED_WHOLE_VIEW_EDGE_RETEST` with
+`PERFORMANCE BLOCKER RETAINED`.

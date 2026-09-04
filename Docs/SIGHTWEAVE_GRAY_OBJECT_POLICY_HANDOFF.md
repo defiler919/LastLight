@@ -154,3 +154,12 @@ remain open at this checkpoint. Prior 0xC0000005 teardown evidence is retained.
 Final manual PIE is required. Only after actual user approval may
 `stable/sightweave-gray-layer-policy-20260903` be created. Black-layer work follows
 that acceptance; this task must not start it.
+
+## Confirmed Whole view-edge ownership correction
+
+Confirmed Whole now renders from FullGeometryMask times one object-level blend
+times an occlusion-only wall gate. Its history freezes FullGeometryMask from a
+coherent revision-stamped LastLegalPose and cannot inherit cone or wall outlines;
+it never owns a cut cap. Unconfirmed Whole and SpatialPartial retain local
+observation semantics. See `SIGHTWEAVE_CONFIRMED_WHOLE_VIEW_EDGE_HANDOFF.md` for
+the root cause, checkpoints, D3D12 evidence and retest route.

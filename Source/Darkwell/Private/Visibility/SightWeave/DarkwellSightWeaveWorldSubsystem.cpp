@@ -15,6 +15,7 @@
 #include "Gameplay/DarkwellVisibilityComponent.h"
 #include "Gameplay/DarkwellGameplayTags.h"
 #include "Player/DarkwellCharacter.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "SightWeaveQueries.h"
 #include "SightWeaveWorldSubsystem.h"
 #include "UI/DarkwellHUD.h"
@@ -150,6 +151,7 @@ void UDarkwellSightWeaveWorldSubsystem::Deinitialize()
 
 void UDarkwellSightWeaveWorldSubsystem::Tick(const float DeltaTime)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_SightWeave_AdapterUpdate);
 	if (Diagnostics.State == EDarkwellVisibilityAuthorityState::SightWeaveRequested)
 	{
 		RequestAgeSeconds += FMath::Max(0.0f, DeltaTime);
@@ -883,6 +885,7 @@ bool UDarkwellSightWeaveWorldSubsystem::ValidateAndBuildDescriptions(
 
 void UDarkwellSightWeaveWorldSubsystem::UpdateDynamicAuthority()
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_SightWeave_SourceUpdate);
 	ADarkwellCharacter* Character = Player.Get();
 	if (!Character || !RuntimeSubsystem)
 	{

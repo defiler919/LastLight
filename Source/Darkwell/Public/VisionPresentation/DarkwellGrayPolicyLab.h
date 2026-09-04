@@ -17,6 +17,25 @@ class UWidgetComponent;
 class STextBlock;
 class SWidget;
 
+struct FDarkwellGrayPolicyHitchFrame
+{
+	double TimestampSeconds = 0.0;
+	uint64 Frame = 0;
+	float FrameMs = 0.0f;
+	float ViewYawDelta = 0.0f;
+	float ObserverMovementDelta = 0.0f;
+	uint64 CoverageRevision = 0;
+	uint64 GeometryRevision = 0;
+	int32 HistoryCount = 0;
+	int32 CandidateCount = 0;
+	int32 ActiveCount = 0;
+	int32 SleepingCount = 0;
+	int32 DirtyTileCount = 0;
+	int64 WorkingSetDeltaBytes = 0;
+	int32 UObjectDelta = 0;
+	bool bGarbageCollecting = false;
+};
+
 namespace Darkwell::GrayPolicyLab
 {
 	inline constexpr TCHAR MapPath[] = TEXT("/Game/Maps/L_SightWeaveGrayPolicyLab");
@@ -125,7 +144,11 @@ public:
 	UFUNCTION(BlueprintPure, Category="Gray Policy Lab") FString GetChineseGuidanceForTesting() const;
 	UFUNCTION(BlueprintPure, Category="Gray Policy Lab") FString GetRuntimeStatusForTesting() const;
 	UFUNCTION(BlueprintPure, Category="Gray Policy Lab") int32 GetRoomControlCountForTesting() const;
+	UFUNCTION(BlueprintCallable, Category="Gray Policy Lab|Testing") bool SetStressModeForTesting(int32 Mode);
+	UFUNCTION(BlueprintCallable, Category="Gray Policy Lab|Testing") void StartSweepForTesting(float Degrees, bool bRepeat);
+	UFUNCTION(BlueprintCallable, Category="Gray Policy Lab|Testing")
 	bool TeleportToRoomForTesting(int32 Room, ADarkwellCharacter* Character);
+	UFUNCTION(BlueprintCallable, Category="Gray Policy Lab|Testing")
 	bool ResetCurrentRoomForTesting(ADarkwellCharacter* Character);
 	ADarkwellMovingPropLabRoom* GetRuntimeRoomForTesting() const { return RuntimeRoom.Get(); }
 	static FVector GetRoomCenterForTesting(int32 Room);
@@ -159,6 +182,7 @@ private:
 	TWeakObjectPtr<ADarkwellMovingPropLabRoom> RuntimeRoom;
 	TSharedPtr<SWidget> ScreenGuidance;
 	TArray<float> FrameTimesMs;
+	TArray<FDarkwellGrayPolicyHitchFrame> HitchRing;
 	FString CheckoutSha;
 	FString CachedStatistics;
 	FVector2D FogMin = FVector2D::ZeroVector;
@@ -167,11 +191,17 @@ private:
 	int32 CurrentRoom = 0;
 	int32 StressMode = 0;
 	int32 StatisticsFrame = 0;
+	int32 HitchRingNext = 0;
+	int32 PreviousUObjectCount = 0;
+	uint64 PreviousWorkingSetBytes = 0;
 	float StatisticsAccumulator = 0.0f;
+	float PreviousViewYaw = 0.0f;
+	FVector PreviousObserverLocation = FVector::ZeroVector;
 	float SweepStartYaw = 0.0f;
 	float SweepTargetYaw = 0.0f;
 	float SweepElapsed = 0.0f;
 	float SweepDuration = 0.0f;
 	bool bRepeatSweep = false;
 	bool bInitialized = false;
+	bool bHasPreviousHitchFrame = false;
 };

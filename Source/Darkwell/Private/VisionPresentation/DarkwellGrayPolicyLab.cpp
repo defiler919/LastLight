@@ -16,11 +16,13 @@
 #include "SlateOptMacros.h"
 #include "Styling/SlateColor.h"
 #include "VisionPresentation/DarkwellMovingPropLabRoom.h"
+#include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Text/STextBlock.h"
+#include "UObject/GarbageCollection.h"
 
 #define LOCTEXT_NAMESPACE "DarkwellGrayPolicyLab"
 
@@ -199,6 +201,7 @@ void ADarkwellSightWeaveGrayPolicyLabDirector::BeginPlay()
 		return;
 	}
 	CheckoutSha = ResolveCheckoutSha();
+	HitchRing.Reserve(120);
 	BuildEnvironment();
 	BuildControls();
 	AttachScreenGuidance();
@@ -608,6 +611,20 @@ int32 ADarkwellSightWeaveGrayPolicyLabDirector::GetRoomControlCountForTesting() 
 	return Controls.Num();
 }
 
+bool ADarkwellSightWeaveGrayPolicyLabDirector::SetStressModeForTesting(const int32 Mode)
+{
+	if (!RuntimeRoom.IsValid() || Mode < 0 || Mode > 7) return false;
+	if (!RuntimeRoom->SetGrayPolicyStressMode(Mode)) return false;
+	StressMode = Mode;
+	return true;
+}
+
+void ADarkwellSightWeaveGrayPolicyLabDirector::StartSweepForTesting(
+	const float Degrees, const bool bRepeat)
+{
+	StartSweep(FMath::Clamp(Degrees, 1.0f, 180.0f), bRepeat);
+}
+
 FVector ADarkwellSightWeaveGrayPolicyLabDirector::GetRoomCenterForTesting(const int32 Room)
 {
 	return RoomCenters[FMath::Clamp(Room, 0, 6)];
@@ -669,15 +686,56 @@ void ADarkwellSightWeaveGrayPolicyLabDirector::UpdateFrameStatistics(const float
 void ADarkwellSightWeaveGrayPolicyLabDirector::EmitHitchIfNeeded(const float DeltaSeconds)
 {
 	const float Ms = DeltaSeconds * 1000.0f;
-	if (Ms < 33.0f || !RuntimeRoom.IsValid()) return;
+	if (!RuntimeRoom.IsValid()) return;
 	const auto T = RuntimeRoom->GetHistoryRuntimeFrameTelemetryForTesting();
-	UE_LOG(LogTemp, Warning, TEXT("GRAY_LAB_HITCH threshold=%s frame=%llu frame_ms=%.3f room=%d stress=%d histories=%d candidates=%d active=%d sleeping=%d dirty_tiles=%d coverage=%llu occupancy=%llu ownership=%llu samples=%llu cap_rebuild=%llu texture_upload=%llu room_us=%.3f history_us=%.3f diagnostics_us=%.3f"),
-		Ms >= 100 ? TEXT("100") : Ms >= 50 ? TEXT("50") : TEXT("33"), T.FrameNumber, Ms,
-		CurrentRoom, StressMode, T.ActiveHistoricalEpochs, T.CandidateHistoricalEpochs,
+	ADarkwellCharacter* Character = Cast<ADarkwellCharacter>(GetWorld()->GetFirstPlayerController()
+		? GetWorld()->GetFirstPlayerController()->GetPawn() : nullptr);
+	const FVector ObserverLocation = Character ? Character->GetActorLocation() : FVector::ZeroVector;
+	const float ViewYaw = Character ? Character->GetActorRotation().Yaw : 0.0f;
+	const UDarkwellFogVisualSubsystem* Fog = GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
+	FDarkwellGrayPolicyHitchFrame Sample;
+	Sample.TimestampSeconds = FPlatformTime::Seconds();
+	Sample.Frame = T.FrameNumber;
+	Sample.FrameMs = Ms;
+	Sample.ViewYawDelta = bHasPreviousHitchFrame
+		? FMath::Abs(FMath::FindDeltaAngleDegrees(PreviousViewYaw, ViewYaw)) : 0.0f;
+	Sample.ObserverMovementDelta = bHasPreviousHitchFrame
+		? FVector::Dist(PreviousObserverLocation, ObserverLocation) : 0.0f;
+	Sample.CoverageRevision = Fog ? Fog->GetDiagnostics().CoverageDrawCount : 0;
+	Sample.GeometryRevision = static_cast<uint64>(RuntimeRoom->GetGeometryRevisionForTesting());
+	Sample.HistoryCount = T.SpatialRecordCount;
+	Sample.CandidateCount = T.CandidateHistoricalEpochs;
+	Sample.ActiveCount = T.ActiveHistoricalEpochs;
+	Sample.SleepingCount = T.SleepingHistoricalEpochs;
+	Sample.DirtyTileCount = T.DirtyTileCount;
+	Sample.WorkingSetDeltaBytes = bHasPreviousHitchFrame
+		? static_cast<int64>(T.ProcessWorkingSetBytes) - static_cast<int64>(PreviousWorkingSetBytes) : 0;
+	Sample.UObjectDelta = bHasPreviousHitchFrame ? T.UObjectCount - PreviousUObjectCount : 0;
+	Sample.bGarbageCollecting = IsGarbageCollecting();
+	if (HitchRing.Num() < 120) HitchRing.Add(Sample);
+	else { HitchRing[HitchRingNext] = Sample; HitchRingNext = (HitchRingNext + 1) % HitchRing.Num(); }
+	PreviousViewYaw = ViewYaw;
+	PreviousObserverLocation = ObserverLocation;
+	PreviousWorkingSetBytes = T.ProcessWorkingSetBytes;
+	PreviousUObjectCount = T.UObjectCount;
+	bHasPreviousHitchFrame = true;
+	if (Ms < 33.0f) return;
+	float PriorPeakMs = 0.0f;
+	for (const FDarkwellGrayPolicyHitchFrame& Prior : HitchRing)
+		PriorPeakMs = FMath::Max(PriorPeakMs, Prior.FrameMs);
+	UE_LOG(LogTemp, Warning, TEXT("GRAY_LAB_HITCH timestamp=%.6f threshold=%s frame=%llu frame_ms=%.3f pre120_peak_ms=%.3f room=%d stress=%d yaw_delta=%.3f observer_delta=%.3f coverage_revision=%llu geometry_revision=%llu histories=%d candidates=%d active=%d sleeping=%d dirty_tiles=%d coverage_queries=%llu occupancy_queries=%llu ownership_queries=%llu samples=%llu working_set_delta=%lld uobject_delta=%d gc=%d cap_rebuild=%llu texture_upload=%llu room_us=%.3f current_us=%.3f candidate_us=%.3f history_us=%.3f coverage_us=%.3f occupancy_us=%.3f ownership_us=%.3f texture_us=%.3f cap_us=%.3f diagnostics_us=%.3f occupancy_snapshot_us=%.3f"),
+		Sample.TimestampSeconds, Ms >= 100 ? TEXT("100") : Ms >= 50 ? TEXT("50") : TEXT("33"),
+		T.FrameNumber, Ms, PriorPeakMs,
+		CurrentRoom, StressMode,
+		Sample.ViewYawDelta, Sample.ObserverMovementDelta, Sample.CoverageRevision,
+		Sample.GeometryRevision, T.SpatialRecordCount, T.CandidateHistoricalEpochs,
 		T.ActiveHistoricalEpochs, T.SleepingHistoricalEpochs, T.DirtyTileCount,
 		T.CoverageQueries, T.OccupancyTests, T.OwnershipTests, T.FineSamplesScanned,
+		Sample.WorkingSetDeltaBytes, Sample.UObjectDelta, Sample.bGarbageCollecting ? 1 : 0,
 		T.CapMeshRebuilds, T.TextureUploads, T.MovingPropLabGameThreadUs,
-		T.AdvanceFineHistoryUs, T.RefreshContributionDiagnosticsUs);
+		T.CurrentRevealUs, T.HistoricalCandidateUs, T.HistoricalEvidenceUs,
+		T.CoverageUs, T.OccupancyUs, T.OwnershipUs, T.TextureSubmissionUs,
+		T.CapPresentationUs, T.RefreshContributionDiagnosticsUs, T.OccupancySnapshotUs);
 }
 
 void ADarkwellSightWeaveGrayPolicyLabDirector::RefreshSpatialPresentation()

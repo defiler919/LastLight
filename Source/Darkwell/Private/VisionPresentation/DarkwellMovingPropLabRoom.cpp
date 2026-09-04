@@ -23,6 +23,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Math/Float16Color.h"
 #include "Player/DarkwellCharacter.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "UObject/ConstructorHelpers.h"
 #include "UObject/UObjectArray.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
@@ -321,8 +322,8 @@ ADarkwellMovingPropLabRoom* ADarkwellMovingPropLabRoom::FindActive(const UWorld*
 {
 	if (!Darkwell::PropLab::IsLabWorld(World)
 		|| (!Darkwell::GrayPolicyLab::IsWorld(World)
-		|| (!World->URL.HasOption(TEXT("MoveRules"))
-			&& !Darkwell::MovingPropLab::IsInWorldControlRequest(World))))
+			&& !World->URL.HasOption(TEXT("MoveRules"))
+			&& !Darkwell::MovingPropLab::IsInWorldControlRequest(World)))
 	{
 		return nullptr;
 	}
@@ -1028,6 +1029,8 @@ ADarkwellMovingPropLabRoom::SampleConservativeCoverage(
 	const uint64 TransformRevision,
 	const uint64 GridRevision, const int32 Subdivision) const
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_Coverage);
+	FScopedHistoryRuntimeTimer CoverageTimer(RuntimeFrame.CoverageUs);
 	++RuntimeFrame.OwnershipTests;
 	++RuntimeFrame.CoverageFullScans;
 	FCoverageSnapshot Result;
@@ -1244,8 +1247,9 @@ FString ADarkwellMovingPropLabRoom::GetHistoryRuntimeTelemetry() const
 	auto Format = [](const FHistoryRuntimeTelemetry& T)
 	{
 		return FString::Printf(
-			TEXT("{\"frame\":%llu,\"frames\":%llu,\"epochs\":%d,\"resident_samples\":%d,\"samples_scanned\":%llu,\"coverage_scans\":%llu,\"coverage_queries\":%llu,\"occupancy_tests\":%llu,\"geometry_tests\":%llu,\"ownership_tests\":%llu,\"occupancy_hits\":%llu,\"history_geometry_reuse\":%llu,\"history_ownership_reuse\":%llu,\"history_coverage_reuse\":%llu,\"occupancy_samples_reused\":%llu,\"texture_calls\":%llu,\"texture_uploads\":%llu,\"cap_calls\":%llu,\"cap_rebuilds\":%llu,\"refresh_us\":%.3f,\"rotation_log_us\":%.3f,\"report_us\":%.3f,\"fine_advance_us\":%.3f,\"tracked_us\":%.3f,\"game_thread_us\":%.3f,\"proxies\":%d,\"caps\":%d,\"textures\":%d,\"mids\":%d,\"fine_bytes\":%llu,\"records\":%d,\"working_set\":%llu,\"uobjects\":%d,\"sweep_candidates\":%llu,\"sweep_queries\":%llu,\"sweep_accepted\":%llu,\"sweep_budget_rejects\":%llu,\"sweep_unsupported_events\":%llu,\"sweep_proof_us\":%.3f,\"sweep_uniform_substeps\":0}"),
+			TEXT("{\"frame\":%llu,\"frames\":%llu,\"epochs\":%d,\"candidates\":%d,\"sleeping\":%d,\"dirty_tiles\":%d,\"resident_samples\":%d,\"samples_scanned\":%llu,\"coverage_scans\":%llu,\"coverage_queries\":%llu,\"occupancy_tests\":%llu,\"geometry_tests\":%llu,\"ownership_tests\":%llu,\"occupancy_hits\":%llu,\"history_geometry_reuse\":%llu,\"history_ownership_reuse\":%llu,\"history_coverage_reuse\":%llu,\"occupancy_samples_reused\":%llu,\"texture_calls\":%llu,\"texture_uploads\":%llu,\"cap_calls\":%llu,\"cap_rebuilds\":%llu,\"refresh_us\":%.3f,\"rotation_log_us\":%.3f,\"report_us\":%.3f,\"fine_advance_us\":%.3f,\"tracked_us\":%.3f,\"coverage_us\":%.3f,\"occupancy_us\":%.3f,\"ownership_us\":%.3f,\"texture_us\":%.3f,\"cap_us\":%.3f,\"current_reveal_us\":%.3f,\"candidate_us\":%.3f,\"historical_us\":%.3f,\"occupancy_snapshot_us\":%.3f,\"game_thread_us\":%.3f,\"proxies\":%d,\"caps\":%d,\"textures\":%d,\"mids\":%d,\"fine_bytes\":%llu,\"records\":%d,\"working_set\":%llu,\"uobjects\":%d,\"sweep_candidates\":%llu,\"sweep_queries\":%llu,\"sweep_accepted\":%llu,\"sweep_budget_rejects\":%llu,\"sweep_unsupported_events\":%llu,\"sweep_proof_us\":%.3f,\"sweep_uniform_substeps\":0}"),
 			T.FrameNumber, T.FramesAccumulated, T.ActiveHistoricalEpochs,
+			T.CandidateHistoricalEpochs, T.SleepingHistoricalEpochs, T.DirtyTileCount,
 			T.FineSamplesResident, T.FineSamplesScanned, T.CoverageFullScans,
 			T.CoverageQueries, T.OccupancyTests, T.PrimitiveGeometryTests,
 			T.OwnershipTests, T.OccupancyCacheHits, T.HistoryGeometryReuseHits,
@@ -1254,6 +1258,9 @@ FString ADarkwellMovingPropLabRoom::GetHistoryRuntimeTelemetry() const
 			T.UpdateRecordCapCalls, T.CapMeshRebuilds,
 			T.RefreshContributionDiagnosticsUs, T.LogRotationFrameUs,
 			T.ReportHudUs, T.AdvanceFineHistoryUs, T.UpdateTrackedUs,
+			T.CoverageUs, T.OccupancyUs, T.OwnershipUs,
+			T.TextureSubmissionUs, T.CapPresentationUs, T.CurrentRevealUs,
+			T.HistoricalCandidateUs, T.HistoricalEvidenceUs, T.OccupancySnapshotUs,
 			T.MovingPropLabGameThreadUs, T.ProxyCount, T.CapComponentCount,
 			T.TextureCount, T.MidCount, T.FineHistoryResidentBytes,
 			T.SpatialRecordCount, T.ProcessWorkingSetBytes, T.UObjectCount,
@@ -1424,7 +1431,13 @@ void ADarkwellMovingPropLabRoom::DestroyGrayStressProps()
 
 bool ADarkwellMovingPropLabRoom::SetGrayPolicyStressMode(const int32 Mode)
 {
-	if (!bGrayPolicyLab || Mode < 0 || Mode > 7 || bMotionActive) return false;
+	if (!bGrayPolicyLab || Mode < 0 || Mode > 7 || bMotionActive)
+	{
+		UE_LOG(LogDarkwellMovingPropLab, Error,
+			TEXT("GRAY_POLICY_STRESS_REJECT mode=%d gray_lab=%d motion=%d"),
+			Mode, bGrayPolicyLab ? 1 : 0, bMotionActive ? 1 : 0);
+		return false;
+	}
 	DestroyGrayStressProps();
 	GrayStressMode = Mode;
 	if (Mode == 0)
@@ -1455,14 +1468,29 @@ bool ADarkwellMovingPropLabRoom::SetGrayPolicyStressMode(const int32 Mode)
 	{
 		for (int32 Index = 0; Index < 8; ++Index)
 		{
-			ADarkwellPropLabFurniture* Actor = SpawnStress(Index, Center + FVector((Index % 4) * 18.0f, (Index / 4) * 18.0f, 0));
-			if (!Actor || !ConfigureHistoricalEpochCountForTesting(Actor->StableId, 8)) return false;
+			ADarkwellPropLabFurniture* Actor = SpawnStress(Index,
+				Center + FVector((Index % 4) * 18.0f, (Index / 4) * 18.0f, 0),
+				ESightWeaveRevealMode::SpatialPartial);
+			if (!Actor || !ConfigureHistoricalEpochCountForTesting(Actor->StableId, 8))
+			{
+				UE_LOG(LogDarkwellMovingPropLab, Error,
+					TEXT("GRAY_POLICY_STRESS_SETUP_FAIL mode=%d actor=%d spawned=%d"),
+					Mode, Index, Actor ? 1 : 0);
+				return false;
+			}
 		}
 	}
 	else if (Mode == 5)
 	{
-		ADarkwellPropLabFurniture* Actor = SpawnStress(0, Center);
-		if (!Actor || !ConfigureHistoricalEpochCountForTesting(Actor->StableId, 64)) return false;
+		ADarkwellPropLabFurniture* Actor = SpawnStress(
+			0, Center, ESightWeaveRevealMode::SpatialPartial);
+		if (!Actor || !ConfigureHistoricalEpochCountForTesting(Actor->StableId, 64))
+		{
+			UE_LOG(LogDarkwellMovingPropLab, Error,
+				TEXT("GRAY_POLICY_STRESS_SETUP_FAIL mode=%d actor=0 spawned=%d"),
+				Mode, Actor ? 1 : 0);
+			return false;
+		}
 	}
 	else if (Mode == 6)
 	{
@@ -1470,8 +1498,15 @@ bool ADarkwellMovingPropLabRoom::SetGrayPolicyStressMode(const int32 Mode)
 		const int32 Counts[] = {64, 64, 56};
 		for (int32 Index = 0; Index < 3; ++Index)
 		{
-			ADarkwellPropLabFurniture* Actor = SpawnStress(Index, Starts[Index]);
-			if (!Actor || !ConfigureHistoricalEpochCountForTesting(Actor->StableId, Counts[Index])) return false;
+			ADarkwellPropLabFurniture* Actor = SpawnStress(
+				Index, Starts[Index], ESightWeaveRevealMode::SpatialPartial);
+			if (!Actor || !ConfigureHistoricalEpochCountForTesting(Actor->StableId, Counts[Index]))
+			{
+				UE_LOG(LogDarkwellMovingPropLab, Error,
+					TEXT("GRAY_POLICY_STRESS_SETUP_FAIL mode=%d actor=%d spawned=%d histories=%d"),
+					Mode, Index, Actor ? 1 : 0, Counts[Index]);
+				return false;
+			}
 		}
 	}
 	else
@@ -1527,6 +1562,9 @@ bool ADarkwellMovingPropLabRoom::ConfigureHistoricalEpochCountForTesting(
 			Pose, Bounds, Darkwell::MovingPropLab::CellSize);
 		if (CurrentIndex == INDEX_NONE)
 		{
+			UE_LOG(LogDarkwellMovingPropLab, Error,
+				TEXT("GRAY_POLICY_SYNTHETIC_HISTORY_FAIL id=%s requested=%d index=%d stage=begin records=%d"),
+				*StableId.ToString(), HistoricalEpochs, Index, Prop->History.GetRecords().Num());
 			return false;
 		}
 		FDarkwellSpatialObservationRecord& Current =
@@ -1534,11 +1572,20 @@ bool ADarkwellMovingPropLabRoom::ConfigureHistoricalEpochCountForTesting(
 		TArray<float> FullCoverage;
 		FullCoverage.Init(1.0f, Current.SpatialMemory.GetCells().Num());
 		Prop->History.AdvanceCurrent(0.20f, FullCoverage);
+		// This helper seeds the exact state a real stationary legal observation
+		// reaches before it is hidden. Do not bypass the policy lifecycle: arming
+		// StationaryOnly here keeps the synthetic stress records semantically
+		// identical to records captured by UpdateTracked.
+		Prop->ObjectPolicy->NotifyLegalObservation();
 		Prop->ObservationState = EObservationState::ObservedArmed;
 		++Prop->ObservationEpisode;
 		EnsureRecordVisual(*Prop, Current);
 		if (!FreezeCurrentForHiddenMotion(*Prop, TEXT("TEST_EPOCH_SCALING")))
 		{
+			UE_LOG(LogDarkwellMovingPropLab, Error,
+				TEXT("GRAY_POLICY_SYNTHETIC_HISTORY_FAIL id=%s requested=%d index=%d stage=freeze records=%d state=%d"),
+				*StableId.ToString(), HistoricalEpochs, Index, Prop->History.GetRecords().Num(),
+				static_cast<int32>(Prop->ObservationState));
 			return false;
 		}
 	}
@@ -2587,6 +2634,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 	FTrackedProp& Prop,
 	const float DeltaSeconds)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_UpdateTracked);
 	FScopedHistoryRuntimeTimer Timer(RuntimeFrame.UpdateTrackedUs);
 	bool bHistoryChangedThisFrame = false;
 	USightWeaveObjectPolicyComponent* ObjectPolicy = Prop.ObjectPolicy.Get();
@@ -2600,6 +2648,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		Prop.bDiagnosticsDirty = true;
 	}
 	ADarkwellPropLabFurniture* Actual = Prop.bExists ? Prop.Actual.Get() : nullptr;
+	const uint64 CurrentRevealStartCycles = FPlatformTime::Cycles64();
 	if (Actual)
 	{
 		const FTransform Transform = Actual->GetActorTransform();
@@ -2921,9 +2970,13 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			Prop.LastPhysicalTransform = Transform;
 		}
 	}
+	RuntimeFrame.CurrentRevealUs += FPlatformTime::ToMilliseconds64(
+		FPlatformTime::Cycles64() - CurrentRevealStartCycles) * 1000.0;
 
  // Current creation is complete. Record addresses remain stable through history
  // and diagnostics; erasure happens at the end, after the last candidate query.
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_HistoricalPath);
+	const uint64 CandidateStartCycles = FPlatformTime::Cycles64();
  TArray<const FDarkwellSpatialObservationRecord*,TInlineAllocator<8>> NewerCandidates;
  uint32 MaximumCandidateEpoch=0;
  for(const auto& C:Prop.History.GetRecords())
@@ -2944,6 +2997,9 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			HistoricalEpochs.Add(Record.Epoch);
 		}
 	}
+	RuntimeFrame.HistoricalCandidateUs += FPlatformTime::ToMilliseconds64(
+		FPlatformTime::Cycles64() - CandidateStartCycles) * 1000.0;
+	const uint64 HistoricalEvidenceStartCycles = FPlatformTime::Cycles64();
 	for (const uint32 Epoch : HistoricalEpochs)
 	{
 		FDarkwellSpatialObservationRecord* Record = Prop.History.FindRecord(Epoch);
@@ -2983,6 +3039,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			}
 		}
 		TArray<int32> GeometryDirtyIndices, PhysicalDirtyIndices;
+		const uint64 OccupancyStartCycles = FPlatformTime::Cycles64();
 		BuildGeometryDirtyIndices(Prop, *Record, *Visual, GeometryDirtyIndices, PhysicalDirtyIndices);
 		const FIntPoint CoarseSize=Record->SpatialMemory.GetSize();
   const FBox2D& CoarseBounds=Record->SpatialMemory.GetBounds();
@@ -3003,6 +3060,8 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 #endif
   for(TConstSetBitIterator<> It(CoarseDirty);It;++It)
   { const int32 I=It.GetIndex(); Visual->CachedCoarseOccupied[I]=IsOccupiedByActual(CoarseBounds.Min+CoarseStep*FVector2D(I%CoarseSize.X+.5,I/CoarseSize.X+.5),NAME_None); }
+		RuntimeFrame.OccupancyUs += FPlatformTime::ToMilliseconds64(
+			FPlatformTime::Cycles64() - OccupancyStartCycles) * 1000.0;
   if(bCoverageDirty || !GeometryDirtyIndices.IsEmpty())
   {
    Visual->CachedCoarseEvidence=Visual->CachedCoarseCoverage;
@@ -3017,8 +3076,11 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			Visual->CoarseEvidenceActiveSeconds = FMath::Max(
 				0.0f, Visual->CoarseEvidenceActiveSeconds - DeltaSeconds);
 		}
+		const uint64 OwnershipStartCycles = FPlatformTime::Cycles64();
 		const bool bOwnershipChanged = UpdateHistoricalContributionExclusion(
 			Prop, *Record, GeometryDirtyIndices);
+		RuntimeFrame.OwnershipUs += FPlatformTime::ToMilliseconds64(
+			FPlatformTime::Cycles64() - OwnershipStartCycles) * 1000.0;
 		const bool bFineChanged = AdvanceFineHistory(
 			Prop, *Record, DeltaSeconds, bCoverageDirty, GeometryDirtyIndices, SweepPreviousDraw);
 		Visual->bPresentationDirty |= bOwnershipChanged;
@@ -3043,6 +3105,8 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			Prop.bDiagnosticsDirty = true;
 		}
 	}
+	RuntimeFrame.HistoricalEvidenceUs += FPlatformTime::ToMilliseconds64(
+		FPlatformTime::Cycles64() - HistoricalEvidenceStartCycles) * 1000.0;
 	const bool bDiagnosticsChanged = Prop.bDiagnosticsDirty;
 	if (bDiagnosticsChanged)
 	{
@@ -3422,6 +3486,8 @@ void ADarkwellMovingPropLabRoom::UpdateRecordTexture(
 	FTrackedProp& Prop,
 	FDarkwellSpatialObservationRecord& Record)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_TextureSubmission);
+	FScopedHistoryRuntimeTimer TextureTimer(RuntimeFrame.TextureSubmissionUs);
 	++RuntimeFrame.UpdateRecordTextureCalls;
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
 	if (!Visual || !Visual->Texture.IsValid())
@@ -3601,6 +3667,8 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	FTrackedProp& Prop,
 	FDarkwellSpatialObservationRecord& Record)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CapPresentation);
+	FScopedHistoryRuntimeTimer CapTimer(RuntimeFrame.CapPresentationUs);
 	++RuntimeFrame.UpdateRecordCapCalls;
 	using namespace UE::Geometry;
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
@@ -4887,6 +4955,7 @@ void ADarkwellMovingPropLabRoom::UpdateRoom(
 	}
 	RuntimeFrame = FHistoryRuntimeTelemetry();
 	RuntimeFrame.FrameNumber = ++RuntimeFrameSequence;
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_RoomUpdate);
 	const uint64 UpdateRoomStartCycles = FPlatformTime::Cycles64();
  const auto* CoverageFog=GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
  const uint64 ComputationsBefore=CoverageFog?CoverageFog->GetCoverageComputationsForTesting():0;
@@ -4900,6 +4969,7 @@ void ADarkwellMovingPropLabRoom::UpdateRoom(
 	}
  // Motion has advanced every actor. Snapshot physical bounds/primitives once
  // for all history occupancy queries in this update, including other identities.
+	const uint64 OccupancySnapshotStartCycles = FPlatformTime::Cycles64();
  FrameOccupancy.Reset(); FrameOccupancyPoints.Reset(); FrameHistoryGeometry.Reset(); FrameHistoryOwnership.Reset(); FrameHistoryCoverage.Reset();
  bCacheFrameOccupancyPoints=false;
  for(const auto& Pair:Tracked)
@@ -4907,7 +4977,9 @@ void ADarkwellMovingPropLabRoom::UpdateRoom(
  bool PhysicalMotion=false;
  for(const auto& Pair:Tracked)
   if(const auto* A=Pair.Value.bExists?Pair.Value.Actual.Get():nullptr; A && A->GetActorEnableCollision())
-  { auto& S=FrameOccupancy.AddDefaulted_GetRef(); S.StableId=Pair.Key; S.Bounds=ActualBounds(*A); S.Geometry=ActualPartGeometry(*A); PhysicalMotion |= !Darkwell::MovingPropLab::TransformsMatch(Pair.Value.LastGeometryTransform,A->GetActorTransform()); }
+ { auto& S=FrameOccupancy.AddDefaulted_GetRef(); S.StableId=Pair.Key; S.Bounds=ActualBounds(*A); S.Geometry=ActualPartGeometry(*A); PhysicalMotion |= !Darkwell::MovingPropLab::TransformsMatch(Pair.Value.LastGeometryTransform,A->GetActorTransform()); }
+	RuntimeFrame.OccupancySnapshotUs = FPlatformTime::ToMilliseconds64(
+		FPlatformTime::Cycles64() - OccupancySnapshotStartCycles) * 1000.0;
  if(PhysicalMotion) ++GeometryRevision;
  bUseFrameOccupancy=true;
 	for (TPair<FName, FTrackedProp>& Pair : Tracked)
@@ -4984,6 +5056,15 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	RuntimeTotal.LogRotationFrameUs += RuntimeFrame.LogRotationFrameUs;
 	RuntimeTotal.ReportHudUs += RuntimeFrame.ReportHudUs;
 	RuntimeTotal.AdvanceFineHistoryUs += RuntimeFrame.AdvanceFineHistoryUs;
+	RuntimeTotal.CoverageUs += RuntimeFrame.CoverageUs;
+	RuntimeTotal.OccupancyUs += RuntimeFrame.OccupancyUs;
+	RuntimeTotal.OwnershipUs += RuntimeFrame.OwnershipUs;
+	RuntimeTotal.TextureSubmissionUs += RuntimeFrame.TextureSubmissionUs;
+	RuntimeTotal.CapPresentationUs += RuntimeFrame.CapPresentationUs;
+	RuntimeTotal.CurrentRevealUs += RuntimeFrame.CurrentRevealUs;
+	RuntimeTotal.HistoricalCandidateUs += RuntimeFrame.HistoricalCandidateUs;
+	RuntimeTotal.HistoricalEvidenceUs += RuntimeFrame.HistoricalEvidenceUs;
+	RuntimeTotal.OccupancySnapshotUs += RuntimeFrame.OccupancySnapshotUs;
 	RuntimeTotal.SweepCandidateSamples += RuntimeFrame.SweepCandidateSamples;
 	RuntimeTotal.SweepCoverageQueries += RuntimeFrame.SweepCoverageQueries;
 	RuntimeTotal.SweepAcceptedSamples += RuntimeFrame.SweepAcceptedSamples;

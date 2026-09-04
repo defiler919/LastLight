@@ -126,6 +126,15 @@ public:
 		double ReportHudUs = 0.0;
 		double AdvanceFineHistoryUs = 0.0;
 		double UpdateTrackedUs = 0.0;
+		double CoverageUs = 0.0;
+		double OccupancyUs = 0.0;
+		double OwnershipUs = 0.0;
+		double TextureSubmissionUs = 0.0;
+		double CapPresentationUs = 0.0;
+		double CurrentRevealUs = 0.0;
+		double HistoricalCandidateUs = 0.0;
+		double HistoricalEvidenceUs = 0.0;
+		double OccupancySnapshotUs = 0.0;
 		double MovingPropLabGameThreadUs = 0.0;
 	};
 
@@ -232,6 +241,7 @@ public:
 	};
 	void GetFineEvidenceDiagnosticsForTesting(FName StableId, TArray<FFineEvidenceDiagnostic>& Out) const;
 	FHistoryRuntimeTelemetry GetHistoryRuntimeTotalTelemetryForTesting() const { return RuntimeTotal; }
+	UFUNCTION(BlueprintCallable, Category="Lab|Diagnostics")
 	void ResetHistoryRuntimeTelemetryForTesting();
 	bool ConfigureHistoricalEpochCountForTesting(FName StableId, int32 HistoricalEpochs);
 	bool SetTrackedTransformForTesting(FName StableId, const FTransform& Transform);
@@ -268,7 +278,10 @@ public:
 	bool ResetGrayPolicyRoom(int32 RoomIndex);
 	bool ToggleGrayPolicyMovingSubject();
 	bool StartGrayPolicyMotion(bool bRotate);
+	UFUNCTION(BlueprintCallable, Category="Lab|Testing")
 	bool SetGrayPolicyStressMode(int32 Mode);
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics")
+	int64 GetGeometryRevisionForTesting() const { return static_cast<int64>(GeometryRevision); }
 	FName GetGrayPolicyMovingSubject() const;
 
 private:

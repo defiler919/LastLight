@@ -58,6 +58,8 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  static void CopyAtlasWithClampBorder(TConstArrayView<FLinearColor> Pixels,FIntPoint Size,
   FIntPoint Atlas,TArrayView<FFloat16Color> Out);
  TArray<FPart> Parts;
+	/** Conservative world regions whose binary current ownership became true this update. */
+	TArray<FBox2D> OwnershipDirtyRegions;
  FTransform LastLegalPose=FTransform::Identity;
  bool bFullyObservedAtPose=false;
  uint64 Updates=0, GeometryResets=0, Queries=0, SamplesTouched=0;

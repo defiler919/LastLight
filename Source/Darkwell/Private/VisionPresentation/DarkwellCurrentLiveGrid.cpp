@@ -15,7 +15,7 @@ bool FDarkwellCurrentLiveGrid::FDescriptor::Matches(const FDescriptor& O) const
 }
 void FDarkwellCurrentLiveGrid::ResetGeometry(FName Id,TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose)
 {
- ++GeometryResets; Updates=0; Parts.Reset(); RegisteredScale=ActorPose.GetScale3D(); LastLegalPose=ActorPose;
+ ++GeometryResets; Updates=0; Parts.Reset(); OwnershipDirtyRegions.Reset(); RegisteredScale=ActorPose.GetScale3D(); LastLegalPose=ActorPose;
  double Radius=0;
  for(const auto& D:Descriptors)
  {
@@ -80,24 +80,29 @@ void FDarkwellCurrentLiveGrid::ApplyWholeObjectPresentation(float Dt,FDarkwellSp
  WholeAppearance.Advance(Dt,TArray<float>{1.f});
  const auto Appearance=WholeAppearance.GetCells()[0];
  bool bWholeUnoccluded=true;
- auto Apply=[&](FDarkwellSpatialPropMemory& Raster)
+ auto Apply=[&](FDarkwellSpatialPropMemory& Raster,const bool bTrackOwnership)
  {
   const auto B=Raster.GetBounds(); const auto S=Raster.GetSize(); const auto Step=B.GetSize()/FVector2D(S);
   auto Cells=Raster.PrepareCurrentRaster(B,S);
+  FBox2D OwnershipDirty(ForceInit);
   for(int32 I=0;I<Cells.Num();++I)
   {
    const auto Min=B.Min+Step*FVector2D(I%S.X,I/S.X); float Gate=1;
    for(auto O : {FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)}) Gate=FMath::Min(Gate,OcclusionPermission(Min+Step*O));
    auto& C=Cells[I]; const bool Allowed=Gate>=FDarkwellSpatialPropMemory::LegalCoverage;
+   const bool PreviouslyOwned=C.DiscoveredPresent>0 && C.AppearanceBlend>0;
    bWholeUnoccluded &= Allowed;
    C.DiscoveredPresent=Allowed?1:0;
    C.AppearanceBlend=Allowed?FMath::Max(C.AppearanceBlend,Appearance.AppearanceBlend):0;
    C.LiveBlend=Allowed?FMath::Max(C.LiveBlend,Appearance.LiveBlend):0;
+   if(bTrackOwnership && !PreviouslyOwned && C.DiscoveredPresent>0 && C.AppearanceBlend>0)
+   { OwnershipDirty+=Min; OwnershipDirty+=Min+Step; }
    // CurrentLegalCoverage remains the real field. Whole permission never feeds it.
   }
+  if(OwnershipDirty.bIsValid) OwnershipDirtyRegions.Add(OwnershipDirty);
  };
- for(auto& P:Parts) { P.bWholePresentation=true; Apply(P.Raster); }
- Apply(Snapshot);
+ for(auto& P:Parts) { P.bWholePresentation=true; Apply(P.Raster,true); }
+ Apply(Snapshot,false);
  bFullyObservedAtPose=bWholeUnoccluded;
 }
 bool FDarkwellCurrentLiveGrid::MatchesGeometry(TConstArrayView<FDescriptor> D,const FTransform& Pose) const
@@ -134,7 +139,7 @@ bool FDarkwellCurrentLiveGrid::HasAnyLegalObservation(const FTransform& ActorPos
 void FDarkwellCurrentLiveGrid::AdvanceWholeUnoccluded(float Dt,const FTransform& ActorPose,
  FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,TConstArrayView<float> Coverage)
 {
- ++Updates; Queries=0; SamplesTouched=0;
+ ++Updates; Queries=0; SamplesTouched=0; OwnershipDirtyRegions.Reset();
  WholeAppearance.Advance(Dt,TArray<float>{1.f});
  auto Cell=WholeAppearance.GetCells()[0];
  const auto Size=GridSize(Bounds); auto Cells=Snapshot.PrepareCurrentRaster(Bounds,Size,AtlasCells.X*AtlasCells.Y);
@@ -142,12 +147,14 @@ void FDarkwellCurrentLiveGrid::AdvanceWholeUnoccluded(float Dt,const FTransform&
  for(int32 I=0;I<Cells.Num();++I) { Cell.CurrentLegalCoverage=Coverage[I]; Cells[I]=Cell; }
  for(auto& P:Parts)
  {
+  const bool PreviouslyOwned=P.bWholePresentation && P.WholePixel.R>0;
   P.Pose=P.Geometry.RelativeTransform*ActorPose;
   P.bWholePresentation=P.bUniformWholePresentation=true;
   P.WholeBounds=XY(P.Geometry.LocalBounds.TransformBy(P.Pose));
   // Uniform RGB is object presentation. A is unused by the original source
   // material; authoritative coverage stays in the canonical raster above.
   P.WholePixel=FLinearColor(Cell.AppearanceBlend,Cell.LiveBlend,0,0);
+  if(!PreviouslyOwned && P.WholePixel.R>0) OwnershipDirtyRegions.Add(P.WholeBounds);
   P.CurrentLegalObservationMask.Empty(); P.LastLegalCaptureMask.Empty();
  }
  bFullyObservedAtPose=true; LastLegalPose=ActorPose;
@@ -155,7 +162,7 @@ void FDarkwellCurrentLiveGrid::AdvanceWholeUnoccluded(float Dt,const FTransform&
 bool FDarkwellCurrentLiveGrid::Advance(float Dt,const FTransform& ActorPose,TFunctionRef<float(FVector2D)> Query,TFunction<bool(const FBox2D&,float&)> Uniform)
 {
  if(!Upright(ActorPose)) return false;
- ++Updates; Queries=0; SamplesTouched=0; bFullyObservedAtPose=true;
+ ++Updates; Queries=0; SamplesTouched=0; bFullyObservedAtPose=true; OwnershipDirtyRegions.Reset();
  for(auto& P:Parts)
  {
   const auto Pose=P.Geometry.RelativeTransform*ActorPose;
@@ -165,15 +172,35 @@ bool FDarkwellCurrentLiveGrid::Advance(float Dt,const FTransform& ActorPose,TFun
   if(P.CurrentLegalObservationMask.Num()!=P.Coverage.Num()) P.CurrentLegalObservationMask.Init(false,P.Coverage.Num());
   P.Pose=Pose; if(Moved) P.LastLegalCaptureMask.SetRange(0,P.LastLegalCaptureMask.Num(),false);
   const auto B=P.Local.GetBounds(); const auto S=P.Local.GetSize(); const auto Step=B.GetSize()/FVector2D(S);
+  auto AddOwnershipRun=[&](const int32 Y,const int32 StartX,const int32 EndX)
+  {
+   if(StartX==INDEX_NONE) return;
+   const FVector2D LocalMin=B.Min+Step*FVector2D(StartX,Y);
+   const FVector2D LocalMax=B.Min+Step*FVector2D(EndX,Y+1);
+   FBox2D WorldBounds(ForceInit);
+   for(const FVector2D Local : {LocalMin,FVector2D(LocalMax.X,LocalMin.Y),LocalMax,FVector2D(LocalMin.X,LocalMax.Y)})
+    WorldBounds+=FVector2D(Pose.TransformPosition(FVector(Local,P.Geometry.LocalBounds.GetCenter().Z)));
+   OwnershipDirtyRegions.Add(WorldBounds);
+  };
   auto Legal=[&](FVector2D Local) { ++Queries; const float V=Query(FVector2D(Pose.TransformPosition(FVector(Local,P.Geometry.LocalBounds.GetCenter().Z)))); return FMath::IsFinite(V)?FMath::Clamp(V,0.f,1.f):0.f; };
   float Constant=0; const bool ConstantRegion=Uniform && Uniform(XY(P.Geometry.LocalBounds.TransformBy(Pose)),Constant);
   if(!ConstantRegion) for(int32 Y=0;Y<=S.Y;++Y) for(int32 X=0;X<=S.X;++X) P.Corners[Y*(S.X+1)+X]=Legal(B.Min+Step*FVector2D(X,Y));
-  for(int32 Y=0;Y<S.Y;++Y) for(int32 X=0;X<S.X;++X)
+  for(int32 Y=0;Y<S.Y;++Y)
   {
-   const int32 I=Y*S.X+X,K=Y*(S.X+1)+X;
-   P.Coverage[I]=ConstantRegion?Constant:FMath::Min(Legal(B.Min+Step*FVector2D(X+.5,Y+.5)),FMath::Min(FMath::Min(P.Corners[K],P.Corners[K+1]),FMath::Min(P.Corners[K+S.X+1],P.Corners[K+S.X+2])));
-   P.CurrentLegalObservationMask[I]=P.Coverage[I]>=FDarkwellSpatialPropMemory::LegalCoverage;
-   if(P.CurrentLegalObservationMask[I]) P.LastLegalCaptureMask[I]=true;
+   int32 OwnershipRunStart=INDEX_NONE;
+   for(int32 X=0;X<S.X;++X)
+   {
+    const int32 I=Y*S.X+X,K=Y*(S.X+1)+X;
+    P.Coverage[I]=ConstantRegion?Constant:FMath::Min(Legal(B.Min+Step*FVector2D(X+.5,Y+.5)),FMath::Min(FMath::Min(P.Corners[K],P.Corners[K+1]),FMath::Min(P.Corners[K+S.X+1],P.Corners[K+S.X+2])));
+    const bool PreviouslyOwned=P.LastLegalCaptureMask[I];
+    P.CurrentLegalObservationMask[I]=P.Coverage[I]>=FDarkwellSpatialPropMemory::LegalCoverage;
+    if(P.CurrentLegalObservationMask[I]) P.LastLegalCaptureMask[I]=true;
+    const bool bNewOwnership=!PreviouslyOwned && P.CurrentLegalObservationMask[I];
+    if(bNewOwnership && OwnershipRunStart==INDEX_NONE) OwnershipRunStart=X;
+    if(!bNewOwnership && OwnershipRunStart!=INDEX_NONE)
+    { AddOwnershipRun(Y,OwnershipRunStart,X); OwnershipRunStart=INDEX_NONE; }
+   }
+   AddOwnershipRun(Y,OwnershipRunStart,S.X);
   }
   P.Local.Advance(Dt,P.Coverage); SamplesTouched+=P.Coverage.Num();
   for(int32 I=0;I<P.Coverage.Num();++I) bFullyObservedAtPose &= P.LastLegalCaptureMask[I] && P.Local.GetCells()[I].DiscoveredPresent>0;

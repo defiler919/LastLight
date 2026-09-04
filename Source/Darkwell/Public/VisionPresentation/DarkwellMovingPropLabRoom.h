@@ -363,6 +363,7 @@ private:
 		uint64 CachedCoverageDrawRevision = MAX_uint64;
 		uint64 ProcessedGeometryRevision = 0;
 		uint64 ProcessedOwnershipRevision = 0;
+		uint32 ProcessedOwnershipMaximumEpoch = 0;
 		uint64 LastCandidateFrame = 0;
 		float CoarseEvidenceActiveSeconds = 0.0f;
 		bool bPresentationDirty = true;

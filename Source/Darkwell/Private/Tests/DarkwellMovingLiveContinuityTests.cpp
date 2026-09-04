@@ -107,14 +107,16 @@ void FDarkwellMovingLiveContract::GetTests(TArray<FString>& Names,TArray<FString
 {
  for(const TCHAR* N : {TEXT("ContinuousVisibleTranslationDoesNotResetLive"),TEXT("RotationAcrossWorldBoundsDimensionSwap"),
  TEXT("PartialCoverageMovingContinuity"),TEXT("ViewLossStartsNewEntryOnlyWhenAppropriate"),TEXT("AlwaysFreezesLastLegalMovingPose"),
- TEXT("StationaryOnlyMovingLiveContinuity"),TEXT("NeverMovingLiveContinuity"),TEXT("FrameRateInvariantMovingLive"),TEXT("TopologyChangeRequiresExplicitReset")})
+ TEXT("StationaryOnlyMovingLiveContinuity"),TEXT("NeverMovingLiveContinuity"),TEXT("FrameRateInvariantMovingLive"),TEXT("TopologyChangeRequiresExplicitReset"),
+ TEXT("OwnershipDirtyRegionsAreIncremental")})
  { Names.Add(N); Commands.Add(N); }
 }
 bool FDarkwellMovingLiveContract::RunTest(const FString& Case)
 {
  using namespace Darkwell::MovingLiveTests;
  if(Case==TEXT("RotationAcrossWorldBoundsDimensionSwap") || Case==TEXT("PartialCoverageMovingContinuity")
-    || Case==TEXT("FrameRateInvariantMovingLive") || Case==TEXT("TopologyChangeRequiresExplicitReset"))
+    || Case==TEXT("FrameRateInvariantMovingLive") || Case==TEXT("TopologyChangeRequiresExplicitReset")
+    || Case==TEXT("OwnershipDirtyRegionsAreIncremental"))
  {
   using Grid=FDarkwellCurrentLiveGrid;
   TArray<Grid::FDescriptor> Descriptors{
@@ -123,6 +125,17 @@ bool FDarkwellMovingLiveContract::RunTest(const FString& Case)
    {3,10,FBox(FVector(-3,-3,-20),FVector(3,3,20)),FTransform(FVector(55,-50,90))}};
   Grid G; G.ResetGeometry(Id,Descriptors,FTransform::Identity);
   auto Full=[](FVector2D){return 1.f;};
+  if(Case==TEXT("OwnershipDirtyRegionsAreIncremental"))
+  {
+   auto Left=[](const FVector2D Point){return Point.X<0?1.f:0.f;};
+   G.Advance(.2f,FTransform::Identity,Left);
+   TestTrue(TEXT("First legal ownership reports conservative dirty regions"),!G.OwnershipDirtyRegions.IsEmpty());
+   G.Advance(.2f,FTransform::Identity,Left);
+   TestTrue(TEXT("Unchanged captured ownership reports no dirty regions"),G.OwnershipDirtyRegions.IsEmpty());
+   G.Advance(.2f,FTransform::Identity,Full);
+   TestTrue(TEXT("Newly captured remainder reports new dirty regions"),!G.OwnershipDirtyRegions.IsEmpty());
+   return true;
+  }
   if(Case==TEXT("TopologyChangeRequiresExplicitReset"))
   {
    G.Advance(.2f,FTransform::Identity,Full); const uint64 Hash=G.StateHash();

@@ -905,6 +905,56 @@ bool ADarkwellMovingPropLabRoom::HasNewerObservedGeometryOverlapAt(
 	const FVector2D Point) const
 {
  if(bUseNewerCandidates && NewerCandidateId==Prop.StableId && (FrameNewerCandidates.IsEmpty() || NewerCandidateMaximumEpoch<=OlderEpoch)) return false;
+	if (bUseNewerCandidates && NewerCandidateId == Prop.StableId
+		&& FrameNewerCandidates.Num() == 1
+		&& FrameNewerCandidates[0]
+		&& FrameNewerCandidates[0]->bCurrentObservedLocation
+		&& FrameNewerCandidates[0]->Epoch > OlderEpoch)
+	{
+		// The common rotating-view path has one changing contributor: current.
+		// Reject uncovered points before touching geometry, then compare vertical
+		// intervals directly without constructing a per-sample interval array.
+		if (!HasCurrentObservedContributionAt(Prop, Point)) return false;
+		const ADarkwellPropLabFurniture* Actual = Prop.bExists ? Prop.Actual.Get() : nullptr;
+		if (!Actual) return false;
+		const int32 CurrentIndex = Prop.History.GetCurrentIndex();
+		const bool bLocalCurrent = CurrentIndex != INDEX_NONE
+			&& Prop.LocalEpoch == Prop.History.GetRecords()[CurrentIndex].Epoch;
+		auto TestGeometry = [&](const FPrimitiveGeometrySnapshot& NewerGeometry)
+		{
+			if (bLocalCurrent && !Prop.CurrentLive.HasObservedContributionAt(
+				Point, NewerGeometry.PrimitiveIndex)) return false;
+			double NewerMinZ = 0.0;
+			double NewerMaxZ = 0.0;
+			if (!QueryVerticalInterval(NewerGeometry, Point, NewerMinZ, NewerMaxZ)) return false;
+			for (const FPrimitiveGeometrySnapshot& OldGeometry : OlderVisual.PartGeometry)
+			{
+				double OldMinZ = 0.0;
+				double OldMaxZ = 0.0;
+				if (QueryVerticalInterval(OldGeometry, Point, OldMinZ, OldMaxZ)
+					&& FMath::Min(OldMaxZ, NewerMaxZ)
+						+ Darkwell::MovingPropLab::RenderOwnershipContactTolerance
+						>= FMath::Max(OldMinZ, NewerMinZ))
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+		if (bUseFrameOccupancy)
+		{
+			for (const FActualOccupancySnapshot& Snapshot : FrameOccupancy)
+			{
+				if (Snapshot.StableId != Prop.StableId) continue;
+				for (const FPrimitiveGeometrySnapshot& Geometry : Snapshot.Geometry)
+					if (TestGeometry(Geometry)) return true;
+				return false;
+			}
+		}
+		for (const FPrimitiveGeometrySnapshot& Geometry : ActualPartGeometry(*Actual))
+			if (TestGeometry(Geometry)) return true;
+		return false;
+	}
 	TArray<FVector2D> NewerIntervals;
 	if (!CollectNewerOwnedVerticalIntervals(Prop, OlderEpoch, Point, NewerIntervals))
 	{
@@ -1900,11 +1950,16 @@ void ADarkwellMovingPropLabRoom::BuildGeometryDirtyIndices(
  TBitArray<> PhysicalDirty=Dirty;
  if(Visual.ProcessedGeometryRevision!=0)
  {
-  MarkChanged(Visual.CachedNewerGeometry,NewerGeometry,1.e-6);
   if(Visual.ProcessedOwnershipRevision!=Prop.ObservationOwnershipRevision)
   {
-   for(const auto& G:Visual.CachedNewerGeometry) MarkRegion(GeometryRegion(G));
-   for(const auto& G:NewerGeometry) MarkRegion(GeometryRegion(G));
+   if(!Prop.CurrentLive.OwnershipDirtyRegions.IsEmpty())
+   {
+    for(const FBox2D& Region : Prop.CurrentLive.OwnershipDirtyRegions) MarkRegion(Region);
+   }
+   else
+   {
+    MarkChanged(Visual.CachedNewerGeometry,NewerGeometry,1.e-6);
+   }
   }
  }
 #if WITH_DEV_AUTOMATION_TESTS
@@ -2955,7 +3010,8 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
                 }
 				if (bCoverageDirty || Prop.CurrentPresentationActiveSeconds > 0.0f)
 				{
-                    if(!Prop.CurrentLive.IsUniformWholePresentation() || bTransformChanged || bRasterGeometryDirty) ++Prop.ObservationOwnershipRevision;
+					if(!Prop.CurrentLive.OwnershipDirtyRegions.IsEmpty()
+						|| bTransformChanged || bRasterGeometryDirty) ++Prop.ObservationOwnershipRevision;
 					Prop.bDiagnosticsDirty = true;
 				}
 			}
@@ -3099,8 +3155,36 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 				0.0f, Visual->CoarseEvidenceActiveSeconds - DeltaSeconds);
 		}
 		const uint64 OwnershipStartCycles = FPlatformTime::Cycles64();
+		// Suppression is monotonic. Once this visual has processed a newer sealed
+		// epoch, unchanged older contributors can never add another ownership bit.
+		// The current epoch remains eligible because its legally observed mask can
+		// grow without changing epoch while the player turns.
+		TArray<const FDarkwellSpatialObservationRecord*, TInlineAllocator<8>>
+			IncrementalOwnershipCandidates;
+		bool bUseIncrementalOwnershipCandidates = true;
+#if WITH_DEV_AUTOMATION_TESTS
+		bUseIncrementalOwnershipCandidates = !bForceFullHistoryEvidenceForTesting;
+#endif
+		if (bUseIncrementalOwnershipCandidates)
+		{
+			for (const FDarkwellSpatialObservationRecord* Candidate : FrameNewerCandidates)
+			{
+				if (Candidate && (Candidate->bCurrentObservedLocation
+					|| Candidate->Epoch > Visual->ProcessedOwnershipMaximumEpoch))
+				{
+					IncrementalOwnershipCandidates.Add(Candidate);
+				}
+			}
+		}
+		const TConstArrayView<const FDarkwellSpatialObservationRecord*> OwnershipView =
+			bUseIncrementalOwnershipCandidates
+			? MakeArrayView(IncrementalOwnershipCandidates)
+			: FrameNewerCandidates;
+		TGuardValue<TConstArrayView<const FDarkwellSpatialObservationRecord*>>
+			OwnershipScope(FrameNewerCandidates, OwnershipView);
 		const bool bOwnershipChanged = UpdateHistoricalContributionExclusion(
 			Prop, *Record, GeometryDirtyIndices);
+		Visual->ProcessedOwnershipMaximumEpoch = MaximumCandidateEpoch;
 		RuntimeFrame.OwnershipUs += FPlatformTime::ToMilliseconds64(
 			FPlatformTime::Cycles64() - OwnershipStartCycles) * 1000.0;
 		const bool bFineChanged = AdvanceFineHistory(

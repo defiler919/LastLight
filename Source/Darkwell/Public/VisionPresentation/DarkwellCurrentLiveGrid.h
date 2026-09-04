@@ -12,6 +12,34 @@ struct FDarkwellFogVisualSegment;
  */
 struct DARKWELL_API FDarkwellCurrentLiveGrid
 {
+ enum class EDividerSource : uint8
+ {
+  ViewEdge,
+  WallOcclusion,
+  WholeCurrentMask,
+  PartialCurrentMask,
+  HistorySurface,
+  HistoryCap,
+  MixedCurrentHistory,
+  Unknown
+ };
+ struct FDividerDiagnostics
+ {
+  EDividerSource Source=EDividerSource::Unknown;
+  TBitArray<> FullGeometryMask;
+  TBitArray<> RawLiveCoverage;
+  bool bObjectHasLegalContact=false;
+  TBitArray<> PhysicalOcclusionGate;
+  TBitArray<> WholePresentationMask;
+  TBitArray<> CurrentLegalObservationMask;
+  TBitArray<> LastLegalCaptureMask;
+  TBitArray<> FrozenHistoryMask;
+  TBitArray<> CapMask;
+  TBitArray<> FinalCurrentContribution;
+  TBitArray<> FinalHistoricalContribution;
+  float MinimumAppearance=0;
+  float MaximumAppearance=0;
+ };
  struct FDescriptor
  {
   uint64 PrimitiveKey=0, MeshKey=0;
@@ -26,6 +54,10 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
   TArray<float> Coverage, Corners;
   // Current contact and accumulated knowledge at the last legal rigid pose.
   TBitArray<> CurrentLegalObservationMask, LastLegalCaptureMask;
+#if WITH_DEV_AUTOMATION_TESTS
+  /** Last occlusion-only Whole gate in derived raster space. Diagnostic storage only. */
+  TBitArray<> PhysicalOcclusionMask;
+#endif
   FTransform Pose=FTransform::Identity;
   FIntPoint AtlasCells=FIntPoint::ZeroValue;
   bool bWholePresentation=false, bUniformWholePresentation=false;
@@ -47,6 +79,9 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  void BuildCurrentLegalObservationMask(TBitArray<>& Out) const;
  void ApplyWholeObjectPresentation(float Dt,FDarkwellSpatialPropMemory& Snapshot,
   TFunctionRef<float(FVector2D)> OcclusionPermission);
+ /** On-demand development diagnostic. It performs no readback and does not alter presentation. */
+ bool GetDividerDiagnostics(int32 PartIndex,FDividerDiagnostics& Out) const;
+ static const TCHAR* DividerSourceName(EDividerSource Source);
  FIntPoint ObservationSize=FIntPoint::ZeroValue;
  FVector2D ObservationStepCm=FVector2D::ZeroVector;
  TBitArray<> ObservationFootprint;

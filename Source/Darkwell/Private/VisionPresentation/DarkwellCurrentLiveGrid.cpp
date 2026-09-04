@@ -80,16 +80,18 @@ void FDarkwellCurrentLiveGrid::ApplyWholeObjectPresentation(float Dt,FDarkwellSp
  WholeAppearance.Advance(Dt,TArray<float>{1.f});
  const auto Appearance=WholeAppearance.GetCells()[0];
  bool bWholeUnoccluded=true;
- auto Apply=[&](FDarkwellSpatialPropMemory& Raster,const bool bTrackOwnership)
+ auto Apply=[&](FDarkwellSpatialPropMemory& Raster,const bool bTrackOwnership,TBitArray<>* PhysicalOcclusionMask)
  {
   const auto B=Raster.GetBounds(); const auto S=Raster.GetSize(); const auto Step=B.GetSize()/FVector2D(S);
   auto Cells=Raster.PrepareCurrentRaster(B,S);
+  if(PhysicalOcclusionMask) PhysicalOcclusionMask->Init(false,Cells.Num());
   FBox2D OwnershipDirty(ForceInit);
   for(int32 I=0;I<Cells.Num();++I)
   {
    const auto Min=B.Min+Step*FVector2D(I%S.X,I/S.X); float Gate=1;
    for(auto O : {FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)}) Gate=FMath::Min(Gate,OcclusionPermission(Min+Step*O));
    auto& C=Cells[I]; const bool Allowed=Gate>=FDarkwellSpatialPropMemory::LegalCoverage;
+   if(PhysicalOcclusionMask) (*PhysicalOcclusionMask)[I]=Allowed;
    const bool PreviouslyOwned=C.DiscoveredPresent>0 && C.AppearanceBlend>0;
    bWholeUnoccluded &= Allowed;
    C.DiscoveredPresent=Allowed?1:0;
@@ -101,9 +103,86 @@ void FDarkwellCurrentLiveGrid::ApplyWholeObjectPresentation(float Dt,FDarkwellSp
   }
   if(OwnershipDirty.bIsValid) OwnershipDirtyRegions.Add(OwnershipDirty);
  };
- for(auto& P:Parts) { P.bWholePresentation=true; Apply(P.Raster,true); }
- Apply(Snapshot,false);
+ for(auto& P:Parts)
+ {
+  P.bWholePresentation=true;
+#if WITH_DEV_AUTOMATION_TESTS
+  Apply(P.Raster,true,&P.PhysicalOcclusionMask);
+#else
+  Apply(P.Raster,true,nullptr);
+#endif
+ }
+ Apply(Snapshot,false,nullptr);
  bFullyObservedAtPose=bWholeUnoccluded;
+}
+
+const TCHAR* FDarkwellCurrentLiveGrid::DividerSourceName(const EDividerSource Source)
+{
+ switch(Source)
+ {
+  case EDividerSource::ViewEdge:return TEXT("VIEW_EDGE");
+  case EDividerSource::WallOcclusion:return TEXT("WALL_OCCLUSION");
+  case EDividerSource::WholeCurrentMask:return TEXT("WHOLE_CURRENT_MASK");
+  case EDividerSource::PartialCurrentMask:return TEXT("PARTIAL_CURRENT_MASK");
+  case EDividerSource::HistorySurface:return TEXT("HISTORY_SURFACE");
+  case EDividerSource::HistoryCap:return TEXT("HISTORY_CAP");
+  case EDividerSource::MixedCurrentHistory:return TEXT("MIXED_CURRENT_HISTORY");
+  default:return TEXT("UNKNOWN");
+ }
+}
+
+bool FDarkwellCurrentLiveGrid::GetDividerDiagnostics(const int32 PartIndex,FDividerDiagnostics& Out) const
+{
+ Out=FDividerDiagnostics();
+ if(!Parts.IsValidIndex(PartIndex)) return false;
+ const FPart& P=Parts[PartIndex];
+ const auto Cells=P.Raster.GetCells();
+ if(Cells.IsEmpty()) return false;
+ Out.FullGeometryMask.Init(true,Cells.Num());
+ Out.RawLiveCoverage.Init(false,Cells.Num());
+ Out.WholePresentationMask.Init(false,Cells.Num());
+ Out.CurrentLegalObservationMask.Init(false,Cells.Num());
+ Out.LastLegalCaptureMask.Init(false,Cells.Num());
+ Out.FinalCurrentContribution.Init(false,Cells.Num());
+#if WITH_DEV_AUTOMATION_TESTS
+ Out.PhysicalOcclusionGate=P.PhysicalOcclusionMask;
+#endif
+ if(Out.PhysicalOcclusionGate.Num()!=Cells.Num()) Out.PhysicalOcclusionGate.Init(true,Cells.Num());
+ const auto RasterBounds=P.Raster.GetBounds();
+ const auto RasterSize=P.Raster.GetSize();
+ const auto RasterStep=RasterBounds.GetSize()/FVector2D(RasterSize);
+ const auto LocalBounds=P.Local.GetBounds();
+ const auto LocalSize=P.Local.GetSize();
+ Out.MinimumAppearance=FLT_MAX;
+ Out.MaximumAppearance=-FLT_MAX;
+ for(int32 Index=0;Index<Cells.Num();++Index)
+ {
+  const auto& Cell=Cells[Index];
+  Out.RawLiveCoverage[Index]=Cell.CurrentLegalCoverage>=FDarkwellSpatialPropMemory::LegalCoverage;
+  Out.WholePresentationMask[Index]=Cell.DiscoveredPresent>0;
+  Out.FinalCurrentContribution[Index]=Cell.DiscoveredPresent>0 && Cell.AppearanceBlend>0;
+  Out.MinimumAppearance=FMath::Min(Out.MinimumAppearance,Cell.AppearanceBlend);
+  Out.MaximumAppearance=FMath::Max(Out.MaximumAppearance,Cell.AppearanceBlend);
+  const FVector2D World=RasterBounds.Min+RasterStep*FVector2D(Index%RasterSize.X+.5,Index/RasterSize.X+.5);
+  const FVector2D Local=FVector2D(P.Pose.InverseTransformPosition(FVector(World,P.Pose.GetLocation().Z)));
+  if(LocalBounds.IsInside(Local))
+  {
+   const FVector2D UV=(Local-LocalBounds.Min)/LocalBounds.GetSize();
+   const int32 LocalIndex=FMath::Clamp(FMath::FloorToInt(UV.Y*LocalSize.Y),0,LocalSize.Y-1)*LocalSize.X
+    +FMath::Clamp(FMath::FloorToInt(UV.X*LocalSize.X),0,LocalSize.X-1);
+   Out.CurrentLegalObservationMask[Index]=P.CurrentLegalObservationMask.IsValidIndex(LocalIndex) && P.CurrentLegalObservationMask[LocalIndex];
+   Out.LastLegalCaptureMask[Index]=P.LastLegalCaptureMask.IsValidIndex(LocalIndex) && P.LastLegalCaptureMask[LocalIndex];
+  }
+ }
+ Out.bObjectHasLegalContact=Out.CurrentLegalObservationMask.CountSetBits()>0;
+ const bool bRawSplit=Out.RawLiveCoverage.CountSetBits()>0 && Out.RawLiveCoverage.CountSetBits()<Out.RawLiveCoverage.Num();
+ const bool bOcclusionSplit=Out.PhysicalOcclusionGate.CountSetBits()>0 && Out.PhysicalOcclusionGate.CountSetBits()<Out.PhysicalOcclusionGate.Num();
+ const bool bAppearanceSplit=!FMath::IsNearlyEqual(Out.MinimumAppearance,Out.MaximumAppearance,UE_SMALL_NUMBER);
+ if(P.bWholePresentation && bOcclusionSplit) Out.Source=EDividerSource::WallOcclusion;
+ else if(P.bWholePresentation && bRawSplit && bAppearanceSplit) Out.Source=EDividerSource::ViewEdge;
+ else if(P.bWholePresentation && Out.WholePresentationMask!=Out.FullGeometryMask) Out.Source=EDividerSource::WholeCurrentMask;
+ else if(!P.bWholePresentation && bRawSplit) Out.Source=EDividerSource::PartialCurrentMask;
+ return true;
 }
 bool FDarkwellCurrentLiveGrid::MatchesGeometry(TConstArrayView<FDescriptor> D,const FTransform& Pose) const
 {

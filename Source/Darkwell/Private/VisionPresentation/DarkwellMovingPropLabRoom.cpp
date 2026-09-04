@@ -304,6 +304,10 @@ void ADarkwellMovingPropLabRoom::BeginPlay()
 {
 	Super::BeginPlay();
 	bGrayPolicyLab = Darkwell::GrayPolicyLab::IsWorld(GetWorld());
+	if (bGrayPolicyLab && GEngine)
+	{
+		GEngine->RemoveOnScreenDebugMessage(0xDA474);
+	}
 	bInWorldControls = Darkwell::MovingPropLab::IsInWorldControlRequest(GetWorld());
 	const bool bActive = FindActive(GetWorld()) == this;
 	SetActorHiddenInGame(!bActive || bGrayPolicyLab);
@@ -6271,7 +6275,7 @@ void ADarkwellMovingPropLabRoom::Report()
 			TEXT("OFFSCREEN PRESSURE PLATE\n%s\nCabinet coverage must be ZERO"),
 			bPressureWaitingForExit ? TEXT("WAITING FOR EXIT") : TEXT("ARMED"))));
 	}
-	if (GEngine)
+	if (GEngine && !bGrayPolicyLab)
 	{
 		GEngine->AddOnScreenDebugMessage(0xDA474, 0.0f, FColor::Cyan, Status);
 	}

@@ -363,12 +363,28 @@ private:
 		uint64 CachedCoverageDrawRevision = MAX_uint64;
 		uint64 ProcessedGeometryRevision = 0;
 		uint64 ProcessedOwnershipRevision = 0;
+		uint64 LastCandidateFrame = 0;
 		float CoarseEvidenceActiveSeconds = 0.0f;
 		bool bPresentationDirty = true;
 		bool bCapTopologyDirty = true;
 		bool bPresentationRetired = false;
 		bool bHasProxyVisibilitySample = false;
 		bool bLastProxyVisible = false;
+	};
+	struct FHistorySpatialKey
+	{
+		FName StableId;
+		uint32 Epoch = 0;
+		bool operator==(const FHistorySpatialKey& Other) const
+		{
+			return StableId == Other.StableId && Epoch == Other.Epoch;
+		}
+		friend uint32 GetTypeHash(const FHistorySpatialKey& Key)
+		{
+			return HashCombineFast(
+				Key.StableId.GetComparisonIndex().ToUnstableInt(),
+				HashCombineFast(Key.StableId.GetNumber(), Key.Epoch));
+		}
 	};
 	struct FHistoryGeometryReuse
 	{
@@ -598,6 +614,13 @@ private:
 	void ConfigureGrayPolicyLabProps();
 	void DestroyGrayStressProps();
 	void UpdateDeterministicMotion(float DeltaSeconds);
+	void RebuildHistoricalSpatialIndex();
+	void PrepareHistoricalCandidates(ADarkwellCharacter* Player);
+	void QueryHistoricalSpatialIndex(const FBox2D& Bounds, bool bDirtyRegion);
+	bool IsHistoricalCandidate(
+		const FTrackedProp& Prop,
+		const FDarkwellSpatialObservationRecord& Record,
+		const FRecordVisual* Visual) const;
 	void Report();
 	void FinalizeHistoryRuntimeTelemetry(uint64 UpdateRoomStartCycles);
 
@@ -610,6 +633,10 @@ private:
 	TMap<FName, FTrackedProp> Tracked;
 	UPROPERTY(Transient) TArray<TObjectPtr<ADarkwellMovingPropLabControl>> InWorldControls;
 	TArray<FActiveMotion> ActiveMotions;
+	TMap<FIntPoint, TArray<FHistorySpatialKey>> HistoricalSpatialIndex;
+	TSet<FHistorySpatialKey> FrameHistoricalCandidates;
+	TSet<FIntPoint> FrameHistoryDirtyTiles;
+	TArray<FBox2D> PendingHistoryDirtyRegions;
 	TSet<EDarkwellMovingPropLabControlKind> CompletedInWorldControls;
 	FString Status;
 	FString CurrentInteraction = TEXT("NONE");
@@ -632,4 +659,7 @@ private:
 	mutable FHistoryRuntimeTelemetry RuntimeTotal;
 	uint64 RuntimeFrameSequence = 0;
 	uint64 GeometryRevision = 1;
+	FVector2D PreviousHistoryObserverLocation = FVector2D::ZeroVector;
+	bool bHistoricalSpatialIndexDirty = true;
+	bool bHasPreviousHistoryObserver = false;
 };

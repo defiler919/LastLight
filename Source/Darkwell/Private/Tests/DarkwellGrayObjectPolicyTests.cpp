@@ -386,6 +386,53 @@ bool FDarkwellIncrementalHistoryEvidenceParity::RunTest(const FString&)
  return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellDistantHistorySleepWakeTest,
+ "Darkwell.PropLab.GrayObjectPolicy.DistantHistorySleepsAndWakesWithoutMutation",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellDistantHistorySleepWakeTest::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ FRoom F;
+ F.Room->ResetTrackedRevealPolicyForLab(
+  Id,Reveal::SpatialPartial,100,History::StationaryOnly);
+ F.Face(146); F.Step(30); F.Face(-90); F.Step(30);
+ if(!TestEqual(TEXT("Fixture creates one historical record"),
+  F.Room->GetStaleEpochCountForTesting(Id),1)) return false;
+ auto EvidenceHash=[&]()
+ {
+  TArray<ADarkwellMovingPropLabRoom::FFineEvidenceDiagnostic> Samples;
+  F.Room->GetFineEvidenceDiagnosticsForTesting(Id,Samples);
+  uint64 Hash=1469598103934665603ull;
+  for(const auto& D:Samples)
+  {
+   Hash=(Hash^D.Epoch)*1099511628211ull;
+   Hash=(Hash^D.Index)*1099511628211ull;
+   Hash=(Hash^GetTypeHash(D.Sample.State))*1099511628211ull;
+   Hash=(Hash^GetTypeHash(D.Sample.Opacity))*1099511628211ull;
+   Hash=(Hash^static_cast<uint64>(D.Sample.bVerifiedEmpty))*1099511628211ull;
+  }
+  return Hash;
+ };
+ F.Player->SetActorLocation(FVector(10000,10000,92));
+ F.Player->SetActorRotation(FRotator(0,-90,0));
+ // The old observer footprint receives one conservative transition frame;
+ // after that, an out-of-range pending evidence timer must not keep the record
+ // awake because no current coverage can affect it.
+ F.Step(3);
+ const auto Sleeping=F.Room->GetHistoryRuntimeFrameTelemetryForTesting();
+ TestTrue(TEXT("Distant history is excluded by the spatial candidate index"),
+  Sleeping.SleepingHistoricalEpochs>0 && Sleeping.CandidateHistoricalEpochs==0);
+ const uint64 Before=EvidenceHash();
+ F.Step(30);
+ TestEqual(TEXT("Sleeping history evidence is immutable while irrelevant"),
+  EvidenceHash(),Before);
+ F.Face(-90); F.Step();
+ const auto Awake=F.Room->GetHistoryRuntimeFrameTelemetryForTesting();
+ TestTrue(TEXT("Returning observer wakes the historical record"),
+  Awake.CandidateHistoricalEpochs>0 && Awake.ActiveHistoricalEpochs>0);
+ return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellGrayHistoryCapacityCurrentTest,
  "Darkwell.PropLab.GrayObjectPolicy.CurrentLiveAtHistoryCapacity",
  EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)

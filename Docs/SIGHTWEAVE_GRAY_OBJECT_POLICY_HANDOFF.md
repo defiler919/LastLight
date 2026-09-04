@@ -4,6 +4,13 @@ Home continuation and newly generated evidence are recorded in
 [SIGHTWEAVE_GRAY_OBJECT_POLICY_HOME.md](SIGHTWEAVE_GRAY_OBJECT_POLICY_HOME.md).
 The earlier company Saved paths below are historical references only.
 
+The latest company continuation is documented in
+[SIGHTWEAVE_GRAY_POLICY_LAB_V2_HANDOFF.md](SIGHTWEAVE_GRAY_POLICY_LAB_V2_HANDOFF.md).
+It adds the independent Chinese-guided acceptance map and runtime profiling
+architecture. Its accurate current status is
+**PARTIAL — GRAY_POLICY_LAB_V2_READY_PERFORMANCE_BLOCKED**: the Lab and evidence
+are ready, while the unchanged strict performance gate is not.
+
 Status: **PARTIAL — GRAY_OBJECT_POLICY_PERFORMANCE_BLOCKED**. Automated build,
 rendered D3D12/SM6, packaging, complete automation and normal teardown evidence
 are closed. No user acceptance, final gray stable branch, or black-layer work is

@@ -994,3 +994,34 @@ or retention. The next user session should first test the rendered Lab manually:
 Whole below/above 100 cm, Partial cut/cap, Always/StationaryOnly/Never while
 moving and stopped, wall occlusion, fast/slow rotation, and repeated rotations
 after capacity. Only explicit user acceptance may create the final gray Stable.
+
+## Company Gray Policy Lab V2 continuation — 2026-09-04
+
+The company task started from verified SHA
+`f8d24b205b0728efe19ff1077b03cf5ee3d7455c` and created the independent
+`/Game/Maps/L_SightWeaveGrayPolicyLab`. It adds a central lobby, six isolated
+Chinese-guided rooms, room-local reset/return, dormant-by-default performance
+fixtures, deterministic turn reproduction, hitch telemetry and D3D12 trace
+drivers. The legacy map remains unchanged. Full implementation, operating steps,
+checkpoint SHAs and evidence paths are in
+[SIGHTWEAVE_GRAY_POLICY_LAB_V2_HANDOFF.md](SIGHTWEAVE_GRAY_POLICY_LAB_V2_HANDOFF.md).
+
+The runtime now indexes unresolved historical world tiles and sleeps histories
+outside view/sweep/geometry dirty regions. In the best comparable short D3D12
+run, distributed-184 candidates/active fell from 183/183 to 63/63, with 120
+sleeping; repeated-turn p95 improved from 29.91 to 21.94 ms. Current ownership
+dirty runs, an exact single-current path and a monotonic newer-epoch frontier also
+reduced isolated OneSpatial ownership mean/peak from 4.838/55.426 ms to
+1.332/11.026 ms. No history was removed and force-full parity remains passing.
+
+The current-source full selector ran 174 tests: 144 clean, 28 warnings, 2 failed
+and 0 not-run. Only the existing long soak and 32-object performance gate failed.
+The 54,000+600 run kept Current lost checks at zero, but its final active
+p50/p95/p99/peak was 28.943/84.099/98.143/196.324 ms and idle p95 was 3.648 ms.
+The final real wall-clock D3D12/SM6 soak measured 600.047 seconds and exited
+normally, but overall p95/p99/peak was 27.060/36.479/11653.167 ms. Its mass
+distributed transitions localize the remaining peak to historical ownership:
+room 11.58 s, history 11.12 s and ownership 10.62 s. Final status is therefore
+**PARTIAL — GRAY_POLICY_LAB_V2_READY_PERFORMANCE_BLOCKED**. Black-layer work and
+the final gray stable branch remain unauthorized until the blocker is addressed
+and the user manually accepts the Lab.

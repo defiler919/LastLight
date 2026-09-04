@@ -74,6 +74,13 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
   const FDarkwellFogVisualSourceSnapshot& Current,TConstArrayView<FDarkwellFogVisualSegment> Occluders,
   TBitArray<>& Out,bool bContactOnly);
  void AdvanceWholeUnoccluded(float Dt,const FTransform& ActorPose,FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,TConstArrayView<float> Coverage);
+ /** Confirmed Whole path. Cone/range coverage is retained only as diagnostics;
+  * presentation is object blend multiplied by the physical-occlusion-only gate. */
+ void AdvanceWholeWithOcclusion(float Dt,const FTransform& ActorPose,
+  FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,TConstArrayView<float> Coverage,
+  TFunctionRef<float(FVector2D)> PhysicalOcclusionGate);
+ /** Rasterizes registered primitive projections, preserving primitive gaps and AABB corners. */
+ bool BuildFullGeometryMask(const FBox2D& Bounds,FIntPoint Size,TBitArray<>& Out) const;
  bool IsUniformWholePresentation() const { return !Parts.IsEmpty() && Parts[0].bUniformWholePresentation; }
  /** Object-local continuous footprint, independent of presentation alpha. */
  void BuildCurrentLegalObservationMask(TBitArray<>& Out) const;

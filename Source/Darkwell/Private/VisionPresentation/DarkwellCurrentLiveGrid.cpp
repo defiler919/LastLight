@@ -7,6 +7,28 @@ namespace
  FBox2D XY(const FBox& B) { return FBox2D(FVector2D(B.Min),FVector2D(B.Max)); }
  FIntPoint GridSize(const FBox2D& B) { return FIntPoint(FMath::CeilToInt(B.GetSize().X/CurrentLocalSampleSizeCm),FMath::CeilToInt(B.GetSize().Y/CurrentLocalSampleSizeCm)); }
  bool Upright(const FTransform& T) { return T.GetRotation().RotateVector(FVector::UpVector).Equals(FVector::UpVector,1.e-5); }
+ bool ProjectedPrimitiveIntersectsCell(const FDarkwellCurrentLiveGrid::FPart& Part,const FBox2D& Cell)
+ {
+  const FBox2D Local=FBox2D(FVector2D(Part.Geometry.LocalBounds.Min),FVector2D(Part.Geometry.LocalBounds.Max));
+  const FVector2D Rectangle[]{
+   FVector2D(Part.Pose.TransformPosition(FVector(Local.Min,Part.Geometry.LocalBounds.GetCenter().Z))),
+   FVector2D(Part.Pose.TransformPosition(FVector(Local.Max.X,Local.Min.Y,Part.Geometry.LocalBounds.GetCenter().Z))),
+   FVector2D(Part.Pose.TransformPosition(FVector(Local.Max,Part.Geometry.LocalBounds.GetCenter().Z))),
+   FVector2D(Part.Pose.TransformPosition(FVector(Local.Min.X,Local.Max.Y,Part.Geometry.LocalBounds.GetCenter().Z)))};
+  const FVector2D CellCorners[]{Cell.Min,FVector2D(Cell.Max.X,Cell.Min.Y),Cell.Max,FVector2D(Cell.Min.X,Cell.Max.Y)};
+  const FVector2D EdgeX=Rectangle[1]-Rectangle[0];
+  const FVector2D EdgeY=Rectangle[3]-Rectangle[0];
+  const FVector2D Axes[]{FVector2D(1,0),FVector2D(0,1),FVector2D(-EdgeX.Y,EdgeX.X).GetSafeNormal(),FVector2D(-EdgeY.Y,EdgeY.X).GetSafeNormal()};
+  for(const FVector2D Axis:Axes)
+  {
+   if(Axis.IsNearlyZero()) continue;
+   double PrimitiveMin=DBL_MAX,PrimitiveMax=-DBL_MAX,CellMin=DBL_MAX,CellMax=-DBL_MAX;
+   for(const FVector2D Point:Rectangle) { const double Projection=FVector2D::DotProduct(Point,Axis); PrimitiveMin=FMath::Min(PrimitiveMin,Projection); PrimitiveMax=FMath::Max(PrimitiveMax,Projection); }
+   for(const FVector2D Point:CellCorners) { const double Projection=FVector2D::DotProduct(Point,Axis); CellMin=FMath::Min(CellMin,Projection); CellMax=FMath::Max(CellMax,Projection); }
+   if(PrimitiveMax<CellMin-UE_KINDA_SMALL_NUMBER || CellMax<PrimitiveMin-UE_KINDA_SMALL_NUMBER) return false;
+  }
+  return true;
+ }
 }
 bool FDarkwellCurrentLiveGrid::FDescriptor::Matches(const FDescriptor& O) const
 {
@@ -95,8 +117,11 @@ void FDarkwellCurrentLiveGrid::ApplyWholeObjectPresentation(float Dt,FDarkwellSp
    const bool PreviouslyOwned=C.DiscoveredPresent>0 && C.AppearanceBlend>0;
    bWholeUnoccluded &= Allowed;
    C.DiscoveredPresent=Allowed?1:0;
-   C.AppearanceBlend=Allowed?FMath::Max(C.AppearanceBlend,Appearance.AppearanceBlend):0;
-   C.LiveBlend=Allowed?FMath::Max(C.LiveBlend,Appearance.LiveBlend):0;
+   // Confirmed Whole presentation is authored exclusively by the object-level
+   // scalar. Never preserve a higher local blend left by pre-confirmation cone
+   // samples: that is the view-edge divider this path is responsible for removing.
+   C.AppearanceBlend=Allowed?Appearance.AppearanceBlend:0;
+   C.LiveBlend=Allowed?Appearance.LiveBlend:0;
    if(bTrackOwnership && !PreviouslyOwned && C.DiscoveredPresent>0 && C.AppearanceBlend>0)
    { OwnershipDirty+=Min; OwnershipDirty+=Min+Step; }
    // CurrentLegalCoverage remains the real field. Whole permission never feeds it.
@@ -114,6 +139,54 @@ void FDarkwellCurrentLiveGrid::ApplyWholeObjectPresentation(float Dt,FDarkwellSp
  }
  Apply(Snapshot,false,nullptr);
  bFullyObservedAtPose=bWholeUnoccluded;
+}
+
+void FDarkwellCurrentLiveGrid::AdvanceWholeWithOcclusion(const float Dt,const FTransform& ActorPose,
+ FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,const TConstArrayView<float> Coverage,
+ TFunctionRef<float(FVector2D)> PhysicalOcclusionGate)
+{
+ check(Upright(ActorPose));
+ ++Updates; Queries=0; SamplesTouched=0; OwnershipDirtyRegions.Reset();
+ const FIntPoint SnapshotSize=GridSize(Bounds);
+ check(Coverage.Num()==SnapshotSize.X*SnapshotSize.Y);
+ auto SnapshotCells=Snapshot.PrepareCurrentRaster(Bounds,SnapshotSize,AtlasCells.X*AtlasCells.Y);
+ for(int32 Index=0;Index<SnapshotCells.Num();++Index)
+ {
+  const float RawCoverage=Coverage[Index];
+  SnapshotCells[Index]=FDarkwellSpatialPropMemory::FCell();
+  SnapshotCells[Index].CurrentLegalCoverage=RawCoverage;
+ }
+ for(FPart& Part:Parts)
+ {
+  Part.Pose=Part.Geometry.RelativeTransform*ActorPose;
+  Part.bUniformWholePresentation=false;
+  Part.bWholePresentation=true;
+  const FBox2D PartBounds=XY(Part.Geometry.LocalBounds.TransformBy(Part.Pose));
+  Part.Raster.PrepareCurrentRaster(PartBounds,GridSize(PartBounds),Part.AtlasCells.X*Part.AtlasCells.Y);
+  Part.CurrentLegalObservationMask.Empty();
+  Part.LastLegalCaptureMask.Empty();
+ }
+ ApplyWholeObjectPresentation(Dt,Snapshot,PhysicalOcclusionGate);
+ LastLegalPose=ActorPose;
+}
+
+bool FDarkwellCurrentLiveGrid::BuildFullGeometryMask(const FBox2D& Bounds,const FIntPoint Size,TBitArray<>& Out) const
+{
+ Out.Empty();
+ if(!Bounds.bIsValid || Size.X<=0 || Size.Y<=0 || Parts.IsEmpty()) return false;
+ Out.Init(false,Size.X*Size.Y);
+ const FVector2D Step=Bounds.GetSize()/FVector2D(Size);
+ for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X)
+ {
+  const FVector2D Min=Bounds.Min+Step*FVector2D(X,Y);
+  const FBox2D Cell(Min,Min+Step);
+  for(const FPart& Part:Parts) if(ProjectedPrimitiveIntersectsCell(Part,Cell))
+  {
+   Out[Y*Size.X+X]=true;
+   break;
+  }
+ }
+ return Out.CountSetBits()>0;
 }
 
 const TCHAR* FDarkwellCurrentLiveGrid::DividerSourceName(const EDividerSource Source)
@@ -233,6 +306,9 @@ void FDarkwellCurrentLiveGrid::AdvanceWholeUnoccluded(float Dt,const FTransform&
   // Uniform RGB is object presentation. A is unused by the original source
   // material; authoritative coverage stays in the canonical raster above.
   P.WholePixel=FLinearColor(Cell.AppearanceBlend,Cell.LiveBlend,0,0);
+#if WITH_DEV_AUTOMATION_TESTS
+  P.PhysicalOcclusionMask.Init(true,P.Raster.GetCells().Num());
+#endif
   if(!PreviouslyOwned && P.WholePixel.R>0) OwnershipDirtyRegions.Add(P.WholeBounds);
   P.CurrentLegalObservationMask.Empty(); P.LastLegalCaptureMask.Empty();
  }

@@ -17,6 +17,14 @@ struct DARKWELL_API FDarkwellSpatialObservationRecord
 	FDarkwellHistoryGridV2 FineHistory;
 	/** Immutable binary capture at fine-grid resolution, independent of alpha/AA. */
 	TBitArray<> LastLegalCaptureMask;
+	/** Whole captures are immutable geometry knowledge and never own a cut cap. */
+	bool bConfirmedWholeCapture = false;
+	bool bCaptureRevisionValid = false;
+	uint64 CaptureAuthorityRevision = 0;
+	uint64 CaptureCoverageRevision = 0;
+	uint64 CapturePoseRevision = 0;
+	uint64 CapturePolicyRevision = 0;
+	uint64 CaptureGeometryRevision = 0;
 	bool bCurrentObservedLocation = false;
 	uint64 PoseUpdates = 0;
 };
@@ -44,6 +52,8 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 		float CellSize = 2.5f);
 	bool UpdateCurrentObservedPosePreservingEvidence(const FTransform& Pose);
 	bool FreezeCurrentForHiddenMovement();
+	/** Confirmed Whole entry point. The exact fine geometry mask is the capture authority. */
+	bool FreezeCurrentFromGeometryMask(const TBitArray<>& FullGeometryMask);
 	/** Drops only the unsealed live observation. Does not manufacture empty evidence. */
 	bool AbandonCurrentObservationWithoutHistory();
 	bool AdvanceCurrent(float DeltaSeconds, TConstArrayView<float> Coverage);

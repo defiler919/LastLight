@@ -2906,13 +2906,16 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
           if(Fog->IsObjectOcclusionFree(Bounds)) Prop.CurrentLive.AdvanceWholeUnoccluded(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage);
           else
           {
-           auto Query=[&](FVector2D P){++RuntimeFrame.CoverageQueries;return Fog->QueryLiveCoverageAtWorldPoint(P).Coverage;};
-           Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query);
-           Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
-           Prop.CurrentLive.WritePartRasters(Query,false);
-           auto Occlusion=[&](FVector2D P){++RuntimeFrame.CoverageQueries;return Fog->QueryObjectOcclusionAtWorldPoint(P).Coverage;};
-           Prop.CurrentLive.ApplyWholeObjectPresentation(DeltaSeconds,Current.SpatialMemory,Occlusion);
+           auto Occlusion=[&](FVector2D P)
+           {
+            ++RuntimeFrame.CoverageQueries;
+            const auto Q=Fog->QueryObjectOcclusionAtWorldPoint(P);
+            return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision
+             && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f;
+           };
+           Prop.CurrentLive.AdvanceWholeWithOcclusion(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage,Occlusion);
           }
+          StampConfirmedWholeCapture(Prop,Current,CoverageSnapshot);
           Prop.ObservationState=EObservationState::ObservedArmed;
           FreezeCurrentForHiddenMotion(Prop,TEXT("SWEPT_LEGAL_OBSERVATION"));
           Prop.bDiagnosticsDirty=true; Prop.CurrentPresentationActiveSeconds=0;
@@ -2992,24 +2995,32 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
                 if(bCoverageDirty || bTransformChanged || Prop.CurrentPresentationActiveSeconds>0)
                 {
                     auto Uniform=[&](const FBox2D& B,float& V) { return Fog->TryUniformCoverage(B,V); };
-                    if(bWhole && Prop.RevealObservation.IsConfirmed() && bAnyLegal && Fog->IsObjectOcclusionFree(Bounds))
+                    if(bWhole && Prop.RevealObservation.IsConfirmed() && bAnyLegal)
                     {
-                     Prop.CurrentLive.AdvanceWholeUnoccluded(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage);
+                     if(Fog->IsObjectOcclusionFree(Bounds))
+                      Prop.CurrentLive.AdvanceWholeUnoccluded(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage);
+                     else
+                     {
+                      auto Occlusion=[&](FVector2D Point)
+                      {
+                       ++RuntimeFrame.CoverageQueries;
+                       const auto Q=Fog->QueryObjectOcclusionAtWorldPoint(Point);
+                       return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision
+                        && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f;
+                      };
+                      Prop.CurrentLive.AdvanceWholeWithOcclusion(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage,Occlusion);
+                     }
                      Prop.CurrentLegalObservationMask.Empty();
+                     StampConfirmedWholeCapture(Prop,Current,CoverageSnapshot);
                     }
                     else
                     {
-                     if(!bWhole || Prop.RevealObservation.IsConfirmed()) Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query,Uniform);
+                     if(!bWhole) Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query,Uniform);
                      else Prop.CurrentLive.Queries=0;
                      Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
                      Prop.CurrentLive.WritePartRasters(Query,!IsCaptureEligible(Prop) || ObjectPolicy->IsSightWeaveMoving(),Uniform);
-                     if(bWhole && Prop.RevealObservation.IsConfirmed() && bAnyLegal)
-                     {
-                      auto Occlusion=[&](FVector2D Point) { ++RuntimeFrame.CoverageQueries; const auto Q=Fog->QueryObjectOcclusionAtWorldPoint(Point); return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f; };
-                      Prop.CurrentLive.ApplyWholeObjectPresentation(DeltaSeconds,Current.SpatialMemory,Occlusion);
-                     }
                      RuntimeFrame.CoverageQueries += Prop.CurrentLive.Queries;
-                     if(!bWhole || Prop.RevealObservation.IsConfirmed()) RuntimeFrame.CurrentSamplesTouched += Prop.CurrentLive.SamplesTouched;
+                     if(!bWhole) RuntimeFrame.CurrentSamplesTouched += Prop.CurrentLive.SamplesTouched;
                     }
                 }
 				if (bCoverageDirty || Prop.CurrentPresentationActiveSeconds > 0.0f)
@@ -3255,6 +3266,22 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 	Prop.History.ReleaseFullyErasedRecords();
 }
 
+void ADarkwellMovingPropLabRoom::StampConfirmedWholeCapture(
+	FTrackedProp& Prop,
+	FDarkwellSpatialObservationRecord& Record,
+	const FCoverageSnapshot& CoverageSnapshot) const
+{
+	Record.bConfirmedWholeCapture = true;
+	Record.bCaptureRevisionValid = CoverageSnapshot.bValid
+		&& CoverageSnapshot.TransformRevision == Prop.TransformRevision
+		&& CoverageSnapshot.GridRevision == Prop.GridRevision;
+	Record.CaptureAuthorityRevision = CoverageSnapshot.AuthorityRevision;
+	Record.CaptureCoverageRevision = CoverageSnapshot.CoverageRevision;
+	Record.CapturePoseRevision = Prop.TransformRevision;
+	Record.CapturePolicyRevision = Prop.PolicyRevision;
+	Record.CaptureGeometryRevision = Prop.CurrentLive.GeometryResets;
+}
+
 bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	FTrackedProp& Prop,
 	const TCHAR* Reason)
@@ -3281,9 +3308,34 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	FDarkwellSpatialObservationRecord& Current =
 		Prop.History.GetMutableRecords()[CurrentIndex];
 	const uint32 Epoch = Current.Epoch;
+	TBitArray<> WholeGeometryMask;
+	if (Current.bConfirmedWholeCapture)
+	{
+		const bool bAtomicCapture = Current.bCaptureRevisionValid
+			&& Current.CapturePolicyRevision == Prop.PolicyRevision
+			&& Current.CaptureGeometryRevision == Prop.CurrentLive.GeometryResets
+			&& Current.SnapshotTransform.Equals(Prop.CurrentLive.LastLegalPose, 1.e-6);
+		const FIntPoint FineSize = Current.SpatialMemory.GetSize()
+			* FDarkwellHistoryGridV2::SamplesPerCell;
+		if (!bAtomicCapture || !Prop.CurrentLive.BuildFullGeometryMask(
+			Current.SpatialMemory.GetBounds(), FineSize, WholeGeometryMask))
+		{
+			UE_LOG(LogDarkwellMovingPropLab, Warning,
+				TEXT("WHOLE_FREEZE_REJECTED id=%s epoch=%u atomic=%d authority_rev=%llu coverage_rev=%llu pose_rev=%llu policy_rev=%llu geometry_rev=%llu current_policy_rev=%llu current_geometry_rev=%llu"),
+				*Prop.StableId.ToString(), Epoch, bAtomicCapture ? 1 : 0,
+				Current.CaptureAuthorityRevision, Current.CaptureCoverageRevision,
+				Current.CapturePoseRevision, Current.CapturePolicyRevision,
+				Current.CaptureGeometryRevision, Prop.PolicyRevision,
+				Prop.CurrentLive.GeometryResets);
+			return false;
+		}
+	}
 	EnsureRecordVisual(Prop, Current);
-	UpdateRecordTexture(Prop, Current);
-	UpdateRecordCap(Prop, Current);
+	if (!Current.bConfirmedWholeCapture)
+	{
+		UpdateRecordTexture(Prop, Current);
+		UpdateRecordCap(Prop, Current);
+	}
 
 	// Hide the original source before making the stale proxy renderable. Both
 	// state changes happen on the game thread before StartMotion advances the
@@ -3301,7 +3353,10 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
         for(auto& T:V->LiveTextures) OwnedTextures.Remove(T.Get());
         V->LiveTextures.Reset(); V->LivePixels.Reset(); V->LiveSignatures.Reset();
     }
-    if (!Prop.History.FreezeCurrentForHiddenMovement())
+    const bool bFrozen = Current.bConfirmedWholeCapture
+		? Prop.History.FreezeCurrentFromGeometryMask(WholeGeometryMask)
+		: Prop.History.FreezeCurrentForHiddenMovement();
+    if (!bFrozen)
 	{
 		return false;
 	}
@@ -3485,7 +3540,8 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 			Visual.PartGeometry = ActualPartGeometry(*Actual);
 		}
 	}
-	if (Record.bCurrentObservedLocation && !IsCaptureEligible(Prop) && Visual.Cap.IsValid())
+	const bool bWholeWithoutCap = Record.bConfirmedWholeCapture;
+	if ((bWholeWithoutCap || (Record.bCurrentObservedLocation && !IsCaptureEligible(Prop))) && Visual.Cap.IsValid())
 	{
 		OwnedCaps.Remove(Visual.Cap.Get());
 		Visual.Cap->DestroyComponent();
@@ -3494,7 +3550,7 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 		Visual.CapTriangles = 0;
 		Visual.CapSignature = 0;
 	}
-	if (!Visual.Cap.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
+	if (!bWholeWithoutCap && !Visual.Cap.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
 	{
 		UDynamicMeshComponent* Cap = NewObject<UDynamicMeshComponent>(
 			this, *FString::Printf(TEXT("MovingCap_%s_%u"), *Prop.StableId.ToString(), Record.Epoch));
@@ -3786,6 +3842,20 @@ void ADarkwellMovingPropLabRoom::UpdateRecordCap(
 	++RuntimeFrame.UpdateRecordCapCalls;
 	using namespace UE::Geometry;
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
+	if (Record.bConfirmedWholeCapture)
+	{
+		if (Visual && Visual->Cap.IsValid())
+		{
+			OwnedCaps.Remove(Visual->Cap.Get());
+			Visual->Cap->DestroyComponent();
+			Visual->Cap.Reset();
+			Visual->CapTriangles = 0;
+			Visual->CapSignature = 0;
+			Visual->CapQuads.Reset();
+			Visual->CapSamplePoints.Reset();
+		}
+		return;
+	}
 	if (!Visual || !Visual->Cap.IsValid())
 	{
 		return;

@@ -433,6 +433,7 @@ private:
 		TWeakObjectPtr<ADarkwellPropLabFurniture> Actual;
 		TWeakObjectPtr<USightWeaveObjectPolicyComponent> ObjectPolicy;
 		uint64 ProcessedMovingRevision = 0;
+		uint64 PolicyRevision = 1;
 		FDarkwellSpatialObservationHistory History;
 		FDarkwellCurrentLiveGrid CurrentLive;
 		FSightWeaveRevealObservation RevealObservation;
@@ -608,6 +609,8 @@ private:
 	void UpdateRecordTexture(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
 	void UpdateCurrentPartTextures(FTrackedProp& Prop, FRecordVisual& Visual);
 	void UpdateRecordCap(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
+	void StampConfirmedWholeCapture(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record,
+		const FCoverageSnapshot& CoverageSnapshot) const;
 	AActor* SpawnMemoryProxy(const FTrackedProp& Prop, const FDarkwellSpatialObservationRecord& Record);
 	void BindProxyMaterial(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record, AActor* Proxy);
 	void TeleportPlayer(ADarkwellCharacter* Player, FVector Location, float Yaw) const;

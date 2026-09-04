@@ -114,6 +114,28 @@ bool FDarkwellSpatialObservationHistory::FreezeCurrentForHiddenMovement()
 	return true;
 }
 
+bool FDarkwellSpatialObservationHistory::FreezeCurrentFromGeometryMask(const TBitArray<>& FullGeometryMask)
+{
+ if(!Records.IsValidIndex(CurrentIndex)) return false;
+ if(!CanSealCurrentObservation())
+ {
+  ++OverflowRejectCount;
+  UE_LOG(LogDarkwellSpatialObservationHistory,Warning,
+   TEXT("History capture capacity reached; confirmed Whole current remains independent id=%s histories=%d"),
+   *StableId.ToString(),Records.Num()-1);
+  return false;
+ }
+ FDarkwellSpatialObservationRecord& Record=Records[CurrentIndex];
+ const FIntPoint Size=Record.SpatialMemory.GetSize()*FDarkwellHistoryGridV2::SamplesPerCell;
+ if(FullGeometryMask.Num()!=Size.X*Size.Y || FullGeometryMask.CountSetBits()==0) return false;
+ Record.LastLegalCaptureMask=FullGeometryMask;
+ Record.bConfirmedWholeCapture=true;
+ Record.SpatialMemory.BeginAbsent();
+ Record.bCurrentObservedLocation=false;
+ CurrentIndex=INDEX_NONE;
+ return true;
+}
+
 bool FDarkwellSpatialObservationHistory::AdvanceCurrent(
 	const float DeltaSeconds,
 	const TConstArrayView<float> Coverage)

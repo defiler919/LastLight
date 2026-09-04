@@ -56,7 +56,7 @@ bool FDarkwellConfirmedWholeFastViewEdgeLeavesNoDivider::RunTest(const FString&)
     Diagnostic.PhysicalOcclusionGate.CountSetBits(),Diagnostic.PhysicalOcclusionGate.Num(),
     Diagnostic.WholePresentationMask.CountSetBits(),Diagnostic.WholePresentationMask.Num(),
     Diagnostic.MinimumAppearance,Diagnostic.MaximumAppearance));
-   TestEqual(TEXT("No-wall split is classified as VIEW_EDGE"),Diagnostic.Source,FDarkwellCurrentLiveGrid::EDividerSource::ViewEdge);
+   TestNotEqual(TEXT("No-wall split no longer contributes a VIEW_EDGE divider"),Diagnostic.Source,FDarkwellCurrentLiveGrid::EDividerSource::ViewEdge);
    TestTrue(TEXT("Raw live coverage contains the swept cone edge"),Diagnostic.RawLiveCoverage.CountSetBits()>0 && Diagnostic.RawLiveCoverage.CountSetBits()<Diagnostic.RawLiveCoverage.Num());
    TestEqual(TEXT("Physical occlusion gate is fully open"),Diagnostic.PhysicalOcclusionGate.CountSetBits(),Diagnostic.PhysicalOcclusionGate.Num());
    TestTrue(TEXT("Whole presentation owns the full primitive"),Diagnostic.WholePresentationMask==Diagnostic.FullGeometryMask);

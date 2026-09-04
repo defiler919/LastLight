@@ -122,13 +122,21 @@ ADarkwellGrayPolicyLabControl::ADarkwellGrayPolicyLabControl()
 	LabelComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("ChineseLabel"));
 	LabelComponent->SetupAttachment(ControlRoot);
 	LabelComponent->SetRelativeLocation(FVector(0, 0, 155));
-	LabelComponent->SetRelativeRotation(FRotator(90, 0, 0));
+	LabelComponent->SetRelativeRotation(FRotator::ZeroRotator);
+	LabelComponent->SetRelativeScale3D(FVector(0.35f));
 	LabelComponent->SetWidgetSpace(EWidgetSpace::World);
 	LabelComponent->SetDrawSize(FVector2D(680, 128));
 	LabelComponent->SetPivot(FVector2D(0.5f, 0.5f));
 	LabelComponent->SetTwoSided(true);
 	LabelComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	LabelComponent->SetWidgetClass(UDarkwellGrayPolicyWorldLabelWidget::StaticClass());
+}
+
+void ADarkwellGrayPolicyLabControl::FaceLabelToward(const FVector WorldTarget)
+{
+	FRotator Facing = (WorldTarget - LabelComponent->GetComponentLocation()).Rotation();
+	Facing.Roll = 90.0f;
+	LabelComponent->SetWorldRotation(Facing);
 }
 
 void ADarkwellGrayPolicyLabControl::Configure(
@@ -222,6 +230,13 @@ void ADarkwellSightWeaveGrayPolicyLabDirector::Tick(const float DeltaSeconds)
 		? GetWorld()->GetFirstPlayerController()->GetPawn() : nullptr);
 	ADarkwellMovingPropLabRoom* Room = RuntimeRoom.Get();
 	if (!Character || !Room) return;
+	if (const UCameraComponent* Camera = Character->FindComponentByClass<UCameraComponent>())
+	{
+		for (ADarkwellGrayPolicyLabControl* Control : Controls)
+		{
+			if (Control) Control->FaceLabelToward(Camera->GetComponentLocation());
+		}
+	}
 	UpdateSweep(DeltaSeconds, *Character);
 	RefreshSpatialPresentation();
 	Room->UpdateRoom(DeltaSeconds, Character);
@@ -245,7 +260,11 @@ void ADarkwellSightWeaveGrayPolicyLabDirector::BuildSightWeaveStaticSurfaces(
 {
 	OutSurfaces.Reset(1);
 	auto& Floor = OutSurfaces.AddDefaulted_GetRef();
-	const FBox2D Bounds = GetSightWeaveFloorBounds();
+	// Static-environment memory is capped at 256 Ultra tiles. A surface spanning
+	// every physically separated room would exceed that bound even though most
+	// of the intervening world is deliberately empty. Register the lobby patch;
+	// runtime coverage still uses the full fixture bounds for every room.
+	const FBox2D Bounds(FVector2D(-2200, -1800), FVector2D(2200, 1800));
 	Floor.WorldFootprint = {Bounds.Min, FVector2D(Bounds.Max.X, Bounds.Min.Y), Bounds.Max,
 		FVector2D(Bounds.Min.X, Bounds.Max.Y)};
 	Floor.NeutralIntensity = 90;
@@ -345,6 +364,18 @@ ADarkwellGrayPolicyLabControl* ADarkwellSightWeaveGrayPolicyLabDirector::AddCont
 	if (!Control) return nullptr;
 	Control->FinishSpawning(Transform);
 	Control->Configure(this, Kind, Label);
+	int32 NearestRoom = 0;
+	float NearestDistanceSquared = TNumericLimits<float>::Max();
+	for (int32 Room = 0; Room <= 6; ++Room)
+	{
+		const float DistanceSquared = FVector::DistSquared2D(Location, RoomCenters[Room]);
+		if (DistanceSquared < NearestDistanceSquared)
+		{
+			NearestDistanceSquared = DistanceSquared;
+			NearestRoom = Room;
+		}
+	}
+	Control->FaceLabelToward(RoomCenters[NearestRoom] + FVector(0, -500, 900));
 	Controls.Add(Control);
 	return Control;
 }

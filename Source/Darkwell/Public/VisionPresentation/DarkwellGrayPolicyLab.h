@@ -76,6 +76,7 @@ public:
 	ADarkwellGrayPolicyLabControl();
 	void Configure(ADarkwellSightWeaveGrayPolicyLabDirector* InDirector,
 		EDarkwellGrayPolicyLabControlKind InKind, const FText& InLabel);
+	void FaceLabelToward(FVector WorldTarget);
 	EDarkwellGrayPolicyLabControlKind GetKind() const { return Kind; }
 
 	virtual bool CanInteract(const ADarkwellCharacter& Character) const override;

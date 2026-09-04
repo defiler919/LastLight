@@ -27,6 +27,7 @@
 #include "Save/DarkwellSaveSubsystem.h"
 #include "World/DarkwellWorkbench.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
+#include "VisionPresentation/DarkwellGrayPolicyLab.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -336,7 +337,9 @@ void ADarkwellHUD::DrawHUD()
 		: nullptr;
 	if (Font && MissionGameState)
 	{
-		const FString Objective = Darkwell::PropLab::IsLabWorld(GetWorld())
+		const FString Objective = Darkwell::GrayPolicyLab::IsWorld(GetWorld())
+			? TEXT("GRAY POLICY LAB V2  |  SIX ISOLATED ROOMS  |  PRESS F AT LAB CONSOLES")
+			: Darkwell::PropLab::IsLabWorld(GetWorld())
 			? TEXT("PROP GAMEPLAY LAB  |  Darkwell.PropLab help  |  MOVING MEMORY: SpatialEvidenceOnly") : FString::Printf(
 			TEXT("OBJECTIVE  %s"),
 			*MissionGameState->GetObjectiveText().ToString());

@@ -88,6 +88,7 @@ public:
 		uint64 FineSamplesScanned = 0;
 		uint64 CoverageFullScans = 0;
 		uint64 CoverageQueries = 0;
+		uint64 OcclusionOnlyQueries = 0;
   uint64 CoverageComputations=0, CoverageCacheHits=0;
 		uint64 CurrentSamplesTouched = 0;
 		uint64 TextureCreations = 0;
@@ -222,6 +223,25 @@ public:
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetFineHistoryTelemetry(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetHistoryRuntimeTelemetry() const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics") FString GetMultiEpochCompositeDiagnosis(FName StableId) const;
+	struct FDividerMaskDiagnostics
+	{
+		FDarkwellCurrentLiveGrid::EDividerSource Source = FDarkwellCurrentLiveGrid::EDividerSource::Unknown;
+		TBitArray<> FullGeometryMask;
+		TBitArray<> RawLiveCoverage;
+		bool bObjectHasLegalContact = false;
+		TBitArray<> PhysicalOcclusionGate;
+		TBitArray<> WholePresentationMask;
+		TBitArray<> CurrentLegalObservationMask;
+		TBitArray<> LastLegalCaptureMask;
+		TBitArray<> FrozenHistoryMask;
+		TBitArray<> CapMask;
+		TBitArray<> FinalCurrentContribution;
+		TBitArray<> FinalHistoricalContribution;
+	};
+	/** On-demand development snapshot. No GPU readback and no per-frame string work. */
+	bool GetDividerMaskDiagnosticsForTesting(FName StableId,FDividerMaskDiagnostics& Out) const;
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics")
+	FString GetDividerMaskTelemetryForTesting(FName StableId) const;
 #if WITH_DEV_AUTOMATION_TESTS
  bool bForceFullHistoryEvidenceForTesting=false;
  TArray<TWeakObjectPtr<UObject>> GetOwnedPresentationObjectsForTesting() const;

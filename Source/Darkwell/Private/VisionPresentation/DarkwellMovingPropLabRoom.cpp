@@ -1315,13 +1315,15 @@ FString ADarkwellMovingPropLabRoom::GetHistoryRuntimeTelemetry() const
 	auto Format = [](const FHistoryRuntimeTelemetry& T)
 	{
 		return FString::Printf(
-			TEXT("{\"frame\":%llu,\"frames\":%llu,\"epochs\":%d,\"candidates\":%d,\"sleeping\":%d,\"dirty_tiles\":%d,\"resident_samples\":%d,\"samples_scanned\":%llu,\"coverage_scans\":%llu,\"coverage_queries\":%llu,\"occupancy_tests\":%llu,\"geometry_tests\":%llu,\"ownership_tests\":%llu,\"occupancy_hits\":%llu,\"history_geometry_reuse\":%llu,\"history_ownership_reuse\":%llu,\"history_coverage_reuse\":%llu,\"occupancy_samples_reused\":%llu,\"texture_calls\":%llu,\"texture_uploads\":%llu,\"cap_calls\":%llu,\"cap_rebuilds\":%llu,\"refresh_us\":%.3f,\"rotation_log_us\":%.3f,\"report_us\":%.3f,\"fine_advance_us\":%.3f,\"tracked_us\":%.3f,\"coverage_us\":%.3f,\"occupancy_us\":%.3f,\"ownership_us\":%.3f,\"texture_us\":%.3f,\"cap_us\":%.3f,\"current_reveal_us\":%.3f,\"candidate_us\":%.3f,\"historical_us\":%.3f,\"occupancy_snapshot_us\":%.3f,\"game_thread_us\":%.3f,\"proxies\":%d,\"caps\":%d,\"textures\":%d,\"mids\":%d,\"fine_bytes\":%llu,\"records\":%d,\"working_set\":%llu,\"uobjects\":%d,\"sweep_candidates\":%llu,\"sweep_queries\":%llu,\"sweep_accepted\":%llu,\"sweep_budget_rejects\":%llu,\"sweep_unsupported_events\":%llu,\"sweep_proof_us\":%.3f,\"sweep_uniform_substeps\":0}"),
+			TEXT("{\"frame\":%llu,\"frames\":%llu,\"epochs\":%d,\"candidates\":%d,\"sleeping\":%d,\"dirty_tiles\":%d,\"resident_samples\":%d,\"samples_scanned\":%llu,\"coverage_scans\":%llu,\"coverage_queries\":%llu,\"occlusion_only_queries\":%llu,\"occupancy_tests\":%llu,\"geometry_tests\":%llu,\"ownership_tests\":%llu,\"occupancy_hits\":%llu,\"history_geometry_reuse\":%llu,\"history_ownership_reuse\":%llu,\"history_coverage_reuse\":%llu,\"occupancy_samples_reused\":%llu,\"texture_creations\":%llu,\"mid_creations\":%llu,\"gpu_texture_uploads\":%llu,\"texture_calls\":%llu,\"texture_uploads\":%llu,\"cap_calls\":%llu,\"cap_rebuilds\":%llu,\"refresh_us\":%.3f,\"rotation_log_us\":%.3f,\"report_us\":%.3f,\"fine_advance_us\":%.3f,\"tracked_us\":%.3f,\"coverage_us\":%.3f,\"occupancy_us\":%.3f,\"ownership_us\":%.3f,\"texture_us\":%.3f,\"cap_us\":%.3f,\"current_reveal_us\":%.3f,\"candidate_us\":%.3f,\"historical_us\":%.3f,\"occupancy_snapshot_us\":%.3f,\"game_thread_us\":%.3f,\"proxies\":%d,\"caps\":%d,\"textures\":%d,\"mids\":%d,\"fine_bytes\":%llu,\"records\":%d,\"working_set\":%llu,\"uobjects\":%d,\"sweep_candidates\":%llu,\"sweep_queries\":%llu,\"sweep_accepted\":%llu,\"sweep_budget_rejects\":%llu,\"sweep_unsupported_events\":%llu,\"sweep_proof_us\":%.3f,\"sweep_uniform_substeps\":0}"),
 			T.FrameNumber, T.FramesAccumulated, T.ActiveHistoricalEpochs,
 			T.CandidateHistoricalEpochs, T.SleepingHistoricalEpochs, T.DirtyTileCount,
 			T.FineSamplesResident, T.FineSamplesScanned, T.CoverageFullScans,
-			T.CoverageQueries, T.OccupancyTests, T.PrimitiveGeometryTests,
+			T.CoverageQueries, T.OcclusionOnlyQueries,
+			T.OccupancyTests, T.PrimitiveGeometryTests,
 			T.OwnershipTests, T.OccupancyCacheHits, T.HistoryGeometryReuseHits,
             T.HistoryOwnershipReuseHits, T.HistoryCoverageReuseHits, T.HistoryOccupancySamplesReused,
+			T.TextureCreations, T.MidCreations, T.GpuTextureUploads,
             T.UpdateRecordTextureCalls, T.TextureUploads,
 			T.UpdateRecordCapCalls, T.CapMeshRebuilds,
 			T.RefreshContributionDiagnosticsUs, T.LogRotationFrameUs,
@@ -2909,6 +2911,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
            auto Occlusion=[&](FVector2D P)
            {
             ++RuntimeFrame.CoverageQueries;
+            ++RuntimeFrame.OcclusionOnlyQueries;
             const auto Q=Fog->QueryObjectOcclusionAtWorldPoint(P);
             return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision
              && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f;
@@ -3004,6 +3007,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
                       auto Occlusion=[&](FVector2D Point)
                       {
                        ++RuntimeFrame.CoverageQueries;
+                       ++RuntimeFrame.OcclusionOnlyQueries;
                        const auto Q=Fog->QueryObjectOcclusionAtWorldPoint(Point);
                        return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision
                         && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f;
@@ -5372,6 +5376,7 @@ void ADarkwellMovingPropLabRoom::FinalizeHistoryRuntimeTelemetry(
 	RuntimeTotal.FineSamplesScanned += RuntimeFrame.FineSamplesScanned;
 	RuntimeTotal.CoverageFullScans += RuntimeFrame.CoverageFullScans;
 	RuntimeTotal.CoverageQueries += RuntimeFrame.CoverageQueries;
+	RuntimeTotal.OcclusionOnlyQueries += RuntimeFrame.OcclusionOnlyQueries;
  RuntimeTotal.CoverageComputations+=RuntimeFrame.CoverageComputations; RuntimeTotal.CoverageCacheHits+=RuntimeFrame.CoverageCacheHits;
 	RuntimeTotal.CurrentSamplesTouched += RuntimeFrame.CurrentSamplesTouched;
 	RuntimeTotal.TextureCreations += RuntimeFrame.TextureCreations;
@@ -6396,6 +6401,133 @@ bool ADarkwellMovingPropLabRoom::GetNewestCaptureMasksForTesting(FName Id,TBitAr
  Capture=Latest->LastLegalCaptureMask; Frozen.Init(false,Latest->FineHistory.GetSamples().Num());
  for(int32 I=0;I<Frozen.Num();++I) Frozen[I]=Latest->FineHistory.GetSamples()[I].InitialRemembered>0;
  return true;
+}
+
+bool ADarkwellMovingPropLabRoom::GetDividerMaskDiagnosticsForTesting(
+	const FName StableId,FDividerMaskDiagnostics& Out) const
+{
+	Out=FDividerMaskDiagnostics();
+	const FTrackedProp* Prop=Tracked.Find(StableId);
+	if(!Prop) return false;
+	const FDarkwellSpatialObservationRecord* Focus=nullptr;
+	const int32 CurrentIndex=Prop->History.GetCurrentIndex();
+	if(Prop->History.GetRecords().IsValidIndex(CurrentIndex)) Focus=&Prop->History.GetRecords()[CurrentIndex];
+	for(const FDarkwellSpatialObservationRecord& Record:Prop->History.GetRecords())
+		if(!Focus || (!Record.bCurrentObservedLocation && Record.Epoch>Focus->Epoch)) Focus=&Record;
+	if(!Focus) return false;
+	const FBox2D Bounds=Focus->FineHistory.IsInitialized()?Focus->FineHistory.GetBounds():Focus->SpatialMemory.GetBounds();
+	const FIntPoint Size=Focus->FineHistory.IsInitialized()?Focus->FineHistory.GetSize()
+		:Focus->SpatialMemory.GetSize()*FDarkwellHistoryGridV2::SamplesPerCell;
+	if(!Prop->CurrentLive.BuildFullGeometryMask(Bounds,Size,Out.FullGeometryMask)) return false;
+	const int32 Count=Size.X*Size.Y;
+	Out.RawLiveCoverage.Init(false,Count);
+	Out.PhysicalOcclusionGate.Init(false,Count);
+	Out.WholePresentationMask.Init(false,Count);
+	Out.CapMask.Init(false,Count);
+	Out.FinalCurrentContribution.Init(false,Count);
+	Out.FinalHistoricalContribution.Init(false,Count);
+	Out.CurrentLegalObservationMask=Prop->CurrentLegalObservationMask;
+	Out.LastLegalCaptureMask=Focus->LastLegalCaptureMask;
+	Out.FrozenHistoryMask.Init(false,Count);
+	if(Focus->FineHistory.IsInitialized()) for(int32 Index=0;Index<Count;++Index)
+		Out.FrozenHistoryMask[Index]=Focus->FineHistory.GetSamples()[Index].InitialRemembered>0;
+	Out.bObjectHasLegalContact=Prop->bCachedWholeLegalContact;
+	const FVector2D Step=Bounds.GetSize()/FVector2D(Size);
+	const UDarkwellFogVisualSubsystem* Fog=GetWorld()?GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>():nullptr;
+	auto SampleHistorical=[&](const FVector2D World)
+	{
+		for(const FDarkwellSpatialObservationRecord& Record:Prop->History.GetRecords())
+		{
+			if(Record.bCurrentObservedLocation || !Record.FineHistory.IsInitialized()) continue;
+			const FRecordVisual* Visual=Prop->Visuals.Find(Record.Epoch);
+			if(!Visual || Visual->bPresentationRetired) continue;
+			const FBox2D& HistoricalBounds=Record.FineHistory.GetBounds();
+			if(!HistoricalBounds.IsInside(World)) continue;
+			const FIntPoint HistoricalSize=Record.FineHistory.GetSize();
+			const FVector2D UV=(World-HistoricalBounds.Min)/HistoricalBounds.GetSize();
+			const int32 X=FMath::Clamp(FMath::FloorToInt(UV.X*HistoricalSize.X),0,HistoricalSize.X-1);
+			const int32 Y=FMath::Clamp(FMath::FloorToInt(UV.Y*HistoricalSize.Y),0,HistoricalSize.Y-1);
+			if(Record.FineHistory.GetSamples()[Y*HistoricalSize.X+X].Opacity>0) return true;
+		}
+		return false;
+	};
+	for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X)
+	{
+		const int32 Index=Y*Size.X+X;
+		const FVector2D Min=Bounds.Min+Step*FVector2D(X,Y);
+		const FVector2D Points[]{Min,Min+FVector2D(Step.X,0),Min+Step,Min+FVector2D(0,Step.Y),Min+Step*.5};
+		if(Prop->LastCoverageBounds.bIsValid && Prop->LastCoverageSize.X>0 && Prop->LastCoverageSize.Y>0
+			&& Prop->CachedCurrentCoverage.Num()==Prop->LastCoverageSize.X*Prop->LastCoverageSize.Y)
+		{
+			const FVector2D UV=(Points[4]-Prop->LastCoverageBounds.Min)/Prop->LastCoverageBounds.GetSize();
+			const int32 RawX=FMath::Clamp(FMath::FloorToInt(UV.X*Prop->LastCoverageSize.X),0,Prop->LastCoverageSize.X-1);
+			const int32 RawY=FMath::Clamp(FMath::FloorToInt(UV.Y*Prop->LastCoverageSize.Y),0,Prop->LastCoverageSize.Y-1);
+			Out.RawLiveCoverage[Index]=Prop->CachedCurrentCoverage[RawY*Prop->LastCoverageSize.X+RawX]>=FDarkwellSpatialPropMemory::LegalCoverage;
+		}
+		bool bCurrent=false;
+		for(const FVector2D Point:Points) bCurrent|=Prop->CurrentLive.HasObservedContributionAt(Point);
+		Out.WholePresentationMask[Index]=bCurrent;
+		Out.FinalCurrentContribution[Index]=bCurrent;
+		Out.FinalHistoricalContribution[Index]=SampleHistorical(Points[4]);
+		float Gate=1;
+		if(Fog) for(const FVector2D Point:Points)
+		{
+			const auto Query=Fog->QueryObjectOcclusionAtWorldPoint(Point);
+			Gate=FMath::Min(Gate,Query.bValid?Query.Coverage:0.f);
+		}
+		Out.PhysicalOcclusionGate[Index]=Gate>=FDarkwellSpatialPropMemory::LegalCoverage;
+	}
+	for(const TPair<uint32,FRecordVisual>& Pair:Prop->Visuals) if(Pair.Value.CapTriangles>0)
+		for(const FVector2D Point:Pair.Value.CapSamplePoints) if(Bounds.IsInside(Point))
+		{
+			const FVector2D UV=(Point-Bounds.Min)/Bounds.GetSize();
+			const int32 X=FMath::Clamp(FMath::FloorToInt(UV.X*Size.X),0,Size.X-1);
+			const int32 Y=FMath::Clamp(FMath::FloorToInt(UV.Y*Size.Y),0,Size.Y-1);
+			Out.CapMask[Y*Size.X+X]=true;
+		}
+	bool bOverlap=false;
+	for(int32 Index=0;Index<Count;++Index) bOverlap|=Out.FinalCurrentContribution[Index] && Out.FinalHistoricalContribution[Index];
+	if(bOverlap) Out.Source=FDarkwellCurrentLiveGrid::EDividerSource::MixedCurrentHistory;
+	else if(Focus->bConfirmedWholeCapture && Out.CapMask.CountSetBits()>0) Out.Source=FDarkwellCurrentLiveGrid::EDividerSource::HistoryCap;
+	else if(!Focus->bCurrentObservedLocation && Focus->bConfirmedWholeCapture && Out.FrozenHistoryMask!=Out.FullGeometryMask) Out.Source=FDarkwellCurrentLiveGrid::EDividerSource::HistorySurface;
+	else if(Focus->bCurrentObservedLocation && Focus->bConfirmedWholeCapture)
+	{
+		TBitArray<> Expected=Out.FullGeometryMask;
+		Expected.CombineWithBitwiseAND(Out.PhysicalOcclusionGate,EBitwiseOperatorFlags::MinSize);
+		const bool bRawSplit=Out.RawLiveCoverage.CountSetBits()>0 && Out.RawLiveCoverage.CountSetBits()<Count;
+		const bool bPhysicalSplit=Out.PhysicalOcclusionGate.CountSetBits()>0 && Out.PhysicalOcclusionGate.CountSetBits()<Count;
+		if(bPhysicalSplit) Out.Source=FDarkwellCurrentLiveGrid::EDividerSource::WallOcclusion;
+		else if(Out.WholePresentationMask!=Expected) Out.Source=bRawSplit
+			?FDarkwellCurrentLiveGrid::EDividerSource::ViewEdge:FDarkwellCurrentLiveGrid::EDividerSource::WholeCurrentMask;
+	}
+	else if(Out.RawLiveCoverage.CountSetBits()>0 && Out.RawLiveCoverage.CountSetBits()<Count)
+		Out.Source=FDarkwellCurrentLiveGrid::EDividerSource::PartialCurrentMask;
+	return true;
+}
+
+FString ADarkwellMovingPropLabRoom::GetDividerMaskTelemetryForTesting(const FName StableId) const
+{
+	FDividerMaskDiagnostics Diagnostic;
+	if(!GetDividerMaskDiagnosticsForTesting(StableId,Diagnostic)) return TEXT("{\"divider_source\":\"UNKNOWN\",\"valid\":false}");
+	auto Hash=[](const TBitArray<>& Mask)
+	{
+		uint64 Value=1469598103934665603ull;
+		for(TConstSetBitIterator<> It(Mask);It;++It) Value=(Value^uint64(It.GetIndex()+1))*1099511628211ull;
+		return Value;
+	};
+	return FString::Printf(TEXT("{\"divider_source\":\"%s\",\"valid\":true,\"full_geometry\":{\"set\":%d,\"hash\":\"%llu\"},\"raw_live\":{\"set\":%d,\"hash\":\"%llu\"},\"object_contact\":%s,\"physical_occlusion\":{\"set\":%d,\"hash\":\"%llu\"},\"whole_presentation\":{\"set\":%d,\"hash\":\"%llu\"},\"current_legal\":{\"set\":%d,\"hash\":\"%llu\"},\"last_capture\":{\"set\":%d,\"hash\":\"%llu\"},\"frozen_history\":{\"set\":%d,\"hash\":\"%llu\"},\"cap\":{\"set\":%d,\"hash\":\"%llu\"},\"final_current\":{\"set\":%d,\"hash\":\"%llu\"},\"final_history\":{\"set\":%d,\"hash\":\"%llu\"}}"),
+		FDarkwellCurrentLiveGrid::DividerSourceName(Diagnostic.Source),
+		Diagnostic.FullGeometryMask.CountSetBits(),Hash(Diagnostic.FullGeometryMask),
+		Diagnostic.RawLiveCoverage.CountSetBits(),Hash(Diagnostic.RawLiveCoverage),
+		Diagnostic.bObjectHasLegalContact?TEXT("true"):TEXT("false"),
+		Diagnostic.PhysicalOcclusionGate.CountSetBits(),Hash(Diagnostic.PhysicalOcclusionGate),
+		Diagnostic.WholePresentationMask.CountSetBits(),Hash(Diagnostic.WholePresentationMask),
+		Diagnostic.CurrentLegalObservationMask.CountSetBits(),Hash(Diagnostic.CurrentLegalObservationMask),
+		Diagnostic.LastLegalCaptureMask.CountSetBits(),Hash(Diagnostic.LastLegalCaptureMask),
+		Diagnostic.FrozenHistoryMask.CountSetBits(),Hash(Diagnostic.FrozenHistoryMask),
+		Diagnostic.CapMask.CountSetBits(),Hash(Diagnostic.CapMask),
+		Diagnostic.FinalCurrentContribution.CountSetBits(),Hash(Diagnostic.FinalCurrentContribution),
+		Diagnostic.FinalHistoricalContribution.CountSetBits(),Hash(Diagnostic.FinalHistoricalContribution));
 }
 
 uint64 ADarkwellMovingPropLabRoom::GetRevealSpanEvaluationsForTesting(FName Id) const

@@ -60,6 +60,7 @@ def longest_over(values, threshold):
 def summarize(name, mode, samples, wall_seconds, setup_ms):
     assert samples, name
     frame_ms = [sample["frame_ms"] for sample in samples]
+    game_frame_ms = [sample["game_frame_ms"] for sample in samples]
     room_ms = [sample["game_thread_us"] / 1000.0 for sample in samples]
     stage_names = (
         "current_reveal_us",
@@ -90,6 +91,12 @@ def summarize(name, mode, samples, wall_seconds, setup_ms):
             "over100": sum(value > 100.0 for value in frame_ms),
             "longest_over33": longest_over(frame_ms, 33.0),
         },
+        "game_frame_ms": {
+            "p50": percentile(game_frame_ms, 0.50),
+            "p95": percentile(game_frame_ms, 0.95),
+            "p99": percentile(game_frame_ms, 0.99),
+            "peak": max(game_frame_ms),
+        },
         "room_ms": {
             "p50": percentile(room_ms, 0.50),
             "p95": percentile(room_ms, 0.95),
@@ -98,8 +105,14 @@ def summarize(name, mode, samples, wall_seconds, setup_ms):
         },
         "history": {
             "records_max": max(sample["records"] for sample in samples),
+            "active_p50": percentile([sample["epochs"] for sample in samples], 0.50),
+            "active_p95": percentile([sample["epochs"] for sample in samples], 0.95),
             "active_max": max(sample["epochs"] for sample in samples),
+            "candidates_p50": percentile([sample["candidates"] for sample in samples], 0.50),
+            "candidates_p95": percentile([sample["candidates"] for sample in samples], 0.95),
             "candidates_max": max(sample["candidates"] for sample in samples),
+            "sleeping_p50": percentile([sample["sleeping"] for sample in samples], 0.50),
+            "sleeping_p95": percentile([sample["sleeping"] for sample in samples], 0.95),
             "sleeping_max": max(sample["sleeping"] for sample in samples),
         },
         "resources": {
@@ -163,12 +176,16 @@ def run():
         phase_start = time.monotonic()
         phase_deadline = measurement_start + (phase_index + 1) * PHASE_SECONDS
         last_time = unreal.GameplayStatics.get_time_seconds(world)
+        last_wall_time = time.perf_counter()
         samples = []
         while time.monotonic() < phase_deadline:
             yield 1
+            current_wall_time = time.perf_counter()
             current_time = unreal.GameplayStatics.get_time_seconds(world)
             telemetry = json.loads(room.get_history_runtime_telemetry())["frame_data"]
-            telemetry["frame_ms"] = max(0.0, (current_time - last_time) * 1000.0)
+            telemetry["frame_ms"] = max(0.0, (current_wall_time - last_wall_time) * 1000.0)
+            telemetry["game_frame_ms"] = max(0.0, (current_time - last_time) * 1000.0)
+            last_wall_time = current_wall_time
             last_time = current_time
             samples.append(telemetry)
             all_samples.append(telemetry)

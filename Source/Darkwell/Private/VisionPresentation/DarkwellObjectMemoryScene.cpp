@@ -294,6 +294,15 @@ ADarkwellObjectMemoryScene::ActualPartGeometry(
 void ADarkwellObjectMemoryScene::FPrimitiveGeometrySnapshot::CachePlanarProjection()
 {
  bCachedPlanarProjection=false;
+ ProjectionBounds=FBox2D(ForceInit);
+ if(LocalBounds.IsValid && !WorldTransform.ContainsNaN())
+ {
+  const auto WorldBounds=LocalBounds.TransformBy(WorldTransform);
+  ProjectionBounds=FBox2D(FVector2D(WorldBounds.Min),FVector2D(WorldBounds.Max));
+  const auto Scale=WorldTransform.GetScale3D().GetAbs();
+  ProjectionToleranceFactor=(Scale.X+Scale.Y)/FMath::Max(UE_DOUBLE_SMALL_NUMBER,FMath::Min(Scale.X,Scale.Y));
+  ProjectionRoundoffMargin=(Scale.X+Scale.Y)*UE_KINDA_SMALL_NUMBER+UE_KINDA_SMALL_NUMBER;
+ }
  const auto Rotation=WorldTransform.GetRotation();
  if(!LocalBounds.IsValid || WorldTransform.ContainsNaN() || Rotation.X!=0 || Rotation.Y!=0) return;
  const FVector Direction=WorldTransform.InverseTransformVector(FVector::UpVector);
@@ -605,24 +614,24 @@ bool ADarkwellObjectMemoryScene::HasNewerObservedGeometryOverlapAt(
 			if (TestGeometry(Geometry)) return true;
 		return false;
 	}
-	TArray<FVector2D> NewerIntervals;
-	if (!CollectNewerOwnedVerticalIntervals(Prop, OlderEpoch, Point, NewerIntervals))
-	{
-		return false;
-	}
+	TArray<FVector2D,TInlineAllocator<4>> OlderIntervals;
 	for (const FPrimitiveGeometrySnapshot& OldGeometry : OlderVisual.PartGeometry)
 	{
 		double OldMinZ = 0.0;
 		double OldMaxZ = 0.0;
-		if (!QueryVerticalInterval(OldGeometry, Point, OldMinZ, OldMaxZ))
-		{
-			continue;
-		}
+		if (QueryVerticalInterval(OldGeometry, Point, OldMinZ, OldMaxZ)) OlderIntervals.Add(FVector2D(OldMinZ,OldMaxZ));
+	}
+	// No old surface at this point can overlap any newer interval.
+	if(OlderIntervals.IsEmpty()) return false;
+	TArray<FVector2D> NewerIntervals;
+	if (!CollectNewerOwnedVerticalIntervals(Prop, OlderEpoch, Point, NewerIntervals)) return false;
+	for(const auto Old : OlderIntervals)
+	{
 		for (const FVector2D Newer : NewerIntervals)
 		{
-			if (FMath::Min(OldMaxZ, Newer.Y)
+			if (FMath::Min(Old.Y, Newer.Y)
 				+ Darkwell::ObjectMemory::RenderOwnershipContactTolerance
-				>= FMath::Max(OldMinZ, Newer.X))
+					>= FMath::Max(Old.X, Newer.X))
 			{
 				return true;
 			}
@@ -699,9 +708,17 @@ bool ADarkwellObjectMemoryScene::HasNewerObservedGeometryOverlapWithinFootprint(
 			return true;
 		}
 	}
-	for (const FPrimitiveGeometrySnapshot& Geometry
-		: CollectNewerGeometrySnapshots(Prop, OlderEpoch))
+	TArray<FPrimitiveGeometrySnapshot> FallbackGeometry;
+	if(!bUseOwnershipGeometry) FallbackGeometry=CollectNewerGeometrySnapshots(Prop,OlderEpoch);
+	const TConstArrayView<FPrimitiveGeometrySnapshot> Candidates=bUseOwnershipGeometry
+		? FrameOwnershipGeometry : MakeArrayView(FallbackGeometry);
+	for (const FPrimitiveGeometrySnapshot& Geometry : Candidates)
 	{
+		if(bUseOwnershipGeometry && Geometry.ProjectionBounds.bIsValid)
+		{
+			const double Padding=Darkwell::ObjectMemory::RenderOwnershipClipClearance*Geometry.ProjectionToleranceFactor+Geometry.ProjectionRoundoffMargin;
+			if(!Geometry.ProjectionBounds.ExpandBy(Padding).Intersect(Footprint)) continue;
+		}
 		const FVector LocalCenter = Geometry.LocalBounds.GetCenter();
 		const FVector WorldCenter = Geometry.WorldTransform.TransformPosition(LocalCenter);
 		const FVector2D ProjectedCenter(WorldCenter.X, WorldCenter.Y);
@@ -2485,8 +2502,18 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			: FrameNewerCandidates;
 		TGuardValue<TConstArrayView<const FDarkwellSpatialObservationRecord*>>
 			OwnershipScope(FrameNewerCandidates, OwnershipView);
-		const bool bOwnershipChanged = UpdateHistoricalContributionExclusion(
-			Prop, *Record, GeometryDirtyIndices);
+		bool bOwnershipChanged;
+		{
+			bool bCache=!GeometryDirtyIndices.IsEmpty();
+#if WITH_DEV_AUTOMATION_TESTS
+			bCache &= !bForceFullHistoryEvidenceForTesting;
+#endif
+			TArray<FPrimitiveGeometrySnapshot> Geometry;
+			if(bCache) Geometry=CollectNewerGeometrySnapshots(Prop,Record->Epoch);
+			TGuardValue<bool> CacheScope(bUseOwnershipGeometry,bCache);
+			TGuardValue<TConstArrayView<FPrimitiveGeometrySnapshot>> GeometryScope(FrameOwnershipGeometry,MakeArrayView(Geometry));
+			bOwnershipChanged=UpdateHistoricalContributionExclusion(Prop,*Record,GeometryDirtyIndices);
+		}
 		Visual->ProcessedOwnershipMaximumEpoch = MaximumCandidateEpoch;
 		RuntimeFrame.OwnershipUs += FPlatformTime::ToMilliseconds64(
 			FPlatformTime::Cycles64() - OwnershipStartCycles) * 1000.0;

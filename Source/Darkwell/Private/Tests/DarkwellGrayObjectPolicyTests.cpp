@@ -539,6 +539,39 @@ bool FDarkwellRepeatedHistoryEvidenceParity::RunTest(const FString&)
  return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellBatchOwnershipParity,
+ "Darkwell.PropLab.ArchitectureAudit.BatchOwnershipSamplesEquivalent",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellBatchOwnershipParity::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ TArray<uint64> Reference;
+ for(bool Full:{true,false})
+ {
+  FRoom F; F.Room->bForceFullHistoryEvidenceForTesting=Full;
+  F.Face(90); F.Step(20); F.Face(-90); F.Step(20);
+  TestTrue(TEXT("Batch fixture supplies distinct captured poses"),F.Room->ConfigureHistoricalEpochCountForTesting(Id,16));
+  for(int32 Frame=0;Frame<6;++Frame)
+  {
+   F.Face(Frame==1||Frame==2?136.f:Frame==4?20.f:-90.f); F.Step();
+   TArray<ADarkwellMovingPropLabRoom::FFineEvidenceDiagnostic> Samples;
+   F.Room->GetFineEvidenceDiagnosticsForTesting(Id,Samples);
+   uint64 H=1469598103934665603ull;
+   auto Mix=[&](uint64 V){H=(H^V)*1099511628211ull;};
+   Mix(Samples.Num());
+   for(const auto& D:Samples)
+   {
+    Mix(D.Epoch); Mix(D.Index); Mix(GetTypeHash(D.Sample.State)); Mix(D.Sample.bVerifiedEmpty);
+    for(float V:{D.Sample.InitialRemembered,D.Sample.Opacity,D.Sample.FrozenAAEnvelope,D.Sample.EmptyDwell,D.Coverage}) Mix(FMath::RoundToInt(V*1000000));
+    Mix(D.bOccupied); Mix(D.bOwned); Mix(D.bValid); Mix(D.bSubmitted);
+   }
+   if(Full) Reference.Add(H);
+   else if(!TestEqual(*FString::Printf(TEXT("Batch ownership matches full sample oracle at frame %d"),Frame),H,Reference[Frame])) return false;
+  }
+ }
+ return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellTerminalSceneCompaction,
  "Darkwell.PropLab.ArchitectureAudit.TerminalSceneCompaction",
  EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)

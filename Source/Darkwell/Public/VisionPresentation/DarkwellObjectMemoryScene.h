@@ -212,13 +212,15 @@ protected:
 		int32 PrimitiveIndex = INDEX_NONE;
 		bool bCachedPlanarProjection = false;
 		double PlanarMinZ = 0, PlanarMaxZ = 0, ToleranceScale = 1;
+		FBox2D ProjectionBounds = FBox2D(ForceInit);
+		double ProjectionToleranceFactor = 1, ProjectionRoundoffMargin = 0;
 		void CachePlanarProjection();
 	};
  struct FActualOccupancySnapshot
  {
   FName StableId; FBox2D Bounds; TArray<FPrimitiveGeometrySnapshot> Geometry;
  };
- TArray<FActualOccupancySnapshot> FrameOccupancy;
+	TArray<FActualOccupancySnapshot> FrameOccupancy;
  bool bUseFrameOccupancy=false, bFilterFrameOccupancy=false;
  TConstArrayView<const FActualOccupancySnapshot*> FrameOccupancyCandidates;
  mutable TMap<FVector2D,bool> FrameOccupancyPoints;
@@ -227,6 +229,8 @@ protected:
  FName NewerCandidateId;
  uint32 NewerCandidateMaximumEpoch=0;
  TConstArrayView<const FDarkwellSpatialObservationRecord*> FrameNewerCandidates;
+ TConstArrayView<FPrimitiveGeometrySnapshot> FrameOwnershipGeometry;
+ bool bUseOwnershipGeometry=false;
 	friend class FDarkwellCapPartialClipTest;
 	friend class FDarkwellCapCoplanarContactTest;
 	friend class FDarkwellGrayHistoryCapacityCurrentTest;

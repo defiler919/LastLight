@@ -85,11 +85,11 @@ namespace Darkwell::ConfirmedWholeViewEdgeTests
  {
   uint64 Hash=1469598103934665603ull;
   auto Mix=[&](const uint64 Value){Hash=(Hash^Value)*1099511628211ull;};
-  for(const auto& Part:Grid.Parts) for(const auto& Cell:Part.Raster.GetCells())
+  for(const auto& Part:Grid.Parts)
   {
-   Mix(FMath::RoundToInt(Cell.AppearanceBlend*1000000));
-   Mix(FMath::RoundToInt(Cell.LiveBlend*1000000));
-   Mix(Cell.DiscoveredPresent>0);
+   Mix(FMath::RoundToInt(Part.WholePixel.R*1000000));
+   Mix(FMath::RoundToInt(Part.WholePixel.G*1000000));
+   Mix(Part.bUniformWholePresentation);
   }
   for(TConstSetBitIterator<> It(Mask);It;++It) Mix(It.GetIndex()+1);
   return Hash;
@@ -119,7 +119,8 @@ bool FDarkwellConfirmedWholeFastViewEdgeLeavesNoDivider::RunTest(const FString&)
    }
    Grid.WriteWorldSnapshot(Snapshot,FBox2D(FVector2D(-50,-25),FVector2D(50,25)));
    Grid.WritePartRasters(RawLiveCoverage,false);
-   Grid.ApplyWholeObjectPresentation(1.f/60.f,Snapshot,[](FVector2D){return 1.f;});
+   TArray<float> Raw; for(const auto& Cell:Snapshot.GetCells()) Raw.Add(Cell.CurrentLegalCoverage);
+   Grid.AdvanceConfirmedWhole(1.f/60.f,FTransform::Identity,Snapshot,Snapshot.GetBounds(),Raw);
 
    FDarkwellCurrentLiveGrid::FDividerDiagnostics Diagnostic;
    TestTrue(TEXT("Whole part exposes deterministic divider diagnostics"),Grid.GetDividerDiagnostics(0,Diagnostic));
@@ -130,7 +131,7 @@ bool FDarkwellConfirmedWholeFastViewEdgeLeavesNoDivider::RunTest(const FString&)
     Diagnostic.WholePresentationMask.CountSetBits(),Diagnostic.WholePresentationMask.Num(),
     Diagnostic.MinimumAppearance,Diagnostic.MaximumAppearance));
    TestNotEqual(TEXT("No-wall split no longer contributes a VIEW_EDGE divider"),Diagnostic.Source,FDarkwellCurrentLiveGrid::EDividerSource::ViewEdge);
-   TestTrue(TEXT("Raw live coverage contains the swept cone edge"),Diagnostic.RawLiveCoverage.CountSetBits()>0 && Diagnostic.RawLiveCoverage.CountSetBits()<Diagnostic.RawLiveCoverage.Num());
+   TestTrue(TEXT("Raw live coverage contains the swept cone edge"),Raw.Contains(0.f) && Raw.Contains(1.f));
    TestEqual(TEXT("Physical occlusion gate is fully open"),Diagnostic.PhysicalOcclusionGate.CountSetBits(),Diagnostic.PhysicalOcclusionGate.Num());
    TestTrue(TEXT("Whole presentation owns the full primitive"),Diagnostic.WholePresentationMask==Diagnostic.FullGeometryMask);
    TestTrue(*FString::Printf(TEXT("Confirmed Whole appearance is uniform after %.0f degree %s sweep"),SweepDegrees,SweepFrames==1?TEXT("single-frame"):TEXT("multi-frame")),IsUniform(Diagnostic));
@@ -178,7 +179,7 @@ bool FDarkwellConfirmedWholeRepeatedFastSweep::RunTest(const FString&)
    Raw.SetNumUninitialized(Snapshot.GetSize().X*Snapshot.GetSize().Y);
    for(int32 Y=0;Y<Snapshot.GetSize().Y;++Y) for(int32 X=0;X<Snapshot.GetSize().X;++X)
     Raw[Y*Snapshot.GetSize().X+X]=((X<Snapshot.GetSize().X/2)==((Sweep&1)==0))?1.f:0.f;
-   Grid.AdvanceWholeWithOcclusion(1.f/Hz,FTransform::Identity,Snapshot,Bounds,Raw,[](FVector2D){return 1.f;});
+   Grid.AdvanceConfirmedWhole(1.f/Hz,FTransform::Identity,Snapshot,Bounds,Raw);
   }
   TBitArray<> FullGeometry;
   const FIntPoint FineSize=Snapshot.GetSize()*FDarkwellHistoryGridV2::SamplesPerCell;
@@ -188,15 +189,13 @@ bool FDarkwellConfirmedWholeRepeatedFastSweep::RunTest(const FString&)
   const int32 Current=History.BeginCurrentObservation(FTransform::Identity,Bounds,2.5f);
   TestTrue(TEXT("Repeated Whole history accepts only the geometry mask"),Current!=INDEX_NONE && History.FreezeCurrentFromGeometryMask(FullGeometry));
   auto& Record=History.GetMutableRecords()[0];
-  Record.FineHistory.Initialize(Record.SpatialMemory,Record.LastLegalCaptureMask);
+  Record.FineHistory.InitializeWholeCapture(Record.SpatialMemory,Record.LastLegalCaptureMask);
   TBitArray<> Frozen(false,Record.FineHistory.GetSamples().Num());
   for(int32 Index=0;Index<Frozen.Num();++Index) Frozen[Index]=Record.FineHistory.GetSamples()[Index].InitialRemembered>0;
   TestTrue(TEXT("1000 sweeps cannot create a partial Whole history"),Frozen==FullGeometry && Record.LastLegalCaptureMask==FullGeometry);
   for(const auto& Part:Grid.Parts)
   {
-   float Minimum=1,Maximum=0;
-   for(const auto& Cell:Part.Raster.GetCells()) { Minimum=FMath::Min(Minimum,Cell.AppearanceBlend); Maximum=FMath::Max(Maximum,Cell.AppearanceBlend); }
-   TestTrue(TEXT("1000 sweeps leave no permanent object-level divider"),FMath::IsNearlyEqual(Minimum,Maximum,UE_SMALL_NUMBER));
+   TestTrue(TEXT("1000 sweeps leave a complete object-level pixel"),Part.bUniformWholePresentation && Part.WholePixel.R==1.f && Part.WholePixel.G==1.f);
   }
   const uint64 Hash=PresentationHash(Grid,FullGeometry);
   if(Reference==0) Reference=Hash;
@@ -220,7 +219,7 @@ bool FDarkwellConfirmedWholeHitchAtomicity::RunTest(const FString&)
   Raw.Init(0,Snapshot.GetCells().Num());
   for(int32 Index=0;Index<Raw.Num()/2;++Index) Raw[Index]=1;
   const FBox2D Bounds(FVector2D(-50,-25),FVector2D(50,25));
-  Grid.AdvanceWholeWithOcclusion(Dt,FTransform::Identity,Snapshot,Bounds,Raw,[](FVector2D){return 1.f;});
+  Grid.AdvanceConfirmedWhole(Dt,FTransform::Identity,Snapshot,Bounds,Raw);
   TBitArray<> FullGeometry;
   Grid.BuildFullGeometryMask(Bounds,Snapshot.GetSize()*FDarkwellHistoryGridV2::SamplesPerCell,FullGeometry);
   FDarkwellSpatialObservationHistory History;
@@ -253,10 +252,10 @@ bool FDarkwellConfirmedWholeHitchAtomicity::RunTest(const FString&)
  return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellConfirmedWholeWallOcclusionIsTransient,
- "Darkwell.PropLab.ConfirmedWholeViewEdge.ConfirmedWholeWallOcclusionIsTransient",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellConfirmedWholeLegalContactDisplaysWhole,
+ "Darkwell.PropLab.ConfirmedWholeViewEdge.ConfirmedWholeLegalContactDisplaysWhole",
  EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
-bool FDarkwellConfirmedWholeWallOcclusionIsTransient::RunTest(const FString&)
+bool FDarkwellConfirmedWholeLegalContactDisplaysWhole::RunTest(const FString&)
 {
  using namespace Darkwell::ConfirmedWholeViewEdgeTests;
  FRoom F;
@@ -267,13 +266,15 @@ bool FDarkwellConfirmedWholeWallOcclusionIsTransient::RunTest(const FString&)
  ADarkwellMovingPropLabRoom::FDividerMaskDiagnostics South;
  TestTrue(TEXT("South wall diagnostic"),F.Room->GetDividerMaskDiagnosticsForTesting(LabId,South));
  TBitArray<> SouthVisible=South.FullGeometryMask; SouthVisible.CombineWithBitwiseAND(South.PhysicalOcclusionGate,EBitwiseOperatorFlags::MinSize);
- TestTrue(TEXT("Physical wall transiently cuts current Whole"),SouthVisible.CountSetBits()>0 && SouthVisible.CountSetBits()<South.FullGeometryMask.CountSetBits());
- TestEqual(TEXT("Current divider is attributed to wall occlusion"),South.Source,FDarkwellCurrentLiveGrid::EDividerSource::WallOcclusion);
+ TestTrue(TEXT("Physical wall still limits authoritative contact"),SouthVisible.CountSetBits()>0 && SouthVisible.CountSetBits()<South.FullGeometryMask.CountSetBits());
+ TestTrue(TEXT("Confirmed Whole ignores wall partitions in current output"),South.WholePresentationMask==South.FullGeometryMask);
+ TestEqual(TEXT("Wall authority is no presentation divider"),South.Source,FDarkwellCurrentLiveGrid::EDividerSource::Unknown);
  TestEqual(TEXT("Confirmed Whole wall current owns no cap"),F.Room->GetVisibleHistoricalCapCountForTesting(LabId),0);
  F.Player->SetActorLocation(FVector(500,600,92)); F.Player->SetActorRotation(FRotator(0,-90,0)); F.Step(30);
  ADarkwellMovingPropLabRoom::FDividerMaskDiagnostics North;
  TestTrue(TEXT("North wall diagnostic"),F.Room->GetDividerMaskDiagnosticsForTesting(LabId,North));
- TestTrue(TEXT("Occlusion boundary follows the other side of the wall"),North.PhysicalOcclusionGate!=South.PhysicalOcclusionGate);
+ TestTrue(TEXT("Occlusion authority follows the other side of the wall"),North.PhysicalOcclusionGate!=South.PhysicalOcclusionGate);
+ TestTrue(TEXT("Current stays whole from either side"),North.WholePresentationMask==North.FullGeometryMask);
  F.Player->SetActorRotation(FRotator(0,90,0)); F.Step(30);
  TBitArray<> Capture,Frozen;
  TestTrue(TEXT("Wall case seals Whole history"),F.Room->GetNewestCaptureMasksForTesting(LabId,Capture,Frozen));
@@ -356,10 +357,11 @@ bool FDarkwellMultiPrimitiveWholeMask::RunTest(const FString&)
  FDarkwellSpatialPropMemory Snapshot;
  Snapshot.Initialize(TEXT("Test.ConfirmedWhole.MultiPrimitive"),Bounds,2.5f); Snapshot.BeginPresent();
  TArray<float> Raw; Raw.Init(0,Snapshot.GetCells().Num()); for(int32 Index=0;Index<Raw.Num();Index+=2) Raw[Index]=1;
- Grid.AdvanceWholeWithOcclusion(.2f,FTransform::Identity,Snapshot,Bounds,Raw,[](const FVector2D Point){return Point.X<15?1.f:0.f;});
- bool bSawVisible=false,bSawBlocked=false;
- for(const auto& Part:Grid.Parts) for(const auto& Cell:Part.Raster.GetCells()) { bSawVisible|=Cell.AppearanceBlend>0; bSawBlocked|=Cell.AppearanceBlend==0; }
- TestTrue(TEXT("Physical wall gate independently blocks only affected primitive regions"),bSawVisible && bSawBlocked);
+ Grid.AdvanceConfirmedWhole(.2f,FTransform::Identity,Snapshot,Bounds,Raw);
+ for(const auto& Part:Grid.Parts)
+  TestTrue(TEXT("All confirmed primitives share full object appearance"),Part.bUniformWholePresentation && Part.WholePixel.R==1.f);
+ for(int32 I=0;I<Raw.Num();++I)
+  TestEqual(TEXT("Whole presentation preserves the supplied legal coverage"),Snapshot.GetCells()[I].CurrentLegalCoverage,Raw[I]);
  return true;
 }
 

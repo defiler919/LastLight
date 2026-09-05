@@ -63,7 +63,7 @@ void FDarkwellGrayObjectPolicyTest::GetTests(TArray<FString>& Names,TArray<FStri
   TEXT("StaticPartialStationaryOnlyRetainsGray"),TEXT("StaticNeverDoesNotRetainGray"),
   TEXT("CoverageEdgeNeverIsExpectedNegativeControl"),TEXT("SixPolicyCombinationsCoexist"),
   TEXT("MotionStateAndRevealPolicyIsolation"),TEXT("ExistingHistoryNotIdentityCleared"),
-  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime"),TEXT("CanonicalRasterMatchesOriginalSamples"),TEXT("ConfirmedWholeStopsSpanAndDenseObservationWork"),TEXT("CachedDiagnosticsMatchForcedDiagnostics"),TEXT("RepeatedPoseDiagnosticsMatchFullScan"),TEXT("FramePhysicalCacheMatchesGeometryOracle"),TEXT("WholeObjectConfirmedRespectsPartialWall")})
+  TEXT("ResetClearsOnlyTarget"),TEXT("PlayStopResourceLifetime"),TEXT("CanonicalRasterMatchesOriginalSamples"),TEXT("ConfirmedWholeStopsSpanAndDenseObservationWork"),TEXT("CachedDiagnosticsMatchForcedDiagnostics"),TEXT("RepeatedPoseDiagnosticsMatchFullScan"),TEXT("FramePhysicalCacheMatchesGeometryOracle"),TEXT("WholeObjectConfirmedUsesLegalWallContact")})
  { Names.Add(N); Commands.Add(N); }
 }
 bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
@@ -262,14 +262,14 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
  F.Face(90); F.Step(30);
  TestTrue(TEXT("Threshold reached"),F.Room->IsRevealConfirmedForTesting(Id));
  TestEqual(TEXT("Whole source presents every pixel after normal entry"),F.Room->GetCurrentPresentationMinimumForTesting(Id),1.f);
- if(Case==TEXT("WholeObjectConfirmedRespectsPartialWall"))
+ if(Case==TEXT("WholeObjectConfirmedUsesLegalWallContact"))
  {
   auto Pose=F.Room->GetTrackedTransform(Id); Pose.SetLocation(FVector(500,0,0)); F.Room->SetTrackedTransformForTesting(Id,Pose);
   F.Player->SetActorLocation(FVector(500,-600,92)); F.Player->SetActorRotation(FRotator(0,90,0)); F.Step(30);
   TestTrue(TEXT("Confirmed state persists at partial opaque wall"),F.Room->IsRevealConfirmedForTesting(Id));
   TestTrue(TEXT("Actual legal portion stays visible"),F.Room->IsCurrentSourceVisibleForTesting(Id));
   TestTrue(TEXT("Real wall cuts legal coverage"),F.Room->GetLastLegalCoverageRatioForTesting(Id)>0 && F.Room->GetLastLegalCoverageRatioForTesting(Id)<1);
-  TestEqual(TEXT("Confirmed presentation cannot reveal wall-hidden pixels"),F.Room->GetCurrentPresentationMinimumForTesting(Id),0.f);
+  TestEqual(TEXT("Confirmed contact presents the full object despite partial wall coverage"),F.Room->GetCurrentPresentationMinimumForTesting(Id),1.f);
   auto* Fog=F.World->GetSubsystem<UDarkwellFogVisualSubsystem>();
   for(auto Point:{FVector2D(500,-20),FVector2D(500,20)})
   {

@@ -167,7 +167,7 @@ bool FGrayPolicyLabNever::RunTest(const FString&)
 GRAY_LAB_SIMPLE_TEST(FGrayPolicyLabOcclusion, "Darkwell.GrayPolicyLabV2.OcclusionRoom")
 bool FGrayPolicyLabOcclusion::RunTest(const FString&)
 {
-	TestTrue(TEXT("Occlusion guidance forbids wall-through confirmation"), Darkwell::GrayPolicyLabV2Tests::GuidanceContains(TEXT("墙后不能确认")));
+	TestTrue(TEXT("Occlusion guidance forbids confirmation without legal contact"), Darkwell::GrayPolicyLabV2Tests::GuidanceContains(TEXT("完全被挡住的对象不能确认")));
 	TestEqual(TEXT("Occlusion room has two policy subjects"), ADarkwellSightWeaveGrayPolicyLabDirector::GetStableIdsForRoomForTesting(5).Num(), 2);
 	return true;
 }

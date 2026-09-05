@@ -112,80 +112,6 @@ void FDarkwellCurrentLiveGrid::ResumeStationaryKnowledge()
 	Resume(WholeAppearance);
 }
 
-void FDarkwellCurrentLiveGrid::ApplyWholeObjectPresentation(float Dt,FDarkwellSpatialPropMemory& Snapshot,
- TFunctionRef<float(FVector2D)> OcclusionPermission)
-{
- WholeAppearance.Advance(Dt,TArray<float>{1.f});
- const auto Appearance=WholeAppearance.GetCells()[0];
- bool bWholeUnoccluded=true;
- auto Apply=[&](FDarkwellSpatialPropMemory& Raster,const bool bTrackOwnership,TBitArray<>* PhysicalOcclusionMask)
- {
-  const auto B=Raster.GetBounds(); const auto S=Raster.GetSize(); const auto Step=B.GetSize()/FVector2D(S);
-  auto Cells=Raster.PrepareCurrentRaster(B,S);
-  if(PhysicalOcclusionMask) PhysicalOcclusionMask->Init(false,Cells.Num());
-  FBox2D OwnershipDirty(ForceInit);
-  for(int32 I=0;I<Cells.Num();++I)
-  {
-   const auto Min=B.Min+Step*FVector2D(I%S.X,I/S.X); float Gate=1;
-   for(auto O : {FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)}) Gate=FMath::Min(Gate,OcclusionPermission(Min+Step*O));
-   auto& C=Cells[I]; const bool Allowed=Gate>=FDarkwellSpatialPropMemory::LegalCoverage;
-   if(PhysicalOcclusionMask) (*PhysicalOcclusionMask)[I]=Allowed;
-   const bool PreviouslyOwned=C.DiscoveredPresent>0 && C.AppearanceBlend>0;
-   bWholeUnoccluded &= Allowed;
-   C.DiscoveredPresent=Allowed?1:0;
-   // Confirmed Whole presentation is authored exclusively by the object-level
-   // scalar. Never preserve a higher local blend left by pre-confirmation cone
-   // samples: that is the view-edge divider this path is responsible for removing.
-   C.AppearanceBlend=Allowed?Appearance.AppearanceBlend:0;
-   C.LiveBlend=Allowed?Appearance.LiveBlend:0;
-   if(bTrackOwnership && !PreviouslyOwned && C.DiscoveredPresent>0 && C.AppearanceBlend>0)
-   { OwnershipDirty+=Min; OwnershipDirty+=Min+Step; }
-   // CurrentLegalCoverage remains the real field. Whole permission never feeds it.
-  }
-  if(OwnershipDirty.bIsValid) OwnershipDirtyRegions.Add(OwnershipDirty);
- };
- for(auto& P:Parts)
- {
-  P.bWholePresentation=true;
-#if WITH_DEV_AUTOMATION_TESTS
-  Apply(P.Raster,true,&P.PhysicalOcclusionMask);
-#else
-  Apply(P.Raster,true,nullptr);
-#endif
- }
- Apply(Snapshot,false,nullptr);
- bFullyObservedAtPose=bWholeUnoccluded;
-}
-
-void FDarkwellCurrentLiveGrid::AdvanceWholeWithOcclusion(const float Dt,const FTransform& ActorPose,
- FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,const TConstArrayView<float> Coverage,
- TFunctionRef<float(FVector2D)> PhysicalOcclusionGate)
-{
- check(Upright(ActorPose));
- ++Updates; Queries=0; SamplesTouched=0; OwnershipDirtyRegions.Reset();
- const FIntPoint SnapshotSize=GridSize(Bounds);
- check(Coverage.Num()==SnapshotSize.X*SnapshotSize.Y);
- auto SnapshotCells=Snapshot.PrepareCurrentRaster(Bounds,SnapshotSize,AtlasCells.X*AtlasCells.Y);
- for(int32 Index=0;Index<SnapshotCells.Num();++Index)
- {
-  const float RawCoverage=Coverage[Index];
-  SnapshotCells[Index]=FDarkwellSpatialPropMemory::FCell();
-  SnapshotCells[Index].CurrentLegalCoverage=RawCoverage;
- }
- for(FPart& Part:Parts)
- {
-  Part.Pose=Part.Geometry.RelativeTransform*ActorPose;
-  Part.bUniformWholePresentation=false;
-  Part.bWholePresentation=true;
-  const FBox2D PartBounds=XY(Part.Geometry.LocalBounds.TransformBy(Part.Pose));
-  Part.Raster.PrepareCurrentRaster(PartBounds,GridSize(PartBounds),Part.AtlasCells.X*Part.AtlasCells.Y);
-  Part.CurrentLegalObservationMask.Empty();
-  Part.LastLegalCaptureMask.Empty();
- }
- ApplyWholeObjectPresentation(Dt,Snapshot,PhysicalOcclusionGate);
- LastLegalPose=ActorPose;
-}
-
 bool FDarkwellCurrentLiveGrid::BuildFullGeometryMask(const FBox2D& Bounds,const FIntPoint Size,TBitArray<>& Out) const
 {
  Out.Empty();
@@ -230,6 +156,17 @@ bool FDarkwellCurrentLiveGrid::GetDividerDiagnostics(const int32 PartIndex,FDivi
  Out=FDividerDiagnostics();
  if(!Parts.IsValidIndex(PartIndex)) return false;
  const FPart& P=Parts[PartIndex];
+ if(P.bUniformWholePresentation)
+ {
+  // The source submits one object-level texel. Spatial authority is diagnosed
+  // by the scene against Fog; old pre-confirmation rasters are not current data.
+  Out.FullGeometryMask.Init(true,1);
+  Out.WholePresentationMask.Init(P.WholePixel.R>0,1);
+  Out.FinalCurrentContribution=Out.WholePresentationMask;
+  Out.PhysicalOcclusionGate.Init(true,1);
+  Out.MinimumAppearance=Out.MaximumAppearance=P.WholePixel.R;
+  return true;
+ }
  const auto Cells=P.Raster.GetCells();
  if(Cells.IsEmpty()) return false;
  Out.FullGeometryMask.Init(true,Cells.Num());
@@ -238,9 +175,6 @@ bool FDarkwellCurrentLiveGrid::GetDividerDiagnostics(const int32 PartIndex,FDivi
  Out.CurrentLegalObservationMask.Init(false,Cells.Num());
  Out.LastLegalCaptureMask.Init(false,Cells.Num());
  Out.FinalCurrentContribution.Init(false,Cells.Num());
-#if WITH_DEV_AUTOMATION_TESTS
- Out.PhysicalOcclusionGate=P.PhysicalOcclusionMask;
-#endif
  if(Out.PhysicalOcclusionGate.Num()!=Cells.Num()) Out.PhysicalOcclusionGate.Init(true,Cells.Num());
  const auto RasterBounds=P.Raster.GetBounds();
  const auto RasterSize=P.Raster.GetSize();
@@ -309,9 +243,10 @@ bool FDarkwellCurrentLiveGrid::HasAnyLegalObservation(const FTransform& ActorPos
  }
  return false;
 }
-void FDarkwellCurrentLiveGrid::AdvanceWholeUnoccluded(float Dt,const FTransform& ActorPose,
+void FDarkwellCurrentLiveGrid::AdvanceConfirmedWhole(float Dt,const FTransform& ActorPose,
  FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,TConstArrayView<float> Coverage)
 {
+ check(Upright(ActorPose));
  ++Updates; Queries=0; SamplesTouched=0; OwnershipDirtyRegions.Reset();
  WholeAppearance.Advance(Dt,TArray<float>{1.f});
  auto Cell=WholeAppearance.GetCells()[0];
@@ -327,9 +262,6 @@ void FDarkwellCurrentLiveGrid::AdvanceWholeUnoccluded(float Dt,const FTransform&
   // Uniform RGB is object presentation. A is unused by the original source
   // material; authoritative coverage stays in the canonical raster above.
   P.WholePixel=FLinearColor(Cell.AppearanceBlend,Cell.LiveBlend,0,0);
-#if WITH_DEV_AUTOMATION_TESTS
-  P.PhysicalOcclusionMask.Init(true,P.Raster.GetCells().Num());
-#endif
   if(!PreviouslyOwned && P.WholePixel.R>0) OwnershipDirtyRegions.Add(P.WholeBounds);
   P.CurrentLegalObservationMask.Empty(); P.LastLegalCaptureMask.Empty();
  }

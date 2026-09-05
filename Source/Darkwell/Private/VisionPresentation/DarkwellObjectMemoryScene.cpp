@@ -2172,19 +2172,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
          if(SweptIndex!=INDEX_NONE)
          {
           auto& Current=Prop.History.GetMutableRecords()[SweptIndex]; Prop.LocalEpoch=Current.Epoch;
-          if(Fog->IsObjectOcclusionFree(Bounds)) Prop.CurrentLive.AdvanceWholeUnoccluded(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage);
-          else
-          {
-           auto Occlusion=[&](FVector2D P)
-           {
-            ++RuntimeFrame.CoverageQueries;
-            ++RuntimeFrame.OcclusionOnlyQueries;
-            const auto Q=Fog->QueryObjectOcclusionAtWorldPoint(P);
-            return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision
-             && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f;
-           };
-           Prop.CurrentLive.AdvanceWholeWithOcclusion(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage,Occlusion);
-          }
+          Prop.CurrentLive.AdvanceConfirmedWhole(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage);
           StampConfirmedWholeCapture(Prop,Current,CoverageSnapshot);
           Prop.ObservationState=EObservationState::ObservedArmed;
           FreezeCurrentForHiddenMotion(Prop,TEXT("SWEPT_LEGAL_OBSERVATION"));
@@ -2296,20 +2284,10 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
                     auto Uniform=[&](const FBox2D& B,float& V) { return Fog->TryUniformCoverage(B,V); };
                     if(bWhole && Prop.RevealObservation.IsConfirmed() && bAnyLegal)
                     {
-                     if(Fog->IsObjectOcclusionFree(Bounds))
-                      Prop.CurrentLive.AdvanceWholeUnoccluded(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage);
-                     else
-                     {
-                      auto Occlusion=[&](FVector2D Point)
-                      {
-                       ++RuntimeFrame.CoverageQueries;
-                       ++RuntimeFrame.OcclusionOnlyQueries;
-                       const auto Q=Fog->QueryObjectOcclusionAtWorldPoint(Point);
-                       return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision
-                        && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision?Q.Coverage:0.f;
-                      };
-                      Prop.CurrentLive.AdvanceWholeWithOcclusion(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage,Occlusion);
-                     }
+                     // Cone and wall coverage already proved legal contact and
+                     // confirmation above. They no longer cut the confirmed
+                     // object's presentation. Source materials retain camera depth.
+                     Prop.CurrentLive.AdvanceConfirmedWhole(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage);
                      Prop.CurrentLegalObservationMask.Empty();
                      StampConfirmedWholeCapture(Prop,Current,CoverageSnapshot);
                     }
@@ -4723,12 +4701,10 @@ bool ADarkwellObjectMemoryScene::GetDividerMaskDiagnosticsForTesting(
 	else if(!Focus->bCurrentObservedLocation && Focus->bConfirmedWholeCapture && Out.FrozenHistoryMask!=Out.FullGeometryMask) Out.Source=FDarkwellCurrentLiveGrid::EDividerSource::HistorySurface;
 	else if(Focus->bCurrentObservedLocation && Focus->bConfirmedWholeCapture)
 	{
-		TBitArray<> Expected=Out.FullGeometryMask;
-		Expected.CombineWithBitwiseAND(Out.PhysicalOcclusionGate,EBitwiseOperatorFlags::MinSize);
 		const bool bRawSplit=Out.RawLiveCoverage.CountSetBits()>0 && Out.RawLiveCoverage.CountSetBits()<Count;
-		const bool bPhysicalSplit=Out.PhysicalOcclusionGate.CountSetBits()>0 && Out.PhysicalOcclusionGate.CountSetBits()<Count;
-		if(bPhysicalSplit) Out.Source=FDarkwellCurrentLiveGrid::EDividerSource::WallOcclusion;
-		else if(Out.WholePresentationMask!=Expected) Out.Source=bRawSplit
+		// PhysicalOcclusionGate remains a real, on-demand authority diagnostic.
+		// A split authority field is no longer a split in confirmed presentation.
+		if(Out.WholePresentationMask!=Out.FullGeometryMask) Out.Source=bRawSplit
 			?FDarkwellCurrentLiveGrid::EDividerSource::ViewEdge:FDarkwellCurrentLiveGrid::EDividerSource::WholeCurrentMask;
 	}
 	else if(Out.RawLiveCoverage.CountSetBits()>0 && Out.RawLiveCoverage.CountSetBits()<Count)

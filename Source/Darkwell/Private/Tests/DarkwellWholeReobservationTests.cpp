@@ -6,6 +6,7 @@
 #include "Engine/Texture2D.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/Material.h"
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
@@ -42,6 +43,19 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 		Policy->HistoryMode=ESightWeaveHistoryMode::StationaryOnly;
 		Actor->AddInstanceComponent(Policy); Policy->RegisterComponent(); Actor->DispatchBeginPlay();
 		TestTrue(TEXT("Register ordinary source"),Scene->RegisterRememberable(Memory,Policy));
+		auto* Neighbor=World->SpawnActor<AActor>();
+		auto* NeighborMesh=NewObject<UStaticMeshComponent>(Neighbor);
+		Neighbor->SetRootComponent(NeighborMesh); Neighbor->AddInstanceComponent(NeighborMesh);
+		NeighborMesh->SetStaticMesh(Mesh->GetStaticMesh()); NeighborMesh->RegisterComponent();
+		Neighbor->SetActorLocation(FVector(-900,0,50));
+		auto* NeighborMemory=NewObject<UDarkwellRememberablePropComponent>(Neighbor);
+		NeighborMemory->bUseSpatialMemory=true; NeighborMemory->ConfigureStableId(TEXT("UnseenNeighbor"));
+		NeighborMemory->AddMemoryPrimitive(NeighborMesh);
+		Neighbor->AddInstanceComponent(NeighborMemory); NeighborMemory->RegisterComponent();
+		auto* NeighborPolicy=NewObject<USightWeaveObjectPolicyComponent>(Neighbor);
+		NeighborPolicy->bOverrideRevealMode=true; NeighborPolicy->RevealMode=ESightWeaveRevealMode::WholeObjectAfterSpan;
+		Neighbor->AddInstanceComponent(NeighborPolicy); NeighborPolicy->RegisterComponent(); Neighbor->DispatchBeginPlay();
+		TestTrue(TEXT("Register independently occluded neighbor"),Scene->RegisterRememberable(NeighborMemory,NeighborPolicy));
 		FDarkwellFogVisualSourceSnapshot Source;
 		Source.BodyRadiusCentimeters=60; Source.ConeRangeCentimeters=1200; Source.ConeHalfAngleDegrees=52;
 		Source.AuthorityRevision=1; Source.bConeLegallyLive=true;
@@ -57,10 +71,35 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 		TestTrue(TEXT("Real wall authority publishes"),Fog->ActivateForWorld(FBox2D(FVector2D(-2000,-2000),FVector2D(2000,1000)),Source,Walls));
 		auto Step=[&](float Seconds){for(int32 I=0;I<FMath::CeilToInt(Seconds/Dt);++I) Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));};
 		Step(.4f); TestEqual(TEXT("Unconfirmed Whole leaves no gray"),Scene->GetSpatialRecordCount(Id),0);
-		View(FVector2D(70,-1000),115); Step(.5f);
+		View(FVector2D(-450,-1000),90); Step(.4f);
+		TestFalse(TEXT("A fully wall-blocked Whole cannot confirm"),Scene->IsRevealConfirmedForTesting(Id));
+		TestFalse(TEXT("A fully wall-blocked Whole cannot show current"),Scene->IsCurrentSourceVisibleForTesting(Id));
+		TestEqual(TEXT("A fully wall-blocked Whole cannot acquire a record"),Scene->GetSpatialRecordCount(Id),0);
+		auto CheckCurrent=[&](const TCHAR* Stage)
+		{
+			const auto& P=Scene->Tracked.FindChecked(Id);
+			TestTrue(FString(Stage)+TEXT(" confirmed legal contact displays one whole object"),Scene->IsWholePresentationUniformForTesting(Id));
+			int32 Missing=0;
+			for(const auto& Pixels:P.CurrentPresentation.LivePixels)
+				for(const auto& Pixel:Pixels) Missing+=Pixel.R<=0;
+			TestEqual(FString(Stage)+TEXT(" actual source submission has no wall/cone holes"),Missing,0);
+			auto* MID=Cast<UMaterialInstanceDynamic>(Mesh->GetMaterial(0));
+			TestTrue(TEXT("Actual source binds its current texture"),MID && !P.CurrentPresentation.LiveTextures.IsEmpty()
+				&& MID->K2_GetTextureParameterValue(TEXT("SpatialStateTexture"))==P.CurrentPresentation.LiveTextures[0].Get());
+			TestTrue(TEXT("Current retains ordinary masked camera depth rendering"),MID && MID->GetMaterial()->BlendMode==BLEND_Masked
+				&& !MID->GetMaterial()->bDisableDepthTest);
+		};
+		View(FVector2D(70,-1000),115);
+		const auto BlockedBefore=Fog->QueryLiveCoverageAtWorldPoint(FVector2D(-900,0));
+		Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));
+		CheckCurrent(TEXT("First confirmed frame")); Step(.5f);
+		CheckCurrent(TEXT("Settled limited contact"));
+		TestEqual(TEXT("Whole presentation cannot publish expanded authority"),Fog->QueryLiveCoverageAtWorldPoint(FVector2D(-900,0)).AuthorityRevision,BlockedBefore.AuthorityRevision);
 		TestTrue(TEXT("Far partial contact confirms ordinary Whole"),Scene->IsRevealConfirmedForTesting(Id));
 		TestTrue(TEXT("Initial view is physically partial"),Scene->GetLastLegalCoverageRatioForTesting(Id)>0 && Scene->GetLastLegalCoverageRatioForTesting(Id)<.95f);
 		TestEqual(TEXT("Whole permission cannot see world point behind wall"),Fog->QueryLiveCoverageAtWorldPoint(FVector2D(-900,0)).Coverage,0.f);
+		TestFalse(TEXT("Confirming one object cannot confirm its blocked neighbor"),Scene->IsRevealConfirmedForTesting(TEXT("UnseenNeighbor")));
+		TestEqual(TEXT("Confirming one object cannot acquire its blocked neighbor"),Scene->GetSpatialRecordCount(TEXT("UnseenNeighbor")),0);
 		View(FVector2D(70,-1000),-90); Step(.4f);
 		// Independent cuboid interior: not BuildFullGeometryMask, cached mask or a
 		// second invocation of the capture initializer under test.
@@ -104,6 +143,7 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 			View(FVector2D(70,-250),155); Step(.5f);
 			TestEqual(TEXT("Full reacquisition continues existing state"),Prop.History.GetRecords().Num(),1);
 			TestTrue(TEXT("Near contact is fully legal"),Scene->GetLastLegalCoverageRatioForTesting(Id)>.99f);
+			CheckCurrent(TEXT("Near reobservation"));
 			if(Cycle%2) for(float Yaw=155;Yaw<270;Yaw+=280*Dt)
 			{ View(FVector2D(70,-250),Yaw); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92)); }
 			View(FVector2D(70,-250),-90); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));
@@ -113,12 +153,31 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 			View(FVector2D(70,-1000),115); Step(.4f); View(FVector2D(70,-1000),-90); Step(.4f);
 			CheckHistory(TEXT("Repeated far exit"));
 		}
+		View(FVector2D(-450,-1000),90); Step(.4f);
+		TestTrue(TEXT("Loss of contact does not reset prior confirmation"),Scene->IsRevealConfirmedForTesting(Id));
+		TestFalse(TEXT("Confirmed object fully blocked by wall has no current source"),Scene->IsCurrentSourceVisibleForTesting(Id));
+		CheckHistory(TEXT("All contact blocked after confirmation"));
 		// Separate direct-full reference after finishing the continuous sequence.
 		Scene->ResetMemory(); TestTrue(TEXT("Register independent reference"),Scene->RegisterRememberable(Memory,Policy));
 		View(FVector2D(70,-250),155); Step(.5f); View(FVector2D(70,-250),-90); Step(.4f);
 		CheckHistory(TEXT("Direct full reference"));
 		const auto& Ref=Scene->Tracked.FindChecked(Id); const auto& RefR=Ref.History.GetRecords()[0];
 		TestTrue(TEXT("Partial then full equals direct full pixel-for-pixel"),SequencePixels==Ref.Visuals.FindChecked(RefR.Epoch).SubmittedPresentation);
+		// Reveal permission is independent of history eligibility. Each policy case
+		// starts a separate session after the continuous route above has completed.
+		for(const auto Mode:{ESightWeaveHistoryMode::Always,ESightWeaveHistoryMode::StationaryOnly,ESightWeaveHistoryMode::Never})
+		for(const bool Moving:{false,true})
+		{
+			Scene->ResetMemory(); Policy->UnregisterComponent(); Policy->HistoryMode=Mode;
+			Policy->RegisterComponent(); Policy->SetSightWeaveMoving(Moving);
+			TestTrue(TEXT("Register history-mode case"),Scene->RegisterRememberable(Memory,Policy));
+			View(FVector2D(70,-1000),115); Step(.5f); CheckCurrent(TEXT("Independent history-mode case"));
+			View(FVector2D(70,-1000),-90); Step(.4f);
+			const bool Eligible=Mode==ESightWeaveHistoryMode::Always || (Mode==ESightWeaveHistoryMode::StationaryOnly && !Moving);
+			TestEqual(TEXT("Whole current does not override history eligibility"),Scene->GetStaleEpochCountForTesting(Id),Eligible?1:0);
+			if(Eligible) CheckHistory(TEXT("Eligible history mode"));
+			else TestEqual(TEXT("Ineligible history owns no proxy resources"),Scene->GetHistoricalPresentationResourceCountForTesting(Id),0);
+		}
 		Scene->ResetMemory(); Scene->Destroy(); World->DestroyWorld(true); GEngine->DestroyWorldContext(World);
 	}
 	return true;

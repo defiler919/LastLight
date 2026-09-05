@@ -54,10 +54,6 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
   TArray<float> Coverage, RasterCoverage;
   // Current contact and accumulated knowledge at the last legal rigid pose.
   TBitArray<> CurrentLegalObservationMask, LastLegalCaptureMask;
-#if WITH_DEV_AUTOMATION_TESTS
-  /** Last occlusion-only Whole gate in derived raster space. Diagnostic storage only. */
-  TBitArray<> PhysicalOcclusionMask;
-#endif
   FTransform Pose=FTransform::Identity;
   FIntPoint AtlasCells=FIntPoint::ZeroValue;
   bool bWholePresentation=false, bUniformWholePresentation=false;
@@ -76,19 +72,16 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  bool BuildSweptObservationMask(const FTransform& ActorPose,const FDarkwellFogVisualSourceSnapshot& Previous,
   const FDarkwellFogVisualSourceSnapshot& Current,TConstArrayView<FDarkwellFogVisualSegment> Occluders,
   TBitArray<>& Out,bool bContactOnly);
- void AdvanceWholeUnoccluded(float Dt,const FTransform& ActorPose,FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,TConstArrayView<float> Coverage);
- /** Confirmed Whole path. Cone/range coverage is retained only as diagnostics;
-  * presentation is object blend multiplied by the physical-occlusion-only gate. */
- void AdvanceWholeWithOcclusion(float Dt,const FTransform& ActorPose,
-  FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,TConstArrayView<float> Coverage,
-  TFunctionRef<float(FVector2D)> PhysicalOcclusionGate);
+ /** Caller must prove confirmation and legal current (or swept capture) contact.
+  * Object-level presentation never feeds back into cone/wall authority. The source
+  * mesh and its ordinary depth-tested material retain camera occlusion. */
+ void AdvanceConfirmedWhole(float Dt,const FTransform& ActorPose,
+  FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,TConstArrayView<float> Coverage);
  /** Rasterizes registered primitive projections, preserving primitive gaps and AABB corners. */
  bool BuildFullGeometryMask(const FBox2D& Bounds,FIntPoint Size,TBitArray<>& Out) const;
  bool IsUniformWholePresentation() const { return !Parts.IsEmpty() && Parts[0].bUniformWholePresentation; }
  /** Object-local continuous footprint, independent of presentation alpha. */
  void BuildCurrentLegalObservationMask(TBitArray<>& Out) const;
- void ApplyWholeObjectPresentation(float Dt,FDarkwellSpatialPropMemory& Snapshot,
-  TFunctionRef<float(FVector2D)> OcclusionPermission);
  /** On-demand development diagnostic. It performs no readback and does not alter presentation. */
  bool GetDividerDiagnostics(int32 PartIndex,FDividerDiagnostics& Out) const;
  static const TCHAR* DividerSourceName(EDividerSource Source);

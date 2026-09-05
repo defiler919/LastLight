@@ -4704,7 +4704,9 @@ bool ADarkwellObjectMemoryScene::GetDividerMaskDiagnosticsForTesting(
 		const bool bRawSplit=Out.RawLiveCoverage.CountSetBits()>0 && Out.RawLiveCoverage.CountSetBits()<Count;
 		// PhysicalOcclusionGate remains a real, on-demand authority diagnostic.
 		// A split authority field is no longer a split in confirmed presentation.
-		if(Out.WholePresentationMask!=Out.FullGeometryMask) Out.Source=bRawSplit
+		// The five-point contribution probe can miss conservative footprint edge
+		// cells on thin handles. A uniform source texel has no spatial divider.
+		if(!Prop->CurrentLive.IsUniformWholePresentation() && Out.WholePresentationMask!=Out.FullGeometryMask) Out.Source=bRawSplit
 			?FDarkwellCurrentLiveGrid::EDividerSource::ViewEdge:FDarkwellCurrentLiveGrid::EDividerSource::WholeCurrentMask;
 	}
 	else if(Out.RawLiveCoverage.CountSetBits()>0 && Out.RawLiveCoverage.CountSetBits()<Count)

@@ -45,6 +45,23 @@ def position(x, y, yaw):
     player.set_actor_location(unreal.Vector(x, y, 92), False, True)
     face(yaw)
 
+def source_texture_sizes(sid, bindings):
+    names={p['mesh'] for p in bindings}
+    for actor in unreal.GameplayStatics.get_all_actors_of_class(world(),unreal.Actor):
+        memory=actor.get_component_by_class(unreal.DarkwellRememberablePropComponent)
+        if memory and memory.get_editor_property('stable_id')==sid:
+            sizes=[]
+            for mesh in actor.get_components_by_class(unreal.StaticMeshComponent):
+                if mesh.get_name() not in names:
+                    continue
+                material=mesh.get_material(0)
+                if isinstance(material,unreal.MaterialInstanceDynamic):
+                    texture=material.get_texture_parameter_value('SpatialStateTexture')
+                    if texture:
+                        sizes.append([texture.blueprint_get_size_x(),texture.blueprint_get_size_y()])
+            return sizes
+    return []
+
 def shot(label):
     if timing_mode:
         sid=unreal.Name('Lab.V2.OcclusionWhole')
@@ -76,6 +93,11 @@ def shot(label):
             live=json.loads(room.get_moving_live_telemetry(sid)))
         if hasattr(room, 'get_capture_refresh_audit_for_testing'):
             item['capture'] = json.loads(room.get_capture_refresh_audit_for_testing(sid))
+            item['source_visible']=any(p['visible'] for p in item['capture']['source_bindings'])
+        item['source_texture_sizes']=source_texture_sizes(sid,item['capture']['source_bindings'])
+        item['uniform']=(bool(item['source_texture_sizes'])
+            and len(item['source_texture_sizes'])==len(item['capture']['source_bindings'])
+            and all(s==[1,1] for s in item['source_texture_sizes']))
         data['objects'][name] = item
     rows.append(data)
     (root/'samples.json').write_text(json.dumps(rows), encoding='utf-8')
@@ -85,6 +107,28 @@ def frames(label, count=8):
     for index in range(count):
         yield 1
         shot(f'{label}_{index:02}')
+
+def camera_depth_probe():
+    # Independent observer/camera positions distinguish gameplay line-of-sight
+    # from ordinary camera depth. Render-only wall hiding is a positive control;
+    # registered occluder segments and the legal observer remain unchanged.
+    position(70,6750,155)
+    origin=unreal.Vector(-450,6300,90)
+    camera.set_world_location(origin,False,True)
+    camera.set_world_rotation(unreal.MathLibrary.find_look_at_rotation(origin,unreal.Vector(-450,7000,75)),False,True)
+    walls=[m for m in director.get_components_by_class(unreal.StaticMeshComponent)
+           if abs(m.get_world_location().x+780)<1 and abs(m.get_world_location().y-6600)<1]
+    assert len(walls)==1, 'Expected the existing left wall, not a new test occluder'
+    yield 30
+    shot('camera_depth_wall')
+    walls[0].set_visibility(False)
+    try:
+        yield 30
+        shot('camera_depth_wall_hidden_control')
+    finally:
+        walls[0].set_visibility(True)
+    yield 30
+    shot('camera_depth_wall_restored')
 
 def run():
     global player, room, director, camera, phase
@@ -163,6 +207,8 @@ def run():
     yield from frames('reference_exit')
     yield 20
     shot('reference_direct_full_history')
+    if not timing_mode:
+        yield from camera_depth_probe()
     phase = 'teardown'
     levels.editor_request_end_play()
     yield 60

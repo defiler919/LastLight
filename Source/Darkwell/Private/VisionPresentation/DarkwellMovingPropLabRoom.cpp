@@ -6532,6 +6532,42 @@ FString ADarkwellMovingPropLabRoom::GetDividerMaskTelemetryForTesting(const FNam
 
 uint64 ADarkwellMovingPropLabRoom::GetRevealSpanEvaluationsForTesting(FName Id) const
 { const auto* P=Tracked.Find(Id); return P?P->RevealObservation.GetSpanEvaluations():0; }
+FString ADarkwellMovingPropLabRoom::GetMemorySeamAuditForTesting(FName Id) const
+{
+	const FTrackedProp* Prop = Tracked.Find(Id);
+	if (!Prop) return TEXT("{}");
+	TArray<FString> Records;
+	for (const auto& Record : Prop->History.GetRecords())
+	{
+		if (Record.bCurrentObservedLocation || !Record.FineHistory.IsInitialized()) continue;
+		const auto* Visual = Prop->Visuals.Find(Record.Epoch);
+		const auto Size = Record.FineHistory.GetSize();
+		const auto Bounds = Record.FineHistory.GetBounds();
+		const int32 Y = Size.Y / 2;
+		TArray<FString> Row, Caps;
+		for (int32 X = 0; X < Size.X; ++X)
+		{
+			const int32 I = Y * Size.X + X;
+			const auto& S = Record.FineHistory.GetSamples()[I];
+			const FLinearColor P = Visual && Visual->SubmittedPresentation.IsValidIndex(I)
+				? Visual->SubmittedPresentation[I] : FLinearColor::Transparent;
+			Row.Add(FString::Printf(TEXT("[%.4f,%d,%.4f,%.4f,%.4f]"),
+				Bounds.Min.X + (X + .5) * Bounds.GetSize().X / Size.X,
+				S.State == FDarkwellHistoryGridV2::Unresolved() ? 1 : S.State == FDarkwellHistoryGridV2::Superseded() ? 3 : S.State == FDarkwellHistoryGridV2::VerifiedEmpty() ? 2 : 0,
+				S.FrozenAAEnvelope, P.B, P.A));
+		}
+		if (Visual) for (const auto& Q : Visual->CapQuads)
+		{
+			if (FMath::Abs(Q.A.X - Q.B.X) < .001)
+				Caps.Add(FString::Printf(TEXT("[%.4f,%.4f,%.4f]"), Q.A.X, Q.A.Y, Q.B.Y));
+		}
+		Records.Add(FString::Printf(TEXT("{\"epoch\":%u,\"y\":%.4f,\"row\":[%s],\"vertical_caps\":[%s]}"),
+			Record.Epoch, Bounds.Min.Y + (Y + .5) * Bounds.GetSize().Y / Size.Y,
+			*FString::Join(Row, TEXT(",")), *FString::Join(Caps, TEXT(","))));
+	}
+	return FString::Printf(TEXT("{\"records\":[%s]}"), *FString::Join(Records, TEXT(",")));
+}
+
 bool ADarkwellMovingPropLabRoom::IsWholePresentationUniformForTesting(FName Id) const
 {
  const auto* P=Tracked.Find(Id);

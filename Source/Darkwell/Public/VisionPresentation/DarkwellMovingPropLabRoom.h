@@ -242,6 +242,9 @@ public:
 	bool GetDividerMaskDiagnosticsForTesting(FName StableId,FDividerMaskDiagnostics& Out) const;
 	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics")
 	FString GetDividerMaskTelemetryForTesting(FName StableId) const;
+	/** Read-only cross-episode surface/cap evidence for the architecture audit. */
+	UFUNCTION(BlueprintPure, Category="Lab|Diagnostics")
+	FString GetMemorySeamAuditForTesting(FName StableId) const;
 #if WITH_DEV_AUTOMATION_TESTS
  bool bForceFullHistoryEvidenceForTesting=false;
  TArray<TWeakObjectPtr<UObject>> GetOwnedPresentationObjectsForTesting() const;

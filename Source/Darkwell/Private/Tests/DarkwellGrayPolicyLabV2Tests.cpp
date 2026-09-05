@@ -3,22 +3,36 @@
 #include "Misc/AutomationTest.h"
 
 #include "Engine/Level.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerStart.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "UObject/Package.h"
+#include "UObject/StrongObjectPtr.h"
 #include "VisionPresentation/DarkwellGrayPolicyLab.h"
 #include "Widgets/SWidget.h"
 #include "Layout/Children.h"
 
 namespace Darkwell::GrayPolicyLabV2Tests
 {
-	UWorld* LoadMap(const TCHAR* Path)
+	struct FScopedMap
 	{
-		UPackage* Package = LoadPackage(nullptr, Path, LOAD_None);
-		return Package ? UWorld::FindWorldInPackage(Package) : nullptr;
-	}
+		TStrongObjectPtr<UWorld> World;
+		explicit FScopedMap(const TCHAR* Path)
+		{
+			UPackage* Package=LoadPackage(nullptr,Path,LOAD_None);
+			World.Reset(Package?UWorld::FindWorldInPackage(Package):nullptr);
+		}
+		~FScopedMap()
+		{
+			// Raw package loading can initialize world subsystems. A later test's
+			// GC must not become responsible for tearing down this map. Never clean
+			// a user/editor world which already has an engine context.
+			if(World.IsValid() && !GEngine->GetWorldContextFromWorld(World.Get()))
+				World->DestroyWorld(false);
+		}
+	};
 
 	template <typename T>
 	int32 CountExactActors(const UWorld* World)
@@ -47,14 +61,16 @@ GRAY_LAB_SIMPLE_TEST(FGrayPolicyLabMapLoads, "Darkwell.GrayPolicyLabV2.MapLoads"
 bool FGrayPolicyLabMapLoads::RunTest(const FString&)
 {
 	TestTrue(TEXT("Dedicated map package exists"), FPackageName::DoesPackageExist(Darkwell::GrayPolicyLab::MapPath));
-	TestNotNull(TEXT("Dedicated map loads"), Darkwell::GrayPolicyLabV2Tests::LoadMap(Darkwell::GrayPolicyLab::MapPath));
+	const Darkwell::GrayPolicyLabV2Tests::FScopedMap Map(Darkwell::GrayPolicyLab::MapPath);
+	TestNotNull(TEXT("Dedicated map loads"), Map.World.Get());
 	return true;
 }
 
 GRAY_LAB_SIMPLE_TEST(FGrayPolicyLabMapCheck, "Darkwell.GrayPolicyLabV2.MapCheck")
 bool FGrayPolicyLabMapCheck::RunTest(const FString&)
 {
-	const UWorld* World = Darkwell::GrayPolicyLabV2Tests::LoadMap(Darkwell::GrayPolicyLab::MapPath);
+	const Darkwell::GrayPolicyLabV2Tests::FScopedMap Map(Darkwell::GrayPolicyLab::MapPath);
+	const UWorld* World=Map.World.Get();
 	TestNotNull(TEXT("Map world"), World);
 	TestEqual(TEXT("Exactly one native Director"),
 		Darkwell::GrayPolicyLabV2Tests::CountExactActors<ADarkwellSightWeaveGrayPolicyLabDirector>(World), 1);
@@ -64,7 +80,8 @@ bool FGrayPolicyLabMapCheck::RunTest(const FString&)
 GRAY_LAB_SIMPLE_TEST(FGrayPolicyLabPlayerStarts, "Darkwell.GrayPolicyLabV2.PlayerStarts")
 bool FGrayPolicyLabPlayerStarts::RunTest(const FString&)
 {
-	const UWorld* World = Darkwell::GrayPolicyLabV2Tests::LoadMap(Darkwell::GrayPolicyLab::MapPath);
+	const Darkwell::GrayPolicyLabV2Tests::FScopedMap Map(Darkwell::GrayPolicyLab::MapPath);
+	const UWorld* World=Map.World.Get();
 	TestEqual(TEXT("Exactly one PlayerStart"), Darkwell::GrayPolicyLabV2Tests::CountExactActors<APlayerStart>(World), 1);
 	return true;
 }
@@ -196,7 +213,8 @@ bool FGrayPolicyLabLegacyLoads::RunTest(const FString&)
 {
 	constexpr TCHAR Legacy[] = TEXT("/Game/Maps/L_ProjectFogPropGameplayLab");
 	TestTrue(TEXT("Legacy map package remains"), FPackageName::DoesPackageExist(Legacy));
-	TestNotNull(TEXT("Legacy map still loads"), Darkwell::GrayPolicyLabV2Tests::LoadMap(Legacy));
+	const Darkwell::GrayPolicyLabV2Tests::FScopedMap Map(Legacy);
+	TestNotNull(TEXT("Legacy map still loads"), Map.World.Get());
 	return true;
 }
 

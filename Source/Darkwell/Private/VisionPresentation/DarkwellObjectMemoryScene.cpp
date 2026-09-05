@@ -3091,7 +3091,9 @@ AActor* ADarkwellObjectMemoryScene::SpawnMemoryProxy(
 		Mesh->SetVisibleInRayTracing(false);
 		Mesh->SetRenderCustomDepth(false);
 		Mesh->SetReceivesDecals(false);
-		Mesh->RegisterComponent();
+		// Bind the historical material before registration. Registering with the
+		// source mesh's default material needlessly creates a render state that
+		// must immediately be rebuilt for the historical material.
 	}
 	return Proxy;
 }
@@ -3122,6 +3124,7 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 		Material->SetScalarParameterValue(TEXT("OriginalUVScale"), Record.UVScale);
 		Material->SetScalarParameterValue(TEXT("SpatialReady"), 1.0f);
 		Mesh->SetMaterial(0, Material);
+		Mesh->RegisterComponent();
 		OwnedMaterials.Add(Material);
 		Visual->Materials.Add(Material);
 	}

@@ -170,11 +170,11 @@ def tick(_delta):
     except StopIteration:
         unreal.unregister_slate_post_tick_callback(handle)
         unreal.log('MEMORY_TRANSITION_STOPPED')
-        unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'QUIT_EDITOR')
+        unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'CLOSE_SLATE_MAINFRAME')
     except Exception:
         (root/'failed.txt').write_text(traceback.format_exc(), encoding='utf-8')
         unreal.log_error(traceback.format_exc())
         levels.editor_request_end_play()
         unreal.unregister_slate_post_tick_callback(handle)
-        unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'QUIT_EDITOR')
+        unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'CLOSE_SLATE_MAINFRAME')
 handle = unreal.register_slate_post_tick_callback(tick)

@@ -13,7 +13,7 @@ Installed engine is 5.8.2 CL 56702186 at the prescribed `D:\UE_5.8`;
 no engine upgrade. Baseline formal Editor build succeeded (up to date).
 Old company Saved artifacts are not new local evidence.
 
-## Actual call chain and ownership
+## Baseline call chain and ownership (before this audit)
 
 1. `UDarkwellSightWeaveWorldSubsystem::Tick` updates SightWeave sources,
    occluders and CPU authority, then publishes a matching source snapshot to
@@ -42,7 +42,7 @@ Old company Saved artifacts are not new local evidence.
    remembered samples are VerifiedEmpty. Superseded is terminal and never becomes
    empty. Therefore obsolete operation records can remain forever.
 
-## Confirmed structural findings (source evidence)
+## Baseline structural findings (source evidence)
 
 - Every StationaryOnly reacquisition after valid loss allocates another epoch,
   even when pose, mesh, appearance and knowledge are unchanged. Epoch is both an
@@ -344,3 +344,42 @@ LongRepeatDistributed retains 121 records through 1,800 frames with system p95 0
 - `Room02_GameViewport`: 51 exact game-viewport frames, protocol and PIE stop complete, severe 0, 45.343 s wall; process-exit fault recurred. Analytic oracle passes all six snapshots (896 interior samples each). Inspected full history, caps hidden, full reentry and first two exit frames: no internal seams or missing historical surface, and only the newly explored end fades in. Initial narrow partial geometry remains legitimately narrow.
 - Late-attach launcher support uses the documented `DebugActiveProcess` API. Startup-debugger runs exit cleanly; late attachment captured the fault. Next control is an empty engine map without PIE, to test whether gray gameplay is necessary for the shutdown failure. Do not infer an engine root cause merely from the current stack.
 - Remaining: isolate first-use handoff, empty-map shutdown control, strict long soak, independent plugin package, final regression and delivery. No new stable acceptance is declared.
+
+
+### Follow-up evidence after J
+
+- `Whole_PreloadedParent` still has two blank first-handoff frames. `Whole_NoOcclusionDiagnostic` disables GPU occlusion queries only for diagnosis and still reproduces them. Neither experiment changes shipped quality/settings. `Whole_HandoffGpu` samples the historical texture on the first three exit callbacks: all three primitive MIDs have Ready=1 and GPU RGBA=(0,0,1,1). A correct texture/readback does not establish a correct drawn frame.
+- Historical mesh components now bind the final material before registration, avoiding an immediate rebuild of an intermediate render state. `ArchitectureAudit_ProxyRegistrationBuild.log` succeeded in 19.99 s. `Whole_BindBeforeRegister` exits 0 but the first-handoff gap remains: this ordering improvement is **not** reported as its fix.
+- `EmptyEditor_LateAttach` uses `/Engine/Maps/Entry`, no PIE and no gray scene; normal startup and late attachment exit 0. This single negative control cannot rule out an intermittent editor issue.
+- Engine `EditorServer.cpp` explicitly routes Slate main-window closure via `CLOSE_SLATE_MAINFRAME`; `QUIT_EDITOR` goes straight to `UUnrealEdEngine::CloseEditor` / `RequestEngineExit`. New replay/performance drivers now request normal main-window closure after PIE is stopped. No engine code is changed. `Whole_CloseMainFrame` and the full three-cycle `Policies_MainFrameClose` exit 0; the latter has complete protocol, severe 0, 80.450 s wall. These results support using the proper UI teardown path, but do not prove the exact owner of the old deferred text-layout fault.
+- `Whole_PrecreatedHiddenProxy` and `Whole_PreparedMaterialDraw` are rejected diagnostic attempts: requested Python APIs were not exposed. Their exit 0 is not a successful visual protocol. No asset was modified or saved by these attempts.
+- Inspected the full-tour wall gap/confirmed occlusion pair: the confirmed Whole cabinet is complete through a legal gap, then is correctly gated by the real wall. Never disappears without a proxy; Partial keeps the legal outer cut. Hidden endpoint becomes Current only after legal reentry, and the previous location can then be erased by the observer's actual intervening view. All these statements concern inspected frames, not blanket acceptance of every transient.
+
+### Strict long soak
+
+`Audit_Final_StrictSoak` ran the unchanged `Darkwell.PropLab.GrayHomeBaseline.FifteenMinuteInteractiveSoak` in isolation: **54,000 active + 600 idle frames, 1/1 clean pass, exit 0, severe 0**, 233.151 s test / 256.093 s wall. This is fifteen simulated minutes at 60 Hz in native NullRHI, not fifteen real GPU minutes. Binary is J plus bind-before-register, before the later source-binding handoff experiment; the exact pre-launch patch is retained.
+
+Across the 15 minute blocks, system p50 0.545-0.588 / p95 3.217-4.185 / p99 16.994-18.553 / max 23.262 ms. Enclosing adapter + room + fixture step p50 3.552-3.619 / p95 6.158-6.948 / p99 19.665-21.421 / max 77.285 ms. GC pauses are included (516.908 ms total); zero steps >100 ms, longest >33 ms run is one. Idle step p50/p95/p99/max 0.220/0.231/0.239/0.258 ms; idle system p95 0.097 ms. Thresholds are unchanged.
+
+Every minute ends at 3 retained records (peak 4), 11-12 textures (peak 12), 33-36 source/history MIDs, no caps in this Whole fixture, and zero lost-live checks. Live UObjects drop 65,878 -> 62,893 after GC (62,841 after idle). Minute working set 2,619,023,360 -> 2,645,413,888 bytes (+26.4 MB); peak 2,662,211,584. This demonstrates bounded repeated knowledge/resources in this fixture, not fixed memory under unlimited new observations.
+
+`Whole_PreparedMaterialDraw2` completed its warm-material diagnostic and still shows the two-frame gap. It also reproduces 0xC0000005 **with main-window closure**, so that route is not an exit-crash fix. Earlier clean exits remain clean observations only.
+
+The source-binding-clear experiment also failed the pixel oracle: `Whole_RetainedSourceBinding` keeps first exit frames 00/01 blank, subsequent frames visible, exit 0. Its experimental removal of source material clearing was reverted. `Whole_NoAADiagnostic` repeats the blank frames with AA disabled solely for diagnosis (and exits 0xC0000005); the shipped setting remains TSR/AA=4. None of these failed hypotheses is presented as a root cause or fix.
+
+### Independent plugin build audit
+
+Initial `BuildPlugin -TargetPlatforms=Win64 -StrictIncludes` failed (UAT exit 6, 123 s) on eight translation units relying on PCH/unity's indirect includes: editor module UPackage, editor fixture ULevel, two M3P5 test files' GUsingNullRHI, and four proxy/transition/policy test files' UPackage conversion. Added only direct `UObject/Package.h`, `Engine/Level.h`, or `RHIGlobals.h` includes as appropriate. No plugin policy or public signature changes. Initial failed package output and log are retained; the next clean package uses a new Saved directory.
+
+The clean retry `ArchitectureAudit_StandalonePluginPackage2.log` **succeeded**, UAT exit 0 in 183 s: strict includes, no PCH/unity, Win64 Editor Development plus UnrealGame Development and Shipping. Output: `Saved/ArchitectureAudit/SightWeaveStandalone_20260905_2`. UAT's temporary HostProject is removed by UAT itself after packaging. Original assets are unchanged.
+
+Final formal project build `Saved/Logs/ArchitectureAudit_FinalEditorBuild.log` succeeded in 19.97 s, after the include fixes and after reverting the failed source-binding experiment. Production runtime matches the successful strict-soak code (bind-before-register); plugin edits are direct includes only. No Live Coding evidence is used.
+
+
+`SightWeaveMinimalHost` is a separate, contentless .uproject with no DARKWELL module, using only the packaged plugin through AdditionalPluginDirectories. Native policy/reveal/proxy/transition tests: **21/21 clean**, exit 0, 0.253 s tests. The host does not use DARKWELL materials or Lab fixtures; this verifies the plugin's advertised portable layer, not the complete project gray renderer. The ordinary project-backend host remains covered separately by `Darkwell.ObjectMemory.OrdinaryHost`.
+
+### Final native regression
+
+`Audit_Final_Regression`: **118/118 passed** (109 clean, 9 with warnings), exit 0, severe 0, 155.308 s tests / 176.677 s wall. Includes the former 111 core selection plus V2 lifecycle/label tests, A-to-B-to-C/multi-count, 50 resets and M6P1 adapter contracts. Runs are isolated from builds and graphical work. Both unchanged short gates pass again; 32 changed-view system p50/p95/p99/max 2.157/6.480/9.384/46.606 ms, enclosing 5.593/9.778/12.381/50.014 ms, one >33 ms step and none >100 ms, idle step p95 0.645 ms.
+
+`AnalyzeGrayWholeTransitions.py` checks the fixed-camera cabinet interior against adjacent floor pixels in original game-viewport PNGs, independently of runtime counters/texture calculations. It rejects the first two blank exit frames in `Policies_GameViewport` and `Whole_RetainedSourceBinding`; subsequent exit frames pass. Its thresholds/patches are specific to this authored fixed camera, not a general renderer classifier. The unresolved failure is retained as delivery evidence.

@@ -71,6 +71,7 @@ class DARKWELL_API UDarkwellGrayPolicyWorldLabelWidget final : public UUserWidge
 
 public:
 	void SetLabel(const FText& InLabel, int32 InFontSize = 28);
+	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -150,6 +151,9 @@ public:
 	bool TeleportToRoomForTesting(int32 Room, ADarkwellCharacter* Character);
 	UFUNCTION(BlueprintCallable, Category="Gray Policy Lab|Testing")
 	bool ResetCurrentRoomForTesting(ADarkwellCharacter* Character);
+	/** Reads the actual game viewport; the global Shot flag can be consumed by an editor viewport. */
+	UFUNCTION(BlueprintCallable, Category="Gray Policy Lab|Testing")
+	bool CaptureGameViewportForTesting(const FString& Filename);
 	ADarkwellMovingPropLabRoom* GetRuntimeRoomForTesting() const { return RuntimeRoom.Get(); }
 	static FVector GetRoomCenterForTesting(int32 Room);
 	static int32 GetExpectedControlCountForTesting() { return 27; }

@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$RunName,
-    [string]$EngineRoot = 'D:\UE_5.8'
+    [string]$EngineRoot = 'D:\UE_5.8',
+    [ValidateSet('Episodes','Contracts')][string]$Protocol = 'Episodes',
+    [ValidateSet('None','FromStart','BeforeExit')][string]$ExitDebugger = 'None'
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -9,23 +11,34 @@ if ($RunName -notmatch '^[A-Za-z0-9_-]+$') { throw 'Use a simple unique run name
 $output = Join-Path $repo "Saved/ArchitectureAudit/$RunName"
 if (Test-Path -LiteralPath $output) { throw "Evidence already exists: $output" }
 New-Item -ItemType Directory -Path $output | Out-Null
-$driver = Join-Path $repo 'Content/Python/audit_gray_memory_episodes.py'
+$driverName = if ($Protocol -eq 'Contracts') { 'audit_gray_memory_contracts.py' } else { 'audit_gray_memory_episodes.py' }
+$driver = Join-Path $repo "Content/Python/$driverName"
 Copy-Item -LiteralPath $driver -Destination "$output/driver.py"
 git -C $repo rev-parse HEAD | Set-Content "$output/source.txt"
 git -C $repo diff --binary | Set-Content "$output/source.patch"
 $prior = $env:DARKWELL_AUDIT_OUTPUT
+$priorSignal = $env:DARKWELL_DEBUG_ATTACH_SIGNAL
 $env:DARKWELL_AUDIT_OUTPUT = $output
+$env:DARKWELL_DEBUG_ATTACH_SIGNAL = if ($ExitDebugger -eq 'BeforeExit') { "$output/attach.signal" } else { $null }
 $start = Get-Date
 try {
-    $process = Start-Process "$EngineRoot/Engine/Binaries/Win64/UnrealEditor.exe" -ArgumentList @(
+    $executable = "$EngineRoot/Engine/Binaries/Win64/UnrealEditor.exe"
+    $arguments = @(
         "$repo/Darkwell.uproject", '/Game/Maps/L_SightWeaveGrayPolicyLab',
         '-d3d12', '-sm6', '-nosound', '-unattended', '-UseFixedTimeStep', '-FPS=60',
         "-ExecutePythonScript=$output/driver.py", "-abslog=$output/editor.log"
-    ) -WindowStyle Hidden -PassThru -Wait
-} finally { $env:DARKWELL_AUDIT_OUTPUT = $prior }
+    )
+    if ($ExitDebugger -ne 'None') {
+        $arguments = @($output, $executable) + $arguments
+        $executable = "$repo/Saved/ArchitectureAudit/WatchUnrealExit.exe"
+        if (-not (Test-Path -LiteralPath $executable)) { throw 'Compile Scripts/WatchUnrealExit.cpp first; see audit documentation.' }
+    }
+    $process = Start-Process $executable -ArgumentList $arguments -WindowStyle Hidden -PassThru -Wait
+} finally { $env:DARKWELL_AUDIT_OUTPUT = $prior; $env:DARKWELL_DEBUG_ATTACH_SIGNAL = $priorSignal }
 $content = Get-Content "$output/editor.log" -Raw
 $summary = [ordered]@{
     exit_code = $process.ExitCode
+    exit_debugger = $ExitDebugger
     wall_seconds = ((Get-Date)-$start).TotalSeconds
     protocol_complete = Test-Path -LiteralPath "$output/complete.json"
     teardown_complete = $content.Contains('GRAY_EPISODE_AUDIT_STOPPED')

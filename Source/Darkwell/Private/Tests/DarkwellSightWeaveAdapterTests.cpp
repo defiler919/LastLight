@@ -1413,7 +1413,8 @@ bool FDarkwellMovingPropRoomRuntimeTest::RunTest(const FString&)
  TMap<FName,int32> PrimitiveCounts;
  for(TActorIterator<ADarkwellPropLabFurniture> It(World);It;++It) if(It->bSpatialHistoryManaged)
  {
-  TestTrue(TEXT("Spatial history proxy authority never registers a second StableID"),It->Memory->GetStableId().IsNone());
+  TestTrue(TEXT("Spatial scene excludes the legacy snapshot presenter"),It->Memory->bUseSpatialMemory);
+  TestEqual(TEXT("Ordinary registration retains the actual stable identity"),It->Memory->GetStableId(),It->StableId);
   TestFalse(TEXT("Duplicate actual StableID fails closed"),PrimitiveCounts.Contains(It->StableId));
   PrimitiveCounts.Add(It->StableId,It->Memory->GetMemoryPrimitives().Num());
  }
@@ -1500,7 +1501,7 @@ bool FDarkwellMovingPropRoomRuntimeTest::RunTest(const FString&)
   TSet<FName> StableIds;
   int32 Managed=0;
   for(TActorIterator<ADarkwellPropLabFurniture> It(World);It;++It) if(It->bSpatialHistoryManaged)
-  { ++Managed; StableIds.Add(It->StableId); TestTrue(TEXT("Multi actual is excluded from ordinary single-snapshot registration"),It->Memory->GetStableId().IsNone()); }
+  { ++Managed; StableIds.Add(It->StableId); TestTrue(TEXT("Multi actual is excluded from legacy single-snapshot registration"),It->Memory->bUseSpatialMemory); TestEqual(TEXT("Multi source retains its explicit scene identity"),It->Memory->GetStableId(),It->StableId); }
   TestEqual(TEXT("No duplicate managed actors"),Managed,Count);
   TestEqual(TEXT("No duplicate StableID in 2/8/32 fixture"),StableIds.Num(),Count);
   for(int32 Index=0;Index<Count;++Index)

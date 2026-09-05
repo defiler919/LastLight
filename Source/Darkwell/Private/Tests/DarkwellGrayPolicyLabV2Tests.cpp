@@ -9,6 +9,8 @@
 #include "Misc/Paths.h"
 #include "UObject/Package.h"
 #include "VisionPresentation/DarkwellGrayPolicyLab.h"
+#include "Widgets/SWidget.h"
+#include "Layout/Children.h"
 
 namespace Darkwell::GrayPolicyLabV2Tests
 {
@@ -199,5 +201,34 @@ bool FGrayPolicyLabLegacyLoads::RunTest(const FString&)
 }
 
 #undef GRAY_LAB_SIMPLE_TEST
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellGrayLabelRelease,
+ "Darkwell.PropLab.GrayPolicyLabV2.LabelSlateLifetime", EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellGrayLabelRelease::RunTest(const FString&)
+{
+ UWorld* World=UWorld::CreateWorld(EWorldType::Game,false);
+ auto* Label=NewObject<UDarkwellGrayPolicyWorldLabelWidget>(World);
+ Label->Initialize();
+ Label->SetLabel(FText::FromString(TEXT("Lifetime check")));
+ TSharedPtr<SWidget> Root=Label->TakeWidget();
+ TWeakPtr<SWidget> Text;
+ TFunction<void(const TSharedRef<SWidget>&)> FindText=[&](const TSharedRef<SWidget>& Node)
+ {
+  if(Node->GetType()==TEXT("STextBlock")) Text=Node;
+  auto* Children=Node->GetChildren();
+  for(int32 Index=0;Children && Index<Children->Num();++Index) FindText(Children->GetChildAt(Index));
+ };
+ FindText(Root.ToSharedRef());
+ TestTrue(TEXT("Concrete label text was built"),Text.IsValid());
+ Root.Reset();
+ Label->ReleaseSlateResources(true);
+ TestFalse(TEXT("Released widget retains no concrete text layout"),Text.IsValid());
+ // Rebuilding must still be supported while the UObject itself stays alive.
+ Root=Label->TakeWidget();
+ TestTrue(TEXT("Released label can rebuild"),Root.IsValid());
+ Root.Reset(); Label->ReleaseSlateResources(true);
+ World->DestroyWorld(false);
+ return true;
+}
 
 #endif

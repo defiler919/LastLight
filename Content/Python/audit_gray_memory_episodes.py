@@ -19,7 +19,7 @@ root.mkdir(parents=True, exist_ok=True)
 started = time.monotonic()
 rows = []
 sid = unreal.Name('Lab.V2.Partial')
-player = room = None
+player = room = director = None
 
 def world():
     return editor.get_game_world()
@@ -33,10 +33,10 @@ def shot(label):
         runtime=json.loads(room.get_history_runtime_telemetry()),
         evidence=json.loads(room.get_memory_seam_audit_for_testing(sid))))
     (root/'samples.json').write_text(json.dumps(rows), encoding='utf-8')
-    unreal.SystemLibrary.execute_console_command(world(), f'Shot filename="{(root/(label+".png")).as_posix()}"')
+    assert director.capture_game_viewport_for_testing(str(root/(label+'.png')))
 
 def run():
-    global room, player
+    global room, player, director
     levels.editor_request_begin_play()
     yield 150
     director = unreal.GameplayStatics.get_all_actors_of_class(world(), unreal.DarkwellSightWeaveGrayPolicyLabDirector)[0]
@@ -50,6 +50,7 @@ def run():
     face(-90)
     boom = player.get_component_by_class(unreal.SpringArmComponent)
     camera = player.get_component_by_class(unreal.CameraComponent)
+    camera.set_absolute(True, True, True)
     boom.set_component_tick_enabled(False)
     origin = unreal.Vector(0, -6850, 650)
     camera.set_world_location(origin, False, True)
@@ -94,6 +95,9 @@ def run():
     assert world() is None
     unreal.SystemLibrary.collect_garbage()
     yield 30
+    if signal := os.environ.get('DARKWELL_DEBUG_ATTACH_SIGNAL'):
+        Path(signal).write_text('PIE stopped; attach before editor teardown', encoding='utf-8')
+        yield 120
 
 sequence = run()
 left = 0

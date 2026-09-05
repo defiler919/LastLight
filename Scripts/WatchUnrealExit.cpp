@@ -33,9 +33,32 @@ int wmain(int argc,wchar_t** argv)
     STARTUPINFOW Startup{}; Startup.cb=sizeof(Startup);
     Startup.dwFlags=STARTF_USESHOWWINDOW; Startup.wShowWindow=SW_HIDE;
     PROCESS_INFORMATION Process{};
+    wchar_t SignalBuffer[32768]{};
+    const DWORD SignalLength=GetEnvironmentVariableW(L"DARKWELL_DEBUG_ATTACH_SIGNAL",SignalBuffer,32768);
+    if(SignalLength>=32768) return 2;
+    const bool LateAttach=SignalLength>0;
     if(!CreateProcessW(argv[2],Command.data(),nullptr,nullptr,FALSE,
-        DEBUG_ONLY_THIS_PROCESS|CREATE_UNICODE_ENVIRONMENT,nullptr,nullptr,&Startup,&Process))
+        (LateAttach?0:DEBUG_ONLY_THIS_PROCESS)|CREATE_UNICODE_ENVIRONMENT,nullptr,nullptr,&Startup,&Process))
     { Log<<"create_error="<<GetLastError()<<std::endl; return 3; }
+    if(LateAttach)
+    {
+        Log<<"pid="<<Process.dwProcessId<<" normal_start_waiting_for_attach_signal"<<std::endl;
+        const ULONGLONG WaitBegin=GetTickCount64();
+        while(!std::filesystem::exists(SignalBuffer) && WaitForSingleObject(Process.hProcess,100)==WAIT_TIMEOUT)
+            if(GetTickCount64()-WaitBegin>1200000) { TerminateProcess(Process.hProcess,124); break; }
+        DWORD Code=0; GetExitCodeProcess(Process.hProcess,&Code);
+        if(Code!=STILL_ACTIVE)
+        {
+            Log<<"exited_before_attach code=0x"<<std::hex<<Code<<std::dec<<std::endl;
+            CloseHandle(Process.hThread); CloseHandle(Process.hProcess); return static_cast<int>(Code);
+        }
+        if(!DebugActiveProcess(Process.dwProcessId))
+        {
+            Log<<"attach_error="<<GetLastError()<<std::endl;
+            TerminateProcess(Process.hProcess,125);
+            CloseHandle(Process.hThread); CloseHandle(Process.hProcess); return 5;
+        }
+    }
     Log<<"pid="<<Process.dwProcessId<<" debugger_attached=1 timings_not_accepted=1"<<std::endl;
     bool InitialBreakpoint=true; bool Finished=false; DWORD ExitCode=0; int ExceptionIndex=0;
     const ULONGLONG Begin=GetTickCount64();
@@ -87,7 +110,7 @@ int wmain(int argc,wchar_t** argv)
                     for(int I=0;I<64 && Frame.AddrPC.Offset;++I)
                     {
                         const DWORD64 Address=Frame.AddrPC.Offset;
-                        char SymbolBuffer[sizeof(SYMBOL_INFO)+MAX_SYM_NAME]{};
+                        alignas(SYMBOL_INFO) char SymbolBuffer[sizeof(SYMBOL_INFO)+MAX_SYM_NAME]{};
                         auto* Symbol=reinterpret_cast<SYMBOL_INFO*>(SymbolBuffer);
                         Symbol->SizeOfStruct=sizeof(SYMBOL_INFO); Symbol->MaxNameLen=MAX_SYM_NAME;
                         DWORD64 Offset=0; const BOOL Found=SymFromAddr(Process.hProcess,Address,&Offset,Symbol);

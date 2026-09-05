@@ -5,6 +5,8 @@
 #include "Components/WidgetComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
+#include "UnrealClient.h"
+#include "ImageUtils.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -93,6 +95,12 @@ void UDarkwellGrayPolicyWorldLabelWidget::SetLabel(const FText& InLabel, const i
 		LabelText->SetText(Label);
 		LabelText->SetFont(ChineseFont(FontSize));
 	}
+}
+
+void UDarkwellGrayPolicyWorldLabelWidget::ReleaseSlateResources(bool bReleaseChildren)
+{
+	Super::ReleaseSlateResources(bReleaseChildren);
+	LabelText.Reset();
 }
 
 TSharedRef<SWidget> UDarkwellGrayPolicyWorldLabelWidget::RebuildWidget()
@@ -505,6 +513,28 @@ bool ADarkwellSightWeaveGrayPolicyLabDirector::ResetCurrentRoomForTesting(ADarkw
 	ResetRoom(CurrentRoom);
 	TeleportPlayer(*Character, CurrentRoom);
 	return true;
+}
+
+bool ADarkwellSightWeaveGrayPolicyLabDirector::CaptureGameViewportForTesting(const FString& Filename)
+{
+#if WITH_EDITOR
+	if (!GEngine || !GEngine->GameViewport || GEngine->GameViewport->GetWorld()!=GetWorld()
+		|| !GEngine->GameViewport->Viewport) return false;
+	const FString Path=FPaths::ConvertRelativePathToFull(Filename);
+	const FString Saved=FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir());
+	if(!FPaths::IsUnderDirectory(Path,Saved) || FPaths::GetExtension(Path)!=TEXT("png")) return false;
+	FViewport* Viewport=GEngine->GameViewport->Viewport;
+	TArray<FColor> Pixels;
+	if(!GetViewportScreenShot(Viewport,Pixels)) return false;
+	const auto Size=Viewport->GetSizeXY();
+	if(Size.X<=0 || Size.Y<=0 || Pixels.Num()!=Size.X*Size.Y) return false;
+	for(auto& Pixel:Pixels) Pixel.A=255;
+	TArray<uint8> PNG;
+	FImageUtils::CompressImageArray(Size.X,Size.Y,Pixels,PNG);
+	return FFileHelper::SaveArrayToFile(PNG,*Path);
+#else
+	return false;
+#endif
 }
 
 void ADarkwellSightWeaveGrayPolicyLabDirector::StartSweep(const float Degrees, const bool bRepeat)

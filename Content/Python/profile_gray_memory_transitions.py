@@ -57,11 +57,15 @@ def run():
     controller.set_actor_tick_enabled(False)
     for command in ['t.MaxFPS 0', 'r.VSync 0', 'r.ScreenPercentage 100', 'r.AntiAliasingMethod 4']:
         unreal.SystemLibrary.execute_console_command(w, command)
+    (root/'render_settings.json').write_text(json.dumps(dict(
+        viewport=list(controller.get_viewport_size()),
+        screen_percentage=unreal.SystemLibrary.get_console_variable_float_value('r.ScreenPercentage'),
+        anti_aliasing_method=unreal.SystemLibrary.get_console_variable_int_value('r.AntiAliasingMethod'))), encoding='utf-8')
     cases = [('Empty',0,240), ('OneWhole',1,300), ('EightWhole',2,300),
              ('ThirtyTwoWhole',3,360), ('PartialNewThenRepeat',0,360),
              ('Overlap64',4,360), ('SameIdentity64',5,360), ('Distributed184',6,360),
              ('FastSweep90',4,180), ('FastSweep160',4,180), ('StationaryStop',0,360),
-             ('LongRepeatDistributed',6,1800)]
+             ('LongRepeatDistributed',6,1800), ('ActualNewKnowledge',0,360)]
     raw = (root/'frames.jsonl').open('w', encoding='utf-8')
     for name, mode, count in cases:
         setup_start = time.perf_counter()
@@ -69,17 +73,28 @@ def run():
             assert director.set_stress_mode_for_testing(0)
             assert director.teleport_to_room_for_testing(2, player)
             assert director.reset_current_room_for_testing(player)
-        elif name == 'StationaryStop':
+        elif name in ('StationaryStop', 'ActualNewKnowledge'):
             assert director.set_stress_mode_for_testing(0)
             assert director.teleport_to_room_for_testing(3, player)
             assert director.reset_current_room_for_testing(player)
+            if name == 'ActualNewKnowledge':
+                # Only physical pose and authored moving state are driven. The
+                # real coverage/policy/runtime must acquire each of six poses.
+                mover = next(a for a in unreal.GameplayStatics.get_all_actors_of_class(w, unreal.Actor)
+                    if (m := a.get_component_by_class(unreal.DarkwellRememberablePropComponent))
+                    and str(m.get_editor_property('stable_id')) == 'Lab.V2.MoveWhole')
+                policy = mover.get_component_by_class(unreal.SightWeaveObjectPolicyComponent)
+                policy.set_sight_weave_moving(True)
+                mover.set_actor_location(unreal.Vector(5300, -4100, 0), False, True)
+                player.set_actor_location(unreal.Vector(5300, -4340, 92), False, True)
+                policy.set_sight_weave_moving(False)
         else:
             assert director.teleport_to_room_for_testing(6, player)
             assert director.set_stress_mode_for_testing(mode)
         setup_ms = (time.perf_counter()-setup_start)*1000
         room.reset_history_runtime_telemetry_for_testing()
         # Sweeps start immediately before the first recorded frame. No warm-up exclusion.
-        if name not in ('PartialNewThenRepeat', 'StationaryStop'):
+        if name not in ('PartialNewThenRepeat', 'StationaryStop', 'ActualNewKnowledge'):
             director.start_sweep_for_testing(90 if name=='FastSweep90' else 160, not name.startswith('FastSweep'))
         else:
             player.set_actor_rotation(unreal.Rotator(yaw=18 if name=='PartialNewThenRepeat' else 90), False)
@@ -100,6 +115,25 @@ def run():
                 player.set_actor_rotation(unreal.Rotator(yaw=angles[(index//20)%len(angles)]), False)
             if name == 'StationaryStop' and index==60:
                 assert room.start_gray_policy_motion(False)
+            if name == 'ActualNewKnowledge':
+                phase = index % 60
+                episode = index // 60
+                if phase == 24:
+                    player.set_actor_rotation(unreal.Rotator(yaw=0), False)
+                if episode < 5 and phase == 30:
+                    policy.set_sight_weave_moving(True)
+                if episode < 5 and 30 <= phase < 40:
+                    progress = episode + (phase-29)/10
+                    mover.set_actor_location(unreal.Vector(5300+250*progress, -4100+250*progress, 0), False, True)
+                if episode < 5 and phase == 40:
+                    policy.set_sight_weave_moving(False)
+                    player.set_actor_location(unreal.Vector(5300+250*(episode+1), -4340+250*(episode+1), 92), False, True)
+                if phase == 59 and episode < 5:
+                    player.set_actor_rotation(unreal.Rotator(yaw=90), False)
+        if name == 'ActualNewKnowledge':
+            # Old positions are behind/alongside the observer. No record injection
+            # and no reset occurs between legally observed poses.
+            assert samples[-1]['records'] >= samples[23]['records']+5, 'New unresolved captures were not retained'
         raw.flush()
         summarize(name, samples, setup_ms)
         director.start_sweep_for_testing(1, False)

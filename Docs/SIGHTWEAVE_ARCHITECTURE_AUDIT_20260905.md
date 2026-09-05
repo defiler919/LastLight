@@ -304,3 +304,43 @@ The corrected partial-exploration path includes an external cut while blends cha
 - Unchanged isolated strict gates: eight-moving system p50/p95/p99/max .460/4.486/6.472/6.794 ms, enclosing step 3.780/7.529/8.049/10.098 ms; idle step p95 .177 ms. 32 changed-view system 2.626/6.423/9.914/48.387 ms, enclosing step 5.602/9.813/12.377/51.816 ms; one >33 ms and none >100 ms; idle step p95 .630 ms. These are native NullRHI gates, not D3D12 whole-frame acceptance.
 - The third debugger-attached full protocol (`Transitions_DebugExit03`) also exited 0. All three attached runs failing to reproduce the intermittent normal-launch exit crash is not a root-cause finding. A late-attach diagnostic is being prepared to preserve normal startup before observing teardown.
 - Remaining: normal graphical batch measurements, actual newly acquired pose growth, expanded continuous policy/lifecycle images, the unchanged 54,000-frame strict soak, and final delivery checks. Audit checkpoints are not user-accepted stable releases.
+
+### Transition-inclusive measurements at H + I
+
+`Transitions_BatchOwnership`: 13/13 scenarios collected, 239.299 s wall, D3D12/SM6, zero severe log lines and PIE stopped, but process **0xC0000005** after log close. Measurement data is retained; teardown/protocol acceptance FAILED. Runtime binary corresponds to `190981f` (launched before that commit, with its exact source patch captured). No other engine/build workload ran concurrently.
+
+| Case | wall p50/p95/p99/max ms | system p50/p95/p99/max ms | setup ms | records first/last/max |
+| --- | --- | --- | --- | --- |
+| Empty | 35.90/37.88/39.70/40.69 | 0.16/0.22/0.27/0.33 | 0.15 | 0/0/0 |
+| OneWhole | 36.41/41.63/50.46/75.62 | 0.23/0.44/0.57/15.05 | 2.15 | 1/1/1 |
+| EightWhole | 36.59/39.53/41.33/51.97 | 0.70/2.32/8.68/16.97 | 14.59 | 8/8/8 |
+| ThirtyTwoWhole | 37.18/43.86/53.57/110.68 | 2.62/8.52/12.44/76.37 | 59.83 | 31/29/31 |
+| PartialNewThenRepeat | 28.06/39.93/57.19/60.34 | 0.44/5.21/21.93/24.77 | 23.74 | 1/1/1 |
+| Overlap64 | 36.04/38.68/40.23/826.97 | 0.20/0.26/0.32/415.81 | 365.29 | 1/1/1 |
+| SameIdentity64 | 36.05/38.46/39.54/1369.05 | 0.17/0.22/0.27/897.19 | 431.87 | 1/1/1 |
+| Distributed184 | 36.22/39.21/42.24/3836.79 | 0.19/0.25/0.33/2560.09 | 1194.06 | 121/121/121 |
+| FastSweep90 | 25.83/27.99/30.50/893.63 | 0.11/0.15/3.99/423.40 | 422.04 | 1/1/1 |
+| FastSweep160 | 25.86/27.76/28.90/874.35 | 0.11/0.15/4.01/419.22 | 409.42 | 1/1/1 |
+| StationaryStop | 27.46/29.73/35.53/59.47 | 0.10/0.49/0.70/4.52 | 9.76 | 2/1/2 |
+| LongRepeatDistributed | 35.78/38.12/39.76/3684.08 | 0.19/0.24/0.29/2531.83 | 1068.03 | 121/121/121 |
+| ActualNewKnowledge | 27.29/38.41/55.15/58.44 | 0.18/2.96/22.06/22.64 | 29.86 | 2/7/7 |
+
+H terminal compaction and I batch query reuse are both present relative to G. Their combined result must not be attributed to I alone. Overlap64 and SameIdentity64 now retain one effective record after lawful replacement; Distributed184 retains 121 spatially unresolved states. Raw setup and first-update spikes are included. These synthetic stress fixtures do not represent 184 independent natural observations.
+
+ActualNewKnowledge drives six physical stationary poses with real hidden motion and player relocation; it never injects records or coverage. Scene records grow 2 -> 7 (one unrelated retained fixture state plus six legally observed poses). Old positions remain outside the observer cone. The 22.64 ms system maximum is a new-capture transition, separate from 2.56 s synthetic batch creation.
+
+LongRepeatDistributed retains 121 records through 1,800 frames with system p95 0.241 ms after compaction; its all-frame maximum still includes 2.532 s initialization. PartialNewThenRepeat remains one capture with system p95 5.211 ms and max 24.771 ms. Existing strict native gates pass, while real whole-frame cadence still misses 16.6 ms, including Empty. No quality or threshold was lowered.
+
+`Room02_LateAttach01` starts normally and attaches only after PIE stop. It reproduced the exit fault and saved two minidumps. Both first- and second-chance AVs read address zero during `RtlFreeHeap` / `free_base`, with Slate `FTextLayout` and `STextBlock` destruction, a larger widget tree, Core cleanup, and Windows DLL/process shutdown on the stack. Engine private PDBs are unavailable: nonzero-displacement nearest exports are not exact private function identities. This localizes the failure to deferred UI destruction at process teardown; it does not yet identify the original owner or prove a gray-runtime cause.
+
+## Checkpoint J — verify concrete Slate lifetime and capture the game viewport
+
+- Added the missing `ReleaseSlateResources` override on the Lab world label. It releases its owned `STextBlock`; a native test checks the actual weak widget pointer expires and rebuilding still works. This is an independently verified lifetime correction, **not** a proven fix for the process-exit crash. Normal `Policies_LifetimeNormal` still exited 0xC0000005 afterward.
+- `Audit_Lifecycle_Probe` crashed because the new UMG fixture omitted a World/Initialize; the corrected `Audit_Lifecycle_Probe2` passes 7/7 (5 clean, 2 warnings), exit 0, severe 0, 19.819 s tests / 40.058 s wall. Includes 50 resets, A-to-B-to-C/multi-count behavior and four M6P1 tests. Two old NAME_None sentinel assertions migrated to the ordinary scene's explicit stable identity and `bUseSpatialMemory`; behavioral checks remain.
+- Formal builds: `ArchitectureAudit_LifetimeBuild.log` 34.57 s, `LifetimeBuild2` 6.86 s, `ViewportCaptureBuild` 26.46 s, all succeeded. No assets or engine files changed.
+- Visual protocol corrections are material: camera now uses absolute transform, hidden-motion endpoint is approached within legal range, and the wall fixture first proves Whole confirmation. Earlier invalid camera/range phases are not behavioral evidence. `Policies_FixedCamera` completed three PIE lifecycles and exited 0, but global `Shot` sometimes captured an editor grid viewport or a later action. Old isolated stable history images and numeric surface oracle remain useful; old transition sequences cannot be treated as continuous visual acceptance.
+- A Lab diagnostic now reads `GEngine->GameViewport` explicitly, checks world identity and writes only PNG under Saved. Both replay drivers use it synchronously. TextureSubmission02/03 separately read the actual Whole GPU texture as (1,1,0,0) on all three visible parts; source images are normal. The earlier suspected universal Whole GPU upload failure was an incorrect inference from unreliable captures, and was not used to justify a renderer patch.
+- `Policies_GameViewport`: three PIE cycles, full contract tour collected, normal exit 0, severe 0, 83.541 s wall. Inspected Whole edge stays uniform. **First cycle's history handoff is blank for two frames; subsequent two cycles are visible from the first captured exit frame.** Counts already report one proxy on the blank frames. First-use rendering readiness remains under investigation, not visually passed.
+- `Room02_GameViewport`: 51 exact game-viewport frames, protocol and PIE stop complete, severe 0, 45.343 s wall; process-exit fault recurred. Analytic oracle passes all six snapshots (896 interior samples each). Inspected full history, caps hidden, full reentry and first two exit frames: no internal seams or missing historical surface, and only the newly explored end fades in. Initial narrow partial geometry remains legitimately narrow.
+- Late-attach launcher support uses the documented `DebugActiveProcess` API. Startup-debugger runs exit cleanly; late attachment captured the fault. Next control is an empty engine map without PIE, to test whether gray gameplay is necessary for the shutdown failure. Do not infer an engine root cause merely from the current stack.
+- Remaining: isolate first-use handoff, empty-map shutdown control, strict long soak, independent plugin package, final regression and delivery. No new stable acceptance is declared.

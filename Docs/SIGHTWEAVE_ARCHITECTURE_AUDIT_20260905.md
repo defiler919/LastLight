@@ -1,6 +1,6 @@
 # Gray observation / memory architecture audit — 2026-09-05
 
-Status: architecture audit and main refactor implemented; native regression, strict soak and standalone plugin verification pass at the documented checkpoints. Prepared render resources now remove the reproduced first-use Whole gap; final verification of that refinement is in progress. Intermittent editor exit and graphical performance failures still prevent stable acceptance. See SIGHTWEAVE_ARCHITECTURE_AUDIT_HANDOFF_ZH.md for the Chinese handoff.
+Status: architecture audit and main refactor implemented; all 118 selected native cases have passing results, with one explicitly documented assertion migration and targeted rerun. Strict soak and standalone plugin verification pass. Final graphical replays pass the reproduced Room02 seam and first-use Whole handoff checks. Graphical performance failures and the unrooted intermittent editor exit fault still prevent stable acceptance; user acceptance is pending. See SIGHTWEAVE_ARCHITECTURE_AUDIT_HANDOFF_ZH.md for the Chinese handoff.
 
 ## Provenance and authority
 
@@ -427,3 +427,63 @@ The final placement refinement represents capture world pose on the proxy Actor 
 `Audit_PreparedCapture_Regression`: **117/118 pass** (109 clean, 8 warnings), one failed legacy allocation assertion, normal exit 0, severe 0, 171.878 s tests / 194.950 s wall. A-to-B-to-C's observed-translation check used GetTotalProxyCount()==0, conflating resource allocation with sealed/visible history. It now checks zero stale epochs and zero visible historical proxies; total allocation telemetry remains unchanged. The ordinary host separately verifies that the prepared material has SpatialReady=0 and submits no history. This migration does not change runtime behavior or discard the failed result. Formal `ArchitectureAudit_PreparedCaptureMigrationBuild.log` succeeds in 15.36 s; the targeted migrated test and strict long soak are running on that binary.
 
 Both unchanged short gates pass in the 118-test run. Eight-moving system p50/p95/p99/max 0.471/4.496/4.741/6.337 ms; complete step 3.790/7.520/7.813/9.884 ms; idle step p95 0.181 ms. Thirty-two changed-view system 2.348/6.473/9.440/48.498 ms; complete step 5.595/9.977/12.047/51.892 ms; one >33 ms, none >100 ms, idle step p95 0.638 ms. Allocated prepared proxies are included in resource totals; they are not disguised as zero-cost or erased history.
+
+`Audit_PreparedCapture_SoakMigration`: **3/3 passed** (2 clean, 1 warning), exit 0, severe 0, 263.339 s tests / 283.804 s wall. Includes ordinary host, migrated A-to-B-to-C/multi-count, and the unchanged strict 54,000-active/600-idle soak. Combined with the preceding 117 passing tests, all 118 selected regression cases have a passing result on the final runtime. This is explicitly a targeted follow-up to one failed count assertion, not a fresh all-green 118-test run.
+
+The soak itself takes 258.560 s. Across its 15 simulated minute blocks, system p50 0.667-0.739 / p95 4.952-5.348 / p99 16.367-17.892 / max 23.711 ms; complete step p50 3.658-3.719 / p95 8.143-8.539 / p99 19.122-20.823 / max 37.998 ms. Preparation therefore has a measured cost relative to the earlier soak (complete-step p95 6.158-6.948 ms), despite passing unchanged thresholds. This Lab fixture also requests contributor diagnostics, averaging 0.604-0.715 ms; graphical ordinary-path costs are measured separately. GC 486.370 ms total is included, no >100 ms step, longest >33 ms run one, zero lost-live checks. Idle complete step 0.223/0.230/0.241/0.259 ms; idle system p95 0.095 ms.
+
+All minute ends retain 3 records/proxies, 12 textures, 36 MIDs and no Whole caps; peaks are 4 records, 12 textures, 36 MIDs. Live UObjects 63,037 -> 62,984 (62,854 after idle); working set 2,658,713,600 -> 2,674,675,712 bytes (+16.0 MB). The resource trend is bounded for repeated knowledge; the distinct startup baselines do not establish a general memory saving over the earlier run. Raw minute rows and derived trends: `Saved/GrayObjectPolicy/Audit_PreparedCapture_SoakMigration/soak_trends.json`.
+
+Final-runtime graphical checks at `59502d8`: `Policies_PreparedCaptureFinal` completes 178 frames / three PIE cycles, exit 0, severe 0, 78.315 s wall; **24/24 Whole exit frames pass the independent pixel oracle**. Inspected the first exit frame, lawful outer Partial cut and final stationary endpoint history. `Room02_PreparedCaptureFinal` completes 51 frames, exit 0, severe 0, 47.257 s wall; **six snapshots x 896 interior samples pass**. Original complete history and caps-hidden images are continuous with no old internal seams. No settings or assets were changed. These clean exits are new observations, not proof that the intermittent shutdown failure has been rooted out.
+
+### Final graphical performance and acceptance limits
+
+`Transitions_PreparedCaptureFinal` at `59502d8`: **13/13 scenarios, protocol passes, exit 0**, severe 0, 253.143 s wall. Same transition-inclusive protocol, actual 2233x911 viewport, D3D12/SM6, SP100, TSR4, uncapped variable timestep; no other engine or build work ran concurrently. Resource preparation is included in the measurement. Full-frame and batch performance acceptance still FAILS; successful collection/exit is a separate result.
+
+| Case | wall p50/p95/p99/max ms | system p50/p95/p99/max ms | setup ms | records first/last/max |
+| --- | --- | --- | --- | --- |
+| Empty | 37.29/40.27/41.90/54.40 | 0.17/0.22/0.25/0.35 | 0.12 | 0/0/0 |
+| OneWhole | 37.08/40.74/48.88/78.76 | 0.23/0.62/3.64/12.19 | 2.31 | 1/1/1 |
+| EightWhole | 39.26/42.68/44.76/46.15 | 0.70/2.33/7.81/12.40 | 14.28 | 8/8/8 |
+| ThirtyTwoWhole | 39.79/46.08/48.96/119.66 | 2.59/7.92/10.20/67.56 | 58.82 | 31/31/31 |
+| PartialNewThenRepeat | 29.10/41.69/56.46/61.78 | 0.20/5.35/21.58/24.27 | 25.06 | 1/1/1 |
+| Overlap64 | 40.10/43.12/44.88/830.02 | 0.20/0.26/0.30/417.20 | 366.69 | 1/1/1 |
+| SameIdentity64 | 40.94/43.98/47.16/1372.36 | 0.17/0.24/0.28/898.42 | 433.87 | 1/1/1 |
+| Distributed184 | 40.23/43.45/45.28/3801.52 | 0.19/0.26/0.29/2555.38 | 1165.57 | 121/121/121 |
+| FastSweep90 | 27.39/31.41/34.32/888.78 | 0.11/0.15/4.00/416.08 | 425.50 | 1/1/1 |
+| FastSweep160 | 27.69/31.09/33.67/833.57 | 0.11/0.15/4.02/416.66 | 370.30 | 1/1/1 |
+| StationaryStop | 28.60/31.95/34.89/47.96 | 0.11/0.52/0.75/4.97 | 9.73 | 2/1/2 |
+| LongRepeatDistributed | 38.18/41.74/43.31/3802.37 | 0.19/0.26/0.29/2579.40 | 1143.97 | 121/121/121 |
+| ActualNewKnowledge | 28.03/40.49/56.49/57.61 | 0.18/2.92/21.36/22.04 | 31.19 | 2/7/7 |
+
+Prepared resource allocations are visible in the counters: Partial starts with one allocated proxy and two textures (both remain fixed), and grows fine knowledge 0 -> 3,809,280 bytes. It performs 67 texture uploads and 14 cap rebuilds. ActualNewKnowledge starts with 2 allocated proxies / 6 textures / 4 MIDs and ends at 7 / 11 / 19, fine bytes 3,809,280 -> 11,329,536; 9 texture creations, 18 MID creations, 27 uploads, zero cap rebuilds. Preparation is transparent; these counters describe residency, not currently visible historical geometry.
+
+LongRepeatDistributed holds 121 records/proxies/caps, 125 textures, 361 MIDs, 44,966,912 fine bytes and 69,515 live UObjects over all 1,800 frames. Process working set grows 4,945,629,184 -> 5,130,342,400 bytes (+184.7 MB); no texture/MID creation during the case, 182 initial-resolution uploads/cap rebuilds. Stable logical residency does not establish constant process memory.
+
+Compared with the pre-preparation final run, OneWhole system p95 increases 0.44 -> 0.62 ms; the other ordinary categories are close, while the new first-use visual failure is removed in the inspected protocol. Against checkpoint F's same corrected protocol, Partial p95 improves 31.61 -> 5.35 ms and distributed first-update system peak 18.32 s -> 2.56 s. None of this removes the 16.6 ms complete-frame failure (Empty p95 40.27 ms), 67.56 ms first-update peak for 32 Whole, or 0.42-2.58 s synthetic batch/initialization peaks.
+
+Remaining entry points: use the retained late-attach dumps to identify the original Slate owner with matching symbols; do not infer an exact private function from nearest exports. Treat synthetic batch initialization as a separate scheduling/ownership-work problem from the already low repeated-view idle path. Diagnose complete editor-frame baseline independently from gray-system CPU timing. No new retention rule, renderer-quality reduction, asset rewrite or engine patch has been introduced to pass a gate.
+
+### Delivered checkpoints and recovery
+
+| Commit | Delivered change |
+| --- | --- |
+| 78682cc | Baseline call-chain audit and Room02 reproduction |
+| a59dc99 | Same-state observation continuation and independent seam oracle |
+| 5d2a9dc | Captured content independent of current source |
+| 2335443 | Source-owned Current resources |
+| d504728 | Ordinary production scene separated from Lab fixture |
+| 118f3f4 | Capture reuse and reseal lifecycle |
+| 88e93c8 | Exact tiled coverage reuse and on-demand forensics |
+| e139249 | Terminal compaction and new knowledge beyond legacy capacity |
+| 190981f | Batch ownership geometry reuse |
+| f2c4e06 | Actual game-viewport capture and concrete label lifetime |
+| 3e2cb1d | Strict independent plugin compilation |
+| 8cf4b4c | Isolated regression/package/soak evidence and retained Whole failure |
+| 59502d8 | Transparent render preparation fixing the reproduced Whole handoff |
+
+Final code is `59502d8ba318fd418d24263ebcb127b78d091d6f`; following delivery commits contain documentation only. Continue only `codex/darkwell-prop-memory-gameplay-lab`. The final handoff response supplies the final documentation-inclusive SHA.
+
+Final formal build command: `Scripts/BuildEditor.ps1` (DarkwellEditor Win64 Development); final log `ArchitectureAudit_PreparedCaptureMigrationBuild.log`, success 15.36 s. Graphical commands: `Scripts/RunGrayMemoryAudit.ps1 -RunName Policies_PreparedCaptureFinal -Protocol Contracts`, the same with `Room02_PreparedCaptureFinal -Protocol Episodes`, and `Scripts/RunGrayMemoryTransitions.ps1 -RunName Transitions_PreparedCaptureFinal`; use a new RunName when reproducing. The two AnalyzeGray scripts read those original frames/diagnostics without changing assets. Strict soak plus migrated regression ran `Scripts/RunGrayObjectPolicyTests.ps1 -RunName Audit_PreparedCapture_SoakMigration -Tests 'Darkwell.ObjectMemory.OrdinaryHost+Darkwell.PropLab.MovingRules.Runtime.AtoBtoCAndMultiCounts+Darkwell.PropLab.GrayHomeBaseline.FifteenMinuteInteractiveSoak'`. The earlier full 118-test selector is preserved in its Saved summary; the script's broad default selector is not the audited short selection.
+
+Delivery safety check after all measurements: no binary asset diff from baseline, LFS fsck OK, no pending LFS push objects, empty unchanged stash list, remote stable refs remain 7534163b9c5718700b610e7677f47fbaa79cf977 and 404a5820739638f1097eaae0aa7fba19733298c3. No local same-name stable heads were created. Process scan finds no UnrealEditor, UnrealEditor-Cmd, CrashReportClient, UnrealTraceServer, ShaderCompileWorker or WatchUnrealExit left running. The PC remains on. Saved evidence stays local and ignored; no generated logs, traces, images, dumps or packages are committed.

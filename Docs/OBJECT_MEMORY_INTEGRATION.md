@@ -17,6 +17,8 @@ SightWeave remains the reusable source/occluder authority, per-object policy, an
 
 No map or binary asset migration is required. Continue the current development branch; these checkpoints are not a new user-accepted stable branch.
 
+Confirmed Whole sealing initializes fine history from the captured geometry through `InitializeWholeCapture`. It must not reuse the transient Current raster's wall/cone/fade AA envelope. Compatible stationary reobservation still reuses the same record and historical resources. The ordinary `Darkwell.ObjectMemory.WholeReobservation` test checks the continuous occluded → hidden → fully observed → hidden route against analytic cube interiors and an independent direct-full session at multiple rates; see `SIGHTWEAVE_REOBSERVATION_MEMORY_REFRESH_HANDOFF_ZH.md`.
+
 Production `BeginCurrentObservation` can retain newly acquired states beyond 64 records. The legacy `BeginObservedLocation` API keeps its 64-record admission budget for existing fixtures/callers. Unchanged uncontradicted states reuse their capture; truly new unresolved knowledge can still grow in memory and is spatially indexed. This is not disk paging or a claim of fixed memory regardless of new knowledge.
 
 A historical record can compact only after the runtime proves that its effective surface and all residual 3D caps are gone. Fully replaced knowledge does not become VerifiedEmpty; it simply no longer needs its old dense representation. Partially unresolved states remain. Epochs are monotonic, and resource reconstruction never starts from a compacted raw capture. Forensic contributor scans are available through diagnostic getters and the old rotation Lab report, not an unconditional ordinary-scene update.

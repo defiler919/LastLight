@@ -2,18 +2,21 @@
 param(
     [Parameter(Mandatory=$true)][string]$RunName,
     [string]$EngineRoot = 'D:\UE_5.8',
-    [ValidateSet('Episodes','Contracts','Reobservation')][string]$Protocol = 'Episodes',
+    [ValidateSet('Episodes','Contracts','Reobservation','ReobservationTiming')][string]$Protocol = 'Episodes',
+    [switch]$NormalTurns,
     [ValidateSet('None','FromStart','BeforeExit')][string]$ExitDebugger = 'None'
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if ($RunName -notmatch '^[A-Za-z0-9_-]+$') { throw 'Use a simple unique run name' }
+if ($NormalTurns -and $Protocol -ne 'Reobservation') { throw 'NormalTurns applies only to the fixed-time Reobservation visual protocol' }
 $output = Join-Path $repo "Saved/ArchitectureAudit/$RunName"
 if (Test-Path -LiteralPath $output) { throw "Evidence already exists: $output" }
 New-Item -ItemType Directory -Path $output | Out-Null
 $driverName = switch ($Protocol) {
     'Contracts' { 'audit_gray_memory_contracts.py' }
     'Reobservation' { 'audit_gray_memory_reobservation.py' }
+    'ReobservationTiming' { 'audit_gray_memory_reobservation.py' }
     default { 'audit_gray_memory_episodes.py' }
 }
 $driver = Join-Path $repo "Content/Python/$driverName"
@@ -22,6 +25,10 @@ git -C $repo rev-parse HEAD | Set-Content "$output/source.txt"
 git -C $repo diff --binary | Set-Content "$output/source.patch"
 $prior = $env:DARKWELL_AUDIT_OUTPUT
 $priorSignal = $env:DARKWELL_DEBUG_ATTACH_SIGNAL
+$priorTiming = $env:DARKWELL_REOBSERVATION_TIMING
+$priorTurns = $env:DARKWELL_REOBSERVATION_NORMAL_TURNS
+$env:DARKWELL_REOBSERVATION_NORMAL_TURNS = if ($NormalTurns) { '1' } else { $null }
+$env:DARKWELL_REOBSERVATION_TIMING = if ($Protocol -eq 'ReobservationTiming') { '1' } else { $null }
 $env:DARKWELL_AUDIT_OUTPUT = $output
 $env:DARKWELL_DEBUG_ATTACH_SIGNAL = if ($ExitDebugger -eq 'BeforeExit') { "$output/attach.signal" } else { $null }
 $start = Get-Date
@@ -32,13 +39,22 @@ try {
         '-d3d12', '-sm6', '-nosound', '-unattended', '-UseFixedTimeStep', '-FPS=60',
         "-ExecutePythonScript=$output/driver.py", "-abslog=$output/editor.log"
     )
+    if ($Protocol -eq 'ReobservationTiming') {
+        $arguments = @($arguments | Where-Object { $_ -notin @('-UseFixedTimeStep','-FPS=60') })
+        $arguments += @('-NoVSync','-ExecCmds=t.MaxFPS 0')
+    }
     if ($ExitDebugger -ne 'None') {
         $arguments = @($output, $executable) + $arguments
         $executable = "$repo/Saved/ArchitectureAudit/WatchUnrealExit.exe"
         if (-not (Test-Path -LiteralPath $executable)) { throw 'Compile Scripts/WatchUnrealExit.cpp first; see audit documentation.' }
     }
     $process = Start-Process $executable -ArgumentList $arguments -WindowStyle Hidden -PassThru -Wait
-} finally { $env:DARKWELL_AUDIT_OUTPUT = $prior; $env:DARKWELL_DEBUG_ATTACH_SIGNAL = $priorSignal }
+} finally {
+    $env:DARKWELL_AUDIT_OUTPUT = $prior
+    $env:DARKWELL_DEBUG_ATTACH_SIGNAL = $priorSignal
+    $env:DARKWELL_REOBSERVATION_TIMING = $priorTiming
+    $env:DARKWELL_REOBSERVATION_NORMAL_TURNS = $priorTurns
+}
 $content = Get-Content "$output/editor.log" -Raw
 $summary = [ordered]@{
     exit_code = $process.ExitCode

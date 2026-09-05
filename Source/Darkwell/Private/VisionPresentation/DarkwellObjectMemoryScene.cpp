@@ -2785,8 +2785,10 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 	{
 		return;
 	}
-	const FIntPoint Size = (Record.bCurrentObservedLocation && Prop.LocalEpoch == Record.Epoch
-        ? Prop.CurrentLive.AtlasCells : Record.SpatialMemory.GetSize())
+	// Prepare the eventual history resources while a capture is eligible. The
+	// material remains transparent until legal sealing; resource readiness does
+	// not grant knowledge. Current pixels still use only the per-source textures.
+	const FIntPoint Size = Record.SpatialMemory.GetSize()
 		* Darkwell::ObjectMemory::PresentationSamples;
 	if (!Record.bCurrentObservedLocation)
 	{
@@ -2808,7 +2810,8 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 	}
 	const bool bTextureSizeChanged = Visual.Texture.IsValid()
 		&& (Visual.Texture->GetSizeX() != Size.X || Visual.Texture->GetSizeY() != Size.Y);
-	if (!Record.bCurrentObservedLocation && (!Visual.Texture.IsValid() || bTextureSizeChanged))
+	if ((!Visual.Texture.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
+		|| (!Record.bCurrentObservedLocation && bTextureSizeChanged))
 	{
 		if(Visual.Texture.IsValid()) OwnedTextures.Remove(Visual.Texture.Get());
         UTexture2D* Texture = UTexture2D::CreateTransient(Size.X, Size.Y, PF_FloatRGBA);
@@ -2872,17 +2875,38 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 		Visual.Cap = Cap;
 		OwnedCaps.Add(Cap);
 	}
-	if (!Record.bCurrentObservedLocation && !Visual.Proxy.IsValid())
+	if ((!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)) && !Visual.Proxy.IsValid())
 	{
 		if (AActor* Proxy = SpawnMemoryProxy(Prop, Record))
 		{
 			Visual.Proxy = Proxy;
 			++Visual.ProxyCreationCount;
 			BindProxyMaterial(Prop, Record, Proxy);
+			Visual.bProxyPreparedForCapture = Record.bCurrentObservedLocation;
 		}
 	}
 	if (!Record.bCurrentObservedLocation && Visual.Proxy.IsValid())
 	{
+		if (Visual.bProxyPreparedForCapture)
+		{
+			// Always may continue observing motion after allocation. Commit the
+			// final legally captured pose/domain, never the source's hidden pose.
+			const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
+			const FVector2D Inv = FVector2D(1, 1) / Bounds.GetSize();
+			Visual.Proxy->SetActorTransform(Record.SnapshotTransform);
+			TInlineComponentArray<UStaticMeshComponent*> Meshes(Visual.Proxy.Get());
+			for (UStaticMeshComponent* Mesh : Meshes)
+			{
+				if (auto* Material = Cast<UMaterialInstanceDynamic>(Mesh->GetMaterial(0)))
+				{
+					Material->SetTextureParameterValue(TEXT("SpatialStateTexture"), Visual.Texture.Get());
+					Material->SetVectorParameterValue(TEXT("SpatialMinInv"),
+						FLinearColor(Bounds.Min.X, Bounds.Min.Y, Inv.X, Inv.Y));
+					Material->SetScalarParameterValue(TEXT("SpatialReady"), 1.0f);
+				}
+			}
+			Visual.bProxyPreparedForCapture = false;
+		}
 		Visual.Proxy->SetActorHiddenInGame(false);
 		const bool bVisible = !Visual.Proxy->IsHidden();
 		if (Visual.bHasProxyVisibilitySample && Visual.bLastProxyVisible != bVisible)
@@ -3068,6 +3092,7 @@ AActor* ADarkwellObjectMemoryScene::SpawnMemoryProxy(
 	USceneComponent* Root = NewObject<USceneComponent>(Proxy, TEXT("SpatialMemoryRoot"));
 	Proxy->SetRootComponent(Root);
 	Root->RegisterComponent();
+	Proxy->SetActorTransform(Record.SnapshotTransform);
 	int32 Index = 0;
 	for (const auto& Source : Record.Primitives)
 	{
@@ -3080,7 +3105,7 @@ AActor* ADarkwellObjectMemoryScene::SpawnMemoryProxy(
 			Proxy, *FString::Printf(TEXT("SpatialMemoryMesh_%d"), Index++));
 		Mesh->SetupAttachment(Root);
 		Mesh->SetStaticMesh(SourceMesh);
-		Mesh->SetWorldTransform(Source.RelativeTransform * Record.SnapshotTransform);
+		Mesh->SetRelativeTransform(Source.RelativeTransform);
 		Mesh->SetMobility(EComponentMobility::Movable);
 		Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Mesh->SetGenerateOverlapEvents(false);
@@ -3122,7 +3147,7 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 			FLinearColor(Bounds.Min.X, Bounds.Min.Y, Inv.X, Inv.Y));
 		Material->SetVectorParameterValue(TEXT("OriginalBaseColorTint"), Record.Tint);
 		Material->SetScalarParameterValue(TEXT("OriginalUVScale"), Record.UVScale);
-		Material->SetScalarParameterValue(TEXT("SpatialReady"), 1.0f);
+		Material->SetScalarParameterValue(TEXT("SpatialReady"), Record.bCurrentObservedLocation ? 0.0f : 1.0f);
 		Mesh->SetMaterial(0, Material);
 		Mesh->RegisterComponent();
 		OwnedMaterials.Add(Material);

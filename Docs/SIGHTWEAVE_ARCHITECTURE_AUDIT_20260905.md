@@ -1,6 +1,6 @@
 # Gray observation / memory architecture audit — 2026-09-05
 
-Status: investigation in progress; no new stable or user acceptance.
+Status: architecture audit and main refactor implemented; native regression, strict soak and standalone plugin verification pass at the documented checkpoints. Prepared render resources now remove the reproduced first-use Whole gap; final verification of that refinement is in progress. Intermittent editor exit and graphical performance failures still prevent stable acceptance. See SIGHTWEAVE_ARCHITECTURE_AUDIT_HANDOFF_ZH.md for the Chinese handoff.
 
 ## Provenance and authority
 
@@ -383,3 +383,47 @@ Final formal project build `Saved/Logs/ArchitectureAudit_FinalEditorBuild.log` s
 `Audit_Final_Regression`: **118/118 passed** (109 clean, 9 with warnings), exit 0, severe 0, 155.308 s tests / 176.677 s wall. Includes the former 111 core selection plus V2 lifecycle/label tests, A-to-B-to-C/multi-count, 50 resets and M6P1 adapter contracts. Runs are isolated from builds and graphical work. Both unchanged short gates pass again; 32 changed-view system p50/p95/p99/max 2.157/6.480/9.384/46.606 ms, enclosing 5.593/9.778/12.381/50.014 ms, one >33 ms step and none >100 ms, idle step p95 0.645 ms.
 
 `AnalyzeGrayWholeTransitions.py` checks the fixed-camera cabinet interior against adjacent floor pixels in original game-viewport PNGs, independently of runtime counters/texture calculations. It rejects the first two blank exit frames in `Policies_GameViewport` and `Whole_RetainedSourceBinding`; subsequent exit frames pass. Its thresholds/patches are specific to this authored fixed camera, not a general renderer classifier. The unresolved failure is retained as delivery evidence.
+
+### Transition-inclusive graphical measurement before prepared capture
+
+`Transitions_Final` ran the final built runtime at `8cf4b4c` in isolation: all 13 cases collected, 255.275 s wall, D3D12/SM6, actual game viewport 2233x911, screen percentage 100, TSR/AA=4, no fixed timestep or FPS cap. PIE stopped and logs contain no severe lines, but the process again exited **0xC0000005 after log close**. Protocol/teardown acceptance is FAILED; complete measurements are retained, not retried until a clean exit can be selected. No runtime code differs from the formal final regression binary.
+
+| Case | wall p50/p95/p99/max ms | system p50/p95/p99/max ms | setup ms | records first/last/max |
+| --- | --- | --- | --- | --- |
+| Empty | 38.65/41.82/43.08/43.47 | 0.17/0.21/0.25/0.37 | 0.13 | 0/0/0 |
+| OneWhole | 38.44/42.03/49.89/77.20 | 0.23/0.44/0.49/14.93 | 2.21 | 1/1/1 |
+| EightWhole | 39.32/43.36/46.54/48.21 | 0.83/2.41/8.76/13.67 | 14.35 | 8/8/8 |
+| ThirtyTwoWhole | 40.15/46.58/49.13/112.40 | 2.66/7.85/10.54/76.29 | 59.35 | 31/31/31 |
+| PartialNewThenRepeat | 31.39/43.04/62.06/64.01 | 0.18/5.47/21.11/24.94 | 23.77 | 1/1/1 |
+| Overlap64 | 39.28/42.56/43.87/833.61 | 0.22/0.27/0.33/420.42 | 368.05 | 1/1/1 |
+| SameIdentity64 | 39.17/42.24/43.35/1381.06 | 0.20/0.26/0.32/919.16 | 421.70 | 1/1/1 |
+| Distributed184 | 39.04/42.47/43.79/3830.54 | 0.19/0.26/0.32/2590.21 | 1161.74 | 121/121/121 |
+| FastSweep90 | 28.48/31.02/58.53/886.64 | 0.11/0.14/3.97/418.30 | 420.81 | 1/1/1 |
+| FastSweep160 | 28.22/31.38/35.51/834.93 | 0.12/0.15/3.99/418.43 | 370.90 | 1/1/1 |
+| StationaryStop | 30.21/33.57/36.30/43.05 | 0.10/0.50/0.83/4.57 | 9.05 | 2/1/2 |
+| LongRepeatDistributed | 38.27/41.75/43.14/3788.97 | 0.19/0.25/0.28/2580.69 | 1129.29 | 121/121/121 |
+| ActualNewKnowledge | 31.33/41.89/60.07/62.53 | 0.17/2.92/21.80/23.16 | 30.23 | 2/7/7 |
+
+Wall cadence measures the complete editor/PIE callback interval; game delta and CPU stage distributions are separately retained in `performance.json`, with every frame in `frames.jsonl` and a CPU/frame trace. Wall cadence is not an isolated GPU pass timer. First-update and setup costs remain in the complete-frame maximum. Even Empty misses the unchanged 16.6 ms target; the system table cannot stand in for full-frame acceptance. Absolute full-frame times vary between runs, while the structural gains and remaining batch spikes repeat.
+
+Partial remains one capture: fine bytes 0 -> 3,809,280, textures 1 -> 2, one final proxy/cap; total 2 texture creations, 67 uploads and 14 cap rebuilds. The 1,800-frame distributed case retains 121 records/proxies/caps, 125 textures, 361 MIDs, 44,966,912 fine bytes and 69,515 live UObjects throughout. Working set rises 4,913,860,608 -> 5,102,587,904 bytes (+188.7 MB), so constant knowledge/resources does not establish zero process-memory growth. Its 182 uploads/cap rebuilds include the initial batch resolution. ActualNewKnowledge retains six legally observed physical poses plus one unrelated state: records 2 -> 7, textures 5 -> 11, MIDs 1 -> 19, fine bytes 3,809,280 -> 11,329,536; 9 texture creations, 24 uploads and zero cap rebuilds during this Whole growth phase. These resource counts are scene telemetry, not total renderer residency.
+
+### Further first-handoff isolation
+
+`Whole_EarlyHistoryTexture` allocates the eventual historical texture at eligible Current observation, with its final dimensions, but leaves it zero and performs no historical upload until view loss. Formal experimental build succeeds in 14.37 s. This still fails exit images 00/01 (visible fraction 0), then passes 02-07; protocol collected 25 frames, 34.797 s wall, process 0xC0000005. Earlier texture initialization alone is therefore insufficient. The experiment is not a shipped fix; its source patch and original images are retained in Saved.
+
+### Checkpoint K — prepare render resources before first legal seal
+
+The next isolated experiment `Whole_PreparedProxy` also registers the eventual proxy with a zero historical texture during eligible Current observation. This **passes all eight first-exit images**, including 00/01 previously blank; original images were opened, complete 25-frame protocol, normal exit 0, 39.632 s wall. Experimental build succeeds in 14.38 s. This distinguishes preparation of mesh/material render resources from texture allocation alone. It supports resource preparation as a remedy for the observed handoff, without identifying a specific private renderer stall or proving every possible first-frame sequence.
+
+The proposed runtime refinement explicitly gates prepared materials with SpatialReady=0 until legal sealing. Preparation creates no FineHistory, submits no history pixels and never applies to Never/unconfirmed Whole. Source-owned Current textures remain the only Current surface input. A prepared historical texture is not resized for every live pose; sealing binds the final capture texture/domain and applies the last legally observed primitive transforms, which matters for Always motion. Already sealed compatible proxies retain their established reuse path. Reset, abandonment and terminal retirement own the prepared resources through the same visual lifetime.
+
+`ArchitectureAudit_PreparedCaptureBuild.log`: formal Editor build succeeds in 39.08 s. The ordinary-host test now directly checks transparent preparation, no premature capture/upload, Never resource exclusion, reuse at sealing, final observed Always pose/domain/texture, and weak proxy release after reset/world destruction. Semantic and graphical validation of this refinement follows; the initial successful experiment alone is not final acceptance.
+
+`Audit_PreparedCapture_Probe`: 2/2 clean, exit 0, severe 0, 0.734 s tests / 22.823 s wall (ordinary host and captured-content/source-destruction contracts). `Policies_PreparedCapture`: all 178 original game-viewport frames across three PIE lifecycles, **24/24 Whole exit images pass**, normal exit 0, severe 0, 84.803 s wall. Inspected first history frame, confirmed edge, hidden-motion stop and wall-gated output. The successful full replay uses the explicit SpatialReady gate; this is stronger evidence than a zero-texture-only diagnostic.
+
+The final placement refinement represents capture world pose on the proxy Actor and each primitive's captured relative pose on its component. This removes dependence on component enumeration order when applying the final Always pose. `ArchitectureAudit_PreparedCaptureFinalBuild.log` succeeds in 14.33 s. The prior full replay predates this final placement change; regression and final graphical checks use the new binary.
+
+`Audit_PreparedCapture_Regression`: **117/118 pass** (109 clean, 8 warnings), one failed legacy allocation assertion, normal exit 0, severe 0, 171.878 s tests / 194.950 s wall. A-to-B-to-C's observed-translation check used GetTotalProxyCount()==0, conflating resource allocation with sealed/visible history. It now checks zero stale epochs and zero visible historical proxies; total allocation telemetry remains unchanged. The ordinary host separately verifies that the prepared material has SpatialReady=0 and submits no history. This migration does not change runtime behavior or discard the failed result. Formal `ArchitectureAudit_PreparedCaptureMigrationBuild.log` succeeds in 15.36 s; the targeted migrated test and strict long soak are running on that binary.
+
+Both unchanged short gates pass in the 118-test run. Eight-moving system p50/p95/p99/max 0.471/4.496/4.741/6.337 ms; complete step 3.790/7.520/7.813/9.884 ms; idle step p95 0.181 ms. Thirty-two changed-view system 2.348/6.473/9.440/48.498 ms; complete step 5.595/9.977/12.047/51.892 ms; one >33 ms, none >100 ms, idle step p95 0.638 ms. Allocated prepared proxies are included in resource totals; they are not disguised as zero-cost or erased history.

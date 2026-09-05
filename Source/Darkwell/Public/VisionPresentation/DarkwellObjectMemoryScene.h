@@ -239,6 +239,7 @@ protected:
 	friend class FDarkwellMemoryEpisodeContract;
 	friend class FDarkwellObservedContentContract;
 	friend class FDarkwellTerminalSceneCompaction;
+	friend class FDarkwellObjectMemoryOrdinaryHost;
 	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);
 
 	struct FCapQuadSnapshot
@@ -301,6 +302,7 @@ protected:
 		bool bPresentationDirty = true;
 		bool bCapTopologyDirty = true;
 		bool bPresentationRetired = false;
+		bool bProxyPreparedForCapture = false;
 		bool bHasProxyVisibilitySample = false;
 		bool bLastProxyVisible = false;
 	};

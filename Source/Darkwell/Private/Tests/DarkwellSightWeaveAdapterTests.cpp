@@ -1453,7 +1453,8 @@ bool FDarkwellMovingPropRoomRuntimeTest::RunTest(const FString&)
  Player->SetActorRotation(FRotator(0,90,0)); Step();
  TestTrue(TEXT("Start deterministic in-view translation"),Room->AdvanceScenario(Player)); Step(130);
  TestEqual(TEXT("Observed translation rebases one epoch and leaves no proxy chain"),Room->GetSpatialRecordCount(TEXT("Lab.Moving.Cabinet")),1);
- TestEqual(TEXT("Observed translation leaves no historical proxy"),Room->GetTotalProxyCount(),0);
+ TestEqual(TEXT("Observed translation leaves no sealed history"),Room->GetStaleEpochCountForTesting(TEXT("Lab.Moving.Cabinet")),0);
+ TestEqual(TEXT("Observed translation leaves no visible historical proxy"),Room->GetVisibleHistoricalProxyCountForTesting(TEXT("Lab.Moving.Cabinet")),0);
 
  TestTrue(TEXT("Select visible rotation"),Room->SelectScenario(2,Player)); Step();
  TestTrue(TEXT("Start observed 90 degree rotation"),Room->AdvanceScenario(Player)); Step(100);

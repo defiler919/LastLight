@@ -3,7 +3,9 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/Texture2D.h"
 #include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/GarbageCollection.h"
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
@@ -54,8 +56,58 @@ bool FDarkwellObjectMemoryOrdinaryHost::RunTest(const FString&)
 	Step(20);
 	for(auto Id:Ids) TestTrue(TEXT("Ordinary source becomes live"),Scene->IsCurrentSourceVisibleForTesting(Id));
 	for(int32 I=0;I<3;++I) TestTrue(TEXT("Whole span confirmation works outside Lab"),Scene->IsRevealConfirmedForTesting(Ids[I]));
+	TArray<TWeakObjectPtr<AActor>> PreparedProxies;
+	for(int32 I=0;I<6;++I)
+	{
+		auto& Prop=Scene->Tracked.FindChecked(Ids[I]);
+		const auto& Record=Prop.History.GetRecords()[Prop.History.GetCurrentIndex()];
+		const auto& Visual=Prop.Visuals.FindChecked(Record.Epoch);
+		TestFalse(TEXT("Preparation cannot seal knowledge"),Record.FineHistory.IsInitialized());
+		if(I%3==2)
+		{
+			TestFalse(TEXT("Never allocates no history proxy"),Visual.Proxy.IsValid());
+			TestFalse(TEXT("Never allocates no history texture"),Visual.Texture.IsValid());
+			continue;
+		}
+		TestTrue(TEXT("Eligible capture prepares its render resources"),Visual.Proxy.IsValid() && Visual.Texture.IsValid());
+		TestEqual(TEXT("Preparation submits no historical pixels"),Visual.TextureUploadCount,0);
+		PreparedProxies.Add(Visual.Proxy);
+		for(const auto& Material:Visual.Materials)
+		{
+			float Ready=-1;
+			TestTrue(TEXT("Prepared material explicitly draws zero opacity"),Material.IsValid()
+				&& Material->GetScalarParameterValue(TEXT("SpatialReady"),Ready) && Ready==0);
+		}
+	}
+	// An Always source may move after preparation. Its eventual proxy must use
+	// the final observed capture pose/domain without reallocating every live step.
+	Policies[0]->SetSightWeaveMoving(true);
+	Actors[0]->AddActorWorldOffset(FVector(0,40,0));
+	Actors[0]->SetActorRotation(FRotator(0,17,0)); Step(5);
+	const FTransform LastObservedPose=Actors[0]->GetActorTransform();
 	Source.bConeLegallyLive=false; ++Source.AuthorityRevision; Fog->UpdateSource(Source); Step(20);
 	for(int32 I=0;I<6;++I) TestEqual(TEXT("Object-local knowledge retention outside Lab"),Scene->GetSpatialRecordCount(Ids[I]),I%3==2?0:1);
+	{
+		const auto& Prop=Scene->Tracked.FindChecked(Ids[0]);
+		const auto& Record=Prop.History.GetRecords()[0];
+		const auto& Visual=Prop.Visuals.FindChecked(Record.Epoch);
+		TestTrue(TEXT("First seal reuses prepared proxy"),PreparedProxies[0]==Visual.Proxy);
+		TestTrue(TEXT("Always seals its last observed pose"),Record.SnapshotTransform.Equals(LastObservedPose));
+		TInlineComponentArray<UStaticMeshComponent*> Parts(Visual.Proxy.Get());
+		TestEqual(TEXT("Prepared capture retains all primitives"),Parts.Num(),Record.Primitives.Num());
+		for(int32 I=0;I<Parts.Num();++I)
+		{
+			TestTrue(TEXT("Prepared mesh moves to final observed pose"),Parts[I]->GetComponentTransform()
+				.Equals(Record.Primitives[I].RelativeTransform*LastObservedPose));
+			auto* Material=Cast<UMaterialInstanceDynamic>(Parts[I]->GetMaterial(0));
+			float Ready=0; UTexture* BoundTexture=nullptr; FLinearColor Domain;
+			const auto& Bounds=Record.SpatialMemory.GetBounds(); const auto Inv=FVector2D(1,1)/Bounds.GetSize();
+			TestTrue(TEXT("Sealed material becomes renderable"),Material && Material->GetScalarParameterValue(TEXT("SpatialReady"),Ready) && Ready==1);
+			TestTrue(TEXT("Sealed material binds final texture"),Material && Material->GetTextureParameterValue(TEXT("SpatialStateTexture"),BoundTexture) && BoundTexture==Visual.Texture.Get());
+			TestTrue(TEXT("Sealed domain matches final observed bounds"),Material && Material->GetVectorParameterValue(TEXT("SpatialMinInv"),Domain)
+				&& Domain.Equals(FLinearColor(Bounds.Min.X,Bounds.Min.Y,Inv.X,Inv.Y)));
+		}
+	}
 	TestTrue(TEXT("Always compatibility keeps gray in its stationary current raster"),Scene->GetMovingLiveTelemetry(Ids[3]).Contains(TEXT("\"live\":[0.000000,0.000000,0.000000]")));
 	const FTransform OldPose=Actors[4]->GetActorTransform();
 	Policies[4]->SetSightWeaveMoving(true); Actors[4]->AddActorWorldOffset(FVector(0,250,0)); Step(10);
@@ -91,6 +143,7 @@ bool FDarkwellObjectMemoryOrdinaryHost::RunTest(const FString&)
 	TestTrue(TEXT("Reset does not destroy ordinary source actors"),IsValid(Actors[4]));
 	Scene->Destroy(); World->DestroyWorld(true); GEngine->DestroyWorldContext(World);
 	CollectGarbage(RF_NoFlags);
+	for(const auto& Proxy:PreparedProxies) TestFalse(TEXT("Reset/world teardown releases prepared proxies"),Proxy.IsValid());
 	return true;
 }
 #endif

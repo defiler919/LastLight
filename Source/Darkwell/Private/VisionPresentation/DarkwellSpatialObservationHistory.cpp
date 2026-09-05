@@ -119,20 +119,25 @@ bool FDarkwellSpatialObservationHistory::FreezeCurrentForHiddenMovement()
 
 bool FDarkwellSpatialObservationHistory::ResumeUncontradictedObservation(uint32 Epoch)
 {
-	if (CurrentIndex != INDEX_NONE) return false;
+	if (CurrentIndex != INDEX_NONE || !CanResumeUncontradictedObservation(Epoch)) return false;
 	const int32 Index = Records.IndexOfByPredicate([Epoch](const auto& R) { return R.Epoch == Epoch; });
 	if (Index == INDEX_NONE) return false;
 	auto& Record = Records[Index];
-	// This narrow reuse path cannot reinterpret counterevidence or replacement.
-	// A later canonical rebuild must start from effective facts, never raw capture.
-	if (!Record.FineHistory.IsInitialized() || Record.FineHistory.GetSamples().ContainsByPredicate([](const auto& S)
-		{ return S.InitialRemembered > 0 && (S.bVerifiedEmpty || S.State == FDarkwellHistoryGridV2::Superseded()); })) return false;
 	Record.SpatialMemory.BeginPresent();
 	// Keep the last valid capture if its resumed source becomes ineligible.
 	Record.bCurrentObservedLocation = true;
 	CurrentIndex = Index;
 	bIndependentCurrentAdmission = true;
 	return true;
+}
+
+bool FDarkwellSpatialObservationHistory::CanResumeUncontradictedObservation(uint32 Epoch) const
+{
+	const auto* Record=FindRecord(Epoch);
+	// A reuse hint grants neither observation nor resurrection of counterevidence.
+	return Record && !Record->bCurrentObservedLocation && Record->FineHistory.IsInitialized()
+		&& !Record->FineHistory.GetSamples().ContainsByPredicate([](const auto& S)
+		{ return S.InitialRemembered > 0 && (S.bVerifiedEmpty || S.State == FDarkwellHistoryGridV2::Superseded()); });
 }
 
 bool FDarkwellSpatialObservationHistory::FreezeCurrentFromGeometryMask(const TBitArray<>& FullGeometryMask)

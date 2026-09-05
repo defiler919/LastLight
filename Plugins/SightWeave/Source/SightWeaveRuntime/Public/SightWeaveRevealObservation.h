@@ -12,6 +12,9 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveRevealObservation
 	bool Initialize(const FResolvedSightWeaveObjectPolicy& Policy, FIntPoint Size,
 		FVector2D CellSpanCm, const TBitArray<>& Footprint);
 	void Observe(bool bValidRevision, const TBitArray<>& CurrentLegalObservationMask);
+	/** Host calls after handing off the last eligible capture on proven contact loss.
+	 * Invalid/unavailable coverage is not proof. Geometry and configured span survive. */
+	void EndSession();
 	void Reset();
 	bool IsInitialized() const { return Footprint.Num()>0; }
 	bool IsConfirmed() const;

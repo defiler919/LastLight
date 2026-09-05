@@ -17,6 +17,7 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 {
 	// Ordinary host, no Lab subclass, identities, fixtures, map or special policy path.
 	for(const float Dt:{1.f/30,1.f/60,1.f/120,1.f/144,.20f})
+	for(const bool MultiPrimitive:{false,true})
 	{
 		UPackage* Package=CreatePackage(TEXT("/Temp/WholeReobservation"));
 		UWorld* World=NewObject<UWorld>(Package,MakeUniqueObjectName(Package,UWorld::StaticClass(),TEXT("ObserverHost")),RF_Transient);
@@ -36,6 +37,18 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 		auto* Memory=NewObject<UDarkwellRememberablePropComponent>(Actor);
 		Memory->bUseSpatialMemory=true; const FName Id(TEXT("StorageCabinet"));
 		Memory->ConfigureStableId(Id); Memory->AddMemoryPrimitive(Mesh);
+		if(MultiPrimitive)
+		{
+			for(const FTransform PartPose:{
+				FTransform(FRotator::ZeroRotator,FVector(-450,-39.5,72.5),FVector(1.76,.04,1.40)),
+				FTransform(FRotator::ZeroRotator,FVector(-396,-44,90),FVector(.03,.05,.30))})
+			{
+				auto* Part=NewObject<UStaticMeshComponent>(Actor); Actor->AddInstanceComponent(Part);
+				Part->SetupAttachment(Mesh); Part->SetStaticMesh(Mesh->GetStaticMesh());
+				Part->SetMobility(EComponentMobility::Movable); Part->RegisterComponent();
+				Part->SetWorldTransform(PartPose); Memory->AddMemoryPrimitive(Part);
+			}
+		}
 		Actor->AddInstanceComponent(Memory); Memory->RegisterComponent();
 		auto* Policy=NewObject<USightWeaveObjectPolicyComponent>(Actor);
 		Policy->bOverrideRevealMode=Policy->bOverrideHistoryMode=true;
@@ -131,10 +144,16 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 					TestTrue(TEXT("Actual visible proxy selects the submitted texture"),MID&&MID->GetTextureParameterValue(TEXT("SpatialStateTexture"),Bound)&&Bound==V->Texture.Get());
 					TestTrue(TEXT("Actual proxy is ready"),MID&&MID->GetScalarParameterValue(TEXT("SpatialReady"),Ready)&&Ready==1&&!V->Proxy->IsHidden()); }
 			}
-			AddInfo(FString::Printf(TEXT("REOBSERVATION dt=%.6f stage=%s interior=%d missing_capture=%d missing_AA=%d missing_pixels=%d %s"),Dt,Stage,Tested,MissingCapture,MissingAA,MissingSubmitted,*Scene->GetCaptureRefreshAuditForTesting(Id)));
+			AddInfo(FString::Printf(TEXT("REOBSERVATION dt=%.6f multi_primitive=%d stage=%s interior=%d missing_capture=%d missing_AA=%d missing_pixels=%d %s"),Dt,MultiPrimitive,Stage,Tested,MissingCapture,MissingAA,MissingSubmitted,*Scene->GetCaptureRefreshAuditForTesting(Id)));
 		};
 		CheckHistory(TEXT("H1"));
 		auto& Prop=Scene->Tracked.FindChecked(Id);
+		auto RememberedEmpty=[](const FDarkwellSpatialObservationRecord& Record)
+		{
+			int32 Count=0;
+			for(const auto& Sample:Record.FineHistory.GetSamples()) Count+=Sample.InitialRemembered>0 && Sample.bVerifiedEmpty;
+			return Count;
+		};
 		const uint32 Epoch=Prop.History.GetRecords()[0].Epoch;
 		const auto InitialProxy=Prop.Visuals.FindChecked(Epoch).Proxy; const auto InitialTexture=Prop.Visuals.FindChecked(Epoch).Texture;
 		TArray<FLinearColor> SequencePixels;
@@ -154,9 +173,92 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 			CheckHistory(TEXT("Repeated far exit"));
 		}
 		View(FVector2D(-450,-1000),90); Step(.4f);
-		TestTrue(TEXT("Loss of contact does not reset prior confirmation"),Scene->IsRevealConfirmedForTesting(Id));
+		TestFalse(TEXT("True contact loss ends this session's confirmation"),Scene->IsRevealConfirmedForTesting(Id));
 		TestFalse(TEXT("Confirmed object fully blocked by wall has no current source"),Scene->IsCurrentSourceVisibleForTesting(Id));
 		CheckHistory(TEXT("All contact blocked after confirmation"));
+		// Continuous qualified -> history -> repeated subthreshold sessions ->
+		// requalification. No Reset/reregistration and no changed span tuning.
+		Source.bConeLegallyLive=false; Source.BodyRadiusCentimeters=30;
+		const auto BeforeShort=Prop.History.FindRecord(Epoch)->LastLegalCaptureMask;
+		const auto BeforeShortPixels=Prop.Visuals.FindChecked(Epoch).SubmittedPresentation;
+		int32 WarmTextureCreations=0;
+		for(int32 Session=0;Session<4;++Session)
+		{
+			View(FVector2D(Session%2 ? -400 : -500,-50),0); Step(.25f);
+			TestTrue(TEXT("Small current contact is legal"),Prop.CurrentLegalObservationMask.CountSetBits()>0);
+			TestFalse(TEXT("Old full memory cannot bypass this session's span"),Scene->IsRevealConfirmedForTesting(Id));
+			TestFalse(TEXT("Subthreshold source uses local presentation"),Scene->IsWholePresentationUniformForTesting(Id));
+			TestEqual(TEXT("History and tentative current are separate"),Prop.History.GetRecords().Num(),2);
+			const auto* Remembered=Prop.History.FindRecord(Epoch);
+			if(TestNotNull(TEXT("Old full memory remains resident"),Remembered))
+			{
+				TestTrue(TEXT("Short contact cannot overwrite capture"),Remembered->LastLegalCaptureMask==BeforeShort);
+				TestEqual(TEXT("Short contact cannot permanently supersede old memory"),Remembered->FineHistory.Count(FDarkwellHistoryGridV2::Superseded()),0);
+				TestEqual(TEXT("Occupied old memory is not empty evidence"),RememberedEmpty(*Remembered),0);
+				const auto& V=Prop.Visuals.FindChecked(Epoch);
+				const auto Size=Remembered->FineHistory.GetSize(); const auto B=Remembered->FineHistory.GetBounds();
+				int32 Overlap=0,CurrentSamples=0,RemainingGray=0;
+				for(int32 I=0;I<V.SubmittedPresentation.Num();++I)
+				{
+					const auto Point=B.Min+B.GetSize()/FVector2D(Size)*FVector2D(I%Size.X+.5,I/Size.X+.5);
+					const bool Current=Prop.CurrentLive.HasObservedContributionAt(Point);
+					const bool Gray=V.SubmittedPresentation[I].B*V.SubmittedPresentation[I].A>0;
+					CurrentSamples+=Current; RemainingGray+=Gray; Overlap+=Current && Gray;
+				}
+				TestTrue(TEXT("Short observation submits real current and remaining gray"),CurrentSamples>100 && RemainingGray>100);
+				TestEqual(TEXT("Actual submitted history A excludes every current sample"),Overlap,0);
+			}
+			TestTrue(TEXT("Current and memory remain mutually exclusive"),Scene->GetMax3DRenderOwnershipContributorsForTesting(Id)<=1);
+			TestEqual(TEXT("No current/history surface overlap"),Scene->GetCurrent3DOverlapStaleSurfaceForTesting(Id),0);
+			View(FVector2D(70,-1000),-90); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));
+			CheckHistory(TEXT("Subthreshold exit first frame"));
+			TestTrue(TEXT("Subthreshold exit restores identical correct history pixels"),Prop.Visuals.FindChecked(Epoch).SubmittedPresentation==BeforeShortPixels);
+			TestTrue(TEXT("Short sessions retain history proxy and texture"),InitialProxy==Prop.Visuals.FindChecked(Epoch).Proxy && InitialTexture==Prop.Visuals.FindChecked(Epoch).Texture);
+			if(Session==0) WarmTextureCreations=Prop.CurrentPresentation.LiveTextureCreations;
+			else TestEqual(TEXT("Repeated tentative entries reuse local textures"),Prop.CurrentPresentation.LiveTextureCreations,WarmTextureCreations);
+		}
+		for(int32 Cycle=0;Cycle<3;++Cycle)
+		{
+			View(FVector2D(-510,-50),0); Step(.1f);
+			TestFalse(TEXT("New continuous session starts below threshold"),Scene->IsRevealConfirmedForTesting(Id));
+			for(int32 X=-490;X<=-390;X+=20) { View(FVector2D(X,-50),0); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92)); }
+			CheckCurrent(TEXT("Continuous accumulated span requalifies"));
+			TestEqual(TEXT("Qualified unchanged state resumes its original record"),Prop.History.GetRecords().Num(),1);
+			View(FVector2D(-510,-50),0); Step(.15f);
+			CheckCurrent(TEXT("Qualified session retains whole on a small legal contact"));
+			TestTrue(TEXT("Inject invalid publication"),Scene->InjectInvalidCoverageOnceForTesting(Id));
+			Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));
+			TestTrue(TEXT("Unavailable authority does not end a qualified session"),Scene->IsRevealConfirmedForTesting(Id));
+			Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92)); CheckCurrent(TEXT("Valid contact after invalid publication"));
+			View(FVector2D(70,-1000),-90); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));
+			TestFalse(TEXT("First true exit frame retires qualification"),Scene->IsRevealConfirmedForTesting(Id));
+			CheckHistory(TEXT("Requalified exit first frame"));
+			TestTrue(TEXT("All qualified cycles reuse the history resources"),InitialProxy==Prop.Visuals.FindChecked(Epoch).Proxy && InitialTexture==Prop.Visuals.FindChecked(Epoch).Texture);
+			TestEqual(TEXT("Whole/local mode switches reuse warmed textures"),Prop.CurrentPresentation.LiveTextureCreations,WarmTextureCreations);
+		}
+		const uint64 HiddenEvidence=Prop.History.FindRecord(Epoch)->FineHistory.EvidenceHash();
+		auto HiddenPose=OriginalPose; HiddenPose.AddToTranslation(FVector(400,0,0));
+		Actor->SetActorTransform(HiddenPose); Step(.2f);
+		TestTrue(TEXT("Hidden motion cannot relocate old capture"),Prop.History.FindRecord(Epoch)->SnapshotTransform.Equals(OriginalPose));
+		TestEqual(TEXT("Hidden motion cannot rewrite remembered facts"),Prop.History.FindRecord(Epoch)->FineHistory.EvidenceHash(),HiddenEvidence);
+		View(FVector2D(-50,-50),0); Step(.2f);
+		TestFalse(TEXT("Small contact at a hidden new pose needs a new span"),Scene->IsRevealConfirmedForTesting(Id));
+		View(FVector2D(70,-1000),-90); Step(.2f);
+		CheckHistory(TEXT("Short new-pose exit preserves original history"));
+		View(FVector2D(-500,-50),0); Step(.6f);
+		const int32 EmptyCount=RememberedEmpty(*Prop.History.FindRecord(Epoch));
+		TestTrue(TEXT("Legal empty old space still erases history without current qualification"),EmptyCount>0);
+		TestTrue(TEXT("Local empty evidence leaves the rest of history"),Prop.History.FindRecord(Epoch)->FineHistory.HasResidualSurface());
+		View(FVector2D(70,-1000),-90); Actor->SetActorTransform(OriginalPose); Step(.2f);
+		View(FVector2D(-500,-50),0); Step(.2f);
+		TestFalse(TEXT("Hidden return plus old memory cannot qualify a short observation"),Scene->IsRevealConfirmedForTesting(Id));
+		TestEqual(TEXT("A short return cannot resurrect verified-empty memory"),RememberedEmpty(*Prop.History.FindRecord(Epoch)),EmptyCount);
+		View(FVector2D(70,-1000),-90); Step(.2f);
+		Source.bConeLegallyLive=true; Source.BodyRadiusCentimeters=60;
+		View(FVector2D(70,-250),155); Step(.3f); CheckCurrent(TEXT("Fresh full observation after counterevidence"));
+		TestTrue(TEXT("Counterevidence prevents resuming the old capture"),Prop.History.GetRecords()[Prop.History.GetCurrentIndex()].Epoch>Epoch);
+		View(FVector2D(70,-250),-90); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));
+		CheckHistory(TEXT("New qualified capture after legitimate counterevidence"));
 		// Separate direct-full reference after finishing the continuous sequence.
 		Scene->ResetMemory(); TestTrue(TEXT("Register independent reference"),Scene->RegisterRememberable(Memory,Policy));
 		View(FVector2D(70,-250),155); Step(.5f); View(FVector2D(70,-250),-90); Step(.4f);
@@ -177,6 +279,14 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 			TestEqual(TEXT("Whole current does not override history eligibility"),Scene->GetStaleEpochCountForTesting(Id),Eligible?1:0);
 			if(Eligible) CheckHistory(TEXT("Eligible history mode"));
 			else TestEqual(TEXT("Ineligible history owns no proxy resources"),Scene->GetHistoricalPresentationResourceCountForTesting(Id),0);
+			Source.bConeLegallyLive=false; Source.BodyRadiusCentimeters=30;
+			View(FVector2D(-500,-50),0); Step(.2f);
+			TestFalse(TEXT("Every HistoryMode requires a fresh Whole session span"),Scene->IsRevealConfirmedForTesting(Id));
+			View(FVector2D(70,-1000),-90); Step(.2f);
+			TestEqual(TEXT("Short next session preserves only prior eligible history"),Scene->GetStaleEpochCountForTesting(Id),Eligible?1:0);
+			if(Eligible) CheckHistory(TEXT("History-mode short next exit"));
+			else TestEqual(TEXT("Short ineligible session still owns no history resources"),Scene->GetHistoricalPresentationResourceCountForTesting(Id),0);
+			Source.bConeLegallyLive=true; Source.BodyRadiusCentimeters=60;
 		}
 		Scene->ResetMemory(); Scene->Destroy(); World->DestroyWorld(true); GEngine->DestroyWorldContext(World);
 	}

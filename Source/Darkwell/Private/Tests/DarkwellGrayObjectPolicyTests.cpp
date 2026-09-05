@@ -314,7 +314,7 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
    F.Face(0); F.Step(1,Dt); TestFalse(TEXT("Starting endpoint never sees target"),F.Room->IsRevealConfirmedForTesting(Id));
    if(Fast) { F.Face(160); F.Step(1,Dt); }
    else for(int32 Angle=5;Angle<=160;Angle+=5) { F.Face(Angle); F.Step(1,Dt); }
-   TestTrue(TEXT("Skipped positive interval and slow observation both confirm"),F.Room->IsRevealConfirmedForTesting(Id));
+   TestFalse(TEXT("Both completed sweep sessions retire qualification at the outside endpoint"),F.Room->IsRevealConfirmedForTesting(Id));
    TestEqual(TEXT("Current endpoint remains outside legal field"),F.Room->GetLastLegalCoverageRatioForTesting(Id),0.f);
    TestFalse(TEXT("Swept observation cannot show illegal current endpoint"),F.Room->IsCurrentSourceVisibleForTesting(Id));
    TBitArray<> Capture,Frozen; TestTrue(TEXT("Stationary swept observation seals gray"),F.Room->GetNewestCaptureMasksForTesting(Id,Capture,Frozen));
@@ -335,8 +335,9 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
   F.Step(30); TestTrue(TEXT("Rigid motion retains confirmation"),F.Room->IsRevealConfirmedForTesting(Id));
   F.Face(-90); F.Step(270);
   TestEqual(TEXT("No moving history"),F.Room->GetHistoricalPresentationResourceCountForTesting(Id),0);
-  TestTrue(TEXT("Hidden rigid motion retains registration confirmation"),F.Room->IsRevealConfirmedForTesting(Id));
-  F.Face(146); F.Step(30); TestTrue(TEXT("Reacquisition needs no second span confirmation"),F.Room->IsRevealConfirmedForTesting(Id));
+  TestFalse(TEXT("Hidden rigid motion ends the previous observation qualification"),F.Room->IsRevealConfirmedForTesting(Id));
+  F.Face(146); F.Step(30); TestFalse(TEXT("Short reacquisition must satisfy this session's span"),F.Room->IsRevealConfirmedForTesting(Id));
+  F.Face(90); F.Step(30); TestTrue(TEXT("Same configured span requalifies the newly observed session"),F.Room->IsRevealConfirmedForTesting(Id));
   return true;
  }
  F.Face(-90); F.Step(30);

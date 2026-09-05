@@ -233,6 +233,7 @@ protected:
  TConstArrayView<const FDarkwellSpatialObservationRecord*> FrameNewerCandidates;
  TConstArrayView<FPrimitiveGeometrySnapshot> FrameOwnershipGeometry;
  bool bUseOwnershipGeometry=false;
+ bool bOnlyDurableOwnership=false;
 	friend class FDarkwellCapPartialClipTest;
 	friend class FDarkwellCapCoplanarContactTest;
 	friend class FDarkwellGrayHistoryCapacityCurrentTest;
@@ -258,6 +259,8 @@ protected:
 	struct FCurrentPresentation
 	{
 		TArray<TWeakObjectPtr<UTexture2D>> LiveTextures;
+		/** Inactive Whole/local binding; mode changes reuse allocations, not qualification. */
+		TArray<TWeakObjectPtr<UTexture2D>> SpareLiveTextures;
 		TArray<TArray<FLinearColor>> LivePixels;
 		TArray<uint64> LiveSignatures;
 		int32 LiveTextureCreations=0,LiveTextureUploads=0;
@@ -285,6 +288,8 @@ protected:
 		int32 ProxyVisibilityTransitions = 0;
 		FIntPoint HistoricalTextureSize = FIntPoint::ZeroValue;
 		TBitArray<> SuppressedByCurrentEvidence;
+		/** Reversible draw exclusion, never passed to FineHistory evidence. */
+		TBitArray<> TransientCurrentSuppression;
 		TArray<FVector2D> CapSamplePoints;
 		TArray<FLinearColor> SubmittedPresentation;
 		TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> Materials;
@@ -327,6 +332,8 @@ protected:
 	struct FHistoryGeometryReuse
 	{
 		FName StableId;
+		bool bWholeCapture=false;
+		TBitArray<> WholeCaptureFootprint;
 		FBox2D Bounds;
 		FIntPoint Size;
 		uint64 PreviousGeometryRevision = 0, PreviousOwnershipRevision = 0;
@@ -388,6 +395,8 @@ protected:
   bool bCachedWholeLegalContact=false;
   uint64 ObservationOwnershipRevision=1;
 		uint32 LocalEpoch=0;
+		/** Last sealed Whole candidate; pose/content/counterevidence must be revalidated. */
+		uint32 ReusableWholeEpoch=0;
 		uint64 LastCaptureAppearanceRevision=0;
 		TMap<uint32, FRecordVisual> Visuals;
 		FTransform InitialTransform = FTransform::Identity;
@@ -449,6 +458,9 @@ protected:
 	};
 
 	bool IsCaptureEligible(const FTrackedProp& Prop) const;
+	bool IsTentativeWhole(const FTrackedProp& Prop) const;
+	bool TryResumeQualifiedWhole(FTrackedProp& Prop);
+	bool UpdateTransientWholeExclusion(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
 	void DestroyVisual(FRecordVisual& Visual, bool bDiscardEvidence = true);
 	void ReleaseSourcePresentation(FTrackedProp& Prop);
 	bool FreezeCurrentForHiddenMotion(FTrackedProp& Prop, const TCHAR* Reason, bool bSealLastEligibleObservation = false);
@@ -501,6 +513,7 @@ protected:
 		float DeltaSeconds, bool bCoverageDirty, TConstArrayView<int32> GeometryDirtyIndices,
 		uint64 SweepPreviousDrawRevision);
 	bool IsOccupiedByActual(FVector2D Point, FName IgnoredStableId) const;
+	bool IsOccupiedWithinWholeFootprint(const FBox2D& Footprint) const;
 	bool HasCurrentObservedContributionAt(const FTrackedProp& Prop, FVector2D Point) const;
 	bool HasNewerObservedContributionAt(
 		const FTrackedProp& Prop,

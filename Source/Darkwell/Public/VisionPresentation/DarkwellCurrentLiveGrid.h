@@ -100,6 +100,8 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
 	TArray<FBox2D> OwnershipDirtyRegions;
  FTransform LastLegalPose=FTransform::Identity;
  bool bFullyObservedAtPose=false;
+ /** Tentative Whole ownership follows current legal samples, never retained local knowledge. */
+ bool bTransientWholePresentation=false;
  uint64 Updates=0, GeometryResets=0, Queries=0, SamplesTouched=0;
  FIntPoint AtlasCells=FIntPoint::ZeroValue;
 private:

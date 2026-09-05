@@ -4,12 +4,14 @@ param(
     [string]$EngineRoot = 'D:\UE_5.8',
     [ValidateSet('Episodes','Contracts','Reobservation','ReobservationTiming')][string]$Protocol = 'Episodes',
     [switch]$NormalTurns,
+    [switch]$WholeSessions,
     [ValidateSet('None','FromStart','BeforeExit')][string]$ExitDebugger = 'None'
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if ($RunName -notmatch '^[A-Za-z0-9_-]+$') { throw 'Use a simple unique run name' }
 if ($NormalTurns -and $Protocol -ne 'Reobservation') { throw 'NormalTurns applies only to the fixed-time Reobservation visual protocol' }
+if ($WholeSessions -and $Protocol -ne 'Reobservation') { throw 'WholeSessions extends the fixed-time continuous visual protocol' }
 $output = Join-Path $repo "Saved/ArchitectureAudit/$RunName"
 if (Test-Path -LiteralPath $output) { throw "Evidence already exists: $output" }
 New-Item -ItemType Directory -Path $output | Out-Null
@@ -27,6 +29,8 @@ $prior = $env:DARKWELL_AUDIT_OUTPUT
 $priorSignal = $env:DARKWELL_DEBUG_ATTACH_SIGNAL
 $priorTiming = $env:DARKWELL_REOBSERVATION_TIMING
 $priorTurns = $env:DARKWELL_REOBSERVATION_NORMAL_TURNS
+$priorSessions = $env:DARKWELL_WHOLE_SESSIONS
+$env:DARKWELL_WHOLE_SESSIONS = if ($WholeSessions) { '1' } else { $null }
 $env:DARKWELL_REOBSERVATION_NORMAL_TURNS = if ($NormalTurns) { '1' } else { $null }
 $env:DARKWELL_REOBSERVATION_TIMING = if ($Protocol -eq 'ReobservationTiming') { '1' } else { $null }
 $env:DARKWELL_AUDIT_OUTPUT = $output
@@ -54,6 +58,7 @@ try {
     $env:DARKWELL_DEBUG_ATTACH_SIGNAL = $priorSignal
     $env:DARKWELL_REOBSERVATION_TIMING = $priorTiming
     $env:DARKWELL_REOBSERVATION_NORMAL_TURNS = $priorTurns
+    $env:DARKWELL_WHOLE_SESSIONS = $priorSessions
 }
 $content = Get-Content "$output/editor.log" -Raw
 $summary = [ordered]@{

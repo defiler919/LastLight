@@ -5,6 +5,7 @@
 #include "Components/WidgetComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
+#include "Slate/SceneViewport.h"
 #include "UnrealClient.h"
 #include "ImageUtils.h"
 #include "EngineUtils.h"
@@ -513,6 +514,20 @@ bool ADarkwellSightWeaveGrayPolicyLabDirector::ResetCurrentRoomForTesting(ADarkw
 	ResetRoom(CurrentRoom);
 	TeleportPlayer(*Character, CurrentRoom);
 	return true;
+}
+
+bool ADarkwellSightWeaveGrayPolicyLabDirector::SetAuditViewportSizeForTesting(int32 Width, int32 Height)
+{
+#if WITH_EDITOR
+	if (Width<0 || Height<0 || Width>4096 || Height>4096 || ((Width==0)!=(Height==0))
+		|| !GEngine || !GEngine->GameViewport || GEngine->GameViewport->GetWorld()!=GetWorld()) return false;
+	if (auto* Viewport=GEngine->GameViewport->GetGameViewport())
+	{
+		Viewport->SetFixedViewportSize(Width,Height);
+		return true;
+	}
+#endif
+	return false;
 }
 
 bool ADarkwellSightWeaveGrayPolicyLabDirector::CaptureGameViewportForTesting(const FString& Filename)

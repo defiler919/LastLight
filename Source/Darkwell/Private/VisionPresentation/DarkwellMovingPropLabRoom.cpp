@@ -815,6 +815,17 @@ bool ADarkwellMovingPropLabRoom::ConfigureHistoricalEpochCountForTesting(
 		TArray<float> FullCoverage;
 		FullCoverage.Init(1.0f, Current.SpatialMemory.GetCells().Num());
 		Prop->History.AdvanceCurrent(0.20f, FullCoverage);
+		if (Prop->RegisteredPolicy.RevealMode==ESightWeaveRevealMode::WholeObjectAfterSpan)
+		{
+			// Explicit synthetic stress fixture: its full coarse observation must
+			// satisfy this fixture session's span, even after a prior real exit.
+			// Production confirmation continues to use primitive-local legal samples.
+			const auto Size=Current.SpatialMemory.GetSize();
+			const TBitArray<> FullFootprint(true,Size.X*Size.Y);
+			Prop->RevealObservation.Initialize(Prop->RegisteredPolicy,Size,
+				Bounds.GetSize()/FVector2D(Size),FullFootprint);
+			Prop->RevealObservation.Observe(true,FullFootprint);
+		}
 		// This helper seeds the exact state a real stationary legal observation
 		// reaches before it is hidden. Do not bypass the policy lifecycle: arming
 		// StationaryOnly here keeps the synthetic stress records semantically
@@ -832,6 +843,7 @@ bool ADarkwellMovingPropLabRoom::ConfigureHistoricalEpochCountForTesting(
 			return false;
 		}
 	}
+	Prop->RevealObservation.EndSession();
 	Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->ApplySourceGeometryVisibility(false);
 	Actual->SetActorEnableCollision(false);
 	Actual->SetActorHiddenInGame(true);

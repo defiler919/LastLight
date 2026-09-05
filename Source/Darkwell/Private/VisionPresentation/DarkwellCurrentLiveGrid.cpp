@@ -418,7 +418,8 @@ bool FDarkwellCurrentLiveGrid::HasObservedContributionAt(FVector2D World,int32 P
    continue;
   }
   const auto C=Sample(Parts[I],World,false);
-  if(C.DiscoveredPresent>0 && C.AppearanceBlend>0) return true;
+  if(C.DiscoveredPresent>0 && C.AppearanceBlend>0
+   && (!bTransientWholePresentation || C.CurrentLegalCoverage>=FDarkwellSpatialPropMemory::LegalCoverage)) return true;
  }
  return false;
 }

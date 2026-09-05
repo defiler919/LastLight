@@ -95,6 +95,7 @@ void ADarkwellObjectMemoryScene::ReleaseSourcePresentation(FTrackedProp& Prop)
 	}
 	Prop.SourceBindings.Reset();
 	for(auto Texture:Prop.CurrentPresentation.LiveTextures) OwnedTextures.Remove(Texture.Get());
+	for(auto Texture:Prop.CurrentPresentation.SpareLiveTextures) OwnedTextures.Remove(Texture.Get());
 	Prop.CurrentPresentation={};
 }
 
@@ -460,6 +461,7 @@ bool ADarkwellObjectMemoryScene::CollectCurrentOwnedVerticalIntervals(
 	TArray<FVector2D>& OutIntervals, const double ProjectionTolerance) const
 {
 	OutIntervals.Reset();
+	if (bOnlyDurableOwnership && IsTentativeWhole(Prop)) return false;
 	if (ProjectionTolerance == 0.0 && !HasCurrentObservedContributionAt(Prop, Point))
 	{
 		return false;
@@ -1156,10 +1158,44 @@ bool ADarkwellObjectMemoryScene::IsOccupiedByActual(
 	return false;
 }
 
+bool ADarkwellObjectMemoryScene::IsOccupiedWithinWholeFootprint(const FBox2D& Footprint) const
+{
+	// Whole capture includes cells intersecting thin primitive edges. An empty
+	// center does not prove that such a captured footprint is physically empty.
+	// This is actual geometry occupancy, not remembered geometry or new coverage.
+	const FVector2D Corners[]{Footprint.Min,FVector2D(Footprint.Max.X,Footprint.Min.Y),
+		Footprint.Max,FVector2D(Footprint.Min.X,Footprint.Max.Y)};
+	auto Intersects=[&](const FPrimitiveGeometrySnapshot& Geometry)
+	{
+		const auto Box=Geometry.LocalBounds.TransformBy(Geometry.WorldTransform);
+		if (!Footprint.Intersect(FBox2D(FVector2D(Box.Min),FVector2D(Box.Max)))) return false;
+		if (Footprint.IsInside(FVector2D(Geometry.WorldTransform.TransformPosition(Geometry.LocalBounds.GetCenter())))) return true;
+		for (int32 Edge=0; Edge<4; ++Edge)
+		{
+			double A,B;
+			if (ClipSegmentToGeometryProjection(Geometry,Corners[Edge],Corners[(Edge+1)%4],0,A,B)) return true;
+		}
+		return false;
+	};
+	if (bUseFrameOccupancy)
+	{
+		for (const auto& Snapshot:FrameOccupancy)
+			if (Footprint.Intersect(Snapshot.Bounds))
+				for (const auto& Geometry:Snapshot.Geometry) if (Intersects(Geometry)) return true;
+		return false;
+	}
+	for (const auto& Pair:Tracked)
+		if (const auto* Actual=Pair.Value.bExists?Pair.Value.Actual.Get():nullptr;
+			Actual && Actual->GetActorEnableCollision() && Footprint.Intersect(ActualBounds(*Actual)))
+			for (const auto& Geometry:ActualPartGeometry(*Actual)) if (Intersects(Geometry)) return true;
+	return false;
+}
+
 bool ADarkwellObjectMemoryScene::HasCurrentObservedContributionAt(
 	const FTrackedProp& Prop,
 	const FVector2D Point) const
 {
+	if (bOnlyDurableOwnership && IsTentativeWhole(Prop)) return false;
 	const int32 CurrentIndex = Prop.History.GetCurrentIndex();
 	const AActor* Actual = Prop.bExists ? Prop.Actual.Get() : nullptr;
 	if (!Actual || CurrentIndex == INDEX_NONE
@@ -1245,6 +1281,8 @@ void ADarkwellObjectMemoryScene::BuildGeometryDirtyIndices(
  };
  if(Reuse) for(const auto& Cached:FrameHistoryGeometry)
   if(Cached.StableId==Prop.StableId && Cached.Size==Size && Cached.Bounds.Min==Bounds.Min && Cached.Bounds.Max==Bounds.Max
+   && Cached.bWholeCapture==Record.bConfirmedWholeCapture
+   && (!Record.bConfirmedWholeCapture || Cached.WholeCaptureFootprint==Record.LastLegalCaptureMask)
    && Cached.PreviousGeometryRevision==Visual.ProcessedGeometryRevision && Cached.PreviousOwnershipRevision==Visual.ProcessedOwnershipRevision
    && SameGeometry(Cached.BeforePhysical,Visual.CachedPhysicalGeometry)
    && SameGeometry(Cached.BeforeNewer,Visual.CachedNewerGeometry) && SameGeometry(Cached.AfterNewer,NewerGeometry))
@@ -1260,6 +1298,8 @@ void ADarkwellObjectMemoryScene::BuildGeometryDirtyIndices(
  if(Reuse && FrameHistoryGeometry.Num()<64)
  {
   Cached=&FrameHistoryGeometry.AddDefaulted_GetRef(); Cached->StableId=Prop.StableId; Cached->Bounds=Bounds; Cached->Size=Size;
+  Cached->bWholeCapture=Record.bConfirmedWholeCapture;
+  if(Record.bConfirmedWholeCapture) Cached->WholeCaptureFootprint=Record.LastLegalCaptureMask;
   Cached->PreviousGeometryRevision=Visual.ProcessedGeometryRevision; Cached->PreviousOwnershipRevision=Visual.ProcessedOwnershipRevision;
   Cached->BeforePhysical=Visual.CachedPhysicalGeometry; Cached->BeforeNewer=Visual.CachedNewerGeometry; Cached->AfterNewer=NewerGeometry;
  }
@@ -1327,6 +1367,9 @@ void ADarkwellObjectMemoryScene::BuildGeometryDirtyIndices(
             const int32 Y = Index / Size.X;
             const FVector2D Point = Bounds.Min + Step * FVector2D(X + 0.5, Y + 0.5);
             Visual.CachedFineOccupied[Index] = IsOccupiedByActual(Point, NAME_None);
+            if (!Visual.CachedFineOccupied[Index] && Record.bConfirmedWholeCapture
+             && Record.LastLegalCaptureMask.IsValidIndex(Index) && Record.LastLegalCaptureMask[Index])
+             Visual.CachedFineOccupied[Index]=IsOccupiedWithinWholeFootprint(FBox2D(Point-Step*.5,Point+Step*.5));
             OutPhysicalDirtyIndices.Add(Index);
         }
         else ++RuntimeFrame.HistoryOccupancySamplesReused;
@@ -1340,6 +1383,8 @@ bool ADarkwellObjectMemoryScene::UpdateHistoricalContributionExclusion(
 	FDarkwellSpatialObservationRecord& Record,
 	const TConstArrayView<int32> DirtyIndices)
 {
+	// Tentative Whole can exclude overlapping draws, but cannot consume memory.
+	TGuardValue<bool> DurableScope(bOnlyDurableOwnership,true);
 	if (Record.bCurrentObservedLocation)
 	{
 		return false;
@@ -1362,6 +1407,19 @@ bool ADarkwellObjectMemoryScene::UpdateHistoricalContributionExclusion(
 	bool bChanged = false;
 	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
 	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
+ const int32 CurrentIndex=Prop.History.GetCurrentIndex();
+ const auto* Current=CurrentIndex!=INDEX_NONE?&Prop.History.GetRecords()[CurrentIndex]:nullptr;
+ bool bSameWholeGeometry=Record.bConfirmedWholeCapture && Current && Current->bConfirmedWholeCapture
+  && Current->Epoch>Record.Epoch
+  && Prop.RevealObservation.IsConfirmed() && Prop.bLastCoverageValid
+  && Record.SnapshotTransform.Equals(Current->SnapshotTransform,1.e-6)
+  && Record.Primitives.Num()==Current->Primitives.Num();
+ if(bSameWholeGeometry) for(int32 I=0;I<Record.Primitives.Num();++I)
+ {
+  const auto& A=Record.Primitives[I]; const auto& B=Current->Primitives[I];
+  bSameWholeGeometry &= A.Mesh==B.Mesh && A.LocalBounds.Equals(B.LocalBounds)
+   && A.RelativeTransform.Equals(B.RelativeTransform,1.e-6);
+ }
  FHistoryOwnershipReuse* Cached=nullptr;
  bool Reuse=bUseFrameOccupancy && Prop.History.GetRecords().Num()>2 && bUseNewerCandidates && NewerCandidateId==Prop.StableId;
 #if WITH_DEV_AUTOMATION_TESTS
@@ -1410,7 +1468,10 @@ bool ADarkwellObjectMemoryScene::UpdateHistoricalContributionExclusion(
   if(Cached && Cached->Evaluated[Index]) { Overlap=Cached->Overlap[Index]; ++RuntimeFrame.HistoryOwnershipReuseHits; }
   else
   {
-   Overlap=HasNewerObservedGeometryOverlapWithinFootprint(Prop,*Visual,Record.Epoch,FBox2D(Minimum,Minimum+Step));
+   // Identical newly confirmed geometry owns the complete old Whole footprint,
+   // including intersecting edge texels whose centers miss a thin handle.
+   Overlap=(bSameWholeGeometry && Record.LastLegalCaptureMask.IsValidIndex(Index) && Record.LastLegalCaptureMask[Index])
+    || HasNewerObservedGeometryOverlapWithinFootprint(Prop,*Visual,Record.Epoch,FBox2D(Minimum,Minimum+Step));
    if(Cached) { Cached->Evaluated[Index]=true; Cached->Overlap[Index]=Overlap; }
   }
 		if (Overlap)
@@ -1586,7 +1647,9 @@ void ADarkwellObjectMemoryScene::RefreshContributionDiagnostics(
 			const int32 CellY = FineY / Darkwell::ObjectMemory::PresentationSamples;
 			const bool bSuppressed = Visual->SuppressedByCurrentEvidence.IsValidIndex(FineIndex)
 				&& Visual->SuppressedByCurrentEvidence[FineIndex];
-			if (!bSuppressed
+			const bool bTransientSuppressed=Visual->TransientCurrentSuppression.IsValidIndex(FineIndex)
+				&& Visual->TransientCurrentSuppression[FineIndex];
+			if (!bSuppressed && !bTransientSuppressed
 				&& Darkwell::ObjectMemory::HistoricalOpacity(Historical, FineIndex, CellY * Coarse.X + CellX) > 0.0f)
 			{
 				++Contributors;
@@ -1685,7 +1748,8 @@ void ADarkwellObjectMemoryScene::RefreshContributionDiagnostics(
 			for (int32 X = 0; X < Fine.X; ++X)
 			{
 				const int32 Index = Y * Fine.X + X;
-				if (!Visual->SuppressedByCurrentEvidence[Index])
+				if (!Visual->SuppressedByCurrentEvidence[Index]
+					&& !(Visual->TransientCurrentSuppression.IsValidIndex(Index) && Visual->TransientCurrentSuppression[Index]))
 				{
 					continue;
 				}
@@ -1768,7 +1832,9 @@ void ADarkwellObjectMemoryScene::RefreshContributionDiagnostics(
 						* Coarse.X + X / Darkwell::ObjectMemory::PresentationSamples;
 					const bool bSuppressed = Visual->SuppressedByCurrentEvidence.IsValidIndex(FineIndex)
 						&& Visual->SuppressedByCurrentEvidence[FineIndex];
-					if (bSuppressed || !Historical.SpatialMemory.GetCells().IsValidIndex(CellIndex)
+					const bool bTransientSuppressed=Visual->TransientCurrentSuppression.IsValidIndex(FineIndex)
+						&& Visual->TransientCurrentSuppression[FineIndex];
+					if (bSuppressed || bTransientSuppressed || !Historical.SpatialMemory.GetCells().IsValidIndex(CellIndex)
 						|| Darkwell::ObjectMemory::HistoricalOpacity(Historical, FineIndex, CellIndex) <= 0.0f)
 					{
 						continue;
@@ -1988,6 +2054,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 	}
 	if (!Actual && Prop.History.GetCurrentIndex()!=INDEX_NONE)
 		FreezeCurrentForHiddenMotion(Prop,TEXT("SOURCE_UNAVAILABLE"));
+	if (!Actual && bWhole) Prop.RevealObservation.EndSession();
 	const uint64 CurrentRevealStartCycles = FPlatformTime::Cycles64();
 	if (Actual)
 	{
@@ -2147,6 +2214,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
    }
    Prop.bCachedWholeLegalContact=bAnyLegal;
 		}
+		Prop.CurrentLive.bTransientWholePresentation=bWhole && !Prop.RevealObservation.IsConfirmed();
 		int32 LegalCells = 0;
 		for (const float Value : Coverage)
 		{
@@ -2159,6 +2227,8 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 		// samples. Invalid/not-ready data may fail closed visually, but never writes
 		// player knowledge, seals an epoch, or rearms a later seal.
 		if (bAnyLegal || bSweptLegalContact) ObjectPolicy->NotifyLegalObservation();
+		if (bWhole && (bAnyLegal || bSweptLegalContact) && IsCaptureEligible(Prop))
+			TryResumeQualifiedWhole(Prop);
         if(bWhole && bSweptLegalContact && !bAnyLegal && Prop.RevealObservation.IsConfirmed() && IsCaptureEligible(Prop))
         {
          // A stationary object was legally seen inside this supported interval.
@@ -2216,6 +2286,13 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			}
 		}
 		CurrentIndex = Prop.History.GetCurrentIndex();
+		// Seal the eligible capture before ending qualification. Invalid coverage
+		// is not proof of contact loss and must preserve the ongoing session.
+		if (bWhole && CoverageSnapshot.bValid && !bAnyLegal)
+		{
+			Prop.RevealObservation.EndSession();
+			Prop.CurrentLive.bTransientWholePresentation=true;
+		}
 		if (CoverageSnapshot.bValid && CurrentIndex == INDEX_NONE && bAnyLegal)
 		{
 			// Repeated sight contact is a new session, not a new object state.
@@ -2224,7 +2301,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			TArray<FDarkwellCurrentLiveGrid::FDescriptor> ResumeDescriptors;
 			for (const UStaticMeshComponent* Part : Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives())
 				if (Part && Part->GetStaticMesh()) ResumeDescriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part)});
-			if (IsCaptureEligible(Prop) && !ObjectPolicy->IsSightWeaveMoving()
+			if (!bWhole && IsCaptureEligible(Prop) && !ObjectPolicy->IsSightWeaveMoving()
 				&& Prop.LastCaptureAppearanceRevision == Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->ComputeMemoryContentRevision()
 				&& Prop.CurrentLive.LastLegalPose.Equals(Transform, 1.e-6)
 				&& Prop.CurrentLive.MatchesGeometry(ResumeDescriptors, Transform)
@@ -2497,6 +2574,15 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			FPlatformTime::Cycles64() - OwnershipStartCycles) * 1000.0;
 		const bool bFineChanged = AdvanceFineHistory(
 			Prop, *Record, DeltaSeconds, bCoverageDirty, GeometryDirtyIndices, SweepPreviousDraw);
+		if (bCoverageDirty || !GeometryDirtyIndices.IsEmpty()
+			|| (Visual->TransientCurrentSuppression.CountSetBits()>0
+				&& (!IsTentativeWhole(Prop) || Prop.History.GetCurrentIndex()==INDEX_NONE || !Prop.bLastCoverageValid)))
+		{
+			const bool bTransientChanged=UpdateTransientWholeExclusion(Prop,*Record);
+			Visual->bPresentationDirty |= bTransientChanged;
+			Visual->bCapTopologyDirty |= bTransientChanged;
+			Prop.bDiagnosticsDirty |= bTransientChanged;
+		}
 		Visual->bPresentationDirty |= bOwnershipChanged;
 		Visual->bCapTopologyDirty |= bOwnershipChanged;
 		if (!bPresentationRetired && Visual->bPresentationDirty)
@@ -2656,6 +2742,7 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 		return false;
 	}
 	Prop.ObservationState = EObservationState::UnobservedSealed;
+	if (Current.bConfirmedWholeCapture) Prop.ReusableWholeEpoch=Epoch;
 	++Prop.HiddenFreezeCount;
 	if (FDarkwellSpatialObservationRecord* Historical = Prop.History.FindRecord(Epoch))
 	{
@@ -2912,11 +2999,20 @@ void ADarkwellObjectMemoryScene::UpdateCurrentPartTextures(FTrackedProp& Prop)
  const auto Sources=Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives();
  const int32 Count=Prop.CurrentLive.Parts.Num();
  for(int32 I=Count; I<Visual.LiveTextures.Num(); ++I) OwnedTextures.Remove(Visual.LiveTextures[I].Get());
+ for(int32 I=Count; I<Visual.SpareLiveTextures.Num(); ++I) OwnedTextures.Remove(Visual.SpareLiveTextures[I].Get());
  Visual.LiveTextures.SetNum(Count); Visual.LivePixels.SetNum(Count); Visual.LiveSignatures.SetNum(Count);
+ Visual.SpareLiveTextures.SetNum(Count);
  for(int32 I=0;I<Count;++I)
  {
   const auto& Part=Prop.CurrentLive.Parts[I]; const auto Atlas=Part.bUniformWholePresentation?FIntPoint(1,1):Part.AtlasCells*4;
   UTexture2D* Texture=Visual.LiveTextures[I].Get();
+  if(Prop.RegisteredPolicy.RevealMode==ESightWeaveRevealMode::WholeObjectAfterSpan
+   && Texture && (Texture->GetSizeX()!=Atlas.X || Texture->GetSizeY()!=Atlas.Y))
+  {
+   // Two reusable representations, with fresh pixels on every selection.
+   Swap(Visual.LiveTextures[I],Visual.SpareLiveTextures[I]);
+   Texture=Visual.LiveTextures[I].Get(); Visual.LiveSignatures[I]=0;
+  }
   if(!Texture || Texture->GetSizeX()!=Atlas.X || Texture->GetSizeY()!=Atlas.Y)
   {
    if(Texture) OwnedTextures.Remove(Texture);
@@ -3011,6 +3107,8 @@ void ADarkwellObjectMemoryScene::UpdateRecordTexture(
 			Presentation[Index].A = Visual->SuppressedByCurrentEvidence[Index] ? 0.0f : 1.0f;
 		}
 	}
+	for (TConstSetBitIterator<> It(Visual->TransientCurrentSuppression); It; ++It)
+		if (Presentation.IsValidIndex(It.GetIndex())) Presentation[It.GetIndex()].A=0;
 	Visual->SubmittedPresentation = Presentation;
 	uint64 Signature = 1469598103934665603ull;
 	auto MixFloat = [&Signature](const float Value)
@@ -4532,6 +4630,79 @@ USightWeaveObjectPolicyComponent* ADarkwellObjectMemoryScene::GetObjectPolicyFor
 {
 	const FTrackedProp* Prop = Tracked.Find(StableId);
 	return Prop ? Prop->ObjectPolicy.Get() : nullptr;
+}
+
+bool ADarkwellObjectMemoryScene::IsTentativeWhole(const FTrackedProp& Prop) const
+{
+	return Prop.RegisteredPolicy.RevealMode==ESightWeaveRevealMode::WholeObjectAfterSpan
+		&& !Prop.RevealObservation.IsConfirmed();
+}
+
+bool ADarkwellObjectMemoryScene::TryResumeQualifiedWhole(FTrackedProp& Prop)
+{
+	if (!Prop.RevealObservation.IsConfirmed() || !IsCaptureEligible(Prop)
+		|| !Prop.Actual.IsValid() || !Prop.ObjectPolicy.IsValid()
+		|| Prop.ObjectPolicy->IsSightWeaveMoving()) return false;
+	const auto* Reusable=Prop.History.FindRecord(Prop.ReusableWholeEpoch);
+	const auto* Memory=Prop.Actual->FindComponentByClass<UDarkwellRememberablePropComponent>();
+	if (!Reusable || Reusable->bCurrentObservedLocation || !Reusable->bConfirmedWholeCapture
+		|| !Reusable->SnapshotTransform.Equals(Prop.Actual->GetActorTransform(),1.e-6)
+		|| Reusable->ContentRevision!=Memory->ComputeMemoryContentRevision()
+		|| !Prop.History.CanResumeUncontradictedObservation(Reusable->Epoch)) return false;
+	const int32 CurrentIndex=Prop.History.GetCurrentIndex();
+	if (CurrentIndex!=INDEX_NONE)
+	{
+		// Only an unsealed candidate may be replaced. Its source textures belong
+		// to the prop and survive; the reusable history has never been mutated.
+		if (Prop.History.GetRecords()[CurrentIndex].FineHistory.IsInitialized()) return false;
+		AbandonCurrentObservationWithoutHistory(Prop);
+	}
+	if (!Prop.History.ResumeUncontradictedObservation(Prop.ReusableWholeEpoch)) return false;
+	Prop.LocalEpoch=Prop.ReusableWholeEpoch;
+	Prop.CurrentLive.ResumeStationaryKnowledge();
+	if (auto* Visual=Prop.Visuals.Find(Prop.LocalEpoch))
+	{
+		if (Visual->Proxy.IsValid()) Visual->Proxy->SetActorHiddenInGame(true);
+		Visual->TransientCurrentSuppression.Empty();
+	}
+	Prop.ObservationState=EObservationState::ObservedArmed;
+	Prop.CurrentPresentationActiveSeconds=.5f;
+	Prop.bDiagnosticsDirty=true;
+	++Prop.ObservationEpisode; ++GeometryRevision; ++Prop.ObservationOwnershipRevision;
+	bHistoricalSpatialIndexDirty=true;
+	return true;
+}
+
+bool ADarkwellObjectMemoryScene::UpdateTransientWholeExclusion(
+	FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record)
+{
+	auto& Visual=Prop.Visuals.FindChecked(Record.Epoch);
+	const int32 CurrentIndex=Prop.History.GetCurrentIndex();
+	if (!Record.FineHistory.IsInitialized() || !IsTentativeWhole(Prop) || CurrentIndex==INDEX_NONE || !Prop.bLastCoverageValid)
+	{
+		const bool Changed=Visual.TransientCurrentSuppression.CountSetBits()>0;
+		Visual.TransientCurrentSuppression.Empty();
+		return Changed;
+	}
+	const FDarkwellSpatialObservationRecord* Candidate=&Prop.History.GetRecords()[CurrentIndex];
+	TGuardValue<bool> UseScope(bUseNewerCandidates,true);
+	TGuardValue<FName> IdScope(NewerCandidateId,Prop.StableId);
+	TGuardValue<uint32> EpochScope(NewerCandidateMaximumEpoch,Candidate->Epoch);
+	TGuardValue<TConstArrayView<const FDarkwellSpatialObservationRecord*>> ViewScope(FrameNewerCandidates,MakeArrayView(&Candidate,1));
+	TGuardValue<bool> GeometryScope(bUseOwnershipGeometry,false);
+	const auto Size=Record.FineHistory.GetSize();
+	const auto Bounds=Record.FineHistory.GetBounds();
+	const auto Step=Bounds.GetSize()/FVector2D(Size);
+	TBitArray<> Mask(false,Size.X*Size.Y);
+	for (int32 I=0; I<Mask.Num(); ++I)
+	{
+		if (Record.FineHistory.GetSamples()[I].InitialRemembered<=0) continue;
+		const auto Min=Bounds.Min+Step*FVector2D(I%Size.X,I/Size.X);
+		Mask[I]=HasNewerObservedGeometryOverlapWithinFootprint(Prop,Visual,Record.Epoch,FBox2D(Min,Min+Step));
+	}
+	const bool Changed=Mask!=Visual.TransientCurrentSuppression;
+	Visual.TransientCurrentSuppression=MoveTemp(Mask);
+	return Changed;
 }
 
 bool ADarkwellObjectMemoryScene::IsCaptureEligible(const FTrackedProp& Prop) const

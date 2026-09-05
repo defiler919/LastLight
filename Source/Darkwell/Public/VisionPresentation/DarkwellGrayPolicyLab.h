@@ -154,6 +154,9 @@ public:
 	/** Reads the actual game viewport; the global Shot flag can be consumed by an editor viewport. */
 	UFUNCTION(BlueprintCallable, Category="Gray Policy Lab|Testing")
 	bool CaptureGameViewportForTesting(const FString& Filename);
+	/** Transient editor-only capture size; (0,0) restores the normal viewport. */
+	UFUNCTION(BlueprintCallable, Category="Gray Policy Lab|Diagnostics")
+	bool SetAuditViewportSizeForTesting(int32 Width, int32 Height);
 	ADarkwellMovingPropLabRoom* GetRuntimeRoomForTesting() const { return RuntimeRoom.Get(); }
 	static FVector GetRoomCenterForTesting(int32 Room);
 	static int32 GetExpectedControlCountForTesting() { return 27; }

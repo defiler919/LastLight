@@ -9,7 +9,7 @@ void FSightWeaveRevealSpanTest::GetTests(TArray<FString>& Names,TArray<FString>&
  for(const TCHAR* N : {TEXT("MinimumSpanWorldUnitSemantics"),TEXT("MinimumSpanSmallObjectClamp"),
   TEXT("MinimumSpanFirstLegalContact"),TEXT("ContiguousSpanDoesNotBridgeGaps"),
   TEXT("TentativeSessionResetsOnRealViewLoss"),TEXT("InvalidCoverageDoesNotResetTentativeSession"),
-  TEXT("ConfirmedPersistsThroughRigidMotion")}) { Names.Add(N); Commands.Add(N); }
+  TEXT("ConfirmedSessionSurvivesLegalRigidMotion")}) { Names.Add(N); Commands.Add(N); }
 }
 bool FSightWeaveRevealSpanTest::RunTest(const FString& Case)
 {
@@ -65,10 +65,20 @@ bool FSightWeaveRevealSpanTest::RunTest(const FString& Case)
  }
  S.Observe(true,Final); TestTrue(TEXT("Confirmed"),S.IsConfirmed());
  const uint64 Evaluations=S.GetSpanEvaluations();
- for(int32 Pose=0;Pose<240;++Pose) S.Observe(Pose%3!=0,Pose%2?Empty:Mask);
- TestTrue(TEXT("Pose/view/invalid inputs cannot revoke registered confirmation"),S.IsConfirmed());
+ for(int32 Pose=0;Pose<240;++Pose) S.Observe(Pose%3!=0,Pose%3==0?Empty:Final);
+ TestTrue(TEXT("Legal contact and invalid publication preserve this session"),S.IsConfirmed());
  TestEqual(TEXT("Confirmed path performs no more span scans"),S.GetSpanEvaluations(),Evaluations);
  TestEqual(TEXT("Tentative storage released after confirmation"),S.GetTentativeMask().Num(),0);
+ for(int32 Session=0;Session<50;++Session)
+ {
+  S.EndSession();
+  TestFalse(TEXT("Proven loss ends qualification after host handoff"),S.IsConfirmed());
+  TestTrue(TEXT("Session end preserves geometry"),S.IsInitialized());
+  TestEqual(TEXT("Every session uses the same configured span"),S.GetEffectiveMinimumSpanCm(),100.f);
+  S.Observe(true,Mask); TestFalse(TEXT("Prior confirmation cannot promote 75 cm"),S.IsConfirmed());
+  S.Observe(false,Empty); TestEqual(TEXT("Invalid publication preserves this session's span"),S.GetObservedSpanCm(),75.f);
+  S.Observe(true,Final); TestTrue(TEXT("This session's contiguous 100 cm qualifies again"),S.IsConfirmed());
+ }
  S.Initialize(Policy,Size,Step,Shape); TestFalse(TEXT("Explicit re-registration/topology reset clears confirmation"),S.IsConfirmed());
  return true;
 }

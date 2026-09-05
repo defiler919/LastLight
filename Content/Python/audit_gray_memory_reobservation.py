@@ -19,6 +19,7 @@ started = time.monotonic()
 rows, timing = [], []
 timing_mode = os.environ.get('DARKWELL_REOBSERVATION_TIMING') == '1'
 normal_turns = os.environ.get('DARKWELL_REOBSERVATION_NORMAL_TURNS') == '1'
+whole_sessions = os.environ.get('DARKWELL_WHOLE_SESSIONS') == '1'
 phase = 'warmup'
 last_wall = None
 player = room = director = camera = None
@@ -139,6 +140,8 @@ def run():
     controller = unreal.GameplayStatics.get_player_controller(w, 0)
     room = unreal.GameplayStatics.get_all_actors_of_class(w, unreal.DarkwellMovingPropLabRoom)[0]
     director = unreal.GameplayStatics.get_all_actors_of_class(w, unreal.DarkwellSightWeaveGrayPolicyLabDirector)[0]
+    if not timing_mode:
+        assert director.set_audit_viewport_size_for_testing(2233,911)
     controller.set_actor_tick_enabled(False)
     player.set_actor_tick_enabled(False)
     player.get_component_by_class(unreal.SpringArmComponent).set_component_tick_enabled(False)
@@ -195,6 +198,33 @@ def run():
         yield from frames(f'repeat{cycle}_near_exit', 3)
         yield 20
         shot(f'repeat{cycle}_near_history')
+    if whole_sessions:
+        # Same cabinet and history after the original four-stage route. The
+        # configured 100 cm span, wall authority and source materials stay fixed.
+        for cycle in range(4):
+            position(70,6750,210)
+            yield 20
+            shot(f'session{cycle}_short_current')
+            face(-90)
+            yield from frames(f'session{cycle}_short_exit',3)
+            yield 20
+            shot(f'session{cycle}_short_history')
+            face(210)
+            yield 15
+            shot(f'session{cycle}_new_short')
+            # Continuous legal contact grows through the same view edge.
+            for yaw in range(209,154,-2):
+                face(yaw)
+                yield 1
+            yield 20
+            shot(f'session{cycle}_qualified_current')
+            face(210)
+            yield 15
+            shot(f'session{cycle}_qualified_small_contact')
+            face(-90)
+            yield from frames(f'session{cycle}_qualified_exit',3)
+            yield 20
+            shot(f'session{cycle}_qualified_history')
     # Independent direct-full route is a separate reset AFTER the continuous case.
     phase = 'reference'
     assert director.reset_current_room_for_testing(player)
@@ -210,6 +240,8 @@ def run():
     if not timing_mode:
         yield from camera_depth_probe()
     phase = 'teardown'
+    if not timing_mode:
+        assert director.set_audit_viewport_size_for_testing(0,0)
     levels.editor_request_end_play()
     yield 60
     assert world() is None
@@ -250,6 +282,8 @@ def tick(_delta):
     except Exception:
         (root/'failed.txt').write_text(traceback.format_exc(),encoding='utf-8')
         unreal.log_error(traceback.format_exc())
+        if director and not timing_mode:
+            director.set_audit_viewport_size_for_testing(0,0)
         levels.editor_request_end_play()
         unreal.unregister_slate_post_tick_callback(handle)
         unreal.SystemLibrary.execute_console_command(editor.get_editor_world(),'CLOSE_SLATE_MAINFRAME')

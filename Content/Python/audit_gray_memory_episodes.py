@@ -40,6 +40,7 @@ def run():
     levels.editor_request_begin_play()
     yield 150
     director = unreal.GameplayStatics.get_all_actors_of_class(world(), unreal.DarkwellSightWeaveGrayPolicyLabDirector)[0]
+    assert director.set_audit_viewport_size_for_testing(2233,911)
     room = unreal.GameplayStatics.get_all_actors_of_class(world(), unreal.DarkwellMovingPropLabRoom)[0]
     controller = unreal.GameplayStatics.get_player_controller(world(), 0)
     player = unreal.GameplayStatics.get_player_character(world(), 0)
@@ -90,6 +91,7 @@ def run():
     yield 10
     (root/'complete.json').write_text(json.dumps(dict(protocol_complete=True, frames=len(rows))), encoding='utf-8')
     unreal.log('GRAY_EPISODE_AUDIT_COMPLETE')
+    assert director.set_audit_viewport_size_for_testing(0,0)
     levels.editor_request_end_play()
     yield 45
     assert world() is None
@@ -121,6 +123,8 @@ def tick(_delta):
     except Exception:
         (root/'failed.txt').write_text(traceback.format_exc(), encoding='utf-8')
         unreal.log_error(traceback.format_exc())
+        if director:
+            director.set_audit_viewport_size_for_testing(0,0)
         levels.editor_request_end_play()
         unreal.unregister_slate_post_tick_callback(handle)
         unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'CLOSE_SLATE_MAINFRAME')

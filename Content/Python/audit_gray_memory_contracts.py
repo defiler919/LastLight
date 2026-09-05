@@ -68,6 +68,7 @@ def run():
         controller = unreal.GameplayStatics.get_player_controller(w, 0)
         room = unreal.GameplayStatics.get_all_actors_of_class(w, unreal.DarkwellMovingPropLabRoom)[0]
         director = unreal.GameplayStatics.get_all_actors_of_class(w, unreal.DarkwellSightWeaveGrayPolicyLabDirector)[0]
+        assert director.set_audit_viewport_size_for_testing(2233,911)
         controller.set_actor_tick_enabled(False)
         player.set_actor_tick_enabled(False)
         player.get_component_by_class(unreal.SpringArmComponent).set_component_tick_enabled(False)
@@ -156,6 +157,7 @@ def run():
         assert room.get_historical_presentation_resource_count_for_testing(unreal.Name('Lab.V2.Partial')) == 0
         lifecycles.append(dict(cycle=lifecycle, viewport=list(controller.get_viewport_size()),
             before_stop=json.loads(room.get_history_runtime_telemetry())['frame_data']))
+        assert director.set_audit_viewport_size_for_testing(0,0)
         levels.editor_request_end_play()
         yield 60
         assert world() is None
@@ -190,6 +192,8 @@ def tick(_delta):
     except Exception:
         (root/'failed.txt').write_text(traceback.format_exc(), encoding='utf-8')
         unreal.log_error(traceback.format_exc())
+        if director:
+            director.set_audit_viewport_size_for_testing(0,0)
         levels.editor_request_end_play()
         unreal.unregister_slate_post_tick_callback(handle)
         unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'CLOSE_SLATE_MAINFRAME')

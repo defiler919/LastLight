@@ -55,6 +55,13 @@ void FSightWeaveRevealObservation::Reset()
 	ObservedSpanCm=EffectiveMinimumSpanCm=MaximumSpanCm=0; SpanEvaluations=0;
 }
 bool FSightWeaveRevealObservation::IsConfirmed() const { return State==SightWeave::RevealObservation::Confirmed; }
+void FSightWeaveRevealObservation::EndSession()
+{
+	if (State==SightWeave::RevealObservation::Unobserved) return;
+	State=SightWeave::RevealObservation::Unobserved;
+	ObservedSpanCm=0;
+	TentativeConfirmationMask.Init(false,Footprint.Num());
+}
 void FSightWeaveRevealObservation::Observe(bool bValidRevision,const TBitArray<>& Mask)
 {
 	if(!bValidRevision || IsConfirmed() || !IsInitialized() || Mask.Num()!=Footprint.Num()) return;
@@ -76,7 +83,7 @@ void FSightWeaveRevealObservation::Observe(bool bValidRevision,const TBitArray<>
 	if(ObservedSpanCm+UE_KINDA_SMALL_NUMBER>=EffectiveMinimumSpanCm)
 	{
 		State=SightWeave::RevealObservation::Confirmed;
-		// Confirmation persists; hot paths no longer maintain tentative bits/span.
+		// Qualification lasts until the host ends this continuous legal session.
 		TentativeConfirmationMask.Empty();
 	}
 }

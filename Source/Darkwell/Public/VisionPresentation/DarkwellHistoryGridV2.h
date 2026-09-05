@@ -23,6 +23,8 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	static FGameplayTag Superseded();
 	void Initialize(const FDarkwellSpatialPropMemory& SealedMemory);
 	void Initialize(const FDarkwellSpatialPropMemory& SealedMemory, const TBitArray<>& CaptureMask);
+	/** Confirmed object geometry owns Whole capture; transient Live cuts never own its AA. */
+	void InitializeWholeCapture(const FDarkwellSpatialPropMemory& SealedMemory, const TBitArray<>& FullGeometryMask);
 	void RestrictToRecordedGeometry(const TBitArray<>& Footprint);
 	bool Advance(float DeltaSeconds, TConstArrayView<float> LegalCoverage,
 		const TBitArray<>& ActualOccupied, const TBitArray<>& NewerObservedOwnership);
@@ -46,6 +48,7 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	/** Superseded evidence is terminal; its stored facts remain resident. */
 	void FilterMutableEvidence(TBitArray<>& CandidateIndices) const;
 private:
+	void InitializeStorage(const FDarkwellSpatialPropMemory& SealedMemory);
 	FBox2D Bounds;
 	FIntPoint Size = FIntPoint::ZeroValue;
 	TArray<FSample> Samples;

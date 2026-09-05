@@ -2685,7 +2685,12 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 			for(int32 I=0; I<Historical->GeometryFootprint.Num(); ++I)
 				if(!Historical->GeometryFootprint[I]) Historical->LastLegalCaptureMask[I]=false;
 		const bool bSameCapture=Historical->FineHistory.IsInitialized() && PreviousCapture==Historical->LastLegalCaptureMask;
-		if(!bSameCapture) Historical->FineHistory.Initialize(Historical->SpatialMemory, Historical->LastLegalCaptureMask);
+		if(!bSameCapture)
+		{
+			if(Historical->bConfirmedWholeCapture)
+				Historical->FineHistory.InitializeWholeCapture(Historical->SpatialMemory, Historical->LastLegalCaptureMask);
+			else Historical->FineHistory.Initialize(Historical->SpatialMemory, Historical->LastLegalCaptureMask);
+		}
 		EnsureRecordVisual(Prop, *Historical);
 		if (auto* Sealed = Prop.Visuals.Find(Epoch))
 		{

@@ -13,7 +13,7 @@ FGameplayTag FDarkwellHistoryGridV2::Unresolved() { return Darkwell::HistoryGrid
 FGameplayTag FDarkwellHistoryGridV2::VerifiedEmpty() { return Darkwell::HistoryGridV2::Empty; }
 FGameplayTag FDarkwellHistoryGridV2::Superseded() { return Darkwell::HistoryGridV2::Superseded; }
 
-void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& SealedMemory)
+void FDarkwellHistoryGridV2::InitializeStorage(const FDarkwellSpatialPropMemory& SealedMemory)
 {
 	check(SealedMemory.IsAbsent());
 	Bounds = SealedMemory.GetBounds();
@@ -23,6 +23,12 @@ void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& Sealed
 	ActiveSamples.Reset();
 	ActiveFlags.Init(false, Samples.Num());
 	MutableEvidence.Init(true, Samples.Num());
+}
+
+void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& SealedMemory)
+{
+	InitializeStorage(SealedMemory);
+	const FIntPoint Coarse = SealedMemory.GetSize();
 	TArray<FLinearColor> FrozenPresentation;
 	SealedMemory.BuildConservativePresentation(SamplesPerCell, FrozenPresentation);
 	for (int32 Y = 0; Y < Size.Y; ++Y) for (int32 X = 0; X < Size.X; ++X)
@@ -57,6 +63,23 @@ void FDarkwellHistoryGridV2::RestrictToRecordedGeometry(const TBitArray<>& Footp
 		Samples[I].InitialRemembered = Samples[I].Opacity = 0;
 		Samples[I].State = NeverObserved();
 		MutableEvidence[I] = true;
+	}
+}
+
+void FDarkwellHistoryGridV2::InitializeWholeCapture(
+	const FDarkwellSpatialPropMemory& SealedMemory, const TBitArray<>& FullGeometryMask)
+{
+	InitializeStorage(SealedMemory);
+	check(FullGeometryMask.Num()==Samples.Num());
+	for(int32 I=0;I<Samples.Num();++I)
+	{
+		auto& S=Samples[I]; S=FSample();
+		S.InitialRemembered=S.Opacity=FullGeometryMask[I]?1.f:0.f;
+		// The recorded mesh supplies the physical silhouette. The geometry support
+		// mask must not inherit a wall, cone edge or fade from Current presentation.
+		// Partial continues to use its observation-boundary inward AA initializer.
+		S.FrozenAAEnvelope=S.InitialRemembered;
+		S.State=FullGeometryMask[I]?Unresolved():NeverObserved();
 	}
 }
 

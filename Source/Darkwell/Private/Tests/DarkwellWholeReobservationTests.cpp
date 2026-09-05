@@ -104,6 +104,8 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 			View(FVector2D(70,-250),155); Step(.5f);
 			TestEqual(TEXT("Full reacquisition continues existing state"),Prop.History.GetRecords().Num(),1);
 			TestTrue(TEXT("Near contact is fully legal"),Scene->GetLastLegalCoverageRatioForTesting(Id)>.99f);
+			if(Cycle%2) for(float Yaw=155;Yaw<270;Yaw+=280*Dt)
+			{ View(FVector2D(70,-250),Yaw); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92)); }
 			View(FVector2D(70,-250),-90); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));
 			CheckHistory(TEXT("H2 first exit frame")); Step(.4f);
 			TestTrue(TEXT("Repeated observation reuses proxy and texture"),InitialProxy==Prop.Visuals.FindChecked(Epoch).Proxy && InitialTexture==Prop.Visuals.FindChecked(Epoch).Texture);

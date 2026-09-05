@@ -1,4 +1,5 @@
 #include "SightWeaveM4P1LabFixture.h"
+#include "Engine/Level.h"
 
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"

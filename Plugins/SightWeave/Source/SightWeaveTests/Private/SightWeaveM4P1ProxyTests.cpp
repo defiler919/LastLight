@@ -1,6 +1,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"
+#include "UObject/Package.h"
 #include "SightWeaveLastSeenProxyComponent.h"
 
 namespace SightWeaveM4P1ProxyTests

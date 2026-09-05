@@ -1,6 +1,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Components/StaticMeshComponent.h"
+#include "UObject/Package.h"
 #include "Misc/AutomationTest.h"
 #include "SightWeaveLastSeenProxyComponent.h"
 

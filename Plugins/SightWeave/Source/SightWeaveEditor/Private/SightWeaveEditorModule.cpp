@@ -1,4 +1,5 @@
 #include "SightWeaveLabSupport.h"
+#include "UObject/Package.h"
 #include "SightWeaveM4P1LabFixture.h"
 
 #include "Camera/CameraActor.h"

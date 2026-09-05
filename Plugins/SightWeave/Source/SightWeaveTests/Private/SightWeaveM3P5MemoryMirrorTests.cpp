@@ -1,6 +1,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/PlatformTime.h"
+#include "RHIGlobals.h"
 #include "Misc/AutomationTest.h"
 #include "SightWeaveMemory.h"
 #include "SightWeaveMemoryTestReadback.h"

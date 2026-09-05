@@ -1,5 +1,6 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
+#include "UObject/Package.h"
 #include "SightWeaveObjectPolicy.h"
 #include "SightWeaveSettings.h"
 #include "Engine/Engine.h"

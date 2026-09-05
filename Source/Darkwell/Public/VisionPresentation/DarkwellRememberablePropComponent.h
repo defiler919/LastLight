@@ -22,7 +22,18 @@ public:
 	void AddMemoryPrimitive(UStaticMeshComponent* Primitive);
 	void ResetMemoryPrimitives() { check(!HasBegunPlay()); MemoryPrimitives.Reset(); }
 	bool bRememberFromStart = true;
-	void SetMemoryAppearance(FLinearColor Tint, float UVScale) { RememberedTint = Tint; RememberedUVScale = UVScale; }
+	void SetMemoryAppearance(FLinearColor Tint, float UVScale)
+	{
+		if (RememberedTint != Tint || RememberedUVScale != UVScale) ++MemoryContentRevision;
+		RememberedTint = Tint; RememberedUVScale = UVScale;
+	}
+	/** Call after changing authored material parameters or other appearance data. */
+	UFUNCTION(BlueprintCallable, Category="Fog Memory")
+	void NotifyMemoryAppearanceChanged() { ++MemoryContentRevision; }
+	/** Content identity excludes world pose and presenter-owned texture parameters. */
+	uint64 ComputeMemoryContentRevision() const;
+	/** Authored part placement in actor space, independent of actor/world motion. */
+	static FTransform GetPrimitiveTransform(const UStaticMeshComponent& Primitive);
 	void AddLiveOnlyComponent(USceneComponent* Component);
 	FName GetStableId() const { return StableId; }
 	TConstArrayView<TObjectPtr<UStaticMeshComponent>> GetMemoryPrimitives() const
@@ -63,4 +74,5 @@ private:
 	TMap<TWeakObjectPtr<USceneComponent>, bool> VisibilityBeforeHide;
 	bool bSourceLive = true;
 	bool bRegistered = false;
+	uint64 MemoryContentRevision = 1;
 };

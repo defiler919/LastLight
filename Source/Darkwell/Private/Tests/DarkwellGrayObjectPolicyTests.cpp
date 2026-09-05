@@ -9,6 +9,10 @@
 #include "VisionPresentation/DarkwellMovingPropLabRoom.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
+#include "VisionPresentation/DarkwellRememberablePropComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 
 namespace Darkwell::GrayObjectPolicyTests
@@ -578,6 +582,55 @@ bool FDarkwellMemoryEpisodeContract::RunTest(const FString&)
  TestEqual(TEXT("Fully known cuboid has no artificial internal caps"),InternalCaps,0);
  TestEqual(TEXT("Repeated operations without new knowledge do not grow retained records"),F.Room->GetSpatialRecordCount(Id),InitialRecords);
  AddInfo(FString::Printf(TEXT("EPISODE_ORACLE missing=%d internal_caps=%d initial_records=%d final_records=%d"),Missing,InternalCaps,InitialRecords,F.Room->GetSpatialRecordCount(Id)));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellObservedContentContract,
+ "Darkwell.PropLab.ArchitectureAudit.ObservedContentSurvivesSource",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellObservedContentContract::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ for(auto Mode:{Reveal::SpatialPartial,Reveal::WholeObjectAfterSpan})
+ {
+  FRoom F;
+  F.Room->ResetTrackedRevealPolicyForLab(Id,Mode,100,History::StationaryOnly);
+  F.Face(90); F.Step(20); F.Face(-90); F.Step(20);
+  auto& Prop=F.Room->Tracked.FindChecked(Id);
+  auto* Source=Prop.Actual.Get(); auto* Memory=Source->Memory.Get();
+  const uint32 Epoch=Prop.History.GetRecords()[0].Epoch;
+  const auto Original=Prop.History.GetRecords()[0];
+  TestTrue(TEXT("Legal capture retains content"),!Original.Primitives.IsEmpty() && Original.ContentRevision!=0);
+  const uint64 BeforePose=Memory->ComputeMemoryContentRevision();
+  const auto Pose=Source->GetActorTransform();
+  Source->SetActorRotation(FRotator(0,23,0));
+  TestEqual(TEXT("Authored content version excludes world pose"),Memory->ComputeMemoryContentRevision(),BeforePose);
+  Source->SetActorTransform(Pose);
+  Memory->SetMemoryAppearance(FLinearColor::Red,7);
+  auto* Part=Memory->GetMemoryPrimitives()[0].Get();
+  Part->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Sphere.Sphere")));
+  Part->SetRelativeScale3D(FVector(3,2,1));
+  F.Step(20);
+  TestEqual(TEXT("Hidden changes create no observed content"),Prop.History.GetRecords().Num(),1);
+  auto* Record=Prop.History.FindRecord(Epoch);
+  TestTrue(TEXT("Hidden appearance cannot rewrite remembered tint"),Record->Tint==Original.Tint);
+  TestTrue(TEXT("Hidden geometry cannot rewrite observed mesh"),Record->Primitives[0].Mesh==Original.Primitives[0].Mesh);
+  F.Room->DestroyVisual(Prop.Visuals.FindChecked(Epoch)); Prop.Visuals.Remove(Epoch);
+  Source->Destroy(); Prop.Actual.Reset(); Prop.bExists=false;
+  F.Room->EnsureRecordVisual(Prop,*Record);
+  auto& Visual=Prop.Visuals.FindChecked(Epoch);
+  TestTrue(TEXT("Memory proxy rebuilds without a live source"),Visual.Proxy.IsValid());
+  if(!Visual.Proxy.IsValid()) return false;
+  TArray<UStaticMeshComponent*> Parts; Visual.Proxy->GetComponents(Parts);
+  TestEqual(TEXT("Rebuilt part count comes from capture"),Parts.Num(),Original.Primitives.Num());
+  if(Parts.IsEmpty()) return false;
+  TestTrue(TEXT("Rebuilt mesh is the observed mesh"),Parts[0]->GetStaticMesh()==Original.Primitives[0].Mesh.Get());
+  TestTrue(TEXT("Rebuilt placement is the observed placement"),Parts[0]->GetComponentTransform().Equals(Original.Primitives[0].RelativeTransform*Original.SnapshotTransform));
+  auto* Material=Cast<UMaterialInstanceDynamic>(Parts[0]->GetMaterial(0));
+  FLinearColor Tint; float UV=0;
+  TestTrue(TEXT("Rebuilt tint is observed content"),Material && Material->GetVectorParameterValue(TEXT("OriginalBaseColorTint"),Tint) && Tint==Original.Tint);
+  TestTrue(TEXT("Rebuilt UV scale is observed content"),Material && Material->GetScalarParameterValue(TEXT("OriginalUVScale"),UV) && UV==Original.UVScale);
+ }
  return true;
 }
 

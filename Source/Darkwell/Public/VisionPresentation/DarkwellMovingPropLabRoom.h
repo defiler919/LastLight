@@ -336,6 +336,7 @@ private:
 	friend class FDarkwellPlanarProjectionParity;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
+	friend class FDarkwellObservedContentContract;
 	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);
 
 	struct FCapQuadSnapshot
@@ -631,6 +632,7 @@ private:
 	void UpdateTracked(FTrackedProp& Prop, float DeltaSeconds);
 	bool SetTrackedExists(FName StableId, bool bExists);
 	void EnsureRecordVisual(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
+	void CaptureObservedContent(const FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record) const;
 	void UpdateRecordTexture(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
 	void UpdateCurrentPartTextures(FTrackedProp& Prop, FRecordVisual& Visual);
 	void UpdateRecordCap(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);

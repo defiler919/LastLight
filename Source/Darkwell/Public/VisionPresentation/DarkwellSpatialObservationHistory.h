@@ -4,6 +4,17 @@
 #include "VisionPresentation/DarkwellSpatialPropMemory.h"
 #include "VisionPresentation/DarkwellHistoryGridV2.h"
 
+class UStaticMesh;
+
+/** Observed content, sufficient to rebuild a proxy after the source is gone. */
+struct DARKWELL_API FDarkwellObservedPrimitive
+{
+	TSoftObjectPtr<UStaticMesh> Mesh;
+	FBox LocalBounds = FBox(ForceInit);
+	FTransform RelativeTransform = FTransform::Identity;
+	uint64 PrimitiveKey = 0;
+};
+
 /**
  * One player-observed world-space occupancy for a stable prop identity.
  * StableID identifies the real prop. Epoch identifies independently verifiable
@@ -13,6 +24,10 @@ struct DARKWELL_API FDarkwellSpatialObservationRecord
 {
 	uint32 Epoch = 0;
 	FTransform SnapshotTransform = FTransform::Identity;
+	uint64 ContentRevision = 0;
+	TArray<FDarkwellObservedPrimitive> Primitives;
+	FLinearColor Tint = FLinearColor::Gray;
+	float UVScale = 5;
 	FDarkwellSpatialPropMemory SpatialMemory;
 	FDarkwellHistoryGridV2 FineHistory;
 	/** Immutable binary capture at fine-grid resolution, independent of alpha/AA. */

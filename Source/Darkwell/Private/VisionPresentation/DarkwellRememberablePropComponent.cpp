@@ -50,6 +50,40 @@ void UDarkwellRememberablePropComponent::AddLiveOnlyComponent(
 	}
 }
 
+FTransform UDarkwellRememberablePropComponent::GetPrimitiveTransform(const UStaticMeshComponent& Primitive)
+{
+	FTransform Result = FTransform::Identity;
+	const USceneComponent* Part = &Primitive;
+	const USceneComponent* Root = Primitive.GetOwner()->GetRootComponent();
+	while (Part && Part != Root)
+	{
+		Result = Result * Part->GetRelativeTransform();
+		Part = Part->GetAttachParent();
+	}
+	return Result;
+}
+
+uint64 UDarkwellRememberablePropComponent::ComputeMemoryContentRevision() const
+{
+	uint64 Hash = 1469598103934665603ull;
+	auto Mix = [&Hash](uint64 V) { Hash = (Hash ^ V) * 1099511628211ull; };
+	Mix(MemoryContentRevision);
+	Mix(GetTypeHash(RememberedTint)); Mix(GetTypeHash(RememberedUVScale));
+	for (const UStaticMeshComponent* Primitive : MemoryPrimitives)
+	{
+		Mix(GetTypeHash(Primitive));
+		if (!Primitive) continue;
+		Mix(GetTypeHash(Primitive->GetStaticMesh()));
+		const FTransform Relative = GetPrimitiveTransform(*Primitive);
+		Mix(GetTypeHash(Relative.GetTranslation()));
+		Mix(GetTypeHash(Relative.GetRotation()));
+		Mix(GetTypeHash(Relative.GetScale3D()));
+		for (int32 Index = 0; Index < Primitive->GetNumMaterials(); ++Index)
+			Mix(GetTypeHash(Primitive->GetMaterial(Index)));
+	}
+	return Hash;
+}
+
 uint64 UDarkwellRememberablePropComponent::ComputeAppearanceRevision() const
 {
 	uint32 Hash = GetTypeHash(StableId);

@@ -2817,10 +2817,14 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		{
 			TArray<FDarkwellCurrentLiveGrid::FDescriptor> Descriptors;
 			for(const UStaticMeshComponent* Part:Actual->Memory->GetMemoryPrimitives())
-				if(Part && Part->GetStaticMesh()) Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),Part->GetRelativeTransform()});
+				if(Part && Part->GetStaticMesh()) Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part)});
 			if(!Prop.CurrentLive.MatchesGeometry(Descriptors,Transform))
 			{
-				if(!Prop.CurrentLive.Parts.IsEmpty()) AbandonCurrentObservationWithoutHistory(Prop);
+				if(!Prop.CurrentLive.Parts.IsEmpty())
+				{
+					if (IsCaptureEligible(Prop)) FreezeCurrentForHiddenMotion(Prop,TEXT("GEOMETRY_VERSION_CHANGED"));
+					else AbandonCurrentObservationWithoutHistory(Prop);
+				}
 				Prop.CurrentLive.ResetGeometry(Prop.StableId,Descriptors,Transform);
 				Prop.RevealObservation.Initialize(ObjectPolicy->GetResolvedPolicy(),Prop.CurrentLive.ObservationSize,Prop.CurrentLive.ObservationStepCm,Prop.CurrentLive.ObservationFootprint);
 			}
@@ -2929,6 +2933,16 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		if (!bAnyLegal && !IsCaptureEligible(Prop) && (!bWhole || CoverageSnapshot.bValid))
 			AbandonCurrentObservationWithoutHistory(Prop);
 		int32 CurrentIndex = Prop.History.GetCurrentIndex();
+		if (CoverageSnapshot.bValid && bAnyLegal && CurrentIndex != INDEX_NONE)
+		{
+			const auto& Observed = Prop.History.GetRecords()[CurrentIndex];
+			if (!Observed.Primitives.IsEmpty() && Observed.ContentRevision != Actual->Memory->ComputeMemoryContentRevision())
+			{
+				if (IsCaptureEligible(Prop)) FreezeCurrentForHiddenMotion(Prop,TEXT("OBSERVED_CONTENT_VERSION_CHANGED"));
+				else AbandonCurrentObservationWithoutHistory(Prop);
+				CurrentIndex = Prop.History.GetCurrentIndex();
+			}
+		}
 		if (CoverageSnapshot.bValid && CurrentIndex != INDEX_NONE)
 		{
 			if (bAnyLegal)
@@ -2958,9 +2972,9 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			// and pose, and no intervening empty/replacement evidence.
 			TArray<FDarkwellCurrentLiveGrid::FDescriptor> ResumeDescriptors;
 			for (const UStaticMeshComponent* Part : Actual->Memory->GetMemoryPrimitives())
-				if (Part && Part->GetStaticMesh()) ResumeDescriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),Part->GetRelativeTransform()});
+				if (Part && Part->GetStaticMesh()) ResumeDescriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part)});
 			if (IsCaptureEligible(Prop) && !ObjectPolicy->IsSightWeaveMoving()
-				&& Prop.LastCaptureAppearanceRevision == Actual->Memory->ComputeAppearanceRevision()
+				&& Prop.LastCaptureAppearanceRevision == Actual->Memory->ComputeMemoryContentRevision()
 				&& Prop.CurrentLive.LastLegalPose.Equals(Transform, 1.e-6)
 				&& Prop.CurrentLive.MatchesGeometry(ResumeDescriptors, Transform)
 				&& Prop.History.ResumeUncontradictedObservation(Prop.LocalEpoch))
@@ -2987,6 +3001,8 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		{
 			FDarkwellSpatialObservationRecord& Current =
 				Prop.History.GetMutableRecords()[CurrentIndex];
+			if (CoverageSnapshot.bValid && bAnyLegal && Current.Primitives.IsEmpty())
+				CaptureObservedContent(Prop, Current);
 			if (CoverageSnapshot.bValid
 				&& CoverageSnapshot.TransformRevision == Prop.TransformRevision
 				&& CoverageSnapshot.GridRevision == Prop.GridRevision
@@ -2994,7 +3010,7 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 			{
 				TArray<FDarkwellCurrentLiveGrid::FDescriptor> Descriptors;
                 for(const UStaticMeshComponent* Part:Actual->Memory->GetMemoryPrimitives())
-                    if(Part && Part->GetStaticMesh()) Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),Part->GetRelativeTransform()});
+                    if(Part && Part->GetStaticMesh()) Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part)});
                 if(Prop.LocalEpoch!=Current.Epoch)
                 {
                     if(!bWhole) Prop.CurrentLive.ResetGeometry(Prop.StableId,Descriptors,Transform);
@@ -3292,6 +3308,7 @@ void ADarkwellMovingPropLabRoom::StampConfirmedWholeCapture(
 	FDarkwellSpatialObservationRecord& Record,
 	const FCoverageSnapshot& CoverageSnapshot) const
 {
+	if (Record.Primitives.IsEmpty()) CaptureObservedContent(Prop, Record);
 	Record.bConfirmedWholeCapture = true;
 	Record.bCaptureRevisionValid = CoverageSnapshot.bValid
 		&& CoverageSnapshot.TransformRevision == Prop.TransformRevision
@@ -3329,8 +3346,7 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	FDarkwellSpatialObservationRecord& Current =
 		Prop.History.GetMutableRecords()[CurrentIndex];
 	const uint32 Epoch = Current.Epoch;
-	if (const auto* Actual = Prop.Actual.Get())
-		Prop.LastCaptureAppearanceRevision = Actual->Memory->ComputeAppearanceRevision();
+	Prop.LastCaptureAppearanceRevision = Current.ContentRevision;
 	TBitArray<> WholeGeometryMask;
 	if (Current.bConfirmedWholeCapture)
 	{
@@ -3490,12 +3506,27 @@ bool ADarkwellMovingPropLabRoom::SetTrackedExists(
 	return true;
 }
 
+void ADarkwellMovingPropLabRoom::CaptureObservedContent(
+	const FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record) const
+{
+	const auto* Actual = Prop.Actual.Get();
+	if (!Actual || !Record.bCurrentObservedLocation) return;
+	Record.ContentRevision = Actual->Memory->ComputeMemoryContentRevision();
+	Record.Tint = Actual->Memory->GetRememberedTint();
+	Record.UVScale = Actual->Memory->GetRememberedUVScale();
+	Record.Primitives.Reset();
+	for (const UStaticMeshComponent* Part : Actual->Memory->GetMemoryPrimitives())
+		if (Part && Part->GetStaticMesh()) Record.Primitives.Add({Part->GetStaticMesh(),
+			Part->GetStaticMesh()->GetBoundingBox(), UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part), Part->GetUniqueID()});
+}
+
 void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 	FTrackedProp& Prop,
 	FDarkwellSpatialObservationRecord& Record)
 {
 	FRecordVisual& Visual = Prop.Visuals.FindOrAdd(Record.Epoch);
 	Visual.Epoch = Record.Epoch;
+	if (Record.bCurrentObservedLocation && Record.Primitives.IsEmpty()) CaptureObservedContent(Prop, Record);
 	if (!Record.bCurrentObservedLocation && Visual.bPresentationRetired)
 	{
 		return;
@@ -3550,17 +3581,15 @@ void ADarkwellMovingPropLabRoom::EnsureRecordVisual(
 	}
 	if (Visual.PartBounds.IsEmpty())
 	{
-		if (const ADarkwellPropLabFurniture* Actual = Prop.Actual.Get())
+		for (const auto& Part : Record.Primitives)
 		{
-			Visual.PartBounds = ActualPartBounds(*Actual);
-			Visual.PartGeometry = ActualPartGeometry(*Actual);
-		}
-	}
-	else if (Visual.PartGeometry.IsEmpty())
-	{
-		if (const ADarkwellPropLabFurniture* Actual = Prop.Actual.Get())
-		{
-			Visual.PartGeometry = ActualPartGeometry(*Actual);
+			FPrimitiveGeometrySnapshot Geometry;
+			Geometry.LocalBounds = Part.LocalBounds;
+			Geometry.WorldTransform = Part.RelativeTransform * Record.SnapshotTransform;
+			Geometry.PrimitiveIndex = Visual.PartGeometry.Num();
+			Geometry.CachePlanarProjection();
+			Visual.PartBounds.Add(Part.LocalBounds.TransformBy(Geometry.WorldTransform));
+			Visual.PartGeometry.Add(Geometry);
 		}
 	}
 	const bool bWholeWithoutCap = Record.bConfirmedWholeCapture;
@@ -3758,8 +3787,7 @@ AActor* ADarkwellMovingPropLabRoom::SpawnMemoryProxy(
 	const FTrackedProp& Prop,
 	const FDarkwellSpatialObservationRecord& Record)
 {
-	const ADarkwellPropLabFurniture* Actual = Prop.Actual.Get();
-	if (!Actual)
+	if (Record.Primitives.IsEmpty())
 	{
 		return nullptr;
 	}
@@ -3778,17 +3806,18 @@ AActor* ADarkwellMovingPropLabRoom::SpawnMemoryProxy(
 	Proxy->SetRootComponent(Root);
 	Root->RegisterComponent();
 	int32 Index = 0;
-	for (const UStaticMeshComponent* Source : Actual->Memory->GetMemoryPrimitives())
+	for (const auto& Source : Record.Primitives)
 	{
-		if (!Source || !Source->GetStaticMesh())
+		UStaticMesh* SourceMesh = Source.Mesh.LoadSynchronous();
+		if (!SourceMesh)
 		{
 			continue;
 		}
 		UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(
 			Proxy, *FString::Printf(TEXT("SpatialMemoryMesh_%d"), Index++));
 		Mesh->SetupAttachment(Root);
-		Mesh->SetStaticMesh(Source->GetStaticMesh());
-		Mesh->SetWorldTransform(Source->GetRelativeTransform() * Record.SnapshotTransform);
+		Mesh->SetStaticMesh(SourceMesh);
+		Mesh->SetWorldTransform(Source.RelativeTransform * Record.SnapshotTransform);
 		Mesh->SetMobility(EComponentMobility::Movable);
 		Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Mesh->SetGenerateOverlapEvents(false);
@@ -3826,7 +3855,8 @@ void ADarkwellMovingPropLabRoom::BindProxyMaterial(
 		Material->SetTextureParameterValue(TEXT("SpatialStateTexture"), Visual->Texture.Get());
 		Material->SetVectorParameterValue(TEXT("SpatialMinInv"),
 			FLinearColor(Bounds.Min.X, Bounds.Min.Y, Inv.X, Inv.Y));
-		Material->SetVectorParameterValue(TEXT("OriginalBaseColorTint"), Prop.Tint);
+		Material->SetVectorParameterValue(TEXT("OriginalBaseColorTint"), Record.Tint);
+		Material->SetScalarParameterValue(TEXT("OriginalUVScale"), Record.UVScale);
 		Material->SetScalarParameterValue(TEXT("SpatialReady"), 1.0f);
 		Mesh->SetMaterial(0, Material);
 		OwnedMaterials.Add(Material);

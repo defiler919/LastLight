@@ -205,3 +205,13 @@ Corrected measurement must include setup/first update and wall-clock intervals,
 while retaining this original comparison. Empty-room full-frame time already
 fails 16.6 ms although system cost is .2 ms: whole-frame and gray-system costs
 cannot be conflated. No performance threshold is changed.
+
+## Checkpoint C — observed content is independent of the source
+
+- Historical records now capture mesh references, actor-relative primitive transforms and bounds, gray tint/UV scale, and a content revision only at legal observation. Proxy reconstruction reads that capture, including after source destruction. World pose is separate from authored content; presenter texture updates do not advance the content revision.
+- A newly observed content change seals eligible old content instead of rewriting it. Hidden content changes cannot update the capture. `NotifyMemoryAppearanceChanged` marks authored parameter changes; the current gray material contract stores tint/UV, not an arbitrary material graph or every MID parameter.
+- Inspection caught an accidental recursive call in the first uncommitted draft (compilation alone could not detect the behavioral failure). It was removed before running this checkpoint's tests. Relative transforms now compose the attachment chain to the actor root, so root-mesh and nested-component hosts do not mix actor motion into content.
+- Formal build: `Scripts/BuildEditor.ps1`, `Saved/ArchitectureAudit_ContentBuild2.log`, succeeded, 28.31 s.
+- `RunGrayObjectPolicyTests.ps1 -RunName Audit_Content_Contract -Tests 'Darkwell.PropLab.ArchitectureAudit+Darkwell.PropLab.GrayObjectPolicy+Darkwell.PropLab.MovingLiveContinuity+SightWeave.ObjectPolicy+SightWeave.RevealPolicy'`: 70/70, 69 clean + 1 warning, zero severe lines, process 0, 43.356 s test / 66.866 s wall.
+- New independent assertions exercise both Whole and Partial captures, hidden mesh/scale/tint changes, pose/content separation, source destruction, and exact old mesh/transform/tint/UV reconstruction. They do not use current source content as the expected answer.
+- Remaining: Live resource ownership still follows epochs; Lab/runtime extraction, terminal-state residency, ordinary host, corrected performance measurements and graphical teardown remain open.

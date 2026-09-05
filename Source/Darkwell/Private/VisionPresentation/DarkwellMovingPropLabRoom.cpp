@@ -848,6 +848,7 @@ void ADarkwellMovingPropLabRoom::LogRotationFrame(const FTrackedProp& Prop) cons
 	{
 		return;
 	}
+	GetContributionDiagnostics(Prop.StableId); // Explicit Lab forensic output.
 	uint32 CurrentEpoch = 0;
 	int32 StaleEpochs = 0;
 	int32 VisibleProxies = 0;

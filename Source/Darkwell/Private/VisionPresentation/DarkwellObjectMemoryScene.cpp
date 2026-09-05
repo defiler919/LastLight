@@ -1480,6 +1480,14 @@ void ADarkwellObjectMemoryScene::RetireHistoricalPresentation(
 	bHistoricalSpatialIndexDirty = true;
 }
 
+const ADarkwellObjectMemoryScene::FTrackedProp* ADarkwellObjectMemoryScene::GetContributionDiagnostics(FName StableId) const
+{
+	// Forensic projected/3D overlap scans are diagnostics, never gameplay input.
+	auto* Prop = const_cast<ADarkwellObjectMemoryScene*>(this)->Tracked.Find(StableId);
+	if (Prop) RefreshContributionDiagnostics(*Prop);
+	return Prop;
+}
+
 void ADarkwellObjectMemoryScene::RefreshContributionDiagnostics(
 	FTrackedProp& Prop) const
 {
@@ -2294,7 +2302,12 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
                      if(!bWhole) Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query,Uniform);
                      else Prop.CurrentLive.Queries=0;
                      Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
-                     Prop.CurrentLive.WritePartRasters(Query,!IsCaptureEligible(Prop) || ObjectPolicy->IsSightWeaveMoving(),Uniform);
+                     auto Raster=[&](const FBox2D& B,FIntPoint S,TArray<float>& Values)
+                     {
+                      const auto Q=Fog->QueryCanonicalCoverageRaster(B,S,Values,RuntimeFrame.CoverageQueries);
+                      return Q.bValid && Q.AuthorityRevision==CoverageSnapshot.AuthorityRevision && Q.CoverageDrawRevision==CoverageSnapshot.CoverageRevision;
+                     };
+                     Prop.CurrentLive.WritePartRasters(Query,!IsCaptureEligible(Prop) || ObjectPolicy->IsSightWeaveMoving(),Uniform,Raster);
                      RuntimeFrame.CoverageQueries += Prop.CurrentLive.Queries;
                      if(!bWhole) RuntimeFrame.CurrentSamplesTouched += Prop.CurrentLive.SamplesTouched;
                     }
@@ -2507,7 +2520,6 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 	const bool bDiagnosticsChanged = Prop.bDiagnosticsDirty;
 	if (bDiagnosticsChanged)
 	{
-		RefreshContributionDiagnostics(Prop);
 		Prop.bDiagnosticsDirty = false;
 	}
 	if (bDiagnosticsChanged && RuntimeFrameSequence % 6 == 0) LogRotationFrame(Prop);
@@ -4045,15 +4057,18 @@ int32 ADarkwellObjectMemoryScene::GetVisibleHistoricalProxyCountForTesting(
 int32 ADarkwellObjectMemoryScene::GetMaxOverlapContributorsForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	return Prop ? Prop->MaxOverlapContributors : 0;
 }
 
 int32 ADarkwellObjectMemoryScene::GetVisibleHistoricalCapCountForTesting(
-	const FName StableId) const
+ const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
-	return Prop ? Prop->VisibleHistoricalCaps : 0;
+ const auto* Prop=Tracked.Find(StableId); int32 Count=0;
+ if(Prop) for(const auto& Pair:Prop->Visuals)
+  Count+=Pair.Value.CapTriangles>0 && Pair.Value.Cap.IsValid() && Pair.Value.Cap->IsVisible()
+   && Pair.Value.Proxy.IsValid() && !Pair.Value.Proxy->IsHidden();
+ return Count;
 }
 
 int32 ADarkwellObjectMemoryScene::GetHistoricalPresentationResourceCountForTesting(
@@ -4077,70 +4092,70 @@ int32 ADarkwellObjectMemoryScene::GetHistoricalPresentationResourceCountForTesti
 int32 ADarkwellObjectMemoryScene::GetMaxSurfaceContributorsForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	return Prop ? Prop->MaxSurfaceContributors : 0;
 }
 
 int32 ADarkwellObjectMemoryScene::GetMaxCapContributorsForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	return Prop ? Prop->MaxCapContributors : 0;
 }
 
 int32 ADarkwellObjectMemoryScene::GetMaxTotalContributorsForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	return Prop ? Prop->MaxTotalContributors : 0;
 }
 
 int32 ADarkwellObjectMemoryScene::GetCurrent3DOverlapStaleSurfaceForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	return Prop ? Prop->Current3DOverlapStaleSurface : 0;
 }
 
 int32 ADarkwellObjectMemoryScene::GetCurrent3DOverlapStaleCapForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	return Prop ? Prop->Current3DOverlapStaleCap : 0;
 }
 
 int32 ADarkwellObjectMemoryScene::GetMax3DRenderOwnershipContributorsForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	return Prop ? Prop->Max3DRenderOwnershipContributors : 0;
 }
 
 int32 ADarkwellObjectMemoryScene::GetCurrentRenderContactStaleSurfaceForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	return Prop ? Prop->CurrentRenderContactStaleSurface : 0;
 }
 
 int32 ADarkwellObjectMemoryScene::GetCurrentRenderContactStaleCapForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	return Prop ? Prop->CurrentRenderContactStaleCap : 0;
 }
 
 int32 ADarkwellObjectMemoryScene::GetHardOwnershipFilterLeakForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	return Prop ? Prop->HardOwnershipFilterLeak : 0;
 }
 
 FString ADarkwellObjectMemoryScene::Get3DOwnershipTelemetryForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	if (!Prop)
 	{
 		return TEXT("CURRENT_3D_OVERLAP_STALE_SURFACE=0 CURRENT_3D_OVERLAP_STALE_CAP=0 MAX_3D_RENDER_OWNERSHIP=0");
@@ -4254,7 +4269,7 @@ FString ADarkwellObjectMemoryScene::GetCapLifecycleTelemetryForTesting(FName Sta
 FString ADarkwellObjectMemoryScene::GetResidualFragmentTelemetryForTesting(
 	const FName StableId) const
 {
-	const FTrackedProp* Prop = Tracked.Find(StableId);
+	const FTrackedProp* Prop = GetContributionDiagnostics(StableId);
 	if (!Prop) return TEXT("NO_TRACKED_PROP");
 	FString Result = FString::Join(Prop->ResidualFragmentDiagnostics, TEXT("; "));
 	for (const auto& Pair : Prop->Visuals)

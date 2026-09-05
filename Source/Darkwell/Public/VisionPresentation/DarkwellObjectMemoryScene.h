@@ -508,6 +508,7 @@ protected:
 		const FRecordVisual& Visual) const;
 	void RetireHistoricalPresentation(FTrackedProp& Prop, FRecordVisual& Visual);
 	void RefreshContributionDiagnostics(FTrackedProp& Prop) const;
+	const FTrackedProp* GetContributionDiagnostics(FName StableId) const;
 	void UpdateTracked(FTrackedProp& Prop, float DeltaSeconds);
 	void EnsureRecordVisual(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
 	void CaptureObservedContent(const FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record) const;

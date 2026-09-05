@@ -249,3 +249,36 @@ cannot be conflated. No performance threshold is changed.
 - New transition-inclusive D3D12 performance driver is separate from the unchanged legacy baseline. It records every wall/game interval, first update, source setup, system stages, resource trends and work counters, with an explicitly labeled post-90-frame slice. Completion of this protocol is not a timing-gate pass.
 - Legacy after-E run `HomeAudit_RuntimeAfter_20260905` completed with normal exit 0 / severe 0 / PIE stopped, 251.067 s wall. Same-scope system p95: Partial 82.823 → 37.372 ms; 32 Whole 93.402 → 63.479 ms; eight Whole 22.558 → 13.128 ms. These are improvements, not passing 16.6 ms gates. `legacy_performance_comparison.json` retains full frame and system percentiles. Old one-shot sweep statistics still exclude the sweep in warmup and are not accepted as sweep evidence.
 - Next: measure this retained-capture stage, improve measured hot paths, address terminal replaced-state residency/capacity, and run strict gates plus final continuous graphical/lifecycle checks.
+
+### Corrected transition-inclusive baseline at checkpoint F
+
+`Transitions_CaptureReuse` records binary `118f3f4`, with all 12 cases complete, D3D12/SM6, normal exit 0, zero severe lines, PIE stopped, 277.749 s wall. It includes setup and the first actual update. System times are memory runtime plus existing Lab control/report work; wall intervals include the normal editor frame and Python recorder. This is a successful measurement protocol, not a full-frame performance pass.
+
+| Case | wall p50/p95/p99/max ms | system p50/p95/p99/max ms | setup ms |
+| --- | --- | --- | --- |
+| Empty | 37.78/41.29/42.30/42.98 | 0.19/0.25/0.31/0.37 | 0.14 |
+| OneWhole | 38.32/41.95/51.30/78.20 | 0.26/0.91/0.92/15.01 | 2.05 |
+| EightWhole | 38.58/43.06/45.08/45.28 | 0.82/4.02/8.69/13.94 | 14.85 |
+| ThirtyTwoWhole | 39.23/50.04/54.58/112.97 | 4.98/13.24/15.89/82.22 | 59.14 |
+| PartialNewThenRepeat | 30.57/47.99/79.77/88.81 | 0.18/31.61/45.65/48.23 | 24.53 |
+| Overlap64 | 38.06/60.29/65.77/1497.27 | 4.49/28.27/30.84/1082.84 | 367.77 |
+| SameIdentity64 | 37.87/44.76/46.78/6844.29 | 6.11/11.77/12.98/6389.11 | 413.69 |
+| Distributed184 | 37.53/44.60/47.30/19543.52 | 6.10/12.28/13.69/18321.95 | 1136.51 |
+| FastSweep90 | 27.37/29.88/31.34/1516.80 | 0.22/0.31/13.71/1084.48 | 385.17 |
+| FastSweep160 | 27.20/29.41/30.96/1546.74 | 0.22/0.33/13.90/1085.24 | 415.55 |
+| StationaryStop | 28.85/31.64/32.74/40.09 | 0.11/0.50/0.58/4.54 | 8.95 |
+| LongRepeatDistributed | 37.92/45.38/47.81/19510.74 | 6.14/12.84/13.46/18295.30 | 1131.42 |
+
+Partial retains one record/proxy and two textures; its fine capture grows from zero to 3,809,280 bytes as knowledge is first acquired, then stays fixed. The 1,800-frame distributed case keeps 184 records. Raw per-frame resources/work and all stage percentiles are in `performance.json` and `frames.jsonl` alongside the trace.
+
+The corrected partial-exploration path includes an external cut while blends change: forensic `RefreshContributionDiagnostics` p95 is 24.498 ms, versus current reveal 9.875 ms. This differs from the old sweep reaching a complete object (where the diagnostic fast path cost was small). The earlier old-protocol observation cannot rule out the diagnostic bottleneck in this newly measured scenario. Batch stress first updates are a separate pathology (1.08 s overlap / 6.39 s same identity / 18.32 s distributed); setup timings alone miss them.
+
+## Checkpoint G — separate forensic scans and reuse exact coverage work
+
+- Projected/3D contributor scans now run through explicit diagnostic getters, with the existing output signature cache. They do not author gameplay knowledge, caps or pixels. The old rotation Lab's explicitly requested forensic log/HUD can still request them; the ordinary scene no longer computes them every changed frame. Visible-cap counts use a direct resource check. Diagnostic tests still request and compare exact overlap results, so the checks remain available rather than being replaced with assumed zeros.
+- Partial local coverage uses conservative uniform-tile proofs. Unresolved tiles retain the original corner/center positions and 2.5 cm density; per-part world rasters reuse the canonical raster with matching authority/draw revisions. Full geometry masks are cached by exact legal pose, bounds, size and geometry reset. No material, shader, render setting or spatial resolution changed.
+- `CurrentTilesMatchPointOracle` compares every local sample and knowledge/blend hash against the original five-point path across translated/yaw-rotated geometry, many view angles and an occluding wall; uniform interiors must reduce point queries by more than 3x. Existing independent seam/known-unknown/erasure tests remain.
+- Formal `ArchitectureAudit_CurrentTilesBuild.log`: succeeded, 33.60 s. `Audit_CurrentTiles_Contracts`: **108/108** (100 clean + 8 warnings), normal exit 0, severe 0, 130.396 s tests / 151.400 s wall. Includes moving continuity, full/incremental parity, fine/spatial history, fast sweeps, ordinary host, per-object policy, independent episode tests and both unchanged strict short performance gates.
+- Strict eight-moving gate: system p50/p95/p99/max .460/5.064/5.915/6.714 ms; enclosing test step 3.767/8.086/8.446/10.216 ms. Strict 32-changed-view gate: system 2.382/6.472/9.484/46.389 ms; enclosing step 5.668/10.026/13.312/49.809 ms, one >33 ms step, none >100 ms. Idle step p95 .178/.628 ms respectively. Thresholds and complete-step assertions are unchanged. Native NullRHI step timing is not a D3D12 full-frame result.
+- Checkpoint F's final build after removal of temporary test instrumentation succeeded in 7.55 s (`ArchitectureAudit_CaptureReuseFinalBuild.log`). The succeeding G suite includes those unmodified parity tests.
+- Next: verify G with the corrected graphical protocol, compact fully terminal replaced records without fake empty evidence, decouple actual capture admission from the legacy 64-record cap, then final graphical tour/soak and delivery audit.

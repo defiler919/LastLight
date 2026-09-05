@@ -38,6 +38,7 @@ bool FDarkwellCurrentLiveGrid::FDescriptor::Matches(const FDescriptor& O) const
 void FDarkwellCurrentLiveGrid::ResetGeometry(FName Id,TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose)
 {
  ++GeometryResets; Updates=0; Parts.Reset(); OwnershipDirtyRegions.Reset(); RegisteredScale=ActorPose.GetScale3D(); LastLegalPose=ActorPose;
+ CachedFullGeometry.Empty();
  double Radius=0;
  for(const auto& D:Descriptors)
  {
@@ -49,7 +50,6 @@ void FDarkwellCurrentLiveGrid::ResetGeometry(FName Id,TConstArrayView<FDescripto
   P.Local.Initialize(Id,B,FMath::Max(Ext.X,Ext.Y)); P.Local.BeginPresent();
   P.Local.PrepareCurrentRaster(B,FIntPoint(FMath::Max(1,FMath::CeilToInt(Ext.X*Scale.X/CurrentLocalSampleSizeCm)),FMath::Max(1,FMath::CeilToInt(Ext.Y*Scale.Y/CurrentLocalSampleSizeCm))));
   P.Coverage.SetNumZeroed(P.Local.GetCells().Num()); P.LastLegalCaptureMask.Init(false,P.Coverage.Num()); P.CurrentLegalObservationMask.Init(false,P.Coverage.Num());
-  const auto LS=P.Local.GetSize(); P.Corners.SetNumZeroed((LS.X+1)*(LS.Y+1));
   const double Diameter=FVector2D(Ext.X*Scale.X,Ext.Y*Scale.Y).Size();
   const int32 MaxCells=FMath::CeilToInt(Diameter/CurrentLocalSampleSizeCm)+2;
   P.AtlasCells=FIntPoint(MaxCells,MaxCells);
@@ -190,6 +190,10 @@ bool FDarkwellCurrentLiveGrid::BuildFullGeometryMask(const FBox2D& Bounds,const 
 {
  Out.Empty();
  if(!Bounds.bIsValid || Size.X<=0 || Size.Y<=0 || Parts.IsEmpty()) return false;
+ if(!CachedFullGeometry.IsEmpty() && CachedFullGeometrySize==Size
+  && CachedFullGeometryBounds.Min==Bounds.Min && CachedFullGeometryBounds.Max==Bounds.Max
+  && CachedFullGeometryPose.Equals(LastLegalPose,0))
+ { Out=CachedFullGeometry; return Out.CountSetBits()>0; }
  Out.Init(false,Size.X*Size.Y);
  const FVector2D Step=Bounds.GetSize()/FVector2D(Size);
  for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X)
@@ -202,6 +206,7 @@ bool FDarkwellCurrentLiveGrid::BuildFullGeometryMask(const FBox2D& Bounds,const 
    break;
   }
  }
+ CachedFullGeometry=Out; CachedFullGeometryBounds=Bounds; CachedFullGeometrySize=Size; CachedFullGeometryPose=LastLegalPose;
  return Out.CountSetBits()>0;
 }
 
@@ -354,15 +359,38 @@ bool FDarkwellCurrentLiveGrid::Advance(float Dt,const FTransform& ActorPose,TFun
    OwnershipDirtyRegions.Add(WorldBounds);
   };
   auto Legal=[&](FVector2D Local) { ++Queries; const float V=Query(FVector2D(Pose.TransformPosition(FVector(Local,P.Geometry.LocalBounds.GetCenter().Z)))); return FMath::IsFinite(V)?FMath::Clamp(V,0.f,1.f):0.f; };
-  float Constant=0; const bool ConstantRegion=Uniform && Uniform(XY(P.Geometry.LocalBounds.TransformBy(Pose)),Constant);
-  if(!ConstantRegion) for(int32 Y=0;Y<=S.Y;++Y) for(int32 X=0;X<=S.X;++X) P.Corners[Y*(S.X+1)+X]=Legal(B.Min+Step*FVector2D(X,Y));
+  // Prove uniform tiles in world space, then retain the exact original five
+  // local sample positions at every unresolved boundary. No density change.
+  auto Fill=[&](auto&& Self,int32 X0,int32 Y0,int32 X1,int32 Y1)->void
+  {
+   const auto Min=B.Min+Step*FVector2D(X0,Y0), Max=B.Min+Step*FVector2D(X1,Y1);
+   FBox2D Tile(ForceInit);
+   for(auto L:{Min,FVector2D(Max.X,Min.Y),Max,FVector2D(Min.X,Max.Y)})
+    Tile+=FVector2D(Pose.TransformPosition(FVector(L,P.Geometry.LocalBounds.GetCenter().Z)));
+   float Constant;
+   if(Uniform && Uniform(Tile,Constant))
+   { for(int32 Y=Y0;Y<Y1;++Y) for(int32 X=X0;X<X1;++X) P.Coverage[Y*S.X+X]=Constant; return; }
+   if(Uniform && (X1-X0>4 || Y1-Y0>4))
+   {
+    if(X1-X0>=Y1-Y0) { const int32 M=(X0+X1)/2; Self(Self,X0,Y0,M,Y1); Self(Self,M,Y0,X1,Y1); }
+    else { const int32 M=(Y0+Y1)/2; Self(Self,X0,Y0,X1,M); Self(Self,X0,M,X1,Y1); }
+    return;
+   }
+   for(int32 Y=Y0;Y<Y1;++Y) for(int32 X=X0;X<X1;++X)
+   {
+    float V=1;
+    for(auto O:{FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)})
+     V=FMath::Min(V,Legal(B.Min+Step*(FVector2D(X,Y)+O)));
+    P.Coverage[Y*S.X+X]=V;
+   }
+  };
+  Fill(Fill,0,0,S.X,S.Y);
   for(int32 Y=0;Y<S.Y;++Y)
   {
    int32 OwnershipRunStart=INDEX_NONE;
    for(int32 X=0;X<S.X;++X)
    {
-    const int32 I=Y*S.X+X,K=Y*(S.X+1)+X;
-    P.Coverage[I]=ConstantRegion?Constant:FMath::Min(Legal(B.Min+Step*FVector2D(X+.5,Y+.5)),FMath::Min(FMath::Min(P.Corners[K],P.Corners[K+1]),FMath::Min(P.Corners[K+S.X+1],P.Corners[K+S.X+2])));
+    const int32 I=Y*S.X+X;
     const bool PreviouslyOwned=P.LastLegalCaptureMask[I];
     P.CurrentLegalObservationMask[I]=P.Coverage[I]>=FDarkwellSpatialPropMemory::LegalCoverage;
     if(P.CurrentLegalObservationMask[I]) P.LastLegalCaptureMask[I]=true;
@@ -420,18 +448,20 @@ void FDarkwellCurrentLiveGrid::WriteWorldSnapshot(FDarkwellSpatialPropMemory& Ou
   if(C.DiscoveredPresent==0 && bFullyObservedAtPose) C=CompleteEnvelope;
  }
 }
-void FDarkwellCurrentLiveGrid::WritePartRasters(TFunctionRef<float(FVector2D)> Query,bool bTransient,TFunction<bool(const FBox2D&,float&)> Uniform)
+void FDarkwellCurrentLiveGrid::WritePartRasters(TFunctionRef<float(FVector2D)> Query,bool bTransient,TFunction<bool(const FBox2D&,float&)> Uniform,
+ TFunction<bool(const FBox2D&,FIntPoint,TArray<float>&)> CanonicalRaster)
 {
  for(auto& P:Parts)
  {
   const auto B=XY(P.Geometry.LocalBounds.TransformBy(P.Pose)); const auto S=GridSize(B);
   auto Cells=P.Raster.PrepareCurrentRaster(B,S,P.AtlasCells.X*P.AtlasCells.Y); const auto Step=B.GetSize()/FVector2D(S);
   float Constant=0; const bool ConstantRegion=Uniform && Uniform(B,Constant);
+  const bool CachedRaster=!ConstantRegion && CanonicalRaster && CanonicalRaster(B,S,P.RasterCoverage) && P.RasterCoverage.Num()==S.X*S.Y;
   for(int32 Y=0;Y<S.Y;++Y) for(int32 X=0;X<S.X;++X)
   {
    const auto Min=B.Min+Step*FVector2D(X,Y); auto C=Sample(P,Min+Step*.5,true);
-   float Coverage=ConstantRegion?Constant:1;
-   if(!ConstantRegion) for(const FVector2D Offset : {FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)})
+   float Coverage=ConstantRegion?Constant:CachedRaster?P.RasterCoverage[Y*S.X+X]:1;
+   if(!ConstantRegion && !CachedRaster) for(const FVector2D Offset : {FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)})
    { ++Queries; Coverage=FMath::Min(Coverage,Query(Min+Step*Offset)); }
    C.CurrentLegalCoverage=Coverage;
    if(Coverage<FDarkwellSpatialPropMemory::LegalCoverage && bTransient) C.AppearanceBlend=0;

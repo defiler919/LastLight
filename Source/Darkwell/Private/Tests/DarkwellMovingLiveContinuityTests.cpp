@@ -13,6 +13,12 @@ namespace Darkwell::MovingLiveTests
 {
 	const FName Id(TEXT("Lab.InWorld.Rotate.Cabinet"));
 	using Mode = ESightWeaveHistoryMode;
+	int32 TextureCreations(const FString& Telemetry)
+	{
+		const FString Key=TEXT("\"texture_creations\":");
+		const int32 Start=Telemetry.Find(Key);
+		return Start==INDEX_NONE?-1:FCString::Atoi(*Telemetry.Mid(Start+Key.Len()));
+	}
 	struct FRoom
 	{
 		FDarkwellLegacyObjectPolicyFixture LegacyPolicy;
@@ -79,7 +85,7 @@ bool FDarkwellMovingLiveReproduction::RunTest(const FString&)
   HistoricalScans+=Perf.FineSamplesScanned; CapRebuilds+=Perf.CapMeshRebuilds;
   const FString Row=F.Room->GetMovingLiveTelemetry(Id);
   TestTrue(TEXT("Stable interior appearance every motion frame"),Row.Contains(TEXT("\"appearance\":[1.000000,1.000000,1.000000]")));
-  TestTrue(TEXT("Fixed four current textures across world AABB changes"),Row.Contains(TEXT("\"texture_creations\":4,")));
+  TestEqual(TEXT("Current allocations do not grow across world AABB changes"),TextureCreations(Row),TextureCreations(Before));
   AddInfo(FString::Printf(TEXT("MOVING_LIVE_FRAME %d "),I)+Row);
   if(Row.Contains(TEXT("\"appearance\":[0.083333,0.083333,0.083333]"))) ++Collapsed;
   TestEqual(TEXT("Single current epoch"),F.Room->GetCurrentEpochCountForTesting(Id),1);
@@ -170,11 +176,12 @@ bool FDarkwellMovingLiveContract::RunTest(const FString& Case)
     FRoom R;
     auto Step=[&]() { R.Adapter->Tick(1.f/Hz);R.Room->UpdateRoom(1.f/Hz,R.Player);R.Fixture->Tick(1.f/Hz); };
     for(int32 I=0;I<Hz;++I) Step();
+    const int32 InitialTextures=TextureCreations(R.Room->GetMovingLiveTelemetry(Id));
     R.Room->StartTrackedRotationForTesting(Id,180,4);
     for(int32 I=0;I<4*Hz;++I)
     {
      Step(); const auto Row=R.Room->GetMovingLiveTelemetry(Id);
-     TestTrue(TEXT("Real Lab texture creation stays fixed at every rate"),Row.Contains(TEXT("\"texture_creations\":4,")));
+     TestEqual(TEXT("Real Lab texture creation stays fixed at every rate"),TextureCreations(Row),InitialTextures);
      TestTrue(TEXT("Real Lab current never destructively reinitializes"),Row.Contains(TEXT("\"initialize\":1,")));
      TestTrue(TEXT("Real Lab stable interior stays solid at every rate"),Row.Contains(TEXT("\"appearance\":[1.000000,1.000000,1.000000]")));
      TestEqual(TEXT("Real Lab has one continuous current"),R.Room->GetCurrentEpochCountForTesting(Id),1);
@@ -260,13 +267,14 @@ bool FDarkwellMovingLiveContract::RunTest(const FString& Case)
  F.Step(30);
  if(Case.StartsWith(TEXT("ContinuousVisibleTranslation")))
  {
+  const int32 InitialTextures=TextureCreations(F.Room->GetMovingLiveTelemetry(Id));
   const FTransform Start=F.Room->GetTrackedTransform(Id);
   F.Room->GetObjectPolicyForTesting(Id)->SetSightWeaveMoving(true);
   for(int32 I=1;I<=240;++I) {
    auto Pose=Start;Pose.AddToTranslation(FVector(120.*I/240,0,0));F.Room->SetTrackedTransformForTesting(Id,Pose);F.Step();
    const auto Row=F.Room->GetMovingLiveTelemetry(Id);
    TestTrue(TEXT("Translation keeps stable appearance"),Row.Contains(TEXT("\"appearance\":[1.000000,1.000000,1.000000]")));
-   TestTrue(TEXT("Texture count stable"),Row.Contains(TEXT("\"texture_creations\":4,")));
+   TestEqual(TEXT("Texture count stable"),TextureCreations(Row),InitialTextures);
    TestEqual(TEXT("No path histories"),F.Room->GetStaleEpochCountForTesting(Id),0);
   }
   F.Room->GetObjectPolicyForTesting(Id)->SetSightWeaveMoving(false); return true;

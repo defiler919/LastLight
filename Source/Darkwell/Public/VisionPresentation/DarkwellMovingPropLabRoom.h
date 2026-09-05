@@ -348,15 +348,20 @@ private:
 		int32 PrimitiveIndex = INDEX_NONE;
 	};
 
+	/** Per-source presentation allocations survive observation entry/exit. */
+	struct FCurrentPresentation
+	{
+		TArray<TWeakObjectPtr<UTexture2D>> LiveTextures;
+		TArray<TArray<FLinearColor>> LivePixels;
+		TArray<uint64> LiveSignatures;
+		int32 LiveTextureCreations=0,LiveTextureUploads=0;
+	};
+
 	struct FRecordVisual
 	{
 		uint32 Epoch = 0;
 		TWeakObjectPtr<AActor> Proxy;
 		TWeakObjectPtr<UTexture2D> Texture;
-		TArray<TWeakObjectPtr<UTexture2D>> LiveTextures;
-		TArray<TArray<FLinearColor>> LivePixels;
-		TArray<uint64> LiveSignatures;
-		int32 LiveTextureCreations=0,LiveTextureUploads=0;
 		TWeakObjectPtr<UDynamicMeshComponent> Cap;
 		TArray<FBox> PartBounds;
 		TArray<FPrimitiveGeometrySnapshot> PartGeometry;
@@ -461,6 +466,7 @@ private:
 		uint64 PolicyRevision = 1;
 		FDarkwellSpatialObservationHistory History;
 		FDarkwellCurrentLiveGrid CurrentLive;
+		FCurrentPresentation CurrentPresentation;
 		FSightWeaveRevealObservation RevealObservation;
 		TBitArray<> CurrentLegalObservationMask;
   bool bCachedWholeLegalContact=false;
@@ -634,7 +640,7 @@ private:
 	void EnsureRecordVisual(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
 	void CaptureObservedContent(const FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record) const;
 	void UpdateRecordTexture(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
-	void UpdateCurrentPartTextures(FTrackedProp& Prop, FRecordVisual& Visual);
+	void UpdateCurrentPartTextures(FTrackedProp& Prop);
 	void UpdateRecordCap(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
 	void StampConfirmedWholeCapture(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record,
 		const FCoverageSnapshot& CoverageSnapshot) const;

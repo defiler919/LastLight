@@ -553,6 +553,7 @@ bool FDarkwellMemoryEpisodeContract::RunTest(const FString&)
   FTransform(FVector(-300,650,0)),ESightWeaveObjectPolicySource::UseProjectDefault,History::StationaryOnly,&Policy);
  F.Face(90); F.Step(20); F.Face(-90); F.Step(20);
  const int32 InitialRecords=F.Room->GetSpatialRecordCount(Id);
+ const auto InitialTextures=F.Room->Tracked.FindChecked(Id).CurrentPresentation.LiveTextures;
  int32 Missing=0, InternalCaps=0;
  for(float Yaw:{52.f,40.f,28.f,52.f,40.f,28.f})
  {
@@ -581,6 +582,7 @@ bool FDarkwellMemoryEpisodeContract::RunTest(const FString&)
  TestEqual(TEXT("Fully known interior has no surface deficit after subset reobservations"),Missing,0);
  TestEqual(TEXT("Fully known cuboid has no artificial internal caps"),InternalCaps,0);
  TestEqual(TEXT("Repeated operations without new knowledge do not grow retained records"),F.Room->GetSpatialRecordCount(Id),InitialRecords);
+ TestTrue(TEXT("Same source reuses live texture allocations across episodes"),InitialTextures==F.Room->Tracked.FindChecked(Id).CurrentPresentation.LiveTextures);
  AddInfo(FString::Printf(TEXT("EPISODE_ORACLE missing=%d internal_caps=%d initial_records=%d final_records=%d"),Missing,InternalCaps,InitialRecords,F.Room->GetSpatialRecordCount(Id)));
  return true;
 }

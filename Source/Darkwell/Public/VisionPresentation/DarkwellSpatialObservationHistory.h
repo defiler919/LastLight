@@ -32,6 +32,8 @@ struct DARKWELL_API FDarkwellSpatialObservationRecord
 	FDarkwellHistoryGridV2 FineHistory;
 	/** Immutable binary capture at fine-grid resolution, independent of alpha/AA. */
 	TBitArray<> LastLegalCaptureMask;
+	/** Pose/content geometry cache; not an observation or empty-evidence mask. */
+	TBitArray<> GeometryFootprint;
 	/** Whole captures are immutable geometry knowledge and never own a cut cap. */
 	bool bConfirmedWholeCapture = false;
 	bool bCaptureRevisionValid = false;

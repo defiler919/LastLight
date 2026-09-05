@@ -65,6 +65,21 @@ bool FDarkwellObjectMemoryOrdinaryHost::RunTest(const FString&)
 	// A dead source/policy must not be required by subsequent memory updates.
 	Actors[0]->Destroy(); Step(10);
 	TestTrue(TEXT("Destroyed source retains unverified knowledge"),Scene->GetVisibleHistoricalProxyCountForTesting(Ids[0])>0);
+	auto* Replacement=World->SpawnActor<AActor>();
+	auto* NewMesh=NewObject<UStaticMeshComponent>(Replacement);
+	Replacement->SetRootComponent(NewMesh); Replacement->AddInstanceComponent(NewMesh);
+	NewMesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Sphere.Sphere")));
+	NewMesh->SetMobility(EComponentMobility::Movable); NewMesh->RegisterComponent();
+	Replacement->SetActorLocation(FVector(-700,-700,60));
+	auto* NewMemory=NewObject<UDarkwellRememberablePropComponent>(Replacement);
+	NewMemory->bUseSpatialMemory=true; NewMemory->ConfigureStableId(Ids[0]); NewMemory->AddMemoryPrimitive(NewMesh);
+	Replacement->AddInstanceComponent(NewMemory); NewMemory->RegisterComponent();
+	auto* NewPolicy=NewObject<USightWeaveObjectPolicyComponent>(Replacement);
+	Replacement->AddInstanceComponent(NewPolicy); NewPolicy->RegisterComponent(); Replacement->DispatchBeginPlay();
+	TestTrue(TEXT("A dead identity accepts a distinct source instance"),Scene->RegisterRememberable(NewMemory,NewPolicy));
+	Step(20);
+	TestEqual(TEXT("Replacement does not grant unseen geometry"),Scene->GetCurrentEpochCountForTesting(Ids[0]),0);
+	TestTrue(TEXT("Replacement does not erase unverified old geometry"),Scene->GetVisibleHistoricalProxyCountForTesting(Ids[0])>0);
 	Source.bConeLegallyLive=true; ++Source.AuthorityRevision; Fog->UpdateSource(Source); Step(30);
 	TestTrue(TEXT("Fresh stationary observation admits the new pose"),Scene->GetCurrentEpochCountForTesting(Ids[4])==1);
 	TestEqual(TEXT("Legal empty evidence removes destroyed source memory"),Scene->GetSpatialRecordCount(Ids[0]),0);

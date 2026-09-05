@@ -41,15 +41,30 @@ bool ADarkwellObjectMemoryScene::RegisterRememberable(
 {
 	if (!Memory || !Policy || !Memory->bUseSpatialMemory || Memory->GetWorld()!=GetWorld()
 		|| Memory->GetOwner()!=Policy->GetOwner() || Memory->GetStableId().IsNone()
-		|| Tracked.Contains(Memory->GetStableId()) || Memory->GetMemoryPrimitives().IsEmpty()) return false;
+		|| Memory->GetMemoryPrimitives().IsEmpty()) return false;
+	FTrackedProp* Existing=Tracked.Find(Memory->GetStableId());
+	if(Existing && Existing->Actual.IsValid() && !Existing->Actual->IsActorBeingDestroyed()) return false;
 	UMaterialInterface* SourceMaterial=LoadObject<UMaterialInterface>(nullptr,
 		TEXT("/Game/Darkwell/Vision/PropLab/M_ManualFixedReveal.M_ManualFixedReveal"));
 	if (!SourceMaterial) return false;
-	FTrackedProp& Prop=Tracked.Add(Memory->GetStableId());
+	if(Existing)
+	{
+		// A new source instance is not evidence about its previous observed poses.
+		if(Existing->History.GetCurrentIndex()!=INDEX_NONE) FreezeCurrentForHiddenMotion(*Existing,TEXT("SOURCE_REPLACED"));
+		ReleaseSourcePresentation(*Existing);
+		Existing->CurrentLive={}; Existing->RevealObservation={}; Existing->LocalEpoch=0;
+		Existing->CurrentLegalObservationMask.Empty(); Existing->LastCaptureAppearanceRevision=0;
+		Existing->CachedCurrentAuthorityRevision=Existing->CachedCurrentCoverageDrawRevision=MAX_uint64;
+		Existing->bLastCoverageValid=false; Existing->ObservationState=EObservationState::NeverObserved;
+		Existing->CurrentPresentationActiveSeconds=.5f; Existing->bDiagnosticsDirty=true;
+		++Existing->TransformRevision; ++Existing->GridRevision; ++GeometryRevision;
+	}
+	FTrackedProp& Prop=Existing?*Existing:Tracked.Add(Memory->GetStableId());
 	Prop.StableId=Memory->GetStableId(); Prop.Actual=Memory->GetOwner(); Prop.ObjectPolicy=Policy;
 	Prop.RegisteredPolicy=Policy->GetResolvedPolicy();
 	Prop.InitialTransform=Prop.LastPhysicalTransform=Prop.LastGeometryTransform=Memory->GetOwner()->GetActorTransform();
-	Prop.bExists=true; Prop.History.Initialize(Prop.StableId);
+	Prop.bExists=true; Prop.bLastCaptureEligible=false;
+	if(!Existing) Prop.History.Initialize(Prop.StableId);
 	for (UStaticMeshComponent* Part:Memory->GetMemoryPrimitives()) if(Part)
 	{
 		auto& Binding=Prop.SourceBindings.AddDefaulted_GetRef();
@@ -1937,6 +1952,16 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 		Prop.bDiagnosticsDirty = true;
 	}
 	AActor* Actual = Prop.bExists && ObjectPolicy ? Prop.Actual.Get() : nullptr;
+	bool bContinueLiveEpisode=false;
+	if(Actual && Prop.History.GetCurrentIndex()!=INDEX_NONE)
+	{
+		const auto& Current=Prop.History.GetRecords()[Prop.History.GetCurrentIndex()];
+		const bool bSameContent=Current.ContentRevision==Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->ComputeMemoryContentRevision();
+		if(Current.FineHistory.IsInitialized() && (!IsCaptureEligible(Prop)
+			|| !Current.SnapshotTransform.Equals(Actual->GetActorTransform(),1.e-6)
+			|| !bSameContent))
+			bContinueLiveEpisode=FreezeCurrentForHiddenMotion(Prop,TEXT("RETAINED_CAPTURE_SOURCE_CHANGED"),true) && bSameContent;
+	}
 	if (!Actual && Prop.History.GetCurrentIndex()!=INDEX_NONE)
 		FreezeCurrentForHiddenMotion(Prop,TEXT("SOURCE_UNAVAILABLE"));
 	const uint64 CurrentRevealStartCycles = FPlatformTime::Cycles64();
@@ -2194,8 +2219,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 				&& Prop.History.ResumeUncontradictedObservation(Prop.LocalEpoch))
 			{
 				Prop.CurrentLive.ResumeStationaryKnowledge();
-				if (auto* V = Prop.Visuals.Find(Prop.LocalEpoch)) DestroyVisual(*V);
-				Prop.Visuals.Remove(Prop.LocalEpoch);
+				if (auto* V = Prop.Visuals.Find(Prop.LocalEpoch); V && V->Proxy.IsValid()) V->Proxy->SetActorHiddenInGame(true);
 				bHistoricalSpatialIndexDirty = true;
 			}
 			const int32 NewIndex = Prop.History.BeginCurrentObservation(
@@ -2225,6 +2249,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 				TArray<FDarkwellCurrentLiveGrid::FDescriptor> Descriptors;
                 for(const UStaticMeshComponent* Part:Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives())
                     if(Part && Part->GetStaticMesh()) Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part)});
+                if(bContinueLiveEpisode && Prop.CurrentLive.MatchesGeometry(Descriptors,Transform)) Prop.LocalEpoch=Current.Epoch;
                 if(Prop.LocalEpoch!=Current.Epoch)
                 {
                     if(!bWhole) Prop.CurrentLive.ResetGeometry(Prop.StableId,Descriptors,Transform);
@@ -2536,9 +2561,9 @@ void ADarkwellObjectMemoryScene::StampConfirmedWholeCapture(
 
 bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 	FTrackedProp& Prop,
-	const TCHAR* Reason)
+	const TCHAR* Reason, const bool bSealLastEligibleObservation)
 {
-	if (!IsCaptureEligible(Prop))
+	if (!IsCaptureEligible(Prop) && !(bSealLastEligibleObservation && Prop.bLastCaptureEligible))
 	{
 		AbandonCurrentObservationWithoutHistory(Prop);
 		return false;
@@ -2560,6 +2585,7 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 	FDarkwellSpatialObservationRecord& Current =
 		Prop.History.GetMutableRecords()[CurrentIndex];
 	const uint32 Epoch = Current.Epoch;
+	const TBitArray<> PreviousCapture=Current.LastLegalCaptureMask;
 	Prop.LastCaptureAppearanceRevision = Current.ContentRevision;
 	TBitArray<> WholeGeometryMask;
 	if (Current.bConfirmedWholeCapture)
@@ -2613,9 +2639,23 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 	++Prop.HiddenFreezeCount;
 	if (FDarkwellSpatialObservationRecord* Historical = Prop.History.FindRecord(Epoch))
 	{
-		Historical->FineHistory.Initialize(Historical->SpatialMemory, Historical->LastLegalCaptureMask);
+		if(Historical->GeometryFootprint.Num()==Historical->LastLegalCaptureMask.Num())
+			for(int32 I=0; I<Historical->GeometryFootprint.Num(); ++I)
+				if(!Historical->GeometryFootprint[I]) Historical->LastLegalCaptureMask[I]=false;
+		const bool bSameCapture=Historical->FineHistory.IsInitialized() && PreviousCapture==Historical->LastLegalCaptureMask;
+		if(!bSameCapture) Historical->FineHistory.Initialize(Historical->SpatialMemory, Historical->LastLegalCaptureMask);
 		EnsureRecordVisual(Prop, *Historical);
-		if (FRecordVisual* SealedVisual = Prop.Visuals.Find(Epoch))
+		if (auto* Sealed = Prop.Visuals.Find(Epoch))
+		{
+			// The frame's spatial candidates were collected before this record
+			// returned from Current. Admit it immediately, even when its proxy and
+			// capture are reusable. A live interval is not a historical sweep.
+			Sealed->bPresentationDirty = Sealed->bCapTopologyDirty = true;
+			Sealed->CachedCoverageAuthorityRevision = MAX_uint64;
+			Sealed->CachedCoverageDrawRevision = MAX_uint64;
+			if (!bSameCapture) Sealed->CachedFineCoverage.Reset();
+		}
+		if (FRecordVisual* SealedVisual = Prop.Visuals.Find(Epoch); SealedVisual && !bSameCapture)
 		{
 			const auto& Grid = Historical->FineHistory;
 			const FIntPoint Size = Grid.GetSize();
@@ -2635,6 +2675,7 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 				}
 			}
 			Historical->FineHistory.RestrictToRecordedGeometry(Footprint);
+			Historical->GeometryFootprint=Footprint;
 			for(int32 I=0;I<Footprint.Num();++I) if(!Footprint[I]) Historical->LastLegalCaptureMask[I]=false;
 		}
 		UpdateRecordTexture(Prop, *Historical);
@@ -2800,6 +2841,7 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 	}
 	if (!Record.bCurrentObservedLocation && Visual.Proxy.IsValid())
 	{
+		Visual.Proxy->SetActorHiddenInGame(false);
 		const bool bVisible = !Visual.Proxy->IsHidden();
 		if (Visual.bHasProxyVisibilitySample && Visual.bLastProxyVisible != bVisible)
 		{

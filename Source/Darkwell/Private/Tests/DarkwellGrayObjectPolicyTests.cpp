@@ -539,10 +539,15 @@ bool FDarkwellRepeatedHistoryEvidenceParity::RunTest(const FString&)
  return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMemoryEpisodeContract,
+IMPLEMENT_COMPLEX_AUTOMATION_TEST(FDarkwellMemoryEpisodeContract,
  "Darkwell.PropLab.ArchitectureAudit.StaticPartialEpisodes",
  EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
-bool FDarkwellMemoryEpisodeContract::RunTest(const FString&)
+void FDarkwellMemoryEpisodeContract::GetTests(TArray<FString>& Names,TArray<FString>& Commands) const
+{
+ for(const TCHAR* Name:{TEXT("30Hz"),TEXT("60Hz"),TEXT("120Hz"),TEXT("144Hz"),TEXT("ReverseOrder"),TEXT("LargeDelta"),TEXT("ResumedThenHiddenMotion"),TEXT("ExploreForward"),TEXT("ExploreReverse"),TEXT("ErasedDoesNotRebuild")})
+ { Names.Add(Name); Commands.Add(Name); }
+}
+bool FDarkwellMemoryEpisodeContract::RunTest(const FString& Case)
 {
  using namespace Darkwell::GrayObjectPolicyTests;
  FRoom F;
@@ -551,13 +556,63 @@ bool FDarkwellMemoryEpisodeContract::RunTest(const FString&)
  Policy.RevealMode=Reveal::SpatialPartial; Policy.HistoryMode=History::StationaryOnly;
  F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
   FTransform(FVector(-300,650,0)),ESightWeaveObjectPolicySource::UseProjectDefault,History::StationaryOnly,&Policy);
- F.Face(90); F.Step(20); F.Face(-90); F.Step(20);
+ const int32 Hz=Case.EndsWith(TEXT("Hz"))?FCString::Atoi(*Case):60;
+ const float Dt=Case==TEXT("LargeDelta")?.4f:1.f/Hz;
+ const int32 Frames=Case==TEXT("LargeDelta")?1:FMath::CeilToInt(Hz/3.f);
+ const bool Explore=Case.StartsWith(TEXT("Explore"));
+ if(Explore)
+ {
+  TArray<float> Order=Case==TEXT("ExploreReverse")?TArray<float>{52,40,28,18}:TArray<float>{18,28,40,52};
+  for(float Yaw:Order) { F.Face(Yaw); F.Step(Frames,Dt); F.Face(-90); F.Step(Frames,Dt); }
+ }
+ else { F.Face(90); F.Step(Frames,Dt); F.Face(-90); F.Step(Frames,Dt); }
  const int32 InitialRecords=F.Room->GetSpatialRecordCount(Id);
  const auto InitialTextures=F.Room->Tracked.FindChecked(Id).CurrentPresentation.LiveTextures;
- int32 Missing=0, InternalCaps=0;
- for(float Yaw:{52.f,40.f,28.f,52.f,40.f,28.f})
+ const auto InitialProxy=F.Room->Tracked.FindChecked(Id).Visuals.CreateConstIterator().Value().Proxy;
+ if(Case==TEXT("ErasedDoesNotRebuild"))
  {
-  F.Face(Yaw); F.Step(20); F.Face(-90); F.Step(20);
+  auto& Prop=F.Room->Tracked.FindChecked(Id);
+  const auto Pose=Prop.Actual->GetActorTransform();
+  Prop.ObjectPolicy->SetSightWeaveMoving(true); Prop.Actual->AddActorWorldOffset(FVector(450,0,0)); F.Step(Frames,Dt);
+  Prop.ObjectPolicy->SetSightWeaveMoving(false);
+  F.Face(160); F.Step(Frames,Dt); F.Face(-90); F.Step(Frames,Dt);
+  const uint32 Epoch=Prop.History.GetRecords()[0].Epoch;
+  auto* Record=Prop.History.FindRecord(Epoch);
+  TArray<int32> Erased;
+  for(int32 I=0; I<Record->FineHistory.GetSamples().Num(); ++I)
+   if(Record->FineHistory.GetSamples()[I].bVerifiedEmpty) Erased.Add(I);
+  TestTrue(TEXT("Real legal empty view erased a strict subset"),!Erased.IsEmpty() && Erased.Num()<Record->FineHistory.GetSamples().Num());
+  TestFalse(TEXT("Counterevidence forbids raw-capture reuse"),Prop.History.ResumeUncontradictedObservation(Epoch));
+  // Returning the actual object in darkness grants no new knowledge.
+  Prop.ObjectPolicy->SetSightWeaveMoving(true); Prop.Actual->SetActorTransform(Pose); F.Step(Frames,Dt);
+  Prop.ObjectPolicy->SetSightWeaveMoving(false); F.Step(Frames,Dt);
+  F.Room->DestroyVisual(Prop.Visuals.FindChecked(Epoch)); Prop.Visuals.Remove(Epoch);
+  Record=Prop.History.FindRecord(Epoch);
+  F.Room->EnsureRecordVisual(Prop,*Record); F.Room->UpdateRecordTexture(Prop,*Record); F.Room->UpdateRecordCap(Prop,*Record);
+  const auto& Pixels=Prop.Visuals.FindChecked(Epoch).SubmittedPresentation;
+  int32 Resurrected=0;
+  for(int32 I:Erased) Resurrected+=!Record->FineHistory.GetSamples()[I].bVerifiedEmpty || (Pixels[I].A*Pixels[I].B)>0;
+  TestEqual(TEXT("Resource reconstruction cannot resurrect erased samples"),Resurrected,0);
+  return true;
+ }
+ if(Case==TEXT("ResumedThenHiddenMotion"))
+ {
+  F.Face(90); F.Step(Frames,Dt);
+  auto& Prop=F.Room->Tracked.FindChecked(Id);
+  Prop.ObjectPolicy->SetSightWeaveMoving(true);
+  F.Face(-90); Prop.Actual->AddActorWorldOffset(FVector(450,0,0)); F.Step(Frames,Dt);
+  TestEqual(TEXT("Leaving with motion cannot discard previously sealed knowledge"),F.Room->GetStaleEpochCountForTesting(Id),1);
+  TestTrue(TEXT("Unverified old memory remains drawable"),F.Room->GetVisibleHistoricalProxyCountForTesting(Id)>0);
+  Prop.ObjectPolicy->SetSightWeaveMoving(false); F.Step(Frames,Dt);
+  TestEqual(TEXT("Hidden stop does not add a new endpoint"),F.Room->GetSpatialRecordCount(Id),1);
+  return true;
+ }
+ int32 Missing=0, InternalCaps=0;
+ TArray<float> Yaws{52.f,40.f,28.f,52.f,40.f,28.f};
+ if(Case==TEXT("ReverseOrder")) Yaws={28.f,40.f,52.f,28.f,40.f,52.f};
+ for(float Yaw:Yaws)
+ {
+  F.Face(Yaw); F.Step(Frames,Dt); F.Face(-90); F.Step(Frames,Dt);
   const auto& Prop=F.Room->Tracked.FindChecked(Id);
   // Independent analytic oracle: a single solid cuboid, fully observed before
   // these repeated subset views. Every interior point remains known and solid.
@@ -574,15 +629,18 @@ bool FDarkwellMemoryEpisodeContract::RunTest(const FString&)
     const int32 I=FMath::FloorToInt(UV.Y*S.Y)*S.X+FMath::FloorToInt(UV.X*S.X);
     if(V->SubmittedPresentation.IsValidIndex(I)) Sum+=V->SubmittedPresentation[I].B*V->SubmittedPresentation[I].A;
    }
-   Missing+=Sum<.999;
+   if(!Explore || X>-390) Missing+=Sum<.999;
+   if(Explore && X<-490) Missing+=Sum>.001;
   }
   for(const auto& Pair:Prop.Visuals) for(const auto& Q:Pair.Value.CapQuads)
-   InternalCaps+=Q.A.X>-600 && Q.A.X<0 && Q.A.Y>615 && Q.A.Y<685;
+   InternalCaps+=Q.A.X>(Explore?-390:-600) && Q.A.X<0 && Q.A.Y>615 && Q.A.Y<685;
  }
  TestEqual(TEXT("Fully known interior has no surface deficit after subset reobservations"),Missing,0);
  TestEqual(TEXT("Fully known cuboid has no artificial internal caps"),InternalCaps,0);
+ if(Explore) TestTrue(TEXT("External known/unknown cut still has a cap"),F.Room->GetVisibleHistoricalCapCountForTesting(Id)>0);
  TestEqual(TEXT("Repeated operations without new knowledge do not grow retained records"),F.Room->GetSpatialRecordCount(Id),InitialRecords);
  TestTrue(TEXT("Same source reuses live texture allocations across episodes"),InitialTextures==F.Room->Tracked.FindChecked(Id).CurrentPresentation.LiveTextures);
+ TestTrue(TEXT("Unchanged captured state reuses its concrete history proxy"),InitialProxy==F.Room->Tracked.FindChecked(Id).Visuals.CreateConstIterator().Value().Proxy);
  AddInfo(FString::Printf(TEXT("EPISODE_ORACLE missing=%d internal_caps=%d initial_records=%d final_records=%d"),Missing,InternalCaps,InitialRecords,F.Room->GetSpatialRecordCount(Id)));
  return true;
 }

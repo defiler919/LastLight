@@ -125,7 +125,7 @@ bool FDarkwellSpatialObservationHistory::ResumeUncontradictedObservation(uint32 
 	if (!Record.FineHistory.IsInitialized() || Record.FineHistory.GetSamples().ContainsByPredicate([](const auto& S)
 		{ return S.InitialRemembered > 0 && (S.bVerifiedEmpty || S.State == FDarkwellHistoryGridV2::Superseded()); })) return false;
 	Record.SpatialMemory.BeginPresent();
-	Record.FineHistory = FDarkwellHistoryGridV2();
+	// Keep the last valid capture if its resumed source becomes ineligible.
 	Record.bCurrentObservedLocation = true;
 	CurrentIndex = Index;
 	return true;

@@ -441,7 +441,7 @@ protected:
 	bool IsCaptureEligible(const FTrackedProp& Prop) const;
 	void DestroyVisual(FRecordVisual& Visual, bool bDiscardEvidence = true);
 	void ReleaseSourcePresentation(FTrackedProp& Prop);
-	bool FreezeCurrentForHiddenMotion(FTrackedProp& Prop, const TCHAR* Reason);
+	bool FreezeCurrentForHiddenMotion(FTrackedProp& Prop, const TCHAR* Reason, bool bSealLastEligibleObservation = false);
 	void AbandonCurrentObservationWithoutHistory(FTrackedProp& Prop);
 	FBox2D ActualBounds(const AActor& Prop) const;
 	TArray<FBox> ActualPartBounds(const AActor& Prop) const;

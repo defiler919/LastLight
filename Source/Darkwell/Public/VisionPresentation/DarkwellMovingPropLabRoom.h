@@ -135,6 +135,7 @@ public:
 	bool ConfigureForGrayPolicyLab(ADarkwellCharacter* Player);
 	bool ResetGrayPolicyRoom(int32 RoomIndex);
 	bool ToggleGrayPolicyMovingSubject();
+	UFUNCTION(BlueprintCallable, Category="Lab|Testing")
 	bool StartGrayPolicyMotion(bool bRotate);
 	UFUNCTION(BlueprintCallable, Category="Lab|Testing")
 	bool SetGrayPolicyStressMode(int32 Mode);

@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$RunName,
     [string]$EngineRoot = 'D:\UE_5.8',
-    [ValidateSet('Episodes','Contracts')][string]$Protocol = 'Episodes',
+    [ValidateSet('Episodes','Contracts','Reobservation')][string]$Protocol = 'Episodes',
     [ValidateSet('None','FromStart','BeforeExit')][string]$ExitDebugger = 'None'
 )
 $ErrorActionPreference = 'Stop'
@@ -11,7 +11,11 @@ if ($RunName -notmatch '^[A-Za-z0-9_-]+$') { throw 'Use a simple unique run name
 $output = Join-Path $repo "Saved/ArchitectureAudit/$RunName"
 if (Test-Path -LiteralPath $output) { throw "Evidence already exists: $output" }
 New-Item -ItemType Directory -Path $output | Out-Null
-$driverName = if ($Protocol -eq 'Contracts') { 'audit_gray_memory_contracts.py' } else { 'audit_gray_memory_episodes.py' }
+$driverName = switch ($Protocol) {
+    'Contracts' { 'audit_gray_memory_contracts.py' }
+    'Reobservation' { 'audit_gray_memory_reobservation.py' }
+    default { 'audit_gray_memory_episodes.py' }
+}
 $driver = Join-Path $repo "Content/Python/$driverName"
 Copy-Item -LiteralPath $driver -Destination "$output/driver.py"
 git -C $repo rev-parse HEAD | Set-Content "$output/source.txt"

@@ -4802,6 +4802,38 @@ bool ADarkwellObjectMemoryScene::IsWholePresentationUniformForTesting(FName Id) 
   && P->RevealObservation.GetTentativeMask().Num()==0 && P->CurrentLive.SamplesTouched==0;
 }
 
+FString ADarkwellObjectMemoryScene::GetCaptureRefreshAuditForTesting(FName Id) const
+{
+	const auto* Prop=Tracked.Find(Id);
+	if(!Prop) return TEXT("{}");
+	auto Binding=[](const UStaticMeshComponent* Mesh)
+	{
+		const auto* MID=Mesh?Cast<UMaterialInstanceDynamic>(Mesh->GetMaterial(0)):nullptr;
+		UTexture* Texture=nullptr; float Ready=-1; FLinearColor Domain=FLinearColor::Transparent;
+		if(MID) { MID->GetTextureParameterValue(TEXT("SpatialStateTexture"),Texture);
+			MID->GetScalarParameterValue(TEXT("SpatialReady"),Ready); MID->GetVectorParameterValue(TEXT("SpatialMinInv"),Domain); }
+		return FString::Printf(TEXT("{\"mesh\":\"%s\",\"visible\":%s,\"material\":\"%s\",\"texture\":\"%s\",\"ready\":%.3f,\"domain\":[%.6f,%.6f,%.9f,%.9f]}"),
+			*GetNameSafe(Mesh),Mesh&&Mesh->IsVisible()?TEXT("true"):TEXT("false"),*GetNameSafe(MID),*GetNameSafe(Texture),Ready,Domain.R,Domain.G,Domain.B,Domain.A);
+	};
+	TArray<FString> Sources,Records;
+	for(const auto& B:Prop->SourceBindings) if(B.Part.IsValid()) Sources.Add(Binding(B.Part.Get()));
+	for(const auto& R:Prop->History.GetRecords())
+	{
+		int32 Remembered=0,ZeroAA=0,Empty=0,Superseded=0; float MinAA=1;
+		for(const auto& S:R.FineHistory.GetSamples()) if(S.InitialRemembered>0)
+		{ ++Remembered; MinAA=FMath::Min(MinAA,S.FrozenAAEnvelope); ZeroAA+=S.FrozenAAEnvelope<=0;
+			Empty+=S.bVerifiedEmpty; Superseded+=S.State==FDarkwellHistoryGridV2::Superseded(); }
+		const auto* V=Prop->Visuals.Find(R.Epoch); TArray<FString> Bindings;
+		if(V && V->Proxy.IsValid()) { TInlineComponentArray<UStaticMeshComponent*> Meshes(V->Proxy.Get());
+			for(const auto* Mesh:Meshes) Bindings.Add(Binding(Mesh)); }
+		Records.Add(FString::Printf(TEXT("{\"epoch\":%u,\"current\":%s,\"whole_capture\":%s,\"capture_valid\":%s,\"content_revision\":\"%llu\",\"authority_revision\":\"%llu\",\"coverage_revision\":\"%llu\",\"geometry_revision\":\"%llu\",\"capture_set\":%d,\"remembered\":%d,\"zero_aa\":%d,\"min_aa\":%.6f,\"empty\":%d,\"superseded\":%d,\"proxy\":\"%s\",\"proxy_hidden\":%s,\"texture\":\"%s\",\"texture_hash\":\"%llu\",\"uploads\":%d,\"bindings\":[%s]}"),
+			R.Epoch,R.bCurrentObservedLocation?TEXT("true"):TEXT("false"),R.bConfirmedWholeCapture?TEXT("true"):TEXT("false"),R.bCaptureRevisionValid?TEXT("true"):TEXT("false"),
+			R.ContentRevision,R.CaptureAuthorityRevision,R.CaptureCoverageRevision,R.CaptureGeometryRevision,R.LastLegalCaptureMask.CountSetBits(),Remembered,ZeroAA,MinAA,Empty,Superseded,
+			V?*GetNameSafe(V->Proxy.Get()):TEXT("None"),V&&V->Proxy.IsValid()&&V->Proxy->IsHidden()?TEXT("true"):TEXT("false"),V?*GetNameSafe(V->Texture.Get()):TEXT("None"),V?V->TextureSignature:0,V?V->TextureUploadCount:0,*FString::Join(Bindings,TEXT(","))));
+	}
+	return FString::Printf(TEXT("{\"eligible\":%s,\"source_bindings\":[%s],\"records\":[%s]}"),IsCaptureEligible(*Prop)?TEXT("true"):TEXT("false"),*FString::Join(Sources,TEXT(",")),*FString::Join(Records,TEXT(",")));
+}
+
 void ADarkwellObjectMemoryScene::ForceContributionRefreshForTesting(FName Id)
 {
 #if WITH_DEV_AUTOMATION_TESTS

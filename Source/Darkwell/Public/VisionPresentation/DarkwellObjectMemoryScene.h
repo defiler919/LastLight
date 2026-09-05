@@ -174,6 +174,8 @@ public:
 	FString GetDividerMaskTelemetryForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Object Memory|Diagnostics")
 	FString GetMemorySeamAuditForTesting(FName StableId) const;
+	UFUNCTION(BlueprintPure, Category="Object Memory|Diagnostics")
+	FString GetCaptureRefreshAuditForTesting(FName StableId) const;
 #if WITH_DEV_AUTOMATION_TESTS
  TArray<TWeakObjectPtr<UObject>> GetOwnedPresentationObjectsForTesting() const;
 #endif
@@ -240,6 +242,7 @@ protected:
 	friend class FDarkwellObservedContentContract;
 	friend class FDarkwellTerminalSceneCompaction;
 	friend class FDarkwellObjectMemoryOrdinaryHost;
+	friend class FDarkwellWholeReobservation;
 	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);
 
 	struct FCapQuadSnapshot

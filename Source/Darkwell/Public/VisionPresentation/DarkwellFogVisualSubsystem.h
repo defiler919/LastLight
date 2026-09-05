@@ -153,6 +153,10 @@ class DARKWELL_API UDarkwellFogVisualSubsystem final : public UWorldSubsystem
 
 public:
 	virtual void Deinitialize() override;
+	/** Ordinary host entry. The host supplies its revisioned legal source and physical segments. */
+	bool ActivateForWorld(const FBox2D& WorldBounds,
+		const FDarkwellFogVisualSourceSnapshot& Source,
+		TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments);
 
 	bool ActivateP1(
 		ADarkwellVisionIntegrationFixture* Fixture,

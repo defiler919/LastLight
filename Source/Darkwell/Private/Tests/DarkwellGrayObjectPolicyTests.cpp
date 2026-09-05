@@ -599,7 +599,7 @@ bool FDarkwellObservedContentContract::RunTest(const FString&)
   F.Room->ResetTrackedRevealPolicyForLab(Id,Mode,100,History::StationaryOnly);
   F.Face(90); F.Step(20); F.Face(-90); F.Step(20);
   auto& Prop=F.Room->Tracked.FindChecked(Id);
-  auto* Source=Prop.Actual.Get(); auto* Memory=Source->Memory.Get();
+  auto* Source=Prop.Actual.Get(); auto* Memory=Source->FindComponentByClass<UDarkwellRememberablePropComponent>();
   const uint32 Epoch=Prop.History.GetRecords()[0].Epoch;
   const auto Original=Prop.History.GetRecords()[0];
   TestTrue(TEXT("Legal capture retains content"),!Original.Primitives.IsEmpty() && Original.ContentRevision!=0);

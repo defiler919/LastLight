@@ -16,13 +16,13 @@ public class Darkwell : ModuleRules
 			"InputCore",
 			"EnhancedInput",
 			"GameplayTags",
+			"SightWeaveRuntime",
 			"AIModule",
 			"NavigationSystem"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
-			"SightWeaveRuntime",
 			"GeometryCore",
 			"GeometryFramework",
 			"Slate",

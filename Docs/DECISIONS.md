@@ -63,3 +63,7 @@
 - Torch/lantern resource tuning, relighting/refueling cost, and fire/light-reaction enemy taxonomy.
 - Final rendering features, including hardware ray tracing.
 - Final save-slot/profile count and campaign-scale migration policy.
+
+### 2026-09-05 — gray memory runtime ownership (supersedes Lab-only integration)
+
+The repeated-observation seam audit is recorded in `SIGHTWEAVE_ARCHITECTURE_AUDIT_20260905.md`. Gray gameplay and presentation now run in `ADarkwellObjectMemoryScene`; `ADarkwellMovingPropLabRoom` is its fixture subclass. An unchanged, uncontradicted observation may continue one knowledge state across sessions. Historical proxy reconstruction uses captured content, not the current source. Live allocations belong to the source and survive view transitions. Ordinary integration is described in `OBJECT_MEMORY_INTEGRATION.md`; unrelated legacy presenters remain opt-in independent paths. These are development checkpoints, not a new user-accepted stable branch.

@@ -22,6 +22,9 @@ public:
 	void AddMemoryPrimitive(UStaticMeshComponent* Primitive);
 	void ResetMemoryPrimitives() { check(!HasBegunPlay()); MemoryPrimitives.Reset(); }
 	bool bRememberFromStart = true;
+	/** Explicit opt-in to the observation scene; prevents two presenters owning this source. */
+	UPROPERTY(EditAnywhere, Category="Fog Memory")
+	bool bUseSpatialMemory = false;
 	void SetMemoryAppearance(FLinearColor Tint, float UVScale)
 	{
 		if (RememberedTint != Tint || RememberedUVScale != UVScale) ++MemoryContentRevision;

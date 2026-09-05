@@ -336,12 +336,32 @@ bool UDarkwellFogVisualSubsystem::Activate(
 	return true;
 }
 
+bool UDarkwellFogVisualSubsystem::ActivateForWorld(const FBox2D& WorldBounds,
+	const FDarkwellFogVisualSourceSnapshot& Source,
+	TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments)
+{
+	if (!Source.IsValid() || !WorldBounds.bIsValid) return false;
+	Deactivate();
+	if (!CreateResources(WorldBounds) || !UpdateOccluderParameters(OccluderSegments))
+	{
+		Deactivate(); return false;
+	}
+	Diagnostics.bActive=true;
+	Diagnostics.bP4DynamicSubjects=true;
+	Diagnostics.CachedOccluderSegmentCount=CachedOccluderSegments.Num();
+	Diagnostics.ActivationRevision=Source.AuthorityRevision;
+	if (!DrawCoverage(Source)) { Deactivate(); return false; }
+	return true;
+}
+
 bool UDarkwellFogVisualSubsystem::UpdateSource(
 	const FDarkwellFogVisualSourceSnapshot& Source)
 {
 	if (!Diagnostics.bActive || !Source.IsValid())
 	{
 		PreviousSource = FDarkwellFogVisualSourceSnapshot();
+		LastSource = FDarkwellFogVisualSourceSnapshot();
+		++Diagnostics.CoverageDrawCount;
 		bSourceContinuityValid = false;
 		return false;
 	}

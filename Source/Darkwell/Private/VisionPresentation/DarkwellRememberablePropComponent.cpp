@@ -195,7 +195,7 @@ void UDarkwellRememberablePropComponent::EndPlay(
 
 void UDarkwellRememberablePropComponent::TryRegister()
 {
-	if (bRegistered || StableId.IsNone() || MemoryPrimitives.IsEmpty()
+	if (bRegistered || bUseSpatialMemory || StableId.IsNone() || MemoryPrimitives.IsEmpty()
 		|| !HasBegunPlay() || !GetWorld())
 	{
 		return;

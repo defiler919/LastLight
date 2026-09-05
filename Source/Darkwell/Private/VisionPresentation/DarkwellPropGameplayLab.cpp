@@ -167,7 +167,7 @@ void ADarkwellPropLabFurniture::OnConstruction(const FTransform& Transform)
    if (Shape == 0 && bIndividualWorktop) Add(FVector(0,0,H+2),FVector(W,D,4));
   }
  }
- Memory->ConfigureStableId(bSpatialHistoryManaged ? NAME_None : StableId);
+ Memory->ConfigureStableId(bSpatialHistoryManaged && !Memory->bUseSpatialMemory ? NAME_None : StableId);
 }
 
 void ADarkwellPropLabFurniture::BeginPlay()

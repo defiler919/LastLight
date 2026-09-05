@@ -91,6 +91,7 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  /** Exact primitive-local evidence query, including fine historical ownership. */
  bool HasObservedContributionAt(FVector2D World,int32 PrimitiveIndex=INDEX_NONE) const;
  uint64 StateHash() const;
+ FLinearColor GetWholeAppearanceForTesting() const { return WholeAppearance.GetCells().IsEmpty()?FLinearColor::Transparent:WholeAppearance.Presentation(0); }
  /** Preserve clamp sampling at the active rectangle inside a reusable atlas.
   * One duplicated border texel, not new coverage or an expanded AA footprint. */
  static void CopyAtlasWithClampBorder(TConstArrayView<FLinearColor> Pixels,FIntPoint Size,

@@ -2030,6 +2030,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_UpdateTracked);
 	FScopedObjectMemoryTimer Timer(RuntimeFrame.UpdateTrackedUs);
+ if(Prop.StableId==QualificationAuditId) { QualificationAuditStages.Reset(); TraceQualificationAudit(Prop,TEXT("begin")); }
 	bool bHistoryChangedThisFrame = false;
 	USightWeaveObjectPolicyComponent* ObjectPolicy = Prop.ObjectPolicy.Get();
 	const auto Policy=ObjectPolicy?ObjectPolicy->GetResolvedPolicy():Prop.RegisteredPolicy;
@@ -2183,6 +2184,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
       RuntimeFrame.CoverageQueries+=Prop.CurrentLive.Queries;
       RuntimeFrame.CurrentSamplesTouched+=Prop.CurrentLive.SamplesTouched;
       Prop.CurrentLive.BuildCurrentLegalObservationMask(Prop.CurrentLegalObservationMask);
+      TraceQualificationAudit(Prop,TEXT("after_local_advance"));
      }
     }
     bAnyLegal=Prop.CurrentLegalObservationMask.CountSetBits()>0;
@@ -2213,6 +2215,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
     else Prop.RevealObservation.Observe(true,Prop.CurrentLegalObservationMask);
    }
    Prop.bCachedWholeLegalContact=bAnyLegal;
+			TraceQualificationAudit(Prop,TEXT("after_observe"));
 		}
 		Prop.CurrentLive.bTransientWholePresentation=bWhole && !Prop.RevealObservation.IsConfirmed();
 		int32 LegalCells = 0;
@@ -2365,6 +2368,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
                      // confirmation above. They no longer cut the confirmed
                      // object's presentation. Source materials retain camera depth.
                      Prop.CurrentLive.AdvanceConfirmedWhole(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage);
+                     TraceQualificationAudit(Prop,TEXT("after_whole_advance"));
                      Prop.CurrentLegalObservationMask.Empty();
                      StampConfirmedWholeCapture(Prop,Current,CoverageSnapshot);
                     }
@@ -2396,6 +2400,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			{
                 if(!Prop.CurrentLive.IsUniformWholePresentation()) UpdateRecordTexture(Prop, Current);
                 UpdateCurrentPartTextures(Prop);
+                TraceQualificationAudit(Prop,TEXT("after_source_binding"));
 				UpdateRecordCap(Prop, Current);
 				Prop.CurrentPresentationActiveSeconds = FMath::Max(
 					0.0f, Prop.CurrentPresentationActiveSeconds - DeltaSeconds);
@@ -4659,7 +4664,9 @@ bool ADarkwellObjectMemoryScene::TryResumeQualifiedWhole(FTrackedProp& Prop)
 	}
 	if (!Prop.History.ResumeUncontradictedObservation(Prop.ReusableWholeEpoch)) return false;
 	Prop.LocalEpoch=Prop.ReusableWholeEpoch;
-	Prop.CurrentLive.ResumeStationaryKnowledge();
+	// This session is already displaying legal local samples. Reusing its old
+	// capture must not restart their appearance or live/gray blend.
+	TraceQualificationAudit(Prop,TEXT("after_capture_resume"));
 	if (auto* Visual=Prop.Visuals.Find(Prop.LocalEpoch))
 	{
 		if (Visual->Proxy.IsValid()) Visual->Proxy->SetActorHiddenInGame(true);
@@ -4954,6 +4961,76 @@ bool ADarkwellObjectMemoryScene::IsWholePresentationUniformForTesting(FName Id) 
  const auto* P=Tracked.Find(Id);
  return P && P->CurrentLive.IsUniformWholePresentation() && P->CurrentLegalObservationMask.Num()==0
   && P->RevealObservation.GetTentativeMask().Num()==0 && P->CurrentLive.SamplesTouched==0;
+}
+
+void ADarkwellObjectMemoryScene::ConfigureQualificationAuditForTesting(FName Id,FVector2D Point)
+{
+#if WITH_EDITOR
+ QualificationAuditId=Id; QualificationAuditPoint=Point; QualificationAuditStages.Reset();
+#endif
+}
+
+void ADarkwellObjectMemoryScene::TraceQualificationAudit(const FTrackedProp& Prop,const TCHAR* Stage)
+{
+#if WITH_EDITOR
+ if(QualificationAuditId.IsNone() || Prop.StableId!=QualificationAuditId) return;
+ QualificationAuditStages.Add(FString::Printf(TEXT("{\"stage\":\"%s\",\"state\":%s}"),Stage,*BuildQualificationAuditState(Prop)));
+#endif
+}
+
+FString ADarkwellObjectMemoryScene::BuildQualificationAuditState(const FTrackedProp& Prop) const
+{
+ const auto Point=QualificationAuditPoint;
+ auto Sample=[&](const FDarkwellSpatialPropMemory& Memory,FVector2D P)
+ {
+  const auto Size=Memory.GetSize(); const auto B=Memory.GetBounds();
+  if(Size.X<=0 || Size.Y<=0 || !B.bIsValid || !B.IsInside(P)) return FDarkwellSpatialPropMemory::FCell();
+  const auto UV=(P-B.Min)/B.GetSize();
+  return Memory.GetCells()[FMath::Clamp(int32(UV.Y*Size.Y),0,Size.Y-1)*Size.X+FMath::Clamp(int32(UV.X*Size.X),0,Size.X-1)];
+ };
+ TArray<FString> Parts;
+ for(int32 I=0;I<Prop.CurrentLive.Parts.Num();++I)
+ {
+  const auto& Part=Prop.CurrentLive.Parts[I];
+  const auto Local=Sample(Part.Local,FVector2D(Part.Pose.InverseTransformPosition(FVector(Point,Part.Pose.GetLocation().Z))));
+  const auto Raster=Sample(Part.Raster,Point);
+  const auto* Mesh=Prop.SourceBindings.IsValidIndex(I)?Prop.SourceBindings[I].Part.Get():nullptr;
+  const auto* MID=Mesh?Cast<UMaterialInstanceDynamic>(Mesh->GetMaterial(0)):nullptr;
+  UTexture* Bound=nullptr; FLinearColor Domain=FLinearColor::Transparent; float Ready=0;
+  if(MID) { MID->GetTextureParameterValue(TEXT("SpatialStateTexture"),Bound); MID->GetVectorParameterValue(TEXT("SpatialMinInv"),Domain); MID->GetScalarParameterValue(TEXT("SpatialReady"),Ready); }
+  const auto* Texture=Cast<UTexture2D>(Bound);
+  FLinearColor Submitted=FLinearColor::Transparent;
+  if(Texture && Prop.CurrentPresentation.LivePixels.IsValidIndex(I))
+  {
+   const auto& Pixels=Prop.CurrentPresentation.LivePixels[I];
+   const FIntPoint Size=Pixels.Num()==1?FIntPoint(1,1):Part.Raster.GetSize()*4;
+   const int32 X=FMath::Clamp(int32((Point.X-Domain.R)*Domain.B*Texture->GetSizeX()),0,Size.X-1);
+   const int32 Y=FMath::Clamp(int32((Point.Y-Domain.G)*Domain.A*Texture->GetSizeY()),0,Size.Y-1);
+   if(Pixels.IsValidIndex(Y*Size.X+X)) Submitted=Pixels[Y*Size.X+X];
+  }
+  Parts.Add(FString::Printf(TEXT("{\"local\":[%.6f,%.6f,%.6f],\"raster\":[%.6f,%.6f],\"whole\":[%.6f,%.6f],\"submitted\":[%.6f,%.6f],\"uniform\":%s,\"texture\":\"%s\",\"size\":[%d,%d],\"ready\":%.1f,\"visible\":%s}"),
+   Local.AppearanceBlend,Local.LiveBlend,Local.CurrentLegalCoverage,Raster.AppearanceBlend,Raster.LiveBlend,Part.WholePixel.R,Part.WholePixel.G,Submitted.R,Submitted.G,
+   Part.bUniformWholePresentation?TEXT("true"):TEXT("false"),*GetNameSafe(Bound),Texture?Texture->GetSizeX():0,Texture?Texture->GetSizeY():0,Ready,Mesh&&Mesh->IsVisible()?TEXT("true"):TEXT("false")));
+ }
+ int32 Transient=0,HistoricalDraws=0; double Gray=0;
+ for(const auto& Record:Prop.History.GetRecords()) if(const auto* V=Prop.Visuals.Find(Record.Epoch))
+ {
+  Transient+=V->TransientCurrentSuppression.CountSetBits();
+  if(Record.bCurrentObservedLocation || !V->Proxy.IsValid() || V->Proxy->IsHidden() || !Record.FineHistory.IsInitialized()) continue;
+  const auto B=Record.FineHistory.GetBounds(); const auto S=Record.FineHistory.GetSize();
+  if(!B.IsInside(Point)) continue;
+  const auto UV=(Point-B.Min)/B.GetSize(); const int32 Index=FMath::Clamp(int32(UV.Y*S.Y),0,S.Y-1)*S.X+FMath::Clamp(int32(UV.X*S.X),0,S.X-1);
+  if(V->SubmittedPresentation.IsValidIndex(Index)) { const auto P=V->SubmittedPresentation[Index]; Gray+=P.B*P.A; HistoricalDraws+=P.B*P.A>0; }
+ }
+ const auto Whole=Prop.CurrentLive.GetWholeAppearanceForTesting();
+ return FString::Printf(TEXT("{\"span\":%.6f,\"confirmed\":%s,\"valid\":%s,\"records\":%d,\"whole_state\":[%.6f,%.6f],\"transient\":%d,\"gray_at_probe\":%.6f,\"historical_draws\":%d,\"texture_creations\":%d,\"parts\":[%s]}"),
+  Prop.RevealObservation.GetObservedSpanCm(),Prop.RevealObservation.IsConfirmed()?TEXT("true"):TEXT("false"),Prop.bLastCoverageValid?TEXT("true"):TEXT("false"),Prop.History.GetRecords().Num(),Whole.R,Whole.G,Transient,Gray,HistoricalDraws,Prop.CurrentPresentation.LiveTextureCreations,*FString::Join(Parts,TEXT(",")));
+}
+
+FString ADarkwellObjectMemoryScene::GetQualificationAuditForTesting(FName Id) const
+{
+ const auto* Prop=Tracked.Find(Id); if(!Prop || Id!=QualificationAuditId) return TEXT("{}");
+ return FString::Printf(TEXT("{\"frame\":%llu,\"stages\":[%s],\"final\":%s}"),GFrameCounter,*FString::Join(QualificationAuditStages,TEXT(",")),*BuildQualificationAuditState(*Prop));
 }
 
 FString ADarkwellObjectMemoryScene::GetCaptureRefreshAuditForTesting(FName Id) const

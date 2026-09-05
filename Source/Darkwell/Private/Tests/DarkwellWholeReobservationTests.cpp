@@ -219,9 +219,33 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 		}
 		for(int32 Cycle=0;Cycle<3;++Cycle)
 		{
-			View(FVector2D(-510,-50),0); Step(.1f);
+			View(FVector2D(-510,-50),0); Step(.3f);
 			TestFalse(TEXT("New continuous session starts below threshold"),Scene->IsRevealConfirmedForTesting(Id));
-			for(int32 X=-490;X<=-390;X+=20) { View(FVector2D(X,-50),0); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92)); }
+			bool CheckedQualification=false;
+			for(int32 X=-490;X<=-390;X+=20)
+			{
+				const bool WasConfirmed=Scene->IsRevealConfirmedForTesting(Id);
+				TArray<TArray<FDarkwellSpatialPropMemory::FCell>> Before;
+				for(const auto& Part:Prop.CurrentLive.Parts) Before.Emplace(Part.Local.GetCells());
+				View(FVector2D(X,-50),0); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));
+				if(!WasConfirmed && Scene->IsRevealConfirmedForTesting(Id))
+				{
+					int32 Retained=0;
+					for(int32 P=0;P<Prop.CurrentLive.Parts.Num();++P)
+					{
+						const auto& Part=Prop.CurrentLive.Parts[P];
+						for(int32 I=0;I<Before[P].Num();++I)
+							if(Before[P][I].CurrentLegalCoverage>=.99f && Part.Local.GetCells()[I].CurrentLegalCoverage>=.99f)
+							{
+								TestTrue(TEXT("Qualification preserves already visible opacity"),Part.WholePixel.R+1.e-6>=Before[P][I].AppearanceBlend);
+								TestTrue(TEXT("Qualification cannot turn a still-legal colored sample gray"),Part.WholePixel.G+1.e-6>=Before[P][I].LiveBlend);
+								++Retained;
+							}
+					}
+					TestTrue(TEXT("Threshold frame includes continuously legal prior surface"),Retained>0); CheckedQualification=true;
+				}
+			}
+			TestTrue(TEXT("Continuous test checks the actual qualification frame"),CheckedQualification);
 			CheckCurrent(TEXT("Continuous accumulated span requalifies"));
 			TestEqual(TEXT("Qualified unchanged state resumes its original record"),Prop.History.GetRecords().Num(),1);
 			View(FVector2D(-510,-50),0); Step(.15f);
@@ -291,5 +315,47 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 		Scene->ResetMemory(); Scene->Destroy(); World->DestroyWorld(true); GEngine->DestroyWorldContext(World);
 	}
 	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellWholeQualificationAppearance,
+ "Darkwell.ObjectMemory.WholeQualificationAppearance",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellWholeQualificationAppearance::RunTest(const FString&)
+{
+ for(const float Dt:{1.f/30,1.f/60,1.f/120,1.f/144,.20f})
+ {
+  FDarkwellCurrentLiveGrid Grid;
+  const FBox2D Bounds(FVector2D(-90,-40),FVector2D(90,40));
+  const TArray<FDarkwellCurrentLiveGrid::FDescriptor> Descriptors{
+   {1,1,FBox(FVector(-90,-40,0),FVector(90,40,145)),FTransform::Identity},
+   {2,1,FBox(FVector(-88,-44,5),FVector(88,-40,140)),FTransform::Identity}};
+  FDarkwellSpatialPropMemory Snapshot;
+  Snapshot.Initialize(TEXT("OrdinaryWhole"),Bounds); Snapshot.BeginPresent();
+  Grid.ResetGeometry(TEXT("OrdinaryWhole"),Descriptors,FTransform::Identity);
+  auto Local=[&](bool Full) { Grid.Advance(Dt,FTransform::Identity,[Full](FVector2D P){return Full || P.X<0?1.f:0.f;}); };
+  auto Whole=[&]() { if(!Grid.IsUniformWholePresentation()) Grid.WriteWorldSnapshot(Snapshot,Bounds); TArray<float> Coverage; Coverage.Init(1,Snapshot.GetCells().Num());
+   Grid.AdvanceConfirmedWhole(Dt,FTransform::Identity,Snapshot,Bounds,Coverage); };
+  // Direct first-contact qualification retains the existing 0.2 s fade and
+  // advances once, even though local and Whole run in the same host frame.
+  Local(true); Whole();
+  TestEqual(TEXT("Direct first contact neither snaps nor double-advances"),Grid.Parts[0].WholePixel.G,FMath::Min(1.f,Dt/.2f));
+  Whole();
+  TestEqual(TEXT("Ongoing Whole continues normal transition"),Grid.Parts[0].WholePixel.G,FMath::Min(1.f,2*Dt/.2f));
+  // A fresh geometry has no old Whole accumulator to borrow. Settle a local
+  // surface before the host grants qualification, then require no fall at all.
+  Grid.ResetGeometry(TEXT("OrdinaryWhole"),Descriptors,FTransform::Identity);
+  for(int32 I=0;I<FMath::CeilToInt(.3f/Dt);++I) Local(false);
+  Whole();
+  for(const auto& Part:Grid.Parts)
+  { TestEqual(TEXT("First slow qualification preserves opacity"),Part.WholePixel.R,1.f);
+    TestEqual(TEXT("First slow qualification preserves color across primitives"),Part.WholePixel.G,1.f); }
+  // After actual loss the new local interval starts at its own progress.
+  // Retained Whole=1 is a reusable representation, not new-session animation.
+  Grid.Advance(.2f,FTransform::Identity,[](FVector2D){return 0.f;});
+  Grid.Advance(.2f,FTransform::Identity,[](FVector2D){return 0.f;});
+  Local(true);
+  const float NewLive=Grid.Parts[0].Local.GetCells()[0].LiveBlend;
+  Whole(); TestEqual(TEXT("Old Whole blend cannot skip new local progress"),Grid.Parts[0].WholePixel.G,NewLive);
+ }
+ return true;
 }
 #endif

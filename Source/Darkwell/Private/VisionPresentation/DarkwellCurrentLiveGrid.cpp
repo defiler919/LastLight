@@ -248,7 +248,24 @@ void FDarkwellCurrentLiveGrid::AdvanceConfirmedWhole(float Dt,const FTransform& 
 {
  check(Upright(ActorPose));
  ++Updates; Queries=0; SamplesTouched=0; OwnershipDirtyRegions.Reset();
- WholeAppearance.Advance(Dt,TArray<float>{1.f});
+ if(!IsUniformWholePresentation())
+ {
+  // Qualification changes the extent of this session's current presentation.
+  // Carry its strongest legally visible blend into the shared object value;
+  // neither an unadvanced Whole accumulator nor old-session lighting may win.
+  // Local samples already advanced this frame, so do not count Dt twice.
+  auto& Whole=WholeAppearance.PrepareCurrentRaster(FBox2D(FVector2D(0),FVector2D(1)),FIntPoint(1,1))[0];
+  float Appearance=0,Live=0;
+  for(const auto& Part:Parts) for(const auto& Local:Part.Local.GetCells())
+   if(Local.CurrentLegalCoverage>=FDarkwellSpatialPropMemory::LegalCoverage && Local.DiscoveredPresent>0)
+   { Appearance=FMath::Max(Appearance,Local.AppearanceBlend); Live=FMath::Max(Live,Local.LiveBlend); }
+  Whole.AppearanceBlend=Appearance; Whole.LiveBlend=Live;
+  Whole.DiscoveredPresent=Appearance>0?1.f:0.f;
+  Whole.CurrentLegalCoverage=1; Whole.ExitAge=0;
+  // Swept-only capture may have no endpoint local presentation to inherit.
+  if(Appearance==0) WholeAppearance.Advance(Dt,TArray<float>{1.f});
+ }
+ else WholeAppearance.Advance(Dt,TArray<float>{1.f});
  auto Cell=WholeAppearance.GetCells()[0];
  const auto Size=GridSize(Bounds); auto Cells=Snapshot.PrepareCurrentRaster(Bounds,Size,AtlasCells.X*AtlasCells.Y);
  check(Cells.Num()==Coverage.Num());

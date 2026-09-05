@@ -176,6 +176,11 @@ public:
 	FString GetMemorySeamAuditForTesting(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Object Memory|Diagnostics")
 	FString GetCaptureRefreshAuditForTesting(FName StableId) const;
+	/** Opt-in, single-object pipeline and binding audit. Never used by gameplay. */
+	UFUNCTION(BlueprintCallable, Category="Object Memory|Diagnostics")
+	void ConfigureQualificationAuditForTesting(FName StableId, FVector2D SurfacePoint);
+	UFUNCTION(BlueprintPure, Category="Object Memory|Diagnostics")
+	FString GetQualificationAuditForTesting(FName StableId) const;
 #if WITH_DEV_AUTOMATION_TESTS
  TArray<TWeakObjectPtr<UObject>> GetOwnedPresentationObjectsForTesting() const;
 #endif
@@ -234,6 +239,9 @@ protected:
  TConstArrayView<FPrimitiveGeometrySnapshot> FrameOwnershipGeometry;
  bool bUseOwnershipGeometry=false;
  bool bOnlyDurableOwnership=false;
+ FName QualificationAuditId;
+ FVector2D QualificationAuditPoint=FVector2D::ZeroVector;
+ TArray<FString> QualificationAuditStages;
 	friend class FDarkwellCapPartialClipTest;
 	friend class FDarkwellCapCoplanarContactTest;
 	friend class FDarkwellGrayHistoryCapacityCurrentTest;
@@ -458,6 +466,8 @@ protected:
 	};
 
 	bool IsCaptureEligible(const FTrackedProp& Prop) const;
+ FString BuildQualificationAuditState(const FTrackedProp& Prop) const;
+ void TraceQualificationAudit(const FTrackedProp& Prop,const TCHAR* Stage);
 	bool IsTentativeWhole(const FTrackedProp& Prop) const;
 	bool TryResumeQualifiedWhole(FTrackedProp& Prop);
 	bool UpdateTransientWholeExclusion(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);

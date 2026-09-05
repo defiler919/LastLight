@@ -335,6 +335,7 @@ private:
 	friend class FDarkwellGrayHistoryCapacityCurrentTest;
 	friend class FDarkwellPlanarProjectionParity;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
+	friend class FDarkwellMemoryEpisodeContract;
 	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);
 
 	struct FCapQuadSnapshot
@@ -464,6 +465,7 @@ private:
   bool bCachedWholeLegalContact=false;
   uint64 ObservationOwnershipRevision=1;
 		uint32 LocalEpoch=0;
+		uint64 LastCaptureAppearanceRevision=0;
 		TMap<uint32, FRecordVisual> Visuals;
 		FTransform InitialTransform = FTransform::Identity;
 		FTransform LastPhysicalTransform = FTransform::Identity;

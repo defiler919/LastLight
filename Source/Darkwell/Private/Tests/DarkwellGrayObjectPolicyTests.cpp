@@ -103,7 +103,7 @@ bool FDarkwellGrayObjectPolicyTest::RunTest(const FString& Case)
   {
    F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::StationaryOnly);
    for(int32 Cycle=0;Cycle<8;++Cycle) { F.Face(146); F.Step(12); F.Face(-90); F.Step(12); }
-   TestTrue(TEXT("Repeated real observation retains several epochs at the same pose"),F.Room->GetSpatialRecordCount(Id)>=4);
+   TestEqual(TEXT("Repeated same-state observations retain one knowledge state"),F.Room->GetSpatialRecordCount(Id),1);
    TestTrue(TEXT("Partial history exercises cap contributor diagnostics"),F.Room->GetVisibleHistoricalCapCountForTesting(Id)>0);
   }
   else
@@ -526,13 +526,58 @@ bool FDarkwellRepeatedHistoryEvidenceParity::RunTest(const FString&)
    if(Full) Reference.Add(Hash);
    else if(!TestEqual(*FString::Printf(TEXT("Repeated history equals full original evidence at frame %d"),Frame),Hash,Reference[Frame])) return false;
   }
-  TestTrue(TEXT("Reference and optimized replay both retain repeated history"),F.Room->GetStaleEpochCountForTesting(Id)>=4);
+  TestTrue(TEXT("Reference and optimized replay retain knowledge without duplicate sessions"),F.Room->GetStaleEpochCountForTesting(Id)>0 && F.Room->GetSpatialRecordCount(Id)<=3);
  }
- TestTrue(TEXT("Replay actually exercises exact geometry reuse"),Reuses>0);
- TestTrue(TEXT("Replay actually exercises exact ownership reuse"),OwnershipReuses>0);
- TestTrue(TEXT("Replay actually exercises canonical coverage-delta reuse"),CoverageReuses>0);
- TestTrue(TEXT("Ownership-only updates reuse physical occupancy"),OccupancySamplesReused>0);
+ // Cross-record cache hits are no longer a product expectation: the identical
+ // observation sessions now share one state. Full per-frame evidence parity
+ // above remains required; independent solid-interior coverage is tested below.
  AddInfo(FString::Printf(TEXT("Repeated history geometry reuse hits=%llu ownership reuse hits=%llu coverage reuse hits=%llu occupancy samples reused=%llu"),Reuses,OwnershipReuses,CoverageReuses,OccupancySamplesReused));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellMemoryEpisodeContract,
+ "Darkwell.PropLab.ArchitectureAudit.StaticPartialEpisodes",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellMemoryEpisodeContract::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ FRoom F;
+ F.Room->DestroyTracked();
+ FResolvedSightWeaveObjectPolicy Policy;
+ Policy.RevealMode=Reveal::SpatialPartial; Policy.HistoryMode=History::StationaryOnly;
+ F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+  FTransform(FVector(-300,650,0)),ESightWeaveObjectPolicySource::UseProjectDefault,History::StationaryOnly,&Policy);
+ F.Face(90); F.Step(20); F.Face(-90); F.Step(20);
+ const int32 InitialRecords=F.Room->GetSpatialRecordCount(Id);
+ int32 Missing=0, InternalCaps=0;
+ for(float Yaw:{52.f,40.f,28.f,52.f,40.f,28.f})
+ {
+  F.Face(Yaw); F.Step(20); F.Face(-90); F.Step(20);
+  const auto& Prop=F.Room->Tracked.FindChecked(Id);
+  // Independent analytic oracle: a single solid cuboid, fully observed before
+  // these repeated subset views. Every interior point remains known and solid.
+  for(double X=-580;X<-20;X+=.625)
+  {
+   const FVector2D Point(X,650);
+   double Sum=0;
+   for(const auto& R:Prop.History.GetRecords())
+   {
+    if(R.bCurrentObservedLocation) continue;
+    const auto* V=Prop.Visuals.Find(R.Epoch); if(!V || V->bPresentationRetired) continue;
+    const auto B=R.FineHistory.GetBounds(); const auto S=R.FineHistory.GetSize();
+    const auto UV=(Point-B.Min)/B.GetSize();
+    const int32 I=FMath::FloorToInt(UV.Y*S.Y)*S.X+FMath::FloorToInt(UV.X*S.X);
+    if(V->SubmittedPresentation.IsValidIndex(I)) Sum+=V->SubmittedPresentation[I].B*V->SubmittedPresentation[I].A;
+   }
+   Missing+=Sum<.999;
+  }
+  for(const auto& Pair:Prop.Visuals) for(const auto& Q:Pair.Value.CapQuads)
+   InternalCaps+=Q.A.X>-600 && Q.A.X<0 && Q.A.Y>615 && Q.A.Y<685;
+ }
+ TestEqual(TEXT("Fully known interior has no surface deficit after subset reobservations"),Missing,0);
+ TestEqual(TEXT("Fully known cuboid has no artificial internal caps"),InternalCaps,0);
+ TestEqual(TEXT("Repeated operations without new knowledge do not grow retained records"),F.Room->GetSpatialRecordCount(Id),InitialRecords);
+ AddInfo(FString::Printf(TEXT("EPISODE_ORACLE missing=%d internal_caps=%d initial_records=%d final_records=%d"),Missing,InternalCaps,InitialRecords,F.Room->GetSpatialRecordCount(Id)));
  return true;
 }
 

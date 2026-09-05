@@ -109,3 +109,99 @@ plugin compilation are separate acceptance requirements.
 `GetMemorySeamAuditForTesting`: on-demand raw center-row surface and vertical caps.
 Neither injects visibility or historical knowledge. Diagnostic builds/runs below
 must be completed before claiming the rendered root cause or a fix.
+
+### A: reproduced surface seams, 02:24–02:32 UTC
+
+`Saved/ArchitectureAudit/Room02_Baseline` completed 51 frames, but Editor exit
+`0xC0000005` after shutdown: failed teardown, not a pass. A second run
+`Room02_Baseline2` adds explicit post-PIE GC and exits **0**. Its complete 51-frame
+D3D12/SM6 replay is preserved. Original images opened for review show **three
+internal lines** after a full observation followed by 52°, 40°, 28° subset views.
+Hiding every cap leaves all three lines visible; restoring caps leaves the same
+lines. The surface path independently creates the reported artifact.
+
+The center-row submitted shader values have 9 deficient samples around world
+X=-210, -27.5 and 152.5 cm: each boundary has two zero samples and one 0.5 sample
+inside an already fully observed solid object. Older ownership is suppressed;
+the new session's frozen inward-AA boundary still fades to zero. Thus cap removal,
+TSR changes or the previous Whole uniform-blend fix cannot repair this Partial
+history defect. Caps can additionally exist at these false per-session boundaries.
+Reentry continuous frames also show known surfaces restarting the reveal dot pattern.
+Eight view cycles retain eight records without geometry/appearance changes.
+
+New independent analytic cuboid oracle `StaticPartialEpisodes` fails on the old
+runtime: **36 deficient interior probes, 1,566 internal cap fragments, 1→7 records**
+after repeated subset views. `Audit_StaticPartial_Before2`: 0/1, process 0,
+test 4.896 s / wall 24.419 s, severe 0. This fails *product* continuity and growth,
+not a comparison against the old implementation. The earlier Before run had no
+matching test (failed build) and is not a baseline pass. OracleBuild initially
+failed because a concurrently edited header was stale in that compiler action;
+OracleBuild2 succeeded on the completed source (11.99 s). Future builds run only
+after source edits finish.
+
+The first small implementation tests reentry into the same uncontradicted observed
+state, keeping accumulated local discovery and resetting only the live lighting
+blend. It explicitly rejects changed pose/content, motion and old counterevidence.
+This is an experiment, not yet the general state compaction or module migration.
+
+### B: narrow reuse experiment
+
+Formal build `ArchitectureAudit_ReuseTrialBuild2.log` succeeded, 15.99 s (the first
+trial build failed on `auto*` deduction from TObjectPtr; corrected explicitly).
+`Audit_StaticPartial_Trial` passes **1/1**, 1.647 s test / 21.092 s wall, process
+0, severe 0. The same analytic interior/cap/growth assertions now all pass.
+GPU replay and wider semantics still pending at this checkpoint.
+
+`Room02_ReuseTrial` now completed the identical 51-frame rendered sequence. Original
+final/history and transition images opened for review: three internal seams gone;
+known portions stay solid on reentry while newly discovered portions reveal.
+Independent recorded-output oracle: all 896 interior probes are solid in each of
+six post-full-observation samples, retained state count stays **1** through eight
+episodes. This validates the narrow direction. Its Editor shutdown again returned
+`0xC0000005` after log close despite PIE stop and explicit GC; teardown remains
+an independent blocker, not disguised by the successful surface oracle.
+
+Representative regression `Audit_Reuse_Representative`: 68 total, 65 clean,
+1 warning, 2 failed; 41.420 s tests / 64.722 s wall, process 0, severe 0.
+All policy, moving-continuity and Whole behavior checks pass. Both failures demand
+four or more *duplicate same-pose epochs* (and consequently cross-record cache
+hits). Their full-scan parity assertions already pass. Those structural expectations
+are migrated to bounded retained knowledge; the full evidence comparisons remain.
+`StaticPartialEpisodes` supplies the new independent product oracle. No failed
+evidence is removed. No runtime path has yet been removed by this trial.
+
+After migrating those structural assertions, `Audit_Reuse_Representative2` passes
+**69/69** (67 clean, 2 warnings), 43.138 s tests / 62.989 s wall, process 0,
+severe 0. Standard Editor build succeeded (7.30 s). This is checkpoint B: a
+reviewable seam/duplicate-session fix with a passing representative semantic
+suite, not completion of the broader architecture/performance/teardown work.
+Next entry: immutable observed content, reusable presentation, generic scene
+ownership, then corrected performance and long-run validation.
+
+### Performance baseline, separate from the seam oracle
+
+`HomeAudit_Before_20260905` completed all eleven legacy D3D12 short cases and
+produced a 214 MB trace. Editor subsequently exited `0xC0000005`: metrics are
+completed evidence, teardown is failed. `binary_provenance.txt` clarifies that
+the running binary precedes the unbuilt trial changes captured by source.patch.
+
+| Legacy case | frame p50/p95/p99/max ms | system p50/p95/p99/max ms |
+| --- | --- | --- |
+| Empty turning | 38.30/40.54/42.12/42.73 | .167/.203/.227/.262 |
+| One Whole | 38.26/40.62/41.14/42.03 | .477/4.957/5.142/5.543 |
+| Eight Whole | 39.11/41.74/43.13/43.54 | 5.519/22.558/24.615/25.350 |
+| 32 Whole | 44.88/111.63/124.14/161.55 | 28.729/93.402/105.432/123.248 |
+| Room 02 Partial | 40.74/95.80/101.20/105.15 | 14.427/82.823/87.154/90.692 |
+| Overlap64 | 38.80/41.67/43.74/46.51 | 4.470/25.181/30.118/31.893 |
+| Same-ID64 | 38.84/40.94/41.73/42.95 | 6.092/12.485/13.379/13.458 |
+| Distributed184 | 38.38/41.04/42.17/42.60 | 5.762/12.244/13.937/14.447 |
+| Distributed repeated 1000 | 38.57/40.82/41.82/48.12 | 6.041/12.168/13.280/14.009 |
+
+These retain the OLD measurement scope: game-clock frame deltas, 90 frames
+excluded before sampling. The two one-shot sweep cases only measure settled idle
+because the sweep finishes during that warmup; their ~.2 ms system p95 is **not**
+fast-turn evidence. Batch publication spikes are likewise omitted by this table.
+Corrected measurement must include setup/first update and wall-clock intervals,
+while retaining this original comparison. Empty-room full-frame time already
+fails 16.6 ms although system cost is .2 ms: whole-frame and gray-system costs
+cannot be conflated. No performance threshold is changed.

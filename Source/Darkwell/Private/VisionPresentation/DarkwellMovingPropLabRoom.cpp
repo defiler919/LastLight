@@ -2953,6 +2953,23 @@ void ADarkwellMovingPropLabRoom::UpdateTracked(
 		CurrentIndex = Prop.History.GetCurrentIndex();
 		if (CoverageSnapshot.bValid && CurrentIndex == INDEX_NONE && bAnyLegal)
 		{
+			// Repeated sight contact is a new session, not a new object state.
+			// Reuse only the still-resident local observation with identical content
+			// and pose, and no intervening empty/replacement evidence.
+			TArray<FDarkwellCurrentLiveGrid::FDescriptor> ResumeDescriptors;
+			for (const UStaticMeshComponent* Part : Actual->Memory->GetMemoryPrimitives())
+				if (Part && Part->GetStaticMesh()) ResumeDescriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),Part->GetRelativeTransform()});
+			if (IsCaptureEligible(Prop) && !ObjectPolicy->IsSightWeaveMoving()
+				&& Prop.LastCaptureAppearanceRevision == Actual->Memory->ComputeAppearanceRevision()
+				&& Prop.CurrentLive.LastLegalPose.Equals(Transform, 1.e-6)
+				&& Prop.CurrentLive.MatchesGeometry(ResumeDescriptors, Transform)
+				&& Prop.History.ResumeUncontradictedObservation(Prop.LocalEpoch))
+			{
+				Prop.CurrentLive.ResumeStationaryKnowledge();
+				if (auto* V = Prop.Visuals.Find(Prop.LocalEpoch)) DestroyVisual(*V);
+				Prop.Visuals.Remove(Prop.LocalEpoch);
+				bHistoricalSpatialIndexDirty = true;
+			}
 			const int32 NewIndex = Prop.History.BeginCurrentObservation(
 				Transform, Bounds, Darkwell::MovingPropLab::CellSize);
 			if (NewIndex != INDEX_NONE)
@@ -3312,6 +3329,8 @@ bool ADarkwellMovingPropLabRoom::FreezeCurrentForHiddenMotion(
 	FDarkwellSpatialObservationRecord& Current =
 		Prop.History.GetMutableRecords()[CurrentIndex];
 	const uint32 Epoch = Current.Epoch;
+	if (const auto* Actual = Prop.Actual.Get())
+		Prop.LastCaptureAppearanceRevision = Actual->Memory->ComputeAppearanceRevision();
 	TBitArray<> WholeGeometryMask;
 	if (Current.bConfirmedWholeCapture)
 	{

@@ -51,6 +51,8 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 		const FBox2D& WorldBounds,
 		float CellSize = 2.5f);
 	bool UpdateCurrentObservedPosePreservingEvidence(const FTransform& Pose);
+	/** Reenter unchanged knowledge; caller must validate captured content and pose. */
+	bool ResumeUncontradictedObservation(uint32 Epoch);
 	bool FreezeCurrentForHiddenMovement();
 	/** Confirmed Whole entry point. The exact fine geometry mask is the capture authority. */
 	bool FreezeCurrentFromGeometryMask(const TBitArray<>& FullGeometryMask);

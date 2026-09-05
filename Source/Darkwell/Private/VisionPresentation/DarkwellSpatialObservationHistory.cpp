@@ -114,6 +114,23 @@ bool FDarkwellSpatialObservationHistory::FreezeCurrentForHiddenMovement()
 	return true;
 }
 
+bool FDarkwellSpatialObservationHistory::ResumeUncontradictedObservation(uint32 Epoch)
+{
+	if (CurrentIndex != INDEX_NONE) return false;
+	const int32 Index = Records.IndexOfByPredicate([Epoch](const auto& R) { return R.Epoch == Epoch; });
+	if (Index == INDEX_NONE) return false;
+	auto& Record = Records[Index];
+	// This narrow reuse path cannot reinterpret counterevidence or replacement.
+	// A later canonical rebuild must start from effective facts, never raw capture.
+	if (!Record.FineHistory.IsInitialized() || Record.FineHistory.GetSamples().ContainsByPredicate([](const auto& S)
+		{ return S.InitialRemembered > 0 && (S.bVerifiedEmpty || S.State == FDarkwellHistoryGridV2::Superseded()); })) return false;
+	Record.SpatialMemory.BeginPresent();
+	Record.FineHistory = FDarkwellHistoryGridV2();
+	Record.bCurrentObservedLocation = true;
+	CurrentIndex = Index;
+	return true;
+}
+
 bool FDarkwellSpatialObservationHistory::FreezeCurrentFromGeometryMask(const TBitArray<>& FullGeometryMask)
 {
  if(!Records.IsValidIndex(CurrentIndex)) return false;

@@ -60,7 +60,7 @@ def run():
     shot('00_unknown')
     yield 3
     # Cone half-angle is about 52 degrees. These poses expose overlapping strips.
-    for cycle, yaw in enumerate([18, 28, 40, 52, 90, 18, 52, 90]):
+    for cycle, yaw in enumerate([18, 28, 40, 52, 90, 52, 40, 28]):
         face(yaw)
         for frame in range(20):
             yield 1
@@ -92,6 +92,8 @@ def run():
     levels.editor_request_end_play()
     yield 45
     assert world() is None
+    unreal.SystemLibrary.collect_garbage()
+    yield 30
 
 sequence = run()
 left = 0

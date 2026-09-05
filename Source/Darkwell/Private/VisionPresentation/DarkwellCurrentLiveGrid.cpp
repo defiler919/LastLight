@@ -96,6 +96,22 @@ void FDarkwellCurrentLiveGrid::BuildCurrentLegalObservationMask(TBitArray<>& Out
  }
 }
 
+void FDarkwellCurrentLiveGrid::ResumeStationaryKnowledge()
+{
+	auto Resume = [](FDarkwellSpatialPropMemory& Memory)
+	{
+		for (auto& Cell : Memory.PrepareCurrentRaster(Memory.GetBounds(), Memory.GetSize()))
+		{
+			if (Cell.DiscoveredPresent > 0) Cell.AppearanceBlend = 1;
+			Cell.LiveBlend = 0;
+			Cell.ExitAge = 1;
+			Cell.CurrentLegalCoverage = 0;
+		}
+	};
+	for (auto& Part : Parts) Resume(Part.Local);
+	Resume(WholeAppearance);
+}
+
 void FDarkwellCurrentLiveGrid::ApplyWholeObjectPresentation(float Dt,FDarkwellSpatialPropMemory& Snapshot,
  TFunctionRef<float(FVector2D)> OcclusionPermission)
 {

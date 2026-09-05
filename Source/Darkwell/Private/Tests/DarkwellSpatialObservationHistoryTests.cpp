@@ -150,26 +150,49 @@ bool FDarkwellHistoryIndependentCurrentTest::RunTest(const FString&)
  for(int32 Cycle=0;Cycle<3;++Cycle)
  {
   const int32 Live=H.BeginCurrentObservation(FTransform(FVector(9999,0,0)),Bounds(9999),10);
-  if(!TestEqual(TEXT("Full history retains one independent live slot"),Live,H.MaxResidentRecords)) return false;
+  if(!TestEqual(TEXT("New current remains independent of retained history"),Live,H.MaxResidentRecords+Cycle)) return false;
   H.AdvanceCurrent(.2f,Full);
   TestEqual(TEXT("Legal current evidence can advance at capacity"),H.GetRecords()[Live].SpatialMemory.GetCells()[0].DiscoveredPresent,1.f);
-  TestFalse(TEXT("Capacity prevents only a new historical capture"),H.FreezeCurrentForHiddenMovement());
-  TestEqual(TEXT("Rejected capture leaves current intact"),H.GetCurrentIndex(),Live);
-  TestEqual(TEXT("Total storage has a fixed independent current reserve"),H.GetRecords().Num(),H.MaxResidentRecords+1);
+  TestTrue(TEXT("Legacy capacity cannot discard newly observed knowledge"),H.FreezeCurrentForHiddenMovement());
+  TestEqual(TEXT("Successful capture seals current"),H.GetCurrentIndex(),INDEX_NONE);
+  TestEqual(TEXT("Actual knowledge growth remains representable"),H.GetRecords().Num(),H.MaxResidentRecords+Cycle+1);
   for(int32 I=0;I<H.MaxResidentRecords;++I)
   {
    const auto& R=H.GetRecords()[I];
    TestEqual(TEXT("Stored epochs remain unchanged"),R.Epoch,uint32(I+1));
    TestEqual(TEXT("Existing history cannot be cleared on capacity"),R.SpatialMemory.GetCells()[0].RemainingStale,1.f);
   }
-  H.AbandonCurrentObservationWithoutHistory();
  }
- TestEqual(TEXT("One diagnostic per rejected capture, never per live update"),H.GetOverflowRejectCount(),uint64(3));
+ TestEqual(TEXT("Production admission rejects no acquired knowledge"),H.GetOverflowRejectCount(),uint64(0));
  Advance(H,H.GetRecords()[0].Epoch,Full);
- TestEqual(TEXT("Only legal empty evidence frees historical capacity"),H.ReleaseFullyErasedRecords(),1);
+ TestEqual(TEXT("Legal empty evidence releases its own historical record"),H.ReleaseFullyErasedRecords(),1);
  const int32 Live=H.BeginCurrentObservation(FTransform(FVector(9000,0,0)),Bounds(9000),10);
- TestTrue(TEXT("Epoch ordering survives repeated rejected capture"),H.GetRecords()[Live].Epoch>67);
- TestTrue(TEXT("Capture resumes when evidence legitimately frees a slot"),H.FreezeCurrentForHiddenMovement());
+ TestTrue(TEXT("Epoch ordering survives growth and release"),H.GetRecords()[Live].Epoch>67);
+ TestTrue(TEXT("Further capture remains available"),H.FreezeCurrentForHiddenMovement());
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellTerminalRecordReleaseTest,
+ "Darkwell.PropLab.MovingRules.SpatialHistory.TerminalReleaseDoesNotInventEmpty",
+ Darkwell::SpatialObservationHistoryTests::Flags)
+bool FDarkwellTerminalRecordReleaseTest::RunTest(const FString&)
+{
+ FDarkwellSpatialObservationHistory H; H.Initialize(TEXT("Terminal"));
+ H.BeginCurrentObservation(FTransform::Identity,FBox2D(FVector2D(0),FVector2D(2.5)),2.5);
+ H.AdvanceCurrent(.2f,TArray<float>{1}); H.FreezeCurrentForHiddenMovement();
+ auto& R=H.GetMutableRecords()[0]; const uint32 Epoch=R.Epoch;
+ R.FineHistory.Initialize(R.SpatialMemory,R.LastLegalCaptureMask);
+ TArray<float> Dark; Dark.Init(0,16); TBitArray<> Occupied(true,16),Owned(false,16);
+ Owned[0]=true; R.FineHistory.Advance(.2f,Dark,Occupied,Owned);
+ TestFalse(TEXT("Any unresolved surface forbids release"),H.ReleaseTerminalRecord(Epoch));
+ Owned.Init(true,16); R.FineHistory.Advance(.2f,Dark,Occupied,Owned);
+ TestFalse(TEXT("Replaced history is not verified empty"),R.FineHistory.IsFullyVerifiedEmpty());
+ TestEqual(TEXT("No replacement sample pretends to prove emptiness"),R.FineHistory.Count(FDarkwellHistoryGridV2::VerifiedEmpty()),0);
+ TestTrue(TEXT("Fully replaced record can release after host proves no cap"),H.ReleaseTerminalRecord(Epoch));
+ TestEqual(TEXT("Terminal dense state is gone"),H.GetRecords().Num(),0);
+ TestEqual(TEXT("Compaction is distinct from empty erasure"),H.GetCompactedRecordCount(),uint64(1));
+ TestFalse(TEXT("A released epoch cannot reenter raw capture"),H.ResumeUncontradictedObservation(Epoch));
+ TestEqual(TEXT("Epoch sequence cannot resurrect a released capture"),H.GetNextEpoch(),Epoch+1);
  return true;
 }
 

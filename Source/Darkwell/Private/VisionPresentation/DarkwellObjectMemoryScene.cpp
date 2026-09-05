@@ -1472,9 +1472,8 @@ void ADarkwellObjectMemoryScene::RetireHistoricalPresentation(
 		Visual.Proxy.IsValid() ? Visual.Proxy->GetUniqueID() : 0,
 		Visual.Cap.IsValid() ? Visual.Cap->GetUniqueID() : 0,
 		Visual.Texture.IsValid() ? Visual.Texture->GetUniqueID() : 0);
-	// Retirement releases presentation resources only. The immutable terminal
-	// evidence remains resident and keeps compact broad-phase membership so a
-	// nearby observer still receives the same diagnostic authority updates.
+	// No surface or 3D cap remains. The host releases the terminal record after
+	// all candidate queries, without rewriting any sample as VerifiedEmpty.
 	DestroyVisual(Visual, false);
 	Visual.bPresentationRetired = true;
 	bHistoricalSpatialIndexDirty = true;
@@ -2537,7 +2536,10 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			{
 				return Cell.RemainingStale > 0.0f || Cell.StaleOpacity > 0.0f;
 			});
-		if (Record.FineHistory.IsInitialized() ? Record.FineHistory.IsFullyVerifiedEmpty() : !bAny)
+		const auto* Visual=Prop.Visuals.Find(Record.Epoch);
+		const bool bTerminal=Visual && Visual->bPresentationRetired && Record.FineHistory.IsInitialized()
+			&& !Record.FineHistory.HasResidualSurface();
+		if (bTerminal || (Record.FineHistory.IsInitialized() ? Record.FineHistory.IsFullyVerifiedEmpty() : !bAny))
 		{
 			Erased.Add(Record.Epoch);
 		}
@@ -2549,6 +2551,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			DestroyVisual(*Visual);
 			Prop.Visuals.Remove(Epoch);
 		}
+		Prop.History.ReleaseTerminalRecord(Epoch);
 	}
 	if (!Erased.IsEmpty()) bHistoricalSpatialIndexDirty = true;
 	Prop.History.ReleaseFullyErasedRecords();

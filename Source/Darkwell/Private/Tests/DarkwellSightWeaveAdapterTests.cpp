@@ -2166,7 +2166,9 @@ bool FDarkwellFineHistoryParallelTest::RunTest(const FString&)
  for (const bool Fast : {true,false})
  {
   const auto Result=RunResidualOwnershipRoute(*this,false,2,true,53,100,Fast);
-  TestFalse(TEXT("Real partial rotation produced per-epoch fine diagnostics"),Result.FineHistory.IsEmpty());
+  TestFalse(TEXT("Real partial rotation captured fine evidence before resolution"),Result.SealedFineHistory.IsEmpty());
+  TestEqual(TEXT("Resolved history leaves no stale surface after reacquisition"),Result.FinalProxies,0);
+  TestEqual(TEXT("Resolved history leaves no stale cap after reacquisition"),Result.FinalCaps,0);
   AddInfo(FString::Printf(TEXT("V2_REACQUIRE fast=%d proxy=%d cap=%d %s"),
    Fast,Result.FinalProxies,Result.FinalCaps,*Result.FineHistory));
  }
@@ -2575,7 +2577,8 @@ namespace
   TArray<ADarkwellMovingPropLabRoom::FFineEvidenceDiagnostic> Final;
   FString Hash;
   uint64 StateHash=1469598103934665603ull;
-  int32 SurvivingSeenEmpty=0, Proxies=0, Records=0;
+  int32 SurvivingSeenEmpty=0, Proxies=0, Records=0, Current=0;
+  bool bCurrentVisible=false;
  };
  FFastSweepRouteResult RunFastSweepEvidenceRoute(FAutomationTestBase& Test, int32 SweepFrames, float Fps=60)
  {
@@ -2632,6 +2635,7 @@ namespace
   Room->GetFineEvidenceDiagnosticsForTesting(Id,Result.Final);
   Result.Hash=Room->GetFineHistoryTelemetry(Id);
   Result.Proxies=Room->GetVisibleHistoricalProxyCountForTesting(Id);Result.Records=Room->GetSpatialRecordCount(Id);
+  Result.Current=Room->GetCurrentEpochCountForTesting(Id); Result.bCurrentVisible=Room->IsCurrentSourceVisibleForTesting(Id);
   int32 Rows=0, Resets=0;
   for(const auto& D:Result.Final)
   {
@@ -2702,7 +2706,7 @@ bool FDarkwellFastSweepReproductionTest::RunTest(const FString&)
  const auto Extreme=RunFastSweepEvidenceRoute(*this,1);
  TestEqual(TEXT("Slow sweep resolves legally seen empty samples"),Slow.SurvivingSeenEmpty,0);
  TestEqual(TEXT("One legal proof survives immediately leaving the view"),Fast.SurvivingSeenEmpty,0);
- TestTrue(TEXT("Final 180 pose is observed without retaining resolved old gray"),Fast.Proxies==0 && Fast.Records>=3);
+ TestTrue(TEXT("Final 180 pose remains presented while resolved old records can release"),Fast.Proxies==0 && Fast.Current==1 && Fast.bCurrentVisible);
  TestEqual(TEXT("Real Lab fast/slow ordered sample states match"),Fast.StateHash,Slow.StateHash);
  int32 SpatialMiss=0;
  for(const auto& D:Extreme.Final)

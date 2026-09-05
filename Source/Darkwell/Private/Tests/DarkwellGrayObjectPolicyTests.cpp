@@ -473,7 +473,7 @@ bool FDarkwellGrayHistoryCapacityCurrentTest::RunTest(const FString&)
     F.Step(); TestTrue(TEXT("Legal current recovers after invalid publication"),F.Room->IsCurrentSourceVisibleForTesting(Id));
    }
    F.Face(-90); F.Step(15);
-   TestEqual(TEXT("Rejected capture does not grow or replace history"),F.Room->GetStaleEpochCountForTesting(Id),64);
+   TestEqual(TEXT("One genuinely new state is retained beyond legacy capacity; repeats reuse it"),F.Room->GetStaleEpochCountForTesting(Id),65);
    TestEqual(TEXT("View loss releases only the transient current"),F.Room->GetCurrentEpochCountForTesting(Id),0);
   }
   F.Face(90); F.Step(15); auto* Policy=F.Room->GetObjectPolicyForTesting(Id);
@@ -482,7 +482,7 @@ bool FDarkwellGrayHistoryCapacityCurrentTest::RunTest(const FString&)
   F.Room->SetTrackedTransformForTesting(Id,Pose); F.Step(15);
   TestTrue(TEXT("Moving live remains visible at historical capacity"),F.Room->IsCurrentSourceVisibleForTesting(Id));
   F.Face(-90); F.Step(15);
-  TestEqual(TEXT("Moving view loss adds no historical record"),F.Room->GetStaleEpochCountForTesting(Id),64);
+  TestTrue(TEXT("Moving view loss adds no historical record; legally replaced state may compact"),F.Room->GetStaleEpochCountForTesting(Id)<=65);
   for(int32 I=0;I<64;++I) TestEqual(TEXT("All stored history evidence remains intact"),Prop.History.GetRecords()[I].FineHistory.EvidenceHash(),Before[I]);
  }
  return true;
@@ -530,12 +530,45 @@ bool FDarkwellRepeatedHistoryEvidenceParity::RunTest(const FString&)
    if(Full) Reference.Add(Hash);
    else if(!TestEqual(*FString::Printf(TEXT("Repeated history equals full original evidence at frame %d"),Frame),Hash,Reference[Frame])) return false;
   }
-  TestTrue(TEXT("Reference and optimized replay retain knowledge without duplicate sessions"),F.Room->GetStaleEpochCountForTesting(Id)>0 && F.Room->GetSpatialRecordCount(Id)<=3);
+  TestTrue(TEXT("Reference and optimized replay retain visible current knowledge without duplicate sessions"),F.Room->IsCurrentSourceVisibleForTesting(Id) && F.Room->GetSpatialRecordCount(Id)>0 && F.Room->GetSpatialRecordCount(Id)<=3);
  }
  // Cross-record cache hits are no longer a product expectation: the identical
  // observation sessions now share one state. Full per-frame evidence parity
  // above remains required; independent solid-interior coverage is tested below.
  AddInfo(FString::Printf(TEXT("Repeated history geometry reuse hits=%llu ownership reuse hits=%llu coverage reuse hits=%llu occupancy samples reused=%llu"),Reuses,OwnershipReuses,CoverageReuses,OccupancySamplesReused));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellTerminalSceneCompaction,
+ "Darkwell.PropLab.ArchitectureAudit.TerminalSceneCompaction",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellTerminalSceneCompaction::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ FRoom F; F.Face(90); F.Step(20); F.Face(-90); F.Step(20);
+ auto& Prop=F.Room->Tracked.FindChecked(Id);
+ // Duplicate an actually acquired capture to isolate the residency rule.
+ // This does not act as the independent observation/visibility oracle.
+ const auto Capture=Prop.History.GetRecords()[0];
+ for(int32 I=0;I<3;++I)
+ {
+  const int32 Index=Prop.History.BeginCurrentObservation(Capture.SnapshotTransform,Capture.SpatialMemory.GetBounds(),2.5);
+  auto& Record=Prop.History.GetMutableRecords()[Index]; const uint32 Epoch=Record.Epoch;
+  Record=Capture; Record.Epoch=Epoch; Record.bCurrentObservedLocation=true; Record.SpatialMemory.BeginPresent();
+  TestTrue(TEXT("Duplicate captured state seals for residency fixture"),Prop.History.FreezeCurrentFromGeometryMask(Capture.LastLegalCaptureMask));
+  F.Room->EnsureRecordVisual(Prop,Record); F.Room->UpdateRecordTexture(Prop,Record); F.Room->UpdateRecordCap(Prop,Record);
+ }
+ ++F.Room->GeometryRevision; ++Prop.ObservationOwnershipRevision;
+ F.Room->bHistoricalSpatialIndexDirty=true;
+ const uint32 OldEpoch=Prop.History.GetRecords()[0].Epoch;
+ TestFalse(TEXT("Old state has no empty proof"),Prop.History.GetRecords()[0].FineHistory.IsFullyVerifiedEmpty());
+ F.Step(3);
+ if(!TestEqual(TEXT("Fully replaced captured states release dense residency"),Prop.History.GetRecords().Num(),1)) return false;
+ TestEqual(TEXT("Three terminal captures compact independently of empty evidence"),Prop.History.GetCompactedRecordCount(),uint64(3));
+ TestTrue(TEXT("The latest knowledge remains visible"),F.Room->GetVisibleHistoricalProxyCountForTesting(Id)>0);
+ if(!TestFalse(TEXT("Deleted state cannot rebuild from raw capture"),Prop.History.ResumeUncontradictedObservation(OldEpoch))) return false;
+ F.Step(30);
+ TestEqual(TEXT("Leaving unchanged unverified scene preserves the remaining state"),Prop.History.GetRecords().Num(),1);
  return true;
 }
 

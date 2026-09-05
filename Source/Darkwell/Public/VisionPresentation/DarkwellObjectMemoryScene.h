@@ -234,6 +234,7 @@ protected:
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
 	friend class FDarkwellObservedContentContract;
+	friend class FDarkwellTerminalSceneCompaction;
 	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);
 
 	struct FCapQuadSnapshot

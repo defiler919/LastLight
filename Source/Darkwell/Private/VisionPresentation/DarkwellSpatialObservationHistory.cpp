@@ -8,6 +8,8 @@ void FDarkwellSpatialObservationHistory::Initialize(const FName InStableId)
 	NextEpoch = 1;
 	CurrentIndex = INDEX_NONE;
 	OverflowRejectCount = 0;
+	CompactedRecordCount = 0;
+	bIndependentCurrentAdmission = false;
 	Records.Reset();
 }
 
@@ -22,9 +24,9 @@ int32 FDarkwellSpatialObservationHistory::BeginObservedLocation(
 int32 FDarkwellSpatialObservationHistory::BeginCurrentObservation(
 	const FTransform& SnapshotTransform, const FBox2D& WorldBounds, const float CellSize)
 {
-	// One unsealed observation has its own admission budget. Storage remains a
-	// contiguous view for existing consumers; it never becomes a 65th history.
-	return BeginObservation(SnapshotTransform, WorldBounds, CellSize, MaxResidentRecords + 1);
+	// Unresolved knowledge may grow; repeating an unchanged state does not.
+	// Residency/compaction must never reject the player's newly acquired facts.
+	return BeginObservation(SnapshotTransform, WorldBounds, CellSize, MAX_int32);
 }
 
 int32 FDarkwellSpatialObservationHistory::BeginObservation(
@@ -58,6 +60,7 @@ int32 FDarkwellSpatialObservationHistory::BeginObservation(
 	Record.SpatialMemory.BeginPresent();
 	Record.bCurrentObservedLocation = true;
 	CurrentIndex = Records.Num() - 1;
+	bIndependentCurrentAdmission = ResidentLimit > MaxResidentRecords;
 	return CurrentIndex;
 }
 
@@ -128,6 +131,7 @@ bool FDarkwellSpatialObservationHistory::ResumeUncontradictedObservation(uint32 
 	// Keep the last valid capture if its resumed source becomes ineligible.
 	Record.bCurrentObservedLocation = true;
 	CurrentIndex = Index;
+	bIndependentCurrentAdmission = true;
 	return true;
 }
 
@@ -179,6 +183,17 @@ bool FDarkwellSpatialObservationHistory::AdvanceHistorical(
 	FDarkwellSpatialObservationRecord* Record = FindRecord(Epoch);
 	return Record && !Record->bCurrentObservedLocation
 		&& Record->SpatialMemory.Advance(DeltaSeconds, Coverage);
+}
+
+bool FDarkwellSpatialObservationHistory::ReleaseTerminalRecord(uint32 Epoch)
+{
+	const int32 Index=Records.IndexOfByPredicate([Epoch](const auto& R){return R.Epoch==Epoch;});
+	if(Index==INDEX_NONE || Index==CurrentIndex || !Records[Index].FineHistory.IsInitialized()
+		|| Records[Index].FineHistory.HasResidualSurface()) return false;
+	Records.RemoveAt(Index);
+	if(CurrentIndex>Index) --CurrentIndex;
+	++CompactedRecordCount;
+	return true;
 }
 
 int32 FDarkwellSpatialObservationHistory::ReleaseFullyErasedRecords()

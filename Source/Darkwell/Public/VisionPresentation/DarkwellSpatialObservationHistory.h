@@ -47,11 +47,12 @@ struct DARKWELL_API FDarkwellSpatialObservationRecord
 };
 
 /**
- * Lab validation model for SpatialEvidenceOnly moving-prop memory.
+ * Captured object states and their effective historical knowledge.
  * It owns no actors, meshes, materials or SightWeave authority.
  */
 struct DARKWELL_API FDarkwellSpatialObservationHistory
 {
+	/** Legacy observation API budget; production Current admission is independent. */
 	static constexpr int32 MaxResidentRecords = 64;
 
 	void Initialize(FName InStableId);
@@ -59,10 +60,10 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 		const FTransform& SnapshotTransform,
 		const FBox2D& WorldBounds,
 		float CellSize = 2.5f);
-	/** Live admission is independent of the 64 sealed-history slots. */
+	/** Preserve actual new knowledge beyond the legacy 64-record admission limit. */
 	int32 BeginCurrentObservation(const FTransform& SnapshotTransform,
 		const FBox2D& WorldBounds, float CellSize = 2.5f);
-	bool CanSealCurrentObservation() const { return CurrentIndex != INDEX_NONE && Records.Num() <= MaxResidentRecords; }
+	bool CanSealCurrentObservation() const { return CurrentIndex != INDEX_NONE && (bIndependentCurrentAdmission || Records.Num() <= MaxResidentRecords); }
 	bool RebaseCurrentObservedLocation(
 		const FTransform& SnapshotTransform,
 		const FBox2D& WorldBounds,
@@ -81,6 +82,9 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 		float DeltaSeconds,
 		TConstArrayView<float> Coverage);
 	int32 ReleaseFullyErasedRecords();
+	/** Host must first prove no residual 3D cap. Refuses any remaining surface. */
+	bool ReleaseTerminalRecord(uint32 Epoch);
+	uint64 GetCompactedRecordCount() const { return CompactedRecordCount; }
 
 	FName GetStableId() const { return StableId; }
 	uint32 GetNextEpoch() const { return NextEpoch; }
@@ -106,5 +110,7 @@ private:
 	uint32 NextEpoch = 1;
 	int32 CurrentIndex = INDEX_NONE;
 	uint64 OverflowRejectCount = 0;
+	uint64 CompactedRecordCount = 0;
+	bool bIndependentCurrentAdmission = false;
 	TArray<FDarkwellSpatialObservationRecord> Records;
 };

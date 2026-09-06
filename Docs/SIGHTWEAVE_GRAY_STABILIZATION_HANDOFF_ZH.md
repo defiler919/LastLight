@@ -174,3 +174,18 @@ FinalAttribution_Standalone01 为独立 Trace（不并入正式数据）：58.39
 Stabilization_FinalQualification01 最终 D3D12/SM6 视觉流程：906 帧、8632 个检查全部通过，九次独立资格会话 current color ratio 最低 1.0，无图像 oracle 失败；151.949 秒、完整协议/清理、exit 0、severe 0。Contracts、Episodes、Reobservation/WholeSessions 和长测继续。
 
 长测驱动只在 ActualNewKnowledge 之后显式 Reset Room 03，恢复该案例实际移走的 source，再进入混合交互路线；记录 reset 前后资源，保持真实运动/可见范围。此变更发生在六组正式 after 结束之后，未改变 Matrix 或 C++ 二进制。先提交推送该检查点，再开始长测。
+
+## 阶段 7：最终完整视觉回归
+
+运行时代码保持最终构建不变。四个独立 D3D12/SM6 图形协议全部完成，清理标记完整、非调试器实际 exit 0、severe 0；图像原件已查看，协议完成与画面判据分别核验。
+
+| Saved/ArchitectureAudit 运行目录 | 协议证据 | 独立画面/资源 oracle | 进程 wall 秒 |
+| --- | --- | --- | ---: |
+| Stabilization_FinalQualification01 | 906 帧、九次独立资格会话 | 8632 检查 PASS | 151.949 |
+| Stabilization_FinalContracts01 | 178 帧、三次 PIE | Whole 首次离开 24/24 图像可见度 PASS | 71.858 |
+| Stabilization_FinalEpisodes01 | 八轮观察和 cap 隐藏/恢复诊断 | 六组各 896 个内部样本，无缺口 | 42.211 |
+| Stabilization_FinalWholeSessions01 | Reobservation + WholeSessions + NormalTurns，118 取证帧 | Reobservation 192、ConfirmedWholeCurrent 97、WholeSessions 332 检查全 PASS | 74.009 |
+
+最后一组同时覆盖原连续四阶段观察、四次重复远近观察、四次重新取得 Whole 资格、相同小接触达标后保持彩色、旧完整历史不回退，以及真实相机墙体深度/隐藏墙负对照。图像 oracle 比较原始截图、实际材质/纹理绑定与独立解析内部样本，不能以原生测试成功替代。所用分析命令为 Scripts/AnalyzeWholeQualification.py、AnalyzeGrayWholeTransitions.py、AnalyzeGrayMemoryEpisodes.py、AnalyzeGrayReobservation.py、AnalyzeConfirmedWholeCurrent.py、AnalyzeWholeSessions.py，参数为表中对应目录。
+
+这些视觉协议采用固定时间步，截图实际 2233×911；其用途是表面正确性和生命周期，不冒充正式 1080p 无截图性能矩阵。所有计时门槛仍以独立正式性能与真实长测为准。

@@ -412,3 +412,20 @@ EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉�
 验证进行中。CapSlice_Build01完整构建成功37.48秒。CapSlice_Target01旧三项cap测试通过，新parity测试在覆盖断言上失败：48次结果一致、96次joined，但初始fixture没有非空cap和live Current。改用真实局部观察宽柜fixture补足，未降低断言。CapSlice_Build02因新增fixture访问lab私有测试辅助函数缺少friend声明失败，已补测试friend；CapSlice_Build03完整构建成功29.73秒，原失败证据保留。最终验证和真实A/B将在本节追加。
 
 CapSlice_Target02已补非空cap（30次比较、20次非空、50次joined全部一致），但fixture移除了实际源，live Current覆盖仍缺失。现显式恢复源后，最终 `CapSlice_Target03` **1/1 clean PASS**，31次比较、20次非空、35次joined、8次live Current回退；网格顶点/三角形索引、quad顺序、cap诊断、几何/候选计数一致，每个细历史字段和捕获/抑制掩码不变。覆盖Partial/Whole、真实再观察、失效coverage、Reset、重新播种和世界销毁。最终完整构建 `CapSlice_Build04` 成功11.58秒（仅测试fixture修订，运行时代码在Build01后未变）。先推送该阶段，再做真实D3D12 A/B和必要阶段回归；尚不声称真实帧改善。
+
+运行时检查点 **9c14ecc** 已推送。第一对真实D3D12 Batch CapSlice_Serial01 / CapSlice_Joined01均complete、exit0、severe0、正常退出、480帧环境异常0、valid_normal_sample=true。184 setup **458.850→375.941ms**，最大整帧 **850.725→749.592ms**；首次native381.502→364.698ms，cap76.425→68.775ms，ownership107.099→101.492ms，occupancy82.275→79.461ms，texture25.365→25.106ms。改善初步成立，但尚未用单对样本替代重复和分段证据；初始化仍远超100ms。
+
+### 18.1 两次真实 Batch 对照
+
+运行时9c14ecc冻结，顺序Serial01→Joined01→Joined02→Serial02，均同DLL 3D3FC1128749E474682A94135CE5D956772DC884BB8E368174E01BDD403489C9、driver 4889D03A8159A896BE5C742A28E747B5EDF7F594470FCD1CF7E329B78933D670、同DefaultEngine.ini。正常前台1920×1080/SP100、Epic/TSR/Lumen HWRT/VSM，D3D12/SM6，NoTrace/无固定步长/无截图；每次480帧环境异常0，complete/exit0/severe0/log关闭，valid_normal_sample=true。前台激活返回false时由用户点击建立前台，实际逐帧校验通过，未关闭校验。
+
+| 184 distributed，ms | Serial01 | Serial02 | Joined01 | Joined02 |
+| --- | ---: | ---: | ---: | ---: |
+| Setup | 458.850 | 440.336 | 375.941 | 418.135 |
+| 最大整帧 | 850.725 | 821.656 | 749.592 | 792.716 |
+
+两次中位数setup **449.593→397.038ms**（减少52.555ms，11.7%），最大整帧 **836.191→771.154ms**（减少65.037ms，7.8%）。Joined两次仍有约43ms差异，改善不是固定节省100ms，且均未接近100ms门槛。原始全部冷帧保留；没有用每个case第90帧后的稳定段替代最大帧。
+
+首次native中位376.916→365.052ms，其中cap75.810→68.858、ownership104.947→102.038、occupancy81.144→79.806、texture25.561→25.014ms。未修改后三个算法，不把其小幅变化归因成新优化。setup均184记录，首/末采样均120，fine bytes均41,157,632；四次184均保留1个>100ms帧。SameIdentity64最大帧273ms附近→256–257ms，Empty p95范围17.917–18.543ms，均是短Batch证据，不能覆盖旧完整帧矩阵FAIL。所有12个case指标、原始帧索引及同源hash见Saved/Stabilization/CapSlice_Joined02/four-run-comparison.json。
+
+复杂度仍保留原全格扫描O(S)、边界对历史网格断点扫描及完整ownership裁剪；仅把行计算分配到最多8个CPU任务，不声称消除历史/断点的最坏复杂度。暂存增加单个cap的O(Q+T)输出，Q为实际裁剪后quad数，T≤8；原O(S)细胞转换仍存在，不复制每个依赖的完整历史。旧Visual保持到新结果全部完成，因此事务内会短暂同时持有旧/新quad，不是零额外内存。GT mesh materialization、签名扫描、occupancy与首次资源创建是下一阶段可测边界。

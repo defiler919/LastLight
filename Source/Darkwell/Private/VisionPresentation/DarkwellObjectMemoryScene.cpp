@@ -1647,7 +1647,10 @@ bool ADarkwellObjectMemoryScene::UpdateHistoricalContributionExclusion(
 		const auto& ReadProp = Prop;
 		ParallelFor(TEXT("DarkwellSealedOwnership"), NumTasks, 1, [&](int32 Task)
 		{
-			TGuardValue<FOwnershipQueryCounts*> CountScope(GOwnershipQueryCounts, &Counts[Task]);
+			// Hot counters stay on this task's stack, avoiding false sharing with
+			// neighboring task slots. Publish each aggregate once before joining.
+			FOwnershipQueryCounts LocalCounts;
+			TGuardValue<FOwnershipQueryCounts*> CountScope(GOwnershipQueryCounts, &LocalCounts);
 			const int32 Begin = int64(DirtyIndices.Num()) * Task / NumTasks;
 			const int32 End = int64(DirtyIndices.Num()) * (Task + 1) / NumTasks;
 			for (int32 Offset = Begin; Offset < End; ++Offset)
@@ -1660,6 +1663,7 @@ bool ADarkwellObjectMemoryScene::UpdateHistoricalContributionExclusion(
 				JoinedResults[Offset] = HasNewerObservedGeometryOverlapWithinFootprint(
 					ReadProp, ReadVisual, Record.Epoch, FBox2D(Minimum, Minimum + Step)) ? 2 : 1;
 			}
+			Counts[Task] = LocalCounts;
 		}, EParallelForFlags::Unbalanced);
 		for (const auto& Count : Counts)
 		{

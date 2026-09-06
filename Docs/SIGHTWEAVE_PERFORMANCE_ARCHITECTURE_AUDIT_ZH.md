@@ -287,3 +287,5 @@ EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉�
 验证包括原全扫描BatchOwnershipSamplesEquivalent、4140组完整interval/footprint空间索引对照、原slab几何对照，以及新增串行/并行十阶段逐帧比较：全部细样本字段、suppression位、texture signature和cap四边形坐标。覆盖无效coverage、8/16条重新播种、Reset及world销毁。所有任务在每次Step返回前完成；此架构没有跨帧“待取消”状态，不能冒称测试了未来异步方案的取消。真实batch收益、完整阶段回归和必要视觉待后续证据；先推送可构建、已定向验证检查点。
 
 运行时检查点a8bb332已推送。其后完整 `BatchSlice_Functional01` **146/146**（136clean、10warnings、0failed/not-run/severe、exit0），实际NullRHI；测试182.321秒/进程203.854秒。没有再次执行四套视觉或长测。SpaceCraft仍运行，真实GPU A/B保持待测；为先验证主目标的CPU工作，新增独立JoinedDistributedBatch诊断，使用现有原生64+64+56构造器、串行/并行交替四次，报告setup与首个native update而非D3D12完整帧。新增仅测试文件，完整DiagnosticBuild01成功8.45秒，先保存检查点再运行该有界诊断。
+
+`BatchSlice_DistributedCPU01` 失败已保留：测试误用普通PropLab/GrayObjectPolicies世界，生产SetGrayPolicyStressMode按gray_lab=0正确拒绝；没有有效成本样本。诊断改为GrayPolicyLab地图身份，并调用正常ConfigureForGrayPolicyLab配置，未削弱生产guard。另将并行查询计数改为任务栈上累加、末尾一次写回，避免相邻计数槽的false sharing；几何求值不变。完整 `BatchSlice_DiagnosticBuild02.log` 成功20.92秒；先推送可构建修订，再执行修正诊断及受影响parity。

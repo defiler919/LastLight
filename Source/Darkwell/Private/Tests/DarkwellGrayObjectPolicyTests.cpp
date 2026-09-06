@@ -8,6 +8,7 @@
 #include "Player/DarkwellCharacter.h"
 #include "VisionPresentation/DarkwellMovingPropLabRoom.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
+#include "VisionPresentation/DarkwellGrayPolicyLab.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -27,9 +28,9 @@ namespace Darkwell::GrayObjectPolicyTests
   ADarkwellPropGameplayLab* Fixture;
   ADarkwellMovingPropLabRoom* Room;
   UDarkwellSightWeaveWorldSubsystem* Adapter;
-  FRoom(bool GrayFixture=false)
+  FRoom(bool GrayFixture=false, bool StressLab=false)
   {
-   UPackage* Package=CreatePackage(TEXT("/Game/Maps/L_ProjectFogPropGameplayLab"));
+   UPackage* Package=CreatePackage(StressLab ? Darkwell::GrayPolicyLab::MapPath : TEXT("/Game/Maps/L_ProjectFogPropGameplayLab"));
    World=NewObject<UWorld>(Package,MakeUniqueObjectName(Package,UWorld::StaticClass(),TEXT("GrayObjectPolicy")),RF_Transient);
    World->WorldType=EWorldType::Game; GEngine->CreateNewWorldContext(World->WorldType).SetCurrentWorld(World);
    World->InitializeNewWorld(UWorld::InitializationValues().InitializeScenes(true).AllowAudioPlayback(false).CreatePhysicsScene(true).CreateNavigation(false).CreateAISystem(false).ShouldSimulatePhysics(false));
@@ -39,7 +40,9 @@ namespace Darkwell::GrayObjectPolicyTests
    Player=World->SpawnActor<ADarkwellCharacter>(ADarkwellCharacter::StaticClass(),FVector(-300,100,92),FRotator(0,90,0),P); Player->DispatchBeginPlay();
    Fixture=World->SpawnActor<ADarkwellPropGameplayLab>(); Fixture->PostInitializeComponents(); Fixture->DispatchBeginPlay();
    Room=ADarkwellMovingPropLabRoom::FindActive(World); Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
-   Adapter->RequestSightWeaveAuthority(Fixture); Room->ResetRoom(Player); Face(90);
+   Adapter->RequestSightWeaveAuthority(Fixture);
+   if(StressLab) Room->ConfigureForGrayPolicyLab(Player); else Room->ResetRoom(Player);
+   Face(90);
   }
   ~FRoom() { Fixture->Destroy(); World->DestroyWorld(true); GEngine->DestroyWorldContext(World); }
   void Face(float Yaw) { Player->SetActorLocation(FVector(-300,100,92)); Player->SetActorRotation(FRotator(0,Yaw,0)); }
@@ -715,7 +718,7 @@ bool FDarkwellJoinedDistributedBatch::RunTest(const FString&)
  for(int32 Run=0;Run<4;++Run)
  {
   const bool Serial=Run%2==0;
-  FRoom F(true); F.Room->bForceSerialOwnershipForTesting=Serial;
+  FRoom F(false,true); F.Room->bForceSerialOwnershipForTesting=Serial;
   F.Player->SetActorLocation(FVector(6000,3600,92));
   F.Player->SetActorRotation(FRotator(0,90,0)); F.Step(2);
   const double Begin=FPlatformTime::Seconds();

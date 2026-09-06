@@ -201,3 +201,7 @@ Stabilization_FinalQualification01 最终 D3D12/SM6 视觉流程：906 帧、863
 普通默认 Editor `ProjectReference_PIE01` 实际尺寸为 1920×1082，被严格条件断言拒绝（complete false、exit 0、severe 1、27.596 秒），失败保留。新增 Editor 模块专用 SetPerformanceViewportSize，在普通 PIE 中固定实际 1920×1080，结束时恢复；不生成 Lab actor、不改普通玩法、不改变 Matrix。完整 Editor 构建 Stabilization_ReferenceViewportBuild01.log 成功，24.74 秒；UBT 因 adaptive unity 工作集同时重链 runtime DLL，runtime 源码没有新改动。此前六组正式 after 的原二进制/源码元数据继续保留，新增构建不冒充那些样本的二进制。
 
 ProjectReference_PIE02 使用默认 Editor 工具集、普通 L_Prototype 原生玩法，实际 1920×1080/SP100、240 帧存活断言通过，complete/exit 0/severe 0，32.546 秒。p50/p95/p99/max 为 27.543/36.634/47.321/79.908 ms，66 帧 >33、0 帧 >100、最长 3 帧。原图显示 Health 36%、Stalker Hunting；计时后 GPU profile 的 TSR 事件确证实际 1920×1080。截图 showui 可包含窗口边框，不能把 PNG 外框尺寸当内部渲染尺寸。
+
+LabRenderReference_PIE01 为独立 Lab 大厅 render-size 取证，不混入 Matrix：34.921 秒、complete、exit 0、severe 0，实际 1920×1080/SP100、6240×6320 coverage。GPU 原始事件 TSR MeasureFlickeringLuma / SpatialAntiAliasing / ResolveHistory 为 1920×1080；Epic TSR UpdateHistory 为 3840×2160，保留当前默认高密度历史。240 帧 p50/p95/p99/max 23.130/26.188/27.691/146.271 ms，2 帧 >33、1 帧 >100、最长 2；该独立大厅路线与压力房 Empty 不同，不用于替换正式矩阵。两份 PIE Reference 截图均已查看，尺寸以实际 viewport 与 GPU 事件为准。
+
+最新 Editor 构建追加完整 manifest 回归 Stabilization_FinalFunctional03：**143/143（134 clean、9 warnings）、0 failed、0 not-run、severe 0、进程 exit 0**；原 142 个名称无遗漏，新增仍为 ConservativeDrawSupport。测试总时长 178.692 秒、进程 wall 211.329 秒。运行时源码自 5ec64c1 以来无变化，本次额外复核包含最终重链后的二进制；完整日志与 baseline-coverage.json 保留。

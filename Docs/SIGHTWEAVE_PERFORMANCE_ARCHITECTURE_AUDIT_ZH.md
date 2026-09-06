@@ -1,5 +1,7 @@
 # SightWeave 灰色层性能架构审计
 
+最新施工（cf3a3c1之后）：第16节记录本轮有界、同帧join的封存ownership切片；第1–15节为上一轮证据，未重新审计或重跑其长测。
+
 2026-09-06。本轮起点 `d986b536fbd21a0fb0c600577f9912369fe221a3`；本地、实时远端一致，工作树干净，LFS fsck PASS。本文先记录修改前模型，后续实验追加，不以优化假设代替结论。外部规则和性能门槛继续采用 `SIGHTWEAVE_GRAY_STABILIZATION_HANDOFF_ZH.md`。
 
 ## 1. 基线与可证范围
@@ -269,3 +271,17 @@ native memory p50/p95/p99/max=.144/4.327/5.304/30.040ms。五个>100ms帧发生�
 EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉、七个性能进程和短GC探针正常退出。原中断EXIT UNKNOWN及旧失败保留，没有通过强杀或全局快捷键结束进程。总体仍为 **PARTIAL — GRAY_STABILIZATION_BLOCKED**。
 
 继续施工顺序：先设计并验证不可变ownership/cap工作集与GT原子发布，解决批量同步停顿；随后减少完整帧渲染与提交成本，并将长测采样器改为完整流式证据；最后针对同步fixture做分配级闭环。不能重复已完成的功能/视觉/长测来替代实现，不改变Whole每轮100cm、合法历史、采样、cap和质量。构建用 `Scripts/BuildEditor.ps1`，功能用RunGrayObjectPolicyTests.ps1的既有完整selector（最终summary.json保存原串）；视觉用RunGrayMemoryAudit.ps1的Qualification/Contracts/Episodes和Reobservation -WholeSessions -NormalTurns。最终仅文档/分析脚本变更，不再修改已验证运行时。
+
+## 16. 有限额度施工：封存ownership的同帧并行切片
+
+起点cf3a3c1588bc290aa9a42f97f8cd1c8d199432c5，工作树干净。本轮只处理批量停顿，保留上一轮三次184 before：setup561.233/512.112/516.630ms，max1354.999/1288.085/1293.440ms。没有重做大范围审计、正式矩阵或长测。开始时SpaceCraft运行，已请求用户退出；因此尚未开始真实GPU before/after。
+
+选择**同帧join**而非跨帧异步发布：已有历史阶段按升序epoch更新，任何一个record的ownership读阶段只依赖较新的未更新数据。对dirty>=4096、存在原空间索引及geometry snapshot、候选>2、该身份全部record均已封存的场景，GT暂借原CPU数据为只读输入，最多16个任务执行原有完整footprint/区间判据。Current、退化几何索引fallback和小工作量仍串行。原cap、texture、FineHistory更新顺序和全部知识不改变。
+
+任务只读Prop/Visual中的CPU历史、geometry、candidate/index和cache位；GT在ParallelFor join前不推进它们。每个任务写互不重叠的uint8结果段，查询计数用线程本地指针指向任务私有计数，避免共享RuntimeFrame写和TBitArray并发bit写。join后GT顺序合并suppression/cache位和计数，再执行原FineHistory/cap/texture发布。既没有跨帧epoch结果，也没有悬空任务或UObject生命周期延长，所以不引入取消队列和revision补丁。工作线程查询链不能访问live actor/policy，Current查询入口另有assert。UE ParallelFor未启用PumpRenderingThread，GT等待不会泵送其他GT更新。
+
+这是一种借用不可变数据、并行求值和GT提交的完整局部切片，**不是**独立纯数据模块或完整异步capture/cap架构。现有const查询方法仍属于scene类；以后若扩到跨帧，必须先拆出拥有自身数据的输入，再设计失效/取消，不能延长当前借用对象的存活期。默认控制量r.Darkwell.ObjectMemory.JoinedSealedOwnership=1；0保留同二进制串行对照，性能runner新增-SerialSealedOwnership并明确记录metadata。
+
+完整Editor构建 `BatchSlice_JoinedBuild01.log` 成功104.57秒。定向 `BatchSlice_JoinedTarget01` 4/4、3clean/1warning、0failed/not-run/severe、exit0，实际NullRHI；测试15.232秒/进程83.210秒。进程启动与构建尾部重叠，但测试开始在构建完成之后，确实执行新JoinedSealedOwnership测试并报告37个并行批次、1,982,208输入样本；不把此过程时间用作性能对比。唯一warning为引擎网络连通性探测generate_204超时，与测试断言无关。
+
+验证包括原全扫描BatchOwnershipSamplesEquivalent、4140组完整interval/footprint空间索引对照、原slab几何对照，以及新增串行/并行十阶段逐帧比较：全部细样本字段、suppression位、texture signature和cap四边形坐标。覆盖无效coverage、8/16条重新播种、Reset及world销毁。所有任务在每次Step返回前完成；此架构没有跨帧“待取消”状态，不能冒称测试了未来异步方案的取消。真实batch收益、完整阶段回归和必要视觉待后续证据；先推送可构建、已定向验证检查点。

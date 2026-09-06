@@ -646,6 +646,64 @@ bool FDarkwellOwnershipIndexParity::RunTest(const FString&)
  return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellJoinedOwnershipParity,
+ "Darkwell.PropLab.ArchitectureAudit.JoinedSealedOwnershipParityAndLifetime",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellJoinedOwnershipParity::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ TArray<uint64> Reference;
+ uint64 Batches=0, WorkSamples=0;
+ for(bool Serial:{true,false})
+ {
+  FRoom F; F.Room->bForceSerialOwnershipForTesting=Serial;
+  F.Face(-90); F.Step(2);
+  for(int32 Frame=0;Frame<10;++Frame)
+  {
+   // Each reseed destroys old visuals and replaces epochs. No task may retain
+   // the previous borrowed input after Step returns. Reset then world teardown
+   // exercise both cancellation boundaries of this joined (not queued) design.
+   if(Frame==0 || Frame==4 || Frame==8)
+    if(!TestTrue(TEXT("New independent sealed captures"),F.Room->ConfigureHistoricalEpochCountForTesting(Id,Frame==4?8:16))) return false;
+   if(Frame==2) F.Room->InjectInvalidCoverageOnceForTesting(Id);
+   if(Frame==6) F.Room->ResetRoom(F.Player);
+   F.Face(Frame==1 || Frame==3 || Frame==7 ? 136.f : -90.f);
+   F.Step();
+   const auto T=F.Room->GetHistoryRuntimeFrameTelemetryForTesting();
+   if(Serial) TestEqual(TEXT("Serial reference dispatches no tasks"),T.JoinedOwnershipBatches,uint64(0));
+   else { Batches+=T.JoinedOwnershipBatches; WorkSamples+=T.JoinedOwnershipSamples; }
+   TArray<ADarkwellMovingPropLabRoom::FFineEvidenceDiagnostic> Samples;
+   F.Room->GetFineEvidenceDiagnosticsForTesting(Id,Samples);
+   uint64 H=1469598103934665603ull;
+   auto Mix=[&](uint64 V){H=(H^V)*1099511628211ull;};
+   Mix(Samples.Num()); Mix(F.Room->GetTotalCapTriangles());
+   for(const auto& D:Samples)
+   {
+    Mix(D.Epoch); Mix(D.Index); Mix(GetTypeHash(D.Sample.State)); Mix(D.Sample.bVerifiedEmpty);
+    for(float V:{D.Sample.InitialRemembered,D.Sample.Opacity,D.Sample.FrozenAAEnvelope,D.Sample.EmptyDwell,D.Coverage}) Mix(GetTypeHash(V));
+    Mix(D.bOccupied); Mix(D.bOwned); Mix(D.bValid); Mix(D.bSubmitted);
+   }
+   const auto& Prop=F.Room->Tracked.FindChecked(Id);
+   for(const auto& R:Prop.History.GetRecords())
+   {
+    Mix(R.Epoch); Mix(R.bCurrentObservedLocation);
+    if(const auto* V=Prop.Visuals.Find(R.Epoch))
+    {
+     Mix(V->bPresentationRetired); Mix(V->CapTriangles); Mix(V->TextureSignature);
+     for(TConstSetBitIterator<> It(V->SuppressedByCurrentEvidence);It;++It) Mix(It.GetIndex()+1);
+     for(const auto& Q:V->CapQuads)
+      for(const FVector P:{Q.A,Q.B,Q.C,Q.D}) Mix(GetTypeHash(P));
+    }
+   }
+   if(Serial) Reference.Add(H);
+   else if(!TestEqual(*FString::Printf(TEXT("Joined publication equals serial, including reset/invalid coverage at frame %d"),Frame),H,Reference[Frame])) return false;
+  }
+ }
+ TestTrue(TEXT("Large sealed histories actually execute joined batches"),Batches>0 && WorkSamples>0);
+ AddInfo(FString::Printf(TEXT("Joined ownership parity: batches=%llu input_samples=%llu; all tasks joined before reset/reseed/world destruction"),Batches,WorkSamples));
+ return true;
+}
+
 // Separate diagnostic selector: measures cold CPU work without a frame gate.
 // Each size starts in a fresh world; no warm-up is inserted after seeding.
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(FDarkwellOwnershipScaling,

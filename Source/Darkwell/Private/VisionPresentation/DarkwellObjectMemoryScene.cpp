@@ -1,5 +1,6 @@
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
+#include "Async/ParallelFor.h"
 
 #include "Components/DynamicMeshComponent.h"
 #include "Components/SceneComponent.h"
@@ -23,6 +24,17 @@
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDarkwellObjectMemory, Log, All);
+
+namespace
+{
+	TAutoConsoleVariable<int32> CVarJoinedSealedOwnership(
+		TEXT("r.Darkwell.ObjectMemory.JoinedSealedOwnership"), 1,
+		TEXT("Compute large sealed-history ownership batches on joined worker tasks. 0 keeps the serial oracle."));
+	// Only the three pure ownership query counters may be updated inside the
+	// joined read phase. Per-task storage avoids atomics and shared telemetry writes.
+	struct FOwnershipQueryCounts { uint64 Geometry = 0, Records = 0, Footprints = 0; };
+	thread_local FOwnershipQueryCounts* GOwnershipQueryCounts = nullptr;
+}
 
 ADarkwellObjectMemoryScene::ADarkwellObjectMemoryScene()
 {
@@ -324,7 +336,8 @@ bool ADarkwellObjectMemoryScene::QueryVerticalInterval(
 	double& OutMaxZ,
 	const double ProjectionTolerance) const
 {
-	++RuntimeFrame.PrimitiveGeometryTests;
+	if (GOwnershipQueryCounts) ++GOwnershipQueryCounts->Geometry;
+	else ++RuntimeFrame.PrimitiveGeometryTests;
  bool UsePlanar=Geometry.bCachedPlanarProjection && FMath::IsFinite(Point.X) && FMath::IsFinite(Point.Y);
 #if WITH_DEV_AUTOMATION_TESTS
  UsePlanar &= !bForceFullHistoryEvidenceForTesting;
@@ -466,6 +479,7 @@ bool ADarkwellObjectMemoryScene::CollectCurrentOwnedVerticalIntervals(
 	const FVector2D Point,
 	TArray<FVector2D>& OutIntervals, const double ProjectionTolerance) const
 {
+	check(!GOwnershipQueryCounts); // Live actor/policy queries are GT-only.
 	OutIntervals.Reset();
 	if (bOnlyDurableOwnership && IsTentativeWhole(Prop)) return false;
 	if (ProjectionTolerance == 0.0 && !HasCurrentObservedContributionAt(Prop, Point))
@@ -581,7 +595,8 @@ bool ADarkwellObjectMemoryScene::VisitNewerOwnedVerticalIntervals(
 {
  auto ProcessCandidate=[&](const FDarkwellSpatialObservationRecord& Candidate)
  {
-		++RuntimeFrame.OwnershipRecordVisits;
+		if (GOwnershipQueryCounts) ++GOwnershipQueryCounts->Records;
+		else ++RuntimeFrame.OwnershipRecordVisits;
 		if (Candidate.Epoch <= OlderEpoch)
 		{
 			return false;
@@ -770,7 +785,8 @@ bool ADarkwellObjectMemoryScene::HasNewerObservedGeometryOverlapWithinFootprint(
 	const uint32 OlderEpoch,
 	const FBox2D& Footprint) const
 {
-	++RuntimeFrame.OwnershipFootprintQueries;
+	if (GOwnershipQueryCounts) ++GOwnershipQueryCounts->Footprints;
+	else ++RuntimeFrame.OwnershipFootprintQueries;
  if(bUseNewerCandidates && NewerCandidateId==Prop.StableId && (FrameNewerCandidates.IsEmpty() || NewerCandidateMaximumEpoch<=OlderEpoch)) return false;
 	if (!Footprint.bIsValid)
 	{
@@ -1602,8 +1618,62 @@ bool ADarkwellObjectMemoryScene::UpdateHistoricalContributionExclusion(
   }
  }
 
-	for (const int32 Index : DirtyIndices)
+	// Lease the existing CPU snapshots read-only until ParallelFor joins. There
+	// is no cross-frame work: the GT cannot advance epochs, retire a visual,
+	// reset the world or mutate these masks before all tasks complete. Therefore
+	// no stale-result queue, revision cancellation or UObject lifetime extension
+	// is needed. Live Current and geometry fallback paths stay serial.
+	bool bJoined = DirtyIndices.Num() >= 4096 && ActiveOwnershipIndex
+		&& bUseOwnershipGeometry && bUseNewerCandidates && NewerCandidateId == Prop.StableId
+		&& FrameNewerCandidates.Num() > 2
+		&& CVarJoinedSealedOwnership.GetValueOnGameThread() != 0;
+#if WITH_DEV_AUTOMATION_TESTS
+	bJoined &= !bForceFullHistoryEvidenceForTesting && !bForceSerialOwnershipForTesting;
+#endif
+	if (bJoined) for (const auto& Candidate : Prop.History.GetRecords())
+		if (Candidate.bCurrentObservedLocation) { bJoined = false; break; }
+	TArray<uint8> JoinedResults;
+	if (bJoined)
 	{
+		check(IsInGameThread());
+		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_JoinedOwnership);
+		JoinedResults.Init(0, DirtyIndices.Num());
+		const int32 NumTasks = FMath::Min(16, FMath::DivideAndRoundUp(DirtyIndices.Num(), 1024));
+		TArray<FOwnershipQueryCounts> Counts;
+		Counts.SetNum(NumTasks);
+		const auto* ReadCache = Cached;
+		const auto& ReadSuppression = Visual->SuppressedByCurrentEvidence;
+		const auto& ReadVisual = *Visual;
+		const auto& ReadProp = Prop;
+		ParallelFor(TEXT("DarkwellSealedOwnership"), NumTasks, 1, [&](int32 Task)
+		{
+			TGuardValue<FOwnershipQueryCounts*> CountScope(GOwnershipQueryCounts, &Counts[Task]);
+			const int32 Begin = int64(DirtyIndices.Num()) * Task / NumTasks;
+			const int32 End = int64(DirtyIndices.Num()) * (Task + 1) / NumTasks;
+			for (int32 Offset = Begin; Offset < End; ++Offset)
+			{
+				const int32 Index = DirtyIndices[Offset];
+				if (!ReadSuppression.IsValidIndex(Index) || ReadSuppression[Index]
+					|| (ReadCache && ReadCache->Evaluated[Index])) continue;
+				const FVector2D Minimum = Bounds.Min + Step * FVector2D(Index % Size.X, Index / Size.X);
+				// Separate bytes per input, never parallel writes to packed bits.
+				JoinedResults[Offset] = HasNewerObservedGeometryOverlapWithinFootprint(
+					ReadProp, ReadVisual, Record.Epoch, FBox2D(Minimum, Minimum + Step)) ? 2 : 1;
+			}
+		}, EParallelForFlags::Unbalanced);
+		for (const auto& Count : Counts)
+		{
+			RuntimeFrame.PrimitiveGeometryTests += Count.Geometry;
+			RuntimeFrame.OwnershipRecordVisits += Count.Records;
+			RuntimeFrame.OwnershipFootprintQueries += Count.Footprints;
+		}
+		++RuntimeFrame.JoinedOwnershipBatches;
+		RuntimeFrame.JoinedOwnershipSamples += DirtyIndices.Num();
+	}
+	// Publish suppression and reuse-cache bits only on the GT, after the join.
+	for (int32 DirtyOffset = 0; DirtyOffset < DirtyIndices.Num(); ++DirtyOffset)
+	{
+		const int32 Index = DirtyIndices[DirtyOffset];
 		if (!Visual->SuppressedByCurrentEvidence.IsValidIndex(Index)
 			|| Visual->SuppressedByCurrentEvidence[Index])
 		{
@@ -1618,8 +1688,9 @@ bool ADarkwellObjectMemoryScene::UpdateHistoricalContributionExclusion(
   {
    // Identical newly confirmed geometry owns the complete old Whole footprint,
    // including intersecting edge texels whose centers miss a thin handle.
-   Overlap=(bSameWholeGeometry && Record.LastLegalCaptureMask.IsValidIndex(Index) && Record.LastLegalCaptureMask[Index])
-    || HasNewerObservedGeometryOverlapWithinFootprint(Prop,*Visual,Record.Epoch,FBox2D(Minimum,Minimum+Step));
+   Overlap=bJoined ? JoinedResults[DirtyOffset] == 2
+    : (bSameWholeGeometry && Record.LastLegalCaptureMask.IsValidIndex(Index) && Record.LastLegalCaptureMask[Index])
+      || HasNewerObservedGeometryOverlapWithinFootprint(Prop,*Visual,Record.Epoch,FBox2D(Minimum,Minimum+Step));
    if(Cached) { Cached->Evaluated[Index]=true; Cached->Overlap[Index]=Overlap; }
   }
 		if (Overlap)
@@ -4100,6 +4171,8 @@ void ADarkwellObjectMemoryScene::FinalizeHistoryRuntimeTelemetry(
 	RuntimeTotal.HistoryOccupancySamplesReused += RuntimeFrame.HistoryOccupancySamplesReused;
 	RuntimeTotal.PrimitiveGeometryTests += RuntimeFrame.PrimitiveGeometryTests;
 	RuntimeTotal.OwnershipTests += RuntimeFrame.OwnershipTests;
+	RuntimeTotal.JoinedOwnershipBatches += RuntimeFrame.JoinedOwnershipBatches;
+	RuntimeTotal.JoinedOwnershipSamples += RuntimeFrame.JoinedOwnershipSamples;
 	RuntimeTotal.UpdateRecordTextureCalls += RuntimeFrame.UpdateRecordTextureCalls;
 	RuntimeTotal.TextureUploads += RuntimeFrame.TextureUploads;
 	RuntimeTotal.UpdateRecordCapCalls += RuntimeFrame.UpdateRecordCapCalls;

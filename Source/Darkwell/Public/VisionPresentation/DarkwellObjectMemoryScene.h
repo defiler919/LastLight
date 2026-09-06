@@ -55,6 +55,8 @@ public:
 		uint64 OwnershipTests = 0;
 		uint64 OwnershipRecordVisits = 0;
 		uint64 OwnershipFootprintQueries = 0;
+		uint64 JoinedOwnershipBatches = 0;
+		uint64 JoinedOwnershipSamples = 0;
 		uint64 CapSignatureSamples = 0;
 		uint64 UpdateRecordTextureCalls = 0;
 		uint64 TextureUploads = 0;
@@ -213,6 +215,7 @@ public:
 	int64 GetGeometryRevisionForTesting() const { return static_cast<int64>(GeometryRevision); }
 #if WITH_DEV_AUTOMATION_TESTS
  bool bForceFullHistoryEvidenceForTesting=false;
+ bool bForceSerialOwnershipForTesting=false;
 #endif
 protected:
 	struct FPrimitiveGeometrySnapshot
@@ -267,6 +270,7 @@ protected:
 	friend class FDarkwellGrayHistoryCapacityCurrentTest;
 	friend class FDarkwellPlanarProjectionParity;
 	friend class FDarkwellOwnershipIndexParity;
+	friend class FDarkwellJoinedOwnershipParity;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
 	friend class FDarkwellObservedContentContract;

@@ -1,5 +1,7 @@
 # 灰色层功能检查点与稳定化施工
 
+最新继续施工（cf3a3c1之后）：已实现大批封存历史ownership的同帧并行求值/GT合并切片，完整Editor构建成功、4项定向测试通过，含37个真实并行批次、1,982,208输入样本的串行parity与Reset/重播种/退出边界。Current与跨帧发布保持原路径；capture/cap/resources仍同步。开始时SpaceCraft未退出，真实before/after尚待采集；本轮不重跑完整矩阵或十分钟长测。详见架构审计第16节，下文“最新续工完成”指上一轮。
+
 最新续工完成：从 `d986b53` 开始的两阶段局部重构，运行时冻结并推送于 `b03bcfb`：ownership空间候选与旧表面提前排除、cap依赖摘要、地面记忆饱和行/扫描线交点复用。最终145/145原生功能、四套视觉及全部独立oracle PASS。三次无Trace Batch的184初始化峰值1.288–1.355秒；FrameAudit的Empty p95中位18.599ms、Partial21.940ms；SourceUpdate独立Trace均值5.50→2.59ms。最终真实610秒长测42,663帧、p95=15.991ms，但5帧>100ms，性能仍FAIL。工作集3.363→3.755GB，释放采样数据+GC+60真实帧后3.434GB，历史/纹理资源边界稳定。短GC规模对照证实采样器保留4.27万条字典可产生约107ms完整Python GC，原慢帧不删除。分配探针区分了用户buffer、D3D12页池与Mimalloc预留/decommit；旧同步6.4GB仍未全部闭环。已有正式全矩阵和54,000步同步长测未重跑。完整证据、限制和后续架构方向见 [性能架构审计](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md) 第5–15节，以及新增23行 [阶段明细](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_METRICS.csv)。
 
 本次性能架构阶段最终分项：**ARCHITECTURE AUDIT PARTIAL / FRAME PERFORMANCE FAIL / INITIALIZATION-BATCH HITCHES FAIL / LONG-RUN RESOURCES PARTIAL / FUNCTIONAL REGRESSION PASS**。EXIT STABILITY在已验证范围内维持PASS。下一步优先运行时ownership/cap工作单元与原子发布，不能把延迟压力脚本当作初始化优化；随后改进完整帧成本和流式采样，保留全部证据。下文“最终”及其普通Editor打开现场属于上一轮稳定化基线，本轮新增进程均已正常结束，未重新打开普通Editor。

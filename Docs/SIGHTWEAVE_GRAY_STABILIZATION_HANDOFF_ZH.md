@@ -30,14 +30,14 @@
 
 禁止强杀/立即 ExitProcess/忽略退出码伪装稳定，禁止修改系统配置、降低画质、改变规则或牺牲合法知识。所有有效阶段明确暂存、commit、push 后核对 local/upstream/remote。生成证据保留 Saved，不提交资产或生成目录。
 
-## 本轮结果（持续更新）
+## 本轮结果（持续更新；最终验收尚未完成）
 
 | 维度 | 状态 | 本轮证据 |
 | --- | --- | --- |
-| FUNCTIONAL REGRESSION | PARTIAL | 人工功能检查点已记录，待本轮受控完整回归 |
-| EXIT STABILITY | PARTIAL | 既有间歇 0xC0000005 开放；旧 Slate 栈不是已确证根因 |
-| FRAME PERFORMANCE | PARTIAL | 历史 23.950→44.743 ms 不具严格同视口对照，待新基线 |
-| INITIALIZATION / BATCH HITCHES | PARTIAL | 待冷/热与真实有效历史数量复测 |
+| FUNCTIONAL REGRESSION | PARTIAL | 最终原生 143/143；Qualification 906 帧 / 8632 检查通过，其余视觉流程继续 |
+| EXIT STABILITY | PARTIAL | 当前可复现的 audit 生命周期错误已修复，最终主窗口、多 PIE 复核继续 |
+| FRAME PERFORMANCE | FAIL | 正式前后各 3 PIE + 3 Standalone；空场景仍超 16.6 ms，部分案例退化 |
+| INITIALIZATION / BATCH HITCHES | FAIL | 184 distributed setup 约减半，整帧仍存在约 2.5–2.6 秒尖峰 |
 | LONG-RUN RESOURCES | PARTIAL | 待本轮模拟长测和十分钟真实运行 |
 
 本检查点只新增文档，不改 C++、构建配置、插件或资产，因此无需在该文档阶段重新 BuildPlugin；正式运行前核验/构建 Editor。
@@ -130,3 +130,47 @@ Before 固定在 `194a0dbddacf9c5ea5d6b19f66773c2effb984c0`，六组过程未修
 Reference 的失败/局限全部保留：ProjectReference_Standalone01 停在原生暂停主菜单，正常 Alt+F4，exit 0、complete false、190.107 秒。Standalone02 原生启动后在等待前台期间继续模拟，完成 720 帧、exit 0，但最终实际截图为 YOU DIED，**不能作为正常游玩基线**。该独立 GPU profile 的格式化事件确证 TSR `1920x1080 -> 1920x1080`。后续驱动保持原暂停菜单直到前台建立，采集 240 帧并逐帧断言 Health>0；截图使用显式 nosuffix 文件名。
 
 ProjectReference_Standalone03 的 240 帧生命值断言通过，但 Shot 的 nosuffix 缺少命令参数前缀，图片实际为 viewport00000.png，末尾文件名断言失败（exit 0、severe 1）；原图已查看，玩家存活、原生敌人 Hunting、HUD 正常。修正为 `Shot -nosuffix -showui` 后 **ProjectReference_Standalone04** 完整通过，实际截图 viewport.png；240 帧 p50/p95/p99/max 为 **25.208/33.485/39.913/50.409 ms**，15 帧>33、0 帧>100、最长慢帧串 1。该普通 L_Prototype 使用默认玩法和 legacy 呈现（project fog_extent 为 0），是基础项目对照，不冒充 Lab 空场景同负载或灰色层性能通过。独立 GPU profile/截图均在这些计时样本之后。
+
+## 阶段 6：正式 after 与完整前后比较
+
+正式 after 固定 `5ec64c1d8dfef1e20d13ed98fc3c6617828d9170`；所有六组完成前没有编辑源码。有效样本 After_PIE_01/02/03 与 After_Standalone_02/03/04 全部 complete、exit 0、severe 0，逐帧实际前台/1920×1080/SP100/全部记录的质量设置检查通过，与 before 设置相同。After_Standalone_01 最后 ActualNewKnowledge 有 357 帧失去 OS 前台，整组排除正式汇总，原始数据保留；协议 complete、退出 0 不能代替前台有效性。
+
+下表每阶段、每模式各三次独立进程；p95 包含全部 case 帧，不剔除冷帧、初始化尖峰或离群值；setup 为三次中位数，最大整帧为该阶段三次最大值。完整 p50/p95/p99/max、慢帧串和资源计数在 Saved/Stabilization/paired-comparison.json 及各运行 analysis.json；聚合原始表在 paired-comparison.md。
+| 模式 / 案例 | before p95 中位数 [范围] ms | after p95 中位数 [范围] ms | before → after setup 中位数 ms | before → after 最大整帧 ms |
+| --- | ---: | ---: | ---: | ---: |
+| PIE / Empty | 33.528 [33.083, 33.708] | 32.584 [31.386, 32.788] | 0.133 → 0.121 | 122.421 → 50.923 |
+| PIE / OneWhole | 33.863 [33.510, 34.004] | 31.072 [30.495, 31.125] | 2.020 → 2.224 | 70.512 → 61.545 |
+| PIE / EightWhole | 35.985 [35.014, 36.079] | 32.122 [31.623, 33.121] | 13.724 → 14.863 | 57.442 → 51.475 |
+| PIE / ThirtyTwoWhole | 40.244 [38.533, 41.732] | 41.263 [38.021, 42.231] | 56.380 → 61.875 | 117.140 → 125.685 |
+| PIE / PartialNewThenRepeat | 31.958 [31.875, 32.258] | 31.014 [30.512, 31.871] | 23.657 → 24.725 | 53.827 → 58.653 |
+| PIE / Overlap64 | 33.572 [33.461, 34.009] | 31.321 [31.140, 31.369] | 348.403 → 184.862 | 802.464 → 551.491 |
+| PIE / SameIdentity64 | 33.283 [33.266, 33.703] | 31.409 [30.964, 32.295] | 388.439 → 205.087 | 1315.046 → 934.409 |
+| PIE / Distributed184 | 34.158 [34.064, 34.331] | 30.882 [30.675, 31.261] | 1085.538 → 580.757 | 3641.627 → 2633.466 |
+| PIE / FastSweep90 | 21.171 [20.828, 21.358] | 27.877 [27.371, 28.728] | 392.491 → 204.827 | 844.810 → 574.466 |
+| PIE / FastSweep160 | 20.917 [20.830, 21.258] | 27.770 [27.145, 28.100] | 376.251 → 213.227 | 823.881 → 580.680 |
+| PIE / StationaryStop | 21.940 [21.903, 21.964] | 27.635 [27.582, 29.451] | 8.581 → 9.103 | 34.423 → 36.808 |
+| PIE / LongRepeatDistributed | 33.573 [33.421, 33.973] | 31.456 [31.236, 32.148] | 1090.884 → 602.258 | 3647.831 → 2639.522 |
+| PIE / ActualNewKnowledge | 31.933 [31.614, 32.277] | 29.739 [29.212, 29.851] | 28.310 → 29.063 | 55.467 → 66.507 |
+| Standalone / Empty | 31.710 [31.693, 31.720] | 28.429 [27.842, 29.858] | 0.133 → 0.120 | 111.688 → 37.630 |
+| Standalone / OneWhole | 31.855 [31.551, 32.234] | 28.787 [27.780, 29.050] | 1.728 → 2.020 | 44.154 → 35.890 |
+| Standalone / EightWhole | 32.655 [32.572, 34.736] | 29.993 [29.894, 30.125] | 12.057 → 12.839 | 60.995 → 49.428 |
+| Standalone / ThirtyTwoWhole | 41.168 [39.716, 43.620] | 37.385 [36.832, 38.448] | 46.850 → 52.159 | 83.263 → 86.875 |
+| Standalone / PartialNewThenRepeat | 30.239 [29.867, 30.898] | 28.433 [28.364, 29.714] | 4.586 → 4.908 | 54.733 → 48.992 |
+| Standalone / Overlap64 | 31.485 [31.460, 31.872] | 28.859 [28.835, 29.055] | 342.539 → 181.511 | 739.421 → 511.476 |
+| Standalone / SameIdentity64 | 31.458 [31.362, 31.630] | 28.175 [27.817, 28.203] | 383.868 → 197.108 | 1250.710 → 883.026 |
+| Standalone / Distributed184 | 31.896 [31.583, 32.357] | 29.107 [27.970, 29.373] | 1073.318 → 553.043 | 3533.005 → 2566.444 |
+| Standalone / FastSweep90 | 19.297 [19.068, 19.391] | 27.796 [27.448, 28.267] | 394.377 → 186.729 | 792.784 → 516.010 |
+| Standalone / FastSweep160 | 19.176 [19.088, 19.291] | 27.835 [27.583, 28.491] | 376.719 → 207.590 | 774.887 → 537.854 |
+| Standalone / StationaryStop | 19.918 [19.765, 20.017] | 27.904 [27.347, 27.909] | 4.295 → 3.766 | 35.029 → 35.422 |
+| Standalone / LongRepeatDistributed | 31.742 [31.412, 31.816] | 27.911 [27.589, 28.776] | 1080.001 → 607.273 | 3537.339 → 2538.341 |
+| Standalone / ActualNewKnowledge | 30.264 [30.096, 30.336] | 28.645 [28.108, 29.296] | 6.077 → 7.293 | 46.207 → 52.158 |
+
+性能结论明确为 FAIL：空场景和所有正式案例的 p95 都未达到 16.6 ms；PIE 32 Whole 每次仍有 123–126 ms 尖峰。快速扫视与停止案例的正式 after 比 before 更慢，不能选择早期 20 ms 烟测覆盖这些退化结果。批量 setup 约减半，但 184 条 distributed 的首帧仍超过 2.5 秒。
+
+可比性边界：相同脚本路线按真实 delta 运动，原生捕获/反证的时序会改变背景记录数；Standalone OneWhole 的 after 资源最大数 2、before 1，不能声称各帧状态完全相同。64 压力样本的即时 65 条很快被合法反证降到 1，distributed 热态约 121/122，不能声称 64 条持续活跃压力已通过。等待前台的冷启动帧单独保留；before/after 激活延迟不同，不把等待时间伪装为可比启动性能。
+
+FinalAttribution_Standalone01 为独立 Trace（不并入正式数据）：58.392 秒、完整协议、exit 0、severe 0、环境异常 0。Empty / NoGuidance / NoWorldLabels / NoUi / NoCoverageDraw / Restored 的 wall p95 为 29.498 / 28.635 / 28.102 / 26.879 / 25.101 / 27.004 ms。Empty GPU coverage 平均 0.243 ms，TSR 5.345 ms，LumenScreenProbeGather 3.485 ms，SourceUpdate CPU 5.193 ms。覆盖优化收益持续存在；剩余基础渲染和等待成本仍高，其增长原因尚未完全归因。现场 NVML 记录 GPU 97%、71°C、1920 MHz、169 W、P0；没有证据把退化归咎于温度或后台应用，也没有关闭用户其他程序。
+
+Stabilization_FinalQualification01 最终 D3D12/SM6 视觉流程：906 帧、8632 个检查全部通过，九次独立资格会话 current color ratio 最低 1.0，无图像 oracle 失败；151.949 秒、完整协议/清理、exit 0、severe 0。Contracts、Episodes、Reobservation/WholeSessions 和长测继续。
+
+长测驱动只在 ActualNewKnowledge 之后显式 Reset Room 03，恢复该案例实际移走的 source，再进入混合交互路线；记录 reset 前后资源，保持真实运动/可见范围。此变更发生在六组正式 after 结束之后，未改变 Matrix 或 C++ 二进制。先提交推送该检查点，再开始长测。

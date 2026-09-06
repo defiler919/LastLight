@@ -110,6 +110,15 @@ def run():
         setup_start = time.perf_counter()
         if name in ('PartialNewThenRepeat','LongInteraction'):
             assert director.set_stress_mode_for_testing(0)
+            if name == 'LongInteraction':
+                # The preceding real-knowledge case physically moved Room 03's
+                # source away. Restore that room through its explicit Reset so
+                # subsequent visits and motion remain inside the legal view.
+                before_reset = room.get_total_spatial_record_count()
+                assert director.teleport_to_room_for_testing(3, player)
+                assert director.reset_current_room_for_testing(player)
+                (root/'long-entry-reset.json').write_text(json.dumps(dict(room=3,records_before=before_reset,
+                    records_after=room.get_total_spatial_record_count())),encoding='utf-8')
             assert director.teleport_to_room_for_testing(2, player)
             assert director.reset_current_room_for_testing(player)
         elif name in ('StationaryStop', 'ActualNewKnowledge'):

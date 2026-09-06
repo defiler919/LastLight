@@ -1,5 +1,17 @@
 # 灰色层功能检查点与稳定化施工
 
+## 阶段性收尾（51eb837 之后，仅文档）
+
+Ownership（6c66747）、capture（59030ab）、cap（9c14ecc）三个生产切片均已完成，运行时保持9c14ecc。各阶段独立证据：ownership约566→108ms；capture footprint约159→56ms、setup约539→452ms；cap CPU约86→29ms，本轮cap最大真实帧两次中位约836→771ms。跨批次数据不直接累加。
+
+已只读复核既有Saved结果：148/148功能PASS，Episodes51张/表面oracle与Contracts178张/24帧Whole oracle PASS。**初始化仍FAIL**，FRAME PERFORMANCE仍FAIL，LONG-RUN RESOURCES仍PARTIAL；本切片必要功能/视觉回归已完成。本次没有运行时修改、构建或测试重跑。
+
+后续顺序：**occupancy → seal外首次proxy/texture/resource创建 → 若仍有数百毫秒卡顿，再进入跨帧调度/原子发布架构**。跨帧须另建完整epoch/revision、取消/失效及发布协议。**Large World / 全地图灰色记忆的分块、流式表现资源、增量空间索引**另列独立scalability audit，本次不实现。完整阶段表与依据见架构审计第19节。
+
+本次起点local/upstream/remote一致于51eb837，工作树干净、LFS检查正常、无遗留测试/构建/Trace进程；仅提交推送本次两份文档，最终SHA以最新Git提交为准。stable保持原SHA，Saved证据保留，不开始黑色层、不自动关机。
+
+## 已完成阶段证据（保留历史记录）
+
 当前19f2e76之后的cap运行时切片 **9c14ecc** 已推送并完成必要最终回归：只读CPU行任务→按原序join/网格合并→GT验证与SetMesh发布；live Current依赖保留串行，无跨帧遗留任务。完整构建CapSlice_Build04通过，定向31次比较含20非空cap、35joined、8 live Current回退；最终 **148/148功能PASS**（旧147项无遗漏），Episodes51张/六组896样本surface oracle及Contracts178张/Whole离开24帧oracle/三次PIE均PASS、正常退出。
 
 两次真实D3D12 A/B中位数：184 setup **449.593→397.038ms**（-11.7%），最大整帧 **836.191→771.154ms**（-7.8%）；并行两次实际749.592/792.716ms，初始化仍FAIL。同二进制/driver/原质量、四次各480帧环境异常0、完整冷帧保留，setup184记录、采样120记录、fine bytes41,157,632均一致。短Trace确认封存cap CPU **85.771→29.480ms**、cap总计136.269→83.715ms；GT提交仍约10ms，未消除。详细成本、原始路径、控制开关-SerialCapBuild及失败fixture修正见架构审计第18节。

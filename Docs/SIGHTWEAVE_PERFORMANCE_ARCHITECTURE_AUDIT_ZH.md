@@ -1,5 +1,7 @@
 # SightWeave 灰色层性能架构审计
 
+阶段性收尾已完成：三个生产切片、现有证据和后续施工顺序统一见第19节。本次仅更新文档，运行时保持9c14ecc。
+
 当前19f2e76之后的cap运行时切片 **9c14ecc** 已推送，最终完整构建、**148/148功能**及Episodes/Contracts必要视觉通过。两次真实A/B中位最大整帧 **836.191→771.154ms**（-7.8%），setup **449.593→397.038ms**；初始化仍FAIL。完整成本、验证和下一入口见第18节。以下capture阶段数据是此前已完成证据。
 
 最新初始化施工起点8fb4d6e，运行时59030ab已推送：capture准备切片完成，前后必要历史/cap视觉及最终147/147功能通过。三次真实Batch中位数：184 setup **538.769→451.701ms**，最大整帧 **926.468→848.486ms**。初始化仍FAIL；完整证据、剩余cap/resource瓶颈见第17节。第16节保留上一轮ownership与真实A/B证据。
@@ -465,3 +467,23 @@ CapSlice_Target02已补非空cap（30次比较、20次非空、50次joined全部
 下一轮最高收益入口：**约80ms首轮occupancy** 的只读几何输入与分块结果，保持完整合法查询/采样，再处理 **seal外首次proxy/texture/resource构造**。cap CPU行工作仍29ms左右，GT细胞准备和签名还在；不要把没有收益证据的SetMesh微优化或继续capture footprint放到前面。若扩展到跨帧必须另建完整epoch/revision/取消/发布协议，本轮安全同帧借用不能直接沿用为异步持有。最终必要回归已完成；未执行的全矩阵、四套视觉全集与长测是明确保留范围，不伪称已重跑。
 
 检查点5c9e495（计时）、9c14ecc（运行时及定向）、9a838fb（两对真实A/B）均已推送。网络推送曾停滞，仅终止已识别的本次git-remote-https子进程，再以30秒低速超时重试成功；未触及Editor、Codex或其他PowerShell。全部失败fixture、无效前台样本、Trace、冷帧及原有Saved证据保留。Git/LFS检查通过，stable两分支保持原SHA；不开始黑色层、不自动关机。
+
+## 19. 阶段性收尾（51eb837 之后，仅文档）
+
+本次以51eb8377f905782a4ee90c5a249bec5435631e90为起点，只核对仓库和既有Saved证据，不进行运行时施工，不构建或重跑功能、视觉、性能矩阵及十分钟长测。当前已完成以下三个生产切片，运行时最终仍为9c14ecc：
+
+| 切片 | 已完成的生产边界 | 各阶段独立证据 |
+| --- | --- | --- |
+| Ownership（6c66747） | 大批封存历史只读求值、同帧并行join、GT合并 | 184 ownership 566.111→107.680ms；最大真实帧1363.970→921.871ms |
+| Capture（59030ab） | 几何footprint只读输入与并行准备、GT合并，省去封存内中间cap提交 | footprint Trace 159.301→56.381ms；三次setup中位538.769→451.701ms；最大帧926.468→848.486ms |
+| Cap（9c14ecc） | 只读行计算、按原序合并、GT验证和资源发布；live Current依赖保留串行 | cap CPU Trace 85.771→29.480ms；两次最大真实帧中位836.191→771.154ms |
+
+以上是各阶段独立A/B，不能将不同批次耗时直接相加或宣称精确累计百分比。现有证据已完整记录在16–18节；本次只读取four-run-comparison.json、两份cap-attribution.json、CapSlice_Functional01.summary.json及Episodes/Contracts的summary与oracle，确认148/148功能、Episodes51张/表面oracle、Contracts178张/24帧Whole oracle均PASS。
+
+**初始化仍FAIL**：184仍有749.592–792.716ms完整帧。FRAME PERFORMANCE仍FAIL，LONG-RUN RESOURCES仍PARTIAL；功能与本切片必要视觉验收已完成，不能为收尾机械重跑。原采样、cap精度、合法历史及灰色层规则保持冻结。
+
+下一阶段建议顺序：先处理约80ms occupancy的只读输入/分块计算，再处理seal外首次proxy/texture/resource创建与提交。若这些继续优化后仍有数百毫秒玩家可感知卡顿，再进入跨帧调度/原子发布架构，建立完整不可变输入、epoch/revision校验、取消/失效及GT发布协议；现有同帧借用不能直接延长到跨帧。此顺序仅为后续建议，本次不实现任何部分。
+
+**Large World / 全地图灰色记忆**的分块、流式表现资源和增量空间索引列为后续独立scalability audit，单独建立规模、复杂度与资源生命周期证据，不混入本次初始化收尾，也不视为已实现能力。
+
+收尾核对起点local/upstream/实时remote均为51eb837，工作树与暂存区干净，git lfs status正常、git lfs fsck OK，无遗留测试/构建/Trace进程。两条stable仍分别为7534163b9c5718700b610e7677f47fbaa79cf977与404a5820739638f1097eaae0aa7fba19733298c3。本次仅暂存、提交、推送两份收尾文档，保留全部Saved证据；最终文档SHA以该提交及Git核对为准。

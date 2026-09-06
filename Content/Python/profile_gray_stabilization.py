@@ -99,6 +99,9 @@ def run():
         cases = [('Empty',0,180), ('OneWhole',1,180)]
     elif protocol == 'Knowledge':
         cases = [('ActualNewKnowledge',0,360)]
+    elif protocol == 'Batch':
+        # Short cold-entry diagnostic. The original Matrix stays unchanged.
+        cases = [('Empty',0,240), ('SameIdentity64',5,120), ('Distributed184',6,120)]
     elif protocol == 'Attribution':
         cases = [(name,0,300) for name in ['Empty','NoGuidance','NoWorldLabels','NoUi','NoCoverageDraw','Restored']]
     elif protocol == 'LongRun':

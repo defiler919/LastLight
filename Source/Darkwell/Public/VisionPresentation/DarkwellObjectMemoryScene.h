@@ -53,6 +53,9 @@ public:
 		uint64 HistoryOccupancySamplesReused = 0;
 		uint64 PrimitiveGeometryTests = 0;
 		uint64 OwnershipTests = 0;
+		uint64 OwnershipRecordVisits = 0;
+		uint64 OwnershipFootprintQueries = 0;
+		uint64 CapSignatureSamples = 0;
 		uint64 UpdateRecordTextureCalls = 0;
 		uint64 TextureUploads = 0;
 		uint64 UpdateRecordCapCalls = 0;

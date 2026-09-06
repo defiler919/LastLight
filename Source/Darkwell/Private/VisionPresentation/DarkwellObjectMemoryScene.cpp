@@ -525,6 +525,7 @@ bool ADarkwellObjectMemoryScene::VisitNewerOwnedVerticalIntervals(
 {
  auto ProcessCandidate=[&](const FDarkwellSpatialObservationRecord& Candidate)
  {
+		++RuntimeFrame.OwnershipRecordVisits;
 		if (Candidate.Epoch <= OlderEpoch)
 		{
 			return false;
@@ -702,6 +703,7 @@ bool ADarkwellObjectMemoryScene::HasNewerObservedGeometryOverlapWithinFootprint(
 	const uint32 OlderEpoch,
 	const FBox2D& Footprint) const
 {
+	++RuntimeFrame.OwnershipFootprintQueries;
  if(bUseNewerCandidates && NewerCandidateId==Prop.StableId && (FrameNewerCandidates.IsEmpty() || NewerCandidateMaximumEpoch<=OlderEpoch)) return false;
 	if (!Footprint.bIsValid)
 	{
@@ -3411,6 +3413,8 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 			continue;
 		}
 		Signature = (Signature ^ Candidate.Epoch) * 1099511628211ull;
+		RuntimeFrame.CapSignatureSamples += Candidate.FineHistory.GetSamples().Num()
+			+ Candidate.SpatialMemory.GetCells().Num();
 		for (const auto& S : Candidate.FineHistory.GetSamples())
 			Signature = (Signature ^ GetTypeHash(S.State) ^ (S.Opacity > 0 ? 1ull : 0ull)) * 1099511628211ull;
 		const FRecordVisual* CandidateVisual = Prop.Visuals.Find(Candidate.Epoch);
@@ -3418,6 +3422,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 			? 1ull : 0ull)) * 1099511628211ull;
 		if (CandidateVisual)
 		{
+			RuntimeFrame.CapSignatureSamples += CandidateVisual->SuppressedByCurrentEvidence.Num();
 			for (int32 SuppressedIndex = 0;
 				SuppressedIndex < CandidateVisual->SuppressedByCurrentEvidence.Num();
 				++SuppressedIndex)

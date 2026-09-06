@@ -573,6 +573,36 @@ bool FDarkwellBatchOwnershipParity::RunTest(const FString&)
  return true;
 }
 
+// Separate diagnostic selector: measures cold CPU work without a frame gate.
+// Each size starts in a fresh world; no warm-up is inserted after seeding.
+IMPLEMENT_COMPLEX_AUTOMATION_TEST(FDarkwellOwnershipScaling,
+ "Darkwell.Stabilization.Diagnostics.OwnershipScaling",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+void FDarkwellOwnershipScaling::GetTests(TArray<FString>& Names,TArray<FString>& Commands) const
+{
+ for(int32 Count:{8,16,32,64}) { const auto Name=FString::FromInt(Count); Names.Add(Name); Commands.Add(Name); }
+}
+bool FDarkwellOwnershipScaling::RunTest(const FString& Case)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ const int32 Count=FCString::Atoi(*Case);
+ FRoom F; F.Face(-90); F.Step(2);
+ const double Start=FPlatformTime::Seconds();
+ if(!TestTrue(TEXT("All distinct poses are seeded"),F.Room->ConfigureHistoricalEpochCountForTesting(Id,Count))) return false;
+ const double SetupMs=(FPlatformTime::Seconds()-Start)*1000;
+ TestEqual(TEXT("Cold records are not hidden in warm-up"),F.Room->GetSpatialRecordCount(Id),Count);
+ for(int32 Frame=0;Frame<3;++Frame)
+ {
+  const double Begin=FPlatformTime::Seconds(); F.Step();
+  const double StepMs=(FPlatformTime::Seconds()-Begin)*1000;
+  const auto P=F.Room->GetHistoryRuntimeFrameTelemetryForTesting();
+  AddInfo(FString::Printf(TEXT("GRAY_ARCH_SCALE count=%d frame=%d setup_ms=%.3f step_ms=%.3f memory_ms=%.3f ownership_ms=%.3f cap_ms=%.3f occupancy_ms=%.3f fine_ms=%.3f texture_ms=%.3f resident_samples=%d scanned=%llu records=%d geometry_tests=%llu ownership_visits=%llu footprint_queries=%llu cap_signature_samples=%llu gpu_uploads=%llu"),
+   Count,Frame,SetupMs,StepMs,P.MovingPropLabGameThreadUs/1000,P.OwnershipUs/1000,P.CapPresentationUs/1000,P.OccupancyUs/1000,P.AdvanceFineHistoryUs/1000,P.TextureSubmissionUs/1000,
+   P.FineSamplesResident,P.FineSamplesScanned,P.SpatialRecordCount,P.PrimitiveGeometryTests,P.OwnershipRecordVisits,P.OwnershipFootprintQueries,P.CapSignatureSamples,P.GpuTextureUploads));
+ }
+ return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellTerminalSceneCompaction,
  "Darkwell.PropLab.ArchitectureAudit.TerminalSceneCompaction",
  EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)

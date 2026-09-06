@@ -1,6 +1,6 @@
 # SightWeave 灰色层性能架构审计
 
-最新施工（cf3a3c1之后）：第16节记录本轮有界、同帧join的封存ownership切片，运行时6c66747已推送。184原生CPU对照ownership约576→115ms，首次native update约844→402ms；真实D3D12最大整帧尚未采集，不构成初始化PASS。第1–15节为上一轮证据，未重新审计或重跑其长测。
+最新施工（cf3a3c1之后）：第16节记录同帧join的封存ownership切片，运行时6c66747已推送。用户退出SpaceCraft后已补最小真实D3D12 Batch A/B：184最大整帧 **1363.970→921.871ms**、ownership **566.111→107.680ms**，setup **549.266→536.297ms**。这是一次有效同条件对照，初始化仍FAIL；详见16.3。第1–15节为上一轮证据，未重新审计或重跑其长测。
 
 2026-09-06。本轮起点 `d986b536fbd21a0fb0c600577f9912369fe221a3`；本地、实时远端一致，工作树干净，LFS fsck PASS。本文先记录修改前模型，后续实验追加，不以优化假设代替结论。外部规则和性能门槛继续采用 `SIGHTWEAVE_GRAY_STABILIZATION_HANDOFF_ZH.md`。
 
@@ -309,7 +309,7 @@ EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉�
 
 每次首帧均保留184条record，geometry tests **8,030,933**、record visits **17,100,359**完全相同。并行各181批、1,941,840输入样本；串行0批。后两次更新各约6–7ms，ownership约.01ms、cap=0。两次均值ownership576.105→115.415ms（约80%下降），native844.445→402.252ms（约52%下降）；仅说明该CPU路径的并行收益，不声称通用硬件提升或真实最大整帧下降同样比例。
 
-### 16.2 验收边界与下一轮入口
+### 16.2 第一检查点验收边界与下一轮入口（c1b1ebb，真实A/B补证见16.3）
 
 | 本轮重点 | 结果 |
 | --- | --- |
@@ -325,3 +325,25 @@ EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉�
 下一轮最高收益结构入口是**封存capture的CPU输入、occupancy/cap计算与GT资源提交的工作边界**：此切片已将ownership降到约115ms，但setup仍约500ms，occupancy/cap各约80ms。先沿既有Trace定位setup中的捕获/快照/资源创建，做可拥有自身数据的工作单元和GT提交，再决定跨帧调度及失效策略。任何跨帧结果必须有epoch/revision和世界生命周期校验；不能将本轮借用引用直接交给跨帧任务，也不能仅延后压力测试构造器来冒充产品优化。Current分支、capture/cap任务化和发布背压均尚未实现；本轮没有遗留半套异步队列。Python流式采样器低于主任务优先级，本轮未修改。
 
 最后检查工作树/暂存、diff和LFS均通过，所有构建及测试进程正常结束，Saved失败/成功证据完整保留。稳定分支不移动，不创建最终stable、不开始黑色层、不自动关机。
+
+### 16.3 SpaceCraft退出后的最小真实D3D12补证
+
+2026-09-06约19:49–19:50，用户确认退出游戏，进程检查无SpaceCraft/UE/构建等冲突负载。直接使用已构建、已推送的6c66747运行时，没有重新编译或修改代码。执行 `RunGrayPerformanceBaseline.ps1 -RunName BatchSlice_RenderSerial01 -Mode Standalone -Protocol Batch -NoAuthoringToolsets -SerialSealedOwnership`，正常结束后执行不带最后开关的 `BatchSlice_RenderJoined01`；随后用AnalyzeGrayStabilization.py分析两个已有结果目录。
+
+两次均D3D12/SM6、前台1920×1080、SP100、原Epic/TSR/Lumen硬件光追/VSM配置，无Trace、无固定时间步、无截图。所有480个case帧各自环境异常0，valid_normal_sample=true，complete、exit0、severe0、log_closed=true；进程28.826/26.134秒。串行日志实际回显 `r.Darkwell.ObjectMemory.JoinedSealedOwnership = "0"`，并行使用原默认1。两次源SHA均c1b1ebb；DLL SHA256均47D4AD0FC9B558A964E33277D21587C9E071DD0E38A91A4ACAEB28B89CDDAD29，driver SHA256均4889D03A8159A896BE5C742A28E747B5EDF7F594470FCD1CF7E329B78933D670，质量值和DefaultEngine.ini一致。所有原始帧、启动帧、setup和退出证据保留于Saved/Stabilization下对应目录，提取对照另存Joined01/before-after.json；分析器跨运行合并的p95不作为串行/并行效果统计。
+
+| Distributed184阶段，单位ms | 串行01 | 并行01 |
+| --- | ---: | ---: |
+| Setup | 549.266 | 536.297 |
+| 最大完整wall帧（case index0） | **1363.970** | **921.871** |
+| 同次最大native memory（index0） | 805.611 | 376.810 |
+| Ownership | 566.111 | 107.680 |
+| Cap presentation | 67.231 | 74.602 |
+| Occupancy | 70.145 | 81.055 |
+| Texture submission CPU | 23.403 | 25.514 |
+
+两次setup均创建184条，首个及后续采样均120条，与旧正式路线一样完成合法反证；没有减少seed或合法历史来获得成绩。完整wall尖峰下降442.099ms，约32.4%，ownership下降约81%；这是**一对短同条件实验**的观察值，不代表三次重复统计或所有机器。setup只小幅变化，cap/occupancy/texture没有相同方向的改善；不将这些相互包含/跨流水线阶段相加，也不把CPU节省直接等同GPU收益。初始尖峰完整保留，两次Distributed均1帧>100ms。
+
+同协议附带的SameIdentity64 setup187.181→185.211ms、最大帧457.824→303.663ms；Empty p95 18.489→18.580ms。由此确认切片收益已经体现在真实渲染的批量帧中，同时**INITIALIZATION / BATCH HITCHES仍FAIL，FRAME PERFORMANCE仍FAIL**。无需为确认此明显CPU切片收益重跑完整矩阵或十分钟长测，也没有重跑已通过的146项。
+
+本次只补性能证据并更新文档；相关最终历史/cap图像验证仍待完成，不冒称新的视觉PASS。下一实现入口仍是约536ms的同步capture/setup及occupancy/cap/资源提交工作边界。运行结束再次确认无残留UE/SpaceCraft/测试进程，工作区只改本文与交接；旧失败证据、既有功能PASS、长期资源PARTIAL和stable指针保留。

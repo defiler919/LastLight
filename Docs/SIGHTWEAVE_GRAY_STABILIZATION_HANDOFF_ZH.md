@@ -232,3 +232,9 @@ LabRenderReference_PIE01 为独立 Lab 大厅 render-size 取证，不混入 Mat
 中断发生于 `Stabilization_FinalMainPlayStop01`：普通 Editor 已启动，最后日志为 12:24:44.406；没有 summary.json、正常关闭标记、已完成 PIE 或可靠退出码。最后原生窗口操作调用被中断，不能推定键盘操作已执行。该样本标为 **INTERRUPTED / EXIT UNKNOWN**，不算 PASS，也不伪造 0xC0000005。恢复查询最近一小时 Windows Application 1000/1001/1002 未找到匹配 Codex/UE 事件，项目最新 crash 目录仍为前一日；这不证明没有异常，只说明目前没有新崩溃证据可归因。最终普通 Editor 退出扩展验证仍待完成。
 
 本次普通 Editor 的额外启动日志 verbosity 明确识别出早前反复出现的 13 条 generic Condition failed 属于引擎 smoke 测试 FUnifiedErrorTest_CreateErrorMessage、FUnifiedErrorTest_CreateErrorMessageWithContext、FStructuredLogFormatTest。它们发生在本任务指定测试队列之前，原日志保留，不能称整个引擎所有测试均通过；灰色层 143 项结果按其独立报告判定。尚未把这些引擎测试失败与退出事件建立因果关系。
+
+## 阶段 10：普通 Editor 的原生接口退出扩展
+
+为避免再次依赖中断时的系统级窗口键盘输入，改用 UE 自带 ModelContextProtocol（本机 127.0.0.1:8000）的 EditorAppToolset.StartPIE / StopPIE / IsPIERunning，以及 SlateInspectorToolset.Windows。每次请求、结果和时间先落盘；普通 Editor 没有 -ExecutePythonScript、keep-alive audit 或调试器。StartPIE 使用标准 in-viewport、非 Simulate，返回后 BeginPlay 已完成；Stop 后再独立查询 false。Windows(close) 的引擎实现调用目标 SWindow::RequestDestroyWindow，是正常窗口关闭请求，不强杀进程，不发送全局按键。
+
+Stabilization_FinalMainApi01：IsPIERunning false→true→false，官方窗口列表只有 Darkwell - 虚幻编辑器，针对该窗口关闭，返回 OK；实际 exit 0、log_closed true、severe 0、182.914 秒（包含接口发现期间等待）。API 回执与引擎 PIE world 创建/清理日志共同证明一次 Play→Stop→Close，不能只依赖 MainWindow runner 的 protocol_complete 字段。中断的旧 FinalMainPlayStop01 继续保留为 EXIT UNKNOWN。

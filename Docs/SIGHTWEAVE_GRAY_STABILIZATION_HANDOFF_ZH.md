@@ -264,3 +264,5 @@ Stabilization_FinalMainApi02：false→true→false→true→false 的完整官�
 - LONG-RUN RESOURCES：PARTIAL。两种完整长测已完成；真实 610 秒对象/纹理计数有界且 GPU 纹理统计稳定，释放采样缓冲后工作集下降；同步 D3D12 模拟工作集的大幅增长只得到部分机制证据，未完全闭环。
 
 最终维持 **PARTIAL — GRAY_STABILIZATION_BLOCKED**。下一步工程重点为完整帧基础成本/退化归因、批量历史归属计算及保留内存的分配级归因；不得降低画质、改变每轮 100 cm、丢弃合法历史或取消 cap。两条 stable 与非发布功能检查点均核对未移动。最终 diff --check、LFS fsck、工作树及 local/upstream/remote 将在交付前核对；正常打开 Lab，PIE 停止，电脑保持开启。
+
+收尾现场已核对：普通 UnrealEditor 加载 /Game/Maps/L_SightWeaveGrayPolicyLab，官方 IsPIERunning 两次返回 false，实际 Editor 截图保存在 Saved/Stabilization/FinalHandoff01/editor.png。测试、构建和 Insights 进程均已结束；普通 Editor 自启动的 Trace Server 已使用自身 `kill` 子命令触发 quit event 并等待服务退出，未强杀；最终只保留用户请求的普通 Editor。diff --check 与 LFS fsck 通过，工作树和暂存区干净，local/upstream/实际 remote 一致；最终提交及进程清单另存 FinalHandoff01/handoff-final.json。未改变 stable，未开始黑色层，未关机。

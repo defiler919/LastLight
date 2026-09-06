@@ -65,6 +65,39 @@ try {
     # SW_HIDE suppresses the native game window even when Slate reports active.
     $process=Start-Process "$EngineRoot/Engine/Binaries/Win64/UnrealEditor.exe" -ArgumentList $arguments -WindowStyle Normal -PassThru
     $process.Id | Set-Content "$output/pid.txt"
+    # Activate only this newly launched benchmark, before measurement starts.
+    # No global keyboard input and no refocusing once quality.json is captured.
+    if (-not ('GrayBenchmarkForeground' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class GrayBenchmarkForeground {
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint from, uint to, bool attach);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window, int command);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
+    public static bool Activate(IntPtr window) {
+        uint ignored, current = GetCurrentThreadId();
+        uint foreground = GetWindowThreadProcessId(GetForegroundWindow(), out ignored);
+        bool attached = foreground != 0 && foreground != current && AttachThreadInput(current, foreground, true);
+        try { ShowWindow(window, 9); return SetForegroundWindow(window); }
+        finally { if (attached) AttachThreadInput(current, foreground, false); }
+    }
+}
+'@
+    }
+    $activationDeadline=(Get-Date).AddSeconds(60)
+    while (!$process.HasExited -and !(Test-Path "$output/viewport-ready.json") -and (Get-Date) -lt $activationDeadline) {
+        Start-Sleep -Milliseconds 250
+    }
+    $process.Refresh()
+    if (!$process.HasExited -and !(Test-Path "$output/quality.json") -and $process.MainWindowHandle -ne 0) {
+        [ordered]@{ time=(Get-Date).ToString('o'); pid=$process.Id; handle=$process.MainWindowHandle.ToInt64();
+            activated=[GrayBenchmarkForeground]::Activate($process.MainWindowHandle) } |
+            ConvertTo-Json | Set-Content "$output/window-activation.json"
+    }
     $process.WaitForExit()
     $code=$process.ExitCode
 } finally {

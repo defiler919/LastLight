@@ -507,6 +507,62 @@ bool ADarkwellObjectMemoryScene::CollectCurrentOwnedVerticalIntervals(
 	return !OutIntervals.IsEmpty();
 }
 
+bool ADarkwellObjectMemoryScene::BuildNewerOwnershipIndex(
+ const FTrackedProp& Prop,
+ TConstArrayView<const FDarkwellSpatialObservationRecord*> Candidates,
+ FNewerOwnershipIndex& Out) const
+{
+ TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_OwnershipIndex);
+ int32 References = 0;
+ for (const auto* Candidate : Candidates)
+ {
+  TArray<FPrimitiveGeometrySnapshot> Fallback;
+  TConstArrayView<FPrimitiveGeometrySnapshot> Geometry;
+  if (Candidate->bCurrentObservedLocation)
+  {
+   const AActor* Actual = Prop.bExists ? Prop.Actual.Get() : nullptr;
+   if (!Actual) continue;
+   if (bUseFrameOccupancy) for (const auto& Snapshot : FrameOccupancy)
+    if (Snapshot.StableId == Prop.StableId) { Geometry = Snapshot.Geometry; break; }
+   if (Geometry.IsEmpty()) { Fallback = ActualPartGeometry(*Actual); Geometry = Fallback; }
+  }
+  else
+  {
+   const FRecordVisual* Visual = Prop.Visuals.Find(Candidate->Epoch);
+   if (!Visual || Visual->bPresentationRetired) continue;
+   Geometry = Visual->PartGeometry;
+  }
+  for (const auto& Part : Geometry)
+  {
+   // Tilted/singular slabs keep the complete original path. In particular a
+   // zero scale inverse can accept points outside a collapsed world AABB.
+   if (!Part.bCachedPlanarProjection || Part.ToleranceScale <= UE_DOUBLE_SMALL_NUMBER
+    || !Part.ProjectionBounds.bIsValid) return false;
+   const double Padding = Darkwell::ObjectMemory::RenderOwnershipClipClearance
+    * Part.ProjectionToleranceFactor + Part.ProjectionRoundoffMargin;
+   const FBox2D Bounds = Part.ProjectionBounds.ExpandBy(Padding);
+   if (Bounds.Min.GetAbsMax() > 1.e9 || Bounds.Max.GetAbsMax() > 1.e9) return false;
+   const FIntPoint Min(FMath::FloorToInt(Bounds.Min.X / FNewerOwnershipIndex::TileSize),
+    FMath::FloorToInt(Bounds.Min.Y / FNewerOwnershipIndex::TileSize));
+   const FIntPoint Max(FMath::FloorToInt(Bounds.Max.X / FNewerOwnershipIndex::TileSize),
+    FMath::FloorToInt(Bounds.Max.Y / FNewerOwnershipIndex::TileSize));
+   const int64 Count = int64(Max.X - Min.X + 1) * (Max.Y - Min.Y + 1);
+   // Bound scratch allocation only; never limit accepted history or sampling.
+   if (Count <= 0 || Count + References > 65536) return false;
+   References += int32(Count);
+   const int32 PrimitiveIndex = Out.Primitives.Add({Candidate->Epoch, Candidate->bCurrentObservedLocation, Part});
+   for (int32 Y = Min.Y; Y <= Max.Y; ++Y) for (int32 X = Min.X; X <= Max.X; ++X)
+   {
+    auto& Tile = Out.Tiles.FindOrAdd(FIntPoint(X,Y));
+    // Outer iteration preserves original record order, including multi-parts.
+    if (Tile.IsEmpty() || Tile.Last() != Candidate) Tile.Add(Candidate);
+    Out.PrimitiveTiles.FindOrAdd(FIntPoint(X,Y)).Add(PrimitiveIndex);
+   }
+  }
+ }
+ return true;
+}
+
 bool ADarkwellObjectMemoryScene::CollectNewerOwnedVerticalIntervals(
 	const FTrackedProp& Prop, const uint32 OlderEpoch, const FVector2D Point,
 	TArray<FVector2D>& OutIntervals, const double ProjectionTolerance) const
@@ -570,7 +626,18 @@ bool ADarkwellObjectMemoryScene::VisitNewerOwnedVerticalIntervals(
 		}
 		return false;
  };
- if(bUseNewerCandidates && NewerCandidateId==Prop.StableId)
+ if (ActiveOwnershipIndex && bUseNewerCandidates && NewerCandidateId == Prop.StableId
+  && ProjectionTolerance >= 0 && ProjectionTolerance <= Darkwell::ObjectMemory::RenderOwnershipClipClearance
+  && FMath::IsFinite(Point.X) && FMath::IsFinite(Point.Y) && Point.GetAbsMax() <= 1.e9)
+ {
+  const FIntPoint Key(FMath::FloorToInt(Point.X / FNewerOwnershipIndex::TileSize),
+   FMath::FloorToInt(Point.Y / FNewerOwnershipIndex::TileSize));
+  if (const auto* Tile = ActiveOwnershipIndex->Tiles.Find(Key))
+   for (const auto* C : *Tile)
+    if ((C->bCurrentObservedLocation || C->Epoch > ActiveOwnershipMinimumEpoch)
+     && ProcessCandidate(*C)) return true;
+ }
+ else if(bUseNewerCandidates && NewerCandidateId==Prop.StableId)
   { for(const auto* C:FrameNewerCandidates) if (ProcessCandidate(*C)) return true; }
  else { for(const auto& C:Prop.History.GetRecords()) if (ProcessCandidate(C)) return true; }
  return false;
@@ -735,12 +802,12 @@ bool ADarkwellObjectMemoryScene::HasNewerObservedGeometryOverlapWithinFootprint(
 	if(!bUseOwnershipGeometry) FallbackGeometry=CollectNewerGeometrySnapshots(Prop,OlderEpoch);
 	const TConstArrayView<FPrimitiveGeometrySnapshot> Candidates=bUseOwnershipGeometry
 		? FrameOwnershipGeometry : MakeArrayView(FallbackGeometry);
-	for (const FPrimitiveGeometrySnapshot& Geometry : Candidates)
+	auto TestGeometry = [&](const FPrimitiveGeometrySnapshot& Geometry)
 	{
 		if(bUseOwnershipGeometry && Geometry.ProjectionBounds.bIsValid)
 		{
 			const double Padding=Darkwell::ObjectMemory::RenderOwnershipClipClearance*Geometry.ProjectionToleranceFactor+Geometry.ProjectionRoundoffMargin;
-			if(!Geometry.ProjectionBounds.ExpandBy(Padding).Intersect(Footprint)) continue;
+			if(!Geometry.ProjectionBounds.ExpandBy(Padding).Intersect(Footprint)) return false;
 		}
 		const FVector LocalCenter = Geometry.LocalBounds.GetCenter();
 		const FVector WorldCenter = Geometry.WorldTransform.TransformPosition(LocalCenter);
@@ -767,6 +834,31 @@ bool ADarkwellObjectMemoryScene::HasNewerObservedGeometryOverlapWithinFootprint(
 				return true;
 			}
 		}
+		return false;
+	};
+	if (ActiveOwnershipIndex && bUseOwnershipGeometry
+		&& FMath::IsFinite(Footprint.Min.X) && FMath::IsFinite(Footprint.Min.Y)
+		&& FMath::IsFinite(Footprint.Max.X) && FMath::IsFinite(Footprint.Max.Y)
+		&& Footprint.Min.GetAbsMax() <= 1.e9 && Footprint.Max.GetAbsMax() <= 1.e9
+		&& Footprint.GetSize().GetAbsMax() <= FNewerOwnershipIndex::TileSize)
+	{
+		const FIntPoint Min(FMath::FloorToInt(Footprint.Min.X / FNewerOwnershipIndex::TileSize),
+			FMath::FloorToInt(Footprint.Min.Y / FNewerOwnershipIndex::TileSize));
+		const FIntPoint Max(FMath::FloorToInt(Footprint.Max.X / FNewerOwnershipIndex::TileSize),
+			FMath::FloorToInt(Footprint.Max.Y / FNewerOwnershipIndex::TileSize));
+		for (int32 Y = Min.Y; Y <= Max.Y; ++Y) for (int32 X = Min.X; X <= Max.X; ++X)
+			if (const auto* Tile = ActiveOwnershipIndex->PrimitiveTiles.Find(FIntPoint(X,Y)))
+				for (const int32 Index : *Tile)
+				{
+					const auto& Primitive = ActiveOwnershipIndex->Primitives[Index];
+					if (Primitive.Epoch > OlderEpoch
+						&& (Primitive.bCurrent || Primitive.Epoch > ActiveOwnershipMinimumEpoch)
+						&& TestGeometry(Primitive.Geometry)) return true;
+				}
+	}
+	else for (const FPrimitiveGeometrySnapshot& Geometry : Candidates)
+	{
+		if (TestGeometry(Geometry)) return true;
 	}
 	return false;
 }
@@ -2462,6 +2554,11 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 #if WITH_DEV_AUTOMATION_TESTS
  if(bForceFullHistoryEvidenceForTesting) bUseNewerCandidates=false;
 #endif
+ FNewerOwnershipIndex OwnershipIndex;
+ bool bOwnershipIndexAttempted = false, bOwnershipIndexReady = false;
+ TMap<uint32, uint64> CapDependencySignatures;
+ TGuardValue<TMap<uint32, uint64>*> CapDependencyScope(ActiveCapDependencySignatures,
+  bUseNewerCandidates ? &CapDependencySignatures : nullptr);
 	TArray<uint32> HistoricalEpochs;
 	for (FDarkwellSpatialObservationRecord& Record : Prop.History.GetMutableRecords())
 	{
@@ -2583,6 +2680,16 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			: FrameNewerCandidates;
 		TGuardValue<TConstArrayView<const FDarkwellSpatialObservationRecord*>>
 			OwnershipScope(FrameNewerCandidates, OwnershipView);
+		if (!bOwnershipIndexAttempted && bUseNewerCandidates && OwnershipView.Num() > 2
+			&& (!GeometryDirtyIndices.IsEmpty() || Visual->bCapTopologyDirty))
+		{
+			bOwnershipIndexAttempted = true;
+			bOwnershipIndexReady = BuildNewerOwnershipIndex(Prop, MakeArrayView(NewerCandidates), OwnershipIndex);
+		}
+		TGuardValue<const FNewerOwnershipIndex*> OwnershipIndexScope(ActiveOwnershipIndex,
+			bOwnershipIndexReady ? &OwnershipIndex : nullptr);
+		TGuardValue<uint32> MinimumOwnershipEpochScope(ActiveOwnershipMinimumEpoch,
+			bUseIncrementalOwnershipCandidates ? Visual->ProcessedOwnershipMaximumEpoch : 0);
 		bool bOwnershipChanged;
 		{
 			bool bCache=!GeometryDirtyIndices.IsEmpty();
@@ -3406,41 +3513,51 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 		Signature = (Signature ^ (Visual->SuppressedByCurrentEvidence[Index] ? 1ull : 0ull))
 			* 1099511628211ull;
 	}
+	// Historical readers run in increasing epoch order. A newer dependency has
+	// not been advanced by any previous reader, so its digest can be shared in
+	// this phase. The cache is local to UpdateTracked; capture and diagnostics
+	// outside that phase recompute. The full oracle uses the same digest uncached.
 	for (const FDarkwellSpatialObservationRecord& Candidate : Prop.History.GetRecords())
 	{
-		if (Candidate.Epoch <= Record.Epoch)
+		if (Candidate.Epoch <= Record.Epoch) continue;
+		uint64 Dependency = 1469598103934665603ull;
+		const uint64* Cached = ActiveCapDependencySignatures
+			? ActiveCapDependencySignatures->Find(Candidate.Epoch) : nullptr;
+		if (Cached) Dependency = *Cached;
+		else
 		{
-			continue;
-		}
-		Signature = (Signature ^ Candidate.Epoch) * 1099511628211ull;
-		RuntimeFrame.CapSignatureSamples += Candidate.FineHistory.GetSamples().Num()
-			+ Candidate.SpatialMemory.GetCells().Num();
-		for (const auto& S : Candidate.FineHistory.GetSamples())
-			Signature = (Signature ^ GetTypeHash(S.State) ^ (S.Opacity > 0 ? 1ull : 0ull)) * 1099511628211ull;
-		const FRecordVisual* CandidateVisual = Prop.Visuals.Find(Candidate.Epoch);
-		Signature = (Signature ^ (CandidateVisual && CandidateVisual->bPresentationRetired
-			? 1ull : 0ull)) * 1099511628211ull;
-		if (CandidateVisual)
-		{
-			RuntimeFrame.CapSignatureSamples += CandidateVisual->SuppressedByCurrentEvidence.Num();
-			for (int32 SuppressedIndex = 0;
-				SuppressedIndex < CandidateVisual->SuppressedByCurrentEvidence.Num();
-				++SuppressedIndex)
+			Dependency = (Dependency ^ Candidate.Epoch) * 1099511628211ull;
+			RuntimeFrame.CapSignatureSamples += Candidate.FineHistory.GetSamples().Num()
+				+ Candidate.SpatialMemory.GetCells().Num();
+			for (const auto& S : Candidate.FineHistory.GetSamples())
+				Dependency = (Dependency ^ GetTypeHash(S.State) ^ (S.Opacity > 0 ? 1ull : 0ull)) * 1099511628211ull;
+			const FRecordVisual* CandidateVisual = Prop.Visuals.Find(Candidate.Epoch);
+			Dependency = (Dependency ^ (CandidateVisual && CandidateVisual->bPresentationRetired
+				? 1ull : 0ull)) * 1099511628211ull;
+			if (CandidateVisual)
 			{
-				Signature = (Signature
-					^ (CandidateVisual->SuppressedByCurrentEvidence[SuppressedIndex] ? 1ull : 0ull))
-					* 1099511628211ull;
+				RuntimeFrame.CapSignatureSamples += CandidateVisual->SuppressedByCurrentEvidence.Num();
+				for (int32 SuppressedIndex = 0;
+					SuppressedIndex < CandidateVisual->SuppressedByCurrentEvidence.Num();
+					++SuppressedIndex)
+				{
+					Dependency = (Dependency
+						^ (CandidateVisual->SuppressedByCurrentEvidence[SuppressedIndex] ? 1ull : 0ull))
+						* 1099511628211ull;
+				}
 			}
+			for (const FDarkwellSpatialPropMemory::FCell& CandidateCell
+				: Candidate.SpatialMemory.GetCells())
+			{
+				const uint64 Renderable = Candidate.bCurrentObservedLocation
+					? (CandidateCell.DiscoveredPresent > 0.0f
+						&& CandidateCell.AppearanceBlend > 0.0f ? 1ull : 0ull)
+					: (CandidateCell.StaleOpacity > 0.0f ? 1ull : 0ull);
+				Dependency = (Dependency ^ Renderable) * 1099511628211ull;
+			}
+			if (ActiveCapDependencySignatures) ActiveCapDependencySignatures->Add(Candidate.Epoch, Dependency);
 		}
-		for (const FDarkwellSpatialPropMemory::FCell& CandidateCell
-			: Candidate.SpatialMemory.GetCells())
-		{
-			const uint64 Renderable = Candidate.bCurrentObservedLocation
-				? (CandidateCell.DiscoveredPresent > 0.0f
-					&& CandidateCell.AppearanceBlend > 0.0f ? 1ull : 0ull)
-				: (CandidateCell.StaleOpacity > 0.0f ? 1ull : 0ull);
-			Signature = (Signature ^ Renderable) * 1099511628211ull;
-		}
+		Signature = (Signature ^ Dependency) * 1099511628211ull;
 	}
 	if (Signature == Visual->CapSignature)
 	{

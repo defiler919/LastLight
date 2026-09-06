@@ -373,7 +373,7 @@ bool FDarkwellIncrementalHistoryEvidenceParity::RunTest(const FString&)
    F.Room->GetFineEvidenceDiagnosticsForTesting(Id,Samples);
    uint64 Hash=1469598103934665603ull;
    auto Mix=[&](uint64 V){Hash=(Hash^V)*1099511628211ull;};
-   Mix(Samples.Num());
+   Mix(Samples.Num()); Mix(F.Room->GetTotalCapTriangles());
    for(const auto& D:Samples)
    {
     Mix(D.Epoch); Mix(D.Index); Mix(GetTypeHash(D.Sample.State));
@@ -559,7 +559,7 @@ bool FDarkwellBatchOwnershipParity::RunTest(const FString&)
    F.Room->GetFineEvidenceDiagnosticsForTesting(Id,Samples);
    uint64 H=1469598103934665603ull;
    auto Mix=[&](uint64 V){H=(H^V)*1099511628211ull;};
-   Mix(Samples.Num());
+   Mix(Samples.Num()); Mix(F.Room->GetTotalCapTriangles());
    for(const auto& D:Samples)
    {
     Mix(D.Epoch); Mix(D.Index); Mix(GetTypeHash(D.Sample.State)); Mix(D.Sample.bVerifiedEmpty);
@@ -570,6 +570,79 @@ bool FDarkwellBatchOwnershipParity::RunTest(const FString&)
    else if(!TestEqual(*FString::Printf(TEXT("Batch ownership matches full sample oracle at frame %d"),Frame),H,Reference[Frame])) return false;
   }
  }
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellOwnershipIndexParity,
+ "Darkwell.PropLab.ArchitectureAudit.OwnershipSpatialIndexMatchesScan",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellOwnershipIndexParity::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ FRoom F;
+ if(!TestTrue(TEXT("Index fixture seeds independent histories"),F.Room->ConfigureHistoricalEpochCountForTesting(Id,8))) return false;
+ auto& Prop=F.Room->Tracked.FindChecked(Id);
+ using FGeometry=ADarkwellObjectMemoryScene::FPrimitiveGeometrySnapshot;
+ TMap<uint32,TArray<FGeometry>> Original;
+ TArray<const FDarkwellSpatialObservationRecord*> Candidates;
+ for(const auto& Record:Prop.History.GetRecords())
+ {
+  Candidates.Add(&Record);
+  Original.Add(Record.Epoch,Prop.Visuals.FindChecked(Record.Epoch).PartGeometry);
+ }
+ TGuardValue<bool> CandidateScope(F.Room->bUseNewerCandidates,true);
+ TGuardValue<FName> IdScope(F.Room->NewerCandidateId,Id);
+ TGuardValue<uint32> EpochScope(F.Room->NewerCandidateMaximumEpoch,Candidates.Last()->Epoch);
+ TGuardValue<TConstArrayView<const FDarkwellSpatialObservationRecord*>> ViewScope(F.Room->FrameNewerCandidates,MakeArrayView(Candidates));
+ int32 Queries=0;
+ for(int32 Case=0;Case<4;++Case)
+ {
+  for(auto& Pair:Prop.Visuals)
+  {
+   Pair.Value.PartGeometry=Original.FindChecked(Pair.Key);
+   for(auto& G:Pair.Value.PartGeometry)
+   {
+    if(Case==1) G.WorldTransform.SetScale3D(G.WorldTransform.GetScale3D()*FVector(-1,1,1));
+    if(Case==2) G.WorldTransform.SetRotation(FRotator(17,31,9).Quaternion());
+    if(Case==3) G.WorldTransform.SetScale3D(FVector(0,1,1));
+    G.CachePlanarProjection();
+   }
+  }
+  ADarkwellObjectMemoryScene::FNewerOwnershipIndex Index;
+  const bool Ready=F.Room->BuildNewerOwnershipIndex(Prop,MakeArrayView(Candidates),Index);
+  TestEqual(TEXT("Planar and negative scale index; tilt and singular fallback"),Ready,Case<2);
+  for(int32 Older:{0,3,6})
+  {
+   const auto& Record=*Candidates[Older];
+   const auto& Visual=Prop.Visuals.FindChecked(Record.Epoch);
+   auto Geometry=F.Room->CollectNewerGeometrySnapshots(Prop,Record.Epoch);
+   TGuardValue<bool> GeometryScope(F.Room->bUseOwnershipGeometry,true);
+   TGuardValue<TConstArrayView<FGeometry>> GeometryView(F.Room->FrameOwnershipGeometry,MakeArrayView(Geometry));
+   FRandomStream Random(100+Older);
+   TArray<FVector2D> Points;
+   const auto Bounds=Record.SpatialMemory.GetBounds().ExpandBy(40);
+   for(int32 I=0;I<300;++I) Points.Add(FVector2D(Random.FRandRange(Bounds.Min.X,Bounds.Max.X),Random.FRandRange(Bounds.Min.Y,Bounds.Max.Y)));
+   for(const auto& G:Visual.PartGeometry)
+    for(const FVector2D Point:{G.ProjectionBounds.Min,G.ProjectionBounds.Max,G.ProjectionBounds.GetCenter()})
+     for(double Offset:{-.051,-.0001,0.,.0001,.051}) Points.Add(Point+FVector2D(Offset));
+   for(const auto Point:Points)
+   {
+    TArray<FVector2D> Scan, Indexed;
+    F.Room->ActiveOwnershipIndex=nullptr;
+    F.Room->CollectNewerOwnedVerticalIntervals(Prop,Record.Epoch,Point,Scan,.051);
+    const FBox2D Footprint(Point-FVector2D(.3125),Point+FVector2D(.3125));
+    const bool Overlap=F.Room->HasNewerObservedGeometryOverlapWithinFootprint(Prop,Visual,Record.Epoch,Footprint);
+    F.Room->ActiveOwnershipIndex=Ready?&Index:nullptr;
+    F.Room->CollectNewerOwnedVerticalIntervals(Prop,Record.Epoch,Point,Indexed,.051);
+    const bool IndexedOverlap=F.Room->HasNewerObservedGeometryOverlapWithinFootprint(Prop,Visual,Record.Epoch,Footprint);
+    F.Room->ActiveOwnershipIndex=nullptr;
+    if(!TestTrue(TEXT("Complete ordered intervals equal unindexed scan"),Scan==Indexed)
+     || !TestEqual(TEXT("Conservative footprint equals unindexed scan"),IndexedOverlap,Overlap)) return false;
+    ++Queries;
+   }
+  }
+ }
+ AddInfo(FString::Printf(TEXT("Ownership spatial index compared %d complete interval and footprint queries"),Queries));
  return true;
 }
 

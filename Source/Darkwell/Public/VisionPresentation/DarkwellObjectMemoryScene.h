@@ -231,6 +231,23 @@ protected:
   FName StableId; FBox2D Bounds; TArray<FPrimitiveGeometrySnapshot> Geometry;
  };
 	TArray<FActualOccupancySnapshot> FrameOccupancy;
+ struct FNewerOwnershipIndex
+ {
+  // Broad phase only. Every selected record still uses the original predicates.
+  static constexpr double TileSize = 16.0;
+  TMap<FIntPoint, TArray<const FDarkwellSpatialObservationRecord*>> Tiles;
+  struct FPrimitive
+  {
+   uint32 Epoch;
+   bool bCurrent;
+   FPrimitiveGeometrySnapshot Geometry;
+  };
+  TArray<FPrimitive> Primitives;
+  TMap<FIntPoint, TArray<int32>> PrimitiveTiles;
+ };
+ const FNewerOwnershipIndex* ActiveOwnershipIndex = nullptr;
+ uint32 ActiveOwnershipMinimumEpoch = 0;
+ TMap<uint32, uint64>* ActiveCapDependencySignatures = nullptr;
  bool bUseFrameOccupancy=false, bFilterFrameOccupancy=false;
  TConstArrayView<const FActualOccupancySnapshot*> FrameOccupancyCandidates;
  mutable TMap<FVector2D,bool> FrameOccupancyPoints;
@@ -249,6 +266,7 @@ protected:
 	friend class FDarkwellCapCoplanarContactTest;
 	friend class FDarkwellGrayHistoryCapacityCurrentTest;
 	friend class FDarkwellPlanarProjectionParity;
+	friend class FDarkwellOwnershipIndexParity;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
 	friend class FDarkwellObservedContentContract;
@@ -469,6 +487,9 @@ protected:
 	};
 
 	bool IsCaptureEligible(const FTrackedProp& Prop) const;
+ bool BuildNewerOwnershipIndex(const FTrackedProp& Prop,
+  TConstArrayView<const FDarkwellSpatialObservationRecord*> Candidates,
+  FNewerOwnershipIndex& Out) const;
  FString BuildQualificationAuditState(const FTrackedProp& Prop) const;
  void TraceQualificationAudit(const FTrackedProp& Prop,const TCHAR* Stage);
 	bool IsTentativeWhole(const FTrackedProp& Prop) const;

@@ -114,3 +114,19 @@ Before 固定在 `194a0dbddacf9c5ea5d6b19f66773c2effb984c0`，六组过程未修
 独立真实 D3D12 `Stabilization_CoverageGPU01`：1 项通过，5 种 source/墙体/边缘情形，逐个读取全部 13 层 mip，与原全图路径完整像素 CRC 一致；先污染旧场再绘制同时验证清除。35.982 秒，exit 0、severe 0。这是 GPU 正确性 oracle，不是性能或正常 Editor 关闭证据。新增 `RunGrayObjectPolicyTests -Rendering` 显式启用真实 RHI，GPU oracle 在 NullRHI 下报错。
 
 `Optimization_SmokeStandalone01` 前台条件有效、complete、exit 0、severe 0；Empty p95 20.198、p99 21.194、max 56.501 ms，OneWhole p95 21.128 ms。说明改动有收益，但这是烟测，**仍未满足完整帧 16.6 ms 目标**，也不是正式三组 after 或最终回归通过。
+
+## 阶段 5：剩余成本、退化几何保护与最终原生回归
+
+`1e89e63ca98c80843e2a47a548d87f2b96a0ed62` 已推送并核对 local/upstream/remote；首次 push 网络 TLS 失败，重试成功，没有 force push。
+
+`Optimization_AttributionMatrix01` 为该提交的独立 Trace，138.135 秒、完整协议、exit 0、severe 0。空场景 GPU DrawCanvasToTarget 平均约 0.240 ms（原全图约 10.294 ms），TSR 5.122 ms、LumenScreenProbeGather 3.301 ms；SourceUpdate CPU 约 5.166 ms，不能把它全算作灰色对象更新。184 distributed setup 553.849 ms、最大整帧 2515.789 ms；首个 native memory update 1949.427 ms，其中 ownership 1493.731 ms、cap 253.628 ms。收益真实，批量尖峰仍失败。
+
+进一步在平面竖向区间查询中，用包含原容差的 world AABB 先拒绝无交集点。零 XY 缩放保留原 slab 行为（逆变换可能接受折叠 AABB 外点），捕获 footprint 的 bounds 捷径也排除这种退化情形。原 PlanarProjectionMatchesOriginalSlab 增加独立 world offset，实际覆盖 **65,610** 次点/容差查询以及平面、倾斜、负缩放和零缩放。
+
+构建均为完整 Editor：ReferenceBuild01 8.42 秒、ProjectionBuild01 20.96 秒、SingularGuardBuild01 22.03 秒成功。`Stabilization_FinalFunctional01` 143/143、208.768 秒通过，但之后补充了零缩放保护；最终以 **Stabilization_FinalFunctional02** 为准：**143 项（132 clean、11 warnings）、0 failed、0 not-run、severe 0、exit 0、212.211 秒**，manifest 原 142 项无遗漏，新增 ConservativeDrawSupport。包括 OrdinaryHost、Whole/Partial/cap/合法反证和完整参考路径；它不是画面或普通退出证据。
+
+普通地图对照单列为 Reference 协议，Matrix 的地图/案例不变。只读环境查询允许在 CDO 上读取实际 game viewport；原生 ExecuteMenuAction 暴露给 UI/Python，逻辑不变。Reference 对已加载世界调用 ResumeGame，不读写存档。LongRun 补充 reset/重新进入/实际运动成功的事件记录与释放 Python 帧缓冲后的 native GC 资源快照；不改变 Matrix 分支。
+
+Reference 的失败/局限全部保留：ProjectReference_Standalone01 停在原生暂停主菜单，正常 Alt+F4，exit 0、complete false、190.107 秒。Standalone02 原生启动后在等待前台期间继续模拟，完成 720 帧、exit 0，但最终实际截图为 YOU DIED，**不能作为正常游玩基线**。该独立 GPU profile 的格式化事件确证 TSR `1920x1080 -> 1920x1080`。后续驱动保持原暂停菜单直到前台建立，采集 240 帧并逐帧断言 Health>0；截图使用显式 nosuffix 文件名。
+
+ProjectReference_Standalone03 的 240 帧生命值断言通过，但 Shot 的 nosuffix 缺少命令参数前缀，图片实际为 viewport00000.png，末尾文件名断言失败（exit 0、severe 1）；原图已查看，玩家存活、原生敌人 Hunting、HUD 正常。修正为 `Shot -nosuffix -showui` 后 **ProjectReference_Standalone04** 完整通过，实际截图 viewport.png；240 帧 p50/p95/p99/max 为 **25.208/33.485/39.913/50.409 ms**，15 帧>33、0 帧>100、最长慢帧串 1。该普通 L_Prototype 使用默认玩法和 legacy 呈现（project fog_extent 为 0），是基础项目对照，不冒充 Lab 空场景同负载或灰色层性能通过。独立 GPU profile/截图均在这些计时样本之后。

@@ -331,6 +331,12 @@ bool ADarkwellObjectMemoryScene::QueryVerticalInterval(
 #endif
  if(UsePlanar)
  {
+	// Reject only points outside the conservative world projection. The local
+	// slab predicate and its inclusive tolerance remain the final authority.
+	const double Padding = FMath::Abs(ProjectionTolerance) * Geometry.ProjectionToleranceFactor + Geometry.ProjectionRoundoffMargin;
+	if (Geometry.ToleranceScale > UE_DOUBLE_SMALL_NUMBER && Geometry.ProjectionBounds.bIsValid
+		&& (Point.X < Geometry.ProjectionBounds.Min.X - Padding || Point.X > Geometry.ProjectionBounds.Max.X + Padding
+			|| Point.Y < Geometry.ProjectionBounds.Min.Y - Padding || Point.Y > Geometry.ProjectionBounds.Max.Y + Padding)) return false;
   // Pure world-Z rotation makes inverse local Z independent of the query XY.
   // Preserve the original inverse transform, division, inclusive tolerance and
   // interval arithmetic exactly; tilted and singular geometry uses the full slab.
@@ -2799,7 +2805,7 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 				const FVector2D Corners[]{Min, Min + FVector2D(Step.X, 0), Min + Step, Min + FVector2D(0, Step.Y)};
 				for (const auto& Geometry : SealedVisual->PartGeometry)
 				{
-					bool bRejectBounds = Geometry.bCachedPlanarProjection && Geometry.ProjectionBounds.bIsValid;
+					bool bRejectBounds = Geometry.bCachedPlanarProjection && Geometry.ToleranceScale > UE_DOUBLE_SMALL_NUMBER && Geometry.ProjectionBounds.bIsValid;
 #if WITH_DEV_AUTOMATION_TESTS
 					bRejectBounds &= !bForceFullHistoryEvidenceForTesting;
 #endif

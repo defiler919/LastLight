@@ -168,7 +168,11 @@ def run():
                     if section % 6 == 0:
                         assert director.reset_current_room_for_testing(player)
                     if target == 3:
-                        room.start_gray_policy_motion(False)
+                        assert room.start_gray_policy_motion(False), 'Long-run physical motion did not start'
+                    with (root/'long-events.jsonl').open('a',encoding='utf-8') as events:
+                        events.write(json.dumps(dict(elapsed_seconds=elapsed,section=section,room=target,
+                            reset=section%6==0,motion=target==3,records=room.get_total_spatial_record_count(),
+                            proxies=room.get_total_proxy_count()))+'\n')
                     last_section = section
                 angles = [18,28,40,52,90,40,-90]
                 player.set_actor_rotation(unreal.Rotator(yaw=angles[int(elapsed*2)%len(angles)]), False)
@@ -209,6 +213,17 @@ def run():
         unreal.SystemLibrary.execute_console_command(w, 'r.Darkwell.FogVisual.Diagnostic.SkipCoverageDraw 0')
     assert director.set_stress_mode_for_testing(0)
     yield 1
+    if protocol == 'LongRun':
+        # Keep cleanup separate from timed interaction and release the Python
+        # row buffer before comparing engine resources after native collection.
+        import gc
+        samples.clear()
+        gc.collect()
+        unreal.SystemLibrary.collect_garbage()
+        for _ in range(60):
+            yield 1
+        (root/'long-cleanup.json').write_text(json.dumps(dict(engine=json.loads(director.get_frame_environment_for_testing()),
+            telemetry=json.loads(room.get_history_runtime_telemetry())['frame_data']),indent=2),encoding='utf-8')
     assert director.set_audit_viewport_size_for_testing(0,0)
     if not standalone:
         levels.editor_request_end_play()

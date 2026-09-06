@@ -567,7 +567,11 @@ FString ADarkwellSightWeaveGrayPolicyLabDirector::GetFrameEnvironmentForTesting(
 		FPlatformTime::ToMilliseconds(GRenderThreadWaitTime), FPlatformTime::ToMilliseconds(GSwapBufferTime));
 	FTextureMemoryStats Memory;
 	if (GDynamicRHI) RHIGetTextureMemoryStats(Memory);
-	const auto* Fog = GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
+	// Allow the read-only class default diagnostic to inspect an ordinary map
+	// without spawning a Lab director or introducing Lab gameplay actors.
+	const UWorld* DiagnosticWorld = GetWorld();
+	if (!DiagnosticWorld && GEngine && GEngine->GameViewport) DiagnosticWorld = GEngine->GameViewport->GetWorld();
+	const auto* Fog = DiagnosticWorld ? DiagnosticWorld->GetSubsystem<UDarkwellFogVisualSubsystem>() : nullptr;
 	const FIntPoint FogSize = Fog ? Fog->GetMapping().TextureExtent : FIntPoint::ZeroValue;
 	Data += FString::Printf(TEXT(",\"smooth_frame_rate\":%d,\"engine_fixed_frame_rate\":%d,\"fog_extent\":[%d,%d],\"rhi_texture_bytes\":%llu}"),
 		GEngine && GEngine->bSmoothFrameRate ? 1 : 0, GEngine && GEngine->bUseFixedFrameRate ? 1 : 0,

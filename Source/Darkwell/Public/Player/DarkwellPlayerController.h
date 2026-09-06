@@ -62,6 +62,8 @@ public:
 	EDarkwellMenuScreen GetMenuScreen() const { return MenuScreen; }
 	bool IsMenuActionEnabled(EDarkwellMenuAction Action) const;
 	FText GetDisplayModeText() const;
+	/** Shared native menu action entry for UI bindings and ordinary-map audits. */
+	UFUNCTION(BlueprintCallable, Category = "DARKWELL|Menu")
 	void ExecuteMenuAction(EDarkwellMenuAction Action);
 
 protected:

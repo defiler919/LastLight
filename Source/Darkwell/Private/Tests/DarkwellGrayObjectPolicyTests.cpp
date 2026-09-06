@@ -777,9 +777,12 @@ bool FDarkwellPlanarProjectionParity::RunTest(const FString&)
   G.bCachedPlanarProjection?++Planar:++Fallback;
   for(double Tolerance:{0.,.02,.25})
   for(double X:{-76.,-75.0001,-75.,-74.9999,0.,74.9999,75.,75.0001,76.})
-  for(double Y:{-38.,-37.5001,-37.5,-37.4999,0.,37.4999,37.5,37.5001,38.})
-  {
-   const FVector2D P(G.WorldTransform.TransformPosition(FVector(X,Y,30)));
+ for(double Y:{-38.,-37.5001,-37.5,-37.4999,0.,37.4999,37.5,37.5001,38.})
+ for(const FVector2D WorldOffset : {FVector2D::ZeroVector,FVector2D(-2000,1700),FVector2D(1800,-2200)})
+ {
+   // Singular inverse transforms can accept points outside their collapsed
+   // world AABB. Exercise those points independently of TransformPosition.
+   const FVector2D P=FVector2D(G.WorldTransform.TransformPosition(FVector(X,Y,30)))+WorldOffset;
    double Min=0,Max=0,ExpectedMin=0,ExpectedMax=0;
    F.Room->bForceFullHistoryEvidenceForTesting=true;
    const bool Expected=F.Room->QueryVerticalInterval(G,P,ExpectedMin,ExpectedMax,Tolerance);

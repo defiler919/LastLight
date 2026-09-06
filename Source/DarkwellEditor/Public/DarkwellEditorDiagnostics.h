@@ -14,4 +14,6 @@ public:
     static int32 GetRealtimeEditorViewportCount();
     UFUNCTION(BlueprintCallable, Category="Darkwell|Diagnostics")
     static void FocusPerformancePIE();
+    UFUNCTION(BlueprintCallable, Category="Darkwell|Diagnostics")
+    static bool SetPerformanceViewportSize(int32 Width, int32 Height);
 };

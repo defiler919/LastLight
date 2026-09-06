@@ -44,6 +44,9 @@ def run():
     while world() is None:
         yield
     w = world()
+    if not standalone:
+        assert unreal.DarkwellEditorDiagnostics.set_performance_viewport_size(1920,1080)
+        yield
     controller = unreal.GameplayStatics.get_player_controller(w,0)
     assert controller is not None
     # The normal map starts at its paused main menu. Resume the already loaded
@@ -89,6 +92,7 @@ def run():
         yield
     assert (root/'viewport.png').exists(), 'Ordinary viewport screenshot is missing'
     if not standalone:
+        assert unreal.DarkwellEditorDiagnostics.set_performance_viewport_size(0,0)
         levels.editor_request_end_play()
         while world() is not None:
             yield

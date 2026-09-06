@@ -11,6 +11,7 @@
 #include "Modules/ModuleManager.h"
 #include "Engine/GameViewportClient.h"
 #include "Widgets/SWindow.h"
+#include "Slate/SceneViewport.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDarkwellEditorLifecycle, Log, All);
 
@@ -59,6 +60,19 @@ void UDarkwellEditorDiagnostics::FocusPerformancePIE()
     // Explicit benchmark setup only. Never called by ordinary gameplay or getters.
     if (GEngine && GEngine->GameViewport)
         if (const auto Window = GEngine->GameViewport->GetWindow()) Window->BringToFront(true);
+}
+
+bool UDarkwellEditorDiagnostics::SetPerformanceViewportSize(int32 Width, int32 Height)
+{
+    if (!GEditor || !GEditor->PlayWorld || !GEngine || !GEngine->GameViewport
+        || Width < 0 || Height < 0 || Width > 4096 || Height > 4096
+        || ((Width == 0) != (Height == 0))) return false;
+    if (FSceneViewport* Viewport = GEngine->GameViewport->GetGameViewport())
+    {
+        Viewport->SetFixedViewportSize(Width, Height);
+        return true;
+    }
+    return false;
 }
 
 class FDarkwellEditorModule final : public IModuleInterface

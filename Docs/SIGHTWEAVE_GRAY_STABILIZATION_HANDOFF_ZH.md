@@ -189,3 +189,15 @@ Stabilization_FinalQualification01 最终 D3D12/SM6 视觉流程：906 帧、863
 最后一组同时覆盖原连续四阶段观察、四次重复远近观察、四次重新取得 Whole 资格、相同小接触达标后保持彩色、旧完整历史不回退，以及真实相机墙体深度/隐藏墙负对照。图像 oracle 比较原始截图、实际材质/纹理绑定与独立解析内部样本，不能以原生测试成功替代。所用分析命令为 Scripts/AnalyzeWholeQualification.py、AnalyzeGrayWholeTransitions.py、AnalyzeGrayMemoryEpisodes.py、AnalyzeGrayReobservation.py、AnalyzeConfirmedWholeCurrent.py、AnalyzeWholeSessions.py，参数为表中对应目录。
 
 这些视觉协议采用固定时间步，截图实际 2233×911；其用途是表面正确性和生命周期，不冒充正式 1080p 无截图性能矩阵。所有计时门槛仍以独立正式性能与真实长测为准。
+
+## 阶段 8：完整模拟长测及普通 PIE 尺寸修正
+
+`RunGrayObjectPolicyTests.ps1 -RunName Stabilization_FinalSoak01 -Tests Darkwell.PropLab.GrayHomeBaseline.FifteenMinuteInteractiveSoak` 完整完成 54,000 active、60 settle、600 idle；无 wall budget 中断。测试耗时 328.048 秒，进程 wall 358.431 秒、exit 0、severe 0，但测试本身 **FAIL**，脚本正确返回 1。失败均来自原性能门槛：active 共 1308 步 >33 ms、2 步 >100 ms、最长连续慢步 14；不能用正常退出覆盖测试失败。
+
+每 3600 步的原始分布与资源记录在 log 和 soak-trends.json；active 最后一段 step p50/p95/p99/max 为 3.764/15.908/67.808/101.872 ms（该段分位数不能冒充完整 54,000 分位数）。Idle 600 步为 0.266/0.277/0.379/0.469 ms，0 次 >33/>100，零纹理上传、创建和历史扫描。模拟保持 9 个身份，资源峰值 records 4、textures 21、MIDs 36、caps 0、显示丢失检查 0，原记录/呈现资源边界断言通过。
+
+**工作集异常未解决**：第 3600 步 4,770,422,784 字节，54000 步 11,194,589,184 字节，idle 结束 11,201,318,912 字节；同期存活 UObject 在周期 GC 后约 63,161–63,174，idle 63,057。不能由 UObject/纹理个数稳定推出内存稳定，也不能直接把进程工作集增长定性为灰色历史泄漏。该测试在同一个同步 Automation 调用里连续推进子系统，不运行普通引擎完整帧；引擎 Texture2D.cpp 的 UpdateTextureRegions 会把上传缓冲清理排到 RHI command lambda。队列是否积压尚无直接分配证据，故仅作为需验证的线索，不能当已证实根因。
+
+普通默认 Editor `ProjectReference_PIE01` 实际尺寸为 1920×1082，被严格条件断言拒绝（complete false、exit 0、severe 1、27.596 秒），失败保留。新增 Editor 模块专用 SetPerformanceViewportSize，在普通 PIE 中固定实际 1920×1080，结束时恢复；不生成 Lab actor、不改普通玩法、不改变 Matrix。完整 Editor 构建 Stabilization_ReferenceViewportBuild01.log 成功，24.74 秒；UBT 因 adaptive unity 工作集同时重链 runtime DLL，runtime 源码没有新改动。此前六组正式 after 的原二进制/源码元数据继续保留，新增构建不冒充那些样本的二进制。
+
+ProjectReference_PIE02 使用默认 Editor 工具集、普通 L_Prototype 原生玩法，实际 1920×1080/SP100、240 帧存活断言通过，complete/exit 0/severe 0，32.546 秒。p50/p95/p99/max 为 27.543/36.634/47.321/79.908 ms，66 帧 >33、0 帧 >100、最长 3 帧。原图显示 Health 36%、Stalker Hunting；计时后 GPU profile 的 TSR 事件确证实际 1920×1080。截图 showui 可包含窗口边框，不能把 PNG 外框尺寸当内部渲染尺寸。

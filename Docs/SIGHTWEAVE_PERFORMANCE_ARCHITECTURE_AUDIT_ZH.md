@@ -285,3 +285,5 @@ EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉�
 完整Editor构建 `BatchSlice_JoinedBuild01.log` 成功104.57秒。定向 `BatchSlice_JoinedTarget01` 4/4、3clean/1warning、0failed/not-run/severe、exit0，实际NullRHI；测试15.232秒/进程83.210秒。进程启动与构建尾部重叠，但测试开始在构建完成之后，确实执行新JoinedSealedOwnership测试并报告37个并行批次、1,982,208输入样本；不把此过程时间用作性能对比。唯一warning为引擎网络连通性探测generate_204超时，与测试断言无关。
 
 验证包括原全扫描BatchOwnershipSamplesEquivalent、4140组完整interval/footprint空间索引对照、原slab几何对照，以及新增串行/并行十阶段逐帧比较：全部细样本字段、suppression位、texture signature和cap四边形坐标。覆盖无效coverage、8/16条重新播种、Reset及world销毁。所有任务在每次Step返回前完成；此架构没有跨帧“待取消”状态，不能冒称测试了未来异步方案的取消。真实batch收益、完整阶段回归和必要视觉待后续证据；先推送可构建、已定向验证检查点。
+
+运行时检查点a8bb332已推送。其后完整 `BatchSlice_Functional01` **146/146**（136clean、10warnings、0failed/not-run/severe、exit0），实际NullRHI；测试182.321秒/进程203.854秒。没有再次执行四套视觉或长测。SpaceCraft仍运行，真实GPU A/B保持待测；为先验证主目标的CPU工作，新增独立JoinedDistributedBatch诊断，使用现有原生64+64+56构造器、串行/并行交替四次，报告setup与首个native update而非D3D12完整帧。新增仅测试文件，完整DiagnosticBuild01成功8.45秒，先保存检查点再运行该有界诊断。

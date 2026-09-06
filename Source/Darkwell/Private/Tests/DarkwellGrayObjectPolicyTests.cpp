@@ -704,6 +704,37 @@ bool FDarkwellJoinedOwnershipParity::RunTest(const FString&)
  return true;
 }
 
+// Bounded CPU diagnostic of the actual 64+64+56 stress constructor. Kept out
+// of the functional manifest and never reported as a real D3D12 frame sample.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellJoinedDistributedBatch,
+ "Darkwell.Stabilization.Diagnostics.JoinedDistributedBatch",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellJoinedDistributedBatch::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ for(int32 Run=0;Run<4;++Run)
+ {
+  const bool Serial=Run%2==0;
+  FRoom F(true); F.Room->bForceSerialOwnershipForTesting=Serial;
+  F.Player->SetActorLocation(FVector(6000,3600,92));
+  F.Player->SetActorRotation(FRotator(0,90,0)); F.Step(2);
+  const double Begin=FPlatformTime::Seconds();
+  if(!TestTrue(TEXT("Actual distributed stress constructor succeeds"),F.Room->SetGrayPolicyStressMode(6))) return false;
+  const double SetupMs=(FPlatformTime::Seconds()-Begin)*1000;
+  for(int32 Frame=0;Frame<3;++Frame)
+  {
+   const double Start=FPlatformTime::Seconds(); F.Step();
+   const double StepMs=(FPlatformTime::Seconds()-Start)*1000;
+   const auto T=F.Room->GetHistoryRuntimeFrameTelemetryForTesting();
+   if(Frame==0 && !Serial) TestTrue(TEXT("184 workload uses joined ownership"),T.JoinedOwnershipBatches>0);
+   AddInfo(FString::Printf(TEXT("GRAY_DISTRIBUTED_CPU run=%d serial=%d frame=%d setup_ms=%.3f step_ms=%.3f memory_ms=%.3f ownership_ms=%.3f cap_ms=%.3f occupancy_ms=%.3f fine_ms=%.3f texture_ms=%.3f batches=%llu input_samples=%llu records=%d geometry_tests=%llu visits=%llu"),
+    Run,Serial,Frame,SetupMs,StepMs,T.MovingPropLabGameThreadUs/1000,T.OwnershipUs/1000,T.CapPresentationUs/1000,
+    T.OccupancyUs/1000,T.AdvanceFineHistoryUs/1000,T.TextureSubmissionUs/1000,T.JoinedOwnershipBatches,T.JoinedOwnershipSamples,T.SpatialRecordCount,T.PrimitiveGeometryTests,T.OwnershipRecordVisits));
+  }
+ }
+ return true;
+}
+
 // Separate diagnostic selector: measures cold CPU work without a frame gate.
 // Each size starts in a fresh world; no warm-up is inserted after seeding.
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(FDarkwellOwnershipScaling,

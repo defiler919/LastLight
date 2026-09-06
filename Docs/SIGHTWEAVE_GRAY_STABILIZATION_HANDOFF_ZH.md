@@ -1,6 +1,10 @@
 # 灰色层功能检查点与稳定化施工
 
-当前19f2e76之后正在进行最终cap切片：只读CPU行任务→按原序join/网格合并→GT验证与SetMesh发布；最新完整构建CapSlice_Build04、定向CapSlice_Target03通过（31比较、20非空、35joined、8 live Current回退）。旧三项独立cap测试亦通过。真实D3D12 A/B、阶段功能/视觉待完成，不能沿用旧147/147声称新运行时已全回归。详细成本、失败fixture修正及边界见架构审计第18节。以下是此前已完成阶段。
+当前19f2e76之后的cap运行时切片 **9c14ecc** 已推送并完成必要最终回归：只读CPU行任务→按原序join/网格合并→GT验证与SetMesh发布；live Current依赖保留串行，无跨帧遗留任务。完整构建CapSlice_Build04通过，定向31次比较含20非空cap、35joined、8 live Current回退；最终 **148/148功能PASS**（旧147项无遗漏），Episodes51张/六组896样本surface oracle及Contracts178张/Whole离开24帧oracle/三次PIE均PASS、正常退出。
+
+两次真实D3D12 A/B中位数：184 setup **449.593→397.038ms**（-11.7%），最大整帧 **836.191→771.154ms**（-7.8%）；并行两次实际749.592/792.716ms，初始化仍FAIL。同二进制/driver/原质量、四次各480帧环境异常0、完整冷帧保留，setup184记录、采样120记录、fine bytes41,157,632均一致。短Trace确认封存cap CPU **85.771→29.480ms**、cap总计136.269→83.715ms；GT提交仍约10ms，未消除。详细成本、原始路径、控制开关-SerialCapBuild及失败fixture修正见架构审计第18节。
+
+本阶段最终：**ARCHITECTURE AUDIT PARTIAL / FRAME PERFORMANCE FAIL / INITIALIZATION-BATCH HITCHES FAIL / LONG-RUN RESOURCES PARTIAL / FUNCTIONAL REGRESSION PASS**；已验证退出路径维持PASS。下一轮优先约80ms occupancy的只读输入/分块计算，然后seal外首次proxy/texture/resource创建；cap细胞准备与签名仍同步。capture footprint未再改，无减少采样/精度/历史或灰色规则变更。未重跑完整矩阵、Qualification/WholeSessions全集或十分钟长测；本切片必要最终功能/视觉已完成，不再作为待办重复跑。计时5c9e495、运行时9c14ecc、性能证据9a838fb均已推送，最终文档提交在其后；所有Saved证据保留，stable不移动。以下是此前已完成阶段。
 
 最新初始化阶段（8fb4d6e之后）已完成，运行时 **59030ab** 已推送：capture几何只读输入→并行准备→GT合并，并移除封存内随即被最终cap覆盖的中间提交。三次真实D3D12 Batch中位数：184 setup **538.769→451.701ms**（-16.2%），最大整帧 **926.468→848.486ms**（-8.4%）；新三次842–853ms，初始化仍FAIL。改造前后均完成必要Episodes51张/表面oracle、Contracts178张/Whole离开24帧oracle/3次PIE；最终完整构建、17/17定向和 **147/147** 阶段功能通过，旧146项无遗漏。
 

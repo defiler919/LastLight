@@ -238,3 +238,15 @@ LabRenderReference_PIE01 为独立 Lab 大厅 render-size 取证，不混入 Mat
 为避免再次依赖中断时的系统级窗口键盘输入，改用 UE 自带 ModelContextProtocol（本机 127.0.0.1:8000）的 EditorAppToolset.StartPIE / StopPIE / IsPIERunning，以及 SlateInspectorToolset.Windows。每次请求、结果和时间先落盘；普通 Editor 没有 -ExecutePythonScript、keep-alive audit 或调试器。StartPIE 使用标准 in-viewport、非 Simulate，返回后 BeginPlay 已完成；Stop 后再独立查询 false。Windows(close) 的引擎实现调用目标 SWindow::RequestDestroyWindow，是正常窗口关闭请求，不强杀进程，不发送全局按键。
 
 Stabilization_FinalMainApi01：IsPIERunning false→true→false，官方窗口列表只有 Darkwell - 虚幻编辑器，针对该窗口关闭，返回 OK；实际 exit 0、log_closed true、severe 0、182.914 秒（包含接口发现期间等待）。API 回执与引擎 PIE world 创建/清理日志共同证明一次 Play→Stop→Close，不能只依赖 MainWindow runner 的 protocol_complete 字段。中断的旧 FinalMainPlayStop01 继续保留为 EXIT UNKNOWN。
+
+Stabilization_FinalMainApi02：false→true→false→true→false 的完整官方回执和两次 PIE world 创建日志，关闭前 editor_pre_exit pie=0，随后 slate_pre_shutdown、日志正常结束；实际 exit 0、severe 0、122.200 秒。两组普通 Editor 都没有 -ExecutePythonScript 或调试器，关闭仅通过该 UE 进程内 SWindow 的正常 RequestDestroyWindow。Codex 在这两组操作后保持正常。
+
+## 阶段 11：短时上传清理归因与 RHI 参数错误
+
+新增独立 `Darkwell.Stabilization.Diagnostics.UploadCleanup`，不改玩法代码，不重跑已完成测试。它向一个 256×144 PF_FloatRGBA 临时纹理提交两组各 2048 次上传，直接跟踪用户上传缓冲的 pending bytes / cleanup 完成数；第二组每 32 次显式 FlushRenderingCommands，属于诊断干预，绝不加进运行时作为优化或性能达标证据。最终还在正常引擎继续 12 帧后记录工作集，区分同步测试期间的滞留与恢复真实帧后的状态。
+
+首个 `Stabilization_UploadCleanupNull01` 虽然请求 NullRHI，但探针记录 GUsingNullRHI=0。核查发现 `RunGrayObjectPolicyTests.ps1` 的条件表达式返回单字符串后，native splat 把 `-NullRHI` 展开为 `- N u l l R H I`；完整原始命令行、Using Default RHI: D3D12 以及探针三者吻合。**Stabilization_FinalSoak01 与 FinalFunctional03 的原日志同样证明实际为 D3D12/SM6**。其测试结果仍真实，但不能称它们为 NullRHI；54,000 步仍是同步模拟子系统调用，不是 900 秒真实引擎帧。已改为显式 string[] 保存参数，并在摘要保存请求 RHI 与原始日志证据。Rendering 分支本来有两个参数，未受这一单字符串问题影响；GPU oracle 与正式性能 runner 不受影响。
+
+首个探针 1 项 PASS、exit 0、severe 0、测试 7.385 秒/进程 37.113 秒：无排空时 2048 个缓冲全部待释放，共 603,979,776 bytes（576 MiB）；排空后 pending=0、completed=2048。每 32 次排空把 pending 峰值限制到 9,437,184 bytes（9 MiB），最终也全部清理。但工作集仍从 4.23 GB 上升至 6.03 GB，证明不能仅看 CPU 上传回调就宣布内存问题解决，还需观察 D3D12 暂存资源/池的逐帧回收。该样本源文件与 hash 已额外保存在原目录。
+
+修复参数后的 `Stabilization_UploadCleanupTrueNull01` 确认实际命令为完整 -NullRHI，但新探针原先错误地要求 NullRHI 也创建纹理资源，断言失败（测试 FAIL、exit 0、severe 0、19.518 秒）。失败保留；改为在 GUsingNullRHI 时明确验证资源为空、上传为零，D3D12 路径继续验证全部清理。三次完整 Editor 构建 UploadProbeBuild01/02/03 分别成功 6.76/5.48/5.57 秒，均只编译新增测试文件并重链。

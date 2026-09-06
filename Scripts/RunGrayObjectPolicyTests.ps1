@@ -16,7 +16,7 @@ $log = Join-Path $evidence "$RunName.log"
 $report = Join-Path $evidence "${RunName}_Report"
 if (Test-Path -LiteralPath $log) { throw "Evidence already exists: $log" }
 $begin = Get-Date
-$rhiArgs = if ($Rendering) { @('-d3d12','-sm6') } else { @('-NullRHI') }
+[string[]]$rhiArgs = if ($Rendering) { @('-d3d12','-sm6') } else { @('-NullRHI') }
 $source = [ordered]@{ head=(& git -C $repo rev-parse HEAD); started=$begin.ToString('o'); editor_args=$ExtraEditorArgs; rhi_args=$rhiArgs }
 $source | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'source.json')
 & git -C $repo diff --binary | Set-Content -LiteralPath (Join-Path $evidence 'source.patch')
@@ -33,6 +33,8 @@ if (Test-Path -LiteralPath "$report/index.json") {
     $summary.duration = $r.totalDuration
 }
 $summary.severe_lines = @(Select-String -LiteralPath $log -Pattern 'Fatal error:|Assertion failed:|Ensure condition failed:|GPU crashed|DXGI_ERROR_DEVICE_REMOVED|DXGI_ERROR_DEVICE_HUNG|EXCEPTION_ACCESS_VIOLATION').Count
+$summary.requested_rhi = if ($Rendering) { 'D3D12/SM6' } else { 'NullRHI' }
+$summary.rhi_evidence = @(Select-String -LiteralPath $log -Pattern 'Using Default RHI:|Using Highest Feature Level|NullRHI|Command Line:' | ForEach-Object { $_.Line })
 $summary.passed = $code -eq 0 -and $summary.total -gt 0 -and $summary.failed -eq 0 -and $summary.not_run -eq 0 -and $summary.severe_lines -eq 0
 $summary | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence "$RunName.summary.json")
 $summary | ConvertTo-Json

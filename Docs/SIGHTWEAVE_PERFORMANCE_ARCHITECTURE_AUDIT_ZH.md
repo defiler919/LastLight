@@ -116,3 +116,27 @@ CPU 知识持续到合法反证/完全被新知识替代；呈现对象可先于
 FrameCost02 Empty 的 300 次 SourceUpdate 平均 **5.503 ms**：PublishSnapshot 5.496、MemoryWriteEffectiveLive 5.420、其中 polygon raster 共 3.674 ms/帧，其余写入合并 1.746 ms；Vision 两次求解合计约 .034 ms，Illumination 约 .010 ms，MemoryPublishPacket 约 .003 ms。父子 scope 已明确，不能再把约 5 ms 归为光线求解。GPU SceneRender 平均 14.853 ms，LumenScreenProbeGather 2.947 ms；CPU 与 GPU 不相加。
 
 下一项有模型支撑的局部改造：地面记忆每字节仅执行 `Prior OR EffectiveLive`。完整已记住行满足 `0xff OR x = 0xff`，因此写入阶段可跳过其重复 raster/combine；ClearMemory/持久状态替换后必须重新依据实际 packed bits 判断，不把 CurrentLive、合法墙体或对象 Whole 资格改为“曾见即可”。先做完整位图/修订/dirty packet 的 reference parity，再测收益。
+
+## 8. 旧表面提前排除与扫描线复用
+
+完整 footprint 查询首先必须与某个旧表面相交。第一阶段仅索引较新几何，仍反复把较新边接触点送回旧几何判定，造成约一亿次查询。新增旧几何局部 XY 分离轴的保守提前排除：沿用原 inverse transform，包含原 inclusive tolerance 和额外浮点余量；倾斜/奇异缩放回原路径。索引不可用和 full oracle 均保留旧路径。FootprintRejectBuild01 完整 Editor 15.48 秒成功；6 项定向全部 clean，其中实际名称为 BatchOwnershipSamplesEquivalent、OwnershipSpatialIndexMatchesScan 和 4 个规模诊断。第一次 selector 的 ArchitectureAudit.Planar 没有匹配项，后续按实际 GrayObjectPolicy.PlanarProjectionMatchesOriginalSlab 补验，未将不存在的选择器算通过。
+
+64 大柜体 resident samples 仍 3,451,712；首步 memory 6264.089→2715.223 ms，ownership 4376.510→898.434 ms，geometry tests 102,022,900→10,438,162。所有原 footprint 接触样本和精确区间判据仍执行于不能安全排除的区域；不丢历史、不减少合法采样。
+
+真实 BatchFootprint01 complete、exit 0、severe 0、环境异常 0，26.153 秒，Trace 诊断：SameIdentity64 setup181.139 / max wall444.362 / native254.018 / ownership188.386 / cap20.928 ms；Distributed184 对应 **532.000 / 1317.517 / 774.759 / 540.056 / 64.905 ms**。184 的 GeometryDirtyIndices 合计66.892 ms。相对 BatchBefore01 的2425.605 ms有显著收益，仍远超门槛，INITIALIZATION保持FAIL；热态合法反证后120条继续明示。
+
+地面写入第一步跳过实际 packed bits 全1的行，11项目标全clean（0.618秒测试/20.627秒进程）。256次完整位图、修订和dirty packet对照覆盖四档精度、illumination/bypass、clear/block/replacement，确实跳过560,504行。FrameRows01真实Trace complete、exit0、severe0、环境异常0：Empty SourceUpdate均值5.503→4.120 ms，MemoryWrite5.420→4.051 ms；完整帧p95=18.636 ms，仍FAIL。
+
+第二步在同一次WriteEffectiveLive中复用稳定快照polygon在相同tile Y、相同行上的完整有序交点；原SampleY、边求交、排序、每个X tile的舍入和位操作均不变。只缓存快照拥有的vision/illumination数组，不缓存临时modifier/suppression polygon地址；最多128组临时行表，超出走原求交，非知识上限。模型从按X×Y tile重复扫描所有polygon边，变为同polygon/Y/row求交一次，再分别写各X tile。缓存于本次写入返回即销毁，不跨revision猜测。Reference开关同时关闭两项优化；新增凹多边形和clear后重获对照。RasterCacheBuild01完整Editor6.64秒成功，RasterCacheTarget01 **12/12 clean**、severe0、实际NullRHI，.736秒测试/20.430秒进程，含完整原slab oracle。阶段完整功能和视觉随后验证。
+
+## 9. 上传地址的提交/预留状态核对
+
+UploadAllocation02 在原探针上仅增加VirtualQuery，记录每个用户缓冲所属的AllocationBase，释放后只查询地址状态、不解引用已释放指针。84个区域包含这些buffer曾使用的allocator段，也可能含其它分配，不能称为buffer独占内存。它们总共704,643,072 bytes=672MiB；600帧时 committed218,234,880 / reserved-uncommitted486,408,192 bytes。最后Released时265,027,584 /439,615,488，说明部分地址又被正常工作复用。所有4096个callback完成、pending0。工作集4,875,702,272→6,710,784,000→5,257,981,952（600帧）→5,104,390,144（Released）。这直接区分了仍预留地址与已decommit的后备内存，支持Mimalloc缓存而非用户buffer永久泄漏的解释。
+
+该次真D3D12/SM6、启动memory trace/LLM，1/1 clean、exit0、severe0，22.352秒测试/70.690秒进程。新VM变量最初与texture region重名导致RememberedRowsBuild01失败，修名后完整RememberedRowsBuild02成功5.89秒；失败日志保留。不会把这个受控探针的恢复量外推成旧54,000步全部6.4GB的精确账本。
+
+FrameCache01：complete、exit0、severe0、环境异常0，45.463秒Trace诊断。Empty SourceUpdate平均 **2.585 ms**，其中MemoryWrite2.519 ms（polygon raster合计约1.057 ms/帧，余下写入约1.462 ms）；对照FrameCost02分别5.503/5.420 ms。Empty wall p50/p95/p99/max=16.101/18.276/20.038/21.383 ms；Partial p95=21.245、max37.874；FastSweep160 cold max407.764，不能只报其15.885 ms的p95而隐藏初始化。GPU SceneRender均值14.645 ms，TSR4.549、Lumen2.953 ms；这些为父子作用域，不能相加。Source节省并没有等量缩短完整帧，GT等待渲染任务的均值反而增至约11.114 ms，符合GPU背压仍主导的流水线模型。
+
+Exporter核查发现引擎TimingExporter.cpp将GPU队列过滤恒设true，因此`ExportTimerStatistics -threads=GameThread`仍含GPU timers。FrameCache01保留的thread_*.csv不能按文件名当作纯CPU/单GPU队列统计。新的导出器改为ExportTimingEvents，保留实际ThreadId和TimerId再归因；原统计中可由唯一timer名称确认的Source/MemoryWrite数据不受影响。旧Trace中的Preload/Session引擎region警告保留，四个本协议region都有明确起止。
+
+第二阶段运行时代码暂定冻结：保留局部几何排除、cap依赖摘要和地面扫描线复用；不添加会让合法Current与旧history在不同帧发布的异步捷径。剩余批量路径仍需同步建立全部纹理/cap/捕获记录和约540ms精确ownership；要消除该停顿，需要独立的不可变几何查询工作集、线程安全计算及原子提交模型，不能只把压力脚本延后或隐藏未完成记录。当前阶段不宣称达到秒级尖峰门槛。完整Editor Stage2FinalBuild01成功6.44秒；PerformanceAudit_Stage2Functional01正在进行，随后验证四个视觉协议和新的真实长测。

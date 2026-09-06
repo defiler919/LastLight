@@ -549,4 +549,85 @@ bool FSightWeaveMemoryRowCullingParity::RunTest(const FString& Parameters)
  return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightWeaveRememberedRowsParity,
+ "SightWeave.ObjectPolicy.WorldMemoryRememberedRowsParity",
+ EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FSightWeaveRememberedRowsParity::RunTest(const FString&)
+{
+ using namespace SightWeaveM3P5MemoryAuthorityTests;
+ auto SameTiles=[](TConstArrayView<FSightWeavePackedMemoryTile> A,TConstArrayView<FSightWeavePackedMemoryTile> B)
+ {
+  if(A.Num()!=B.Num()) return false;
+  for(int32 I=0;I<A.Num();++I) if(!A[I].Key.IsEquivalentTo(B[I].Key) || A[I].PackedBits!=B[I].PackedBits) return false;
+  return true;
+ };
+ int64 Skipped=0;
+ for(auto Precision:{ESightWeaveRenderPrecisionTier::Coarse,ESightWeaveRenderPrecisionTier::Standard,
+     ESightWeaveRenderPrecisionTier::Fine,ESightWeaveRenderPrecisionTier::Ultra})
+ for(bool Bypass:{true,false})
+ {
+  const double Span=SightWeave::Memory::InteriorTileSize*SightWeaveCentimetersPerTexel(Precision);
+  const double Origin=-1000000.0;
+  auto Box=[&](double Lo,double Hi){return BoxVertices(Origin+Span*Lo,Origin+Span*Lo,Origin+Span*Hi,Origin+Span*Hi);};
+  auto Snapshot=MakeSnapshot(1,Bypass,Box(-.5,3.5),Box(-.5,3.5));
+  FSightWeaveMemoryAuthority Scan,Fast;
+  if(!TestTrue(TEXT("Configure reference and optimized"),Configure(Scan,Snapshot,Precision)&&Configure(Fast,Snapshot,Precision))) return false;
+  Scan.SetForceFullWriteForTesting(true);
+  FSightWeaveMemoryModifierHandle ScanBlock,FastBlock;
+  for(int32 Step=0;Step<32;++Step)
+  {
+   if(Step==3 || Step==10 || Step==14)
+   {
+    const auto Region=MakeRegion(Scan,ESightWeaveMemoryRegionShape::AxisAlignedBox,
+     FVector2D(Origin+Span*1.4),FVector2D(Span*4,Span*.15));
+    if(!TestEqual(TEXT("Clear agrees"),Fast.ClearMemory(Region),Scan.ClearMemory(Region))) return false;
+   }
+   if(Step==3)
+   {
+    FSightWeaveMemoryModifierDescription Block;
+    Block.Region=MakeRegion(Scan,ESightWeaveMemoryRegionShape::Circle,FVector2D(Origin+Span*1.4),FVector2D(Span*.8));
+    ScanBlock=Scan.RegisterModifier(Block); FastBlock=Fast.RegisterModifier(Block);
+    if(!TestTrue(TEXT("Both write blockers register"),ScanBlock.IsValid()&&FastBlock.IsValid())) return false;
+   }
+   if(Step==8) { Scan.UnregisterModifier(ScanBlock); Fast.UnregisterModifier(FastBlock); }
+   Snapshot=MakeSnapshot(Step+1,Bypass,
+    Box(Step==0?-.5:(Step%4)*.13,Step==0?3.5:2.8+(Step%3)*.2),
+    Box(Step==0?-.5:(Step%5)*.08,Step==0?3.5:2.9));
+   if(Step>=10 && Step<14)
+   {
+    auto& Vertices=Snapshot.VisionSources[0].Polygon.Vertices;
+    Vertices.Reset();
+    for(int32 I=0;I<16;++I)
+    {
+     const double Angle=FMath::DegreesToRadians(I*22.5+Step*7.0);
+     const double Radius=Span*(I%2?.7:1.9);
+     Vertices.Emplace(Origin+Span*1.4+FMath::Cos(Angle)*Radius,
+       Origin+Span*1.4+FMath::Sin(Angle)*Radius,100.0);
+    }
+   }
+   const auto A=Scan.WriteEffectiveLive(Snapshot), B=Fast.WriteEffectiveLive(Snapshot);
+   Skipped+=Fast.GetSkippedWriteRowsForTesting();
+   if(!TestTrue(TEXT("Success, revisions, changed and dirty counts equal"),A.Succeeded()&&B.Succeeded()
+    &&A.MemoryRevision==B.MemoryRevision&&A.SnapshotRevision==B.SnapshotRevision
+    &&A.ChangedTileCount==B.ChangedTileCount&&A.CandidateTileCount==B.CandidateTileCount
+    &&A.DirtyTileCount==B.DirtyTileCount&&A.AllocatedTileCount==B.AllocatedTileCount
+    &&Scan.GetPersistenceGuardRevision()==Fast.GetPersistenceGuardRevision())) return false;
+   const auto PA=Scan.PublishPacket(),PB=Fast.PublishPacket();
+   if(!TestTrue(TEXT("All authority and dirty packet bits equal"),SameTiles(PA->GetAuthorityTiles(),PB->GetAuthorityTiles())
+     &&SameTiles(PA->GetDirtyTiles(),PB->GetDirtyTiles()))) return false;
+   if(Step==20)
+   {
+    FSightWeaveMemoryPersistentState State;
+    if(!TestTrue(TEXT("Export replacement state"),Scan.ExportPersistentState(State)==ESightWeaveMemoryFailure::None)) return false;
+    for(auto* Authority:{&Scan,&Fast})
+     if(!TestTrue(TEXT("Persistent replacement"),Authority->PreparePersistentReplacement(State)==ESightWeaveMemoryFailure::None)) return false;
+    Scan.SetForceFullWriteForTesting(true);
+   }
+  }
+ }
+ TestTrue(TEXT("Test exercises saturated rows"),Skipped>0);
+ AddInfo(FString::Printf(TEXT("Compared 256 complete updates, all four precisions, illumination/bypass, clear/block/replacement; skipped rows=%lld"),Skipped));
+ return true;
+}
+
 #endif

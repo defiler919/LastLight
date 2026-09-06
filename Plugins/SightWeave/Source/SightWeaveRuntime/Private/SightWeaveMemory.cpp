@@ -135,11 +135,22 @@ namespace SightWeaveMemoryPrivate
 		Bits[RowOffset + LastByte] |= static_cast<uint8>(0xffu >> (7 - (LastX & 7)));
 	}
 
+	struct FCachedRasterRow
+	{
+		TArray<double, TInlineAllocator<4>> Crossings;
+		bool bReady = false;
+	};
+	// Snapshot polygons remain immutable throughout one WriteEffectiveLive.
+	// X tiles share the exact same SampleY and polygon-edge intersections.
+	using FRasterRows = TArray<FCachedRasterRow>;
+	using FRasterCache = TMap<TPair<const FVector*, int32>, FRasterRows>;
+
 	void RasterizePolygon(
 		TConstArrayView<FVector> Vertices,
 		const FSightWeaveMemoryScopeKey& Scope,
 		const FIntPoint LogicalCoordinate,
-		TArray<uint8>& InOutBits, const bool bCullEmptyRows = true)
+		TArray<uint8>& InOutBits, const bool bCullEmptyRows = true,
+		const bool* RememberedRows = nullptr, FRasterCache* Cache = nullptr)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(SightWeave_MemoryRasterizePolygon);
 		if (Vertices.Num() < 3)
@@ -162,26 +173,44 @@ namespace SightWeaveMemoryPrivate
    FirstRow=FMath::Clamp(FMath::FloorToInt((Bounds.Min.Y-TileMinimum.Y)/CentimetersPerTexel)-1,0,EndRow);
    EndRow=FMath::Clamp(FMath::CeilToInt((Bounds.Max.Y-TileMinimum.Y)/CentimetersPerTexel)+1,FirstRow,EndRow);
   }
-		TArray<double, TInlineAllocator<64>> Crossings;
+		FRasterRows* Rows = nullptr;
+		if (Cache)
+		{
+			const TPair<const FVector*, int32> Key(Vertices.GetData(), LogicalCoordinate.Y);
+			Rows = Cache->Find(Key);
+			// Bound temporary work memory, falling back to the original solver.
+			if (!Rows && Cache->Num() < 128)
+			{
+				Rows = &Cache->Add(Key);
+				Rows->SetNum(SightWeave::Memory::InteriorTileSize);
+			}
+		}
+		TArray<double, TInlineAllocator<4>> LocalCrossings;
 		for (int32 Row = FirstRow; Row < EndRow; ++Row)
 		{
-			const double SampleY = TileMinimum.Y
-				+ (static_cast<double>(Row) + 0.5) * CentimetersPerTexel;
-			Crossings.Reset();
-			for (int32 VertexIndex = 0; VertexIndex < Vertices.Num(); ++VertexIndex)
+			if (RememberedRows && RememberedRows[Row]) continue;
+			auto& Crossings = Rows ? (*Rows)[Row].Crossings : LocalCrossings;
+			if (!Rows || !(*Rows)[Row].bReady)
 			{
-				const FVector& A3 = Vertices[VertexIndex];
-				const FVector& B3 = Vertices[(VertexIndex + 1) % Vertices.Num()];
-				const double AY = A3.Y;
-				const double BY = B3.Y;
-				if (!((AY <= SampleY && BY > SampleY) || (BY <= SampleY && AY > SampleY)))
+				const double SampleY = TileMinimum.Y
+					+ (static_cast<double>(Row) + 0.5) * CentimetersPerTexel;
+				Crossings.Reset();
+				for (int32 VertexIndex = 0; VertexIndex < Vertices.Num(); ++VertexIndex)
 				{
-					continue;
+					const FVector& A3 = Vertices[VertexIndex];
+					const FVector& B3 = Vertices[(VertexIndex + 1) % Vertices.Num()];
+					const double AY = A3.Y;
+					const double BY = B3.Y;
+					if (!((AY <= SampleY && BY > SampleY) || (BY <= SampleY && AY > SampleY)))
+					{
+						continue;
+					}
+					const double Alpha = (SampleY - AY) / (BY - AY);
+					Crossings.Add(A3.X + Alpha * (B3.X - A3.X));
 				}
-				const double Alpha = (SampleY - AY) / (BY - AY);
-				Crossings.Add(A3.X + Alpha * (B3.X - A3.X));
+				Crossings.Sort();
+				if (Rows) (*Rows)[Row].bReady = true;
 			}
-			Crossings.Sort();
 			for (int32 CrossingIndex = 0; CrossingIndex + 1 < Crossings.Num(); CrossingIndex += 2)
 			{
 				const double MinimumX = Crossings[CrossingIndex];
@@ -543,6 +572,9 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(SightWeave_MemoryWriteEffectiveLive);
 	check(IsInGameThread());
+#if WITH_DEV_AUTOMATION_TESTS
+	SkippedWriteRowsForTesting = 0;
+#endif
 	FSightWeaveMemoryUpdateDiagnostics Result;
 	Result.PriorMemoryRevision = MemoryRevision;
 	Result.MemoryRevision = MemoryRevision;
@@ -621,8 +653,36 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 		return Result;
 	}
 
+	SightWeaveMemoryPrivate::FRasterCache RasterCache;
 	for (const FIntPoint LogicalCoordinate : CandidateTiles)
 	{
+		// This authority only ORs legal writes into durable memory. A fully set
+		// row cannot change. Derive from the actual bits each update so ClearMemory
+		// and persistent replacements need no separate cache invalidation.
+		bool RememberedRows[SightWeave::Memory::InteriorTileSize] = {};
+		const bool* SkipRows = nullptr;
+		bool bCanSkip = true;
+#if WITH_DEV_AUTOMATION_TESTS
+		bCanSkip = !bForceFullWriteForTesting;
+#endif
+		const FSightWeavePackedMemoryTile* Existing = FindTile(LogicalCoordinate);
+		if (bCanSkip && Existing && Existing->PackedBits.Num() == SightWeave::Memory::PackedBytesPerTile)
+		{
+			int32 FullRows = 0;
+			for (int32 Row = 0; Row < SightWeave::Memory::InteriorTileSize; ++Row)
+			{
+				bool bFull = true;
+				for (int32 Byte = 0; Byte < SightWeave::Memory::RowBytes; ++Byte)
+					if (Existing->PackedBits[Row * SightWeave::Memory::RowBytes + Byte] != 0xff) { bFull = false; break; }
+				RememberedRows[Row] = bFull;
+				FullRows += bFull;
+			}
+#if WITH_DEV_AUTOMATION_TESTS
+			SkippedWriteRowsForTesting += FullRows;
+#endif
+			if (FullRows == SightWeave::Memory::InteriorTileSize) continue;
+			if (FullRows > 0) SkipRows = RememberedRows;
+		}
 		TArray<SightWeaveMemoryPrivate::FProfileMasks> ProfileMasks;
 		TArray<uint8> Bypass;
 		TArray<uint8> Suppression;
@@ -647,7 +707,7 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 					Vision.Polygon.Vertices,
 					Scope,
 					LogicalCoordinate,
-					Bypass);
+					Bypass, true, SkipRows, bCanSkip ? &RasterCache : nullptr);
 				continue;
 			}
 			const FSightWeaveRenderProfileIdentity Profile =
@@ -658,7 +718,7 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 				Vision.Polygon.Vertices,
 				Scope,
 				LogicalCoordinate,
-				Masks.Vision);
+				Masks.Vision, true, SkipRows, bCanSkip ? &RasterCache : nullptr);
 			for (const int32 IlluminationIndex : Vision.CompatibleIlluminationSourceIndices)
 			{
 				if (!Snapshot.IlluminationSources.IsValidIndex(IlluminationIndex))
@@ -677,7 +737,7 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 						Illumination.Polygon.Vertices,
 						Scope,
 						LogicalCoordinate,
-						Masks.Illumination);
+						Masks.Illumination, true, SkipRows, bCanSkip ? &RasterCache : nullptr);
 				}
 			}
 		}
@@ -702,7 +762,7 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 				Vertices,
 				Scope,
 				LogicalCoordinate,
-				Suppression);
+				Suppression, true, SkipRows);
 		}
 		for (const FModifierRecord& Modifier : Modifiers)
 		{
@@ -724,7 +784,7 @@ FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLiv
 					RegionVertices,
 					Scope,
 					LogicalCoordinate,
-					WriteBlock);
+						WriteBlock, true, SkipRows);
 			}
 		}
 

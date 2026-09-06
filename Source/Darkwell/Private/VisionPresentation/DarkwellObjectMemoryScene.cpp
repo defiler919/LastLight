@@ -787,6 +787,40 @@ bool ADarkwellObjectMemoryScene::HasNewerObservedGeometryOverlapWithinFootprint(
 		FVector2D(Footprint.Max.X, Footprint.Min.Y),
 		Footprint.Max,
 		FVector2D(Footprint.Min.X, Footprint.Max.Y)};
+	if (ActiveOwnershipIndex && bUseOwnershipGeometry)
+	{
+		// Every following query lies inside this footprint and requires an old
+		// surface. Reject a separating old-local XY axis once, before repeatedly
+		// clipping every newer primitive and testing its contacts against the old
+		// geometry. Use the original inverse transform and a conservative margin;
+		// tilted/singular geometry keeps the original path.
+		bool bMayContainOldSurface = false;
+		for (const FPrimitiveGeometrySnapshot& Old : OlderVisual.PartGeometry)
+		{
+			if (!Old.bCachedPlanarProjection || Old.ToleranceScale <= UE_DOUBLE_SMALL_NUMBER)
+			{
+				bMayContainOldSurface = true;
+				break;
+			}
+			FBox2D LocalFootprint(ForceInit);
+			for (const FVector2D Corner : Corners)
+				LocalFootprint += FVector2D(Old.WorldTransform.InverseTransformPosition(FVector(Corner, 0.0)));
+			const double Margin = UE_KINDA_SMALL_NUMBER + 1.e-10 * (1.0
+				+ LocalFootprint.Min.GetAbsMax() + LocalFootprint.Max.GetAbsMax()
+				+ Old.LocalBounds.Min.GetAbsMax() + Old.LocalBounds.Max.GetAbsMax()
+				+ FMath::Max(Footprint.Min.GetAbsMax(), Footprint.Max.GetAbsMax()) / Old.ToleranceScale);
+			if (!FMath::IsFinite(Margin) || !LocalFootprint.bIsValid
+				|| (LocalFootprint.Min.X <= Old.LocalBounds.Max.X + Margin
+					&& LocalFootprint.Max.X >= Old.LocalBounds.Min.X - Margin
+					&& LocalFootprint.Min.Y <= Old.LocalBounds.Max.Y + Margin
+					&& LocalFootprint.Max.Y >= Old.LocalBounds.Min.Y - Margin))
+			{
+				bMayContainOldSurface = true;
+				break;
+			}
+		}
+		if (!bMayContainOldSurface) return false;
+	}
 	if (TestPoint(Center))
 	{
 		return true;
@@ -1365,6 +1399,7 @@ void ADarkwellObjectMemoryScene::BuildGeometryDirtyIndices(
 	const FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record,
 	FRecordVisual& Visual, TArray<int32>& OutDirtyIndices, TArray<int32>& OutPhysicalDirtyIndices)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_GeometryDirtyIndices);
 	OutDirtyIndices.Reset();
 	OutPhysicalDirtyIndices.Reset();
 	if (!Record.FineHistory.IsInitialized()

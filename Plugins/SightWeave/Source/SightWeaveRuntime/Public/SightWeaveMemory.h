@@ -237,6 +237,10 @@ public:
 	ESightWeaveMemoryFailure GetLastFailure() const { return LastFailure; }
 
 	FSightWeaveMemoryUpdateDiagnostics WriteEffectiveLive(const FSightWeaveFrameSnapshot& Snapshot);
+#if WITH_DEV_AUTOMATION_TESTS
+	void SetForceFullWriteForTesting(bool bForce) { bForceFullWriteForTesting = bForce; }
+	int32 GetSkippedWriteRowsForTesting() const { return SkippedWriteRowsForTesting; }
+#endif
 	bool ClearMemory(const FSightWeaveMemoryRegion& Region);
 	FSightWeaveMemoryModifierHandle RegisterModifier(
 		const FSightWeaveMemoryModifierDescription& Description);
@@ -301,6 +305,10 @@ private:
 	bool bConfigured = false;
 	bool bNeedsFullRebuild = false;
 	bool bModifierStateDirty = false;
+#if WITH_DEV_AUTOMATION_TESTS
+	bool bForceFullWriteForTesting = false;
+	int32 SkippedWriteRowsForTesting = 0;
+#endif
 };
 
 #if WITH_DEV_AUTOMATION_TESTS

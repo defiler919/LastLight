@@ -1,6 +1,6 @@
 # 灰色层功能检查点与稳定化施工
 
-最新续工：从 `d986b53` 开始的性能架构审计正在进行，当前运行时已有 ownership/cap 局部重构。最新模型和实验见 [性能架构审计](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md) 第 5 节；下文“最终”指上一轮已完成的稳定化基线，不能替代新运行时的阶段回归。
+最新续工：从 `d986b53` 开始的性能架构审计已有两阶段局部重构：ownership空间候选与旧表面提前排除、cap依赖摘要、地面记忆饱和行/扫描线交点复用。真实Trace的184初始化峰值降至约1.32秒，SourceUpdate均值约5.50→2.59ms，均不等于性能达标。第一阶段144/144通过，第二阶段完整功能与四套视觉正在验证。分配探针已区分用户buffer、D3D12页池与Mimalloc预留/decommit；旧同步长测的全部6.4GB仍未逐字节闭环。最新事实见 [性能架构审计](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md) 第5–9节；下文“最终”指上一轮稳定化基线。
 
 2026-09-06，最终状态：**PARTIAL — GRAY_STABILIZATION_BLOCKED**。功能与当前可复现退出路径的回归通过；完整帧、批量尖峰未达标，长期资源归因仍有缺口。不得据此创建发布 stable 或开始黑色层。
 

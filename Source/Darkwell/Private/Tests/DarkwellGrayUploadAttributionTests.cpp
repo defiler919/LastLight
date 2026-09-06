@@ -11,6 +11,9 @@
 #include "RHICommandList.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/StrongObjectPtr.h"
+#if PLATFORM_WINDOWS
+#include "Windows/WindowsHWrapper.h"
+#endif
 #include <atomic>
 
 namespace Darkwell::UploadAttribution
@@ -25,6 +28,7 @@ class FProbe final : public IAutomationLatentCommand
     uint64 StartFrame = 0;
     int32 Stage = 0;
     int64 PeakPending = 0;
+    TSet<void*> UploadReservations;
 
     void Report(const TCHAR* Phase, bool bDump = true)
     {
@@ -38,6 +42,22 @@ class FProbe final : public IAutomationLatentCommand
         PlatformBytes = FLowLevelMemTracker::Get().GetTotalTrackedMemory(ELLMTracker::Platform);
 #endif
         const FPlatformMemoryStats Memory = FPlatformMemory::GetStats();
+        uint64 Reserved = 0, Committed = 0;
+#if PLATFORM_WINDOWS
+        for (void* Base : UploadReservations)
+        {
+            MEMORY_BASIC_INFORMATION Region{};
+            uint8* Cursor = static_cast<uint8*>(Base);
+            while (::VirtualQuery(Cursor, &Region, sizeof(Region)) && Region.AllocationBase == Base)
+            {
+                if (Region.State == MEM_COMMIT) Committed += Region.RegionSize;
+                if (Region.State == MEM_RESERVE) Reserved += Region.RegionSize;
+                Cursor += Region.RegionSize;
+            }
+        }
+#endif
+        Test->AddInfo(FString::Printf(TEXT("GRAY_UPLOAD_VM phase=%s allocation_bases=%d committed=%llu reserved_uncommitted=%llu"),
+            Phase, UploadReservations.Num(), Committed, Reserved));
         TRACE_BOOKMARK(TEXT("GrayUpload_%s"), Phase);
         Test->AddInfo(FString::Printf(TEXT("GRAY_UPLOAD_ATTR phase=%s frame=%llu render_frame=%u pending=%lld completed=%d peak_pending=%lld working_set=%llu used_virtual=%llu llm_default=%llu llm_platform=%llu"),
             Phase, GFrameCounter, RenderFrame, Counters->Pending.load(), Counters->Completed.load(), PeakPending,
@@ -60,6 +80,10 @@ class FProbe final : public IAutomationLatentCommand
         {
             LLM_SCOPE_BYNAME(TEXT("Darkwell/UploadAttribution"));
             uint8* Pixels = new uint8[Bytes];
+#if PLATFORM_WINDOWS
+            MEMORY_BASIC_INFORMATION VirtualRegion{};
+            if (::VirtualQuery(Pixels, &VirtualRegion, sizeof(VirtualRegion))) UploadReservations.Add(VirtualRegion.AllocationBase);
+#endif
             FMemory::Memzero(Pixels, Bytes);
             auto* Region = new FUpdateTextureRegion2D(0, 0, 0, 0, Width, Height);
             PeakPending = FMath::Max(PeakPending, Cleanup->Pending.fetch_add(Bytes) + Bytes);

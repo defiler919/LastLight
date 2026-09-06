@@ -143,6 +143,7 @@ public:
 	FName GetGrayPolicyMovingSubject() const;
 
 private:
+	friend class FDarkwellJoinedCapParity;
 	friend class FDarkwellCapPartialClipTest;
 	friend class FDarkwellCapCoplanarContactTest;
 	friend class FDarkwellGrayHistoryCapacityCurrentTest;

@@ -13,6 +13,7 @@
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/DynamicMeshComponent.h"
+#include "DynamicMesh/DynamicMesh3.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
@@ -780,6 +781,103 @@ bool FDarkwellCapturePreparationParity::RunTest(const FString&)
   }
  }
  AddInfo(FString::Printf(TEXT("Capture footprint cases=%d; Partial/Whole capture, invalid coverage, reset, reseed and world teardown parity"),FootprintCases));
+ return true;
+}
+
+// Compare the submitted mesh itself, ordered cap diagnostics and authority state.
+// Forced rebuilds exercise the joined transaction even when its signature is warm.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellJoinedCapParity,
+ "Darkwell.PropLab.ArchitectureAudit.JoinedCapMeshParityAndLifetime",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellJoinedCapParity::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ int32 Compared=0, NonEmpty=0, Joined=0, CurrentFallback=0;
+ for(const Reveal Mode:{Reveal::SpatialPartial,Reveal::WholeObjectAfterSpan})
+ {
+  FRoom F;
+  F.Room->DestroyTracked();
+  FResolvedSightWeaveObjectPolicy Policy; Policy.RevealMode=Mode; Policy.HistoryMode=History::StationaryOnly;
+  F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+   FTransform(FVector(-300,650,0)),ESightWeaveObjectPolicySource::UseProjectDefault,History::StationaryOnly,&Policy);
+  for(int32 Phase=0;Phase<10;++Phase)
+  {
+   if(Phase==0) { F.Face(52); F.Step(20); F.Face(-90); F.Step(); }
+   if(Phase==7)
+    if(!TestTrue(TEXT("Reseed sealed histories"),F.Room->ConfigureHistoricalEpochCountForTesting(Id,4))) return false;
+   if(Phase==8)
+   {
+    // The scaling fixture intentionally removes its actual source. Restore it
+    // explicitly so this phase exercises a live Current, not only sealed data.
+    auto& Restored=F.Room->Tracked.FindChecked(Id);
+    Restored.bExists=true; Restored.Actual->SetActorHiddenInGame(false);
+    Restored.Actual->SetActorEnableCollision(true);
+   }
+   if(Phase==1 || Phase==8) { F.Face(40); F.Step(12); }
+   if(Phase==2 || Phase==9) { F.Face(-90); F.Step(); }
+   if(Phase==3) { F.Room->InjectInvalidCoverageOnceForTesting(Id); F.Step(); }
+   if(Phase==4) { F.Face(90); F.Step(25); }
+   if(Phase==5) { F.Face(-90); F.Step(); }
+   if(Phase==6) { F.Room->ResetRoom(F.Player); F.Room->ResetTrackedRevealPolicyForLab(Id,Mode,100,History::StationaryOnly); }
+   auto& Prop=F.Room->Tracked.FindChecked(Id);
+   for(auto& R:Prop.History.GetMutableRecords())
+   {
+    auto* V=Prop.Visuals.Find(R.Epoch); if(!V || !V->Cap.IsValid()) continue;
+    const auto FineBefore=R.FineHistory.GetSamples();
+    TArray<FDarkwellHistoryGridV2::FSample> SavedSamples; SavedSamples.Append(FineBefore.GetData(),FineBefore.Num());
+    const auto Suppression=V->SuppressedByCurrentEvidence;
+    const auto Capture=R.LastLegalCaptureMask;
+    auto Hash=[&]()
+    {
+     uint64 H=1469598103934665603ull; auto Mix=[&](uint64 X){H=(H^X)*1099511628211ull;};
+     Mix(V->CapSignature); Mix(V->CapTriangles); Mix(V->CapExpected); Mix(V->CapGenerated);
+     Mix(V->CapClipped); Mix(V->MissingHistoricalCuts); Mix(V->Cap->IsVisible());
+     for(const auto& Q:V->CapQuads) { Mix(Q.PrimitiveIndex); for(const FVector P:{Q.A,Q.B,Q.C,Q.D}) Mix(GetTypeHash(P)); }
+     for(const auto P:V->CapSamplePoints) Mix(GetTypeHash(P));
+     V->Cap->ProcessMesh([&](const UE::Geometry::FDynamicMesh3& Mesh)
+     {
+      Mix(Mesh.VertexCount()); Mix(Mesh.TriangleCount());
+      for(int32 I:Mesh.VertexIndicesItr()) { Mix(I); Mix(GetTypeHash(Mesh.GetVertex(I))); }
+      for(int32 I:Mesh.TriangleIndicesItr()) { const auto T=Mesh.GetTriangle(I); Mix(I); Mix(T.A); Mix(T.B); Mix(T.C); }
+     });
+     return H;
+    };
+    V->CapSignature=0; F.Room->bForceSerialCapBuildForTesting=true;
+    const auto Before=F.Room->GetHistoryRuntimeFrameTelemetryForTesting();
+    const int32 BeforeJoined=F.Room->JoinedCapBuildsForTesting;
+    F.Room->UpdateRecordCap(Prop,R); const uint64 Reference=Hash();
+    const auto Middle=F.Room->GetHistoryRuntimeFrameTelemetryForTesting();
+    TestEqual(TEXT("Serial control never dispatches rows"),F.Room->JoinedCapBuildsForTesting,BeforeJoined);
+    NonEmpty+=V->CapTriangles>0;
+    V->CapSignature=0; F.Room->bForceSerialCapBuildForTesting=false;
+    F.Room->UpdateRecordCap(Prop,R);
+    const auto After=F.Room->GetHistoryRuntimeFrameTelemetryForTesting();
+    if(!TestEqual(*FString::Printf(TEXT("Exact mesh and cap diagnostic parity mode=%d phase=%d epoch=%u"),int32(Mode),Phase,R.Epoch),Hash(),Reference)) return false;
+    TestEqual(TEXT("Same geometric predicates evaluated"),After.PrimitiveGeometryTests-Middle.PrimitiveGeometryTests,Middle.PrimitiveGeometryTests-Before.PrimitiveGeometryTests);
+    TestEqual(TEXT("Same ownership candidates visited"),After.OwnershipRecordVisits-Middle.OwnershipRecordVisits,Middle.OwnershipRecordVisits-Before.OwnershipRecordVisits);
+    bool LiveNewer=false;
+    for(const auto& C:Prop.History.GetRecords()) LiveNewer|=C.bCurrentObservedLocation && C.Epoch>R.Epoch;
+    if(!R.bCurrentObservedLocation && LiveNewer)
+    {
+     ++CurrentFallback;
+     TestEqual(TEXT("Live Current dependency remains on GT"),F.Room->JoinedCapBuildsForTesting,BeforeJoined);
+    }
+    TestTrue(TEXT("Cap publication never changes authority or suppression masks"),Suppression==V->SuppressedByCurrentEvidence && Capture==R.LastLegalCaptureMask);
+    TestEqual(TEXT("Fine history storage retained"),R.FineHistory.GetSamples().Num(),SavedSamples.Num());
+    for(int32 I=0;I<SavedSamples.Num();++I)
+    {
+     const auto& A=SavedSamples[I]; const auto& B=R.FineHistory.GetSamples()[I];
+     if(!TestTrue(TEXT("Every fine authority field unchanged"),A.State==B.State && A.InitialRemembered==B.InitialRemembered && A.Opacity==B.Opacity
+      && A.FrozenAAEnvelope==B.FrozenAAEnvelope && A.bVerifiedEmpty==B.bVerifiedEmpty && A.EmptyDwell==B.EmptyDwell)) return false;
+    }
+    ++Compared;
+   }
+  }
+  Joined+=F.Room->JoinedCapBuildsForTesting;
+ }
+ TestTrue(TEXT("Non-vacuous submitted caps and joined large grids"),Compared>0 && NonEmpty>0 && Joined>0);
+ TestTrue(TEXT("Exercised historical cap with live Current fallback"),CurrentFallback>0);
+ AddInfo(FString::Printf(TEXT("CAP_PARITY compared=%d nonempty=%d joined=%d live_current_fallback=%d; reset/reseed/invalid coverage/Whole/Partial/world teardown"),Compared,NonEmpty,Joined,CurrentFallback));
  return true;
 }
 

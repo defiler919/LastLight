@@ -8,6 +8,7 @@ param(
     [switch]$NoAuthoringToolsets,
     [switch]$SerialSealedOwnership,
     [switch]$LegacyCapturePreparation,
+    [switch]$SerialCapBuild,
     [switch]$Trace
 )
 $ErrorActionPreference='Stop'
@@ -39,6 +40,7 @@ if ($NoAuthoringToolsets) {
 if($Mode -eq 'Standalone') {
     $startupCommands = @()
     if ($SerialSealedOwnership) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedSealedOwnership 0' }
+    if ($SerialCapBuild) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedCapBuild 0' }
     if ($LegacyCapturePreparation) { $startupCommands += 'r.Darkwell.ObjectMemory.StagedCapturePreparation 0' }
     $startupCommands += "py $output/driver.py"
     $startup = $startupCommands -join ','
@@ -47,6 +49,7 @@ if($Mode -eq 'Standalone') {
 else { $arguments+="-ExecutePythonScript=$output/driver.py" }
 if ($SerialSealedOwnership -and $Mode -ne 'Standalone') { throw 'Serial ownership comparison is scoped to Standalone' }
 if ($LegacyCapturePreparation -and $Mode -ne 'Standalone') { throw 'Capture comparison is scoped to Standalone' }
+if ($SerialCapBuild -and $Mode -ne 'Standalone') { throw 'Cap comparison is scoped to Standalone' }
 if($Trace) { $arguments+=@('-trace=cpu,gpu,frame,bookmark,region',"-tracefile=$output/capture.utrace") }
 $metadata=[ordered]@{
     schema=1; sha=(& git -C $repo rev-parse HEAD); started_utc=$start.ToUniversalTime().ToString('o'); mode=$Mode; protocol=$Protocol
@@ -61,6 +64,7 @@ $metadata=[ordered]@{
     disabled_authoring_plugins=$disabledPlugins
     serial_sealed_ownership=[bool]$SerialSealedOwnership
     legacy_capture_preparation=[bool]$LegacyCapturePreparation
+    serial_cap_build=[bool]$SerialCapBuild
     editor_binary_sha256=(Get-FileHash "$repo/Binaries/Win64/UnrealEditor-DarkwellEditor.dll").Hash
     timing_note='Wall intervals between distinct game updates include Python measurement cost; engine GT/RT/RHI/GPU counters are delayed and overlap. PIE global Render/RHI counters can be overwritten by Slate window updates; use separate Insights capture for attribution. No subtraction attribution.'
 }

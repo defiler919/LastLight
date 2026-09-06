@@ -33,6 +33,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarStagedCapturePreparation(
 		TEXT("r.Darkwell.ObjectMemory.StagedCapturePreparation"), 1,
 		TEXT("Prepare captured geometry on joined CPU tasks and publish the final cap once. 0 keeps the legacy capture path."));
+	TAutoConsoleVariable<int32> CVarJoinedCapBuild(
+		TEXT("r.Darkwell.ObjectMemory.JoinedCapBuild"), 1,
+		TEXT("Build large cap row ranges from joined read-only CPU inputs. 0 keeps serial row evaluation."));
 	// Only the three pure ownership query counters may be updated inside the
 	// joined read phase. Per-task storage avoids atomics and shared telemetry writes.
 	struct FOwnershipQueryCounts { uint64 Geometry = 0, Records = 0, Footprints = 0; };
@@ -3725,16 +3728,24 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 	{
 		return;
 	}
-	Visual->CapSignature = Signature;
-	++RuntimeFrame.CapMeshRebuilds;
+	check(IsInGameThread());
+	const auto& ReadProp = static_cast<const FTrackedProp&>(Prop);
+	const auto& ReadVisual = static_cast<const FRecordVisual&>(*Visual);
+	const uint32 BuildEpoch = Record.Epoch;
+	const uint64 BuildRevision = Prop.TransformRevision;
+	UDynamicMeshComponent* const TargetCap = Visual->Cap.Get();
 	FDynamicMesh3 Mesh;
+	struct FRowResult
 	{
+		TArray<FCapQuadSnapshot> Quads;
+		int32 Expected = 0, Generated = 0, Clipped = 0, MissingCuts = 0;
+		FOwnershipQueryCounts Counts;
+	};
+	FRowResult Combined;
+	{
+	const auto& ReadRecord = static_cast<const FDarkwellSpatialObservationRecord&>(Record);
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CapBuildCPU);
-	Visual->CapExpected = Visual->CapGenerated = Visual->CapClipped = 0;
-	Visual->MissingHistoricalCuts = 0;
-	Visual->CapSamplePoints.Reset();
-	Visual->CapQuads.Reset();
-	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
+	const FBox2D& Bounds = ReadRecord.SpatialMemory.GetBounds();
 	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
 	const FVector Origin = GetActorLocation();
 	auto IsSubmitted = [&](const int32 X, const int32 Y)
@@ -3750,35 +3761,22 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 		const auto& Cell = Cells[Y * Size.X + X];
 		if (bFineHistory)
 		{
-			const auto State = Record.FineHistory.GetSamples()[Y * Size.X + X].State;
+			const auto State = ReadRecord.FineHistory.GetSamples()[Y * Size.X + X].State;
 			return State == FDarkwellHistoryGridV2::NeverObserved() || State == FDarkwellHistoryGridV2::VerifiedEmpty();
 		}
 		return bPresent ? Cell.DiscoveredPresent == 0
 			: Cell.InitialRemembered == 0 || Cell.VerifiedEmpty > 0;
 	};
-	auto AppendQuad = [&](const FVector& A, const FVector& B, const FVector& C, const FVector& D,
-		const int32 PrimitiveIndex)
-	{
-		const FVector Center = (A + B + C + D) * 0.25f;
-		const int32 IA = Mesh.AppendVertex(FVector3d(A - Origin));
-		const int32 IB = Mesh.AppendVertex(FVector3d(B - Origin));
-		const int32 IC = Mesh.AppendVertex(FVector3d(C - Origin));
-		const int32 ID = Mesh.AppendVertex(FVector3d(D - Origin));
-		Mesh.AppendTriangle(IA, IB, IC);
-		Mesh.AppendTriangle(IA, IC, ID);
-		Visual->CapSamplePoints.Add(FVector2D(Center.X, Center.Y));
-		Visual->CapQuads.Add({A, B, C, D, PrimitiveIndex});
-	};
-	const TArray<FPrimitiveGeometrySnapshot> NewerGeometry = Record.bCurrentObservedLocation
+	const TArray<FPrimitiveGeometrySnapshot> NewerGeometry = ReadRecord.bCurrentObservedLocation
 		? TArray<FPrimitiveGeometrySnapshot>()
-		: CollectNewerGeometrySnapshots(Prop, Record.Epoch);
+		: CollectNewerGeometrySnapshots(ReadProp, ReadRecord.Epoch);
 	auto AddOwnershipGridBreakpoints = [&](const FVector2D SegmentStart,
 		const FVector2D SegmentEnd, TArray<double>& Breakpoints)
 	{
 		const FVector2D Delta = SegmentEnd - SegmentStart;
-		for (const FDarkwellSpatialObservationRecord& Candidate : Prop.History.GetRecords())
+		for (const FDarkwellSpatialObservationRecord& Candidate : ReadProp.History.GetRecords())
 		{
-			if (Candidate.Epoch < Record.Epoch)
+			if (Candidate.Epoch < ReadRecord.Epoch)
 			{
 				continue;
 			}
@@ -3828,211 +3826,287 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 			}
 		}
 	};
-	auto AddQuad = [&](const FVector& A, const FVector& B, const FVector& C, const FVector& D,
-		const int32 PrimitiveIndex, const FVector2D RetainedSide)
+	auto BuildRows = [&](const int32 BeginRow, const int32 EndRow, FRowResult& Result)
 	{
-		++Visual->CapGenerated;
-		const int32 Segments = bFineHistory ? 1 : Darkwell::ObjectMemory::PresentationSamples;
-		for (int32 Segment = 0; Segment < Segments;
-			++Segment)
+		auto AppendQuad = [&](const FVector& A, const FVector& B, const FVector& C, const FVector& D,
+			const int32 PrimitiveIndex)
 		{
-			const double Alpha0 = static_cast<double>(Segment)
-				/ Segments;
-			const double Alpha1 = static_cast<double>(Segment + 1)
-				/ Segments;
-			const FVector Bottom0 = FMath::Lerp(A, B, Alpha0);
-			const FVector Bottom1 = FMath::Lerp(A, B, Alpha1);
-			const FVector Top1 = FMath::Lerp(D, C, Alpha1);
-			const FVector Top0 = FMath::Lerp(D, C, Alpha0);
-			TArray<double> Breakpoints{0.0, 1.0};
-			// Clip to the original transformed primitive too. A midpoint inside
-			// its OBB does not imply both endpoints are inside (especially yaw).
-			if (Visual->PartGeometry.IsValidIndex(PrimitiveIndex))
+			Result.Quads.Add({A, B, C, D, PrimitiveIndex});
+		};
+		auto AddQuad = [&](const FVector& A, const FVector& B, const FVector& C, const FVector& D,
+			const int32 PrimitiveIndex, const FVector2D RetainedSide)
+		{
+			++Result.Generated;
+			const int32 Segments = bFineHistory ? 1 : Darkwell::ObjectMemory::PresentationSamples;
+			for (int32 Segment = 0; Segment < Segments;
+				++Segment)
 			{
-				double Entry, Exit;
-				if (!ClipSegmentToGeometryProjection(Visual->PartGeometry[PrimitiveIndex],
-					FVector2D(Bottom0), FVector2D(Bottom1), 0.0, Entry, Exit)) continue;
-				Breakpoints.Add(FMath::Clamp(Entry, 0.0, 1.0));
-				Breakpoints.Add(FMath::Clamp(Exit, 0.0, 1.0));
-			}
-			if (!Record.bCurrentObservedLocation)
-			{
-				for (const FPrimitiveGeometrySnapshot& Geometry : NewerGeometry)
+				const double Alpha0 = static_cast<double>(Segment)
+					/ Segments;
+				const double Alpha1 = static_cast<double>(Segment + 1)
+					/ Segments;
+				const FVector Bottom0 = FMath::Lerp(A, B, Alpha0);
+				const FVector Bottom1 = FMath::Lerp(A, B, Alpha1);
+				const FVector Top1 = FMath::Lerp(D, C, Alpha1);
+				const FVector Top0 = FMath::Lerp(D, C, Alpha0);
+				TArray<double> Breakpoints{0.0, 1.0};
+				// Clip to the original transformed primitive too. A midpoint inside
+				// its OBB does not imply both endpoints are inside (especially yaw).
+				if (ReadVisual.PartGeometry.IsValidIndex(PrimitiveIndex))
 				{
-					double Entry = 0.0;
-					double Exit = 0.0;
-					if (ClipSegmentToGeometryProjection(Geometry,
-						FVector2D(Bottom0), FVector2D(Bottom1),
-						Darkwell::ObjectMemory::RenderOwnershipClipClearance,
-						Entry, Exit))
+					double Entry, Exit;
+					if (!ClipSegmentToGeometryProjection(ReadVisual.PartGeometry[PrimitiveIndex],
+						FVector2D(Bottom0), FVector2D(Bottom1), 0.0, Entry, Exit)) continue;
+					Breakpoints.Add(FMath::Clamp(Entry, 0.0, 1.0));
+					Breakpoints.Add(FMath::Clamp(Exit, 0.0, 1.0));
+				}
+				if (!ReadRecord.bCurrentObservedLocation)
+				{
+					for (const FPrimitiveGeometrySnapshot& Geometry : NewerGeometry)
 					{
-						Breakpoints.Add(FMath::Clamp(Entry, 0.0, 1.0));
-						Breakpoints.Add(FMath::Clamp(Exit, 0.0, 1.0));
-					}
-				}
-				AddOwnershipGridBreakpoints(FVector2D(Bottom0), FVector2D(Bottom1), Breakpoints);
-			}
-			Breakpoints.Sort();
-			for (int32 Index = Breakpoints.Num() - 1; Index > 0; --Index)
-			{
-				if (FMath::IsNearlyEqual(Breakpoints[Index], Breakpoints[Index - 1], 1.0e-7))
-				{
-					Breakpoints.RemoveAt(Index);
-				}
-			}
-			for (int32 Span = 0; Span + 1 < Breakpoints.Num(); ++Span)
-			{
-				const double Span0 = Breakpoints[Span];
-				const double Span1 = Breakpoints[Span + 1];
-				if (Span1 - Span0 <= 1.0e-7)
-				{
-					continue;
-				}
-				const FVector SpanBottom0 = FMath::Lerp(Bottom0, Bottom1, Span0);
-				const FVector SpanBottom1 = FMath::Lerp(Bottom0, Bottom1, Span1);
-				const FVector SpanTop0 = FMath::Lerp(Top0, Top1, Span0);
-				const FVector SpanTop1 = FMath::Lerp(Top0, Top1, Span1);
-				const FVector2D Point(FMath::Lerp(
-					FVector2D(SpanBottom0), FVector2D(SpanBottom1), 0.5));
-				double OldMinZ = FMath::Min(SpanBottom0.Z, SpanTop0.Z);
-				double OldMaxZ = FMath::Max(SpanBottom0.Z, SpanTop0.Z);
-				if (Visual->PartGeometry.IsValidIndex(PrimitiveIndex))
-				{
-					double GeometryMinZ = 0.0;
-					double GeometryMaxZ = 0.0;
-					if (!QueryVerticalInterval(Visual->PartGeometry[PrimitiveIndex],
-						Point, GeometryMinZ, GeometryMaxZ))
-					{
-						continue;
-					}
-					OldMinZ = FMath::Max(OldMinZ, GeometryMinZ);
-					OldMaxZ = FMath::Min(OldMaxZ, GeometryMaxZ);
-				}
-				if (OldMaxZ - OldMinZ <= UE_KINDA_SMALL_NUMBER)
-				{
-					continue;
-				}
-				TArray<FVector2D> Remaining{FVector2D(OldMinZ, OldMaxZ)};
-				if (!Record.bCurrentObservedLocation)
-				{
-					// Match the final surface ownership domain, not just exact OBBs.
-					// A conservative fine texel can be wholly owned even when its
-					// center lies just outside the newer mesh. Leaving a cap in that
-					// texel creates a detached strip with no remaining historical skin.
-					// This is post-candidate clipping only; never a new cut or V write.
-					const FIntPoint Fine = Size * (bFineHistory ? 1 : Darkwell::ObjectMemory::PresentationSamples);
-					const FVector2D Support = Point + RetainedSide
-						* Darkwell::ObjectMemory::RenderOwnershipClipPrecisionMargin;
-					const FVector2D UV = (Support - Bounds.Min) / Bounds.GetSize();
-					const int32 FX = FMath::Clamp(FMath::FloorToInt(UV.X * Fine.X), 0, Fine.X - 1);
-					const int32 FY = FMath::Clamp(FMath::FloorToInt(UV.Y * Fine.Y), 0, Fine.Y - 1);
-					if (Visual->SuppressedByCurrentEvidence.IsValidIndex(FY * Fine.X + FX)
-						&& Visual->SuppressedByCurrentEvidence[FY * Fine.X + FX])
-					{
-						++Visual->CapClipped;
-						continue;
-					}
-					TArray<FVector2D> NewerIntervals;
-					CollectNewerOwnedVerticalIntervals(Prop, Record.Epoch, Point, NewerIntervals,
-						Darkwell::ObjectMemory::RenderOwnershipClipClearance);
-					// Resolve the closed ownership of an exact grid endpoint only in
-					// the existing 0.001-cm precision strip, not the whole adjacent span.
-					if (FVector2D::Distance(FVector2D(SpanBottom0), FVector2D(SpanBottom1)) <=
-						2.01 * Darkwell::ObjectMemory::RenderOwnershipClipPrecisionMargin)
-					{
-						for (const FVector Endpoint : {SpanBottom0, SpanBottom1})
+						double Entry = 0.0;
+						double Exit = 0.0;
+						if (ClipSegmentToGeometryProjection(Geometry,
+							FVector2D(Bottom0), FVector2D(Bottom1),
+							Darkwell::ObjectMemory::RenderOwnershipClipClearance,
+							Entry, Exit))
 						{
-							TArray<FVector2D> EndIntervals;
-							CollectNewerOwnedVerticalIntervals(Prop, Record.Epoch, FVector2D(Endpoint), EndIntervals,
-								Darkwell::ObjectMemory::RenderOwnershipClipClearance);
-							NewerIntervals.Append(EndIntervals);
+							Breakpoints.Add(FMath::Clamp(Entry, 0.0, 1.0));
+							Breakpoints.Add(FMath::Clamp(Exit, 0.0, 1.0));
 						}
 					}
-					Remaining = SubtractOwnedCapIntervals(FVector2D(OldMinZ, OldMaxZ), NewerIntervals);
-					if (Remaining.Num() != 1 || Remaining[0] != FVector2D(OldMinZ, OldMaxZ))
+					AddOwnershipGridBreakpoints(FVector2D(Bottom0), FVector2D(Bottom1), Breakpoints);
+				}
+				Breakpoints.Sort();
+				for (int32 Index = Breakpoints.Num() - 1; Index > 0; --Index)
+				{
+					if (FMath::IsNearlyEqual(Breakpoints[Index], Breakpoints[Index - 1], 1.0e-7))
 					{
-						++Visual->CapClipped;
+						Breakpoints.RemoveAt(Index);
 					}
 				}
-				for (const FVector2D Interval : Remaining)
+				for (int32 Span = 0; Span + 1 < Breakpoints.Num(); ++Span)
 				{
-					AppendQuad(
-						FVector(SpanBottom0.X, SpanBottom0.Y, Interval.X),
-						FVector(SpanBottom1.X, SpanBottom1.Y, Interval.X),
-						FVector(SpanTop1.X, SpanTop1.Y, Interval.Y),
-						FVector(SpanTop0.X, SpanTop0.Y, Interval.Y), PrimitiveIndex);
-				}
-			}
-		}
-	};
-	auto Vertical = [&](const double X, const double Y0, const double Y1, const double RetainedX)
-	{
-		for (int32 PrimitiveIndex = 0; PrimitiveIndex < Visual->PartBounds.Num(); ++PrimitiveIndex)
-		{
-			const FBox& Part = Visual->PartBounds[PrimitiveIndex];
-			if (X < Part.Min.X - UE_KINDA_SMALL_NUMBER || X > Part.Max.X + UE_KINDA_SMALL_NUMBER) continue;
-			const double From = FMath::Max(Y0, Part.Min.Y);
-			const double To = FMath::Min(Y1, Part.Max.Y);
-			if (To - From > UE_KINDA_SMALL_NUMBER)
-			{
-				AddQuad(FVector(X, From, Part.Min.Z), FVector(X, To, Part.Min.Z),
-					FVector(X, To, Part.Max.Z), FVector(X, From, Part.Max.Z), PrimitiveIndex, FVector2D(RetainedX, 0));
-			}
-		}
-	};
-	auto Horizontal = [&](const double Y, const double X0, const double X1, const double RetainedY)
-	{
-		for (int32 PrimitiveIndex = 0; PrimitiveIndex < Visual->PartBounds.Num(); ++PrimitiveIndex)
-		{
-			const FBox& Part = Visual->PartBounds[PrimitiveIndex];
-			if (Y < Part.Min.Y - UE_KINDA_SMALL_NUMBER || Y > Part.Max.Y + UE_KINDA_SMALL_NUMBER) continue;
-			const double From = FMath::Max(X0, Part.Min.X);
-			const double To = FMath::Min(X1, Part.Max.X);
-			if (To - From > UE_KINDA_SMALL_NUMBER)
-			{
-				AddQuad(FVector(From, Y, Part.Min.Z), FVector(To, Y, Part.Min.Z),
-					FVector(To, Y, Part.Max.Z), FVector(From, Y, Part.Max.Z), PrimitiveIndex, FVector2D(0, RetainedY));
-			}
-		}
-	};
-	for (int32 Y = 0; Y < Size.Y; ++Y)
-	{
-		for (int32 X = 0; X < Size.X; ++X)
-		{
-			// Independent positive diagnostic: a sealed partial discovery is still
-			// a real exposed history boundary, even without VerifiedEmpty evidence.
-			const auto& Cell = Cells[Y * Size.X + X];
-			if (bAbsent && Cell.InitialRemembered > 0 && Cell.VerifiedEmpty == 0)
-			{
-				for (const FIntPoint Offset : {FIntPoint(-1,0), FIntPoint(1,0), FIntPoint(0,-1), FIntPoint(0,1)})
-				{
-					const int32 NX = X + Offset.X, NY = Y + Offset.Y;
-					if (NX < 0 || NY < 0 || NX >= Size.X || NY >= Size.Y) continue;
-					const auto& Neighbor = Cells[NY * Size.X + NX];
-					if (bFineHistory ? Record.FineHistory.CanEmitCap(Y * Size.X + X, NY * Size.X + NX)
-						: (Neighbor.InitialRemembered == 0 || Neighbor.VerifiedEmpty > 0))
+					const double Span0 = Breakpoints[Span];
+					const double Span1 = Breakpoints[Span + 1];
+					if (Span1 - Span0 <= 1.0e-7)
 					{
-						++Visual->CapExpected;
-						Visual->MissingHistoricalCuts += !IsSubmitted(X, Y) || !IsCut(NX, NY);
+						continue;
+					}
+					const FVector SpanBottom0 = FMath::Lerp(Bottom0, Bottom1, Span0);
+					const FVector SpanBottom1 = FMath::Lerp(Bottom0, Bottom1, Span1);
+					const FVector SpanTop0 = FMath::Lerp(Top0, Top1, Span0);
+					const FVector SpanTop1 = FMath::Lerp(Top0, Top1, Span1);
+					const FVector2D Point(FMath::Lerp(
+						FVector2D(SpanBottom0), FVector2D(SpanBottom1), 0.5));
+					double OldMinZ = FMath::Min(SpanBottom0.Z, SpanTop0.Z);
+					double OldMaxZ = FMath::Max(SpanBottom0.Z, SpanTop0.Z);
+					if (ReadVisual.PartGeometry.IsValidIndex(PrimitiveIndex))
+					{
+						double GeometryMinZ = 0.0;
+						double GeometryMaxZ = 0.0;
+						if (!QueryVerticalInterval(ReadVisual.PartGeometry[PrimitiveIndex],
+							Point, GeometryMinZ, GeometryMaxZ))
+						{
+							continue;
+						}
+						OldMinZ = FMath::Max(OldMinZ, GeometryMinZ);
+						OldMaxZ = FMath::Min(OldMaxZ, GeometryMaxZ);
+					}
+					if (OldMaxZ - OldMinZ <= UE_KINDA_SMALL_NUMBER)
+					{
+						continue;
+					}
+					TArray<FVector2D> Remaining{FVector2D(OldMinZ, OldMaxZ)};
+					if (!ReadRecord.bCurrentObservedLocation)
+					{
+						// Match the final surface ownership domain, not just exact OBBs.
+						// A conservative fine texel can be wholly owned even when its
+						// center lies just outside the newer mesh. Leaving a cap in that
+						// texel creates a detached strip with no remaining historical skin.
+						// This is post-candidate clipping only; never a new cut or V write.
+						const FIntPoint Fine = Size * (bFineHistory ? 1 : Darkwell::ObjectMemory::PresentationSamples);
+						const FVector2D Support = Point + RetainedSide
+							* Darkwell::ObjectMemory::RenderOwnershipClipPrecisionMargin;
+						const FVector2D UV = (Support - Bounds.Min) / Bounds.GetSize();
+						const int32 FX = FMath::Clamp(FMath::FloorToInt(UV.X * Fine.X), 0, Fine.X - 1);
+						const int32 FY = FMath::Clamp(FMath::FloorToInt(UV.Y * Fine.Y), 0, Fine.Y - 1);
+						if (ReadVisual.SuppressedByCurrentEvidence.IsValidIndex(FY * Fine.X + FX)
+							&& ReadVisual.SuppressedByCurrentEvidence[FY * Fine.X + FX])
+						{
+							++Result.Clipped;
+							continue;
+						}
+						TArray<FVector2D> NewerIntervals;
+						CollectNewerOwnedVerticalIntervals(ReadProp, ReadRecord.Epoch, Point, NewerIntervals,
+							Darkwell::ObjectMemory::RenderOwnershipClipClearance);
+						// Resolve the closed ownership of an exact grid endpoint only in
+						// the existing 0.001-cm precision strip, not the whole adjacent span.
+						if (FVector2D::Distance(FVector2D(SpanBottom0), FVector2D(SpanBottom1)) <=
+							2.01 * Darkwell::ObjectMemory::RenderOwnershipClipPrecisionMargin)
+						{
+							for (const FVector Endpoint : {SpanBottom0, SpanBottom1})
+							{
+								TArray<FVector2D> EndIntervals;
+								CollectNewerOwnedVerticalIntervals(ReadProp, ReadRecord.Epoch, FVector2D(Endpoint), EndIntervals,
+									Darkwell::ObjectMemory::RenderOwnershipClipClearance);
+								NewerIntervals.Append(EndIntervals);
+							}
+						}
+						Remaining = SubtractOwnedCapIntervals(FVector2D(OldMinZ, OldMaxZ), NewerIntervals);
+						if (Remaining.Num() != 1 || Remaining[0] != FVector2D(OldMinZ, OldMaxZ))
+						{
+							++Result.Clipped;
+						}
+					}
+					for (const FVector2D Interval : Remaining)
+					{
+						AppendQuad(
+							FVector(SpanBottom0.X, SpanBottom0.Y, Interval.X),
+							FVector(SpanBottom1.X, SpanBottom1.Y, Interval.X),
+							FVector(SpanTop1.X, SpanTop1.Y, Interval.Y),
+							FVector(SpanTop0.X, SpanTop0.Y, Interval.Y), PrimitiveIndex);
 					}
 				}
 			}
-			if (!IsSubmitted(X, Y)) continue;
-			const double X0 = Bounds.Min.X + X * Step.X;
-			const double X1 = X0 + Step.X;
-			const double Y0 = Bounds.Min.Y + Y * Step.Y;
-			const double Y1 = Y0 + Step.Y;
-			if (IsCut(X - 1, Y)) Vertical(X0, Y0, Y1, 1);
-			if (IsCut(X + 1, Y)) Vertical(X1, Y0, Y1, -1);
-			if (IsCut(X, Y - 1)) Horizontal(Y0, X0, X1, 1);
-			if (IsCut(X, Y + 1)) Horizontal(Y1, X0, X1, -1);
+		};
+		auto Vertical = [&](const double X, const double Y0, const double Y1, const double RetainedX)
+		{
+			for (int32 PrimitiveIndex = 0; PrimitiveIndex < ReadVisual.PartBounds.Num(); ++PrimitiveIndex)
+			{
+				const FBox& Part = ReadVisual.PartBounds[PrimitiveIndex];
+				if (X < Part.Min.X - UE_KINDA_SMALL_NUMBER || X > Part.Max.X + UE_KINDA_SMALL_NUMBER) continue;
+				const double From = FMath::Max(Y0, Part.Min.Y);
+				const double To = FMath::Min(Y1, Part.Max.Y);
+				if (To - From > UE_KINDA_SMALL_NUMBER)
+				{
+					AddQuad(FVector(X, From, Part.Min.Z), FVector(X, To, Part.Min.Z),
+						FVector(X, To, Part.Max.Z), FVector(X, From, Part.Max.Z), PrimitiveIndex, FVector2D(RetainedX, 0));
+				}
+			}
+		};
+		auto Horizontal = [&](const double Y, const double X0, const double X1, const double RetainedY)
+		{
+			for (int32 PrimitiveIndex = 0; PrimitiveIndex < ReadVisual.PartBounds.Num(); ++PrimitiveIndex)
+			{
+				const FBox& Part = ReadVisual.PartBounds[PrimitiveIndex];
+				if (Y < Part.Min.Y - UE_KINDA_SMALL_NUMBER || Y > Part.Max.Y + UE_KINDA_SMALL_NUMBER) continue;
+				const double From = FMath::Max(X0, Part.Min.X);
+				const double To = FMath::Min(X1, Part.Max.X);
+				if (To - From > UE_KINDA_SMALL_NUMBER)
+				{
+					AddQuad(FVector(From, Y, Part.Min.Z), FVector(To, Y, Part.Min.Z),
+						FVector(To, Y, Part.Max.Z), FVector(From, Y, Part.Max.Z), PrimitiveIndex, FVector2D(0, RetainedY));
+				}
+			}
+		};
+		for (int32 Y = BeginRow; Y < EndRow; ++Y)
+		{
+			for (int32 X = 0; X < Size.X; ++X)
+			{
+				// Independent positive diagnostic: a sealed partial discovery is still
+				// a real exposed history boundary, even without VerifiedEmpty evidence.
+				const auto& Cell = Cells[Y * Size.X + X];
+				if (bAbsent && Cell.InitialRemembered > 0 && Cell.VerifiedEmpty == 0)
+				{
+					for (const FIntPoint Offset : {FIntPoint(-1,0), FIntPoint(1,0), FIntPoint(0,-1), FIntPoint(0,1)})
+					{
+						const int32 NX = X + Offset.X, NY = Y + Offset.Y;
+						if (NX < 0 || NY < 0 || NX >= Size.X || NY >= Size.Y) continue;
+						const auto& Neighbor = Cells[NY * Size.X + NX];
+						if (bFineHistory ? ReadRecord.FineHistory.CanEmitCap(Y * Size.X + X, NY * Size.X + NX)
+							: (Neighbor.InitialRemembered == 0 || Neighbor.VerifiedEmpty > 0))
+						{
+							++Result.Expected;
+							Result.MissingCuts += !IsSubmitted(X, Y) || !IsCut(NX, NY);
+						}
+					}
+				}
+				if (!IsSubmitted(X, Y)) continue;
+				const double X0 = Bounds.Min.X + X * Step.X;
+				const double X1 = X0 + Step.X;
+				const double Y0 = Bounds.Min.Y + Y * Step.Y;
+				const double Y1 = Y0 + Step.Y;
+				if (IsCut(X - 1, Y)) Vertical(X0, Y0, Y1, 1);
+				if (IsCut(X + 1, Y)) Vertical(X1, Y0, Y1, -1);
+				if (IsCut(X, Y - 1)) Horizontal(Y0, X0, X1, 1);
+				if (IsCut(X, Y + 1)) Horizontal(Y1, X0, X1, -1);
+			}
 		}
+	};
+	// The GT leases const CPU snapshots until every row task joins. A historical
+	// cap with a newer live Current can enter actor/policy queries; keep that
+	// entire path serial. There is no queue or task surviving this transaction.
+	bool bJoined = Cells.Num() >= 4096 && Size.Y >= 4
+		&& CVarJoinedCapBuild.GetValueOnGameThread() != 0;
+#if WITH_DEV_AUTOMATION_TESTS
+	bJoined &= !bForceSerialCapBuildForTesting && !bForceFullHistoryEvidenceForTesting;
+#endif
+	if (bJoined && !ReadRecord.bCurrentObservedLocation)
+		for (const auto& Candidate : ReadProp.History.GetRecords())
+			if (Candidate.bCurrentObservedLocation && Candidate.Epoch > ReadRecord.Epoch)
+			{ bJoined = false; break; }
+	const int32 NumTasks = bJoined ? FMath::Min(8, FMath::Min(Size.Y,
+		FMath::DivideAndRoundUp(Cells.Num(), 2048))) : 1;
+	TArray<FRowResult> Results;
+	Results.SetNum(NumTasks);
+	auto RunRows = [&](int32 Task)
+	{
+		// Stack-local hot counters and output avoid false sharing and packed-bit writes.
+		FRowResult Local;
+		TGuardValue<FOwnershipQueryCounts*> Scope(GOwnershipQueryCounts,
+			bJoined ? &Local.Counts : nullptr);
+		BuildRows(int64(Size.Y) * Task / NumTasks,
+			int64(Size.Y) * (Task + 1) / NumTasks, Local);
+		Results[Task] = MoveTemp(Local);
+	};
+	if (bJoined)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_JoinedCapRows);
+		ParallelFor(TEXT("DarkwellCapRows"), NumTasks, 1, RunRows, EParallelForFlags::Unbalanced);
+#if WITH_DEV_AUTOMATION_TESTS
+		++JoinedCapBuildsForTesting;
+#endif
+	}
+	else RunRows(0);
+	// Deterministic row-order merge retains the old quad, vertex and triangle order.
+	// Only this phase materializes the final mesh; no task accesses a component.
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CapMergeCPU);
+	int32 NumQuads = 0;
+	for (const auto& Result : Results) NumQuads += Result.Quads.Num();
+	Combined.Quads.Reserve(NumQuads);
+	for (auto& Result : Results)
+	{
+		Combined.Expected += Result.Expected; Combined.Generated += Result.Generated;
+		Combined.Clipped += Result.Clipped; Combined.MissingCuts += Result.MissingCuts;
+		Combined.Quads.Append(MoveTemp(Result.Quads));
+		RuntimeFrame.PrimitiveGeometryTests += Result.Counts.Geometry;
+		RuntimeFrame.OwnershipRecordVisits += Result.Counts.Records;
+		RuntimeFrame.OwnershipFootprintQueries += Result.Counts.Footprints;
+	}
+	for (const auto& Q : Combined.Quads)
+	{
+		const int32 IA = Mesh.AppendVertex(Q.A - Origin), IB = Mesh.AppendVertex(Q.B - Origin);
+		const int32 IC = Mesh.AppendVertex(Q.C - Origin), ID = Mesh.AppendVertex(Q.D - Origin);
+		Mesh.AppendTriangle(IA, IB, IC); Mesh.AppendTriangle(IA, IC, ID);
 	}
 	}
+	// Same-frame join prevents epoch/revision/resource mutation. Validate that
+	// contract before atomically publishing diagnostics and the GT resource.
+	check(IsInGameThread() && Record.Epoch == BuildEpoch && Prop.TransformRevision == BuildRevision
+		&& Prop.Visuals.Find(BuildEpoch) == Visual && Visual->Cap.Get() == TargetCap);
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CapSubmitGT);
+	Visual->CapSignature = Signature;
+	++RuntimeFrame.CapMeshRebuilds;
+	Visual->CapExpected = Combined.Expected; Visual->CapGenerated = Combined.Generated;
+	Visual->CapClipped = Combined.Clipped; Visual->MissingHistoricalCuts = Combined.MissingCuts;
+	Visual->CapQuads = MoveTemp(Combined.Quads);
+	Visual->CapSamplePoints.Reset(Visual->CapQuads.Num());
+	for (const auto& Q : Visual->CapQuads)
+		Visual->CapSamplePoints.Add(FVector2D((Q.A + Q.B + Q.C + Q.D) * 0.25));
 	Visual->CapTriangles = Mesh.TriangleCount();
-	Visual->Cap->SetMesh(MoveTemp(Mesh));
-	Visual->Cap->SetVisibility(Visual->CapTriangles > 0);
+	TargetCap->SetMesh(MoveTemp(Mesh));
+	TargetCap->SetVisibility(Visual->CapTriangles > 0);
 }
 
 void ADarkwellObjectMemoryScene::RebuildHistoricalSpatialIndex()

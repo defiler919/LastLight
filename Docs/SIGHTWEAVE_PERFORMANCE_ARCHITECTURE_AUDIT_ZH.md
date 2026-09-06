@@ -1,5 +1,7 @@
 # SightWeave 灰色层性能架构审计
 
+当前19f2e76之后的cap生产切片已完成构建与最小定向验证，真实D3D12 A/B和阶段回归待执行，见第18节。以下capture阶段数据是此前已完成证据。
+
 最新初始化施工起点8fb4d6e，运行时59030ab已推送：capture准备切片完成，前后必要历史/cap视觉及最终147/147功能通过。三次真实Batch中位数：184 setup **538.769→451.701ms**，最大整帧 **926.468→848.486ms**。初始化仍FAIL；完整证据、剩余cap/resource瓶颈见第17节。第16节保留上一轮ownership与真实A/B证据。
 
 上一轮施工（cf3a3c1之后）：第16节记录同帧join的封存ownership切片，运行时6c66747已推送。用户退出SpaceCraft后已补最小真实D3D12 Batch A/B：184最大整帧 **1363.970→921.871ms**、ownership **566.111→107.680ms**，setup **549.266→536.297ms**。这是一次有效同条件对照，初始化仍FAIL；详见16.3。第1–15节为更早证据，未重新审计或重跑其长测。
@@ -396,3 +398,17 @@ EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉�
 下一轮最高收益入口是**最终cap的纯CPU网格构建与GT SetMesh/资源提交分离**：新Trace在184封存内cap约147ms，后续首个update又约75ms。先把需要的FineHistory/geometry/较新合法贡献作为共享只读输入，形成独立cap结果，再以原序GT提交；避免为每个record复制整套历史造成新的O(H²S)成本。随后处理首帧约83ms occupancy，以及seal外首次proxy/texture/resource构造。不能直接把当前借用场景方法的任务延长到跨帧，跨帧仍须完整epoch/revision/失效协议。本轮没有遗留半套异步队列，也没有提前宣称cap或GT资源创建已解决。
 
 最终检查diff、工作树及LFS正常，测试/Insights/UE进程全部结束；所有Saved证据（含失败构建、旧失败诊断、冷帧）保留。阶段运行时59030ab和中间文档f1c2f71均已推送；stable不移动，不开始黑色层，不自动关机。
+
+## 18. 最终 cap 行计算与 GT 提交切片（19f2e76 之后，施工中）
+
+先读取最新交接，保持 capture footprint 与既有 ownership 实现。计时检查点 `5c9e495` 已推送；完整 Editor 构建 `CapSlice_ProbeBuild02` 成功18.60秒。首次 `CapSlice_TraceBefore01` D3D12 启动后 Windows 前台激活失败，90秒前台校验超时，complete=false、exit0、脚本Traceback一条，正常退出；没有有效Batch数据，不作为性能样本。用户随后确认可采集。
+
+为避免等待前台阻断 CPU 归因，使用已有184构造诊断 `CapSlice_CpuProbe01`，NullRHI+CPU Trace，1/1通过、severe0，测试4.112秒/进程34.119秒。Insights按真实GT和184次seal分组，四次各184个封存中的 cap CPU build **75.983–76.717ms**，细胞转换17.850–27.621ms，签名21.074–21.288ms，GT提交10.112–11.449ms，cap总计127.186–136.385ms。原始trace、导出CSV、cap-attribution.json在Saved/GrayObjectPolicy/CapSlice_CpuProbe01。四组诊断切换的是旧ownership控制量，不是cap A/B；此处只用cap分段成本选择切片，不能当真实帧性能。
+
+运行时改造：大网格（至少4096格且至少4行）最多8个连续行任务，借用只读record/geometry/history输入，任务独立生成裁剪后的有序quad和计数；join后按原行顺序合并，构造最终FDynamicMesh3，GT验证epoch、transform revision、visual及cap目标，再发布诊断和SetMesh/visibility。计算阶段不再边算边改Visual。细胞转换、签名、最终mesh materialization和资源操作仍在GT；这不是完整跨帧异步。涉及较新实时Current的历史cap走串行，避免worker进入actor/policy查询。全部任务在返回前join，不复制每条record的整套历史，不引入H²S快照存储、持久任务队列或待取消结果。几何方法仍依赖scene的const CPU查询及任务局部计数，不可直接延长到跨帧。
+
+控制量 r.Darkwell.ObjectMemory.JoinedCapBuild=0 / runner -SerialCapBuild 用于同二进制串行行求值对照；两边都保留当前ownership/capture默认开启，以及新的结果合并封装，因此不把控制量0称为19f2e76原二进制。采样、裁剪断点与精度、完整区间差、候选顺序、quad/vertex/triangle顺序不变。occupancy、seal外首次资源创建本切片尚未修改。
+
+验证进行中。CapSlice_Build01完整构建成功37.48秒。CapSlice_Target01旧三项cap测试通过，新parity测试在覆盖断言上失败：48次结果一致、96次joined，但初始fixture没有非空cap和live Current。改用真实局部观察宽柜fixture补足，未降低断言。CapSlice_Build02因新增fixture访问lab私有测试辅助函数缺少friend声明失败，已补测试friend；CapSlice_Build03完整构建成功29.73秒，原失败证据保留。最终验证和真实A/B将在本节追加。
+
+CapSlice_Target02已补非空cap（30次比较、20次非空、50次joined全部一致），但fixture移除了实际源，live Current覆盖仍缺失。现显式恢复源后，最终 `CapSlice_Target03` **1/1 clean PASS**，31次比较、20次非空、35次joined、8次live Current回退；网格顶点/三角形索引、quad顺序、cap诊断、几何/候选计数一致，每个细历史字段和捕获/抑制掩码不变。覆盖Partial/Whole、真实再观察、失效coverage、Reset、重新播种和世界销毁。最终完整构建 `CapSlice_Build04` 成功11.58秒（仅测试fixture修订，运行时代码在Build01后未变）。先推送该阶段，再做真实D3D12 A/B和必要阶段回归；尚不声称真实帧改善。

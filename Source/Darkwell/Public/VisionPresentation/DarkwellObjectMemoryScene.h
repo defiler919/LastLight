@@ -217,6 +217,8 @@ public:
  bool bForceFullHistoryEvidenceForTesting=false;
  bool bForceSerialOwnershipForTesting=false;
  bool bForceLegacyCapturePreparationForTesting=false;
+ bool bForceSerialCapBuildForTesting=false;
+ int32 JoinedCapBuildsForTesting=0;
 #endif
 protected:
 	struct FPrimitiveGeometrySnapshot
@@ -273,6 +275,7 @@ protected:
 	friend class FDarkwellOwnershipIndexParity;
 	friend class FDarkwellJoinedOwnershipParity;
 	friend class FDarkwellCapturePreparationParity;
+	friend class FDarkwellJoinedCapParity;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
 	friend class FDarkwellObservedContentContract;

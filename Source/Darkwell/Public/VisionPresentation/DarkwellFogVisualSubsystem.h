@@ -89,6 +89,9 @@ struct DARKWELL_API FDarkwellFogVisualMapping
 class DARKWELL_API FDarkwellContinuousVisibilityBuilder final
 {
 public:
+	/** Conservative pixel support of the current analytic field; no legal sample is changed. */
+	static FIntRect GetCoverageDrawRect(const FDarkwellFogVisualSourceSnapshot& Source,
+		const FDarkwellFogVisualMapping& Mapping, float TransitionWidthCentimeters);
 	/** Shared body/cone + segment-occlusion query used by live and swept evidence. */
 	static FDarkwellFogVisualCoverageQuery QuerySourceCoverage(
 		const FDarkwellFogVisualSourceSnapshot& Source, const FVector2D& WorldPosition,

@@ -91,3 +91,26 @@
 - 构建：TraceScopes 18.56 秒成功；Attribution 首次编译因 TObjectPtr range auto* 推导失败，明确改为具体指针类型后完整 Editor 构建成功 7.89 秒。Python AST 与 diff --check 通过。代码目前仅增加诊断，不改变正常覆盖绘制和玩法。
 
 正式 before/after 使用 `RunGrayPerformanceBaseline.ps1 -RunName UNIQUE -Mode PIE或Standalone -Protocol Matrix -NoAuthoringToolsets`，每次为独立进程，激活其实际窗口后自动采集。`AnalyzeGrayStabilization.py` 输出所有帧及单独 steady_after_90、setup/资源数量、>33/>100、最长慢帧串；trace、干预或条件变化不混入 normal 汇总。首次批量 setup 的即时 records/proxies/identities 与运行中资源分别记录，避免将合法反证后的压力下降当满负载通过。
+
+## 阶段 4：六组正式 before 与第一批等价优化
+
+Before 固定在 `194a0dbddacf9c5ea5d6b19f66773c2effb984c0`，六组过程未修改源码/二进制。全部使用上述 Matrix、NoAuthoringToolsets、实际前台 1920×1080/SP100、相同质量，无 Trace/截图/调试器；逐帧环境无异常。Saved/Stabilization 下有效样本为 Before_PIE_01/02/03、Before_Standalone_01/02/04，全部 complete、exit 0、severe 0。Standalone_03 因未在 90 秒内激活 OS 前台而协议失败（exit 0）；原始失败保留，不计有效样本。
+
+| Empty p95 ms | 1 | 2 | 3 |
+| --- | ---: | ---: | ---: |
+| PIE | 33.708 | 33.083 | 33.528 |
+| Standalone | 31.693 | 31.720 | 31.710 |
+
+逐 case 的 p50/p95/p99/max、所有尖峰和资源见各目录 analysis.json。以 Standalone_04 为例：184 distributed setup 1073.318 ms、整帧最大 3527.221 ms。批量构造即时 65/185（含先前局部背景记录）不等于热态仍有相同压力：原生合法反证会让 64 案例降至 1 条，distributed 保留约 121/122 条；不得据此宣称 64 条持续活跃压力通过。
+
+第一批实际优化：
+
+- GPU current coverage 保持原 R16F 6240×6320、2.5 cm/texel、全 mip 和原全图 UV；每次清除当前场，再用硬件 scissor 只绘制 body/cone 半径加过渡宽度与浮点余量内的保守区域。历史数据独立，不延迟本帧结果。`Diagnostic.FullCoverageDraw=1` 保留原全图绘制作为 oracle，正常默认 0。
+- 归属布尔查询在首个合法重叠证明后停止；cap 减法仍取完整区间，测试完整路径保留。捕获 footprint 先做保守平面包围盒拒绝，几何并集命中后停止；原参考路径保持可运行。
+- 静态 world-label 纹理改为 Configure 时 RequestRedraw，朝向相机的组件变换仍正常更新，内容/质量不变。
+
+完整 Editor 构建 `Stabilization_OptimizationBuild01.log` 成功，28.33 秒。定向 `Stabilization_OptimizationTarget01` 实际 2 项通过（ConservativeDrawSupport、BatchOwnershipSamplesEquivalent）；第三个指定的 Incremental selector 前缀写错，未运行，不冒充通过，最终完整 manifest 将覆盖正确名称。
+
+独立真实 D3D12 `Stabilization_CoverageGPU01`：1 项通过，5 种 source/墙体/边缘情形，逐个读取全部 13 层 mip，与原全图路径完整像素 CRC 一致；先污染旧场再绘制同时验证清除。35.982 秒，exit 0、severe 0。这是 GPU 正确性 oracle，不是性能或正常 Editor 关闭证据。新增 `RunGrayObjectPolicyTests -Rendering` 显式启用真实 RHI，GPU oracle 在 NullRHI 下报错。
+
+`Optimization_SmokeStandalone01` 前台条件有效、complete、exit 0、severe 0；Empty p95 20.198、p99 21.194、max 56.501 ms，OneWhole p95 21.128 ms。说明改动有收益，但这是烟测，**仍未满足完整帧 16.6 ms 目标**，也不是正式三组 after 或最终回归通过。

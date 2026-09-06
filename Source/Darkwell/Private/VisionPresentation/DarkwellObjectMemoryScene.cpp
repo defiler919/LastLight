@@ -502,24 +502,33 @@ bool ADarkwellObjectMemoryScene::CollectCurrentOwnedVerticalIntervals(
 }
 
 bool ADarkwellObjectMemoryScene::CollectNewerOwnedVerticalIntervals(
-	const FTrackedProp& Prop,
-	const uint32 OlderEpoch,
-	const FVector2D Point,
+	const FTrackedProp& Prop, const uint32 OlderEpoch, const FVector2D Point,
 	TArray<FVector2D>& OutIntervals, const double ProjectionTolerance) const
 {
 	OutIntervals.Reset();
+	VisitNewerOwnedVerticalIntervals(Prop, OlderEpoch, Point, ProjectionTolerance,
+		[&OutIntervals](const FVector2D Interval) { OutIntervals.Add(Interval); return false; });
+	return !OutIntervals.IsEmpty();
+}
+
+bool ADarkwellObjectMemoryScene::VisitNewerOwnedVerticalIntervals(
+	const FTrackedProp& Prop,
+	const uint32 OlderEpoch,
+	const FVector2D Point,
+	const double ProjectionTolerance, TFunctionRef<bool(FVector2D)> Visit) const
+{
  auto ProcessCandidate=[&](const FDarkwellSpatialObservationRecord& Candidate)
  {
 		if (Candidate.Epoch <= OlderEpoch)
 		{
-			return;
+			return false;
 		}
 		if (Candidate.bCurrentObservedLocation)
 		{
 			TArray<FVector2D> CurrentIntervals;
 			CollectCurrentOwnedVerticalIntervals(Prop, Point, CurrentIntervals, ProjectionTolerance);
-			OutIntervals.Append(CurrentIntervals);
-			return;
+			for (const FVector2D Interval : CurrentIntervals) if (Visit(Interval)) return true;
+			return false;
 		}
 		const FRecordVisual* Visual = Prop.Visuals.Find(Candidate.Epoch);
 		const FBox2D& Bounds = Candidate.SpatialMemory.GetBounds();
@@ -528,7 +537,7 @@ bool ADarkwellObjectMemoryScene::CollectNewerOwnedVerticalIntervals(
 		if (!Visual || Visual->bPresentationRetired || (ProjectionTolerance == 0.0 && !Bounds.IsInside(Point))
 			|| Fine.X <= 0 || Fine.Y <= 0)
 		{
-			return;
+			return false;
 		}
 		const FVector2D Relative = (Point - Bounds.Min) / Bounds.GetSize();
 		const int32 FineX = FMath::Clamp(FMath::FloorToInt(Relative.X * Fine.X), 0, Fine.X - 1);
@@ -541,7 +550,7 @@ bool ADarkwellObjectMemoryScene::CollectNewerOwnedVerticalIntervals(
 		if (bSuppressed || !Candidate.SpatialMemory.GetCells().IsValidIndex(CellIndex)
 			|| Darkwell::ObjectMemory::HistoricalOpacity(Candidate, FineIndex, CellIndex) <= 0.0f)
 		{
-			return;
+			return false;
 		}
 		for (const FPrimitiveGeometrySnapshot& Geometry : Visual->PartGeometry)
 		{
@@ -549,14 +558,15 @@ bool ADarkwellObjectMemoryScene::CollectNewerOwnedVerticalIntervals(
 			double MaximumZ = 0.0;
 			if (QueryVerticalInterval(Geometry, Point, MinimumZ, MaximumZ, ProjectionTolerance))
 			{
-				OutIntervals.Add(FVector2D(MinimumZ, MaximumZ));
+				if (Visit(FVector2D(MinimumZ, MaximumZ))) return true;
 			}
 		}
+		return false;
  };
  if(bUseNewerCandidates && NewerCandidateId==Prop.StableId)
-  { for(const auto* C:FrameNewerCandidates) ProcessCandidate(*C); }
- else { for(const auto& C:Prop.History.GetRecords()) ProcessCandidate(C); }
- return !OutIntervals.IsEmpty();
+  { for(const auto* C:FrameNewerCandidates) if (ProcessCandidate(*C)) return true; }
+ else { for(const auto& C:Prop.History.GetRecords()) if (ProcessCandidate(C)) return true; }
+ return false;
 }
 
 bool ADarkwellObjectMemoryScene::HasNewerObservedGeometryOverlapAt(
@@ -625,21 +635,24 @@ bool ADarkwellObjectMemoryScene::HasNewerObservedGeometryOverlapAt(
 	}
 	// No old surface at this point can overlap any newer interval.
 	if(OlderIntervals.IsEmpty()) return false;
-	TArray<FVector2D> NewerIntervals;
-	if (!CollectNewerOwnedVerticalIntervals(Prop, OlderEpoch, Point, NewerIntervals)) return false;
-	for(const auto Old : OlderIntervals)
+	auto OverlapsOlder = [&OlderIntervals](const FVector2D Newer)
 	{
-		for (const FVector2D Newer : NewerIntervals)
-		{
-			if (FMath::Min(Old.Y, Newer.Y)
-				+ Darkwell::ObjectMemory::RenderOwnershipContactTolerance
-					>= FMath::Max(Old.X, Newer.X))
-			{
-				return true;
-			}
-		}
+		for (const FVector2D Old : OlderIntervals)
+			if (FMath::Min(Old.Y, Newer.Y) + Darkwell::ObjectMemory::RenderOwnershipContactTolerance >= FMath::Max(Old.X, Newer.X)) return true;
+		return false;
+	};
+#if WITH_DEV_AUTOMATION_TESTS
+	if (bForceFullHistoryEvidenceForTesting)
+	{
+		TArray<FVector2D> NewerIntervals;
+		CollectNewerOwnedVerticalIntervals(Prop, OlderEpoch, Point, NewerIntervals);
+		for (const FVector2D Newer : NewerIntervals) if (OverlapsOlder(Newer)) return true;
+		return false;
 	}
-	return false;
+#endif
+	// This caller asks only whether any overlap exists. The complete interval
+	// collector is still used by cap subtraction and the reference oracle.
+	return VisitNewerOwnedVerticalIntervals(Prop, OlderEpoch, Point, 0.0, OverlapsOlder);
 }
 
 TArray<ADarkwellObjectMemoryScene::FPrimitiveGeometrySnapshot>
@@ -2786,11 +2799,21 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 				const FVector2D Corners[]{Min, Min + FVector2D(Step.X, 0), Min + Step, Min + FVector2D(0, Step.Y)};
 				for (const auto& Geometry : SealedVisual->PartGeometry)
 				{
+					bool bRejectBounds = Geometry.bCachedPlanarProjection && Geometry.ProjectionBounds.bIsValid;
+#if WITH_DEV_AUTOMATION_TESTS
+					bRejectBounds &= !bForceFullHistoryEvidenceForTesting;
+#endif
+					if (bRejectBounds)
+					{
+						const FVector Scale = Geometry.WorldTransform.GetScale3D().GetAbs();
+						const double Padding = 2.0 * UE_KINDA_SMALL_NUMBER * FMath::Max(Scale.X, Scale.Y) + Geometry.ProjectionRoundoffMargin;
+						if (!Geometry.ProjectionBounds.ExpandBy(Padding).Intersect(FBox2D(Min, Min + Step))) continue;
+					}
 					double A, B;
 					bool Intersects = QueryVerticalInterval(Geometry, Min + Step * .5, A, B);
 					for (int32 Edge = 0; Edge < 4 && !Intersects; ++Edge)
 						Intersects |= ClipSegmentToGeometryProjection(Geometry, Corners[Edge], Corners[(Edge + 1) % 4], 0, A, B);
-					Footprint[Y * Size.X + X] = Footprint[Y * Size.X + X] || Intersects;
+					if (Intersects) { Footprint[Y * Size.X + X] = true; break; }
 				}
 			}
 			Historical->FineHistory.RestrictToRecordedGeometry(Footprint);

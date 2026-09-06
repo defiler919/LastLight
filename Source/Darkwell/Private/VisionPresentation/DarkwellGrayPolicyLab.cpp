@@ -148,6 +148,9 @@ ADarkwellGrayPolicyLabControl::ADarkwellGrayPolicyLabControl()
 	LabelComponent->SetTwoSided(true);
 	LabelComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	LabelComponent->SetWidgetClass(UDarkwellGrayPolicyWorldLabelWidget::StaticClass());
+	// The label text is static between Configure calls. Camera-facing world
+	// transforms still update; their texture does not need another Slate paint.
+	LabelComponent->SetManuallyRedraw(true);
 }
 
 void ADarkwellGrayPolicyLabControl::FaceLabelToward(const FVector WorldTarget)
@@ -169,6 +172,7 @@ void ADarkwellGrayPolicyLabControl::Configure(
 	if (auto* Widget = Cast<UDarkwellGrayPolicyWorldLabelWidget>(LabelComponent->GetWidget()))
 	{
 		Widget->SetLabel(Label, 27);
+		LabelComponent->RequestRedraw();
 	}
 }
 

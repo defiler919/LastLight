@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory=$true)][string]$RunName,
     [string]$Tests = 'Darkwell.PropLab+Darkwell.FogVisual+Darkwell.SightWeave.M6P1+SightWeave.ObjectPolicy+SightWeave.RevealPolicy',
     [string]$EngineRoot = 'D:\UE_5.8',
+    [switch]$Rendering,
     [string[]]$ExtraEditorArgs = @()
 )
 $ErrorActionPreference = 'Stop'
@@ -15,10 +16,11 @@ $log = Join-Path $evidence "$RunName.log"
 $report = Join-Path $evidence "${RunName}_Report"
 if (Test-Path -LiteralPath $log) { throw "Evidence already exists: $log" }
 $begin = Get-Date
-$source = [ordered]@{ head=(& git -C $repo rev-parse HEAD); started=$begin.ToString('o'); editor_args=$ExtraEditorArgs }
+$rhiArgs = if ($Rendering) { @('-d3d12','-sm6') } else { @('-NullRHI') }
+$source = [ordered]@{ head=(& git -C $repo rev-parse HEAD); started=$begin.ToString('o'); editor_args=$ExtraEditorArgs; rhi_args=$rhiArgs }
 $source | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'source.json')
 & git -C $repo diff --binary | Set-Content -LiteralPath (Join-Path $evidence 'source.patch')
-& "$EngineRoot/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" "$repo/Darkwell.uproject" -unattended -nop4 -nosplash -NullRHI -NoSound "-ExecCmds=Automation RunTests $Tests" '-TestExit=Automation Test Queue Empty' "-ReportExportPath=$report" "-abslog=$log" @ExtraEditorArgs *> (Join-Path $evidence "$RunName.stdout.txt")
+& "$EngineRoot/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" "$repo/Darkwell.uproject" -unattended -nop4 -nosplash @rhiArgs -NoSound "-ExecCmds=Automation RunTests $Tests" '-TestExit=Automation Test Queue Empty' "-ReportExportPath=$report" "-abslog=$log" @ExtraEditorArgs *> (Join-Path $evidence "$RunName.stdout.txt")
 $code = $LASTEXITCODE
 $summary = [ordered]@{ run=$RunName; selector=$Tests; exit_code=$code; wall_seconds=((Get-Date)-$begin).TotalSeconds }
 if (Test-Path -LiteralPath "$report/index.json") {

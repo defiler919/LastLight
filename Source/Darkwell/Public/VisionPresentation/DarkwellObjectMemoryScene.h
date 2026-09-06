@@ -501,6 +501,9 @@ protected:
 		uint32 OlderEpoch,
 		FVector2D Point,
 		TArray<FVector2D>& OutIntervals, double ProjectionTolerance = 0.0) const;
+	/** Visit the same legal intervals; true stops after the caller's proof succeeds. */
+	bool VisitNewerOwnedVerticalIntervals(const FTrackedProp& Prop, uint32 OlderEpoch,
+		FVector2D Point, double ProjectionTolerance, TFunctionRef<bool(FVector2D)> Visit) const;
 	bool HasNewerObservedGeometryOverlapAt(
 		const FTrackedProp& Prop,
 		const FRecordVisual& OlderVisual,

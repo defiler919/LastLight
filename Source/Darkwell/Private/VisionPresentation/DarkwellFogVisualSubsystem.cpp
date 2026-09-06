@@ -4,6 +4,8 @@
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 
 #include "Engine/TextureRenderTarget2D.h"
+#include "Engine/Canvas.h"
+#include "CanvasTypes.h"
 #include "HAL/IConsoleManager.h"
 #include "Kismet/KismetRenderingLibrary.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -22,6 +24,9 @@ namespace Darkwell::FogVisual
 		TEXT("/Game/Darkwell/Vision/ProjectFog/M_DarkwellFogCoverage.M_DarkwellFogCoverage");
 
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	TAutoConsoleVariable<int32> CVarFullCoverageDraw(
+		TEXT("r.Darkwell.FogVisual.Diagnostic.FullCoverageDraw"), 0,
+		TEXT("Use the original full-target draw for coverage equivalence diagnostics."));
 	TAutoConsoleVariable<int32> CVarDiagnosticSkipCoverageDraw(
 		TEXT("r.Darkwell.FogVisual.Diagnostic.SkipCoverageDraw"), 0,
 		TEXT("Diagnostic ablation only: publish legal CPU coverage but freeze the GPU field. Never a normal performance result."));
@@ -100,6 +105,33 @@ FVector2D FDarkwellFogVisualMapping::WorldToUV(const FVector2D& WorldPosition) c
 	return IsValid()
 		? (WorldPosition - WorldMin) * InvWorldExtent
 		: FVector2D::ZeroVector;
+}
+
+FIntRect FDarkwellContinuousVisibilityBuilder::GetCoverageDrawRect(
+	const FDarkwellFogVisualSourceSnapshot& Source, const FDarkwellFogVisualMapping& Mapping,
+	const float TransitionWidthCentimeters)
+{
+	const FIntRect Full(FIntPoint::ZeroValue, Mapping.TextureExtent);
+	if (!Source.IsValid() || !Mapping.IsValid() || !FMath::IsFinite(TransitionWidthCentimeters)) return Full;
+	// Both analytic fields are identically zero beyond radius + half the edge
+	// transition. Occlusion can only remove coverage. Retain two extra pixels
+	// for conversion/float roundoff, with the same full-target UV interpolation.
+	const double Padding = FMath::Max(0.0f, TransitionWidthCentimeters) * 0.5;
+	const FVector2D BodyRadius(Source.BodyRadiusCentimeters + Padding);
+	FBox2D Bounds(Source.BodyCenter - BodyRadius, Source.BodyCenter + BodyRadius);
+	if (Source.bConeLegallyLive)
+	{
+		const FVector2D ConeRadius(Source.ConeRangeCentimeters + Padding);
+		Bounds += FBox2D(Source.ConeOrigin - ConeRadius, Source.ConeOrigin + ConeRadius);
+	}
+	const FVector2D Step = Mapping.WorldExtent / FVector2D(Mapping.TextureExtent);
+	FIntPoint Min, Max;
+	for (int32 Axis = 0; Axis < 2; ++Axis)
+	{
+		Min[Axis] = FMath::FloorToInt(FMath::Clamp((Bounds.Min[Axis]-Mapping.WorldMin[Axis])/Step[Axis]-2.0, 0.0, double(Mapping.TextureExtent[Axis])));
+		Max[Axis] = FMath::CeilToInt(FMath::Clamp((Bounds.Max[Axis]-Mapping.WorldMin[Axis])/Step[Axis]+2.0, 0.0, double(Mapping.TextureExtent[Axis])));
+	}
+	return FIntRect(Min, Max);
 }
 
 float FDarkwellContinuousVisibilityBuilder::EvaluateNoOcclusionCoverage(
@@ -659,13 +691,42 @@ bool UDarkwellFogVisualSubsystem::DrawCoverage(
 		return false;
 	}
 	UpdateMaterialParameters(Source);
+	bool bFullDraw = false;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	bFullDraw = Darkwell::FogVisual::CVarFullCoverageDraw.GetValueOnGameThread() != 0;
 	if (Darkwell::FogVisual::CVarDiagnosticSkipCoverageDraw.GetValueOnGameThread() == 0)
 #endif
-	UKismetRenderingLibrary::DrawMaterialToRenderTarget(
-		GetWorld(),
-		LiveCoverageTexture,
-		CoverageMaterial);
+	{
+		if (bFullDraw)
+		{
+			UKismetRenderingLibrary::DrawMaterialToRenderTarget(GetWorld(), LiveCoverageTexture, CoverageMaterial);
+		}
+		else
+		{
+			const FIntRect Rect = FDarkwellContinuousVisibilityBuilder::GetCoverageDrawRect(
+				Source, Mapping, Darkwell::FogVisual::CoverageTransitionWidthCentimeters);
+			// This texture contains only current coverage, so clear the previous
+			// field before drawing. Historical knowledge lives in separate data.
+			UKismetRenderingLibrary::ClearRenderTarget2D(GetWorld(), LiveCoverageTexture, FLinearColor::Black);
+			if (Rect.Width() > 0 && Rect.Height() > 0)
+			{
+				UCanvas* Canvas = nullptr;
+				FVector2D Size;
+				FDrawToRenderTargetContext Context;
+				UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(GetWorld(), LiveCoverageTexture, Canvas, Size, Context);
+				if (Canvas && Canvas->Canvas)
+				{
+					Canvas->Canvas->SetRenderTargetScissorRect(Rect);
+					// Full tile and original UVs preserve interpolation exactly;
+					// scissoring only avoids shading provably zero pixels.
+					Canvas->K2_DrawMaterial(CoverageMaterial, FVector2D::ZeroVector, Size, FVector2D::ZeroVector);
+					UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(GetWorld(), Context);
+				}
+			}
+			// Preserve the original complete mip chain and same-frame submission.
+			if (LiveCoverageTexture->GetResource()) LiveCoverageTexture->UpdateResourceImmediate(false);
+		}
+	}
 	PreviousSource = bSourceContinuityValid ? LastSource : FDarkwellFogVisualSourceSnapshot();
 	LastSource = Source;
 	bSourceContinuityValid = true;

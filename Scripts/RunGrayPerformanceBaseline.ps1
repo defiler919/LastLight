@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$RunName,
     [ValidateSet('PIE','Standalone')][string]$Mode='PIE',
-    [ValidateSet('Smoke','Matrix','LongRun')][string]$Protocol='Matrix',
+    [ValidateSet('Smoke','Knowledge','Attribution','Matrix','LongRun')][string]$Protocol='Matrix',
     [string]$EngineRoot='D:\UE_5.8',
     [switch]$NoAuthoringToolsets,
     [switch]$Trace
@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 if ($RunName -notmatch '^[A-Za-z0-9_-]+$') { throw 'Use a unique simple run name' }
-$workloads=@(Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(UnrealEditor|UnrealEditor-Cmd|ShaderCompileWorker|SpaceCraft|MSBuild|cl|link|UnrealBuildTool|AutomationTool)\.exe$' -or ($_.Name -eq 'dotnet.exe' -and $_.CommandLine -match 'UnrealBuildTool|AutomationTool') })
+$workloads=@(Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(UnrealEditor|UnrealEditor-Cmd|UnrealInsights|ShaderCompileWorker|SpaceCraft|MSBuild|cl|link|UnrealBuildTool|AutomationTool)\.exe$' -or ($_.Name -eq 'dotnet.exe' -and $_.CommandLine -match 'UnrealBuildTool|AutomationTool') })
 if($workloads.Count) { throw "Conflicting workload: $($workloads.Name -join ', ')" }
 $output=Join-Path $repo "Saved/Stabilization/$RunName"
 if(Test-Path -LiteralPath $output){throw "Evidence exists: $output"}
@@ -33,7 +33,7 @@ if ($NoAuthoringToolsets) {
 }
 if($Mode -eq 'Standalone') { $arguments+=@('-game','-EnablePython',"-ExecCmds=`"py $output/driver.py`"") }
 else { $arguments+="-ExecutePythonScript=$output/driver.py" }
-if($Trace) { $arguments+=@('-trace=cpu,gpu,frame,bookmark',"-tracefile=$output/capture.utrace") }
+if($Trace) { $arguments+=@('-trace=cpu,gpu,frame,bookmark,region',"-tracefile=$output/capture.utrace") }
 $metadata=[ordered]@{
     schema=1; sha=(& git -C $repo rev-parse HEAD); started_utc=$start.ToUniversalTime().ToString('o'); mode=$Mode; protocol=$Protocol
     engine=(Get-Content "$EngineRoot/Engine/Build/Build.version" -Raw | ConvertFrom-Json)
@@ -45,7 +45,8 @@ $metadata=[ordered]@{
     screenshots=$false; trace=[bool]$Trace; debugger=$false; fixed_timestep=$false; other_engine_build_processes=$workloads
     arguments=$arguments; processes_at_start=@(Get-Process | Select-Object Name,Id,CPU,WorkingSet64)
     disabled_authoring_plugins=$disabledPlugins
-    timing_note='Wall intervals between distinct game updates; engine GT/RT/RHI/GPU counters are delayed and overlap. No subtraction attribution.'
+    editor_binary_sha256=(Get-FileHash "$repo/Binaries/Win64/UnrealEditor-DarkwellEditor.dll").Hash
+    timing_note='Wall intervals between distinct game updates include Python measurement cost; engine GT/RT/RHI/GPU counters are delayed and overlap. PIE global Render/RHI counters can be overwritten by Slate window updates; use separate Insights capture for attribution. No subtraction attribution.'
 }
 $metadata | ConvertTo-Json -Depth 8 | Set-Content "$output/environment.json"
 $priorOutput=$env:DARKWELL_STABILIZATION_OUTPUT
@@ -55,7 +56,9 @@ try {
     $env:DARKWELL_STABILIZATION_OUTPUT=$output
     $env:DARKWELL_STABILIZATION_MODE=$Mode
     $env:DARKWELL_STABILIZATION_PROTOCOL=$Protocol
-    $process=Start-Process "$EngineRoot/Engine/Binaries/Win64/UnrealEditor.exe" -ArgumentList $arguments -WindowStyle Hidden -PassThru
+    # This is the user's requested visible, foreground interactive benchmark.
+    # SW_HIDE suppresses the native game window even when Slate reports active.
+    $process=Start-Process "$EngineRoot/Engine/Binaries/Win64/UnrealEditor.exe" -ArgumentList $arguments -WindowStyle Normal -PassThru
     $process.Id | Set-Content "$output/pid.txt"
     $process.WaitForExit()
     $code=$process.ExitCode

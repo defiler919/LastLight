@@ -8,6 +8,7 @@
 #include "Kismet/KismetRenderingLibrary.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDarkwellFogVisual, Log, All);
@@ -21,6 +22,9 @@ namespace Darkwell::FogVisual
 		TEXT("/Game/Darkwell/Vision/ProjectFog/M_DarkwellFogCoverage.M_DarkwellFogCoverage");
 
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	TAutoConsoleVariable<int32> CVarDiagnosticSkipCoverageDraw(
+		TEXT("r.Darkwell.FogVisual.Diagnostic.SkipCoverageDraw"), 0,
+		TEXT("Diagnostic ablation only: publish legal CPU coverage but freeze the GPU field. Never a normal performance result."));
 	TAutoConsoleVariable<int32> CVarDiagnosticRawCoverageReadback(
 		TEXT("r.Darkwell.FogVisual.Diagnostic.RawCoverageReadback"),
 		0,
@@ -649,11 +653,15 @@ void UDarkwellFogVisualSubsystem::UpdateMaterialParameters(
 bool UDarkwellFogVisualSubsystem::DrawCoverage(
 	const FDarkwellFogVisualSourceSnapshot& Source)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Fog_DrawCoverage);
 	if (!CoverageMaterial || !LiveCoverageTexture || !GetWorld())
 	{
 		return false;
 	}
 	UpdateMaterialParameters(Source);
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (Darkwell::FogVisual::CVarDiagnosticSkipCoverageDraw.GetValueOnGameThread() == 0)
+#endif
 	UKismetRenderingLibrary::DrawMaterialToRenderTarget(
 		GetWorld(),
 		LiveCoverageTexture,

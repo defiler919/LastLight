@@ -28,6 +28,7 @@
 #include "UObject/GarbageCollection.h"
 #include "RenderTimer.h"
 #include "DynamicRHI.h"
+#include "RHIStats.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Widgets/SWindow.h"
 #include "Misc/App.h"
@@ -547,8 +548,12 @@ FString ADarkwellSightWeaveGrayPolicyLabDirector::GetFrameEnvironmentForTesting(
 			Window = FSlateApplication::Get().FindWidgetWindow(Widget.ToSharedRef());
 	}
 	const FVector2D WindowSize = Window ? FVector2D(Window->GetSizeInScreen()) : FVector2D::ZeroVector;
-	auto CVar = [](const TCHAR* Name) { const auto* V=IConsoleManager::Get().FindConsoleVariable(Name); return V ? V->GetFloat() : -1.0f; };
-	return FString::Printf(TEXT("{\"frame\":%llu,\"viewport\":[%d,%d],\"window\":[%.0f,%.0f],\"foreground\":%d,\"window_active\":%d,\"minimized\":%d,\"screen_percentage\":%.3f,\"secondary_percentage\":%.3f,\"aa\":%.0f,\"dynamic_resolution\":%.0f,\"vsync\":%.0f,\"max_fps\":%.3f,\"fixed_step\":%d,\"game_ms\":%.4f,\"render_ms\":%.4f,\"rhi_ms\":%.4f,\"gpu_ms\":%.4f,\"game_wait_ms\":%.4f,\"render_wait_ms\":%.4f,\"present_ms\":%.4f}"),
+	auto CVar = [](const TCHAR* Name) {
+		static TMap<FString, IConsoleVariable*> Variables;
+		if (!Variables.Contains(Name)) Variables.Add(Name, IConsoleManager::Get().FindConsoleVariable(Name));
+		const auto* V = Variables.FindChecked(Name); return V ? V->GetFloat() : -1.0f;
+	};
+	FString Data = FString::Printf(TEXT("{\"frame\":%llu,\"viewport\":[%d,%d],\"window\":[%.0f,%.0f],\"foreground\":%d,\"window_active\":%d,\"minimized\":%d,\"screen_percentage\":%.3f,\"secondary_percentage\":%.3f,\"aa\":%.0f,\"dynamic_resolution\":%.0f,\"vsync\":%.0f,\"max_fps\":%.3f,\"fixed_step\":%d,\"game_ms\":%.4f,\"render_ms\":%.4f,\"rhi_ms\":%.4f,\"gpu_ms\":%.4f,\"game_wait_ms\":%.4f,\"render_wait_ms\":%.4f,\"present_ms\":%.4f"),
 		GFrameCounter, Size.X, Size.Y, WindowSize.X, WindowSize.Y,
 		FPlatformApplicationMisc::IsThisApplicationForeground()?1:0, Window && Window->IsActive()?1:0, Window && Window->IsWindowMinimized()?1:0,
 		CVar(TEXT("r.ScreenPercentage")), CVar(TEXT("r.SecondaryScreenPercentage.GameViewport")), CVar(TEXT("r.AntiAliasingMethod")),
@@ -556,6 +561,22 @@ FString ADarkwellSightWeaveGrayPolicyLabDirector::GetFrameEnvironmentForTesting(
 		FPlatformTime::ToMilliseconds(GGameThreadTime), FPlatformTime::ToMilliseconds(GRenderThreadTime), FPlatformTime::ToMilliseconds(GRHIThreadTime),
 		FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles()), FPlatformTime::ToMilliseconds(GGameThreadWaitTime),
 		FPlatformTime::ToMilliseconds(GRenderThreadWaitTime), FPlatformTime::ToMilliseconds(GSwapBufferTime));
+	FTextureMemoryStats Memory;
+	if (GDynamicRHI) RHIGetTextureMemoryStats(Memory);
+	const auto* Fog = GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
+	const FIntPoint FogSize = Fog ? Fog->GetMapping().TextureExtent : FIntPoint::ZeroValue;
+	Data += FString::Printf(TEXT(",\"smooth_frame_rate\":%d,\"engine_fixed_frame_rate\":%d,\"fog_extent\":[%d,%d],\"rhi_texture_bytes\":%llu}"),
+		GEngine && GEngine->bSmoothFrameRate ? 1 : 0, GEngine && GEngine->bUseFixedFrameRate ? 1 : 0,
+		FogSize.X, FogSize.Y, Memory.StreamingMemorySize + Memory.NonStreamingMemorySize);
+	return Data;
+}
+
+void ADarkwellSightWeaveGrayPolicyLabDirector::SetPerformanceUiVisibleForTesting(
+	const bool bGuidance, const bool bWorldLabels)
+{
+	if (ScreenGuidance) ScreenGuidance->SetVisibility(bGuidance ? EVisibility::SelfHitTestInvisible : EVisibility::Collapsed);
+	for (ADarkwellGrayPolicyLabControl* Control : Controls) if (Control)
+		if (auto* Widget = Control->FindComponentByClass<UWidgetComponent>()) Widget->SetVisibility(bWorldLabels);
 }
 
 bool ADarkwellSightWeaveGrayPolicyLabDirector::CaptureGameViewportForTesting(const FString& Filename)
@@ -646,6 +667,7 @@ void ADarkwellSightWeaveGrayPolicyLabDirector::DetachScreenGuidance()
 
 FText ADarkwellSightWeaveGrayPolicyLabDirector::BuildScreenGuidance() const
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Lab_GuidanceText);
 	const FText RoomText = BuildRoomGuidance(CurrentRoom);
 	return FText::Format(LOCTEXT("ScreenPanel",
 		"SightWeave 灰色层测试实验室\n地图：L_SightWeaveGrayPolicyLab  |  运行 SHA：{0}\n当前房间：{1}\n\n{2}\n\n通用操作：WASD 移动，鼠标转向，面对圆形控制台按 F\n每个房间都有“返回大厅”和“重置当前房间”\n{3}"),

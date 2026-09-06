@@ -2674,6 +2674,7 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 	FTrackedProp& Prop,
 	const TCHAR* Reason, const bool bSealLastEligibleObservation)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Memory_SealCapture);
 	if (!IsCaptureEligible(Prop) && !(bSealLastEligibleObservation && Prop.bLastCaptureEligible))
 	{
 		AbandonCurrentObservationWithoutHistory(Prop);
@@ -2774,6 +2775,7 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 		}
 		if (FRecordVisual* SealedVisual = Prop.Visuals.Find(Epoch); SealedVisual && !bSameCapture)
 		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Memory_CaptureFootprint);
 			const auto& Grid = Historical->FineHistory;
 			const FIntPoint Size = Grid.GetSize();
 			const FVector2D Step = Grid.GetBounds().GetSize() / FVector2D(Size.X, Size.Y);
@@ -2853,6 +2855,7 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 	FTrackedProp& Prop,
 	FDarkwellSpatialObservationRecord& Record)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Memory_EnsureResources);
 	FRecordVisual& Visual = Prop.Visuals.FindOrAdd(Record.Epoch);
 	Visual.Epoch = Record.Epoch;
 	if (Record.bCurrentObservedLocation && Record.Primitives.IsEmpty()) CaptureObservedContent(Prop, Record);

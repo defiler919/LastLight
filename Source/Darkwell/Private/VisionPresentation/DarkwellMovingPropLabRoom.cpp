@@ -769,6 +769,7 @@ bool ADarkwellMovingPropLabRoom::SetGrayPolicyStressMode(const int32 Mode)
 bool ADarkwellMovingPropLabRoom::ConfigureHistoricalEpochCountForTesting(
 	const FName StableId, const int32 HistoricalEpochs)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Lab_SeedDistinctHistory);
 	if (HistoricalEpochs < 0
 		|| HistoricalEpochs > FDarkwellSpatialObservationHistory::MaxResidentRecords)
 	{

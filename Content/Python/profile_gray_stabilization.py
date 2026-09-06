@@ -37,13 +37,13 @@ def stats(values):
                 p95=a[min(len(a)-1, int(len(a)*.95))],
                 p99=a[min(len(a)-1, int(len(a)*.99))], maximum=max(a))
 
-def summarize(name, samples, setup_ms):
+def summarize(name, samples, setup_ms, setup_resources):
     resource_keys = ['records', 'proxies', 'caps', 'textures', 'mids', 'fine_bytes', 'working_set', 'uobjects']
     def window(items):
         return dict(samples=len(items), wall_frame_ms=stats([r['wall_ms'] for r in items]),
                     game_delta_ms=stats([r['game_delta_ms'] for r in items]),
                     memory_system_ms=stats([r['game_thread_us']/1000 for r in items]))
-    result = dict(case=name, setup_ms=setup_ms, all_frames=window(samples),
+    result = dict(case=name, setup_ms=setup_ms, setup_resources=setup_resources, all_frames=window(samples),
                   steady_after_90=window(samples[90:]) if len(samples)>90 else None,
                   resources={k:dict(first=samples[0][k], last=samples[-1][k], maximum=max(r[k] for r in samples)) for k in resource_keys},
                   total_work={k:sum(r[k] for r in samples) for k in ['texture_creations', 'mid_creations', 'texture_uploads', 'cap_rebuilds', 'samples_scanned', 'coverage_queries', 'occupancy_tests', 'ownership_tests']},
@@ -71,12 +71,18 @@ def run():
     if not standalone:
         unreal.DarkwellEditorDiagnostics.focus_performance_pie()
     startup=[]
+    (root/'viewport-ready.json').write_text(director.get_frame_environment_for_testing(),encoding='utf-8')
+    foreground_deadline=time.perf_counter()+90
+    while not json.loads(director.get_frame_environment_for_testing())['foreground']:
+        assert time.perf_counter()<foreground_deadline, 'OS foreground was not established; sample is invalid'
+        startup.append(dict(phase='waiting_for_foreground',wall_ms=latest_wall_ms,engine=json.loads(director.get_frame_environment_for_testing())))
+        yield 1
     for startup_index in range(12):
         yield 1
         startup.append(dict(index=startup_index,wall_ms=latest_wall_ms,engine=json.loads(director.get_frame_environment_for_testing()),telemetry=json.loads(room.get_history_runtime_telemetry())['frame_data']))
     (root/'startup-frames.json').write_text(json.dumps(startup,indent=2),encoding='utf-8')
     quality_names = ['sg.'+q+'Quality' for q in ['ViewDistance','AntiAliasing','Shadow','GlobalIllumination','Reflection','PostProcess','Texture','Effects','Foliage','Shading']]
-    quality_names += ['r.RayTracing','r.Lumen.HardwareRayTracing','r.Shadow.Virtual.Enable','r.TemporalAA.Upsampling','r.Editor.Viewport.OverridePIEScreenPercentage','Slate.bAllowThrottling','t.IdleWhenNotForeground']
+    quality_names += ['r.RayTracing','r.Lumen.HardwareRayTracing','r.Shadow.Virtual.Enable','r.TemporalAA.Upsampling','r.Editor.Viewport.OverridePIEScreenPercentage','Slate.bAllowThrottling','t.IdleWhenNotForeground','r.GTSyncType','r.OneFrameThreadLag']
     settings = {key:unreal.SystemLibrary.get_console_variable_float_value(key) for key in quality_names}
     settings.update(mode=run_mode, protocol=protocol, editor_realtime=False if not standalone else None, initial=json.loads(director.get_frame_environment_for_testing()), seed=0, screenshots=False)
     (root/'quality.json').write_text(json.dumps(settings,indent=2), encoding='utf-8')
@@ -91,10 +97,15 @@ def run():
              ('LongRepeatDistributed',6,1800), ('ActualNewKnowledge',0,360)]
     if protocol == 'Smoke':
         cases = [('Empty',0,180), ('OneWhole',1,180)]
+    elif protocol == 'Knowledge':
+        cases = [('ActualNewKnowledge',0,360)]
+    elif protocol == 'Attribution':
+        cases = [(name,0,300) for name in ['Empty','NoGuidance','NoWorldLabels','NoUi','NoCoverageDraw','Restored']]
     elif protocol == 'LongRun':
         cases = [('ActualNewKnowledge',0,360), ('LongInteraction',0,1000000)]
     raw = (root/'frames.jsonl').open('w', encoding='utf-8')
     for name, mode, count in cases:
+        unreal.SystemLibrary.execute_console_command(w, 'Trace.RegionBegin '+name)
         case_start = time.perf_counter()
         setup_start = time.perf_counter()
         if name in ('PartialNewThenRepeat','LongInteraction'):
@@ -108,9 +119,10 @@ def run():
             if name == 'ActualNewKnowledge':
                 # Only physical pose and authored moving state are driven. The
                 # real coverage/policy/runtime must acquire each of six poses.
-                mover = next(a for a in unreal.GameplayStatics.get_all_actors_of_class(w, unreal.Actor)
-                    if (m := a.get_component_by_class(unreal.DarkwellRememberablePropComponent))
-                    and str(m.get_editor_property('stable_id')) == 'Lab.V2.MoveWhole')
+                # Native property spelling also works in -game, where editor
+                # Python's snake-case property aliases are not registered.
+                mover = next(a for a in unreal.GameplayStatics.get_all_actors_of_class(w, unreal.DarkwellPropLabFurniture)
+                    if str(a.get_editor_property('StableId')) == 'Lab.V2.MoveWhole')
                 policy = mover.get_component_by_class(unreal.SightWeaveObjectPolicyComponent)
                 policy.set_sight_weave_moving(True)
                 mover.set_actor_location(unreal.Vector(5300, -4100, 0), False, True)
@@ -120,6 +132,11 @@ def run():
             assert director.teleport_to_room_for_testing(6, player)
             assert director.set_stress_mode_for_testing(mode)
         setup_ms = (time.perf_counter()-setup_start)*1000
+        setup_resources = dict(records=room.get_total_spatial_record_count(), proxies=room.get_total_proxy_count(),
+            tracked_identities=room.get_tracked_identity_count(), stress_mode=mode)
+        if protocol == 'Attribution':
+            director.set_performance_ui_visible_for_testing(name not in ('NoGuidance','NoUi'), name not in ('NoWorldLabels','NoUi'))
+            unreal.SystemLibrary.execute_console_command(w, 'r.Darkwell.FogVisual.Diagnostic.SkipCoverageDraw '+('1' if name=='NoCoverageDraw' else '0'))
         room.reset_history_runtime_telemetry_for_testing()
         # Sweeps start immediately before the first recorded frame. No warm-up exclusion.
         if name not in ('PartialNewThenRepeat', 'StationaryStop', 'ActualNewKnowledge','LongInteraction'):
@@ -135,7 +152,7 @@ def run():
             r['engine'] = json.loads(director.get_frame_environment_for_testing())
             r['engine']['editor_realtime_count'] = unreal.DarkwellEditorDiagnostics.get_realtime_editor_viewport_count() if not standalone else 0
             assert r['engine']['viewport'] == [1920,1080], r['engine']
-            r.update(case=name, index=index, wall_ms=latest_wall_ms,
+            r.update(case=name, index=index, elapsed_seconds=time.perf_counter()-started, wall_ms=latest_wall_ms,
                      game_delta_ms=(now_game-last_game)*1000,
                      yaw=player.get_actor_rotation().yaw)
             last_game = now_game
@@ -182,10 +199,14 @@ def run():
             # and no reset occurs between legally observed poses.
             assert samples[-1]['records'] >= samples[23]['records']+5, 'New unresolved captures were not retained'
         raw.flush()
-        summarize(name, samples, setup_ms)
+        summarize(name, samples, setup_ms, setup_resources)
+        unreal.SystemLibrary.execute_console_command(w, 'Trace.RegionEnd '+name)
         director.start_sweep_for_testing(1, False)
         yield 1
     raw.close()
+    if protocol == 'Attribution':
+        director.set_performance_ui_visible_for_testing(True,True)
+        unreal.SystemLibrary.execute_console_command(w, 'r.Darkwell.FogVisual.Diagnostic.SkipCoverageDraw 0')
     assert director.set_stress_mode_for_testing(0)
     yield 1
     assert director.set_audit_viewport_size_for_testing(0,0)

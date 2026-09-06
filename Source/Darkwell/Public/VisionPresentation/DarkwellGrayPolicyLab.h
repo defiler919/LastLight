@@ -160,6 +160,9 @@ public:
 	/** Read-only low-cost engine counters. Thread/GPU counters are asynchronous, not additive. */
 	UFUNCTION(BlueprintPure, Category="Gray Policy Lab|Diagnostics")
 	FString GetFrameEnvironmentForTesting() const;
+	/** Explicit diagnostic ablation only; restores UI without touching gameplay. */
+	UFUNCTION(BlueprintCallable, Category="Gray Policy Lab|Diagnostics")
+	void SetPerformanceUiVisibleForTesting(bool bGuidance, bool bWorldLabels);
 	ADarkwellMovingPropLabRoom* GetRuntimeRoomForTesting() const { return RuntimeRoom.Get(); }
 	static FVector GetRoomCenterForTesting(int32 Room);
 	static int32 GetExpectedControlCountForTesting() { return 27; }

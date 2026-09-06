@@ -77,3 +77,17 @@
 - `-NoAuthoringToolsets` 是显式诊断环境，逐次记录全部禁用项；解决 UE 内置 ToolsetRegistry 在 Standalone `-game -EnablePython` 中引用缺失 PythonTestRunner 的初始化错误。普通项目配置不改变，该环境不能冒充默认 Editor。
 
 `Scripts/BuildEditor.ps1` 恢复检查成功（Saved/Logs/Stabilization_ResumeCheckpointBuild.log，1.32 秒 up-to-date；此前对应 C++ 完整构建 6.86 秒成功）。该检查点保存现有入口，并不声称功能最终验收、退出全面稳定、性能达标或尖峰已修复。先 push 本阶段再进行长实验。
+
+阶段 2 已推送为 `c2ee6575e3caff69f858ec1faad3a2b17785c4a6`，local/upstream/remote 核对一致。
+
+## 阶段 3：空场景归因与正式对照前的入口修正
+
+- `Attribution_Standalone_Matrix01`：旧 Hidden 启动无法建立 OS 前台；90 秒谓词超时，协议失败、exit 0，保存 failed.txt/trace。改为用户要求的可见前台测试窗口，并通过 Computer Use 激活实际返回的窗口；Slate active 不能代替 OS foreground。前台等待帧另存 startup，正式帧逐帧核对 viewport/画质/前台，分析器不删除离群帧。
+- `Attribution_Standalone_Matrix02`：前台有效，完成 Empty 到 LongRepeatDistributed，但 ActualNewKnowledge 使用编辑器 snake-case 属性别名，在 -game 无法读取，协议失败、exit 0。前十二案例和完整 trace 保留，仅用于诊断，不算完整正常矩阵。改用真实 native `StableId` 名称；`Harness_Knowledge01` 独立非 Trace 实际新增六条未解决记录，360 帧断言通过，exit 0、severe 0；p95 30.202、p99 44.232、max 98.346 ms。
+- Insights CPU/GPU/region 独立采样：首份忘启用 region channel，因此只导出全程统计；后续明确开启 region。`ExportGrayTrace.ps1` 可无 UI 导出区域与总计。全程 trace 的 GPU DrawMaterialToRenderTarget 平均 9.330 ms，不能冒充空场景单独结果。
+- `Attribution_Standalone_Controls01`：1080p、SP100、TSR、sg 全 3、VSync/FPS limit/fixed/smooth 均关闭、实际前台；六段各 300 帧，exit 0、severe 0。Empty / NoGuidance / NoWorldLabels / NoUi / NoCoverageDraw / Restored 的 wall p95 分别为 **31.493 / 31.342 / 29.946 / 29.742 / 19.867 / 31.777 ms**。这是一轮带 Trace 的干预归因，不是优化后的正常达标成绩。
+- Empty 区域 Insights：GPU 覆盖绘制平均 **10.294 ms**，TSR **5.153 ms**，LumenScreenProbeGather **3.259 ms**；存在明确 GPU occlusion-query wait。覆盖纹理真实 **6240×6320、R16F、2.5 cm/texel**，每次转头按全图绘制。CPU memory p95 约 0.203 ms。由干预和 GPU track 共同支持优先减少确定为零的覆盖像素工作，不降低纹理密度、TSR、光照或合法采样。
+- 新诊断开关 `r.Darkwell.FogVisual.Diagnostic.SkipCoverageDraw` 默认 0，只在 Attribution 的 NoCoverageDraw 段故意冻结 GPU 场、保留 CPU 语义；正常结果不使用。Lab UI 可显式隐藏/恢复；RHI texture bytes 为设备统计，不能当全部显存或泄漏证明。
+- 构建：TraceScopes 18.56 秒成功；Attribution 首次编译因 TObjectPtr range auto* 推导失败，明确改为具体指针类型后完整 Editor 构建成功 7.89 秒。Python AST 与 diff --check 通过。代码目前仅增加诊断，不改变正常覆盖绘制和玩法。
+
+正式 before/after 使用 `RunGrayPerformanceBaseline.ps1 -RunName UNIQUE -Mode PIE或Standalone -Protocol Matrix -NoAuthoringToolsets`，每次为独立进程，激活其实际窗口后自动采集。`AnalyzeGrayStabilization.py` 输出所有帧及单独 steady_after_90、setup/资源数量、>33/>100、最长慢帧串；trace、干预或条件变化不混入 normal 汇总。首次批量 setup 的即时 records/proxies/identities 与运行中资源分别记录，避免将合法反证后的压力下降当满负载通过。

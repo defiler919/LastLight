@@ -157,6 +157,9 @@ public:
 	/** Transient editor-only capture size; (0,0) restores the normal viewport. */
 	UFUNCTION(BlueprintCallable, Category="Gray Policy Lab|Diagnostics")
 	bool SetAuditViewportSizeForTesting(int32 Width, int32 Height);
+	/** Read-only low-cost engine counters. Thread/GPU counters are asynchronous, not additive. */
+	UFUNCTION(BlueprintPure, Category="Gray Policy Lab|Diagnostics")
+	FString GetFrameEnvironmentForTesting() const;
 	ADarkwellMovingPropLabRoom* GetRuntimeRoomForTesting() const { return RuntimeRoom.Get(); }
 	static FVector GetRoomCenterForTesting(int32 Room);
 	static int32 GetExpectedControlCountForTesting() { return 27; }

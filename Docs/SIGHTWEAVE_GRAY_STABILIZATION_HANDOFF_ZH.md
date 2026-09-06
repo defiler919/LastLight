@@ -63,3 +63,17 @@
 运行目录均在 Saved/ArchitectureAudit；最小路径在 Saved/Stabilization。新造通知探针 ExitNotification_Before01、Before02、LateDebug01 均退出 0（最后一项调试器从启动附加），不算已重现根因的证明。退出验收继续开放，需追加最终正常主窗口、多 PIE 和失败路线覆盖。
 
 阶段 1 只提交驱动所有权修复与此处进度，场景/资源算法不变。性能元数据与 Editor 专用诊断入口仍在下一阶段施工；已有烟测包含脚本变量错误、Standalone 内置 ToolsetRegistry PythonTestRunner 初始化错误和后台 PIE，均明确不是正式基线。单独禁用 ToolsetRegistry 会被依赖重新启用，不能声称该开关已生效。当前机器 CPU Ryzen 9 3900X、GPU RTX 2070 SUPER、驱动 32.0.16.1088、RAM 34,305,445,888 字节。用户已退出 SpaceCraft，后续正式实验串行独占 UE/构建负载。
+
+## 阶段 2：中断恢复与可构建测量入口
+
+用户实体 Esc 中断后恢复，起点仍为 `2344b1a4829e4ca4ac60250cedc4df453ee34ea2`，fetch 后 local/upstream/remote 一致。未提交文件均来自本轮，未使用 reset/restore/clean/stash。没有残留 UE、Python、Trace、UBT 或测试进程；用户自己的普通 PowerShell 保留。LFS fsck 通过。
+
+- `Scripts/TestManifests/GrayFunctional.json` 固定原 142 项完整名称与 selector；`RunGrayFunctionalRegression.ps1` 验证新报告不得遗漏原名。`Stabilization_HarnessFunctional` 实际 142 项（131 clean、11 warnings）、0 failed、0 not-run、severe 0、exit 0，194.741 秒；coverage 文件确认 missing/new 均空。
+- `RunGrayExitProbe.ps1` / `audit_gray_exit.py` 保存最小 0/N PIE 生命周期、真实退出码及源码状态；MainWindow 模式用于外部真实主窗口操作。
+- `RunGrayPerformanceBaseline.ps1` / `profile_gray_stabilization.py` 保存逐帧 JSONL、冷启动、case setup、资源与质量/硬件/进程元数据，支持 PIE、Standalone、Smoke/Matrix/LongRun 和独立 Trace。尚未完成正式矩阵/长测验收。
+- 新 `DarkwellEditor` 模块只承载临时 PIE 浮动窗口、实时视口 override 恢复和退出顺序诊断；uproject/Editor target 增加该 Editor 模块，SightWeave 插件无改动。人工晚通知 probe 仅显式参数启用，已有负结果保留，不作为退出修复。
+- Runtime Lab 新只读实际视口/窗口、CVar 和线程/GPU计数接口。计数异步且不可相加；特别是 PIE 的全局 Render/RHI 读数可能被后续 Slate 窗口更新覆盖，不能当该游戏帧精确归因。下一阶段用独立 Insights 样本核对。
+- Smoke 实际 viewport 1920×1080、SP100、TSR、sg 全 3、硬件光追和 VSM 开启。Standalone 空场景 p95 约 28–30 ms；浮动 PIE 的 OS foreground 仍为 0（即使 Slate window_active 为 1），因此不是正式前台 baseline。所有异常烟测保留，不能选最后一次代替对照。
+- `-NoAuthoringToolsets` 是显式诊断环境，逐次记录全部禁用项；解决 UE 内置 ToolsetRegistry 在 Standalone `-game -EnablePython` 中引用缺失 PythonTestRunner 的初始化错误。普通项目配置不改变，该环境不能冒充默认 Editor。
+
+`Scripts/BuildEditor.ps1` 恢复检查成功（Saved/Logs/Stabilization_ResumeCheckpointBuild.log，1.32 秒 up-to-date；此前对应 C++ 完整构建 6.86 秒成功）。该检查点保存现有入口，并不声称功能最终验收、退出全面稳定、性能达标或尖峰已修复。先 push 本阶段再进行长实验。

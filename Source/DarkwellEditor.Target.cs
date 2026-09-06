@@ -11,5 +11,6 @@ public class DarkwellEditorTarget : TargetRules
 		DefaultBuildSettings = BuildSettingsVersion.V7;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
 		ExtraModuleNames.Add("Darkwell");
+		ExtraModuleNames.Add("DarkwellEditor");
 	}
 }

@@ -26,6 +26,12 @@
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Text/STextBlock.h"
 #include "UObject/GarbageCollection.h"
+#include "RenderTimer.h"
+#include "DynamicRHI.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Widgets/SWindow.h"
+#include "Misc/App.h"
+#include "HAL/PlatformApplicationMisc.h"
 
 #define LOCTEXT_NAMESPACE "DarkwellGrayPolicyLab"
 
@@ -528,6 +534,28 @@ bool ADarkwellSightWeaveGrayPolicyLabDirector::SetAuditViewportSizeForTesting(in
 	}
 #endif
 	return false;
+}
+
+FString ADarkwellSightWeaveGrayPolicyLabDirector::GetFrameEnvironmentForTesting() const
+{
+	const FIntPoint Size = GEngine && GEngine->GameViewport && GEngine->GameViewport->Viewport
+		? GEngine->GameViewport->Viewport->GetSizeXY() : FIntPoint::ZeroValue;
+	TSharedPtr<SWindow> Window;
+	if (FSlateApplication::IsInitialized() && GEngine && GEngine->GameViewport)
+	{
+		if (const auto Widget = GEngine->GameViewport->GetGameViewportWidget())
+			Window = FSlateApplication::Get().FindWidgetWindow(Widget.ToSharedRef());
+	}
+	const FVector2D WindowSize = Window ? FVector2D(Window->GetSizeInScreen()) : FVector2D::ZeroVector;
+	auto CVar = [](const TCHAR* Name) { const auto* V=IConsoleManager::Get().FindConsoleVariable(Name); return V ? V->GetFloat() : -1.0f; };
+	return FString::Printf(TEXT("{\"frame\":%llu,\"viewport\":[%d,%d],\"window\":[%.0f,%.0f],\"foreground\":%d,\"window_active\":%d,\"minimized\":%d,\"screen_percentage\":%.3f,\"secondary_percentage\":%.3f,\"aa\":%.0f,\"dynamic_resolution\":%.0f,\"vsync\":%.0f,\"max_fps\":%.3f,\"fixed_step\":%d,\"game_ms\":%.4f,\"render_ms\":%.4f,\"rhi_ms\":%.4f,\"gpu_ms\":%.4f,\"game_wait_ms\":%.4f,\"render_wait_ms\":%.4f,\"present_ms\":%.4f}"),
+		GFrameCounter, Size.X, Size.Y, WindowSize.X, WindowSize.Y,
+		FPlatformApplicationMisc::IsThisApplicationForeground()?1:0, Window && Window->IsActive()?1:0, Window && Window->IsWindowMinimized()?1:0,
+		CVar(TEXT("r.ScreenPercentage")), CVar(TEXT("r.SecondaryScreenPercentage.GameViewport")), CVar(TEXT("r.AntiAliasingMethod")),
+		CVar(TEXT("r.DynamicRes.OperationMode")), CVar(TEXT("r.VSync")), CVar(TEXT("t.MaxFPS")), FApp::UseFixedTimeStep()?1:0,
+		FPlatformTime::ToMilliseconds(GGameThreadTime), FPlatformTime::ToMilliseconds(GRenderThreadTime), FPlatformTime::ToMilliseconds(GRHIThreadTime),
+		FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles()), FPlatformTime::ToMilliseconds(GGameThreadWaitTime),
+		FPlatformTime::ToMilliseconds(GRenderThreadWaitTime), FPlatformTime::ToMilliseconds(GSwapBufferTime));
 }
 
 bool ADarkwellSightWeaveGrayPolicyLabDirector::CaptureGameViewportForTesting(const FString& Filename)

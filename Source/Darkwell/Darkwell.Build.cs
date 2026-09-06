@@ -27,7 +27,10 @@ public class Darkwell : ModuleRules
 			"GeometryFramework",
 			"Slate",
 			"SlateCore",
-			"UMG"
+			"UMG",
+			"RenderCore",
+			"RHI",
+			"ApplicationCore"
 		});
 
 		if (Target.Type != TargetType.Server)

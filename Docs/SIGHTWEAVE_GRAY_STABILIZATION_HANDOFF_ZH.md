@@ -34,11 +34,11 @@
 
 | 维度 | 状态 | 本轮证据 |
 | --- | --- | --- |
-| FUNCTIONAL REGRESSION | PARTIAL | 最终原生 143/143；Qualification 906 帧 / 8632 检查通过，其余视觉流程继续 |
+| FUNCTIONAL REGRESSION | PASS | 最终原生 143/143，四个最终视觉协议及全部对应 oracle 通过；见阶段 7–8 |
 | EXIT STABILITY | PARTIAL | 当前可复现的 audit 生命周期错误已修复，最终主窗口、多 PIE 复核继续 |
 | FRAME PERFORMANCE | FAIL | 正式前后各 3 PIE + 3 Standalone；空场景仍超 16.6 ms，部分案例退化 |
 | INITIALIZATION / BATCH HITCHES | FAIL | 184 distributed setup 约减半，整帧仍存在约 2.5–2.6 秒尖峰 |
-| LONG-RUN RESOURCES | PARTIAL | 待本轮模拟长测和十分钟真实运行 |
+| LONG-RUN RESOURCES | PARTIAL | 两种完整长测均已完成；真实资源有界，模拟工作集 4.77→11.20 GB 的增长归因仍开放 |
 
 本检查点只新增文档，不改 C++、构建配置、插件或资产，因此无需在该文档阶段重新 BuildPlugin；正式运行前核验/构建 Editor。
 
@@ -205,3 +205,30 @@ ProjectReference_PIE02 使用默认 Editor 工具集、普通 L_Prototype 原生
 LabRenderReference_PIE01 为独立 Lab 大厅 render-size 取证，不混入 Matrix：34.921 秒、complete、exit 0、severe 0，实际 1920×1080/SP100、6240×6320 coverage。GPU 原始事件 TSR MeasureFlickeringLuma / SpatialAntiAliasing / ResolveHistory 为 1920×1080；Epic TSR UpdateHistory 为 3840×2160，保留当前默认高密度历史。240 帧 p50/p95/p99/max 23.130/26.188/27.691/146.271 ms，2 帧 >33、1 帧 >100、最长 2；该独立大厅路线与压力房 Empty 不同，不用于替换正式矩阵。两份 PIE Reference 截图均已查看，尺寸以实际 viewport 与 GPU 事件为准。
 
 最新 Editor 构建追加完整 manifest 回归 Stabilization_FinalFunctional03：**143/143（134 clean、9 warnings）、0 failed、0 not-run、severe 0、进程 exit 0**；原 142 个名称无遗漏，新增仍为 ConservativeDrawSupport。测试总时长 178.692 秒、进程 wall 211.329 秒。运行时源码自 5ec64c1 以来无变化，本次额外复核包含最终重链后的二进制；完整日志与 baseline-coverage.json 保留。
+
+已提交明细表 `Docs/SIGHTWEAVE_GRAY_STABILIZATION_METRICS.csv` 包含全部 12 个有效进程 × 13 案例 = 156 行：逐次 SHA/二进制哈希、p50/p95/p99/max、setup、>33/>100/慢帧串、资源首尾/峰值，以及异步线程和灰色阶段分位数。线程列存在重叠和延迟，不能相加或直接相减归因；它们与前文独立 Trace 互为补充。无效样本仍在原目录并在本文逐项记录，不混入该有效明细表。
+
+## 阶段 9：真实十分钟长测与第二次中断恢复
+
+`RunGrayPerformanceBaseline.ps1 -RunName Stabilization_FinalLongRun01 -Mode Standalone -Protocol LongRun -NoAuthoringToolsets` 已在 Codex 意外关闭前完整完成。Saved/Stabilization/Stabilization_FinalLongRun01 的 complete.json、summary.json、analysis.json、long-resource-trends.json 和原始 frames.jsonl 均存在。进程 wall 636.739 秒，完整协议、非调试器 exit 0、severe 0、日志正常关闭；全部逐帧环境检查通过，异常前台/尺寸/画质帧为 0。没有重跑这份长测。
+
+前置 ActualNewKnowledge 360 帧通过真实新增六条未解决知识断言；p50/p95/p99/max 22.057/29.101/44.393/50.300 ms，5 帧 >33、0 帧 >100。随后 LongInteraction 按协议达到 610.004 秒，首末已记录帧跨度 609.967 秒；共 29,741 帧，p50/p95/p99/max **21.004/26.430/28.963/112.532 ms**，57 帧 >33、2 帧 >100、最长慢帧串 1，性能仍 FAIL。共有 62 个房间阶段事件、11 次显式 Reset、10 次成功物理运动启动，覆盖 Room 1/2/3/5 的 Whole、Partial、运动、重复观察和重入。前置六条知识到混合路线之间的 Room 03 Reset 明确记录为 6→0，不伪装自然遗忘。
+
+| LongInteraction 资源 | 首帧 | 末帧 | 峰值 |
+| --- | ---: | ---: | ---: |
+| records | 1 | 2 | 4 |
+| proxies | 1 | 2 | 3 |
+| textures | 2 | 12 | 14 |
+| MIDs（历史计数） | 1 | 4 | 5 |
+| caps | 1 | 1 | 2 |
+| fine history bytes | 0 | 2,818,048 | 6,627,328 |
+| 工作集 bytes | 3,235,434,496 | 3,575,353,344 | 3,575,353,344 |
+| UObject 槽位计数 | 53,904 | 53,999 | 53,999 |
+
+分钟末 RHI texture bytes：前四分钟 1,948,364,800，之后 1,939,058,688，末尾清理仍为后者；这是设备纹理统计，不等于全部显存。独立 NVML 观测运行中约 3919–3981 MiB，退出后 1694 MiB（读数时下一普通 Editor 正在启动，不能声称是完全无 UE 的桌面基线）。工作集随 Python 保存逐帧字典增加；释放 samples、Python GC、native GC 并再运行 60 个真实帧后降至 **3,385,679,872** 字节，records/proxies/textures/MIDs/caps/fine history 保持 2/2/12/4/1/2,818,048。真实运行未见持续增长的灰色对象资源或 GPU 纹理数量，但此结果不能解释或抵消同步模拟中的 6.4 GB 工作集增长，故 LONG-RUN RESOURCES 保持 PARTIAL。
+
+用户随后报告：关闭 Unreal Editor 过程中 Codex 窗口也意外关闭。恢复时 local/upstream/实际 remote 均为 e358e3eb2504be56af929f20ce8d61525f7d4c52，未提交仅本文两行明细说明和新 CSV，暂存区/stash 为空，LFS fsck 通过。没有残留 UnrealEditor、Python、Trace、UBT 或 AutomationTool；原有普通 PowerShell 保留。保存所有 Saved 证据，未 reset/clean/restore，也未重跑已完成测试。
+
+中断发生于 `Stabilization_FinalMainPlayStop01`：普通 Editor 已启动，最后日志为 12:24:44.406；没有 summary.json、正常关闭标记、已完成 PIE 或可靠退出码。最后原生窗口操作调用被中断，不能推定键盘操作已执行。该样本标为 **INTERRUPTED / EXIT UNKNOWN**，不算 PASS，也不伪造 0xC0000005。恢复查询最近一小时 Windows Application 1000/1001/1002 未找到匹配 Codex/UE 事件，项目最新 crash 目录仍为前一日；这不证明没有异常，只说明目前没有新崩溃证据可归因。最终普通 Editor 退出扩展验证仍待完成。
+
+本次普通 Editor 的额外启动日志 verbosity 明确识别出早前反复出现的 13 条 generic Condition failed 属于引擎 smoke 测试 FUnifiedErrorTest_CreateErrorMessage、FUnifiedErrorTest_CreateErrorMessageWithContext、FStructuredLogFormatTest。它们发生在本任务指定测试队列之前，原日志保留，不能称整个引擎所有测试均通过；灰色层 143 项结果按其独立报告判定。尚未把这些引擎测试失败与退出事件建立因果关系。

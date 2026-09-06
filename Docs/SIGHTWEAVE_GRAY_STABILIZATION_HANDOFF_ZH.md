@@ -1,6 +1,8 @@
 # 灰色层功能检查点与稳定化施工
 
-最新续工：从 `d986b53` 开始的性能架构审计已完成两阶段局部重构，运行时冻结并推送于 `b03bcfb`：ownership空间候选与旧表面提前排除、cap依赖摘要、地面记忆饱和行/扫描线交点复用。最终145/145原生功能、四套视觉及全部独立oracle已PASS。三次无Trace Batch的184初始化峰值1.288–1.355秒，SourceUpdate独立Trace均值约5.50→2.59ms，均不等于性能达标。分配探针已区分用户buffer、D3D12页池与Mimalloc预留/decommit；旧同步长测的全部6.4GB仍未逐字节闭环。新阶段FrameAudit及最终真实610秒长测进行中，已有正式全矩阵和同步长测未重跑。最新事实见 [性能架构审计](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md) 第5–10节；下文“最终”指上一轮稳定化基线。
+最新续工完成：从 `d986b53` 开始的两阶段局部重构，运行时冻结并推送于 `b03bcfb`：ownership空间候选与旧表面提前排除、cap依赖摘要、地面记忆饱和行/扫描线交点复用。最终145/145原生功能、四套视觉及全部独立oracle PASS。三次无Trace Batch的184初始化峰值1.288–1.355秒；FrameAudit的Empty p95中位18.599ms、Partial21.940ms；SourceUpdate独立Trace均值5.50→2.59ms。最终真实610秒长测42,663帧、p95=15.991ms，但5帧>100ms，性能仍FAIL。工作集3.363→3.755GB，释放采样数据+GC+60真实帧后3.434GB，历史/纹理资源边界稳定。短GC规模对照证实采样器保留4.27万条字典可产生约107ms完整Python GC，原慢帧不删除。分配探针区分了用户buffer、D3D12页池与Mimalloc预留/decommit；旧同步6.4GB仍未全部闭环。已有正式全矩阵和54,000步同步长测未重跑。完整证据、限制和后续架构方向见 [性能架构审计](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md) 第5–15节，以及新增23行 [阶段明细](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_METRICS.csv)。
+
+本次性能架构阶段最终分项：**ARCHITECTURE AUDIT PARTIAL / FRAME PERFORMANCE FAIL / INITIALIZATION-BATCH HITCHES FAIL / LONG-RUN RESOURCES PARTIAL / FUNCTIONAL REGRESSION PASS**。EXIT STABILITY在已验证范围内维持PASS。下一步优先运行时ownership/cap工作单元与原子发布，不能把延迟压力脚本当作初始化优化；随后改进完整帧成本和流式采样，保留全部证据。下文“最终”及其普通Editor打开现场属于上一轮稳定化基线，本轮新增进程均已正常结束，未重新打开普通Editor。
 
 2026-09-06，最终状态：**PARTIAL — GRAY_STABILIZATION_BLOCKED**。功能与当前可复现退出路径的回归通过；完整帧、批量尖峰未达标，长期资源归因仍有缺口。不得据此创建发布 stable 或开始黑色层。
 
@@ -32,7 +34,7 @@
 
 禁止强杀/立即 ExitProcess/忽略退出码伪装稳定，禁止修改系统配置、降低画质、改变规则或牺牲合法知识。所有有效阶段明确暂存、commit、push 后核对 local/upstream/remote。生成证据保留 Saved，不提交资产或生成目录。
 
-## 最终分项结论
+## 上一轮稳定化基线分项结论
 
 | 维度 | 状态 | 本轮证据 |
 | --- | --- | --- |

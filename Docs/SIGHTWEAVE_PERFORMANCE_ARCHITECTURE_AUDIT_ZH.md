@@ -164,4 +164,108 @@ Exporter核查发现引擎TimingExporter.cpp将GPU队列过滤恒设true，因�
 | SameIdentity64 | 17.733 / 17.312 / 17.558 | 179.268 / 198.081 / 182.488 | 436.816 / 462.747 / 439.590 |
 | Distributed184 | 17.244 / 17.557 / 17.421 | 561.233 / 512.112 / 516.630 | 1354.999 / 1288.085 / 1293.440 |
 
-全部cold/setup/离群帧保留；每组64和184各一帧>100ms。setup真实创建64/184条；同身份64在合法反证后最终为0（第二次首个采样已是0），184首个采样及热态为120，fine bytes41,157,632。不能把17ms热态称为持续184满负载。秒级停顿缩短但INITIALIZATION仍FAIL，Empty p95仍超过16.6ms。新的无Trace FrameAudit三组和最终真实610秒长测继续进行；不会重复旧完整矩阵或54,000步同步长测。
+全部cold/setup/离群帧保留；每组64和184各一帧>100ms。setup真实创建64/184条；同身份64在合法反证后最终为0（第二次首个采样已是0），184首个采样及热态为120，fine bytes41,157,632。不能把17ms热态称为持续184满负载。秒级停顿缩短但INITIALIZATION仍FAIL，Empty p95仍超过16.6ms。不会重复旧完整矩阵或54,000步同步长测。
+
+## 11. 最终完整帧复核与按实际线程校正的成本模型
+
+`PerformanceAudit_FinalFrame01/02/03` 为同一最终运行时的三次独立无Trace Standalone FrameAudit，45.046/44.786/44.822秒；complete、exit0、severe0、实际D3D12/SM6、环境异常0，质量保持原值。统计包含全部case帧，含初始化。
+
+| case | p95 ms，三次 | p99 ms，三次 | 最大整帧 ms，三次 |
+| --- | --- | --- | --- |
+| Empty | 18.067 / 18.812 / 18.599 | 19.311 / 19.632 / 20.058 | 19.812 / 40.250 / 21.182 |
+| FastSweep160 | 15.940 / 16.035 / 16.324 | 17.227 / 16.736 / 17.803 | 408.535 / 409.242 / 424.341 |
+| PartialNewThenRepeat | 22.093 / 21.691 / 21.940 | 32.916 / 31.785 / 32.807 | 38.960 / 38.090 / 40.097 |
+| StationaryStop | 16.451 / 16.251 / 16.559 | 17.433 / 17.047 / 17.490 | 24.402 / 24.788 / 25.737 |
+
+Empty第二次40.250ms保留；FastSweep每次一个>100ms冷帧，第三次有连续两个>33ms。Partial每次5帧>33ms，native memory p95约5.42–5.48ms；不能由快速扫视/停止的p95接近目标宣称完整帧PASS。新阶段只复核局部Standalone协议，没有重新验证全PIE矩阵；旧正式PIE FAIL继续有效。
+
+用 `ExportGrayTrace.ps1 -RunName PerformanceAudit_FrameCache01 -EventsOnly` 从**已有**capture.utrace补导492,228个相关事件，保存 `events_critical_all_threads.csv`，原统计、旧受限线程导出和日志不覆盖。`AnalyzeGrayCriticalEvents.py` 按实际ThreadId/TimerId与region时间求交，总量裁切边界、事件均值/分位数只取完整落入region的事件。其分位数使用线性插值，wall分析器采用原有次序统计，两种分位数不混称。第一次补导已成功但外层临时命令用未定义的LASTEXITCODE误报“Export failed”；核查Insights正常退出、文件和492,228条输出后直接分析原文件，未重新采集。
+
+Empty region为[14.304289,19.181216]秒，校正后的代表成本如下。相同名称可能有多个TimerId，保留身份避免把CPU或细小GPU准备段合并进主pass：
+
+| 实际线程 / scope | 完整事件数 | mean ms | p95 ms | 解释 |
+| --- | ---: | ---: | ---: | --- |
+| GameThread / Frame | 299 | 16.236 | 17.953 | GT帧含等待，不等于纯计算 |
+| GameThread / SourceUpdate | 300 | 2.585 | 3.236 | 插件权威更新；MemoryWrite子段2.519ms |
+| GameThread / GameThreadWaitForTask | 300 | 11.114 | 12.832 | 下游渲染任务背压，不能再加到GPU帧 |
+| 各Foreground/Background Worker / GPUBound_WaitingForGPUForOcclusionQueries | 299合计 | 10.577 | 不合并各线程分位数 | 等待在任务线程执行；早前“RT等待”应理解为渲染流水线依赖，非独占RT上的同名scope |
+| GPU0-Graphics0 / Frame，Timer4453 | 299 | 16.103 | 17.675 | 独立GPU graphics队列帧 |
+| GPU0-Graphics0 / SceneRender | 300 | 14.678 | 15.923 | 包含以下渲染pass |
+| GPU0-Graphics0 / TSR，Timer4445 | 300 | 4.554 | 4.938 | 原Epic/1080p输入与原TSR历史密度 |
+| GPU0-Graphics0 / LumenScreenProbeGather，Timer4419 | 300 | 2.953 | 3.304 | 同名Timer4404仅.017ms，未误合并 |
+
+这形成可信的流水线成本模型：Source确有约2.9ms可消除的CPU重复写入；修复后GT更多时间等待，graphics队列约16ms，TSR和Lumen占其中明确部分，完整wall仍约18ms的尾部。所有父子pass和跨线程时间均有重叠；没有使用`wall-memory`或跨线程相加得到虚构的总帧预算。其它渲染pass、RHI提交、调度/Present与测量开销仍在原trace中，本文不把未选择的scope残差命名为单一瓶颈。
+
+旧十分钟26.430ms未录Trace，无法事后重建该p95帧的因果链；旧Source5.193ms、GPU SceneRender19.550ms、TSR5.345ms与本轮修改前SceneRender14.759ms的差异发生在局部重构之前，不能纳入算法收益。对旧数字的准确回答是“基础渲染/背压为主，部分Current写入影响尾部，有未闭合的跨运行渲染时间差”，不是“26.43全部由历史或某个GPU pass造成”。
+
+## 12. 改造后的复杂度、资源边界与后续架构决策
+
+| 路径 | 现在避免的工作 | 仍存在的成本与生命周期 |
+| --- | --- | --- |
+| Ownership | 每必要历史阶段构建空间候选；大量不接触旧表面的footprint整体拒绝，原谓词保留 | dense overlap时K仍随H增长，候选间边交点查询仍昂贵；首帧D=S。16cm索引只在本次阶段存活，超过scratch预算回全扫描 |
+| Cap | 各较新record依赖摘要只扫描一次；O(H²S)降为O(HS+H²) | cap轮廓的必要精确计算、边断点、临时FineCells转换仍存在；不删cap、不改变精度 |
+| World memory | 已全1行不再执行等价OR；相同polygon/Y/row交点跨X tile复用 | 仍遍历需要的packed bits/tiles，实际新增合法知识仍写入；临时行表返回即释放，clear/replace直接以真实bits为准 |
+| Current/History textures | 本轮未用降低纹理精度或延迟合法上传取巧 | full-float presentation约16B/sample、缓存coverage约4B/sample、细知识和bit masks并存；签名不变之前仍可能生成/散列像素、重复MID参数；可继续优化，但先需dirty输入契约和完整像素等价证据 |
+| History geometry / Proxy | 避免每点全身份扫描，不复制或删除权威知识 | CachedNewerGeometry最坏O(H²P)元数据；FindRecord线性查询、批量capture/proxy/texture/cap构造仍同步；GC和RHI页池回收有独立时序 |
+
+优先级判断没有改变：下一阶段若要真正消除184的秒级停顿，应改造**运行时历史工作单元和提交边界**，而不是继续堆点查询微优化。可先在GT建立只读几何/知识输入，对CPU ownership/cap做任务化计算，验证输入epoch后在GT原子发布；同时保持未完成期间Current与已合法历史一致、cap可见和GPU资源有效。该设计还需要处理新观察/反证使任务失效、取消与世界退出、资源上传背压。用户授权允许重构，但本轮证据只支持以上局部实现达到功能等价；尚未实现或验证的异步方案不写成成果。
+
+旧同步54,000步不含正常RHIEndFrame；同调用中可积累576MiB用户缓冲、数百个4MiB上传页和Mimalloc提交页。三个生命周期已分别给出回调、分配跟踪和VirtualQuery证据；这是资源积压与缓存的实证，不能把仍预留的8MiB地址段当活跃用户泄漏。现有对象/纹理资源计数有界也不能反向证明所有分配无泄漏。后续如需闭合旧6.4GB账本，须在该同步fixture自身采集完整分配追踪或逐真实引擎帧的等价对照；本轮不机械重跑已完成长测，不把诊断flush/trim加入产品逻辑。
+
+## 13. 最终真实610秒长测
+
+`PerformanceAudit_FinalLongRun01` 在已推送8f26fdf文档检查点启动，运行时仍为b03bcfb；无Trace、无截图、真实D3D12/SM6 Standalone、1080p/SP100及原质量。独立进程634.853秒，完整协议、日志正常关闭、exit0、severe0，42,663个LongInteraction帧的环境异常0。
+
+前置ActualNewKnowledge360帧保留6条真实新增未解决知识，p50/p95/p99/max=15.381/19.059/28.494/32.109ms，无>33ms。随后原混合路线达到610秒，首末采样跨度609.975秒；p50/p95/p99/max为 **14.135/15.991/17.538/160.729ms**，18帧>33ms、5帧>100ms、最长慢帧串1。只有该路线的p95/p99数值达标；重复大尖峰及前述Empty/Partial超标使总体FRAME PERFORMANCE仍为FAIL。
+
+路线事件62个，11次显式Reset、10次成功运动启动；前置知识到混合路线之间的Room03 Reset为6→0，清楚区分人为Reset与合法反证。逐帧elapsed_seconds从整个驱动开始计算（此组Long末值616.314），long-events从混合路线起点计算；分钟资源桶使用前者，不能把它误读为长路线运行了616秒。
+
+| 资源 | Long首帧 | Long末帧 | 峰值 | 释放Python样本+GC+60真实帧后 |
+| --- | ---: | ---: | ---: | ---: |
+| records | 1 | 2 | 4 | 2 |
+| proxies | 1 | 2 | 3 | 2 |
+| textures | 2 | 12 | 14 | 12 |
+| MIDs（历史统计） | 1 | 4 | 5 | 4 |
+| caps | 1 | 1 | 2 | 1 |
+| fine history bytes | 0 | 2818048 | 6627328 | 2818048 |
+| 工作集 bytes | 3363123200 | 3754786816 | 3754786816 | 3434364928 |
+| UObject槽位 | 53904 | 53999 | 53999 | 53999 |
+| RHI texture bytes | 1946574848 | 1939058688 | 1960042496 | 1939058688 |
+
+分钟末工作集约3.370/3.430/3.488/3.521/3.541/3.572/3.616/3.661/3.706/3.742/3.755GB，最后桶不足一分钟。RHI纹理从约1.960GB下降并在后半程保持1.939GB；释放Python帧数据后工作集下降约320MB，保留历史资源不变。相比旧长测42,663对29,741个样本，采样器自身保存更多dict；不能把运行末WS增加全部称为玩法泄漏，也不能据此证明旧同步6.4GB没有其它来源。
+
+native memory p50/p95/p99/max=.144/4.327/5.304/30.040ms。五个>100ms帧发生在驱动elapsed366.635、427.757、488.877、550.012、611.134秒，间隔约61.12秒；对应native对象memory只有.096–.102ms，无texture upload/cap rebuild，日志的逐帧时序与wall采样有相邻帧延迟。异步engine GT峰值149.008ms，仍不能用计数相减定位所有父子scope。对这一新发现的周期性尖峰补做短时Python GC归因，原长测全部数据与FAIL结论保留。
+
+23行明细保存在 `SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_METRICS.csv`，包含7个独立无Trace进程、全部case/cold/setup、p50/p95/p99/max、慢帧串、资源首尾/峰值、SHA和二进制/驱动/质量哈希。七组所记录的Darkwell DLL、driver、质量分别只有一种哈希；不会用新Standalone局部样本冒充新PIE全矩阵。生成命令：`python Scripts/SummarizeGrayPerformanceAudit.py <七个Saved/Stabilization/PerformanceAudit_Final目录> --csv Docs/SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_METRICS.csv`；输入各目录先经AnalyzeGrayStabilization.py分析，长测资源明细保存为该长测目录long-resource-trends.json。
+
+## 14. 采样器Python GC成本的短时归因
+
+本机BaseEngine.ini:1749的 `gc.TimeBetweenPurgingPendingKillObjects=61.1` 与五个大尖峰的61.12秒周期一致。UnrealEngine.cpp的ConditionalCollectGarbage按该间隔触发；PythonScriptPlugin.cpp:2175的OnPreGarbageCollect获取GIL并调用PyUtil::CollectGarbage；PyUtil.cpp:1798最终执行完整 `PyGC_Collect()`。现有测量驱动既逐帧写JSONL，也把包含engine字典和viewport等列表的每个样本保留在samples直到case结束，造成大量仍可达、仍需GC遍历的对象。
+
+为验证机制，独立 `Saved/GrayObjectPolicy/PerformanceAudit_PythonGcAttribution01/probe.py` 在实际UE Python3.11.8、NullRHI进程中读取**既有**帧文件，分别保留0/4096/16384/42663条字典，对每种规模做四次完整gc.collect(2)。没有重跑游戏路线，没有修改GC间隔或关闭GC；23.048秒、complete、exit0。原命令、script、日志和gc-scaling.json保留。
+
+| 保留样本数 | 四次完整GC ms | tracked对象数 |
+| ---: | --- | ---: |
+| 0 | 7.140 / 6.678 / 6.757 / 6.713 | 68557 |
+| 4096 | 19.322 / 16.709 / 17.128 / 16.760 | 89040 |
+| 16384 | 46.873 / 46.397 / 48.444 / 48.288 | 150483 |
+| 42663 | 104.361 / 105.735 / 107.753 / 108.632 | 281881 |
+| 释放后0 | 6.267 | 68568 |
+
+每次collected=0，所有保留row仍tracked；这是对仍可达采样数据的遍历成本，不是发现了4万条垃圾或泄漏。它确证采样器能额外制造百毫秒GC，并与真实长测的增长周期吻合；真实长测未Trace，不能声称逐帧160.729ms已全部分解为Python GC。应将其标为**已有受控证据的测量开销**，不可删掉原慢帧后重新计算PASS。
+
+下一次修订测量协议时，应只保留运行断言必要的有限数据，全部原始帧继续流式保存，完整分布在计时结束后由外部分析器计算；不得减少样本、禁用GC、丢弃尖峰或改画质。本轮不在最终采集后悄悄修改已冻结驱动，也不为改变成绩再重复十分钟长路线。原Empty/Partial失败和184秒级停顿独立于这一长测采样器问题，仍需解决。
+
+## 15. 最终判定与继续施工的起点
+
+| 维度 | 状态 | 结论 |
+| --- | --- | --- |
+| ARCHITECTURE AUDIT | PARTIAL | 成本、复杂度和资源生命周期模型已建立并通过规模/线程/分配/GC对照验证；旧26.430ms逐帧因果链、跨运行渲染时间差及旧同步6.4GB完整账本仍未闭合 |
+| FRAME PERFORMANCE | FAIL | 新Standalone Empty p95中位18.599ms、Partial21.940ms；新610秒p95=15.991ms但5帧>100ms。旧PIE正式FAIL未被新局部样本替代 |
+| INITIALIZATION / BATCH HITCHES | FAIL | 184真实最大整帧1.288–1.355秒；独立同协议Trace从2.426降到1.318秒，仍远未达标 |
+| LONG-RUN RESOURCES | PARTIAL | 实际长测资源边界稳定；上传排队、4MiB D3D12页回收、Mimalloc decommit及采样数据保留分别有证据，不能冒充全部内存无泄漏 |
+| FUNCTIONAL REGRESSION | PASS | 最终完整Editor build成功，145/145及四套视觉/全部独立oracle通过；冻结灰色规则无降级 |
+
+EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉、七个性能进程和短GC探针正常退出。原中断EXIT UNKNOWN及旧失败保留，没有通过强杀或全局快捷键结束进程。总体仍为 **PARTIAL — GRAY_STABILIZATION_BLOCKED**。
+
+继续施工顺序：先设计并验证不可变ownership/cap工作集与GT原子发布，解决批量同步停顿；随后减少完整帧渲染与提交成本，并将长测采样器改为完整流式证据；最后针对同步fixture做分配级闭环。不能重复已完成的功能/视觉/长测来替代实现，不改变Whole每轮100cm、合法历史、采样、cap和质量。构建用 `Scripts/BuildEditor.ps1`，功能用RunGrayObjectPolicyTests.ps1的既有完整selector（最终summary.json保存原串）；视觉用RunGrayMemoryAudit.ps1的Qualification/Contracts/Episodes和Reobservation -WholeSessions -NormalTurns。最终仅文档/分析脚本变更，不再修改已验证运行时。

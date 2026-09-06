@@ -1,8 +1,8 @@
 # SightWeave 灰色层性能架构审计
 
-最新初始化施工起点8fb4d6e：第17节记录当前历史/cap视觉补验及capture准备切片；第16节保留上一轮ownership与真实A/B证据。
+最新初始化施工起点8fb4d6e，运行时59030ab已推送：capture准备切片完成，前后必要历史/cap视觉及最终147/147功能通过。三次真实Batch中位数：184 setup **538.769→451.701ms**，最大整帧 **926.468→848.486ms**。初始化仍FAIL；完整证据、剩余cap/resource瓶颈见第17节。第16节保留上一轮ownership与真实A/B证据。
 
-最新施工（cf3a3c1之后）：第16节记录同帧join的封存ownership切片，运行时6c66747已推送。用户退出SpaceCraft后已补最小真实D3D12 Batch A/B：184最大整帧 **1363.970→921.871ms**、ownership **566.111→107.680ms**，setup **549.266→536.297ms**。这是一次有效同条件对照，初始化仍FAIL；详见16.3。第1–15节为上一轮证据，未重新审计或重跑其长测。
+上一轮施工（cf3a3c1之后）：第16节记录同帧join的封存ownership切片，运行时6c66747已推送。用户退出SpaceCraft后已补最小真实D3D12 Batch A/B：184最大整帧 **1363.970→921.871ms**、ownership **566.111→107.680ms**，setup **549.266→536.297ms**。这是一次有效同条件对照，初始化仍FAIL；详见16.3。第1–15节为更早证据，未重新审计或重跑其长测。
 
 2026-09-06。本轮起点 `d986b536fbd21a0fb0c600577f9912369fe221a3`；本地、实时远端一致，工作树干净，LFS fsck PASS。本文先记录修改前模型，后续实验追加，不以优化假设代替结论。外部规则和性能门槛继续采用 `SIGHTWEAVE_GRAY_STABILIZATION_HANDOFF_ZH.md`。
 
@@ -352,7 +352,7 @@ EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉�
 
 ## 17. Capture准备与最终cap提交切片
 
-起点8fb4d6e，工作树干净，无游戏/UE/构建冲突进程。先执行当前6c66747运行时必要视觉：`InitSlice_BeforeEpisodes01`完成51张图像，六组各896个历史内部表面样本全部无缺失，35.689秒；`InitSlice_BeforeContracts01`完成178张图像及3次PIE生命周期，Whole首次离开图像oracle24/24 PASS，60.168秒。均D3D12/SM6、协议完成、severe0、正常退出；人工核看局部外切口与最终完整历史，没有新增缺面或内部接缝。Episodes与旧Stage2的图像ROI不是逐像素相同，原始比较保留，不把TSR图像误称bitwise parity。本阶段先通过上述视觉门槛，未重新做ownership审计。
+起点8fb4d6e，工作树干净，无游戏/UE/构建冲突进程。先执行当前6c66747运行时必要视觉：`InitSlice_BeforeEpisodes01`完成51张图像，六组各896个历史内部表面样本全部无缺失，35.689秒；`InitSlice_BeforeContracts01`完成178张图像及3次PIE生命周期，Whole首次离开图像oracle24/24 PASS，60.168秒。均D3D12/SM6、协议完成、severe0、正常退出；另核看局部外切口与最终完整历史图像，没有发现新增缺面或内部接缝。Episodes与旧Stage2的图像ROI不是逐像素相同，原始比较保留，不把TSR图像误称bitwise parity。本阶段先通过上述视觉门槛，未重新做ownership审计。
 
 读取已有PerformanceAudit_BatchFootprint01/stats_all.csv：248次SealCapture累计550.694ms，其中CaptureFootprint205.980ms；EnsureResources累计144.095ms，CapPresentation累计272.560ms包含setup与后续update，不能把这些父子/跨阶段总量直接相加。184的上一轮无Trace setup536.297ms/最大帧921.871ms仍是改造前参考。
 
@@ -364,6 +364,35 @@ EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉�
 
 运行时59030ab已推送后，首对无Trace `InitSlice_CaptureLegacy01 / CaptureStaged01` 均有效、逐帧环境异常0、正常退出：184 setup558.937→465.343ms，最大整帧935.647→848.486ms；首个native368.894→373.530ms基本未变。控制量0保留旧串行求值和中间cap提交，但仍使用提取后的共同输入/结果封装；不能说该控制二进制完全等于8fb4d6e。两次原始日志、冷帧和setup均保留，没有隐藏新增Empty 52.563ms慢帧。
 
-改造后 `InitSlice_AfterEpisodes01` 51张/六组896样本surface oracle PASS，38.149秒；`InitSlice_AfterContracts01` 178张/24帧Whole image oracle/3次PIE PASS，62.842秒。均severe0、exit0，人工核看局部切口。Episodes同相机ROI与本轮before的51图比较，最大图像MAE=.305/255、最大p99像素差6/255，保留原图和比较JSON；以独立表面/图像规则及cap几何parity验收，不设置新宽松像素阈值冒充完全一致。
+改造后 `InitSlice_AfterEpisodes01` 51张/六组896样本surface oracle PASS，38.149秒；`InitSlice_AfterContracts01` 178张/24帧Whole image oracle/3次PIE PASS，62.842秒。均severe0、exit0，另核看局部切口图像。Episodes同相机ROI与本轮before的51图比较，最大图像MAE=.305/255、最大p99像素差6/255，保留原图和比较JSON；以独立表面/图像规则及cap几何parity验收，不设置新宽松像素阈值冒充完全一致。
 
 独立短Trace `InitSlice_TraceCaptureLegacy01 / TraceCaptureStaged01` 均完整、exit0、severe0、环境异常0；Trace样本按协议不算valid_normal_sample。使用Insights导出实际GameThread事件，确认恰好248个seal，按协议顺序64+184分组，并只累计嵌套在对应seal内的子scope（Saved中analyze_capture_events.py及capture-attribution.json可复核）。184 seal累计401.933→327.838ms，其中footprint **159.301→56.381ms**；cap调用 **368→184**，但实际cap时间131.458→146.713ms，没有测得cap耗时收益。两次ensure在seal内均368次、2.344→2.862ms；大量首次资源创建在seal外，不得用这个小值宣称资源构造已解决。新的完整stage功能回归正在运行，随后补必要短Batch重复以区分噪声；不重跑完整矩阵和长测。
+
+### 17.1 最终三次真实Batch对照
+
+全部使用59030ab运行时、同一DLL（SHA256 638E31BDB9C63795BAA2ADEEF662D33D46C3A991E1A179D8382ACA8D5E441698）、原Python driver（4889D03A8159A896BE5C742A28E747B5EDF7F594470FCD1CF7E329B78933D670）和DefaultEngine.ini。第一对源SHA59030ab，后两对源SHAf1c2f71仅增加证据文档，未再构建。顺序Legacy01→Staged01→Staged02→Legacy02→Legacy03→Staged03；双方ownership均开启，只切换StagedCapturePreparation。每次独立前台D3D12/SM6 Standalone，1920×1080/SP100、原质量、无Trace/固定步长/截图；均complete、exit0、severe0、log正常关闭，480个case帧环境异常0，六组valid_normal_sample=true。
+
+| 184 distributed，ms | Legacy01 | Legacy02 | Legacy03 | Staged01 | Staged02 | Staged03 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Setup | 558.937 | 538.769 | 525.705 | 465.343 | 444.692 | 451.701 |
+| 最大整帧 | 935.647 | 926.468 | 913.484 | 848.486 | 841.894 | 852.615 |
+
+三次中位数setup538.769→451.701ms，减少87.068ms（16.2%）；最大整帧926.468→848.486ms，减少77.982ms（8.4%）。首个native update中位378.550→388.191ms，ownership104.782→106.897、occupancy83.010→83.321、cap73.472→74.913、texture25.031→25.749ms：收益来自setup中的封存准备，未测得历史update阶段改善，不掩盖这些小幅退化。Trace的footprint缩短可解释主要机制，但不能将它与独立无Trace的时间直接相加或逐毫秒归因。
+
+六次setup均184条，首个及末个采样均120条、fine bytes均41,157,632；按原规则完成合法反证，没有减采样、丢历史或调整cap精度。每次184均保留1个>100ms帧。SameIdentity64最大帧中位308.368→278.164ms、setup188.815→158.101ms；其首帧因实际合法反证可为0或64条，原数据保留，不与稳定120条的184成本混用。Empty三次p95中位18.752→19.241ms；Staged01另有52.563ms冷慢帧。完整分布及18个case明细保存在Staged03/six-run-comparison.json，不用分析器跨变体混合p95作为改善结论。
+
+### 17.2 最终验证与剩余工作
+
+`InitSlice_Functional01` **147/147 PASS**（134clean、13warnings、0failed/not-run/severe、exit0），实际NullRHI，测试175.181秒/进程199.474秒；baseline-coverage.json确认旧146项无遗漏，仅新增CapturePreparationParityAndLifetime。17项定向的warnings来自HTTP连通性与EOS网络请求，不是玩法断言失败。代码冻结后只运行这一次完整阶段功能及上述两种必要视觉；未再跑Qualification/WholeSessions全套、PIE×3/Standalone×3完整矩阵或十分钟长测。
+
+| 维度 | 最终状态 | 当前依据 |
+| --- | --- | --- |
+| FUNCTIONAL REGRESSION | PASS | 147/147、27组geometry oracle、Partial/Whole封存与生命周期parity，改造前后Episodes/Contracts及独立oracle通过 |
+| INITIALIZATION / BATCH HITCHES | FAIL | 184三次最大帧仍842–853ms；setup约445–465ms，未接近100ms门槛 |
+| FRAME PERFORMANCE | FAIL | 原完整矩阵FAIL未被短Batch替代，当前Empty仍约19ms p95 |
+| ARCHITECTURE AUDIT | PARTIAL | capture只读准备/GT合并切片成立，完整cap计算与资源提交仍同步；未重做ownership大审计 |
+| LONG-RUN RESOURCES | PARTIAL | 本轮未做长测；任务在函数返回前join，原长期资源证据与归因缺口保留 |
+
+下一轮最高收益入口是**最终cap的纯CPU网格构建与GT SetMesh/资源提交分离**：新Trace在184封存内cap约147ms，后续首个update又约75ms。先把需要的FineHistory/geometry/较新合法贡献作为共享只读输入，形成独立cap结果，再以原序GT提交；避免为每个record复制整套历史造成新的O(H²S)成本。随后处理首帧约83ms occupancy，以及seal外首次proxy/texture/resource构造。不能直接把当前借用场景方法的任务延长到跨帧，跨帧仍须完整epoch/revision/失效协议。本轮没有遗留半套异步队列，也没有提前宣称cap或GT资源创建已解决。
+
+最终检查diff、工作树及LFS正常，测试/Insights/UE进程全部结束；所有Saved证据（含失败构建、旧失败诊断、冷帧）保留。阶段运行时59030ab和中间文档f1c2f71均已推送；stable不移动，不开始黑色层，不自动关机。

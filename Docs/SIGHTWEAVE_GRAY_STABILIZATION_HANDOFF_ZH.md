@@ -1,6 +1,8 @@
 # 灰色层功能检查点与稳定化施工
 
-最新初始化阶段（8fb4d6e之后）：先补完当前历史/cap视觉，Episodes51张/六组表面oracle与Contracts178张/Whole离开24帧oracle/3次PIE均PASS。现已实现capture几何的只读输入→并行准备→GT合并，并移除封存内立即被最终cap覆盖的中间cap提交；完整Editor构建及17/17定向通过，正在采集同二进制真实Batch A/B。控制量r.Darkwell.ObjectMemory.StagedCapturePreparation，runner的-LegacyCapturePreparation关闭本切片、保留上一轮ownership并行。最终视觉/阶段功能仍待当前改造后的证据。详见架构审计第17节；下文第16节“最新”是上一轮已完成结果。
+最新初始化阶段（8fb4d6e之后）已完成，运行时 **59030ab** 已推送：capture几何只读输入→并行准备→GT合并，并移除封存内随即被最终cap覆盖的中间提交。三次真实D3D12 Batch中位数：184 setup **538.769→451.701ms**（-16.2%），最大整帧 **926.468→848.486ms**（-8.4%）；新三次842–853ms，初始化仍FAIL。改造前后均完成必要Episodes51张/表面oracle、Contracts178张/Whole离开24帧oracle/3次PIE；最终完整构建、17/17定向和 **147/147** 阶段功能通过，旧146项无遗漏。
+
+控制量r.Darkwell.ObjectMemory.StagedCapturePreparation；runner的-LegacyCapturePreparation保留旧串行准备与中间cap、ownership仍开启。两个短Trace按真实GT嵌套事件确认184 footprint **159.301→56.381ms**；cap调用368→184但耗时131.458→146.713ms，未解决cap瓶颈。下一入口为最终cap纯CPU网格结果与GT SetMesh/资源提交分离，其次约83ms occupancy及seal外proxy/texture创建。六个真实Batch、两个Trace与完整功能/视觉证据均保留Saved，运行时冻结后未再修改代码；未跑完整矩阵或十分钟长测。详细三次数据、范围和剩余工作见架构审计17.1–17.2。最终状态FUNCTIONAL PASS / INITIALIZATION FAIL / FRAME FAIL / ARCHITECTURE PARTIAL / LONG-RUN PARTIAL；进程均正常结束、stable未移动。下文“最新”均为更早阶段历史记录。
 
 最新继续施工（cf3a3c1之后）：已完成大批封存历史ownership的同帧并行求值/GT合并切片，最终运行时 **6c66747** 已推送。四项定向及一次完整146/146功能回归通过；最终仅任务计数局部修订的完整Editor build成功20.92秒，另有3/3定向通过。原生184 CPU对照ownership **569–584→115–116ms**、首次native update **838–851→391–414ms**，几何/record访问计数完全相同。用户随后退出SpaceCraft，已补一次真实D3D12 Batch A/B：184最大整帧 **1363.970→921.871ms**、setup **549.266→536.297ms**、ownership **566.111→107.680ms**、cap **67.231→74.602ms**；同二进制/driver/质量、两次环境异常0、正常退出。初始化仍FAIL，并行同帧join仍有近一秒停顿。详细证据及范围见 [架构审计第16节](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md#16-有限额度施工封存ownership的同帧并行切片)，新增真实样本见16.3。
 

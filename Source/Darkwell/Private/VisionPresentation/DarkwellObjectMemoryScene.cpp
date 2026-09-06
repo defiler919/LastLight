@@ -30,6 +30,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarJoinedSealedOwnership(
 		TEXT("r.Darkwell.ObjectMemory.JoinedSealedOwnership"), 1,
 		TEXT("Compute large sealed-history ownership batches on joined worker tasks. 0 keeps the serial oracle."));
+	TAutoConsoleVariable<int32> CVarStagedCapturePreparation(
+		TEXT("r.Darkwell.ObjectMemory.StagedCapturePreparation"), 1,
+		TEXT("Prepare captured geometry on joined CPU tasks and publish the final cap once. 0 keeps the legacy capture path."));
 	// Only the three pure ownership query counters may be updated inside the
 	// joined read phase. Per-task storage avoids atomics and shared telemetry writes.
 	struct FOwnershipQueryCounts { uint64 Geometry = 0, Records = 0, Footprints = 0; };
@@ -2908,6 +2911,67 @@ void ADarkwellObjectMemoryScene::StampConfirmedWholeCapture(
 	Record.CaptureGeometryRevision = Prop.CurrentLive.GeometryResets;
 }
 
+TBitArray<> ADarkwellObjectMemoryScene::BuildCaptureGeometryFootprint(
+	const FBox2D& Bounds, const FIntPoint Size,
+	const TConstArrayView<FPrimitiveGeometrySnapshot> Geometry, const bool bParallel) const
+{
+	check(IsInGameThread());
+	// Own the complete geometry input. Workers never read a live actor, record,
+	// visual, packed output bit, or resource; the GT publishes only after join.
+	struct FInput
+	{
+		FBox2D Bounds;
+		FIntPoint Size;
+		TArray<FPrimitiveGeometrySnapshot> Geometry;
+	};
+	const FInput Input{Bounds, Size, TArray<FPrimitiveGeometrySnapshot>(Geometry)};
+	const FVector2D Step = Input.Bounds.GetSize() / FVector2D(Size);
+	const int32 Num = Size.X * Size.Y;
+	const int32 Tasks = bParallel && Num >= 4096 ? FMath::Min(16, FMath::DivideAndRoundUp(Num, 1024)) : 1;
+	TArray<uint8> Result;
+	Result.SetNumUninitialized(Num);
+	TArray<FOwnershipQueryCounts> Counts;
+	Counts.SetNum(Tasks);
+	bool bRejectPlanarBounds = true;
+#if WITH_DEV_AUTOMATION_TESTS
+	bRejectPlanarBounds = !bForceFullHistoryEvidenceForTesting;
+#endif
+	auto Compute = [&](const int32 Task)
+	{
+		FOwnershipQueryCounts LocalCounts;
+		TGuardValue<FOwnershipQueryCounts*> CountScope(GOwnershipQueryCounts, &LocalCounts);
+		const int32 Begin = int64(Num) * Task / Tasks;
+		const int32 End = int64(Num) * (Task + 1) / Tasks;
+		for (int32 Index = Begin; Index < End; ++Index)
+		{
+			const FVector2D Min = Input.Bounds.Min + Step * FVector2D(Index % Size.X, Index / Size.X);
+			const FVector2D Corners[]{Min, Min + FVector2D(Step.X, 0), Min + Step, Min + FVector2D(0, Step.Y)};
+			Result[Index] = 0;
+			for (const auto& Part : Input.Geometry)
+			{
+				if (bRejectPlanarBounds && Part.bCachedPlanarProjection && Part.ToleranceScale > UE_DOUBLE_SMALL_NUMBER && Part.ProjectionBounds.bIsValid)
+				{
+					const FVector Scale = Part.WorldTransform.GetScale3D().GetAbs();
+					const double Padding = 2.0 * UE_KINDA_SMALL_NUMBER * FMath::Max(Scale.X, Scale.Y) + Part.ProjectionRoundoffMargin;
+					if (!Part.ProjectionBounds.ExpandBy(Padding).Intersect(FBox2D(Min, Min + Step))) continue;
+				}
+				double A, B;
+				bool Intersects = QueryVerticalInterval(Part, Min + Step * .5, A, B);
+				for (int32 Edge = 0; Edge < 4 && !Intersects; ++Edge)
+					Intersects |= ClipSegmentToGeometryProjection(Part, Corners[Edge], Corners[(Edge + 1) % 4], 0, A, B);
+				if (Intersects) { Result[Index] = 1; break; }
+			}
+		}
+		Counts[Task] = LocalCounts;
+	};
+	if (Tasks > 1) ParallelFor(TEXT("DarkwellCaptureFootprint"), Tasks, 1, Compute, EParallelForFlags::Unbalanced);
+	else Compute(0);
+	for (const auto& Count : Counts) RuntimeFrame.PrimitiveGeometryTests += Count.Geometry;
+	TBitArray<> Footprint(false, Num);
+	for (int32 Index = 0; Index < Num; ++Index) Footprint[Index] = Result[Index] != 0;
+	return Footprint;
+}
+
 bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 	FTrackedProp& Prop,
 	const TCHAR* Reason, const bool bSealLastEligibleObservation)
@@ -2960,7 +3024,14 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 		}
 	}
 	EnsureRecordVisual(Prop, Current);
-	if (!Current.bConfirmedWholeCapture)
+	bool bStagedCapture = CVarStagedCapturePreparation.GetValueOnGameThread() != 0;
+#if WITH_DEV_AUTOMATION_TESTS
+	bStagedCapture &= !bForceFullHistoryEvidenceForTesting && !bForceLegacyCapturePreparationForTesting;
+#endif
+	// No game frame can observe the intermediate Current cap in this sealing
+	// transaction. Keep its existing resources until the final historical mesh
+	// is ready, instead of submitting a mesh that is replaced in this same call.
+	if (!bStagedCapture && !Current.bConfirmedWholeCapture)
 	{
 		UpdateRecordTexture(Prop, Current);
 		UpdateRecordCap(Prop, Current);
@@ -3016,31 +3087,8 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Memory_CaptureFootprint);
 			const auto& Grid = Historical->FineHistory;
 			const FIntPoint Size = Grid.GetSize();
-			const FVector2D Step = Grid.GetBounds().GetSize() / FVector2D(Size.X, Size.Y);
-			TBitArray<> Footprint(false, Size.X * Size.Y);
-			for (int32 Y = 0; Y < Size.Y; ++Y) for (int32 X = 0; X < Size.X; ++X)
-			{
-				const FVector2D Min = Grid.GetBounds().Min + Step * FVector2D(X, Y);
-				const FVector2D Corners[]{Min, Min + FVector2D(Step.X, 0), Min + Step, Min + FVector2D(0, Step.Y)};
-				for (const auto& Geometry : SealedVisual->PartGeometry)
-				{
-					bool bRejectBounds = Geometry.bCachedPlanarProjection && Geometry.ToleranceScale > UE_DOUBLE_SMALL_NUMBER && Geometry.ProjectionBounds.bIsValid;
-#if WITH_DEV_AUTOMATION_TESTS
-					bRejectBounds &= !bForceFullHistoryEvidenceForTesting;
-#endif
-					if (bRejectBounds)
-					{
-						const FVector Scale = Geometry.WorldTransform.GetScale3D().GetAbs();
-						const double Padding = 2.0 * UE_KINDA_SMALL_NUMBER * FMath::Max(Scale.X, Scale.Y) + Geometry.ProjectionRoundoffMargin;
-						if (!Geometry.ProjectionBounds.ExpandBy(Padding).Intersect(FBox2D(Min, Min + Step))) continue;
-					}
-					double A, B;
-					bool Intersects = QueryVerticalInterval(Geometry, Min + Step * .5, A, B);
-					for (int32 Edge = 0; Edge < 4 && !Intersects; ++Edge)
-						Intersects |= ClipSegmentToGeometryProjection(Geometry, Corners[Edge], Corners[(Edge + 1) % 4], 0, A, B);
-					if (Intersects) { Footprint[Y * Size.X + X] = true; break; }
-				}
-			}
+			const TBitArray<> Footprint = BuildCaptureGeometryFootprint(Grid.GetBounds(), Size,
+				SealedVisual->PartGeometry, bStagedCapture);
 			Historical->FineHistory.RestrictToRecordedGeometry(Footprint);
 			Historical->GeometryFootprint=Footprint;
 			for(int32 I=0;I<Footprint.Num();++I) if(!Footprint[I]) Historical->LastLegalCaptureMask[I]=false;

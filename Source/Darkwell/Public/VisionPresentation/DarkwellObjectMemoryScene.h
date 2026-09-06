@@ -216,6 +216,7 @@ public:
 #if WITH_DEV_AUTOMATION_TESTS
  bool bForceFullHistoryEvidenceForTesting=false;
  bool bForceSerialOwnershipForTesting=false;
+ bool bForceLegacyCapturePreparationForTesting=false;
 #endif
 protected:
 	struct FPrimitiveGeometrySnapshot
@@ -271,6 +272,7 @@ protected:
 	friend class FDarkwellPlanarProjectionParity;
 	friend class FDarkwellOwnershipIndexParity;
 	friend class FDarkwellJoinedOwnershipParity;
+	friend class FDarkwellCapturePreparationParity;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
 	friend class FDarkwellObservedContentContract;
@@ -507,6 +509,8 @@ protected:
 	TArray<FBox> ActualPartBounds(const AActor& Prop) const;
 	TArray<FPrimitiveGeometrySnapshot> ActualPartGeometry(
 		const AActor& Prop) const;
+	TBitArray<> BuildCaptureGeometryFootprint(const FBox2D& Bounds, FIntPoint Size,
+		TConstArrayView<FPrimitiveGeometrySnapshot> Geometry, bool bParallel) const;
 	bool QueryVerticalInterval(
 		const FPrimitiveGeometrySnapshot& Geometry,
 		FVector2D Point,

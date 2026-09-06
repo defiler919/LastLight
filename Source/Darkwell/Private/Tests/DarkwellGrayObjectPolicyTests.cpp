@@ -12,6 +12,7 @@
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/DynamicMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
@@ -704,6 +705,81 @@ bool FDarkwellJoinedOwnershipParity::RunTest(const FString&)
  }
  TestTrue(TEXT("Large sealed histories actually execute joined batches"),Batches>0 && WorkSamples>0);
  AddInfo(FString::Printf(TEXT("Joined ownership parity: batches=%llu input_samples=%llu; all tasks joined before reset/reseed/world destruction"),Batches,WorkSamples));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellCapturePreparationParity,
+ "Darkwell.PropLab.ArchitectureAudit.CapturePreparationParityAndLifetime",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellCapturePreparationParity::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ // Full slab fallback is the geometry oracle, including thin, tilted and
+ // reflected parts. Non-word-aligned dimensions catch packed-output races.
+ int32 FootprintCases=0;
+ {
+  FRoom F;
+  for(const FRotator Pose:{FRotator(0,17,0),FRotator(31,73,19),FRotator(0,179,0)})
+   for(const FVector Scale:{FVector(1,1,1),FVector(-.7,1.8,.4),FVector(1,.01,1)})
+    for(const FIntPoint Size:{FIntPoint(17,19),FIntPoint(65,67),FIntPoint(129,127)})
+    {
+     TArray<ADarkwellObjectMemoryScene::FPrimitiveGeometrySnapshot> Parts;
+     for(const FBox Local:{FBox(FVector(-23,-15,-40),FVector(23,15,40)),FBox(FVector(-37,-.2,-2),FVector(37,.2,2))})
+     {
+      auto& P=Parts.AddDefaulted_GetRef(); P.LocalBounds=Local;
+      P.WorldTransform=FTransform(Pose,FVector(7,-9,20),Scale); P.PrimitiveIndex=Parts.Num()-1; P.CachePlanarProjection();
+     }
+     const FBox2D Bounds(FVector2D(-70,-70),FVector2D(70,70));
+     F.Room->bForceFullHistoryEvidenceForTesting=true;
+     const auto Original=F.Room->BuildCaptureGeometryFootprint(Bounds,Size,Parts,false);
+     F.Room->bForceFullHistoryEvidenceForTesting=false;
+     const auto Joined=F.Room->BuildCaptureGeometryFootprint(Bounds,Size,Parts,true);
+     if(!TestTrue(TEXT("Joined exact footprint matches full slab oracle"),Original==Joined)) return false;
+     ++FootprintCases;
+    }
+ }
+ for(const Reveal Mode:{Reveal::SpatialPartial,Reveal::WholeObjectAfterSpan})
+ {
+  TArray<uint64> Reference;
+  for(const bool Legacy:{true,false})
+  {
+   FRoom F; F.Room->bForceLegacyCapturePreparationForTesting=Legacy;
+   F.Room->ResetTrackedRevealPolicyForLab(Id,Mode,100,History::StationaryOnly);
+   F.Face(90); F.Step(25); F.Face(-90); F.Step();
+   for(int32 Phase=0;Phase<6;++Phase)
+   {
+    if(Phase==0 || Phase==5)
+     if(!TestTrue(TEXT("Cold capture succeeds"),F.Room->ConfigureHistoricalEpochCountForTesting(Id,Phase==0?8:4))) return false;
+    if(Phase==1) { F.Room->InjectInvalidCoverageOnceForTesting(Id); F.Step(); }
+    if(Phase==2) F.Room->ResetRoom(F.Player);
+    if(Phase==3) { F.Room->ResetTrackedRevealPolicyForLab(Id,Mode,100,History::StationaryOnly); F.Face(90); F.Step(25); }
+    if(Phase==4) { F.Face(-90); F.Step(); }
+    const auto& Prop=F.Room->Tracked.FindChecked(Id);
+    uint64 H=1469598103934665603ull;
+    auto Mix=[&](uint64 V){H=(H^V)*1099511628211ull;};
+    auto Bits=[&](const TBitArray<>& B){Mix(B.Num()); for(TConstSetBitIterator<> It(B);It;++It) Mix(It.GetIndex()+1);};
+    Mix(Prop.History.GetRecords().Num());
+    for(const auto& R:Prop.History.GetRecords())
+    {
+     Mix(R.Epoch); Mix(R.bCurrentObservedLocation); Bits(R.LastLegalCaptureMask); Bits(R.GeometryFootprint);
+     for(const auto& S:R.FineHistory.GetSamples())
+     {
+      Mix(GetTypeHash(S.State)); Mix(S.bVerifiedEmpty);
+      for(float V:{S.InitialRemembered,S.Opacity,S.FrozenAAEnvelope,S.EmptyDwell}) Mix(GetTypeHash(V));
+     }
+     if(const auto* V=Prop.Visuals.Find(R.Epoch))
+     {
+      Mix(V->TextureSignature); Mix(V->CapTriangles); Bits(V->SuppressedByCurrentEvidence);
+      Mix(V->Cap.IsValid() && V->Cap->IsVisible());
+      for(const auto& Q:V->CapQuads) for(const FVector P:{Q.A,Q.B,Q.C,Q.D}) Mix(GetTypeHash(P));
+     }
+    }
+    if(Legacy) Reference.Add(H);
+    else if(!TestEqual(*FString::Printf(TEXT("Atomic capture parity mode=%d phase=%d"),int32(Mode),Phase),H,Reference[Phase])) return false;
+   }
+  }
+ }
+ AddInfo(FString::Printf(TEXT("Capture footprint cases=%d; Partial/Whole capture, invalid coverage, reset, reseed and world teardown parity"),FootprintCases));
  return true;
 }
 

@@ -7,6 +7,7 @@ param(
     [string]$EngineRoot='D:\UE_5.8',
     [switch]$NoAuthoringToolsets,
     [switch]$SerialSealedOwnership,
+    [switch]$LegacyCapturePreparation,
     [switch]$Trace
 )
 $ErrorActionPreference='Stop'
@@ -36,11 +37,16 @@ if ($NoAuthoringToolsets) {
     $arguments += "-DisablePlugins=$($disabledPlugins -join ',')"
 }
 if($Mode -eq 'Standalone') {
-    $startup = if ($SerialSealedOwnership) { "r.Darkwell.ObjectMemory.JoinedSealedOwnership 0,py $output/driver.py" } else { "py $output/driver.py" }
+    $startupCommands = @()
+    if ($SerialSealedOwnership) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedSealedOwnership 0' }
+    if ($LegacyCapturePreparation) { $startupCommands += 'r.Darkwell.ObjectMemory.StagedCapturePreparation 0' }
+    $startupCommands += "py $output/driver.py"
+    $startup = $startupCommands -join ','
     $arguments+=@('-game','-EnablePython',"-ExecCmds=`"$startup`"")
 }
 else { $arguments+="-ExecutePythonScript=$output/driver.py" }
 if ($SerialSealedOwnership -and $Mode -ne 'Standalone') { throw 'Serial ownership comparison is scoped to Standalone' }
+if ($LegacyCapturePreparation -and $Mode -ne 'Standalone') { throw 'Capture comparison is scoped to Standalone' }
 if($Trace) { $arguments+=@('-trace=cpu,gpu,frame,bookmark,region',"-tracefile=$output/capture.utrace") }
 $metadata=[ordered]@{
     schema=1; sha=(& git -C $repo rev-parse HEAD); started_utc=$start.ToUniversalTime().ToString('o'); mode=$Mode; protocol=$Protocol
@@ -54,6 +60,7 @@ $metadata=[ordered]@{
     arguments=$arguments; processes_at_start=@(Get-Process | Select-Object Name,Id,CPU,WorkingSet64)
     disabled_authoring_plugins=$disabledPlugins
     serial_sealed_ownership=[bool]$SerialSealedOwnership
+    legacy_capture_preparation=[bool]$LegacyCapturePreparation
     editor_binary_sha256=(Get-FileHash "$repo/Binaries/Win64/UnrealEditor-DarkwellEditor.dll").Hash
     timing_note='Wall intervals between distinct game updates include Python measurement cost; engine GT/RT/RHI/GPU counters are delayed and overlap. PIE global Render/RHI counters can be overwritten by Slate window updates; use separate Insights capture for attribution. No subtraction attribution.'
 }

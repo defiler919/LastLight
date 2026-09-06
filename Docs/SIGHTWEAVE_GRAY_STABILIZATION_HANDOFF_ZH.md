@@ -1,5 +1,7 @@
 # 灰色层功能检查点与稳定化施工
 
+最新初始化阶段（8fb4d6e之后）：先补完当前历史/cap视觉，Episodes51张/六组表面oracle与Contracts178张/Whole离开24帧oracle/3次PIE均PASS。现已实现capture几何的只读输入→并行准备→GT合并，并移除封存内立即被最终cap覆盖的中间cap提交；完整Editor构建及17/17定向通过，正在采集同二进制真实Batch A/B。控制量r.Darkwell.ObjectMemory.StagedCapturePreparation，runner的-LegacyCapturePreparation关闭本切片、保留上一轮ownership并行。最终视觉/阶段功能仍待当前改造后的证据。详见架构审计第17节；下文第16节“最新”是上一轮已完成结果。
+
 最新继续施工（cf3a3c1之后）：已完成大批封存历史ownership的同帧并行求值/GT合并切片，最终运行时 **6c66747** 已推送。四项定向及一次完整146/146功能回归通过；最终仅任务计数局部修订的完整Editor build成功20.92秒，另有3/3定向通过。原生184 CPU对照ownership **569–584→115–116ms**、首次native update **838–851→391–414ms**，几何/record访问计数完全相同。用户随后退出SpaceCraft，已补一次真实D3D12 Batch A/B：184最大整帧 **1363.970→921.871ms**、setup **549.266→536.297ms**、ownership **566.111→107.680ms**、cap **67.231→74.602ms**；同二进制/driver/质量、两次环境异常0、正常退出。初始化仍FAIL，并行同帧join仍有近一秒停顿。详细证据及范围见 [架构审计第16节](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md#16-有限额度施工封存ownership的同帧并行切片)，新增真实样本见16.3。
 
 本轮待办：相关最终历史/cap视觉；最小真实A/B已完成，结果在Saved/Stabilization/BatchSlice_RenderSerial01与BatchSlice_RenderJoined01，不再以“GPU被SpaceCraft占用”作为未采集理由。此补证未修改代码、未重跑功能/全矩阵/长测；完整146/146在a8bb332通过，6c66747仅计数栈化与测试fixture修正后按影响范围验证。Current、capture/cap/resources仍同步，跨帧任务/失效队列尚未引入；因此没有悬空任务需要恢复。下一结构入口是约半秒setup的封存capture工作单元，以及occupancy/cap计算与GT资源提交边界。Python流式采样器、旧6.4GB账本和Empty GPU成本留待后续。最后检查无残留UE/SpaceCraft/测试进程，Saved证据保留，stable未移动。下文“最新续工完成”指上一轮。

@@ -1,5 +1,7 @@
 # SightWeave 灰色层性能架构审计
 
+最新初始化施工起点8fb4d6e：第17节记录当前历史/cap视觉补验及capture准备切片；第16节保留上一轮ownership与真实A/B证据。
+
 最新施工（cf3a3c1之后）：第16节记录同帧join的封存ownership切片，运行时6c66747已推送。用户退出SpaceCraft后已补最小真实D3D12 Batch A/B：184最大整帧 **1363.970→921.871ms**、ownership **566.111→107.680ms**，setup **549.266→536.297ms**。这是一次有效同条件对照，初始化仍FAIL；详见16.3。第1–15节为上一轮证据，未重新审计或重跑其长测。
 
 2026-09-06。本轮起点 `d986b536fbd21a0fb0c600577f9912369fe221a3`；本地、实时远端一致，工作树干净，LFS fsck PASS。本文先记录修改前模型，后续实验追加，不以优化假设代替结论。外部规则和性能门槛继续采用 `SIGHTWEAVE_GRAY_STABILIZATION_HANDOFF_ZH.md`。
@@ -347,3 +349,15 @@ EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉�
 同协议附带的SameIdentity64 setup187.181→185.211ms、最大帧457.824→303.663ms；Empty p95 18.489→18.580ms。由此确认切片收益已经体现在真实渲染的批量帧中，同时**INITIALIZATION / BATCH HITCHES仍FAIL，FRAME PERFORMANCE仍FAIL**。无需为确认此明显CPU切片收益重跑完整矩阵或十分钟长测，也没有重跑已通过的146项。
 
 本次只补性能证据并更新文档；相关最终历史/cap图像验证仍待完成，不冒称新的视觉PASS。下一实现入口仍是约536ms的同步capture/setup及occupancy/cap/资源提交工作边界。运行结束再次确认无残留UE/SpaceCraft/测试进程，工作区只改本文与交接；旧失败证据、既有功能PASS、长期资源PARTIAL和stable指针保留。
+
+## 17. Capture准备与最终cap提交切片
+
+起点8fb4d6e，工作树干净，无游戏/UE/构建冲突进程。先执行当前6c66747运行时必要视觉：`InitSlice_BeforeEpisodes01`完成51张图像，六组各896个历史内部表面样本全部无缺失，35.689秒；`InitSlice_BeforeContracts01`完成178张图像及3次PIE生命周期，Whole首次离开图像oracle24/24 PASS，60.168秒。均D3D12/SM6、协议完成、severe0、正常退出；人工核看局部外切口与最终完整历史，没有新增缺面或内部接缝。Episodes与旧Stage2的图像ROI不是逐像素相同，原始比较保留，不把TSR图像误称bitwise parity。本阶段先通过上述视觉门槛，未重新做ownership审计。
+
+读取已有PerformanceAudit_BatchFootprint01/stats_all.csv：248次SealCapture累计550.694ms，其中CaptureFootprint205.980ms；EnsureResources累计144.095ms，CapPresentation累计272.560ms包含setup与后续update，不能把这些父子/跨阶段总量直接相加。184的上一轮无Trace setup536.297ms/最大帧921.871ms仍是改造前参考。
+
+本切片把封存几何footprint准备拆成拥有bounds/size/geometry副本的只读CPU输入、分段uint8输出、join后GT合并packed bits并提交最终FineHistory/texture/cap。使用同一完整中心/边交点谓词和原精度，dirty样本不删减。>=4096个样本最多16任务；小输入走串行。任务不持有record/visual/资源，不访问live actor；场景const几何方法仍提供原谓词和任务局部计数，尚不是独立无scene依赖的几何模块。全部工作在函数返回前join，未引入跨帧队列，GT不推进epoch/世界销毁，无待取消结果。
+
+同时省去同一次封存内先算/提交Current cap、随后立即覆盖为Historical cap的中间调用；既有资源保留至最终结果，Whole的原子资格验证、隐藏原件/历史接管、最终cap计算/资源创建顺序保留。当前texture调用原本直接return，跳过它不计成GPU上传收益。控制量 `r.Darkwell.ObjectMemory.StagedCapturePreparation=0` 保留旧中间cap和串行几何计算；runner增加-LegacyCapturePreparation用于同二进制对照，不改旧ownership默认开关。occupancy和最终cap算法、GT proxy/texture创建本身尚未重构。
+
+完整Editor构建InitSlice_CaptureBuild02成功11.84秒；Build01因新增测试缺少DynamicMeshComponent头文件失败，已修正，原日志保留。`InitSlice_CaptureTarget01` **17/17 PASS**（14clean、3warnings、0failed/not-run/severe、exit0），NullRHI，33.022秒测试/53.306秒进程。新增CapturePreparationParityAndLifetime覆盖27组不同尺寸/旋转/倾斜/反射/薄几何的完整slab oracle，Partial/Whole封存、实际再次观察、失效coverage、Reset、重新播种及世界销毁；比对捕获/geometry掩码、细历史字段、texture signature、cap顶点/可见性。另有旧全扫描、ownership、反复历史对照。先推送可构建可验证阶段，再采集真实before/after及最终视觉；性能尚未判定改善。

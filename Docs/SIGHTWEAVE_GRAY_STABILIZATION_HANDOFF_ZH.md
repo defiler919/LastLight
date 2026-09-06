@@ -1,6 +1,6 @@
 # 灰色层功能检查点与稳定化施工
 
-2026-09-06 开始，状态：施工中；性能、首次/批量尖峰、长期资源和 Editor 退出均未验收。不得据此创建发布 stable 或开始黑色层。
+2026-09-06，最终状态：**PARTIAL — GRAY_STABILIZATION_BLOCKED**。功能与当前可复现退出路径的回归通过；完整帧、批量尖峰未达标，长期资源归因仍有缺口。不得据此创建发布 stable 或开始黑色层。
 
 ## 起点和人工验收边界
 
@@ -8,7 +8,7 @@
 - 用户在本任务明确确认该交接状态的 Whole 达标交接退灰测试通过，并表示当前人工路线灰色层行为可接受。最终运行时是 `a4a17a412a35d2e9a0c7dd8917965d6e8c9323f5`；a6e4324 为文档交接，不能说它又修改了运行时。
 - 验收覆盖用户的 Whole 局部→整件达标连续显示人工路线及其目前使用过的灰色层交互；不是所有几何的穷尽证明。上一轮自动化 142/142、连续帧 oracle 8632/8632 是既有证据，不能作为本轮重跑结果。
 - 两条远端 stable 固定为 `stable/sightweave-gray-core-20260903` → `7534163b9c5718700b610e7677f47fbaa79cf977`、`stable/moving-history-grid-v2-20260902` → `404a5820739638f1097eaae0aa7fba19733298c3`，本轮不移动。
-- 非发布 tag `checkpoint/gray-functional-accepted-20260906`：启动时本地及远端不存在，拟指向 a6e4324；注释为“灰色层功能人工验收检查点；性能和退出稳定性仍开放；不是发布 Stable。”
+- 非发布 tag `checkpoint/gray-functional-accepted-20260906` 已推送，解析到 a6e4324；注释为“灰色层功能人工验收检查点；性能和退出稳定性仍开放；不是发布 Stable。”
 - 实际引擎 `D:\UE_5.8`：Build.version 为 **5.8.2 CL56702186**。AGENTS 的 5.8.1 是环境说明差异，实验按实际二进制记录。
 
 ## 冻结的外部规则
@@ -30,17 +30,17 @@
 
 禁止强杀/立即 ExitProcess/忽略退出码伪装稳定，禁止修改系统配置、降低画质、改变规则或牺牲合法知识。所有有效阶段明确暂存、commit、push 后核对 local/upstream/remote。生成证据保留 Saved，不提交资产或生成目录。
 
-## 本轮结果（持续更新；最终验收尚未完成）
+## 最终分项结论
 
 | 维度 | 状态 | 本轮证据 |
 | --- | --- | --- |
 | FUNCTIONAL REGRESSION | PASS | 最终原生 143/143，四个最终视觉协议及全部对应 oracle 通过；见阶段 7–8 |
-| EXIT STABILITY | PARTIAL | 当前可复现的 audit 生命周期错误已修复，最终主窗口、多 PIE 复核继续 |
+| EXIT STABILITY | PASS | 旧失败路径、多进程 Contracts/Episodes，以及普通 Editor 一次/两次 PIE 后正常关闭均通过；中断样本 EXIT UNKNOWN 保留 |
 | FRAME PERFORMANCE | FAIL | 正式前后各 3 PIE + 3 Standalone；空场景仍超 16.6 ms，部分案例退化 |
 | INITIALIZATION / BATCH HITCHES | FAIL | 184 distributed setup 约减半，整帧仍存在约 2.5–2.6 秒尖峰 |
 | LONG-RUN RESOURCES | PARTIAL | 两种完整长测均已完成；真实资源有界，模拟工作集 4.77→11.20 GB 的增长归因仍开放 |
 
-本检查点只新增文档，不改 C++、构建配置、插件或资产，因此无需在该文档阶段重新 BuildPlugin；正式运行前核验/构建 Editor。
+启动时的功能检查点仅新增文档；后续 C++、构建、测试与证据见分阶段记录。SightWeave 插件和二进制资产未改动，本轮未运行 BuildPlugin。
 
 
 ## 阶段 1：执行器完成与退出所有权
@@ -250,3 +250,17 @@ Stabilization_FinalMainApi02：false→true→false→true→false 的完整官�
 首个探针 1 项 PASS、exit 0、severe 0、测试 7.385 秒/进程 37.113 秒：无排空时 2048 个缓冲全部待释放，共 603,979,776 bytes（576 MiB）；排空后 pending=0、completed=2048。每 32 次排空把 pending 峰值限制到 9,437,184 bytes（9 MiB），最终也全部清理。但工作集仍从 4.23 GB 上升至 6.03 GB，证明不能仅看 CPU 上传回调就宣布内存问题解决，还需观察 D3D12 暂存资源/池的逐帧回收。该样本源文件与 hash 已额外保存在原目录。
 
 修复参数后的 `Stabilization_UploadCleanupTrueNull01` 确认实际命令为完整 -NullRHI，但新探针原先错误地要求 NullRHI 也创建纹理资源，断言失败（测试 FAIL、exit 0、severe 0、19.518 秒）。失败保留；改为在 GUsingNullRHI 时明确验证资源为空、上传为零，D3D12 路径继续验证全部清理。三次完整 Editor 构建 UploadProbeBuild01/02/03 分别成功 6.76/5.48/5.57 秒，均只编译新增测试文件并重链。
+
+最终短对照：`Stabilization_UploadCleanupD3D12Frames01` 1 项 PASS、exit 0、severe 0，测试 3.091 秒/进程 35.251 秒，显式 -d3d12 -sm6 且 GUsingNullRHI=0。用户缓冲 pending 576 MiB→0；每 32 次排空峰值 9 MiB，全部 4096 个缓冲最终清理。工作集 4,066,603,008→5,857,345,536 bytes，恢复 12 个真实引擎帧后 5,858,992,128 bytes，未回到起点。`Stabilization_UploadCleanupTrueNull02` 1 项 PASS、exit 0、severe 0，测试 0.008 秒/进程 23.271 秒，实际 GUsingNullRHI=1、texture_resource=0、uploads=0。
+
+该对照确证同步提交会积压用户上传缓冲，以及短时间的 RHI 排空不保证进程工作集下降；尚未用分配调用栈区分全部 allocator 缓存、D3D12 暂存池和永久保留分配。因此不把 54,000 步的 6.4 GB 增长全部归因于已证明的单一原因，也不把定期 Flush 加入玩法来换取虚假通过。LONG-RUN RESOURCES 保持 PARTIAL。后续应针对保留分配做 Memory Insights/LLM 与 D3D12 暂存分配归因，再决定是否需要修改资源生命周期或把同步测试改为逐引擎帧推进；现有两份完整长测不需要因本次恢复而重跑。
+
+## 交接结论与剩余阻塞
+
+- FUNCTIONAL REGRESSION：PASS。原 142 项无遗漏，最终功能报告 143/143；最终四个视觉协议及全部 oracle 通过；新增上传生命周期诊断在真实 D3D12 和正确 NullRHI 两分支均通过。恢复后没有修改产品运行逻辑，没有重跑已完成的功能、视觉、矩阵或长测。新构建只加入测试代码；原功能报告对应原有玩法代码，不能伪称在新 runner 的 NullRHI 下重新跑过 143 项。
+- EXIT STABILITY：PASS，范围限定为已验证路径。**已证实并修复当前可复现的 audit 生命周期错误；不能证明历史上所有相同退出码必然具有相同根因。** 旧 0xC0000005、中断无退出码及所有协议失败均保留。Codex 意外关闭的确切机制没有新证据，不将其归入同一个 UE 崩溃根因。最后两组通过官方 UE 接口完成普通主窗口正常关闭，非全局快捷键、非强杀。
+- FRAME PERFORMANCE：FAIL。三次正式 after 的 Empty p95 中位数 Standalone 28.429 ms、PIE 32.584 ms，均超 16.6 ms；快速扫视/停止存在退化，真实十分钟 p95 26.430 ms 且有两帧 >100 ms。基础 GPU/等待仍高，当前证据不支持把全部成本归于灰色对象。
+- INITIALIZATION / BATCH HITCHES：FAIL。覆盖 GPU 绘制平均约 10.294→0.243 ms、批量 setup 约减半，但 184 distributed 整帧峰值仍约 2.5–2.6 秒；剩余 ownership/cap 等首批处理成本开放。64 合法反证后的压力下降和前台等待差异已注明，不能冒充持续满负载或严格冷启动达标。
+- LONG-RUN RESOURCES：PARTIAL。两种完整长测已完成；真实 610 秒对象/纹理计数有界且 GPU 纹理统计稳定，释放采样缓冲后工作集下降；同步 D3D12 模拟工作集的大幅增长只得到部分机制证据，未完全闭环。
+
+最终维持 **PARTIAL — GRAY_STABILIZATION_BLOCKED**。下一步工程重点为完整帧基础成本/退化归因、批量历史归属计算及保留内存的分配级归因；不得降低画质、改变每轮 100 cm、丢弃合法历史或取消 cap。两条 stable 与非发布功能检查点均核对未移动。最终 diff --check、LFS fsck、工作树及 local/upstream/remote 将在交付前核对；正常打开 Lab，PIE 停止，电脑保持开启。

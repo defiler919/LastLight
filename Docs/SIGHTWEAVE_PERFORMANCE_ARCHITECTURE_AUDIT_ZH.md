@@ -361,3 +361,9 @@ EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉�
 同时省去同一次封存内先算/提交Current cap、随后立即覆盖为Historical cap的中间调用；既有资源保留至最终结果，Whole的原子资格验证、隐藏原件/历史接管、最终cap计算/资源创建顺序保留。当前texture调用原本直接return，跳过它不计成GPU上传收益。控制量 `r.Darkwell.ObjectMemory.StagedCapturePreparation=0` 保留旧中间cap和串行几何计算；runner增加-LegacyCapturePreparation用于同二进制对照，不改旧ownership默认开关。occupancy和最终cap算法、GT proxy/texture创建本身尚未重构。
 
 完整Editor构建InitSlice_CaptureBuild02成功11.84秒；Build01因新增测试缺少DynamicMeshComponent头文件失败，已修正，原日志保留。`InitSlice_CaptureTarget01` **17/17 PASS**（14clean、3warnings、0failed/not-run/severe、exit0），NullRHI，33.022秒测试/53.306秒进程。新增CapturePreparationParityAndLifetime覆盖27组不同尺寸/旋转/倾斜/反射/薄几何的完整slab oracle，Partial/Whole封存、实际再次观察、失效coverage、Reset、重新播种及世界销毁；比对捕获/geometry掩码、细历史字段、texture signature、cap顶点/可见性。另有旧全扫描、ownership、反复历史对照。先推送可构建可验证阶段，再采集真实before/after及最终视觉；性能尚未判定改善。
+
+运行时59030ab已推送后，首对无Trace `InitSlice_CaptureLegacy01 / CaptureStaged01` 均有效、逐帧环境异常0、正常退出：184 setup558.937→465.343ms，最大整帧935.647→848.486ms；首个native368.894→373.530ms基本未变。控制量0保留旧串行求值和中间cap提交，但仍使用提取后的共同输入/结果封装；不能说该控制二进制完全等于8fb4d6e。两次原始日志、冷帧和setup均保留，没有隐藏新增Empty 52.563ms慢帧。
+
+改造后 `InitSlice_AfterEpisodes01` 51张/六组896样本surface oracle PASS，38.149秒；`InitSlice_AfterContracts01` 178张/24帧Whole image oracle/3次PIE PASS，62.842秒。均severe0、exit0，人工核看局部切口。Episodes同相机ROI与本轮before的51图比较，最大图像MAE=.305/255、最大p99像素差6/255，保留原图和比较JSON；以独立表面/图像规则及cap几何parity验收，不设置新宽松像素阈值冒充完全一致。
+
+独立短Trace `InitSlice_TraceCaptureLegacy01 / TraceCaptureStaged01` 均完整、exit0、severe0、环境异常0；Trace样本按协议不算valid_normal_sample。使用Insights导出实际GameThread事件，确认恰好248个seal，按协议顺序64+184分组，并只累计嵌套在对应seal内的子scope（Saved中analyze_capture_events.py及capture-attribution.json可复核）。184 seal累计401.933→327.838ms，其中footprint **159.301→56.381ms**；cap调用 **368→184**，但实际cap时间131.458→146.713ms，没有测得cap耗时收益。两次ensure在seal内均368次、2.344→2.862ms；大量首次资源创建在seal外，不得用这个小值宣称资源构造已解决。新的完整stage功能回归正在运行，随后补必要短Batch重复以区分噪声；不重跑完整矩阵和长测。

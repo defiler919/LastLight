@@ -139,4 +139,29 @@ FrameCache01：complete、exit0、severe0、环境异常0，45.463秒Trace诊断
 
 Exporter核查发现引擎TimingExporter.cpp将GPU队列过滤恒设true，因此`ExportTimerStatistics -threads=GameThread`仍含GPU timers。FrameCache01保留的thread_*.csv不能按文件名当作纯CPU/单GPU队列统计。新的导出器改为ExportTimingEvents，保留实际ThreadId和TimerId再归因；原统计中可由唯一timer名称确认的Source/MemoryWrite数据不受影响。旧Trace中的Preload/Session引擎region警告保留，四个本协议region都有明确起止。
 
-第二阶段运行时代码暂定冻结：保留局部几何排除、cap依赖摘要和地面扫描线复用；不添加会让合法Current与旧history在不同帧发布的异步捷径。剩余批量路径仍需同步建立全部纹理/cap/捕获记录和约540ms精确ownership；要消除该停顿，需要独立的不可变几何查询工作集、线程安全计算及原子提交模型，不能只把压力脚本延后或隐藏未完成记录。当前阶段不宣称达到秒级尖峰门槛。完整Editor Stage2FinalBuild01成功6.44秒；PerformanceAudit_Stage2Functional01正在进行，随后验证四个视觉协议和新的真实长测。
+第二阶段运行时代码冻结于 `b03bcfbc5ff3c00f56d4da10c52220b706362714` 并已推送：保留局部几何排除、cap依赖摘要和地面扫描线复用；不添加会让合法Current与旧history在不同帧发布的异步捷径。剩余批量路径仍需同步建立全部纹理/cap/捕获记录和约540ms精确ownership；要消除该停顿，需要独立的不可变几何查询工作集、线程安全计算及原子提交模型，不能只把压力脚本延后或隐藏未完成记录。当前阶段不宣称达到秒级尖峰门槛。完整Editor Stage2FinalBuild01成功6.44秒；最终回归见下节。
+
+## 10. 第二阶段完整功能和视觉回归
+
+`PerformanceAudit_Stage2Functional01` 最终 **145/145**（135 clean、10 warnings、0 failed/not-run、severe0、exit0），实际NullRHI，164.530秒测试/188.408秒进程。报告在 `Saved/GrayObjectPolicy/PerformanceAudit_Stage2Functional01/PerformanceAudit_Stage2Functional01_Report`；baseline-coverage.json确认原142项无遗漏，新增ConservativeDrawSupport、OwnershipSpatialIndexMatchesScan、WorldMemoryRememberedRowsParity。测试启动时HEAD为4c2a765且runtime改动在source.patch内，随后提交的b03bcfb没有改变所测代码。
+
+四个独立D3D12/SM6视觉协议全部complete、teardown complete、exit0、severe0；所有独立分析器返回PASS。下列目录均位于Saved/ArchitectureAudit：
+
+| 最终运行目录 | 协议与独立判据 | 进程秒 |
+| --- | --- | ---: |
+| PerformanceAudit_Stage2Qualification01 | 906帧、9资格会话，8632检查全部通过 | 140.100 |
+| PerformanceAudit_Stage2Contracts01 | 178帧、3次PIE；Whole首次离开24张图像通过 | 57.409 |
+| PerformanceAudit_Stage2Episodes01 | 8轮观察；历史/cap隐藏和恢复六组各896内部样本，无缺口 | 40.135 |
+| PerformanceAudit_Stage2WholeSessions01 | 118取证帧；Reobservation192、ConfirmedWholeCurrent97、WholeSessions332检查全通过 | 66.163 |
+
+实际PNG2233×911、固定时间步；这些是正确性证据，不混入1080p真实性能。人工查看了Qualification达标前/后、Contracts移动前、Episodes第四轮完整历史、WholeSessions H2等代表图，结合全部独立oracle验证Whole每轮资格、达标不退灰、Partial与合法历史、cap和正常深度。分析命令为 `python Scripts/AnalyzeWholeQualification.py <目录>`、AnalyzeGrayWholeTransitions.py、AnalyzeGrayMemoryEpisodes.py、AnalyzeGrayReobservation.py、AnalyzeConfirmedWholeCurrent.py、AnalyzeWholeSessions.py，输出保留原目录。
+
+最终无Trace批量复核 `PerformanceAudit_FinalBatch01/02/03`：同一b03bcfb运行时、Standalone、1920×1080/SP100、原Epic/TSR/Lumen/VSM/D3D12质量，逐帧环境异常0，complete/exit0/severe0。每次独立进程，26.058/28.310/29.332秒。此为新阶段的三个Batch局部协议，不冒充重新完成原PIE×3+Standalone×3正式全矩阵。
+
+| case | p95 ms，三次 | setup ms，三次 | 最大整帧 ms，三次 |
+| --- | --- | --- | --- |
+| Empty | 18.156 / 18.436 / 18.465 | .110 / .108 / .147 | 19.952 / 19.404 / 19.958 |
+| SameIdentity64 | 17.733 / 17.312 / 17.558 | 179.268 / 198.081 / 182.488 | 436.816 / 462.747 / 439.590 |
+| Distributed184 | 17.244 / 17.557 / 17.421 | 561.233 / 512.112 / 516.630 | 1354.999 / 1288.085 / 1293.440 |
+
+全部cold/setup/离群帧保留；每组64和184各一帧>100ms。setup真实创建64/184条；同身份64在合法反证后最终为0（第二次首个采样已是0），184首个采样及热态为120，fine bytes41,157,632。不能把17ms热态称为持续184满负载。秒级停顿缩短但INITIALIZATION仍FAIL，Empty p95仍超过16.6ms。新的无Trace FrameAudit三组和最终真实610秒长测继续进行；不会重复旧完整矩阵或54,000步同步长测。

@@ -1,6 +1,6 @@
 # SightWeave 灰色层性能架构审计
 
-最新施工（cf3a3c1之后）：第16节记录本轮有界、同帧join的封存ownership切片；第1–15节为上一轮证据，未重新审计或重跑其长测。
+最新施工（cf3a3c1之后）：第16节记录本轮有界、同帧join的封存ownership切片，运行时6c66747已推送。184原生CPU对照ownership约576→115ms，首次native update约844→402ms；真实D3D12最大整帧尚未采集，不构成初始化PASS。第1–15节为上一轮证据，未重新审计或重跑其长测。
 
 2026-09-06。本轮起点 `d986b536fbd21a0fb0c600577f9912369fe221a3`；本地、实时远端一致，工作树干净，LFS fsck PASS。本文先记录修改前模型，后续实验追加，不以优化假设代替结论。外部规则和性能门槛继续采用 `SIGHTWEAVE_GRAY_STABILIZATION_HANDOFF_ZH.md`。
 
@@ -289,3 +289,39 @@ EXIT STABILITY沿用已验证范围的PASS；本轮全部最终功能、视觉�
 运行时检查点a8bb332已推送。其后完整 `BatchSlice_Functional01` **146/146**（136clean、10warnings、0failed/not-run/severe、exit0），实际NullRHI；测试182.321秒/进程203.854秒。没有再次执行四套视觉或长测。SpaceCraft仍运行，真实GPU A/B保持待测；为先验证主目标的CPU工作，新增独立JoinedDistributedBatch诊断，使用现有原生64+64+56构造器、串行/并行交替四次，报告setup与首个native update而非D3D12完整帧。新增仅测试文件，完整DiagnosticBuild01成功8.45秒，先保存检查点再运行该有界诊断。
 
 `BatchSlice_DistributedCPU01` 失败已保留：测试误用普通PropLab/GrayObjectPolicies世界，生产SetGrayPolicyStressMode按gray_lab=0正确拒绝；没有有效成本样本。诊断改为GrayPolicyLab地图身份，并调用正常ConfigureForGrayPolicyLab配置，未削弱生产guard。另将并行查询计数改为任务栈上累加、末尾一次写回，避免相邻计数槽的false sharing；几何求值不变。完整 `BatchSlice_DiagnosticBuild02.log` 成功20.92秒；先推送可构建修订，再执行修正诊断及受影响parity。
+
+### 16.1 最终运行时6c66747的有界对照
+
+`BatchSlice_DistributedCPU02` **3/3 PASS**（1clean、2warnings、0failed/not-run/severe、exit0），测试19.478秒/进程39.103秒。包含修正184诊断、JoinedSealedOwnershipParityAndLifetime、BatchOwnershipSamplesEquivalent。两条warning均为引擎generate_204 HTTP探测超时。原有功能146/146在a8bb332完成；后续运行时仅将计数移到任务栈，并在此处重新验证受影响parity，未机械重复全套。source.json、原日志、report和提取的native-costs.json均保留于上述Saved/GrayObjectPolicy目录。
+
+四次使用同一二进制、同一原生64+64+56 stress构造器、独立新世界，按串行/并行/串行/并行顺序；seed后不插入预热。**这是NullRHI CPU诊断，SpaceCraft PID18656仍运行，且不含完整GrayPolicyLab渲染环境，不是独占负载的Standalone性能验收。** setup只测构造器，Step测Adapter/Room/Fixture的一次原生更新；memory为其中的对象记忆阶段。以下单位ms，全部保留，不能与旧D3D12整帧相加或混算收益：
+
+| 工作阶段 | 串行0 | 并行1 | 串行2 | 并行3 |
+| --- | ---: | ---: | ---: | ---: |
+| 184 setup | 473.349 | 482.495 | 474.776 | 518.930 |
+| 首次Step | 851.353 | 414.154 | 838.413 | 391.221 |
+| 首次native memory | 850.919 | 413.722 | 837.970 | 390.782 |
+| Ownership | 583.685 | 115.767 | 568.525 | 115.063 |
+| Cap presentation | 79.846 | 83.678 | 80.156 | 82.457 |
+| Occupancy | 83.671 | 102.650 | 86.957 | 81.458 |
+| Fine history | 43.185 | 49.456 | 42.353 | 49.729 |
+| Texture submission CPU | 15.480 | 16.518 | 15.318 | 16.951 |
+
+每次首帧均保留184条record，geometry tests **8,030,933**、record visits **17,100,359**完全相同。并行各181批、1,941,840输入样本；串行0批。后两次更新各约6–7ms，ownership约.01ms、cap=0。两次均值ownership576.105→115.415ms（约80%下降），native844.445→402.252ms（约52%下降）；仅说明该CPU路径的并行收益，不声称通用硬件提升或真实最大整帧下降同样比例。
+
+### 16.2 验收边界与下一轮入口
+
+| 本轮重点 | 结果 |
+| --- | --- |
+| 架构切片 | 已完成：封存ownership只读借用、并行精确求值、join后GT合并；无跨帧任务和待取消结果 |
+| 功能正确性 | 完整146/146一次通过，最终计数局部修订另有3/3定向；覆盖旧全扫描oracle、样本/纹理/cap parity及无效coverage、Reset、重播种和world销毁 |
+| 184真实setup / 最大整帧 | 新after **待测**。上一轮三次before setup512–561ms、最大整帧1288–1355ms保留；本轮CPU数据不能填入此栏 |
+| INITIALIZATION / BATCH HITCHES | **FAIL**。即使CPU ownership显著缩短，setup约半秒且GT仍等待所有任务完成，未消除玩家可感知停顿 |
+| 最终视觉 | 本轮未重跑；前轮四套PASS仅作既有基线，不能写成6c66747的新视觉PASS |
+| 其它总体状态 | ARCHITECTURE AUDIT PARTIAL / FRAME PERFORMANCE FAIL / LONG-RUN RESOURCES PARTIAL；本轮未重做全系统审计、矩阵、十分钟长测或旧内存账本 |
+
+恢复后先确认SpaceCraft已退出，再在**同一6c66747运行时二进制**做最小Batch A/B：`Scripts/RunGrayPerformanceBaseline.ps1 -RunName <唯一名称> -Mode Standalone -Protocol Batch -NoAuthoringToolsets -SerialSealedOwnership`为串行，不带最后开关为并行；用日志确认串行CVar确实为0，先一对，再按变异决定必要重复。不应重做全矩阵或从零跑145项。用 `Scripts/AnalyzeGrayStabilization.py <Saved目录>` 分析全部setup/冷帧，不删异常。取得真实A/B后补一次与改动相关的历史/cap视觉证据；此前保留最终渲染验证待办。
+
+下一轮最高收益结构入口是**封存capture的CPU输入、occupancy/cap计算与GT资源提交的工作边界**：此切片已将ownership降到约115ms，但setup仍约500ms，occupancy/cap各约80ms。先沿既有Trace定位setup中的捕获/快照/资源创建，做可拥有自身数据的工作单元和GT提交，再决定跨帧调度及失效策略。任何跨帧结果必须有epoch/revision和世界生命周期校验；不能将本轮借用引用直接交给跨帧任务，也不能仅延后压力测试构造器来冒充产品优化。Current分支、capture/cap任务化和发布背压均尚未实现；本轮没有遗留半套异步队列。Python流式采样器低于主任务优先级，本轮未修改。
+
+最后检查工作树/暂存、diff和LFS均通过，所有构建及测试进程正常结束，Saved失败/成功证据完整保留。稳定分支不移动，不创建最终stable、不开始黑色层、不自动关机。

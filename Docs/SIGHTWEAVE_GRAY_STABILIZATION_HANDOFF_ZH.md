@@ -1,6 +1,8 @@
 # 灰色层功能检查点与稳定化施工
 
-最新继续施工（cf3a3c1之后）：已实现大批封存历史ownership的同帧并行求值/GT合并切片，运行时a8bb332已推送。完整Editor构建、4项定向和一次完整146/146功能回归通过，含37个真实并行批次、1,982,208输入样本的串行parity与Reset/重播种/退出边界。Current与跨帧发布保持原路径；capture/cap/resources仍同步。SpaceCraft仍运行，真实GPU before/after尚待采集；正在补原生184构造器的短CPU对照，不冒充完整帧。本轮不重跑完整矩阵或十分钟长测。详见架构审计第16节，下文“最新续工完成”指上一轮。
+最新继续施工（cf3a3c1之后）：已完成大批封存历史ownership的同帧并行求值/GT合并切片，最终运行时 **6c66747** 已推送。四项定向及一次完整146/146功能回归通过；最终仅任务计数局部修订的完整Editor build成功20.92秒，另有3/3定向通过。原生184 CPU对照ownership **569–584→115–116ms**、首次native update **838–851→391–414ms**，几何/record访问计数完全相同。setup仍473–519ms、cap约80–84ms；并行仍在同帧join，不声称消除卡顿。SpaceCraft PID18656仍运行，新D3D12最大整帧 **待测**，旧1.288–1.355秒仍为最近有效真实结果。详细四次样本、失败诊断的场景修复、正确性范围和命令见 [架构审计第16节](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md#16-有限额度施工封存ownership的同帧并行切片)。
+
+本轮待办：SpaceCraft退出后，同一二进制用Batch及-SerialSealedOwnership做最小真实A/B，再补相关历史/cap视觉。本轮没有新视觉、全矩阵或十分钟结果；完整146/146在a8bb332通过，6c66747仅计数栈化与测试fixture修正后按影响范围验证。Current、capture/cap/resources仍同步，跨帧任务/失效队列尚未引入；因此没有悬空任务需要恢复。下一结构入口是约半秒setup的封存capture工作单元，以及occupancy/cap计算与GT资源提交边界。Python流式采样器、旧6.4GB账本和Empty GPU成本留待后续。本轮构建/测试进程已退出，Saved证据保留，stable未移动。下文“最新续工完成”指上一轮。
 
 最新续工完成：从 `d986b53` 开始的两阶段局部重构，运行时冻结并推送于 `b03bcfb`：ownership空间候选与旧表面提前排除、cap依赖摘要、地面记忆饱和行/扫描线交点复用。最终145/145原生功能、四套视觉及全部独立oracle PASS。三次无Trace Batch的184初始化峰值1.288–1.355秒；FrameAudit的Empty p95中位18.599ms、Partial21.940ms；SourceUpdate独立Trace均值5.50→2.59ms。最终真实610秒长测42,663帧、p95=15.991ms，但5帧>100ms，性能仍FAIL。工作集3.363→3.755GB，释放采样数据+GC+60真实帧后3.434GB，历史/纹理资源边界稳定。短GC规模对照证实采样器保留4.27万条字典可产生约107ms完整Python GC，原慢帧不删除。分配探针区分了用户buffer、D3D12页池与Mimalloc预留/decommit；旧同步6.4GB仍未全部闭环。已有正式全矩阵和54,000步同步长测未重跑。完整证据、限制和后续架构方向见 [性能架构审计](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md) 第5–15节，以及新增23行 [阶段明细](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_METRICS.csv)。
 

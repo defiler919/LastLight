@@ -5,6 +5,7 @@ param(
     [ValidateSet('Episodes','Contracts','Reobservation','ReobservationTiming','Qualification')][string]$Protocol = 'Episodes',
     [switch]$NormalTurns,
     [switch]$WholeSessions,
+    [switch]$LegacyDirectClose,
     [ValidateSet('None','FromStart','BeforeExit')][string]$ExitDebugger = 'None'
 )
 $ErrorActionPreference = 'Stop'
@@ -24,6 +25,14 @@ $driverName = switch ($Protocol) {
 }
 $driver = Join-Path $repo "Content/Python/$driverName"
 Copy-Item -LiteralPath $driver -Destination "$output/driver.py"
+if ($LegacyDirectClose) {
+    # Controlled negative regression: reproduce the old ownership violation on
+    # the same built binary and route, without depending on a Saved selector.
+    $text = Get-Content -LiteralPath "$output/driver.py" -Raw
+    $text.Replace('unreal.EditorPythonScripting.set_keep_python_script_alive(False)',
+        "unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'CLOSE_SLATE_MAINFRAME')") |
+        Set-Content -LiteralPath "$output/driver.py" -Encoding utf8
+}
 git -C $repo rev-parse HEAD | Set-Content "$output/source.txt"
 git -C $repo diff --binary | Set-Content "$output/source.patch"
 $prior = $env:DARKWELL_AUDIT_OUTPUT
@@ -65,6 +74,7 @@ $content = Get-Content "$output/editor.log" -Raw
 $summary = [ordered]@{
     exit_code = $process.ExitCode
     exit_debugger = $ExitDebugger
+    legacy_direct_close = [bool]$LegacyDirectClose
     wall_seconds = ((Get-Date)-$start).TotalSeconds
     protocol_complete = Test-Path -LiteralPath "$output/complete.json"
     teardown_complete = $content.Contains('GRAY_EPISODE_AUDIT_STOPPED')

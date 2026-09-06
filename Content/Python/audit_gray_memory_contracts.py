@@ -188,7 +188,10 @@ def tick(_delta):
     except StopIteration:
         unreal.unregister_slate_post_tick_callback(handle)
         unreal.log('GRAY_EPISODE_AUDIT_STOPPED')
-        unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'CLOSE_SLATE_MAINFRAME')
+        # Let ExecutePythonScript complete its notification before engine exit.
+        # Directly closing Slate here leaves that notification alive until the
+        # Python plugin shuts down, after the Slate application has been destroyed.
+        unreal.EditorPythonScripting.set_keep_python_script_alive(False)
     except Exception:
         (root/'failed.txt').write_text(traceback.format_exc(), encoding='utf-8')
         unreal.log_error(traceback.format_exc())
@@ -196,5 +199,5 @@ def tick(_delta):
             director.set_audit_viewport_size_for_testing(0,0)
         levels.editor_request_end_play()
         unreal.unregister_slate_post_tick_callback(handle)
-        unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), 'CLOSE_SLATE_MAINFRAME')
+        unreal.EditorPythonScripting.set_keep_python_script_alive(False)
 handle = unreal.register_slate_post_tick_callback(tick)

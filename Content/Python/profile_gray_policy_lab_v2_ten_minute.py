@@ -242,7 +242,7 @@ def tick(_delta):
     except StopIteration:
         unreal.unregister_slate_post_tick_callback(handle)
         unreal.log("GRAY_POLICY_LAB_V2_TEN_MIN_CALLBACK_UNREGISTERED")
-        unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), "QUIT_EDITOR")
+        unreal.EditorPythonScripting.set_keep_python_script_alive(False)
     except Exception as error:
         (OUTPUT / "failed.json").write_text(
             json.dumps({"error": repr(error)}, indent=2), encoding="utf-8"
@@ -250,7 +250,7 @@ def tick(_delta):
         unreal.log_error("GRAY_POLICY_LAB_V2_TEN_MIN_FAIL " + traceback.format_exc())
         levels.editor_request_end_play()
         unreal.unregister_slate_post_tick_callback(handle)
-        unreal.SystemLibrary.execute_console_command(editor.get_editor_world(), "QUIT_EDITOR")
+        unreal.EditorPythonScripting.set_keep_python_script_alive(False)
 
 
 handle = unreal.register_slate_post_tick_callback(tick)

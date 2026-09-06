@@ -1,4 +1,5 @@
 #include "SightWeaveWorldSubsystem.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 
 #include "Algo/Sort.h"
 #if WITH_DEV_AUTOMATION_TESTS
@@ -2070,6 +2071,7 @@ void USightWeaveWorldSubsystem::QueryBatch(
 
 FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(SightWeave_PublishSnapshot);
 	if (!bSightWeaveInitialized)
 	{
 		return FSightWeaveRevision();
@@ -2734,6 +2736,7 @@ bool USightWeaveWorldSubsystem::MeasurePreparedEventIndexForwardSequenceForTesti
 
 void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(SightWeave_RebuildVision);
 	const FSightWeaveVisionSourceDescription* Description = VisionSources.Find(SourceId);
 	if (!Description)
 	{
@@ -3068,6 +3071,7 @@ void USightWeaveWorldSubsystem::RebuildVisionSnapshotEntry(const int64 SourceId)
 
 void USightWeaveWorldSubsystem::RebuildIlluminationSnapshotEntry(const int64 SourceId)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(SightWeave_RebuildIllumination);
 	const FSightWeaveIlluminationSourceDescription* Description = IlluminationSources.Find(SourceId);
 	if (!Description)
 	{

@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$RunName,
     [ValidateSet('PIE','Standalone')][string]$Mode='PIE',
-    [ValidateSet('Smoke','Knowledge','Attribution','Batch','Matrix','LongRun','Reference')][string]$Protocol='Matrix',
+    [ValidateSet('Smoke','Knowledge','Attribution','FrameAudit','Batch','Matrix','LongRun','Reference')][string]$Protocol='Matrix',
     [string]$Map='',
     [string]$EngineRoot='D:\UE_5.8',
     [switch]$NoAuthoringToolsets,

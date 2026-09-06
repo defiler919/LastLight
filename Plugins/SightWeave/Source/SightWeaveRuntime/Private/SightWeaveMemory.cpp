@@ -1,4 +1,5 @@
 #include "SightWeaveMemory.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 
 #include "Algo/Sort.h"
 
@@ -140,6 +141,7 @@ namespace SightWeaveMemoryPrivate
 		const FIntPoint LogicalCoordinate,
 		TArray<uint8>& InOutBits, const bool bCullEmptyRows = true)
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(SightWeave_MemoryRasterizePolygon);
 		if (Vertices.Num() < 3)
 		{
 			return;
@@ -539,6 +541,7 @@ int64 FSightWeaveMemoryAuthority::GetPackedAuthorityBytes() const
 FSightWeaveMemoryUpdateDiagnostics FSightWeaveMemoryAuthority::WriteEffectiveLive(
 	const FSightWeaveFrameSnapshot& Snapshot)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(SightWeave_MemoryWriteEffectiveLive);
 	check(IsInGameThread());
 	FSightWeaveMemoryUpdateDiagnostics Result;
 	Result.PriorMemoryRevision = MemoryRevision;
@@ -1141,6 +1144,7 @@ void FSightWeaveMemoryAuthority::FinalizePreparedPersistentReplacement(
 TSharedPtr<const FSightWeaveMemoryPacket, ESPMode::ThreadSafe>
 FSightWeaveMemoryAuthority::PublishPacket(const bool bForceFullRebuild)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(SightWeave_MemoryPublishPacket);
 	check(IsInGameThread());
 	TSharedRef<FSightWeaveMemoryPacket, ESPMode::ThreadSafe> Packet =
 		MakeShared<FSightWeaveMemoryPacket, ESPMode::ThreadSafe>();

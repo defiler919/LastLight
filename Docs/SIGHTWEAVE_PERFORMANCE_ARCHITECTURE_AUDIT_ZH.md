@@ -94,3 +94,25 @@ CPU 知识持续到合法反证/完全被新知识替代；呈现对象可先于
 施工中 SpaceCraft 再次出现，真实采集脚本拒绝启动；用户随后确认已退出，重新核对后才继续真实样本。新增脚本仅在本次 benchmark 采样开始前置前其自身窗口，不发送全局键盘输入，采样期间不抢回焦点。
 
 阶段状态：审计继续；FRAME / INITIALIZATION **FAIL**，RESOURCES **PARTIAL**，本次运行时功能 **PARTIAL（10 项定向通过，完整阶段回归待做）**。不移动 stable。
+
+## 6. 第一阶段完整功能与分配级归因
+
+`18251b8` 已推送。PerformanceAudit_Stage1Functional01 **144/144**（133 clean、11 warnings、0 failed/not-run、severe 0、exit 0），实际 NullRHI；测试 169.431 秒，进程 191.207 秒。此前 10 项定向与本次完整回归都包括新的 ownership oracle。阶段视觉尚待做。
+
+新增独立 UploadResourceAttribution，2048+2048 次原尺寸上传，之后实际 GT/RT 帧推进到 12/120/360/600，最后 GPU idle、GT/RT allocator trim、纹理释放+GC+60 帧。诊断干预不进入玩法。ResourceProbeBuild01 全量 Editor 19.53 秒成功；PerformanceAudit_UploadAllocation01 真 D3D12/SM6，-LLM、启动即 memory trace，1/1 clean、exit 0、severe 0、21.608 秒测试/68.121 秒进程。trace 858,479,748 bytes，原始转储和四份 live CSV/存活差分在其 Saved/GrayObjectPolicy 目录。
+
+- CPU 用户缓冲：无 flush 峰值 603,979,776 bytes；每 32 次 flush 峰值 9,437,184；4096 次 callback 全部完成，最终 pending 0。
+- 4 MiB、Textures 标签、D3D12RHI 分配数量：Baseline 10 → BurstFlushed 152 → BatchedFlushed 298 → Released 11；对应上传页模型。通用 D3D12.DumpTrackedAllocations **没有列出这些页**，仅靠该命令会漏掉上传池，原输出保留。
+- 工作集 4,872,335,360 → 6,687,464,896（两批排空后）→ 5,648,818,176（600 帧）→ 5,499,977,728（纹理释放后）。GPU idle 和显式 trim 本身没有可见额外下降；继续真实帧和时间后明显下降，不能说永不回收。
+- Released 相对 Baseline 的最大保留组是 `Darkwell/UploadAttribution` 73×8 MiB=612,368,384 bytes，调用栈含项目 operator new[] → Probe::Submit，其间引擎函数无 PDB、仅模块名。本机实际 mimalloc.Build.cs 选择 **2.0.0**，其 MI_SEGMENT_SIZE 为 8 MiB；不能误套同目录未选用的 2.1.2。Windows MemoryTrace hook 跟踪 VirtualAlloc reserve 并标记为 heap，MEM_DECOMMIT 不生成 Free，故 live reservation 不等于仍驻留用户 allocation。仍需直接核对这些地址的 committed/reserved 状态。
+- CSV 总数混有系统预留、allocator 子分配和 GPU heap，不可将约 21 GB 的总和当进程工作集。Insights 也报告部分 RootHeap=1 的 invalid FREE 并补零大小记录；不隐藏此采集边界，不用其混合总和闭合 6.4 GB 旧长测。
+
+该探针把“用户 buffer 队列 → D3D12 上传页 → allocator/VM 保留”分开，并证实前两层可清理；仍不足以把旧同步 54,000 步的全部增长归给单一原因。LONG-RUN RESOURCES 保持 PARTIAL。
+
+## 7. 完整帧 Source 成本进一步展开
+
+只添加 CPU Trace scopes，未改插件规则；SourceTraceBuild01 全量 Editor 构建成功 13.53 秒。独立 FrameAudit 保留 Empty、快速扫视、Partial 与运动停止，原正式 Matrix 不变。FrameCost01 在运动未结束时切换场景被 GRAY_POLICY_STRESS_REJECT 拒绝，complete false、severe 1、exit 0，失败原目录保留。FrameCost02 调整该诊断顺序并延长最后运动观察，complete、exit 0、severe 0，46.886 秒，窗口激活成功。
+
+FrameCost02 Empty 的 300 次 SourceUpdate 平均 **5.503 ms**：PublishSnapshot 5.496、MemoryWriteEffectiveLive 5.420、其中 polygon raster 共 3.674 ms/帧，其余写入合并 1.746 ms；Vision 两次求解合计约 .034 ms，Illumination 约 .010 ms，MemoryPublishPacket 约 .003 ms。父子 scope 已明确，不能再把约 5 ms 归为光线求解。GPU SceneRender 平均 14.853 ms，LumenScreenProbeGather 2.947 ms；CPU 与 GPU 不相加。
+
+下一项有模型支撑的局部改造：地面记忆每字节仅执行 `Prior OR EffectiveLive`。完整已记住行满足 `0xff OR x = 0xff`，因此写入阶段可跳过其重复 raster/combine；ClearMemory/持久状态替换后必须重新依据实际 packed bits 判断，不把 CurrentLive、合法墙体或对象 Whole 资格改为“曾见即可”。先做完整位图/修订/dirty packet 的 reference parity，再测收益。

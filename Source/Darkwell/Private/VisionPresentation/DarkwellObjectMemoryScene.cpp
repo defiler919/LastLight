@@ -3604,6 +3604,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 	TArray<FDarkwellSpatialPropMemory::FCell> FineCells;
 	if (bFineHistory)
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CapCells);
 		FineCells.SetNum(Record.FineHistory.GetSamples().Num());
 		for (int32 I = 0; I < FineCells.Num(); ++I)
 		{
@@ -3653,6 +3654,8 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 	};
 	uint64 Signature = (uint64(Record.SpatialMemory.GetGeneration()) << 1 | uint64(bPresent))
 		* 1099511628211ull;
+	{
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CapSignature);
 	for (int32 Index = 0; Index < Cells.Num(); ++Index)
 	{
 		const FDarkwellSpatialPropMemory::FCell& Cell = Cells[Index];
@@ -3717,6 +3720,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 		}
 		Signature = (Signature ^ Dependency) * 1099511628211ull;
 	}
+	}
 	if (Signature == Visual->CapSignature)
 	{
 		return;
@@ -3724,6 +3728,8 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 	Visual->CapSignature = Signature;
 	++RuntimeFrame.CapMeshRebuilds;
 	FDynamicMesh3 Mesh;
+	{
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CapBuildCPU);
 	Visual->CapExpected = Visual->CapGenerated = Visual->CapClipped = 0;
 	Visual->MissingHistoricalCuts = 0;
 	Visual->CapSamplePoints.Reset();
@@ -4022,6 +4028,8 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 			if (IsCut(X, Y + 1)) Horizontal(Y1, X0, X1, -1);
 		}
 	}
+	}
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CapSubmitGT);
 	Visual->CapTriangles = Mesh.TriangleCount();
 	Visual->Cap->SetMesh(MoveTemp(Mesh));
 	Visual->Cap->SetVisibility(Visual->CapTriangles > 0);

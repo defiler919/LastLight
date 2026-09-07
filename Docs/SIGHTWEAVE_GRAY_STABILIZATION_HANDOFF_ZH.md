@@ -1,5 +1,19 @@
 # 灰色层功能检查点与稳定化施工
 
+## 跨帧首次历史准备：架构定案（2026-09-07，084ab56之后，仅文档）
+
+已核验开发分支及远端084ab5664058badeacb754e1fef6fb487bb71f9d，初始工作区干净；阅读AGENTS、上阶段交接、审计第21节与相关生命周期源码。**本轮没有修改运行时/接口头文件、构建、跑基准或留下后台任务；实际运行时仍为bf48648。** 全文、拟定接口和可执行测试计划见 [首次历史准备与发布设计](SIGHTWEAVE_HISTORY_PREPARATION_SCHEDULING_DESIGN_ZH.md)，审计第22节为决策索引。
+
+推荐“合法Current期间预算化预备→原GT合法seal严格校验并一次消费→未完成/过期则现有同帧回退”。知识事件、资格/证据推进与发布时机不排队。第一生产切片P1只对首次、静止、合法confirmed Whole的两种几何mask使用GT协作续算：有界队列、私有快照/游标/结果、世代票据、原Freeze入口消费，**不启动worker，不重写几何谓词，不拆Partial/证据或UObject创建**。后续再按闭环扩展CPU执行器、更多纯产物和GT资源准备。
+
+失效身份包含Scene/世界实例、SceneGeneration、HistoryGeneration、StableId/Epoch/record incarnation、SourceGeneration、request serial和精确capture domain。epoch会被Initialize重置，同epoch也会resume，不能单独用作身份；已有TransformRevision有容差，不能代替精确域验证。Reset/Destroy/Initialize/Replace/resume/retire及同步回退先撤销发布权再清理。Source消失/替换不得擦掉旧合法历史；迟到结果不得FindOrAdd复活记录。未来历史产物还必须有覆盖fine/opacity/可逆排除/ownership的输入版本，不能拿dirty bool或简单OR合并替代。
+
+**冷184的限制已定案**：同一调用连续生成并seal184条，没有准备提前量；P1不承诺降低516–520ms，不能拆seed到多帧后偷换基准。全冷同时必显、零额外延迟、硬帧预算不可同时保证；这里选择原语义/首显优先并如实记录回退超支。若未来要硬性压低该整批峰值，须单独确认初始化交互门槛或允许首显延迟，不能由调度器暗中改变玩家知识。
+
+下一轮中档执行者按设计第8节P1顺序施工，第9节验证：0=现有同帧oracle、1=影子比对、2=完整P1；必须同时完成Ready消费、失效/回退/释放和确定性注入测试，不能仅提交一半队列。指标同时计从最初合法观察起的最大整帧、首显额外帧数（P1要求0）、墙钟首显延迟、整批AllReady/合法终止、取消浪费和内存高水位；原冷184与新增有合法准备提前量的Whole路线分别报告。
+
+本轮仅更新本交接、设计与审计。没有重新优化ownership/capture/cap/occupancy/resource微项，没有Large World/黑色层或Docs/AI维护。INITIALIZATION仍FAIL，stable保持404a582/7534163；没有新增构建/测试/性能通过声明。
+
 ## 首次表现资源生产切片完成（2026-09-07，a8df0d9之后）
 
 最终运行时 **bf48648ee46e119155e16616c977f3a251bc179b** 已推送；最小归因检查点0899a7f。启动核验开发分支/远端a8df0d9、工作区干净；remote默认HEAD是main/46d9f9d，并非开发分支。只沿第20节之后处理首次表现资源，没有重做occupancy、维护Docs/AI、启动黑色层或移动stable。

@@ -626,3 +626,15 @@ python Scripts/AnalyzeGrayWholeTransitions.py Saved/ArchitectureAudit/ResourceSl
 下一优先级应提升到整批首次历史准备/发布的调度合同：**跨帧调度 + epoch/revision/lifetime校验 + GT原子发布**，先明确合法观察何时形成可展示历史、旧Current/预备资源如何持续有效、reset/销毁/新证据如何取消过期产物，以及整批峰值/最坏首显延迟的双重验收。需要单独授权，不能直接把Freeze或UObject创建搬到worker，不能让晚到结果恢复旧灰影。本轮完全没有开始该系统。
 
 若下一轮仍限定同帧，可评估TextureSubmission内约43ms的像素生成/顺序签名/Float16准备，优先做纯CPU数据路径；其收益上限不足以独自解决半秒首次整帧。共享跨record可变texture/MID、盲目池化、移动Whole首次发布或拆分合法知识都不是本轮建议的安全续作。
+
+## 22. 跨帧首次历史架构定案（2026-09-07，084ab56之后，未改运行时）
+
+完整方案、拟定private接口、源码集成点、状态/失效矩阵、第一生产切片和验收计划见 [SIGHTWEAVE_HISTORY_PREPARATION_SCHEDULING_DESIGN_ZH.md](SIGHTWEAVE_HISTORY_PREPARATION_SCHEDULING_DESIGN_ZH.md)。本阶段只阅读必要源码并提交技术文档；没有新计时、构建、测试或运行时变更。实际运行时仍bf48648，第21节正常两对D3D12数据仍是最新证据，INITIALIZATION仍FAIL。
+
+决策：合法Current期间预算化准备纯数据，原GT合法seal只消费严格匹配的完整结果；未完成或过期就同帧回退，不隐藏源等待。第一切片P1用GT协作续算两种Whole几何mask，不启动worker，不调度历史证据/Partial/UObject生命周期，不重新优化现有几何算法。P1完整包含有界队列、generation/ticket、reset/replace/resume/retire失效、Ready消费与oracle回退，不能只上线影子队列。
+
+关键源码约束：History.Initialize重置epoch，resume复用epoch；SourceReplace保留旧历史；TransformRevision有容差；FrameOccupancy/FrameNewerCandidates只在本帧有效；Visual退休状态参与候选语义。方案因此分离世界/Scene/History/Source/record寿命与精确几何域；未来封存表现还必须独立覆盖evidence/opacity/可逆排除版本。取消旧任务不是取消玩家知识，任务完成不能创建或恢复权威记录。
+
+**对184的结论修正为明确边界，而不是性能承诺**：现有一次调用内同时请求并seal184条，无准备提前量。P1普通Whole路线有机会提前分摊工作，但原冷184应完整保留、可能继续同步回退。若要硬性降低这个冷批次且不增加首显延迟，必须先提供语义上允许的准备阶段；单纯改seed时序不算优化。首显延迟/初始化交互门槛若需要变化，应独立定案，不能在实现时自行放宽。
+
+下一轮验收同时覆盖最大整帧（从合法观察/最初请求起，包含预备帧）、合法seal至首次正确图像的帧差与墙钟时间、AllReady/合法终止、取消/过期结果拒绝、内存高水位与回收。P1额外首显帧延迟要求0；软准备预算不是整帧硬上限。旧冷184与新增有提前量的Whole路线分别同二进制A/B，不跨路线比较。详细拟定测试未执行，不计为通过。

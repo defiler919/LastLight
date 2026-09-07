@@ -1,5 +1,50 @@
 # 灰色层功能检查点与稳定化施工
 
+## 下一阶段定向侦察（2026-09-07，起点 a41928beec12f56fa6d68887b1669ea8bf7915e7）
+
+本轮仅阅读 AGENTS.md、最新性能审计第18–19节、交接和相关源码；不改运行时、不构建、不运行测试、不引入跨帧任务。下列行号对应起点源码。最新审计引用的 Saved/Stabilization/CapSlice_Joined02 与 CapSlice_TraceJoined01 在本机不存在，因此计时沿用已提交证据，不声称重新核验原始 Trace。此前148/148和必要视觉结果不重复执行。
+
+### Occupancy 的实际边界、规模与待确认项
+
+入口在 `Source/Darkwell/Private/VisionPresentation/DarkwellObjectMemoryScene.cpp`：`UpdateMemory`（5511）在GT采集 FrameOccupancy（5524–5545，独立 OccupancySnapshotUs），然后 `UpdateTracked`（2256）按历史 epoch 原序处理；2701按 record bounds筛候选；2734–2756的 **OccupancyUs** 包括 `BuildGeometryDirtyIndices`（1419）以及 coarse dirty映射/占据回填。它不包括前面的候选/coverage准备，也不等于某个几何函数自身耗时。最新无Trace occupancy中位79.806ms是此复合区间；尚无足够证据给内部函数排毫秒名次。
+
+- `BuildGeometryDirtyIndices`：收集/复制当前物理与较新历史几何；查 FrameHistoryGeometry复用；比较修订和前后几何，构造 Dirty/PhysicalDirty位图；按索引计算或复用 fine occupancy，并生成两份dirty索引。首次 ProcessedGeometryRevision=0 或尺寸不符时全格标脏。即使候选为空，仍支付位图、循环、索引输出及缓存写入成本；复用命中也复制 Occupied和两份索引数组。
+- 精细查询链：`IsOccupiedByActual`（1282）→ exact XY点缓存/候选bounds → `QueryVerticalInterval`（338，缓存投影早退及精确local slab）；Whole仅在中心未占据且 LastLegalCaptureMask允许时走 `IsOccupiedWithinWholeFootprint`（1330）→ AABB/中心包含/四边 `ClipSegmentToGeometryProjection`（421）。Whole footprint现在遍历完整FrameOccupancy，不能不加证明地复用中心点候选缩小它。
+- coarse部分将PhysicalDirty映射到coarse位图，再对coarse中心调用同一占据函数。ownership-only dirty仍必须进入后续合法证据处理，但不得重新推翻物理占据缓存。
+- 规模：压力是三个身份64+64+56=184条姿态，yaw每次17度、X每次7cm，绝非184个当前物理对象；seed后合法反证的采样记录为120，fine分配41,157,632 bytes（既有审计）。fixture CellSize=2.5cm，Fine每轴4倍，即每coarse cell 16样本、名义约0.625cm细度；每条实际尺寸随旋转后bounds变化。工作量应记录 sum(S_i)、physical-dirty数D_i、coarse-dirty数C_i与primitive候选P_i，不能用分配字节反推准确样本数，也不能挪用旧ownership的1,941,840样本/8,030,933 geometry tests当本阶段计数。
+- `DarkwellMovingPropLabRoom.cpp:769–852`播种结束将该身份碰撞关闭、bExists=false；FrameOccupancy只纳入当前存在且有碰撞的Actor。空候选时中心查询立即false，Whole仍有自身检查。故80ms可能有显著的CPU数组/扫描成本；本轮不能证明narrow-phase为主耗时。通用成本含O(sum S_i)扫描/初始化、O(sum(D_i+C_i)*P_i)几何查询，加较新历史几何收集/比较/复制（历史规模增长时可有二次工作），并非单一O(H)算法。点缓存上限131072、geometry复用条目上限64，满后保留完整路径。
+
+### 可施工边界与正确性约束
+
+适合继续“只读输入→并行CPU→GT合并”，但**不适合直接并行整段BuildGeometryDirtyIndices或跨record的UpdateTracked**。推荐先按单record分块、同帧join，维持record证据/ownership/退役的原顺序：GT完成revision判定、复用命中、候选与输入固定，任务只求fine/coarse中心和Whole footprint结果，GT按原索引写缓存/dirty列表/统计，再推进原合法证据与ownership。进一步并行dirty计算或减少复制应由分段结果决定，不能先假设纯查询占满80ms。
+
+输入保留精确bounds/size、已投影几何、Whole mask、旧occupancy及dirty/revision上下文；同帧借用期间禁止容器变动。任务用独占字节输出或独占完整bit word，GT压回TBitArray；不同bit也可能共用机器字，不能并发写同一TBitArray。FrameOccupancyPoints是共享TMap，FrameHistoryGeometry与Visual数组/修订也是共享可变状态；需GT管理cache命中/发布，或设计有界局部cache后实测重复查询损失，不能给worker直接调用当前共享查询。`QueryVerticalInterval`已有thread_local GOwnershipQueryCounts路线，可复用局部计数思想；IsOccupiedByActual自身的OccupancyTests/CacheHits仍须拆出。没有FrameOccupancy快照的live Actor/UObject回退继续GT。
+
+主要风险：精确浮点点key及边界容差改变导致薄边误擦；Whole中心空但footprint有物理占据；ownership-only变化、亚容差物理位移、collision/销毁导致的缓存失效；任务并发bit/TMap写与悬空候选；提前发布修订、改变record处理顺序导致旧历史复活或提前VerifiedEmpty。不得混淆占据事实与合法coverage/ownership，不能让物理位置本身授予玩家知识。
+
+### Seal外首次 proxy / texture / resource 创建
+
+可确认的调用点（同一Scene.cpp，另注明Lab文件）：
+
+| 入口/阶段 | 主要创建或提交 | 结论 |
+| --- | --- | --- |
+| Lab `ConfigureHistoricalEpochCountForTesting`，MovingPropLabRoom.cpp:837 | EnsureRecordVisual先执行，下一行才FreezeCurrentForHiddenMotion | seed的首次创建位于seal外；不是seal内Ensure的368次约2.357ms所覆盖的总成本 |
+| 生产 `UpdateTracked:2626` Current | EnsureRecordVisual；2631附近UpdateCurrentPartTextures | 合格观察时预备透明历史代理，并更新当前表现 |
+| `EnsureRecordVisual:3153` | 3194 CreateTransient(PF_FloatRGBA)→Bulk锁定清零→UpdateResource；3233附近NewObject DynamicMesh cap→RegisterComponent/LoadObject材质 | 纹理按coarse尺寸×4的每轴分辨率；CPU分配/清零与GT对象及后续渲染创建须分开量 |
+| `SpawnMemoryProxy:3461`→`BindProxyMaterial:3514` | SpawnActor、Root注册、逐primitive LoadSynchronous/NewObject/SetStaticMesh；LoadObject父材质、每mesh创建MID、绑定后RegisterComponent | 后者才注册mesh；已有“先材质后注册”优化，不重复施工。实际render proxy/RHI成本可晚于GT调用，本轮未取得其线程耗时 |
+| `UpdateCurrentPartTextures:3302` | 3327 CreateTransient/UpdateResource；后续CPU像素/签名/FFloat16Color staging→UpdateTextureRegions | 与历史预备纹理是两条路径；Whole有1×1与spare复用，不能把全部上传算首次创建 |
+| 历史 `UpdateTracked:2706`，seal内部3029/3077 | EnsureRecordVisual缓存命中、必要尺寸重建/最终姿态及SpatialReady绑定 | 完整资源成本必须同时统计seal外/内，不能只计ensure总次数 |
+
+资源整段不能直接搬到worker：UObject创建、加载、Actor/component注册、MID参数、OwnedTextures/Materials/Caps和显示发布保持GT；纯像素/几何准备才是CPU任务候选。必须保留Current预备代理SpatialReady=0、最终合法捕获姿态、源隐藏/历史接管顺序与GC可见owner；不能通过推迟预备来重新引入首次Whole离开的空白帧。不可把UpdateResource返回等同GPU就绪，也不新增Flush或降低采样换成绩。
+
+### 下一轮顺序、收益预算与最小验收
+
+1. **P0：先给occupancy现有复合区间做最小分段**（dirty准备/复用复制、fine查询含Whole、coarse、合并），同时记录上述S/D/C/P和空候选/cache命中。仅需下一轮施工时一次短归因，不重开旧审计。若查询/独立扫描可并行部分占80ms的50%–80%，且这部分获得3倍加速，理论净节省约27–43ms，再扣调度/暂存/GT合并；这是条件预算，不是实测收益或承诺。若复制/串行准备占主导，则先减少精确等价的重复收集/复制，避免做低收益任务化。80ms只是整个当前occupancy区间的绝对消除上界，不能预期因此将约771ms整帧压到100ms。
+2. **P1：资源首次创建分段归因后再选切片**。按历史/Current、首次/复用/resize、seal内外记录次数、texels/bytes、mesh/MID数，拆texture分配清零、proxy构造、MID/注册与渲染线程资源事件。旧144.095ms Ensure累计跨setup/update且来自旧版，不能当本版可节省预算；当前无法负责任给资源收益毫秒数。缓存父材质或减少重复资源提交需证明确有成本，优先保持现有预备/原子交接。
+3. 下一轮实际修改后才运行要求的完整Editor构建及必要定向比较：串行/并行逐位fine/coarse occupancy和dirty列表、修订/计数、Whole薄边、旋转/倾斜回退、空候选、ownership-only/微小位移、销毁碰撞变化与缓存容量回退；保留真实短D3D12 A/B的setup/首update/完整最大帧，资源改动补首次Whole离开及cap视觉。已有阶段148项/视觉/长测不因本轮侦察重新跑；实现后的回归按实际影响安排。
+
+没有新性能PASS。初始化/完整帧FAIL、长期资源PARTIAL保持。跨帧epoch/revision/取消/原子发布及Large World独立审计继续留待后续，本轮没有半成品任务队列。仅本文补充定向结论，提交前检查文档diff；未修改生产代码或资产。
+
 ## 阶段性收尾（51eb837 之后，仅文档）
 
 Ownership（6c66747）、capture（59030ab）、cap（9c14ecc）三个生产切片均已完成，运行时保持9c14ecc。各阶段独立证据：ownership约566→108ms；capture footprint约159→56ms、setup约539→452ms；cap CPU约86→29ms，本轮cap最大真实帧两次中位约836→771ms。跨批次数据不直接累加。

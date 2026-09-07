@@ -1,5 +1,19 @@
 # 灰色层功能检查点与稳定化施工
 
+## A0 CPU历史与Presentation资源寿命解耦完成（2026-09-07，b29557d）
+
+运行时 **b29557d84b1cb0dad79e00b53991ce492a2a0058** 已提交推送，基线161b57ac170b3615c397884a39cc7a49231d7dc8。起始远端/分支一致、工作区干净，已读AGENTS、批量架构、交接及审计第26节。**默认仍全部驻留，WholeGeometryPreparation仍0；A0不是性能优化，没有新增worker、A1、距离/LRU/队列、资源池、atlas或Partial算法。**
+
+FRecordVisual保留CPU记录状态：PartGeometry/Bounds、永久与可逆排除、coverage/ownership/occupancy缓存、Processed*Revision、历史texture尺寸、SubmittedPresentation、cap quads/签名/三角形及统计。Proxy/texture/cap component/MIDs和资源发布状态迁到独立Render结构，UPROPERTY Owned*与world继续强持有资源。关键发现是CapTriangles参与terminal判定，因此无GPU期间仍生成最新CPU cap及像素，只跳过GPU提交；不能把整个cap更新延后。知识record/FineHistory/capture字段原位置和规则不变。
+
+显式A0开发入口：ReleaseHistoricalPresentationForTesting取得带Scene弱引用、source身份、History寿命、epoch、请求序号的票据；释放只清Render与对应Owned*。UpdateTracked继续原CPU证据/ownership/occupancy更新，Ensure不自动补回显式释放的旧record。RebuildHistoricalPresentationForTesting只查现存record，从调用时最新CPU状态生成/提交，再同GT显示；不FindOrAdd知识，不读取旧texture/cap。Reset/History.Initialize、SourceReplace、resume、terminal/world teardown使旧票据失效；缺失捕获mesh显式失败、不发布残缺proxy。PIE桥接用一次保存的票据和随机GUID，只允许一个待重建record；非开发测试构建不执行逐出/重建。
+
+Build03完整DarkwellEditor Win64 Development成功。最终A0_D3D12_Final定向 **3/3 clean PASS，severe0**：PresentationResidency、OrdinaryHost、RecordScopedResourcesParityAndLifetime。Whole/Partial两种回放共12个无资源更新帧，其中8帧fine证据实际改变；逐帧record/fine/capture/ownership/occupancy/CPU像素/cap/pose与始终驻留oracle一致。两次真实D3D12新texture读回与最新CPU Float16像素逐字节一致；Partial实际mesh顶点/三角形与当前CPU quads一致。覆盖重复release/rebuild、stale request、MissingMesh、SourceReplace后GC、Reset/same-epoch History.Initialize、resume再seal、合法空证据终结后拒绝复活及world重建/GC。
+
+A0_Visual01为同DLL、D3D12/SM6、正常深度/质量、两次真实PIE的32图专用协议：第一轮始终驻留，第二轮逐出单个旧Whole/Partial、GC后重建。Whole首次离开和重建首帧、Partial外切口及后续连续帧已查看，协议/teardown通过；测试范围内 **Whole首次离开额外0帧，resume再seal额外0帧，显式重建同调用发布**。不是逐像素整屏等价或无截图GPU呈现延迟测量。
+
+细节、命令、原始证据及hash见审计第27节和[批量架构第9节](SIGHTWEAVE_BATCH_PRESENTATION_ARCHITECTURE_ZH.md#9-a0落地检查点2026-09-07b29557d)。A0已足以作为A1保守需求分类/旧历史驻留策略的基础，但未验证自动流式场景、快速转身/瞬移和大量同时重入；不得直接默认启用A1。未跑cold184性能、完整矩阵、十分钟、P1/occupancy全集或Shipping cook。**INITIALIZATION仍FAIL**，无性能改善声明；stable、Docs/AI、黑色层、Large World未动。
+
 ## 批量Presentation架构判断（2026-09-07，仅文档，运行时不变）
 
 本轮基线cad92f014cfb88d4ba9e333eae5814184a9ba5a6，实际运行时仍 **43c5748db9afbd7c861d7a3be7389437ca2a4eab**。已核验远端开发分支、当前分支及干净起始工作区，读取AGENTS和相关源码/原始证据；没有修改运行时、新增instrumentation、运行UE、构建或重测。完整决策和下一轮可直接执行的合同见[批量历史表现架构判断](SIGHTWEAVE_BATCH_PRESENTATION_ARCHITECTURE_ZH.md)，性能审计第26节为证据索引。

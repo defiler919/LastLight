@@ -889,3 +889,52 @@ A按需物化有利于大量旧历史、少量必显K，CPU知识/证据始终�
 首切片A0只分离FRecordVisual内CPU状态与可回收GPU资源，默认全驻留、预期性能收益0。禁止以Visual缺席/retired替代驻留状态，因为当前这些条件影响ownership、证据和终结释放。提供单旧record的开发释放/重建oracle，期间推进真实新证据，证明重建来自当前CPU revision、不复活旧历史；Current与最近seal不逐出，同帧fallback保留首显。完整边界、幂等/Reset/SourceReplace/Destroy/GC/world和Whole/Partial视觉验收见设计第6节。A0不包含自动距离流式、worker、资源池或自定义scene proxy。
 
 冻结已有P1及ownership/capture/cap/occupancy/resource/parent-material局部优化，默认P1仍0、旧路径作oracle。建议新增独立GameplayFirstHistory、SceneRestoreInitialization产品验收，原cold184保留stress身份和完整输入；真实历史restore合同目前未定义，不能填PASS。**原INITIALIZATION仍FAIL，本轮没有修改gate或宣称新性能收益。** 未重跑任何测试，没有新视觉/生命周期/性能通过声明；stable、Docs/AI、黑色层、Large World未动。
+
+## 27. A0 CPU历史与Presentation寿命解耦（2026-09-07，b29557d）
+
+开发分支起点161b57ac170b3615c397884a39cc7a49231d7dc8，起始工作区干净；实际实现 **b29557d84b1cb0dad79e00b53991ce492a2a0058** 已推送。A0是数据和资源寿命切片，不是性能优化。默认仍全驻留、P1仍0；没有A1、worker扩展、Partial新算法、资源池、atlas或跨帧证据。完整字段边界及协议见[批量架构第9节](SIGHTWEAVE_BATCH_PRESENTATION_ARCHITECTURE_ZH.md#9-a0落地检查点2026-09-07b29557d)。
+
+### 实现与正确性关键点
+
+FRecordVisual改为持久CPU状态加独立FRecordRenderResources。Proxy/Texture/Cap/MIDs及上传/预备/发布状态移入Render，强引用仍由Scene Owned*和world负责；原证据、coverage/occupancy/ownership缓存、PartGeometry、cap/pixel CPU产物全部保留。TextureSignature表达CPU最新像素，Render.UploadedTextureSignature表达具体texture已提交内容；新cap强制提交，即使CPU拓扑签名未变化也不能误用空的新组件。
+
+最关键的非GPU依赖是CapTriangles参与IsHistoricalPresentationResolved。无GPU期间仍执行cap CPU准备及像素生成，只跳过SetMesh/texture提交；否则可能错误保留或消除历史。ownership的Visual存在/retired检查仍指CPU状态，未替换成资源检查。默认Never/未准备资源的原提前返回保留。DestroyVisual继续处理原完整销毁/terminal清理，新ReleaseRenderResources只回收Render，不修改任何知识或CPU缓存。
+
+仅开发诊断显式逐出单个现存旧record。票据包含Scene、source、History寿命、epoch、请求序号；Reset/History.Initialize同epoch重用、SourceReplace、resume、terminal/world终结均拒绝旧请求。新合法证据继续更新CPU；票据没有过期snapshot，重建从当前CPU状态计算，GT内先创建隐藏/SpatialReady=0资源，再提交最新texture/cap并显示。成功重建幂等；缺失捕获mesh显式Error+false且不发布残缺proxy。观察资产仍从record保存的mesh路径获取，不从新source复制。没有后台结果可以迟到写回或FindOrAdd复活知识。
+
+PIE诊断桥接每Scene仅一个待重建record，随机GUID匹配内部票据；非开发测试构建不执行。普通玩家路径无逐出调用者。已有Current透明预备、Whole合法seal原子路径不排队；合法resume撤销显式非驻留及旧请求并回到同步路径。
+
+### 构建与定向C++证据
+
+最终命令：
+
+```powershell
+& Scripts/BuildEditor.ps1 *> Saved/A0/Build03.log
+& Scripts/RunGrayObjectPolicyTests.ps1 -RunName A0_D3D12_Final -Rendering -Tests 'Darkwell.ObjectMemory.PresentationResidency+Darkwell.ObjectMemory.OrdinaryHost+Darkwell.PropLab.ArchitectureAudit.RecordScopedResourcesParityAndLifetime'
+& Scripts/RunGrayMemoryAudit.ps1 -RunName A0_Visual01 -Protocol A0
+```
+
+Build03完整DarkwellEditor Win64 Development **Succeeded**；保留Build01/02，均成功。项目/引擎原有deprecated和旧测试float转换warning未作为本切片新增问题。初版A0_Target01 NullRHI定向3/3 clean，加入resume和GPU读回后A0_D3D12_02同样3/3；最终加缺失资产负测、保留未创建资源提前返回后，**A0_D3D12_Final 3/3 clean PASS、severe0、exit0**，测试执行约2.934s（不是性能基准）。启动阶段UnifiedError自测日志早于所选测试；所选测试没有失败/warning。
+
+- 新PresentationResidency：Whole/Partial各跑始终驻留与显式逐出两条同输入回放，release前后CPU摘要不变；共12个无资源更新帧，其中8帧fine证据实际变化，不是纯sleeping空转。逐帧比较record数量/epoch/current、fine证据、capture/footprint、pose/content表现描述、所有coarse cell标量、两种suppression、fine/coarse occupancy、coverage缓存、processed revision、最终CPU像素和cap quads/计数，全部相同。
+- 在实际Render为空时推进隐藏姿态变化、合法相机证据/反证及新观察ownership；UpdateTracked未自动补回资源。重建前后CPU摘要不变，原子发布后pose/MID参数/texture绑定正确；重复调用没有重复资源/注册。
+- 最终两次D3D12 GPU texture读回：完整尺寸保持，全部FFloat16Color逐字节等于最新CPU像素。Partial重建的实际DynamicMesh三角形数及逐顶点坐标与当前CPU quads一致。整屏截图受TAA等影响，不以CPU texture完全一致声称整屏逐像素一致。
+- GC回收逐出的proxy/texture/cap/MIDs时CPU历史继续存活；随后SourceReplace使用生产RegisterRememberable、旧source GC、新票据重建仍保留旧capture/pose。缺失mesh负测明确失败、未创建残缺proxy，恢复原资产后可以重试。
+- 合法空证据在无资源期间终结record后旧请求失败；Reset、同epoch History.Initialize、旧请求序号、不同world、source替换均拒绝旧票据；resume后旧票据无效、再次seal首帧正确；world teardown/recreate及具体UObject回收断言通过。
+- OrdinaryHost及原RecordScopedResourcesParityAndLifetime覆盖默认行为、透明Current、Whole首次离开、原旧资源开关oracle、独立MID参数/注册及生命周期。旧测试仅按Render字段新位置更新访问，没有删断言。
+
+DLL SHA256：`2E2060E2AECDCA23DBBE30F6A6EB5D898EC9C99801AB51A7F7695854146D5C1E`。
+
+### 必要D3D12视觉
+
+新`Content/Python/audit_gray_presentation_residency.py`，runner增加`-Protocol A0`。`Saved/ArchitectureAudit/A0_Visual01`：同DLL、D3D12/SM6、原正常材质/深度、SP100、AA4，2233×911 viewport，固定步长只用于正确性，**不是性能测量**。两次真实PIE：cycle0始终驻留；cycle1分别显式释放一个旧Whole/Partial，验证资源为0而record数不变，等待并GC后重建；Reset拒绝旧请求，PIE结束后world为None再GC。
+
+协议exit0、complete/teardown通过、severe0，共32原始图。已查看全部32图的连续帧总览，并查看Partial oracle/重建首图原图；Whole首次离开、Whole/Partial重建第一个渲染样本均非空且姿态正确，Partial合法外切口保留。Whole每cycle有4张first_exit连续图，两cycle共8张；重建、Partial各自也有连续4帧。**测试范围内Whole首次离开额外0帧，resume再seal额外0帧，显式重建同GT调用发布。** 这不是无截图GPU呈现墙钟延迟或任意快速相机路径保证。
+
+driver SHA256：`673E8A0EAC7C8C1D9270F52FFFDCBDB01368AC38502040BBA8CDD1A30D3BABB1`。原图、samples.json、complete.json、summary.json、driver副本、源码patch及editor.log留本机Saved；不提交生成二进制/图像。
+
+### 结论、限制与下一入口
+
+A0达到本轮闭环，可以作为A1保守需求分类/旧历史驻留策略的基础；**不等于A1已启用或已通过自动流式验收**。下一轮先记录所需K和安全可逐出集合、保护Current/最近capture，再做一个带同步fallback的旧历史策略切片，必须另验快速转身/瞬移、同帧多record重入和最坏首显延迟。不能把cap CPU更新随GPU一起跳过，也不能把原空间证据索引直接当表现需求索引。
+
+未做cold184性能、完整矩阵、十分钟、P1/occupancy全集、随机生命周期穷举、Shipping cook、任意临时无路径mesh重建或流式范围策略。原持久mesh路径跨GC可重取已测，不宣称所有资产类型都可卸载。A0无性能收益声明，冷184原输入未改变，**INITIALIZATION仍FAIL**。stable、Docs/AI、黑色层、Large World未动。

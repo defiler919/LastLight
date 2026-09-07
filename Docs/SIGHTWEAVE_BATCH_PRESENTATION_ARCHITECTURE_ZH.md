@@ -126,3 +126,38 @@ A0验收通过再进入A1保守需求分类/旧历史驻留策略；先记录所
 冻结ownership/capture/cap/occupancy现有CPU算法及同帧join；它们仍是正确性oracle，只为新后端适配或真实回归修复而动。冻结P1范围及模式0默认，不再优先投入其1ms预算/首次Whole两个mask微调；保留P1协议/故障注入作为参考，不能把它当Partial资源streaming的现成完整协议。冻结record内MID共享、唯一cap名称、Scene父材质强持有；保留各旧路径开关。父材质资产归属/cook声明是独立工程边界，不与本架构切片捆绑。
 
 本轮无需新instrumentation即可证明两阶段同步放大及CPU/GPU寿命耦合。尚未量出实际必显K、纯可推迟P、固定提交F、GPU draw/overdraw和各方案真实收益；上述范围都是有条件规划。没有运行新benchmark/测试，不冒充架构已验证。下一轮唯一建议入口为A0，交付可释放/可重建且不改知识的完整小切片；Large World、黑色层、跨帧证据、完整自定义renderer均不在首轮范围。
+
+## 9. A0落地检查点（2026-09-07，b29557d）
+
+上方第1–8节是161b57a的设计判断；本节记录后续A0实际实现，运行时b29557d84b1cb0dad79e00b53991ce492a2a0058。默认全驻留，开发测试才显式释放单旧record；没有实现A1。验收和证据见性能审计第27节。
+
+### 已落地边界
+
+| 寿命 | 字段/所有者 | 释放Presentation的影响 |
+| --- | --- | --- |
+| 玩家知识及capture | History内record、SpatialMemory、FineHistory、capture mask/footprint、observed primitives/pose/content/tint/UV | 不改、不重建知识 |
+| CPU record状态 | FRecordVisual的PartBounds/PartGeometry、两种suppression、全部coverage/occupancy/geometry缓存、Processed*Revision/最大epoch、dirty/active状态、尺寸锁 | 保留，继续原UpdateTracked推进 |
+| CPU表现结果 | SubmittedPresentation、TextureSignature、CapSignature/CapQuads/CapSamplePoints/CapTriangles及cap计数 | 继续更新；CapTriangles仍用于判断历史是否真正终结 |
+| 可释放资源 | FRecordRenderResources的Proxy、Texture、Cap、Materials；UploadedTextureSignature、cap待提交/原子发布/透明预备/可见性状态 | ReleaseRenderResources解除Owned*引用并Destroy proxy/component，整体重置Render |
+| 显式请求控制 | bRenderResourcesReleased、PresentationRequestSerial，测试票据 | 不是知识/资格/retired，不作为ownership候选条件 |
+
+资源强引用仍通过原Scene UPROPERTY OwnedTextures/OwnedMaterials/OwnedCaps及world actor寿命维护；没有static缓存、AddToRoot资源或资源池。原观察mesh仍以record的TSoftObjectPtr资产路径描述，不把当前source mesh当重建输入；重建先检查全部捕获mesh可取得，缺失时Error+false，保留CPU历史。普通资产路径跨GC后同步重取经过测试；尚未证明任意无持久路径的临时mesh都能卸载后恢复，不能据此启用任意资产流式。
+
+ReleaseRenderResources与DestroyVisual分开：前者只释放Render；后者仍用于原Reset/销毁/terminal清理，保留既有bDiscardEvidence行为。没有用bPresentationRetired表达非驻留，也没有改ReleaseTerminalRecord判定。默认Never/未创建资源路径仍按原条件提前返回，只有显式离线的旧历史继续无GPU的CPU输出生成。
+
+### 请求、推进和发布
+
+1. 开发测试对现存、非Current、非retired且已初始化fine历史调用ReleaseHistoricalPresentationForTesting，取得Scene/source弱身份、History.GetPreparationLifetime、epoch、单调请求序号。API不接受只有id/epoch的重建，也不创造record。
+2. 相同record重复release安全，但新票据撤销旧请求；表现资源被回收，CPU Visual保持存在。ownership贡献者和空间索引沿用CPU状态及真正终结条件，完全不检查Render驻留。
+3. 无资源期间按原时序推进合法证据/反证、ownership/occupancy和CPU表现结果。没有跨帧证据、隐藏的fine写入或按相机需求减少知识；保留cap计算是本轮安全边界，不是A1性能收益。
+4. 重建校验存活Scene/world、相同History寿命、source身份、epoch和请求序号；检查当前record非Current/terminal。直接取调用时最新CPU结果的输入重新生成，票据不携带过期像素或prepared snapshot，所以普通新证据不必撤销该请求。
+5. 创建时proxy隐藏、MID SpatialReady=0，cap不显示；最新像素及cap在GT提交后才同调用设Ready/显示。不等待下一帧，没有任务回调。失败保留CPU状态并清理创建中的资源；成功重复调用不重复注册。
+6. Reset/Initialize后不能复用票据，SourceReplace旧票据失败但可对仍合法的旧历史取得新票据；合法resume回到同步Current路径时取消显式非驻留并撤销旧请求。terminal或world销毁后查找失败，不会FindOrAdd复活。
+
+PIE桥接ReleaseOldestPresentationForTesting/RebuildPresentationForTesting只是诊断：每Scene一个待重建票据，以随机GUID匹配请求；非WITH_DEV_AUTOMATION_TESTS构建返回空/false。没有距离、相机、预算、队列或定时触发者，因此最近capture不会被自动逐出。
+
+### 验收结论与下一入口
+
+完整Editor Build、最终D3D12定向3/3、两PIE/32图通过。12个无资源更新帧中8帧证据实际改变，Whole/Partial逐帧CPU/最终表现oracle一致；两次D3D12纹理读回完全一致，Partial实际mesh匹配当前CPU拓扑。Whole首次离开及resume再seal0额外帧；显式重建同GT调用完成并在首张后续渲染图出现正确表现。生命周期、失败及取消边界有定向覆盖，没有随机穷举或Shipping证据。
+
+可以进入A1的保守需求分类及单旧历史自动驻留小切片，先记录所需K/可逐出集合、保护Current/最近capture、明确同步fallback，再考虑启用策略。A0不代表自动流式已经安全，不保证任意瞬移同时满足硬帧预算与0延迟。P1仍默认0，现有微项冻结；冷184输入未动、本轮未跑性能，INITIALIZATION仍FAIL。

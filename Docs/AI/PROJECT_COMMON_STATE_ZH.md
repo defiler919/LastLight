@@ -1,73 +1,48 @@
-# DARKWELL AI 公共事实层
+# DARKWELL AI 公共事实快照
 
-> 用途：供项目内不同 AI 职位共享“已经确认的当前项目事实”。
-> 本文件是高密度当前快照，不是聊天记录、变更日志或完整设计文档。
+仅保存已确认事实、当前有效状态与权威索引；维护方法见 [职位上下文入口](README.md)。
 
-## 元数据
+## 核验基点
 
-- State Version: 1
-- Project: `DARKWELL`
 - Repository: `defiler919/LastLight`
 - Development Branch: `codex/darkwell-prop-memory-gameplay-lab`
-- Verified Project Commit: `d7511db9ed7e1c776076a57ea74b6a5bb60ae0fc`
+- Verified Commit: `a1a67a955da04f3a50153c920efd7cc4beed3626`
 - Verified Date: 2026-09-07
 
-`Verified Project Commit` 表示本文件中的项目事实已经核对到该项目提交。AI 状态文件自身的提交不要求写回自己的 SHA；对齐时如果 HEAD 仅比该提交多 `Docs/AI/*` 状态维护提交，不视为项目事实过期。
+此 SHA 是写入本快照前已核验的仓库基点，不是本文件提交的自引用；不承诺此后的 HEAD 自动有效。
 
-## 公共层维护规则
+## 项目基础
 
-1. **只保存已确认事实。** “考虑、倾向、候选、可能、希望、待讨论”等内容不得进入公共层。
-2. 职位层中的候选内容，只有在用户明确确认，或已有明确的正式代码/已接受决策文档证据时，才能晋升到公共层。
-3. 当前聊天只能提供候选信息；发生冲突时，以当前 Git、代码和权威文档为准。
-4. 本文件只保留“当前有效状态”。旧状态、讨论过程和被替代方案交给 Git 历史或专项文档，不在末尾持续追加流水账。
-5. 详细规则只写摘要并链接权威文档，不复制大段审计、日志和测试证据。
-6. 原则上保持在 **250 行以内**；接近上限时先压缩、删除已失效或已由权威文档承载的信息，再增加新内容。
-7. 未显式指定职位的新聊天窗口默认 **无职位**。职位只有在用户明确任命后才激活。
-8. 未来可以增加编剧等职位；职位专属的待定内容留在职位层，不自动污染公共层。
+- DARKWELL：3D 顶视角，Windows / Win64，单人离线；C++ 持有核心玩法，Blueprint/资产承担表现、绑定与调参。依据：[DECISIONS](../DECISIONS.md)。
+- 仓库声明 UE 5.8.1，默认引擎根目录 `D:\UE_5.8`，可用 `DARKWELL_UE_ROOT` 覆盖；见 [AGENTS](../../AGENTS.md)。最近已提交性能证据记录 UE 5.8.2 CL56702186，属于实验环境记录，不代表仓库声明已升级或本次重新检测了引擎。
+- 视野插件为 SightWeave，实际模块含 `SightWeaveRender`、`SightWeaveRuntime`、`SightWeaveEditor`、`SightWeaveTests`；以 [插件描述](../../Plugins/SightWeave/SightWeave.uplugin) 为准。
 
-## 已确认项目基础
+## 冻结规则摘要
 
-- Engine: Unreal Engine 5.8.1；Windows desktop / Win64。
-- Runtime: 单人、离线。
-- 实现原则：核心玩法规则由 C++ 持有；Blueprint/资产主要承担表现、绑定和调参。
-- Perspective: 3D 顶视角。
-- 当前主要视野插件/系统身份：`SightWeave`；模块为 `SightWeaveRuntime`、`SightWeaveEditor`、`SightWeaveTests`。
-- 主要开发仓库规则见根目录 `AGENTS.md`；长期技术/设计决定见 `Docs/DECISIONS.md`。
+依据：[灰色层交接](../SIGHTWEAVE_GRAY_STABILIZATION_HANDOFF_ZH.md) 的“起点和人工验收边界”“冻结的外部规则”，精确定义不由本摘要替代。
 
-## 已确认 SightWeave / 灰色层产品事实摘要
+- 战争迷雾为 Black / Gray / Current 三态；CPU 持有玩家知识，视觉不能授予知识。历史依赖合法空间证据，StableID、隐藏真实状态和 Superseded 均不能冒充 VerifiedEmpty；合法擦除不能复活。
+- Reveal / History 独立。DARKWELL 使用 `WholeObjectAfterSpan / 100 cm / StationaryOnly`，兼容 `SpatialPartial / Always / Never`；每轮连续合法观察重新满足对象配置跨度，旧历史/缓存不能授予资格，无效 coverage 不算失联。
+- Whole 达标后持续合法接触显示整件，保留正常相机深度；不扩张世界探索、不穿墙授予知识。局部到整件不退灰，首次离开先正确交接历史再结束资格；未达标不覆盖旧知识。
+- Partial 保留合法局部累计、完整内部表面与外切口 cap；StationaryOnly 不记运动路径，隐藏停止须重新合法观察才记终点；Never 不留历史。
+- 相同未反证状态可复用资源；真实新增知识允许增长。每对象最多 64 条封存历史加一个未封存 Current 预留；不自动淘汰，只有完全 VerifiedEmpty 历史可释放。容量合同见 [DECISIONS](../DECISIONS.md)。
+- 用户人工接受覆盖当时 Whole 达标连续显示及已使用灰色交互路线，不是穷尽验收或发布 stable。性能施工保持上述产品语义冻结。
 
-- 战争迷雾为三态：未探索 Black、已探索 Gray、当前合法可见 Current。
-- 玩家知识由 CPU 权威数据持有；视觉层不能反向授予玩家知识。
-- `SpatialEvidenceOnly`：历史解析依赖合法空间证据；StableID 是身份，不等于玩家知识，不能用身份全局清历史。
-- Reveal 与 History 为独立策略。DARKWELL 当前核心组合包含 `WholeObjectAfterSpan` / 100 cm 与 `StationaryOnly`；`SpatialPartial`、`Always`、`Never` 等兼容规则保留。
-- Whole 的每个新的连续合法观察 session 独立满足配置 span；旧确认、旧灰记忆或缓存不能跳过本次门槛。
-- Whole 一旦在当前连续 session 资格成立，继续合法接触时保持整物体 Current；普通相机深度遮挡仍保留，但不会借此扩张世界探索、邻近地面或穿墙知识。
-- `StationaryOnly`：运动中不产生新的路径/中间姿态历史；隐藏停止不能自动制造最终记忆，必须静止后重新被合法观察。
-- 历史容量与释放、完整 Whole 规则、重复观察连续性等精确定义以专项权威文档为准，不以本摘要替代。
+## 当前有效状态
 
-## 当前已确认技术状态摘要
+- 仍处于灰色层性能收敛，整体 `PARTIAL — GRAY_STABILIZATION_BLOCKED`；本阶段不开始黑色层、不移动 stable。
+- Occupancy 同帧生产切片已完成，最终运行时 `f12c6c1`；最新阶段证据见性能审计第 20 节。184 压力两对同二进制 A/B 的最大整帧中位 587.833→543.815 ms；仅支持该切片收益。
+- INITIALIZATION / BATCH HITCHES：FAIL（最终峰值约 535–552 ms）；FRAME PERFORMANCE：FAIL；LONG-RUN RESOURCES：PARTIAL；ARCHITECTURE AUDIT：PARTIAL。局部优化未替代全系统验收。
+- 最新定向功能 4/4、必要 Contracts / Episodes 视觉通过；上一阶段完整 148/148 属于旧版本证据，不能宣称当前版本完整套件已重跑。EXIT STABILITY 在已验证路径范围内 PASS，不能从旧交接复活已修复 blocker，也不能推广到所有退出路径。
+- 历史采用空间候选 / dirty region，非候选可休眠；当前无跨帧队列，seal 外首次 proxy / texture / resource 创建切片尚未施工。全地图分块、流式资源及增量空间索引没有已确定的最终方案。
 
-- 灰色层核心功能行为已完成用户手工接受并保持冻结；后续性能施工不得顺手重设计产品语义。
-- 当前仍处于灰色层性能收敛阶段；黑色层工作尚未开始。
-- 历史运行时使用空间候选/dirty region 机制，远距离非候选历史可以休眠，不要求每帧全世界扫描。
-- Large World / 全地图灰色记忆的最终 chunk、流式表现资源和增量空间索引方案 **尚未确定**；这是未来独立 scalability audit 的议题，不得把候选尺寸或方案写成公共事实。
+## 权威索引（按需读对应章节）
 
-## 权威资料索引
+- [AGENTS](../../AGENTS.md)：仓库、构建与资产安全规则。
+- [DECISIONS](../DECISIONS.md)：长期决定；Deferred / candidate 条目不是最终确认，旧状态须核对后续明确替代证据。
+- [灰色层交接](../SIGHTWEAVE_GRAY_STABILIZATION_HANDOFF_ZH.md)：顶部 Occupancy 最新状态；“冻结的外部规则”及人工接受范围；旧阶段不当作现状。
+- [性能架构审计](../SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md)：第 20 节最新切片与证据限制；第 15 节全局分项基线，后续章节按明确范围更新。
+- [Whole 会话](../SIGHTWEAVE_WHOLE_SESSION_HANDOFF_ZH.md) / [Whole 达标交接修复](../SIGHTWEAVE_WHOLE_QUALIFICATION_CONTINUITY_ZH.md)：会话合同与不退灰交接；退出/性能状态以更新交接为准。
+- [普通 Actor 接入](../OBJECT_MEMORY_INTEGRATION.md)：当前宿主与插件接入边界。
 
-- 仓库/构建/资产安全：`AGENTS.md`
-- 已确认长期技术与设计决定：`Docs/DECISIONS.md`
-- 灰色层当前功能与稳定化交接：`Docs/SIGHTWEAVE_GRAY_STABILIZATION_HANDOFF_ZH.md`
-- 性能架构与证据：`Docs/SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md`
-- 普通 Actor 接入：`Docs/OBJECT_MEMORY_INTEGRATION.md`
-- Whole 连续观察：`Docs/SIGHTWEAVE_WHOLE_SESSION_HANDOFF_ZH.md`
-- Whole 资格连续性：`Docs/SIGHTWEAVE_WHOLE_QUALIFICATION_CONTINUITY_ZH.md`
-
-## 明确不属于公共事实的内容
-
-以下内容除非以后被明确确认，否则不得从职位讨论直接写入本文件：
-
-- 尚在讨论中的故事、世界观、敌人、玩法设想；
-- 某职位认为“比较好”的候选方案；
-- 尚未验证的性能推测；
-- Large World 的具体 chunk 尺寸、流式策略或跨帧实现方案；
-- 临时测试、失败实验和聊天中的中间判断。
+详细日志、图像、Trace 在文档引用的本机 `Saved/`，不随 Git 交付；以上证据摘要来自已提交报告，本次没有重跑或重新核验全部原始证据。

@@ -786,6 +786,7 @@ bool ADarkwellMovingPropLabRoom::ConfigureHistoricalEpochCountForTesting(
 		DestroyVisual(Pair.Value);
 	}
 	Prop->Visuals.Reset();
+	InvalidateWholePreparation(StableId);
 	Prop->History.Initialize(StableId);
 	Prop->ObservationState = EObservationState::NeverObserved;
 	Prop->HiddenFreezeCount = 0;

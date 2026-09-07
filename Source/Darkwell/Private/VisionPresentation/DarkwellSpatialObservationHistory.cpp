@@ -4,6 +4,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogDarkwellSpatialObservationHistory, Log, All);
 
 void FDarkwellSpatialObservationHistory::Initialize(const FName InStableId)
 {
+	PreparationLifetime = FGuid::NewGuid();
 	StableId = InStableId;
 	NextEpoch = 1;
 	CurrentIndex = INDEX_NONE;

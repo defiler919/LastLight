@@ -1,5 +1,6 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
+#include "VisionPresentation/DarkwellHistoryPreparation.h"
 #include "UObject/UObjectIterator.h"
 #include "UObject/GarbageCollection.h"
 #include "SightWeaveObjectPolicy.h"
@@ -1437,6 +1438,127 @@ bool FDarkwellPlanarProjectionParity::RunTest(const FString&)
  }
  TestTrue(TEXT("Positive planar cache and tilted/singular fallbacks exercised"),Planar>0 && Fallback>0);
  AddInfo(FString::Printf(TEXT("Planar slab parity: %d queries, %d cached transforms, %d fallbacks"),Queries,Planar,Fallback));
+ return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellWholePreparationHandoff,"Darkwell.ObjectMemory.Preparation.FirstWholeHandoff",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellWholePreparationHandoff::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ auto* Mode = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ObjectMemory.WholeGeometryPreparation"));
+ const int32 Previous = Mode->GetInt(); ON_SCOPE_EXIT { Mode->Set(Previous, ECVF_SetByCode); };
+ TBitArray<> OracleCapture, OracleFrozen;
+ for (int32 M = 0; M <= 2; ++M)
+ {
+  Mode->Set(M, ECVF_SetByCode);
+  FRoom F;
+  F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::WholeObjectAfterSpan,100,History::StationaryOnly);
+  for (uint64 Frame = 1; Frame <= 30; ++Frame) { F.Room->WholePreparationFrameForTesting=Frame; F.Step(); }
+  AddInfo(F.Room->GetWholePreparationTelemetry());
+  if (M > 0) TestTrue(TEXT("unchanged coverage does not readmit"), F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"requests\":1,")));
+  if (M > 0) TestTrue(TEXT("lead time produces Ready"), F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"ready\":1")));
+  const auto Before = F.Room->GetWholePreparationTelemetry();
+  F.Room->AdvanceWholePreparation();
+  TestEqual(TEXT("repeat update cannot replenish work"), F.Room->GetWholePreparationTelemetry().Left(F.Room->GetWholePreparationTelemetry().Find(TEXT(",\"seal_age_ms"))), Before.Left(Before.Find(TEXT(",\"seal_age_ms"))));
+  F.Face(-90); F.Room->WholePreparationFrameForTesting=31; F.Step();
+  TBitArray<> Capture,Frozen;
+  TestTrue(TEXT("first exit synchronously seals"),F.Room->GetNewestCaptureMasksForTesting(Id,Capture,Frozen));
+  if (M == 0) { OracleCapture=Capture; OracleFrozen=Frozen; }
+  else { TestTrue(TEXT("capture parity"),Capture==OracleCapture); TestTrue(TEXT("fine parity"),Frozen==OracleFrozen); }
+  if (M == 1) TestTrue(TEXT("shadow consumed"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"shadow\":1")));
+  if (M == 2) TestTrue(TEXT("Ready consumed"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"hits\":1")));
+  AddInfo(F.Room->GetWholePreparationTelemetry());
+  F.Room->ResetMemory();
+  TestTrue(TEXT("reset releases all staging"), F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"pending\":0")));
+ }
+ Mode->Set(2, ECVF_SetByCode);
+ for (int32 Case = 0; Case < 8; ++Case)
+ {
+  FRoom F;
+  F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::WholeObjectAfterSpan,100,History::StationaryOnly);
+  for (uint64 Frame=1; Frame<=30; ++Frame) { F.Room->WholePreparationFrameForTesting=Frame; F.Step(); }
+  auto* Prop = F.Room->Tracked.Find(Id);
+  TestNotNull(TEXT("tracked source"), Prop);
+  const auto Index = Prop->History.GetCurrentIndex();
+  TestTrue(TEXT("has Current"),Index!=INDEX_NONE);
+  auto& Current = Prop->History.GetMutableRecords()[Index];
+  switch (Case) {
+   case 0: F.Room->InvalidateWholePreparation(Id); break;
+   case 1: Prop->History.Initialize(Id); break;
+   case 2: Current.SnapshotTransform.AddToTranslation(FVector(1.e-7,0,0)); break;
+   case 3: ++Current.ContentRevision; break;
+   case 4: ++Prop->PolicyRevision; break;
+   case 5: Prop->Actual->Destroy(); break;
+   case 6: F.Room->InvalidateWholePreparation(); break;
+   case 7: Current.bCaptureRevisionValid=false; break;
+  }
+  TBitArray<> A,B;
+  TestFalse(FString::Printf(TEXT("stale case %d cannot be consumed"),Case),F.Room->TakeWholePreparation(*Prop,A,B));
+  TestFalse(TEXT("late duplicate cannot revive"),F.Room->TakeWholePreparation(*Prop,A,B));
+  TestTrue(TEXT("stale staging released"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"pending\":0")));
+ }
+
+ {
+  FRoom F;
+  F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::WholeObjectAfterSpan,100,History::StationaryOnly);
+  for(uint64 Frame=1;Frame<=30;++Frame) { F.Room->WholePreparationFrameForTesting=Frame; F.Step(); }
+  const auto* Original=F.Room->Tracked.Find(Id);
+  const int32 AuthorityCount=F.Room->Tracked.Num();
+  for(int32 I=0;I<12;++I) {
+   auto Clone=*Original;
+   Clone.StableId=FName(*FString::Printf(TEXT("Preparation.Admission.%d"),I));
+   F.Room->RequestWholePreparation(Clone);
+  }
+  TestTrue(TEXT("ninth packet cannot exceed bounded queue"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"pending\":8,")));
+  TestEqual(TEXT("private admission grants no identity"),F.Room->Tracked.Num(),AuthorityCount);
+  F.Room->ResetMemory();
+  TestTrue(TEXT("queue reset releases masks and descriptors"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"bytes\":0,")));
+ }
+ // Each mask has its own original wrapper oracle, including reflected thin geometry.
+ {
+  FRoom F;
+  for(const double Scale : {1.0,-1.0}) for(const int32 Quota : {1,127,128,129}) {
+   FDarkwellCurrentLiveGrid Grid;
+   auto& Part=Grid.Parts.AddDefaulted_GetRef();
+   Part.Geometry.LocalBounds=FBox(FVector(-17,-.01,0),FVector(17,.01,23));
+   Part.Pose=FTransform(FRotator(0,37,0),FVector(0,0,0),FVector(Scale,1,1));
+   const FBox2D Bounds(FVector2D(-25,-25),FVector2D(25,25));
+   const FIntPoint Size(17,9);
+   TArray<ADarkwellObjectMemoryScene::FPrimitiveGeometrySnapshot> Geometry;
+   auto& CapturePart=Geometry.AddDefaulted_GetRef();
+   CapturePart.LocalBounds=Part.Geometry.LocalBounds; CapturePart.WorldTransform=Part.Pose; CapturePart.CachePlanarProjection();
+   TBitArray<> ExpectedWhole;
+   Grid.BuildFullGeometryMask(Bounds,Size,ExpectedWhole);
+   const auto ExpectedFootprint=F.Room->BuildCaptureGeometryFootprint(Bounds,Size,Geometry,false);
+   Darkwell::HistoryPreparation::FMaskJob Job;
+   const Darkwell::HistoryPreparation::FTicket Ticket{1,1,1,1,1};
+   Job.Initialize(Ticket,Size.X*Size.Y);
+   while(!Job.IsReady()) Job.Step(1,Quota,[&](bool Whole,int32 Index) {
+    if(!Whole) return F.Room->PrepareFootprintCell(Bounds,Size,Index,Geometry);
+    const FVector2D Step=Bounds.GetSize()/FVector2D(Size);
+    const FVector2D Min=Bounds.Min+Step*FVector2D(Index%Size.X,Index/Size.X);
+    return FDarkwellCurrentLiveGrid::IntersectsWholeCell(Part.Geometry.LocalBounds,Part.Pose,FBox2D(Min,Min+Step));
+   });
+   TBitArray<> A,B; Job.Take(Ticket,A,B);
+   TestTrue(TEXT("thin rotated reflected Whole per-bit oracle"),A==ExpectedWhole);
+   TestTrue(TEXT("thin rotated reflected capture per-bit oracle"),B==ExpectedFootprint);
+  }
+ }
+ // Incomplete work must finish through the existing seal, without a wait frame.
+ {
+  FRoom F;
+  F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::WholeObjectAfterSpan,100,History::StationaryOnly);
+  F.Room->WholePreparationWorkForTesting=1;
+  for(uint64 Frame=1;Frame<=3;++Frame) { F.Room->WholePreparationFrameForTesting=Frame; F.Step(); }
+  F.Face(-90); F.Room->WholePreparationFrameForTesting=4; F.Step();
+  TBitArray<> A,B;
+  TestTrue(TEXT("Preparing falls back in exit call"),F.Room->GetNewestCaptureMasksForTesting(Id,A,B));
+  TestTrue(TEXT("Preparing capture parity"),A==OracleCapture && B==OracleFrozen);
+  TestTrue(TEXT("fallback clears pending"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"pending\":0")));
+ }
+
  return true;
 }
 

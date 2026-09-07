@@ -8,6 +8,7 @@
 #include "SightWeaveRevealObservation.h"
 #include "DarkwellObjectMemoryScene.generated.h"
 
+struct FDarkwellWholePreparationState;
 class UDynamicMeshComponent;
 class UMaterialInstanceDynamic;
 class UTexture2D;
@@ -22,6 +23,16 @@ class DARKWELL_API ADarkwellObjectMemoryScene : public AActor
  GENERATED_BODY()
 public:
  ADarkwellObjectMemoryScene();
+ virtual ~ADarkwellObjectMemoryScene() override;
+ UFUNCTION(BlueprintPure, Category="SightWeave|Diagnostics")
+ FString GetWholePreparationTelemetry() const;
+ UFUNCTION(BlueprintCallable, Category="SightWeave|Diagnostics")
+ void SetWholePreparationDiagnosticForTesting(int32 Action);
+ bool bHoldWholePreparationForTesting = false;
+#if WITH_DEV_AUTOMATION_TESTS
+ uint64 WholePreparationFrameForTesting = MAX_uint64;
+ int32 WholePreparationWorkForTesting = 65536;
+#endif
  virtual void EndPlay(EEndPlayReason::Type Reason) override;
  bool RegisterRememberable(UDarkwellRememberablePropComponent* Memory, USightWeaveObjectPolicyComponent* Policy);
  void UpdateMemory(float DeltaSeconds, FVector ObserverLocation);
@@ -488,6 +499,17 @@ protected:
   uint64 DiagnosticSignature=0;
 	};
 
+	friend struct FDarkwellWholePreparationState;
+	friend class FDarkwellWholePreparationHandoff;
+	TSharedPtr<FDarkwellWholePreparationState> WholePreparation;
+	void RequestWholePreparation(FTrackedProp& Prop);
+	void AdvanceWholePreparation();
+	void InvalidateWholePreparation(FName Id = NAME_None);
+	bool TakeWholePreparation(FTrackedProp& Prop, TBitArray<>& Whole, TBitArray<>& Footprint);
+	bool PrepareFootprintCell(const FBox2D& Bounds, FIntPoint Size, int32 Index,
+		TConstArrayView<FPrimitiveGeometrySnapshot> Geometry) const;
+	bool CaptureFootprintCell(const FBox2D& Bounds, FIntPoint Size, int32 Index,
+		TConstArrayView<FPrimitiveGeometrySnapshot> Geometry, bool bRejectPlanarBounds) const;
 	struct FCoverageSnapshot
 	{
 		TArray<float> Values;

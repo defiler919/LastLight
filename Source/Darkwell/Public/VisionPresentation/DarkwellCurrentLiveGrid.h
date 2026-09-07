@@ -78,6 +78,7 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  void AdvanceConfirmedWhole(float Dt,const FTransform& ActorPose,
   FDarkwellSpatialPropMemory& Snapshot,const FBox2D& Bounds,TConstArrayView<float> Coverage);
  /** Rasterizes registered primitive projections, preserving primitive gaps and AABB corners. */
+ static bool IntersectsWholeCell(const FBox& LocalBounds,const FTransform& Pose,const FBox2D& Cell);
  bool BuildFullGeometryMask(const FBox2D& Bounds,FIntPoint Size,TBitArray<>& Out) const;
  bool IsUniformWholePresentation() const { return !Parts.IsEmpty() && Parts[0].bUniformWholePresentation; }
  /** Object-local continuous footprint, independent of presentation alpha. */

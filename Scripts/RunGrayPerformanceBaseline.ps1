@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$RunName,
     [ValidateSet('PIE','Standalone')][string]$Mode='PIE',
-    [ValidateSet('Smoke','Knowledge','Attribution','FrameAudit','Batch','Matrix','LongRun','Reference')][string]$Protocol='Matrix',
+    [ValidateSet('Smoke','Knowledge','Attribution','FrameAudit','Batch','Matrix','LongRun','Reference','WholePreparation')][string]$Protocol='Matrix',
     [string]$Map='',
     [string]$EngineRoot='D:\UE_5.8',
     [switch]$NoAuthoringToolsets,
@@ -11,6 +11,7 @@ param(
     [switch]$SerialCapBuild,
     [switch]$SerialOccupancy,
     [switch]$LegacyRecordResources,
+    [ValidateRange(0,2)][int]$WholeGeometryPreparationMode=0,
     [switch]$Trace
 )
 $ErrorActionPreference='Stop'
@@ -40,7 +41,7 @@ if ($NoAuthoringToolsets) {
     $arguments += "-DisablePlugins=$($disabledPlugins -join ',')"
 }
 if($Mode -eq 'Standalone') {
-    $startupCommands = @()
+    $startupCommands = @("r.Darkwell.ObjectMemory.WholeGeometryPreparation $WholeGeometryPreparationMode")
     if ($SerialSealedOwnership) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedSealedOwnership 0' }
     if ($SerialCapBuild) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedCapBuild 0' }
     if ($SerialOccupancy) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedOccupancy 0' }

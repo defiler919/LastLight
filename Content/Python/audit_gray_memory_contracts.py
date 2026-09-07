@@ -49,9 +49,12 @@ def shot(label, ids):
             confirmed=room.is_reveal_confirmed_for_testing(sid),
             coverage=room.get_last_legal_coverage_ratio_for_testing(sid),
             live=json.loads(room.get_moving_live_telemetry(sid)))
+    data['preparation'] = json.loads(room.get_whole_preparation_telemetry())
+    data['capture_wall_seconds'] = time.monotonic()
+    assert director.capture_game_viewport_for_testing(str(root/(label+'.png')))
+    data['seal_to_readback_ms'] = data['preparation']['seal_age_ms'] + (time.monotonic()-data['capture_wall_seconds'])*1000
     rows.append(data)
     (root/'samples.json').write_text(json.dumps(rows), encoding='utf-8')
-    assert director.capture_game_viewport_for_testing(str(root/(label+'.png')))
 
 def frames(label, ids, count=8):
     for index in range(count):
@@ -76,6 +79,9 @@ def run():
         camera.set_absolute(True, True, True)
         for command in ['r.ScreenPercentage 100', 'r.AntiAliasingMethod 4', 'setres 1920x1080w']:
             unreal.SystemLibrary.execute_console_command(w, command)
+        preparation_mode = int(os.environ.get('DARKWELL_WHOLE_PREPARATION_MODE','0'))
+        unreal.SystemLibrary.execute_console_command(w, 'r.Darkwell.ObjectMemory.WholeGeometryPreparation '+str(preparation_mode))
+        room.set_whole_preparation_diagnostic_for_testing(1 if preparation_mode==2 and lifecycle==1 else 0)
         enter(1)
         yield 20
         assert room.get_spatial_record_count(unreal.Name('Lab.V2.Whole')) == 0
@@ -85,6 +91,8 @@ def run():
         assert room.is_reveal_confirmed_for_testing(unreal.Name('Lab.V2.Whole'))
         face(40)
         yield from frames(f'pie{lifecycle}_whole_confirmed_edge', ['Whole'])
+        if preparation_mode==2 and lifecycle==2:
+            room.set_whole_preparation_diagnostic_for_testing(2)
         face(-90)
         yield from frames(f'pie{lifecycle}_whole_exit', ['Whole'])
         yield 20

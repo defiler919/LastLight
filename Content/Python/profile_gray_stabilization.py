@@ -99,6 +99,8 @@ def run():
         cases = [('Empty',0,180), ('OneWhole',1,180)]
     elif protocol == 'Knowledge':
         cases = [('ActualNewKnowledge',0,360)]
+    elif protocol == 'WholePreparation':
+        cases = [('WholePreparationLead',0,180)]
     elif protocol == 'Batch':
         # Short cold-entry diagnostic. The original Matrix stays unchanged.
         cases = [('Empty',0,240), ('SameIdentity64',5,120), ('Distributed184',6,120)]
@@ -115,7 +117,11 @@ def run():
         unreal.SystemLibrary.execute_console_command(w, 'Trace.RegionBegin '+name)
         case_start = time.perf_counter()
         setup_start = time.perf_counter()
-        if name in ('PartialNewThenRepeat','LongInteraction'):
+        if name == 'WholePreparationLead':
+            assert director.set_stress_mode_for_testing(0)
+            assert director.teleport_to_room_for_testing(1, player)
+            assert director.reset_current_room_for_testing(player)
+        elif name in ('PartialNewThenRepeat','LongInteraction'):
             assert director.set_stress_mode_for_testing(0)
             if name == 'LongInteraction':
                 # The preceding real-knowledge case physically moved Room 03's
@@ -155,16 +161,18 @@ def run():
             unreal.SystemLibrary.execute_console_command(w, 'r.Darkwell.FogVisual.Diagnostic.SkipCoverageDraw '+('1' if name=='NoCoverageDraw' else '0'))
         room.reset_history_runtime_telemetry_for_testing()
         # Sweeps start immediately before the first recorded frame. No warm-up exclusion.
-        if name not in ('PartialNewThenRepeat', 'StationaryStop', 'ActualNewKnowledge','LongInteraction'):
+        if name not in ('PartialNewThenRepeat', 'StationaryStop', 'ActualNewKnowledge','LongInteraction','WholePreparationLead'):
             director.start_sweep_for_testing(90 if name=='FastSweep90' else 160, not name.startswith('FastSweep'))
         else:
-            player.set_actor_rotation(unreal.Rotator(yaw=18 if name=='PartialNewThenRepeat' else 90), False)
+            player.set_actor_rotation(unreal.Rotator(yaw=-90 if name=='WholePreparationLead' else (18 if name=='PartialNewThenRepeat' else 90)), False)
         samples = []
         last_game = unreal.GameplayStatics.get_time_seconds(w)
         for index in range(count):
             yield 1
             now_game = unreal.GameplayStatics.get_time_seconds(w)
             r = json.loads(room.get_history_runtime_telemetry())['frame_data']
+            if name == 'WholePreparationLead':
+                r['preparation'] = json.loads(room.get_whole_preparation_telemetry())
             r['engine'] = json.loads(director.get_frame_environment_for_testing())
             r['engine']['editor_realtime_count'] = unreal.DarkwellEditorDiagnostics.get_realtime_editor_viewport_count() if not standalone else 0
             assert r['engine']['viewport'] == [1920,1080], r['engine']
@@ -174,6 +182,8 @@ def run():
             last_game = now_game
             samples.append(r)
             raw.write(json.dumps(r, separators=(',', ':'))+'\n')
+            if name == 'WholePreparationLead' and index in (5,65):
+                player.set_actor_rotation(unreal.Rotator(yaw=90 if index==5 else -90), False)
             if name == 'LongInteraction':
                 elapsed = time.perf_counter()-case_start
                 section = int(elapsed // 10)

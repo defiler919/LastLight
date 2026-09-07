@@ -87,6 +87,7 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 	bool ReleaseTerminalRecord(uint32 Epoch);
 	uint64 GetCompactedRecordCount() const { return CompactedRecordCount; }
 
+	FGuid GetPreparationLifetime() const { return PreparationLifetime; }
 	FName GetStableId() const { return StableId; }
 	uint32 GetNextEpoch() const { return NextEpoch; }
 	int32 GetCurrentIndex() const { return CurrentIndex; }
@@ -107,6 +108,7 @@ private:
 		const FBox2D& WorldBounds, float CellSize, int32 ResidentLimit);
 	static bool IsFullyErased(const FDarkwellSpatialObservationRecord& Record);
 
+	FGuid PreparationLifetime;
 	FName StableId;
 	uint32 NextEpoch = 1;
 	int32 CurrentIndex = INDEX_NONE;

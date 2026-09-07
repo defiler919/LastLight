@@ -48,12 +48,6 @@ namespace
 	thread_local FOwnershipQueryCounts* GOwnershipQueryCounts = nullptr;
 }
 
-ADarkwellObjectMemoryScene::ADarkwellObjectMemoryScene()
-{
-	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("ObjectMemoryRoot")));
-	PrimaryActorTick.bCanEverTick=false;
-}
-
 void ADarkwellObjectMemoryScene::EndPlay(EEndPlayReason::Type Reason)
 {
 	ResetMemory();
@@ -109,6 +103,7 @@ bool ADarkwellObjectMemoryScene::RegisterRememberable(
 
 void ADarkwellObjectMemoryScene::ReleaseSourcePresentation(FTrackedProp& Prop)
 {
+ InvalidateWholePreparation(Prop.StableId);
 	for(auto& Binding:Prop.SourceBindings)
 	{
 		if(auto* Part=Binding.Part.Get())
@@ -125,6 +120,7 @@ void ADarkwellObjectMemoryScene::ReleaseSourcePresentation(FTrackedProp& Prop)
 
 void ADarkwellObjectMemoryScene::ResetMemory()
 {
+ InvalidateWholePreparation();
 	for(auto& Pair:Tracked)
 	{
 		for(auto& Visual:Pair.Value.Visuals) DestroyVisual(Visual.Value);
@@ -1943,6 +1939,7 @@ void ADarkwellObjectMemoryScene::RetireHistoricalPresentation(
 	FTrackedProp& Prop,
 	FRecordVisual& Visual)
 {
+ InvalidateWholePreparation(Prop.StableId);
 	if (Visual.bPresentationRetired)
 	{
 		return;
@@ -2798,6 +2795,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 				}
 			}
 			EnsureRecordVisual(Prop, Current);
+			RequestWholePreparation(Prop);
 			if (bCoverageDirty || bTransformChanged
 				|| Prop.CurrentPresentationActiveSeconds > 0.0f)
 			{
@@ -3070,6 +3068,37 @@ void ADarkwellObjectMemoryScene::StampConfirmedWholeCapture(
 	Record.CaptureGeometryRevision = Prop.CurrentLive.GeometryResets;
 }
 
+bool ADarkwellObjectMemoryScene::PrepareFootprintCell(const FBox2D& Bounds, const FIntPoint Size,
+ const int32 Index, const TConstArrayView<FPrimitiveGeometrySnapshot> Geometry) const
+{
+ FOwnershipQueryCounts Counts;
+ TGuardValue<FOwnershipQueryCounts*> Scope(GOwnershipQueryCounts, &Counts);
+ return CaptureFootprintCell(Bounds, Size, Index, Geometry, true);
+}
+
+bool ADarkwellObjectMemoryScene::CaptureFootprintCell(const FBox2D& Bounds, const FIntPoint Size, const int32 Index,
+ const TConstArrayView<FPrimitiveGeometrySnapshot> Geometry, const bool bRejectPlanarBounds) const
+{
+ const FVector2D Step = Bounds.GetSize() / FVector2D(Size);
+			const FVector2D Min = Bounds.Min + Step * FVector2D(Index % Size.X, Index / Size.X);
+			const FVector2D Corners[]{Min, Min + FVector2D(Step.X, 0), Min + Step, Min + FVector2D(0, Step.Y)};
+			for (const auto& Part : Geometry)
+			{
+				if (bRejectPlanarBounds && Part.bCachedPlanarProjection && Part.ToleranceScale > UE_DOUBLE_SMALL_NUMBER && Part.ProjectionBounds.bIsValid)
+				{
+					const FVector Scale = Part.WorldTransform.GetScale3D().GetAbs();
+					const double Padding = 2.0 * UE_KINDA_SMALL_NUMBER * FMath::Max(Scale.X, Scale.Y) + Part.ProjectionRoundoffMargin;
+					if (!Part.ProjectionBounds.ExpandBy(Padding).Intersect(FBox2D(Min, Min + Step))) continue;
+				}
+				double A, B;
+				bool Intersects = QueryVerticalInterval(Part, Min + Step * .5, A, B);
+				for (int32 Edge = 0; Edge < 4 && !Intersects; ++Edge)
+					Intersects |= ClipSegmentToGeometryProjection(Part, Corners[Edge], Corners[(Edge + 1) % 4], 0, A, B);
+				if (Intersects) return true;
+			}
+ return false;
+}
+
 TBitArray<> ADarkwellObjectMemoryScene::BuildCaptureGeometryFootprint(
 	const FBox2D& Bounds, const FIntPoint Size,
 	const TConstArrayView<FPrimitiveGeometrySnapshot> Geometry, const bool bParallel) const
@@ -3103,23 +3132,7 @@ TBitArray<> ADarkwellObjectMemoryScene::BuildCaptureGeometryFootprint(
 		const int32 End = int64(Num) * (Task + 1) / Tasks;
 		for (int32 Index = Begin; Index < End; ++Index)
 		{
-			const FVector2D Min = Input.Bounds.Min + Step * FVector2D(Index % Size.X, Index / Size.X);
-			const FVector2D Corners[]{Min, Min + FVector2D(Step.X, 0), Min + Step, Min + FVector2D(0, Step.Y)};
-			Result[Index] = 0;
-			for (const auto& Part : Input.Geometry)
-			{
-				if (bRejectPlanarBounds && Part.bCachedPlanarProjection && Part.ToleranceScale > UE_DOUBLE_SMALL_NUMBER && Part.ProjectionBounds.bIsValid)
-				{
-					const FVector Scale = Part.WorldTransform.GetScale3D().GetAbs();
-					const double Padding = 2.0 * UE_KINDA_SMALL_NUMBER * FMath::Max(Scale.X, Scale.Y) + Part.ProjectionRoundoffMargin;
-					if (!Part.ProjectionBounds.ExpandBy(Padding).Intersect(FBox2D(Min, Min + Step))) continue;
-				}
-				double A, B;
-				bool Intersects = QueryVerticalInterval(Part, Min + Step * .5, A, B);
-				for (int32 Edge = 0; Edge < 4 && !Intersects; ++Edge)
-					Intersects |= ClipSegmentToGeometryProjection(Part, Corners[Edge], Corners[(Edge + 1) % 4], 0, A, B);
-				if (Intersects) { Result[Index] = 1; break; }
-			}
+			Result[Index] = CaptureFootprintCell(Input.Bounds, Size, Index, Input.Geometry, bRejectPlanarBounds);
 		}
 		Counts[Task] = LocalCounts;
 	};
@@ -3160,7 +3173,8 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 	const uint32 Epoch = Current.Epoch;
 	const TBitArray<> PreviousCapture=Current.LastLegalCaptureMask;
 	Prop.LastCaptureAppearanceRevision = Current.ContentRevision;
-	TBitArray<> WholeGeometryMask;
+	TBitArray<> WholeGeometryMask, PreparedWhole, PreparedFootprint;
+	const bool bPrepared = TakeWholePreparation(Prop, PreparedWhole, PreparedFootprint);
 	if (Current.bConfirmedWholeCapture)
 	{
 		const bool bAtomicCapture = Current.bCaptureRevisionValid
@@ -3169,8 +3183,8 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 			&& Current.SnapshotTransform.Equals(Prop.CurrentLive.LastLegalPose, 1.e-6);
 		const FIntPoint FineSize = Current.SpatialMemory.GetSize()
 			* FDarkwellHistoryGridV2::SamplesPerCell;
-		if (!bAtomicCapture || !Prop.CurrentLive.BuildFullGeometryMask(
-			Current.SpatialMemory.GetBounds(), FineSize, WholeGeometryMask))
+		if (!bAtomicCapture || !(bPrepared ? (WholeGeometryMask = MoveTemp(PreparedWhole), WholeGeometryMask.CountSetBits() > 0)
+			: Prop.CurrentLive.BuildFullGeometryMask(Current.SpatialMemory.GetBounds(), FineSize, WholeGeometryMask)))
 		{
 			UE_LOG(LogDarkwellObjectMemory, Warning,
 				TEXT("WHOLE_FREEZE_REJECTED id=%s epoch=%u atomic=%d authority_rev=%llu coverage_rev=%llu pose_rev=%llu policy_rev=%llu geometry_rev=%llu current_policy_rev=%llu current_geometry_rev=%llu"),
@@ -3246,8 +3260,8 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Memory_CaptureFootprint);
 			const auto& Grid = Historical->FineHistory;
 			const FIntPoint Size = Grid.GetSize();
-			const TBitArray<> Footprint = BuildCaptureGeometryFootprint(Grid.GetBounds(), Size,
-				SealedVisual->PartGeometry, bStagedCapture);
+			const TBitArray<> Footprint = bPrepared ? MoveTemp(PreparedFootprint)
+				: BuildCaptureGeometryFootprint(Grid.GetBounds(), Size, SealedVisual->PartGeometry, bStagedCapture);
 			Historical->FineHistory.RestrictToRecordedGeometry(Footprint);
 			Historical->GeometryFootprint=Footprint;
 			for(int32 I=0;I<Footprint.Num();++I) if(!Footprint[I]) Historical->LastLegalCaptureMask[I]=false;
@@ -3271,6 +3285,7 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 
 void ADarkwellObjectMemoryScene::AbandonCurrentObservationWithoutHistory(FTrackedProp& Prop)
 {
+ InvalidateWholePreparation(Prop.StableId);
 	const int32 Index = Prop.History.GetCurrentIndex();
 	if (Index == INDEX_NONE) return;
 	const uint32 Epoch = Prop.History.GetRecords()[Index].Epoch;
@@ -5265,6 +5280,7 @@ bool ADarkwellObjectMemoryScene::TryResumeQualifiedWhole(FTrackedProp& Prop)
 		if (Prop.History.GetRecords()[CurrentIndex].FineHistory.IsInitialized()) return false;
 		AbandonCurrentObservationWithoutHistory(Prop);
 	}
+	InvalidateWholePreparation(Prop.StableId);
 	if (!Prop.History.ResumeUncontradictedObservation(Prop.ReusableWholeEpoch)) return false;
 	Prop.LocalEpoch=Prop.ReusableWholeEpoch;
 	// This session is already displaying legal local samples. Reusing its old
@@ -5763,5 +5779,6 @@ void ADarkwellObjectMemoryScene::UpdateMemory(
 
  RuntimeFrame.CoverageComputations=CoverageFog?CoverageFog->GetCoverageComputationsForTesting()-ComputationsBefore:0;
  RuntimeFrame.CoverageCacheHits=CoverageFog?CoverageFog->GetCoverageCacheHitsForTesting()-HitsBefore:0;
+	AdvanceWholePreparation();
 	FinalizeHistoryRuntimeTelemetry(UpdateRoomStartCycles);
 }

@@ -7,14 +7,16 @@ namespace
  FBox2D XY(const FBox& B) { return FBox2D(FVector2D(B.Min),FVector2D(B.Max)); }
  FIntPoint GridSize(const FBox2D& B) { return FIntPoint(FMath::CeilToInt(B.GetSize().X/CurrentLocalSampleSizeCm),FMath::CeilToInt(B.GetSize().Y/CurrentLocalSampleSizeCm)); }
  bool Upright(const FTransform& T) { return T.GetRotation().RotateVector(FVector::UpVector).Equals(FVector::UpVector,1.e-5); }
- bool ProjectedPrimitiveIntersectsCell(const FDarkwellCurrentLiveGrid::FPart& Part,const FBox2D& Cell)
+
+}
+bool FDarkwellCurrentLiveGrid::IntersectsWholeCell(const FBox& LocalBounds,const FTransform& Pose,const FBox2D& Cell)
  {
-  const FBox2D Local=FBox2D(FVector2D(Part.Geometry.LocalBounds.Min),FVector2D(Part.Geometry.LocalBounds.Max));
+  const FBox2D Local=FBox2D(FVector2D(LocalBounds.Min),FVector2D(LocalBounds.Max));
   const FVector2D Rectangle[]{
-   FVector2D(Part.Pose.TransformPosition(FVector(Local.Min,Part.Geometry.LocalBounds.GetCenter().Z))),
-   FVector2D(Part.Pose.TransformPosition(FVector(Local.Max.X,Local.Min.Y,Part.Geometry.LocalBounds.GetCenter().Z))),
-   FVector2D(Part.Pose.TransformPosition(FVector(Local.Max,Part.Geometry.LocalBounds.GetCenter().Z))),
-   FVector2D(Part.Pose.TransformPosition(FVector(Local.Min.X,Local.Max.Y,Part.Geometry.LocalBounds.GetCenter().Z)))};
+   FVector2D(Pose.TransformPosition(FVector(Local.Min,LocalBounds.GetCenter().Z))),
+   FVector2D(Pose.TransformPosition(FVector(Local.Max.X,Local.Min.Y,LocalBounds.GetCenter().Z))),
+   FVector2D(Pose.TransformPosition(FVector(Local.Max,LocalBounds.GetCenter().Z))),
+   FVector2D(Pose.TransformPosition(FVector(Local.Min.X,Local.Max.Y,LocalBounds.GetCenter().Z)))};
   const FVector2D CellCorners[]{Cell.Min,FVector2D(Cell.Max.X,Cell.Min.Y),Cell.Max,FVector2D(Cell.Min.X,Cell.Max.Y)};
   const FVector2D EdgeX=Rectangle[1]-Rectangle[0];
   const FVector2D EdgeY=Rectangle[3]-Rectangle[0];
@@ -29,7 +31,6 @@ namespace
   }
   return true;
  }
-}
 bool FDarkwellCurrentLiveGrid::FDescriptor::Matches(const FDescriptor& O) const
 {
  return PrimitiveKey==O.PrimitiveKey && MeshKey==O.MeshKey && LocalBounds.Equals(O.LocalBounds)
@@ -126,7 +127,7 @@ bool FDarkwellCurrentLiveGrid::BuildFullGeometryMask(const FBox2D& Bounds,const 
  {
   const FVector2D Min=Bounds.Min+Step*FVector2D(X,Y);
   const FBox2D Cell(Min,Min+Step);
-  for(const FPart& Part:Parts) if(ProjectedPrimitiveIntersectsCell(Part,Cell))
+  for(const FPart& Part:Parts) if(IntersectsWholeCell(Part.Geometry.LocalBounds,Part.Pose,Cell))
   {
    Out[Y*Size.X+X]=true;
    break;

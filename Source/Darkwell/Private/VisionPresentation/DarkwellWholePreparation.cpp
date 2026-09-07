@@ -5,6 +5,7 @@
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformTime.h"
+#include "Misc/ScopeExit.h"
 #include "UObject/ObjectKey.h"
 
 namespace
@@ -87,6 +88,7 @@ struct FDarkwellWholePreparationState
 	Darkwell::HistoryPreparation::FFrameBudget Budget;
 	uint64 Generation = 1, Serial = 0;
 	int32 RoundRobin = 0, LastMode = 0;
+	bool bCharging = false;
 	uint64 Requests = 0, Hits = 0, Fallbacks = 0, Cancelled = 0, Shadow = 0;
 	double LastSealStartSeconds = 0;
 
@@ -151,8 +153,11 @@ void ADarkwellObjectMemoryScene::InvalidateWholePreparation(const FName Id)
 	check(IsInGameThread());
 	if (!WholePreparation) return;
 	auto& S = *WholePreparation;
+	const bool bHadEntries = !S.Entries.IsEmpty();
+	const double Start = FPlatformTime::Seconds();
 	S.Cancelled += S.Entries.RemoveAll([&](const auto& E) { return Id.IsNone() || E.Input.Id == Id; });
 	if (Id.IsNone()) { if (S.Generation != MAX_uint64) ++S.Generation; }
+	if (bHadEntries && !S.bCharging) { S.Budget.Begin(PreparationFrame(*this)); S.Budget.Charge(FPlatformTime::Seconds() - Start, 0); }
 	// Preserve this engine frame's expenditure, including through ResetMemory.
 }
 
@@ -166,10 +171,12 @@ void ADarkwellObjectMemoryScene::RequestWholePreparation(FTrackedProp& Prop)
 	S.Budget.Begin(PreparationFrame(*this));
 	if (!S.Budget.CanAdvance(PreparationTimeLimit(*this), PreparationWorkLimit(*this))) return;
 	const double Start = FPlatformTime::Seconds();
+	TGuardValue<bool> Charging(S.bCharging, true);
+	ON_SCOPE_EXIT { S.Budget.Charge(FPlatformTime::Seconds() - Start, 0); };
 	// P1's conservative multi-host fallback avoids multiplying a world budget.
 	int32 Hosts = 0;
 	for (TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld()); It; ++It) ++Hosts;
-	if (Hosts != 1) { InvalidateWholePreparation(); S.Budget.Charge(FPlatformTime::Seconds() - Start, 0); return; }
+	if (Hosts != 1) { InvalidateWholePreparation(); return; }
 	FDarkwellWholePreparationState::FInput Input;
 	if (!FDarkwellWholePreparationState::Snapshot(*this, Prop, Input)) InvalidateWholePreparation(Prop.StableId);
 	else
@@ -185,7 +192,6 @@ void ADarkwellObjectMemoryScene::RequestWholePreparation(FTrackedProp& Prop)
 			++S.Requests;
 		}
 	}
-	S.Budget.Charge(FPlatformTime::Seconds() - Start, 0);
 }
 
 void ADarkwellObjectMemoryScene::AdvanceWholePreparation()
@@ -203,6 +209,9 @@ void ADarkwellObjectMemoryScene::AdvanceWholePreparation()
 	while (!S.Entries.IsEmpty() && Skipped < S.Entries.Num() && S.Budget.CanAdvance(PreparationTimeLimit(*this), PreparationWorkLimit(*this)))
 	{
 		const double Start = FPlatformTime::Seconds();
+		int32 Work = 0;
+		TGuardValue<bool> Charging(S.bCharging, true);
+		ON_SCOPE_EXIT { S.Budget.Charge(FPlatformTime::Seconds() - Start, Work); };
 		S.RoundRobin %= S.Entries.Num();
 		auto& Entry = S.Entries[S.RoundRobin++];
 		if (Entry.Job.bRevoked || Entry.Job.IsReady()) { ++Skipped; continue; }
@@ -211,11 +220,11 @@ void ADarkwellObjectMemoryScene::AdvanceWholePreparation()
 		if (!Validated.Contains(S.RoundRobin - 1) && (!Prop || !FDarkwellWholePreparationState::Snapshot(*this, *Prop, Current) || !Entry.Input.Matches(Current)))
 		{
 			Entry.Job.Revoke(); ++S.Cancelled; ++Skipped;
-			S.Budget.Charge(FPlatformTime::Seconds() - Start, 0); continue;
+			continue;
 		}
 		Validated.Add(S.RoundRobin - 1);
 		const auto& Input = Entry.Input;
-		const int32 Work = Entry.Job.Step(PreparationFrame(*this), FMath::Min(128, PreparationWorkLimit(*this) - S.Budget.Work), [&](const bool bWhole, const int32 Index)
+		Work = Entry.Job.Step(PreparationFrame(*this), FMath::Min(128, PreparationWorkLimit(*this) - S.Budget.Work), [&](const bool bWhole, const int32 Index)
 		{
 			if (!bWhole) return PrepareFootprintCell(Input.Bounds, Input.Size, Index, Input.Capture);
 			const FVector2D Step = Input.Bounds.GetSize() / FVector2D(Input.Size);
@@ -224,7 +233,6 @@ void ADarkwellObjectMemoryScene::AdvanceWholePreparation()
 				if (FDarkwellCurrentLiveGrid::IntersectsWholeCell(Part.Bounds, Part.Pose, FBox2D(Min, Min + Step))) return true;
 			return false;
 		});
-		S.Budget.Charge(FPlatformTime::Seconds() - Start, Work);
 		if (Work == 0) ++Skipped; else Skipped = 0;
 	}
 }
@@ -236,7 +244,10 @@ bool ADarkwellObjectMemoryScene::TakeWholePreparation(FTrackedProp& Prop, TBitAr
 	S.LastSealStartSeconds = FPlatformTime::Seconds();
 	const int32 Index = S.Entries.IndexOfByPredicate([&](const auto& E) { return E.Input.Id == Prop.StableId; });
 	if (Index == INDEX_NONE) { ++S.Fallbacks; return false; }
+	S.Budget.Begin(PreparationFrame(*this));
 	const double Start = FPlatformTime::Seconds();
+	TGuardValue<bool> Charging(S.bCharging, true);
+	ON_SCOPE_EXIT { S.Budget.Charge(FPlatformTime::Seconds() - Start, 0); };
 	auto Entry = MoveTemp(S.Entries[Index]);
 	S.Entries.RemoveAt(Index);
 	FDarkwellWholePreparationState::FInput Current;
@@ -254,8 +265,6 @@ bool ADarkwellObjectMemoryScene::TakeWholePreparation(FTrackedProp& Prop, TBitAr
 		++S.Shadow;
 	}
 	if (bUse) ++S.Hits; else ++S.Fallbacks;
-	S.Budget.Begin(PreparationFrame(*this));
-	S.Budget.Charge(FPlatformTime::Seconds() - Start, 0);
 	return bUse;
 }
 

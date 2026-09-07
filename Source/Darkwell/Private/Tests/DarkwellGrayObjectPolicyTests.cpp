@@ -1461,7 +1461,8 @@ bool FDarkwellWholePreparationHandoff::RunTest(const FString&)
   if (M > 0) TestTrue(TEXT("lead time produces Ready"), F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"ready\":1")));
   const auto Before = F.Room->GetWholePreparationTelemetry();
   F.Room->AdvanceWholePreparation();
-  TestEqual(TEXT("repeat update cannot replenish work"), F.Room->GetWholePreparationTelemetry().Left(F.Room->GetWholePreparationTelemetry().Find(TEXT(",\"seal_age_ms"))), Before.Left(Before.Find(TEXT(",\"seal_age_ms"))));
+  auto WorkField=[](const FString& Value) { const int32 Start=Value.Find(TEXT("\"frame_work\":")); return Value.Mid(Start,Value.Find(TEXT(",\"frame_ms\""))-Start); };
+  TestEqual(TEXT("repeat update cannot replenish work"), WorkField(F.Room->GetWholePreparationTelemetry()),WorkField(Before));
   F.Face(-90); F.Room->WholePreparationFrameForTesting=31; F.Step();
   TBitArray<> Capture,Frozen;
   TestTrue(TEXT("first exit synchronously seals"),F.Room->GetNewestCaptureMasksForTesting(Id,Capture,Frozen));

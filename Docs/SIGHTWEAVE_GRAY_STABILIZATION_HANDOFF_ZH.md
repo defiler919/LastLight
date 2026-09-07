@@ -1,5 +1,22 @@
 # 灰色层功能检查点与稳定化施工
 
+## A1保守旧历史需求驻留完成，默认关闭（2026-09-07，a8d12dd）
+
+运行时 **a8d12dd52ac1109c483b7cc93ddece9222bce03a** 已推送，起点d3ed085。`r.Darkwell.ObjectMemory.HistoryResidency`默认0，mode1启用保守自动驻留；P1仍0。实现与证据详见性能审计第28节、批量架构第10节。未扩worker/Partial证据/资源池/B/atlas，stable与Docs/AI未动。
+
+Scene在相机更新后的PostUpdateWork使用实际LocalPlayer投影视锥；PartBounds+CPU cap联合保守球，近邻1000cm、预取500cm、保留1000cm、离开保留范围1秒才释放，最近Current/capture pin5秒。无有效单相机/投影/bounds则全驻留，不按合法灯光/墙体规则判表现需求，不以远距截止淘汰仍在相机范围的历史。只自动释放持久资产、非Current/retired且fine初始化的旧历史；A0显式票据不被自动路径接管。
+
+释放仅Render，CPU知识/证据/ownership/occupancy/cap终结语义不变；需求重入用同一GT调用中的最新CPU状态重建/提交再显示，无异步结果可复活旧record。SourceReplace/Reset/Initialize/retire/world合同沿A0；mode0恢复自动释放资源，失败有Error/计数并重试，不隐藏失败。资源不存在不授予/删除知识。
+
+新`OldHistory64FewDemand`为64身份、32confirmed Whole+32 Partial的老历史fixture，6秒自然老化后固定相机路线。两次同DLL0/1对照均 **N64不变，窄需求K64→16，proxy/texture/MID64→16、cap32→8，逻辑纹理payload9→2.25MiB（-75%）**。不能把此数写成全局VRAM收益，post-GC全局RHI统计未下降。路线中滞回会暂时保留K32/48/64。
+
+完整A1窗口含创建/pin：0A→1A为284.305→336.003ms，0B→1B为305.229→284.592ms，启动前台等待不同，不作整体改善声明。老历史路线MaxFullFrame **18.147→26.728ms、16.434→29.043ms**；单帧驻留GT最大13.994ms、单record最大2.488ms。每次48条重建额外48texture上传/24cap提交，边界首入后无重复抖动。资源收益成立，**整段峰值收益不成立，继续默认0**。
+
+完整Editor Build06成功，最终D3D12定向A1_Final02 **3/3 clean PASS**。CPU oracle/hash一致；A0活跃证据回归12离线帧/8改变、纹理读回/Partial cap parity及生命周期通过。两PIE36图已检查，Whole/Partial、快速转身/瞬移第一样本无空白，已测Whole首离开/重入额外0帧；不是任意相机或所有资产保证。Standalone截图读回两批黑图/ensure作废，runner限制A1视觉为PIE；性能四次无截图clean。
+
+原Batch压力输入未改：A1_Cold184Pressure完整帧539.999ms，setup184、合法反证后120，**INITIALIZATION仍FAIL**；只压力状态，无旧二进制匹配改善声明。下一步冻结A1策略及旧P1/微项，先对已出现的16条同步重入建立B共享提交/后端可行性证据，不通过减预取或晚显示追成绩。A作为旧历史内存策略可保留，密集必显/重入峰值已接近B触发条件，但不授权直接上大型renderer。未做完整矩阵、长测、Shipping、多视图或全局内存回收曲线。
+
+
 ## A0 CPU历史与Presentation资源寿命解耦完成（2026-09-07，b29557d）
 
 运行时 **b29557d84b1cb0dad79e00b53991ce492a2a0058** 已提交推送，基线161b57ac170b3615c397884a39cc7a49231d7dc8。起始远端/分支一致、工作区干净，已读AGENTS、批量架构、交接及审计第26节。**默认仍全部驻留，WholeGeometryPreparation仍0；A0不是性能优化，没有新增worker、A1、距离/LRU/队列、资源池、atlas或Partial算法。**

@@ -938,3 +938,88 @@ driver SHA256：`673E8A0EAC7C8C1D9270F52FFFDCBDB01368AC38502040BBA8CDD1A30D3BABB
 A0达到本轮闭环，可以作为A1保守需求分类/旧历史驻留策略的基础；**不等于A1已启用或已通过自动流式验收**。下一轮先记录所需K和安全可逐出集合、保护Current/最近capture，再做一个带同步fallback的旧历史策略切片，必须另验快速转身/瞬移、同帧多record重入和最坏首显延迟。不能把cap CPU更新随GPU一起跳过，也不能把原空间证据索引直接当表现需求索引。
 
 未做cold184性能、完整矩阵、十分钟、P1/occupancy全集、随机生命周期穷举、Shipping cook、任意临时无路径mesh重建或流式范围策略。原持久mesh路径跨GC可重取已测，不宣称所有资产类型都可卸载。A0无性能收益声明，冷184原输入未改变，**INITIALIZATION仍FAIL**。stable、Docs/AI、黑色层、Large World未动。
+
+
+## 28. A1保守旧历史需求驻留（2026-09-07）
+
+运行时 **a8d12dd52ac1109c483b7cc93ddece9222bce03a**。起始远端d3ed08574d20ae3011fdf93dd2de262ff9718d7c、开发分支和干净工作区均已核验；读取AGENTS、批量架构及A0交接/源码。仅A1第一生产切片，**HistoryResidency默认0、WholeGeometryPreparation默认0**。不扩P1、不新增worker、Partial证据算法、资源池、atlas、B、Large World或黑色层。
+
+### 生产需求及生命周期
+
+新`DarkwellPresentationResidency.cpp`在Scene的`TG_PostUpdateWork`执行。核对本机UE LevelTick：UpdateCameraManager在该组之前；从唯一LocalPlayer的实际projection/viewport构造相机视锥，不使用角色朝向、手电、合法视野或墙体证据范围。不设置任意远距截止，远处仍在相机贡献范围的历史不能仅因距离被逐出。捕获PartBounds与当前CPU CapQuads合并为保守球，避免cap超出原表面范围。
+
+- Current不参与自动逐出；最近一次Current/首次资源建立后pin **5秒**。新Whole原子seal沿用原同步路径，额外首显0帧。
+- 相机周围 **1000cm** 加record半径的近邻始终保留；视锥预取额外 **500cm**，驻留滞回额外 **1000cm**，明确离开保留范围超过 **1秒** 才逐出。边界使用世界时间，不因测试改小常量或回填年龄。
+- 无有效相机、多个controller、无效投影/bounds均fail-open。只有非Current、非retired、fine已初始化、捕获mesh为有效持久资产且非Transient的旧历史可以自动释放；未知/临时mesh保留。未覆盖自定义多视图/反射专用相机的需求，因此不得据此默认开启。
+- 逐出调用A0 ReleaseRenderResources，只清Render与Owned*引用；保留record/FineHistory/capture、ownership/occupancy缓存及CPU像素/cap。CapTriangles影响terminal，仍按原CPU路径更新。
+- `bAutoResidencyReleased`区分自动驻留和A0显式测试票据。返回mode0同步补回自动释放资源，显式A0控制不被接管；恢复失败保留重试状态、记录Error/Failures。Current resume撤销非驻留及旧请求。
+- 提取A0重建核心为生产`RebuildHistoricalPresentation`：只遍历当下存活的record引用，无跨帧队列或snapshot；world/source/History被替换或删除后没有旧回调可发布。重建检查当前world/record资格和捕获资产路径，按最新CPU状态重新生成，隐藏proxy/MID Ready0，纹理和cap同GT提交后一次显示。没有FindOrAdd知识、晚一帧预算或旧texture复用。
+- Reset/SourceReplace/History.Initialize/retire/world语义继承A0；已有A0票据仍校验Scene、source、History寿命、epoch、请求序号。自动路径不保留跨帧票据。统计累计于Scene寿命，Reset清历史，不清累计逐出/重建计数。
+
+### 新代表场景与测量边界
+
+`OldHistory64FewDemand`，入口`ConfigureOldHistoryDemandForTesting`、`Content/Python/profile_gray_old_history_demand.py`及runner `-Protocol A1`。64个身份、四个16条组，中心在东西南北12000cm，组内300cm间隔；**32条实际confirmed Whole + 32条半覆盖Partial**。这是明确命名的合法观察状态合成fixture，不是shipping读档导入，也不用于证明正常捕获成本。原cold184 helper新增可选fixture分支，默认false；原调用及输入时序未变。
+
+创建后保持输入静止，让5秒pin自然到期；6秒后执行相同340帧相机路线：窄需求60、慢移40、43/47度边界往返40、180转身60、瞬移到此前未访问的南组60、返回东组60。四次正式运行逐帧phase/index/camera完全一致；相机轨迹不驱动新的证据规则。老化等待按实际世界时间，帧数会随运行速度变化，不能称完整启动逐帧一致。
+
+A1完整窗口包含fixture创建、pin等待和全部路线，**不包括引擎进程启动/首次地图资源初始化**；setup没有从MaxFullFrame扣除。Standalone D3D12/SM6、1920×1080、SP100、AA4、无fixed step/截图、同DLL同driver。壁钟完整帧含Python测量开销；原native RuntimeFrame结束早于新增late tick，因此必须另报Residency.FrameMs，不能把原native GT下降当全部GT改善。
+
+### 同二进制结果
+
+原始文件在`Saved/Stabilization/A1_Final0A、A1_Final1A、A1_Final1B、A1_Final0B`，汇总`Saved/A1/comparison.json`。四次exit0/severe0，正式采样全部前台。执行顺序0A→1A→1B→0B。
+
+| 指标/ms | mode0 A | mode1 A | mode0 B | mode1 B |
+| --- | ---: | ---: | ---: | ---: |
+| setup | 195.426 | 216.661 | 189.966 | 195.398 |
+| A1完整窗口MaxFullFrame | 284.305 | 336.003 | 305.229 | 284.592 |
+| 老历史路线MaxFullFrame | 18.147 | 26.728 | 16.434 | 29.043 |
+| 窄需求阶段MaxFullFrame | 18.147 | 20.250 | 16.434 | 14.439 |
+| 慢移阶段MaxFullFrame | 15.203 | 13.195 | 15.239 | 15.305 |
+| 边界阶段MaxFullFrame | 14.026 | 25.566 | 15.268 | 29.043 |
+| 180转身MaxFullFrame | 14.522 | 26.728 | 15.678 | 27.840 |
+| 瞬移MaxFullFrame | 13.722 | 26.602 | 15.113 | 27.801 |
+| 返回东组MaxFullFrame | 16.405 | 15.024 | 14.757 | 16.479 |
+| 单帧驻留处理最大GT | 0 | 13.994 | 0 | 12.835 |
+| 单record重建最大GT | 0 | 2.488 | 0 | 1.477 |
+
+mode1 A等待前台635个样本，mode0 B等待767个样本；另两次0。**启动条件不严格匹配，完整窗口波动不作改善声明**。窄需求中位帧0A/1A=8.817/7.835、0B/1B=8.396/7.997ms，但整段峰值恶化，不能以局部中位数宣称总体优化。
+
+两次都复现：N=64，稳定窄需求 **K=64→16**，proxy/texture/MID各64→16，cap component32→8；Float16纹理基础层逻辑payload **9,437,184→2,359,296 bytes（9→2.25MiB，-75%）**，尺寸/精度未变。该数不是VRAM/allocator总量；逐出的UObject实际GC回收有C++断言。路线末尾因1秒滞回仍K48，不能把全程K写成16。全局post-GC RHI texture统计约1,947,496,448→1,956,933,632 bytes并未下降，包含其他资源及延迟释放，**不声明全局VRAM减少75%**。
+
+mode1每次路线前已逐出48；边界、转身、瞬移各同步重建16，累计48重建，路线结束64次逐出，failures/missing始终0。边界首次预取一次后，40次往返没有继续逐出/重建；本次没有thrash。末段返回东组尚在滞回中，不把该段叫作额外48条重建；真正多record同时重入在前面三段。资源收益可重复，但最坏整帧由18.147/16.434升至26.728/29.043ms，零延迟fallback的费用真实存在。
+
+### CPU parity和提交工作
+
+所有正式模式/阶段首尾hash均 **16192475078042990979**，N64从未减少。Hash包含record epoch/current、fine证据、coarse cell标量、fine/coarse occupancy与suppression。该代表路线历史主要sleeping：samples_scanned/coverage_queries/occupancy_tests/ownership_tests都为0，两模式一致；不以此冒充活跃证据覆盖。native Historical最大0A/1A/0B/1B=0.003/0.003/0.002/0.020ms，原memory GT最大1.051/1.328/1.481/0.915ms，另加上表late residency费用。
+
+mode0路线texture/cap提交0/0；mode1额外 **48次texture上传、24次cap重建、2310次presentation geometry测试**。这是重物化成本，不属于新的玩家证据，不能声称所有CPU查询/总工作完全相同。驻留遥测单列这些累计增量以免被原RuntimeFrame边界隐藏。
+
+### 构建、定向正确性及生命周期
+
+`Scripts/BuildEditor.ps1`，最终`Saved/A1/Build06.log`：完整DarkwellEditor Win64 Development目标 **Succeeded**，11.47s（增量编译，无Live Coding）。后续只调整Python说明/移除未调用函数/截图metadata及runner PIE参数，没有改变C++。
+
+`Scripts/RunGrayObjectPolicyTests.ps1 -RunName A1_Final02 -Rendering -Tests 'Darkwell.ObjectMemory.A1ConservativeDemand+Darkwell.ObjectMemory.PresentationResidency+Darkwell.ObjectMemory.OrdinaryHost'`：最终 **3/3 clean PASS、warning0、severe0、exit0**，测试体3.724s。证据`Saved/GrayObjectPolicy/A1_Final02`。
+
+- 新A1：实际Whole/Partial32/32、最近pin64、老化K16、边界滞回、慢移/转身/瞬移/整组重入、无效相机fail-open、mode0恢复、逐出后GC资源真实消失而CPU存活、SourceReplace+GC后captured pose正确、Reset不重建、world teardown/recreate/GC。
+- A0回归：12个无GPU推进帧其中8帧fine证据实际改变；逐帧CPU/最终像素/cap/pose oracle一致，两次D3D12 Float16纹理读回相等、Partial实际mesh匹配。覆盖旧请求/同epoch Initialize/terminal/缺失mesh/SourceReplace/Reset/world、Whole首次离开及resume再seal。A1只是自动触发同一生产释放/重建核心，未改这些规则。
+- OrdinaryHost保护普通Current透明预备与Whole原子交接。**已测Whole首次离开额外0帧；需求重入在当次GT调用完成，无等待队列。** 不等于任意资产加载失败也能无条件显示；失败显式记录并保留CPU，不发布残缺资源。
+
+保留早期失败证据：Build01前置声明错误已修复；A1_Final初版fixture未初始化CurrentLive geometry/pose，Whole freeze atomic=0被合同正确拒绝，修正fixture后Final02通过。A1_Mode0_A初版全Partial样本不参与正式A/B，不能与final混用。
+
+### D3D12视觉与工具限制
+
+`A1_Visual0/1` Standalone直接viewport读回触发引擎D3D12 InRHITexture ensure且输出黑图，**两批作废**；mode0也复现，不作为A1显示缺失或视觉通过证据。runner现拒绝Standalone+A1Visual，视觉必须PIE。没有修改生产渲染/深度以绕过问题。
+
+`A1_PIEVisual0/1` 同DLL两次PIE、各18张，exit0/severe0。已查看全部36图连续总览与瞬移首图近景原图：Whole/Partial显示、外切口、姿态与oracle相符；180转身/瞬移第一样本已有历史、后续无退灰/旧姿态复活。每阶段首3张中未见额外空帧；资源missing0。远处组像素很小，近景证据来自瞬移阶段；不声称整屏逐像素相等或无截图GPU墙钟延迟，截图开销不用于性能A/B。
+
+正式性能/视觉DLL SHA256：`5CDEA8C6C8C1E2845AC8F3B2E7CB47BFA7007B13DEDD334B3BE501CC3F6F4C1C`；原始采样driver SHA256：`055AA31E6E3687A6A225BE1ED5108976FC14CF7A7401AD35DEE24C5EAA43BA3F`。提交driver只清理未调用旧函数、修正说明/截图metadata，路线未变；最终driver SHA256 `BCB34C6900E2DF5936C306A740EED92100BF316F91AC7920AEE80ED50F910744`。Saved保留原driver及日志，生成图/二进制不入Git。
+
+### cold184压力及下一阶段
+
+同DLL、mode0 `A1_Cold184Pressure -Protocol Batch -Mode Standalone -NoAuthoringToolsets`：原Empty240/SameIdentity64 120/Distributed184 120帧短协议，exit0/severe0。Distributed184 setup259.858ms、native memory最大272.470ms、真实最大完整帧 **539.999ms**；setup184条/184proxy、合法反证后120条/120套资源。未改变seed或输入时序，无匹配旧二进制对照，不宣称相对旧533.639ms改善/回归幅度。**INITIALIZATION仍FAIL**。
+
+A1达到可重复的驻留资源削减及定向正确性闭环，作为默认关闭的内存策略值得保留；没有达到默认启用或整段性能改善条件。K远小于N时CPU本来已sleeping，继续添加距离层级/LRU/预算队列不会自动解决同步多record重建峰值。**本阶段冻结A1策略与旧P1/微项，不继续堆流式复杂度。**
+
+下一轮中档入口：围绕本次boundary/turn180/teleport各16条重入，用已有RebuildUploads/RebuildCaps/MaxRebuildMs和A0生成/提交入口建立密集必显K的B可行性小证据；区分纯CPU cap/pixels与GT注册/提交，评估共享提交/后端能否降低整组重建，而不是再降预取范围或允许晚一帧。当前已触及B的“多个必显record同步重建造成帧峰值”条件，尚无证据支持直接上完整atlas/custom proxy。CPU权威密集场景另审，B也不会消除O(N)证据工作。
+
+未跑完整矩阵/十分钟/P1或occupancy全集、Shipping cook、多视图/任意瞬移随机穷举、所有资产类型、长时间内存压力或全局VRAM回收曲线。stable、Docs/AI未动。A1仅对旧历史释放，原cold初始化合同没有转为PASS。

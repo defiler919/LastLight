@@ -161,3 +161,16 @@ PIE桥接ReleaseOldestPresentationForTesting/RebuildPresentationForTesting只是
 完整Editor Build、最终D3D12定向3/3、两PIE/32图通过。12个无资源更新帧中8帧证据实际改变，Whole/Partial逐帧CPU/最终表现oracle一致；两次D3D12纹理读回完全一致，Partial实际mesh匹配当前CPU拓扑。Whole首次离开及resume再seal0额外帧；显式重建同GT调用完成并在首张后续渲染图出现正确表现。生命周期、失败及取消边界有定向覆盖，没有随机穷举或Shipping证据。
 
 可以进入A1的保守需求分类及单旧历史自动驻留小切片，先记录所需K/可逐出集合、保护Current/最近capture、明确同步fallback，再考虑启用策略。A0不代表自动流式已经安全，不保证任意瞬移同时满足硬帧预算与0延迟。P1仍默认0，现有微项冻结；冷184输入未动、本轮未跑性能，INITIALIZATION仍FAIL。
+
+
+## 10. A1第一生产切片（2026-09-07，a8d12dd）
+
+运行时a8d12dd52ac1109c483b7cc93ddece9222bce03a，详见审计第28节。默认HistoryResidency=0；mode1为保守旧历史自动释放/同步重建，无队列/worker/预算延迟。A0生命周期边界不变。
+
+需求采用相机更新后实际投影视锥，捕获表面与CPU cap联合bounds；近邻1000cm、预取500cm、保留1000cm、外侧1秒滞回，最近capture pin5秒。只有可从持久捕获资产安全重建的旧sealed记录参与；无有效相机/投影/bounds fail-open，无任意远距截断。表现范围与合法知识范围完全独立。重入当帧从最新CPU状态重建后原子发布；mode0同步恢复，A0手动诊断独立。
+
+OldHistory64FewDemand两次同DLL实测N64/K16，32Whole+32Partial，proxy/texture/MID64→16、cap32→8，逻辑texel payload9→2.25MiB。资源UObject回收与CPU继续推进有定向测试，**不是全局VRAM减少75%**。相同340帧相机路线CPU摘要完全一致；活跃证据推进由A0回归另覆盖。同步16条重入使路线最大整帧18.147→26.728ms、16.434→29.043ms，单帧驻留GT最大13.994ms；已测首显仍0额外帧，没有拿晚显示换成绩。
+
+结论：A1达到旧历史多/需求少的可重复驻留资源收益，未达到默认启用或整体峰值改善条件。保留可选择的内存策略，不继续扩A的距离/LRU/队列。下一轮明确入口为RebuildHistoricalPresentation、UpdateRecordTexture/UpdateRecordCap和Residency.Rebuild*遥测，针对同帧16条必显重入拆分CPU重生成与GT注册/提交，做B共享提交/后端可行性判断；尚不支持直接建设完整atlas/custom proxy。当前CPU权威结果并未被卸载，CPU密集场景仍需独立建模。
+
+Editor Build、D3D12定向3/3、PIE36图通过；invalid camera/Reset/SourceReplace/GC/world/terminal沿A0合同验证，边界往返未见thrash。原cold184只短压力回归539.999ms、184→120合法记录；输入与gate未变、INITIALIZATION仍FAIL。冻结旧P1/局部微项，stable不动。

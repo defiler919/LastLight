@@ -869,3 +869,23 @@ FinalLegacy1/FinalScene1分别9473/1133次前台等待，完整窗口292.027/46.
 后续单独明确生产材质归属、用Unreal资产工具迁移及修复引用/建立可审查的资产引用与cook合同；本轮不重命名、复制或改写任何uasset。不要将材质中的灰层表现公式擅自改成新的知识规则。
 
 交互热点移除后，最高收益下一入口是用本版父材质就绪路径重新做既有P1 mode0/2联合验收，判断seal是否重新成为主峰；不扩大协议或直接默认2。冷184仍是整批同步建立架构问题，不能以这10ms迁移升级初始化评级。未做矩阵/十分钟/occupancy全集/随机生命周期穷举/Shipping/进程冷启动总时间/无截图GPU呈现延迟/真实材质反复卸载压力。stable、Docs/AI、黑色层、Large World未动。
+
+## 26. 批量历史表现架构判断（2026-09-07，仅文档）
+
+基线cad92f014cfb88d4ba9e333eae5814184a9ba5a6，实际运行时仍43c5748db9afbd7c861d7a3be7389437ca2a4eab。本节没有新benchmark、构建或运行时改动；复核第25节原始ParentMaterial_ColdPressure/performance.json、frames.jsonl及生产Scene、Lab seed和SaveGame源码。详见[批量历史表现架构判断](SIGHTWEAVE_BATCH_PRESENTATION_ARCHITECTURE_ZH.md)，其中第6节是下一轮A0生产合同。本节的下一入口替代第25节末尾继续P1微项验收的建议。
+
+### 两阶段同步成本与测试含义
+
+cold184为SetGrayPolicyStressMode(6)的三身份64+64+56条SpatialPartial/StationaryOnly历史。ConfigureHistoricalEpochCountForTesting在同调用内人工FullCoverage、AdvanceCurrent(0.20)、逐epoch记录/seal；不是184个正常Whole离开或已接入的真实读档。Batch先Empty、SameIdentity64再Distributed184，所谓cold是历史资源冷建立，不是全进程/磁盘/驱动冷启动。setup要求184套资源，未要求或验证同帧184条可见像素；实际可见K未知。
+
+原完整wall533.639ms，setup257.921、native268.504ms。首次native的Historical父scope240.040ms；ownership99.499、occupancy39.179、texture20.335、cap51.006ms为主要分项，不能与父scope重复加总。扫描1,972,688样本，occupancy tests2,095,981、geometry tests8,018,953；184次texture/cap更新、各182次upload/rebuild。合法反证后120条和41,157,632 fine bytes；后续sleeping=120仍驻留120proxy。稳定样本约12–13ms不能替代冷帧。
+
+成本模型为seed CPU(N,S,G) + evidence(S_dirty,重叠I) + materialize(必显K,parts,texels,cap几何) + submit + other。对象/组件/每record资源及固定提交近似O(N+parts)，fine/像素按总samples/texels增长，ownership密集候选可能超线性。不能把所有工作称作O(N)资源注册，更不能认为atlas可消除约100ms ownership或所有capture/fine工作。setup后首次证据使表现再次变化，只有另行定义bulk-import中间状态不发布的合同并证明知识等价，才可能合并阶段；本轮不改seed时序。
+
+### 推荐与边界
+
+A按需物化有利于大量旧历史、少量必显K，CPU知识/证据始终推进；B atlas/实例化/共享renderer合并对象及提交，适合真正大量同屏同mesh历史。两者互补。规划敏感性而非实测：假设A可延期纯表现P=80–160ms、K/N=25–50%，对应40–120ms窗口减负；假设B固定管理/提交F=30–80ms可消除50–80%，对应15–64ms。P/F尚未测定，不能作为收益承诺；原cold184最近seal全部保守pin时A可能零收益。两者都不能据此承诺533ms到帧预算。
+
+首切片A0只分离FRecordVisual内CPU状态与可回收GPU资源，默认全驻留、预期性能收益0。禁止以Visual缺席/retired替代驻留状态，因为当前这些条件影响ownership、证据和终结释放。提供单旧record的开发释放/重建oracle，期间推进真实新证据，证明重建来自当前CPU revision、不复活旧历史；Current与最近seal不逐出，同帧fallback保留首显。完整边界、幂等/Reset/SourceReplace/Destroy/GC/world和Whole/Partial视觉验收见设计第6节。A0不包含自动距离流式、worker、资源池或自定义scene proxy。
+
+冻结已有P1及ownership/capture/cap/occupancy/resource/parent-material局部优化，默认P1仍0、旧路径作oracle。建议新增独立GameplayFirstHistory、SceneRestoreInitialization产品验收，原cold184保留stress身份和完整输入；真实历史restore合同目前未定义，不能填PASS。**原INITIALIZATION仍FAIL，本轮没有修改gate或宣称新性能收益。** 未重跑任何测试，没有新视觉/生命周期/性能通过声明；stable、Docs/AI、黑色层、Large World未动。

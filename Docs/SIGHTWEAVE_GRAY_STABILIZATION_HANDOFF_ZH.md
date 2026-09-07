@@ -1,5 +1,17 @@
 # 灰色层功能检查点与稳定化施工
 
+## 批量Presentation架构判断（2026-09-07，仅文档，运行时不变）
+
+本轮基线cad92f014cfb88d4ba9e333eae5814184a9ba5a6，实际运行时仍 **43c5748db9afbd7c861d7a3be7389437ca2a4eab**。已核验远端开发分支、当前分支及干净起始工作区，读取AGENTS和相关源码/原始证据；没有修改运行时、新增instrumentation、运行UE、构建或重测。完整决策和下一轮可直接执行的合同见[批量历史表现架构判断](SIGHTWEAVE_BATCH_PRESENTATION_ARCHITECTURE_ZH.md)，性能审计第26节为证据索引。
+
+cold184是三身份64+64+56条合成Partial历史，在一个调用中逐条建立并seal，非184个正常首次Whole，也未证明184条同时贡献可见像素。原533.639ms由约257.921ms同步setup和268.504ms首次native更新构成；后者包含ownership99.499、occupancy39.179、texture20.335、cap51.006ms等嵌套分项。首次更新后合法反证剩120条，后续sleeping仍保留120套表现资源。不能把约半秒归于某次LoadObject或184次NewObject；换renderer也不会自动消除百万级样本/空间判定。
+
+推荐A0先分离CPU历史状态与GPU表现资源寿命，再做A按需物化；B批量后端留给真正高密度必显场景。当前FRecordVisual混有证据、occupancy、ownership缓存及终结状态，不能直接DestroyVisual或用retired表示卸载。**下一轮只做可释放/可重建的完整A0切片，默认仍全驻留，性能收益预算为0**：开发测试对单个旧sealed record释放资源，期间推进合法证据，再从当前CPU状态重建并与oracle比对；保护Current/最近首次seal的原子发布、0额外首显，覆盖GC/world/SourceReplace及Partial外切口。不要同时上范围流式、池或自定义renderer。
+
+本节替代下方旧阶段“继续P1联合峰值验收”的下一入口建议：冻结P1及ownership/capture/cap/occupancy/resource/parent-material微项，保留旧路径oracle，WholeGeometryPreparation仍默认0。A与B的条件收益范围仅为规划敏感性，未测实际必显K或可延期纯表现成本，不是实测预测；保守A在原cold184全部最近seal的条件下可能零收益。
+
+建议区分正常GameplayFirstHistory、真实SceneRestoreInitialization与原SyntheticCold184Stress，但**本轮未改变产品合同或gate，INITIALIZATION仍FAIL**；目前这套历史没有接通实际SaveGame恢复，shipping初始化合同须另行明确，不能以重命名变PASS。原cold184保留相同seed、时序、计数和完整窗口。stable、Docs/AI、黑色层、Large World均未动。
+
 ## 历史父材质首次可用性完成（2026-09-07，43c5748）
 
 运行时 **43c5748db9afbd7c861d7a3be7389437ca2a4eab** 已推送。最小Trace确认首次LoadObject 14.767ms几乎全在FlushAsyncLoading，主体为deferred PostLoad9.668ms / 材质shader资源缓存9.133ms（布局、shader map id、FinishCacheShaders等），另有package/export创建和预加载；不是单纯磁盘或GPU等待。详见[性能审计第25节](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md#25-历史父材质首次可用性与scene生命周期2026-09-0743c5748)。

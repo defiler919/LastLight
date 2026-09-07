@@ -3343,17 +3343,28 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 	if ((!Visual.Texture.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
 		|| (!Record.bCurrentObservedLocation && bTextureSizeChanged))
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_HistoryTextureCreate);
 		if(Visual.Texture.IsValid()) OwnedTextures.Remove(Visual.Texture.Get());
-        UTexture2D* Texture = UTexture2D::CreateTransient(Size.X, Size.Y, PF_FloatRGBA);
+		UTexture2D* Texture;
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_TextureAllocate);
+			Texture = UTexture2D::CreateTransient(Size.X, Size.Y, PF_FloatRGBA);
+		}
 		Texture->SRGB = false;
 		Texture->Filter = TF_Bilinear;
 		Texture->AddressX = TA_Clamp;
 		Texture->AddressY = TA_Clamp;
 		Texture->NeverStream = true;
-		auto& Bulk = Texture->GetPlatformData()->Mips[0].BulkData;
-		FMemory::Memzero(Bulk.Lock(LOCK_READ_WRITE), Bulk.GetBulkDataSize());
-		Bulk.Unlock();
-		Texture->UpdateResource();
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_TextureClear);
+			auto& Bulk = Texture->GetPlatformData()->Mips[0].BulkData;
+			FMemory::Memzero(Bulk.Lock(LOCK_READ_WRITE), Bulk.GetBulkDataSize());
+			Bulk.Unlock();
+		}
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_TextureUpdateResource);
+			Texture->UpdateResource();
+		}
 		Visual.Texture = Texture;
 		++Visual.TextureCreationCount;
 		++RuntimeFrame.TextureCreations;
@@ -3391,6 +3402,7 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 	}
 	if (!bWholeWithoutCap && !Visual.Cap.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_CapCreate);
 		UDynamicMeshComponent* Cap = NewObject<UDynamicMeshComponent>(
 			this, *FString::Printf(TEXT("MovingCap_%s_%u"), *Prop.StableId.ToString(), Record.Epoch));
 		Cap->SetupAttachment(GetRootComponent());
@@ -3399,7 +3411,10 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 		Cap->SetCastShadow(false);
 		Cap->SetReceivesDecals(false);
 		Cap->SetVisibility(false);
-		Cap->RegisterComponent();
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_CapRegister);
+			Cap->RegisterComponent();
+		}
 		Cap->SetMaterial(0, LoadObject<UMaterialInterface>(
 			nullptr, TEXT("/Game/Darkwell/Vision/PropLab/M_ManualStaleCutCap.M_ManualStaleCutCap")));
 		Visual.Cap = Cap;
@@ -3454,6 +3469,7 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 
 void ADarkwellObjectMemoryScene::UpdateCurrentPartTextures(FTrackedProp& Prop)
 {
+ TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_CurrentTextures);
  auto& Visual=Prop.CurrentPresentation;
  auto* Actual=Prop.Actual.Get(); if(!Actual) return;
  const auto Sources=Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives();
@@ -3475,6 +3491,7 @@ void ADarkwellObjectMemoryScene::UpdateCurrentPartTextures(FTrackedProp& Prop)
   }
   if(!Texture || Texture->GetSizeX()!=Atlas.X || Texture->GetSizeY()!=Atlas.Y)
   {
+   TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_CurrentTextureCreate);
    if(Texture) OwnedTextures.Remove(Texture);
    Visual.LiveSignatures[I]=0;
    Texture=UTexture2D::CreateTransient(Atlas.X,Atlas.Y,PF_FloatRGBA);
@@ -3615,6 +3632,7 @@ AActor* ADarkwellObjectMemoryScene::SpawnMemoryProxy(
 	const FTrackedProp& Prop,
 	const FDarkwellSpatialObservationRecord& Record)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxySpawn);
 	if (Record.Primitives.IsEmpty())
 	{
 		return nullptr;
@@ -3637,11 +3655,16 @@ AActor* ADarkwellObjectMemoryScene::SpawnMemoryProxy(
 	int32 Index = 0;
 	for (const auto& Source : Record.Primitives)
 	{
-		UStaticMesh* SourceMesh = Source.Mesh.LoadSynchronous();
+		UStaticMesh* SourceMesh;
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MeshLoad);
+			SourceMesh = Source.Mesh.LoadSynchronous();
+		}
 		if (!SourceMesh)
 		{
 			continue;
 		}
+		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxyMeshCreate);
 		UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(
 			Proxy, *FString::Printf(TEXT("SpatialMemoryMesh_%d"), Index++));
 		Mesh->SetupAttachment(Root);
@@ -3669,20 +3692,31 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 	FDarkwellSpatialObservationRecord& Record,
 	AActor* Proxy)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxyBind);
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
 	if (!Visual || !Visual->Texture.IsValid() || !Proxy)
 	{
 		return;
 	}
-	UMaterialInterface* Parent = LoadObject<UMaterialInterface>(
-		nullptr, TEXT("/Game/Darkwell/Vision/PropLab/M_MovingAccumulatedMemory.M_MovingAccumulatedMemory"));
+	UMaterialInterface* Parent;
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MaterialLoad);
+		Parent = LoadObject<UMaterialInterface>(
+			nullptr, TEXT("/Game/Darkwell/Vision/PropLab/M_MovingAccumulatedMemory.M_MovingAccumulatedMemory"));
+	}
 	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
 	const FVector2D Inv = FVector2D(1, 1) / Bounds.GetSize();
 	TInlineComponentArray<UStaticMeshComponent*> Meshes(Proxy);
 	for (UStaticMeshComponent* Mesh : Meshes)
 	{
-		UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Parent, this);
+		UMaterialInstanceDynamic* Material;
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MIDCreate);
+			Material = UMaterialInstanceDynamic::Create(Parent, this);
+		}
 		++RuntimeFrame.MidCreations;
+		{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MIDParameters);
 		Material->SetTextureParameterValue(TEXT("SpatialStateTexture"), Visual->Texture.Get());
 		Material->SetVectorParameterValue(TEXT("SpatialMinInv"),
 			FLinearColor(Bounds.Min.X, Bounds.Min.Y, Inv.X, Inv.Y));
@@ -3690,7 +3724,11 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 		Material->SetScalarParameterValue(TEXT("OriginalUVScale"), Record.UVScale);
 		Material->SetScalarParameterValue(TEXT("SpatialReady"), Record.bCurrentObservedLocation ? 0.0f : 1.0f);
 		Mesh->SetMaterial(0, Material);
-		Mesh->RegisterComponent();
+		}
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxyMeshRegister);
+			Mesh->RegisterComponent();
+		}
 		OwnedMaterials.Add(Material);
 		Visual->Materials.Add(Material);
 	}

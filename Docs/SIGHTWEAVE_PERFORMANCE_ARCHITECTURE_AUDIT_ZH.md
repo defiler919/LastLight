@@ -536,3 +536,15 @@ Build04完整Editor构建成功13.66秒；最终Target04实际NullRHI四项 **4/
 可复核命令：`Scripts/BuildEditor.ps1`；`Scripts/RunGrayObjectPolicyTests.ps1 -RunName OccupancySlice_Target04 -Tests <summary.json中的四项selector>`；`Scripts/RunGrayPerformanceBaseline.ps1 -RunName <OccupancyFinal运行名> -Mode Standalone -Protocol Batch -NoAuthoringToolsets`（Serial另加-SerialOccupancy）；`python Scripts/AnalyzeGrayStabilization.py <运行目录>`；`Scripts/RunGrayMemoryAudit.ps1 -RunName <上述视觉运行名> -Protocol Contracts/Episodes`，分别经AnalyzeGrayWholeTransitions.py、AnalyzeGrayMemoryEpisodes.py验证。已存在的证据目录不可覆盖，复测应另取唯一RunName。
 
 **本occupancy生产切片完成且收益成立；INITIALIZATION仍FAIL（535–552ms尖峰），FRAME PERFORMANCE仍FAIL，LONG-RUN RESOURCES仍PARTIAL。** 本轮决定不叠加seal外首次proxy/texture/resource施工：GT对象创建/注册/上传和首次显示生命周期是另一完整切片，留作下一入口。现有细胞/签名、资源创建以及约38ms occupancy余量仍在；当前无跨帧队列，不开始黑色层，不移动stable。未重跑完整矩阵、十分钟长测或无关视觉全集，失败fixture和原始Saved证据均保留。
+
+## 21. 首次表现资源切片（2026-09-07，起点 a8df0d9，归因检查点）
+
+运行时基线仍为 f12c6c1；中间提交仅维护项目顾问文档。本阶段不重做 occupancy。初始分支干净，开发远端 a8df0d9；远端默认 HEAD 实为 main/46d9f9d，不能与开发分支尖端混称。
+
+最小新增资源 Trace scopes，BuildEditor ProbeBuild01成功22.91秒。`ResourceSlice_TraceBefore01` 是真实前台D3D12/SM6 Batch，exit0/complete/severe0，480帧环境异常0；因Trace开启不作为正常A/B。原始证据在 Saved/Stabilization；Insights stats_Distributed184.csv、events_resources.csv和events_cap_outlier.csv可复查。
+
+184阶段：EnsureResources总70.824ms，seed内552调用70.618ms，其中seal内仅1.490ms，**seal外69.128ms**。首次创建184纹理/184cap/184proxy/552mesh/MID；cap创建25.489ms（注册1.342）、proxy绑定23.437ms（MID创建10.252、参数4.071、mesh注册8.330）、proxy生成11.953ms、历史texture创建6.917ms（allocate2.942/clear1.242/UpdateResource2.668）。父子计时不可累加；当前纹理路径在此seed不执行。TextureSubmission另44.421ms，其中seal内23.163ms，不等于RHI上传成本。
+
+真实异常落点：184首个cap耗时14.760ms，嵌套构造0.146ms、注册0.024ms、LoadObject0.010ms。editor.log明确报告同名MovingCap_Lab.V2.Stress.000_1替换等待清理**14.44ms**，随后同名epoch也有短等待。引擎UObjectGlobals.cpp StaticAllocateObject同名覆盖执行ConditionalBeginDestroy并在IsReadyForFinishDestroy前Sleep(0)。历史销毁/重建复用StableId+Epoch的显式cap名称，使待回收组件被原位替换；这是可安全修复的生命周期成本，不能解释为cap几何生成。
+
+下一实施候选：cap分配使用独立UObject身份，仍同步创建/注册新的合法cap；同一record所有mesh具有完全相同的parent/texture/bounds/tint/UV/ready参数，可共享record内MID，禁止跨record共享。先对这一资源生命周期切片做同二进制对照；若整帧收益不足，再按证据判断纹理CPU准备或整体同步架构，不降低合法结果、不跨帧。

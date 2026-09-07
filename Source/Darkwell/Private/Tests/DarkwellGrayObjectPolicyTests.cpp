@@ -19,6 +19,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/Texture2D.h"
 #include "TextureResource.h"
+#include "ConvexVolume.h"
 #include "RHICommandList.h"
 #include "RenderingThread.h"
 #include "Math/Float16Color.h"
@@ -886,6 +887,97 @@ bool FDarkwellJoinedCapParity::RunTest(const FString&)
  TestTrue(TEXT("Non-vacuous submitted caps and joined large grids"),Compared>0 && NonEmpty>0 && Joined>0);
  TestTrue(TEXT("Exercised historical cap with live Current fallback"),CurrentFallback>0);
  AddInfo(FString::Printf(TEXT("CAP_PARITY compared=%d nonempty=%d joined=%d live_current_fallback=%d; reset/reseed/invalid coverage/Whole/Partial/world teardown"),Compared,NonEmpty,Joined,CurrentFallback));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellA1Residency,
+ "Darkwell.ObjectMemory.A1ConservativeDemand",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellA1Residency::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ TArray<FString> Oracle;
+ TArray<TWeakObjectPtr<UObject>> Objects;
+ for(bool Enabled:{false,true})
+ {
+  {
+   FRoom F;F.World->AddToRoot();ON_SCOPE_EXIT{F.World->RemoveFromRoot();};
+   F.Face(-90);F.Step(2);
+   auto& S=*F.Room;
+   if(!TestTrue(TEXT("Named old-history fixture"),S.ConfigureOldHistoryDemandForTesting()))return false;
+   int32 Whole=0,Partial=0;
+   for(const auto& Pair:S.Tracked)if(Pair.Key.ToString().StartsWith(TEXT("Lab.A1.Old.")))
+    for(const auto& R:Pair.Value.History.GetRecords()) R.bConfirmedWholeCapture?++Whole:++Partial;
+   TestEqual(TEXT("Actual confirmed Whole fixtures"),Whole,32);TestEqual(TEXT("Partial fixtures"),Partial,32);
+   auto Apply=[&](double Now,float Yaw,FVector Camera,bool Valid=true)
+   {
+    FConvexVolume Volume;
+    const FQuat Rotation=FRotator(0,Yaw,0).Quaternion();
+    for(const FVector N:{FVector(-1,1,0),FVector(-1,-1,0),FVector(-1,0,1),FVector(-1,0,-1)})
+     Volume.Planes.Add(FPlane(Camera,Rotation.RotateVector(N.GetSafeNormal())));
+    Volume.Init();
+    const auto Before=S.GetOldHistoryEvidenceHashForTesting();
+    S.ApplyPresentationDemand(Valid?&Volume:nullptr,Camera,Now,Enabled);
+    TestEqual(TEXT("Demand changes no authority/occupancy/ownership"),S.GetOldHistoryEvidenceHashForTesting(),Before);
+    TestEqual(TEXT("Every needed record is materialized in this call"),S.Residency.Missing,uint64(0));
+   };
+   Apply(1,0,FVector::ZeroVector);
+   auto Count=[&](){int32 K=0;for(const auto& Pair:S.Tracked)if(Pair.Key.ToString().StartsWith(TEXT("Lab.A1.Old.")))
+    for(const auto& V:Pair.Value.Visuals)K+=V.Value.Render.Proxy.IsValid();return K;};
+   TestEqual(TEXT("Recent captures pinned regardless of camera"),Count(),64);
+   auto& Offline=S.Tracked.FindChecked(TEXT("Lab.A1.Old.2.0"));
+   const auto EvictedTexture=Offline.Visuals.FindChecked(1).Render.Texture;
+   Apply(6,0,FVector::ZeroVector);
+   if(Enabled)
+   {
+    CollectGarbage(RF_NoFlags,true);
+    TestFalse(TEXT("Automatic eviction texture is actually reclaimed by GC"),EvictedTexture.IsValid());
+    TestNotNull(TEXT("CPU record survives automatic eviction and GC"),Offline.History.FindRecord(1));
+   }
+   TestEqual(TEXT("Old demand K is small, N retained"),Count(),Enabled?16:64);
+   const uint64 BeforeBoundary=S.Residency.Evictions;
+   for(int32 I=0;I<12;++I)Apply(6.1+I*.02,I%2?47.f:43.f,FVector(0,I*5,0));
+   TestEqual(TEXT("Expanded retain boundary prevents thrash"),S.Residency.Evictions,BeforeBoundary);
+   // Slow translation, 180 turn, teleport and a whole group simultaneously reenter.
+   for(int32 Phase=0;Phase<6;++Phase)
+   {
+    F.Step();
+    Apply(8+Phase*2,Phase%2?180:0,Phase==3?FVector(0,11600,100):FVector(Phase*50,0,100));
+    const auto Hash=S.GetOldHistoryEvidenceHashForTesting();
+    if(!Enabled)Oracle.Add(Hash);else TestEqual(TEXT("Same input CPU oracle"),Hash,Oracle[Phase]);
+   }
+   if(Enabled)TestTrue(TEXT("Multiple reentries really rebuilt resources"),S.Residency.Rebuilds>=16);
+   Apply(30,0,FVector::ZeroVector,false);
+   TestEqual(TEXT("Invalid camera is fail-open all resident"),Count(),64);
+   Apply(32,0,FVector::ZeroVector);
+   if(Enabled)
+   {
+    const auto Capture=*Offline.History.FindRecord(1);
+    Offline.Actual->Destroy();
+    auto* Replacement=F.World->SpawnActor<AActor>();
+    auto* Mesh=NewObject<UStaticMeshComponent>(Replacement);Replacement->SetRootComponent(Mesh);Replacement->AddInstanceComponent(Mesh);
+    Mesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Sphere.Sphere")));
+    Mesh->SetMobility(EComponentMobility::Movable);Mesh->RegisterComponent();Replacement->SetActorLocation(FVector(30000,30000,0));
+    auto* Memory=NewObject<UDarkwellRememberablePropComponent>(Replacement);Memory->bUseSpatialMemory=true;Memory->ConfigureStableId(Offline.StableId);Memory->AddMemoryPrimitive(Mesh);
+    Replacement->AddInstanceComponent(Memory);Memory->RegisterComponent();
+    auto* Policy=NewObject<USightWeaveObjectPolicyComponent>(Replacement);Replacement->AddInstanceComponent(Policy);Policy->RegisterComponent();Replacement->DispatchBeginPlay();
+    TestTrue(TEXT("Source replacement while automatically nonresident"),S.RegisterRememberable(Memory,Policy));
+    CollectGarbage(RF_NoFlags,true);
+    Apply(33,90,FVector::ZeroVector);
+    TestTrue(TEXT("Automatic rebuild after replacement preserves captured pose"),Offline.Visuals.FindChecked(1).Render.Proxy.IsValid()
+     && Offline.Visuals.FindChecked(1).Render.Proxy->GetActorTransform().Equals(Capture.SnapshotTransform));
+   }
+   Objects.Append(S.GetOwnedPresentationObjectsForTesting());
+   // Returning mode 0 restores managed resources; A0 explicit releases are independent.
+   S.ApplyPresentationDemand(nullptr,FVector::ZeroVector,33,false);
+   TestEqual(TEXT("Oracle mode restores all histories synchronously"),Count(),64);
+   Objects.Append(S.GetOwnedPresentationObjectsForTesting());
+   S.ResetMemory();
+   S.ApplyPresentationDemand(nullptr,FVector::ZeroVector,34,true);
+   TestEqual(TEXT("Reset never reconstructs old records"),S.GetTotalSpatialRecordCount(),0);
+  }
+  CollectGarbage(RF_NoFlags,true);
+  for(const auto& Object:Objects)TestFalse(TEXT("World teardown/GC releases managed resources"),Object.IsValid());
+ }
  return true;
 }
 

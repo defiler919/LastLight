@@ -9,6 +9,7 @@
 #include "DarkwellObjectMemoryScene.generated.h"
 
 struct FDarkwellWholePreparationState;
+struct FConvexVolume;
 class UDynamicMeshComponent;
 class UMaterialInstanceDynamic;
 class UTexture2D;
@@ -34,6 +35,8 @@ public:
  int32 WholePreparationWorkForTesting = 65536;
  double WholePreparationForegroundUsForTesting = 0;
 #endif
+ virtual void Tick(float DeltaSeconds) override;
+ UFUNCTION(BlueprintPure, Category="SightWeave|Diagnostics") FString GetPresentationResidencyTelemetry() const;
  virtual void EndPlay(EEndPlayReason::Type Reason) override;
  /** Idempotent GT resource admission, independent of observation or knowledge. */
  UFUNCTION(BlueprintCallable, Category="SightWeave")
@@ -318,6 +321,7 @@ protected:
 	friend class FDarkwellJoinedOccupancyParity;
 	friend class FDarkwellRecordResourcesParity;
 	friend class FDarkwellPresentationResidency;
+	friend class FDarkwellA1Residency;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
 	friend class FDarkwellObservedContentContract;
@@ -371,6 +375,8 @@ protected:
 		FRecordRenderResources Render;
 		// Explicit A0 diagnostic control, never a visibility/evidence eligibility bit.
 		bool bRenderResourcesReleased = false;
+		bool bAutoResidencyReleased = false;
+		double LastCaptureTime = -1, LastDemandTime = -1;
 		uint64 PresentationRequestSerial = 0;
 		TArray<FBox> PartBounds;
 		TArray<FPrimitiveGeometrySnapshot> PartGeometry;
@@ -573,6 +579,15 @@ protected:
 	bool IsTentativeWhole(const FTrackedProp& Prop) const;
 	bool TryResumeQualifiedWhole(FTrackedProp& Prop);
 	bool UpdateTransientWholeExclusion(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
+	bool RebuildHistoricalPresentation(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record, FRecordVisual& Visual);
+	void ApplyPresentationDemand(const FConvexVolume* Frustum, FVector Camera, double Now, bool bEnabled);
+	bool bResidencyWasEnabled = false;
+	struct FResidencyTelemetry
+	{
+		uint64 Evictions=0, Rebuilds=0, Failures=0, Needed=0, Missing=0;
+		uint64 RebuildUploads=0, RebuildCaps=0, RebuildGeometryTests=0;
+		double FrameMs=0, MaxFrameMs=0, MaxRebuildMs=0;
+	} Residency;
 	void ReleaseRenderResources(FRecordVisual& Visual);
 	void DestroyVisual(FRecordVisual& Visual, bool bDiscardEvidence = true);
 	uint64 NextPresentationRequestSerial = 0;

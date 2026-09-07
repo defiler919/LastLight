@@ -2,10 +2,12 @@
 param(
     [Parameter(Mandatory=$true)][string]$RunName,
     [ValidateSet('PIE','Standalone')][string]$Mode='PIE',
-    [ValidateSet('Smoke','Knowledge','Attribution','FrameAudit','Batch','Matrix','LongRun','Reference','WholePreparation','ParentMaterial')][string]$Protocol='Matrix',
+    [ValidateSet('Smoke','Knowledge','Attribution','FrameAudit','Batch','Matrix','LongRun','Reference','WholePreparation','ParentMaterial','A1')][string]$Protocol='Matrix',
     [string]$Map='',
     [string]$EngineRoot='D:\UE_5.8',
     [switch]$NoAuthoringToolsets,
+    [ValidateSet(0,1)][int]$HistoryResidencyMode=0,
+    [switch]$A1Visual,
     [switch]$SerialSealedOwnership,
     [switch]$LegacyCapturePreparation,
     [switch]$SerialCapBuild,
@@ -19,6 +21,7 @@ param(
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 if ($RunName -notmatch '^[A-Za-z0-9_-]+$') { throw 'Use a unique simple run name' }
+if ($A1Visual -and ($Protocol -ne 'A1' -or $Mode -ne 'PIE')) { throw 'A1 viewport readback requires the PIE visual protocol; use Standalone without screenshots for performance' }
 $workloads=@(Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(UnrealEditor|UnrealEditor-Cmd|UnrealInsights|ShaderCompileWorker|SpaceCraft|MSBuild|cl|link|UnrealBuildTool|AutomationTool)\.exe$' -or ($_.Name -eq 'dotnet.exe' -and $_.CommandLine -match 'UnrealBuildTool|AutomationTool') })
 if($workloads.Count) { throw "Conflicting workload: $($workloads.Name -join ', ')" }
 $output=Join-Path $repo "Saved/Stabilization/$RunName"
@@ -27,6 +30,7 @@ New-Item -ItemType Directory -Path $output | Out-Null
 if (!$Map) { $Map = if ($Protocol -eq 'Reference') { '/Game/Maps/L_Prototype' } else { '/Game/Maps/L_SightWeaveGrayPolicyLab' } }
 if ($Protocol -ne 'Reference' -and $Map -ne '/Game/Maps/L_SightWeaveGrayPolicyLab') { throw 'The gray Matrix is frozen to its Lab map' }
 $driver=if ($Protocol -eq 'Reference') { "$repo/Content/Python/profile_gray_project_reference.py" } else { "$repo/Content/Python/profile_gray_stabilization.py" }
+if ($Protocol -eq 'A1') { $driver="$repo/Content/Python/profile_gray_old_history_demand.py" }
 Copy-Item -LiteralPath $driver -Destination "$output/driver.py"
 git -C $repo diff HEAD --binary | Set-Content "$output/source.patch"
 git -C $repo status --porcelain=v1 | Set-Content "$output/worktree.txt"
@@ -47,7 +51,7 @@ if ($NoAuthoringToolsets) {
     $arguments += "-DisablePlugins=$($disabledPlugins -join ',')"
 }
 if($Mode -eq 'Standalone') {
-    $startupCommands = @("r.Darkwell.ObjectMemory.WholeGeometryPreparation $WholeGeometryPreparationMode")
+    $startupCommands = @("r.Darkwell.ObjectMemory.HistoryResidency $HistoryResidencyMode","r.Darkwell.ObjectMemory.WholeGeometryPreparation $WholeGeometryPreparationMode")
     if ($LegacyWholePreparationBudget) { $startupCommands += 'r.Darkwell.ObjectMemory.WholePreparationFrameGuard 0' }
     if ($SerialSealedOwnership) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedSealedOwnership 0' }
     if ($SerialCapBuild) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedCapBuild 0' }
@@ -58,7 +62,7 @@ if($Mode -eq 'Standalone') {
     $startup = $startupCommands -join ','
     $arguments+=@('-game','-EnablePython',"-ExecCmds=`"$startup`"")
 }
-else { $arguments+="-ExecutePythonScript=$output/driver.py" }
+else { $arguments+=@("-ExecutePythonScript=$output/driver.py", "-ExecCmds=`"r.Darkwell.ObjectMemory.HistoryResidency $HistoryResidencyMode`"") }
 if ($SerialSealedOwnership -and $Mode -ne 'Standalone') { throw 'Serial ownership comparison is scoped to Standalone' }
 if ($LegacyCapturePreparation -and $Mode -ne 'Standalone') { throw 'Capture comparison is scoped to Standalone' }
 if ($SerialCapBuild -and $Mode -ne 'Standalone') { throw 'Cap comparison is scoped to Standalone' }
@@ -73,7 +77,7 @@ $metadata=[ordered]@{
     ram_bytes=(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory
     binary_built_utc=$binary.LastWriteTimeUtc.ToString('o'); binary_sha256=(Get-FileHash $binary.FullName).Hash
     driver_sha256=(Get-FileHash $driver).Hash; map=$Map; seed=0
-    screenshots=($Protocol -eq 'Reference'); trace=[bool]$Trace; debugger=$false; fixed_timestep=$false; other_engine_build_processes=$workloads
+    screenshots=($Protocol -eq 'Reference' -or [bool]$A1Visual); history_residency_mode=$HistoryResidencyMode; trace=[bool]$Trace; debugger=$false; fixed_timestep=$false; other_engine_build_processes=$workloads
     arguments=$arguments; processes_at_start=@(Get-Process | Select-Object Name,Id,CPU,WorkingSet64)
     disabled_authoring_plugins=$disabledPlugins
     serial_sealed_ownership=[bool]$SerialSealedOwnership
@@ -87,6 +91,8 @@ $metadata=[ordered]@{
     timing_note='Wall intervals between distinct game updates include Python measurement cost; engine GT/RT/RHI/GPU counters are delayed and overlap. PIE global Render/RHI counters can be overwritten by Slate window updates; use separate Insights capture for attribution. No subtraction attribution.'
 }
 $metadata | ConvertTo-Json -Depth 8 | Set-Content "$output/environment.json"
+$priorA1Visual=$env:DARKWELL_A1_VISUAL
+$env:DARKWELL_A1_VISUAL=if($A1Visual){"1"}else{"0"}
 $priorOutput=$env:DARKWELL_STABILIZATION_OUTPUT
 $priorMode=$env:DARKWELL_STABILIZATION_MODE
 $priorProtocol=$env:DARKWELL_STABILIZATION_PROTOCOL
@@ -143,6 +149,7 @@ public static class GrayBenchmarkForeground {
     $env:DARKWELL_STABILIZATION_PROTOCOL=$priorProtocol
     $env:DARKWELL_STABILIZATION_MAP=$priorMap
     $env:DARKWELL_HISTORY_PARENT_MODE=$priorParent
+    $env:DARKWELL_A1_VISUAL=$priorA1Visual
 }
 $log=Get-Content "$output/editor.log" -Raw
 $summary=[ordered]@{ exit_code=$code; exit_hex=('0x{0:X8}' -f ($code -band 0xffffffffL)); wall_seconds=((Get-Date)-$start).TotalSeconds; complete=(Test-Path "$output/complete.json"); severe_lines=@(Select-String "$output/editor.log" -Pattern 'Fatal error:|Assertion failed:|Ensure condition failed:|EXCEPTION_ACCESS_VIOLATION|Traceback').Count; log_closed=$log.Contains('Log file closed'); d3d12_sm6=$log.Contains('D3D12') -and $log.Contains('PCD3D_SM6') }

@@ -766,8 +766,53 @@ bool ADarkwellMovingPropLabRoom::SetGrayPolicyStressMode(const int32 Mode)
 	return true;
 }
 
+bool ADarkwellMovingPropLabRoom::ConfigureOldHistoryDemandForTesting()
+{
+#if WITH_DEV_AUTOMATION_TESTS
+ // Distinct named representative input, never the frozen cold184 workload.
+ // Old legal captures are constructed with the existing explicit seed helper;
+ // this is not a shipping save importer or a real-time camera capture benchmark.
+ for(int32 Group=0;Group<4;++Group) for(int32 I=0;I<16;++I)
+ {
+  const FVector Centers[]={FVector(12000,0,0),FVector(-12000,0,0),FVector(0,12000,0),FVector(0,-12000,0)};
+  const FName Id(*FString::Printf(TEXT("Lab.A1.Old.%d.%d"),Group,I));
+  if(Tracked.Contains(Id)) return false;
+  FResolvedSightWeaveObjectPolicy Definition;
+  Definition.RevealMode=I%2==0?ESightWeaveRevealMode::WholeObjectAfterSpan:ESightWeaveRevealMode::SpatialPartial;
+  Definition.MinimumObservedSpanCm=100; Definition.HistoryMode=ESightWeaveHistoryMode::StationaryOnly;
+  auto* Source=SpawnTracked(Id,4,FVector(120,60,100),FLinearColor(.6f,.4f,.2f),
+   FTransform(Centers[Group]+FVector((I%4)*300,(I/4)*300,0)),
+   ESightWeaveObjectPolicySource::UseProjectDefault, ESightWeaveHistoryMode::StationaryOnly, &Definition);
+  if(!Source) return false;
+  auto* Policy=Source->FindComponentByClass<USightWeaveObjectPolicyComponent>();
+  Policy->bOverrideRevealMode=Policy->bOverrideHistoryMode=true;
+  Policy->RevealMode=I%2==0?ESightWeaveRevealMode::WholeObjectAfterSpan:ESightWeaveRevealMode::SpatialPartial;
+  Policy->HistoryMode=ESightWeaveHistoryMode::StationaryOnly;
+  if(!ConfigureHistoricalEpochCountForTesting(Id,1,true)) return false;
+ }
+ return true;
+#else
+ return false;
+#endif
+}
+
+FString ADarkwellMovingPropLabRoom::GetOldHistoryEvidenceHashForTesting() const
+{
+ uint64 H=1469598103934665603ull;
+ auto Mix=[&](uint64 V){H=(H^V)*1099511628211ull;};
+ for(int32 G=0;G<4;++G)for(int32 I=0;I<16;++I)
+  if(const auto* P=Tracked.Find(FName(*FString::Printf(TEXT("Lab.A1.Old.%d.%d"),G,I))))
+   for(const auto& R:P->History.GetRecords())
+   {Mix(R.Epoch);Mix(R.bCurrentObservedLocation);Mix(R.FineHistory.EvidenceHash());
+    for(const auto& C:R.SpatialMemory.GetCells())for(float V:{C.InitialRemembered,C.VerifiedEmpty,C.RemainingStale})Mix(GetTypeHash(V));
+    if(const auto* V=P->Visuals.Find(R.Epoch))for(const auto* B:{&V->CachedFineOccupied,&V->CachedCoarseOccupied,&V->SuppressedByCurrentEvidence})
+     {Mix(B->Num());for(int32 J=0;J<B->Num();++J)Mix((*B)[J]);}
+   }
+ return FString::Printf(TEXT("%llu"),H);
+}
+
 bool ADarkwellMovingPropLabRoom::ConfigureHistoricalEpochCountForTesting(
-	const FName StableId, const int32 HistoricalEpochs)
+	const FName StableId, const int32 HistoricalEpochs, const bool bDemandFixture)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Lab_SeedDistinctHistory);
 	if (HistoricalEpochs < 0
@@ -816,6 +861,9 @@ bool ADarkwellMovingPropLabRoom::ConfigureHistoricalEpochCountForTesting(
 			Prop->History.GetMutableRecords()[CurrentIndex];
 		TArray<float> FullCoverage;
 		FullCoverage.Init(1.0f, Current.SpatialMemory.GetCells().Num());
+		if(bDemandFixture && Prop->RegisteredPolicy.RevealMode==ESightWeaveRevealMode::SpatialPartial)
+			for(int32 Cell=0;Cell<FullCoverage.Num();++Cell)
+				if(Cell%Current.SpatialMemory.GetSize().X>=Current.SpatialMemory.GetSize().X/2) FullCoverage[Cell]=0;
 		Prop->History.AdvanceCurrent(0.20f, FullCoverage);
 		if (Prop->RegisteredPolicy.RevealMode==ESightWeaveRevealMode::WholeObjectAfterSpan)
 		{
@@ -827,6 +875,17 @@ bool ADarkwellMovingPropLabRoom::ConfigureHistoricalEpochCountForTesting(
 			Prop->RevealObservation.Initialize(Prop->RegisteredPolicy,Size,
 				Bounds.GetSize()/FVector2D(Size),FullFootprint);
 			Prop->RevealObservation.Observe(true,FullFootprint);
+			if(bDemandFixture && Prop->RevealObservation.IsConfirmed())
+			{
+				TArray<FDarkwellCurrentLiveGrid::FDescriptor> Descriptors;
+				for(const UStaticMeshComponent* Part:Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives())
+					if(Part && Part->GetStaticMesh()) Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part)});
+				Prop->CurrentLive.ResetGeometry(StableId,Descriptors,Pose);
+				Prop->CurrentLive.AdvanceConfirmedWhole(.20f,Pose,Current.SpatialMemory,Bounds,FullCoverage);
+				FCoverageSnapshot Capture;Capture.bValid=true;
+				Capture.TransformRevision=Prop->TransformRevision;Capture.GridRevision=Prop->GridRevision;
+				StampConfirmedWholeCapture(*Prop,Current,Capture);
+			}
 		}
 		// This helper seeds the exact state a real stationary legal observation
 		// reaches before it is hidden. Do not bypass the policy lifecycle: arming

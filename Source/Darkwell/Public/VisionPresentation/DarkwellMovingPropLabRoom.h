@@ -116,7 +116,9 @@ public:
 
 	/** Read-only cross-episode surface/cap evidence for the architecture audit. */
 
-	bool ConfigureHistoricalEpochCountForTesting(FName StableId, int32 HistoricalEpochs);
+	UFUNCTION(BlueprintCallable, Category="Diagnostics") bool ConfigureOldHistoryDemandForTesting();
+	UFUNCTION(BlueprintPure, Category="Diagnostics") FString GetOldHistoryEvidenceHashForTesting() const;
+	bool ConfigureHistoricalEpochCountForTesting(FName StableId, int32 HistoricalEpochs, bool bDemandFixture = false);
 
 	UFUNCTION(BlueprintCallable, Category="Lab|Testing")
 	bool StartTrackedRotationForTesting(FName StableId, float TargetYaw, float Duration);

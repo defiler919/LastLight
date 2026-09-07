@@ -158,7 +158,8 @@ struct FDarkwellWholePreparationState
 ADarkwellObjectMemoryScene::ADarkwellObjectMemoryScene()
 {
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("ObjectMemoryRoot")));
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.TickGroup = TG_PostUpdateWork;
 	WholePreparation = MakeShared<FDarkwellWholePreparationState>();
 }
 ADarkwellObjectMemoryScene::~ADarkwellObjectMemoryScene() = default;

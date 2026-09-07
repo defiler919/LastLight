@@ -313,6 +313,7 @@ bool ADarkwellObjectMemoryScene::ReleaseHistoricalPresentationForTesting(
 	// Repeated release is harmless; issuing a new ticket revokes the previous request.
 	ReleaseRenderResources(*Visual);
 	Visual->bRenderResourcesReleased = true;
+	Visual->bAutoResidencyReleased = false; // explicit A0 control supersedes automatic residency
 	Visual->PresentationRequestSerial = ++NextPresentationRequestSerial;
 	Out = {this, Prop->Actual, Id, Prop->History.GetPreparationLifetime(), Epoch, Visual->PresentationRequestSerial};
 	Prop->bDiagnosticsDirty = true;
@@ -329,6 +330,19 @@ bool ADarkwellObjectMemoryScene::RebuildHistoricalPresentationForTesting(const F
 	FRecordVisual* Visual = Prop->Visuals.Find(Ticket.Epoch);
 	if (!Record || !Visual || Record->bCurrentObservedLocation || Visual->bPresentationRetired
 		|| !Record->FineHistory.IsInitialized() || Ticket.RequestSerial != Visual->PresentationRequestSerial) return false;
+	return RebuildHistoricalPresentation(*Prop, *Record, *Visual);
+}
+
+#endif
+
+bool ADarkwellObjectMemoryScene::RebuildHistoricalPresentation(
+ FTrackedProp& InProp, FDarkwellSpatialObservationRecord& InRecord, FRecordVisual& InVisual)
+{
+ check(IsInGameThread());
+ if (!GetWorld() || GetWorld()->bIsTearingDown || IsActorBeingDestroyed()
+  || InRecord.bCurrentObservedLocation || InVisual.bPresentationRetired
+  || !InRecord.FineHistory.IsInitialized()) return false;
+ auto* Prop=&InProp; auto* Record=&InRecord; auto* Visual=&InVisual;
 	if (!Visual->bRenderResourcesReleased) return true; // successful request is idempotent
 	// Snapshot asset paths survive source replacement/GC. Do not publish a partial
 	// proxy on failure or silently substitute the current source's mesh/content.
@@ -338,7 +352,7 @@ bool ADarkwellObjectMemoryScene::RebuildHistoricalPresentationForTesting(const F
 		if (!Primitive.Mesh.LoadSynchronous())
 		{
 			UE_LOG(LogDarkwellObjectMemory, Error, TEXT("A0 missing captured mesh id=%s epoch=%u asset=%s"),
-				*Ticket.StableId.ToString(), Ticket.Epoch, *Primitive.Mesh.ToString());
+				*Prop->StableId.ToString(), Record->Epoch, *Primitive.Mesh.ToString());
 			return false;
 		}
 	}
@@ -357,6 +371,7 @@ bool ADarkwellObjectMemoryScene::RebuildHistoricalPresentationForTesting(const F
 	UpdateRecordCap(*Prop, *Record);
 	for (const auto& Material : Visual->Render.Materials)
 		if (Material.IsValid()) Material->SetScalarParameterValue(TEXT("SpatialReady"), 1.f);
+	Visual->bAutoResidencyReleased = false;
 	Visual->Render.bPublishPending = false;
 	Visual->Render.Proxy->SetActorHiddenInGame(false);
 	if (Visual->Render.Cap.IsValid()) Visual->Render.Cap->SetVisibility(Visual->CapTriangles > 0);
@@ -365,8 +380,6 @@ bool ADarkwellObjectMemoryScene::RebuildHistoricalPresentationForTesting(const F
 	Prop->bDiagnosticsDirty = true;
 	return true;
 }
-#endif
-
 FString ADarkwellObjectMemoryScene::ReleaseOldestPresentationForTesting(FName Id)
 {
 #if WITH_DEV_AUTOMATION_TESTS
@@ -3467,6 +3480,8 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Memory_EnsureResources);
 	FRecordVisual& Visual = Prop.Visuals.FindOrAdd(Record.Epoch);
 	Visual.Epoch = Record.Epoch;
+	if (Visual.LastCaptureTime < 0 || Record.bCurrentObservedLocation)
+		Visual.LastCaptureTime = GetWorld()->GetTimeSeconds();
 	if (Record.bCurrentObservedLocation && Record.Primitives.IsEmpty()) CaptureObservedContent(Prop, Record);
 	if (!Record.bCurrentObservedLocation && Visual.bPresentationRetired)
 	{
@@ -3512,6 +3527,7 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 	if (Record.bCurrentObservedLocation && Visual.bRenderResourcesReleased)
 	{
 		Visual.bRenderResourcesReleased = false;
+		Visual.bAutoResidencyReleased = false;
 		Visual.PresentationRequestSerial = ++NextPresentationRequestSerial;
 	}
 	if (Visual.bRenderResourcesReleased) return;

@@ -1,5 +1,20 @@
 # 灰色层功能检查点与稳定化施工
 
+## 历史父材质首次可用性完成（2026-09-07，43c5748）
+
+运行时 **43c5748db9afbd7c861d7a3be7389437ca2a4eab** 已推送。最小Trace确认首次LoadObject 14.767ms几乎全在FlushAsyncLoading，主体为deferred PostLoad9.668ms / 材质shader资源缓存9.133ms（布局、shader map id、FinishCacheShaders等），另有package/export创建和预加载；不是单纯磁盘或GPU等待。详见[性能审计第25节](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md#25-历史父材质首次可用性与scene生命周期2026-09-0743c5748)。
+
+新增显式GT `InitializeHistoryPresentationResources`，在首次合法RegisterRememberable接入时幂等取得父材质，用Scene的Transient UPROPERTY强持有；空Scene构造/BeginPlay不加载。Reset/SourceReplace保留不可变资源，EndPlay清引用，缺失资产Error+false，兼容未准备宿主在Bind中严格同调用同步fallback。不同record的MID/参数仍独立，不改透明Current或首次seal发布。`SceneHistoryParent=1`默认启用，0保留旧路径；**WholeGeometryPreparation仍默认0，本轮没有扩P1/worker/Partial/evidence/资源池。**
+
+结论明确为 **交互卡顿改善，但总成本迁移，不宣称整体性能收益**。四条匹配启动同DLL D3D12样本从父材质尚未加载的显式资源初始化开始记录，包含初始化帧、首次Current/首次seal至稳定；不是进程总启动时间。旧Current22.834/21.063ms，新11.562/12.809ms；新初始化帧16.399/19.172ms，其中父加载10.294/10.418ms。完整MaxFullFrame旧22.834/21.944、新17.778/22.199ms，一对下降另一对基本持平，未裁掉index0峰值。Bind旧9.552/10.030、新0.181/0.198ms；交互Parent取得约0.001ms。新Scene全窗口只load1次，资源/驻留/扫描权威计数逐index一致。
+
+Build04完整Editor成功；ParentMaterial_Target03定向3/3 clean PASS，覆盖空Scene/幂等/无知识、GC强引用、Reset/SourceReplace、EndPlay/world teardown+GC及新world重建。GC用临时材质探针避免编辑器其他资产引用掩盖问题。旧/新Contracts各三次PIE/178图，两边各24帧Whole首离开连续图通过，额外首显0帧；Partial外切口已查看。初次生命周期测试夹具未初始化Actors/WorldContext的失败/warning记录保留，已修复后通过。
+
+冷184只跑新版本独立压力：533.639ms，setup257.921、native268.504ms；原输入未改，无前台异常，setup184records/proxies，后续合法反证后120及fine_bytes41157632。**INITIALIZATION仍FAIL**，不将父材质成本移出交互解释为解决整批同步建立。前台等待不匹配的早期A/B另存，不混入最终四条。
+
+通用生产Scene仍依赖PropLab目录的M_MovingAccumulatedMemory，项目材质承担表现本身合法，但Lab归属/硬编码字符串及显式cook引用边界需另行整理；本轮不改资产名或uasset，没有Shipping打包证据。下一入口是在父材质就绪的新路径上做既有P1 mode0/2联合峰值验收，看seal是否成为主峰，不先扩大协议或默认2。矩阵/十分钟/occupancy全集、进程总冷启动、无截图GPU呈现延迟及真实材质反复卸载压力未做；stable、Docs/AI、黑色层、Large World未动。
+
+
 ## P1 首次Current与准备预算切片（2026-09-07，8831d86，默认仍0）
 
 运行时 **8831d86a3ef0bd8c4a0a6c349c01008de7c30a1b** 已推送。首次Current主成本已定位到EnsureRecordVisual → BindProxyMaterial → 历史父材质LoadObject（匹配启动六次9.241–14.497ms），不是geometry或texture创建。实施帧尾准入、资源创建/≥1ms native重帧避让、engine frame门控锁存、snapshot后in-flight预算复检及外围清理计账；原P1资格/票据/两mask/一次消费/同步fallback不变，Current与seal不等待。`WholePreparationFrameGuard=0`保留同DLL旧调度；外层WholeGeometryPreparation默认仍0。

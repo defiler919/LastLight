@@ -782,3 +782,90 @@ seal→首图读回墙钟上界mode0三次43.394/45.218/45.847ms，mode2 Ready/P
 本轮落地的是重帧避让和计账安全切片，不是首次Current主成本已被消除。下一最高收益入口为BindProxyMaterial内首次历史父材质同步加载及其依赖初始化生命周期；先短Trace拆开LoadObject内部等待/依赖，再评估合法初始化阶段的材质可用性与GC持有。必须把初始化/预备帧纳入完整窗口，不能把这10余ms偷偷移到测量外当作收益。另可在现有P1范围限制帧尾候选扫描的总开销；不扩worker/Partial/evidence/资源池，不因这次seal收益扩大异步协议。
 
 没有重跑完整矩阵、十分钟长测、occupancy全集、无关视觉全集、Shipping、随机生命周期穷举、多宿主压力或无截图GPU呈现延迟。没有证明OS抢占下1ms硬上限，也没有复现归因旧2.512ms。默认仍0；stable、Docs/AI、黑色层、Large World未动。Saved原始证据留本机，源码/复算工具及本技术文档随Git交付。
+
+
+## 25. 历史父材质首次可用性与Scene生命周期（2026-09-07，43c5748）
+
+开始核验开发分支/远端5881eaa0853b2c9aca5cdbcbf105d44dc1c702ef、干净工作区；remote默认HEAD仍main/46d9f9d。已读AGENTS、交接、第24节及Scene/注册/Reset/EndPlay/Bind资源源码。运行时 **43c5748db9afbd7c861d7a3be7389437ca2a4eab** 已推送。WholeGeometryPreparation仍默认0，未扩大P1、Partial/evidence/worker/资源池，未修改资产或冷184输入时序。
+
+### LoadObject内部：同步完成包和材质PostLoad，不是单纯磁盘I/O
+
+短真实D3D12 Trace `Saved/Stabilization/ParentMaterial_TraceBefore`（起点8831d86的DLL，仅归因，不混入最终A/B）。用UnrealInsights导出timers/threads及事件，按实际GameThread和最大Darkwell_Resources_MaterialLoad时间域筛选：
+
+| 嵌套事件 | inclusive ms |
+| --- | ---: |
+| Darkwell_Resources_MaterialLoad / LoadObject | 14.767 / 14.764 |
+| FlushAsyncLoading | 14.716 |
+| Event_DeferredPostLoad | 9.668 |
+| UMaterial::CacheResourceShadersForRendering | **9.133** |
+| BuildShaderMapIdOverride / FinishCacheShaders | 4.520 / 4.546 |
+| 两处FMaterialShaderMapLayoutCache::FindOrCreateLayout | 4.464 / 2.597 |
+| FHLSLMaterialTranslatorTranslate | 0.775 |
+| Event_PreloadExports / Event_CreateExports | 2.332 / 1.388 |
+| Event_ProcessPackageSummary | 0.832 |
+| FMaterialShaderMap::Compile | 0.066 |
+
+加载范围39.4295422–39.4443090s，GameThread Id=2，MaterialLoad TimerId=4547。父子scope不能相加；两个layout事件分别属于不同父分支。约9.1ms是材质渲染shader资源缓存/布局和PostLoad CPU工作；其余主要落在包summary、export创建/预加载等。FlushAsyncLoading名称不表示这14.7ms全部空等I/O或GPU；Trace显示GT在同步完成实际加载/PostLoad工作，没有证据把主体归因于GPU fence或ShaderCompileWorker长编译。未逐一分摊依赖包I/O字节或所有引擎内部小事件。该结果来自uncooked Editor -game D3D12路径，包含EditorOnlyData和shader缓存工作，不外推Shipping相同成本。
+
+原始capture.utrace、all_events.csv、timers.csv、threads.csv和material-export.rsp/log保留本机，脚本导出使用TimingInsights.ExportTimingEvents及实际ThreadId过滤。
+
+### 最小生产生命周期方案
+
+父材质是不可变的表现依赖，可以在合法source接入Scene时持有，无需等知识/首次Current。新增`InitializeHistoryPresentationResources()`，GT幂等接口；在RegisterRememberable通过源/策略/世界/身份合法性和重复注册检查后调用。空Scene的构造/BeginPlay不加载；调用本身不创建record/proxy/MID/texture、不确认知识，也不等待下一帧显示。
+
+Scene用`UPROPERTY(Transient) TObjectPtr<UMaterialInterface> HistoryParentMaterial`强持有。首次source注册或显式资源初始化成功后，Bind只取现有父对象；没有经过注册/显式准备的兼容宿主仍在Bind内同调用同步fallback。缺失资产记录Error并返回false；注册不会静默成功，Bind不会拿nullptr继续创建MID。每record的MID及其参数/姿态/SpatialReady仍独立，父材质没有被修改，不是MID池或跨record可变状态共享。
+
+Reset清的是知识和表现实例，保留同Scene不可变父材质；SourceReplace复用同一父对象，旧历史仍按原证据处理。EndPlay先按原Reset释放表现，再清父引用；新Scene单独持有/登记自己的依赖。没有static裸指针、AddToRoot资产或持有旧World/Source回调。资源即便在不同world由引擎解析为同一全局资产对象，也不携带旧world知识；世界相关MID仍属于各Scene。未进入正常Play生命周期的临时对象最终由Scene自身GC释放引用。
+
+`r.Darkwell.ObjectMemory.SceneHistoryParent=1`默认启用本资源切片；0保留原每次Bind的LoadObject路径。**这与WholeGeometryPreparation无关，后者仍0。** runner的`-LegacyHistoryParent`用启动期DPCvars在世界/注册之前设0，避免ExecCmds执行过晚形成假oracle。
+
+### 成本判定与完整测量窗口
+
+结论是 **交互卡顿改善，但总成本迁移**。首次包/材质初始化没有被消除：旧Current LoadObject约9.24/9.42ms，新显式初始化约10.29/10.42ms。Scene存活期间不再重复字符串LoadObject、且Reset/GC不会因Scene主动放弃引用而需要重新取得父资源；未通过真实强制卸载对照证明多次9ms初始化被消除，不作此宣称。
+
+新增`-Protocol ParentMaterial`复用原180帧固定合法Whole路线，P1=0，两边都先用启动期DPCvars禁用自动取得父材质；index0断言object_loaded=0且loads=0，再在已记录窗口内按A/B开关调用同一个显式生产资源初始化接口。新路径初始化完整包含在index1的wall interval；Current仍index6，seal仍index66，窗口持续到index179稳定状态。旧路径接口为no-op，加载仍在Current。
+
+这是**显式资源准入开始至稳定的完整窗口**，不是整个进程启动/地图加载时间。生产默认将该幂等接口接到首次合法Register；其更早的自动注册初始化总启动帧没有被拿来宣称性能收益。独立窗口保证任何父材质预加载帧不被裁掉，默认自动注册的正确性由真实普通宿主/PIE测试覆盖。原Batch输入与计时保持不变。
+
+四次匹配启动采集次序Scene2 → Legacy2 → Legacy3 → Scene3，均180帧、等待前台0、记录期前台异常0；同DLL、同driver，D3D12/SM6、1080p/SP100/原质量、NoAuthoringToolsets、NoTrace/无截图/无固定步长。DLL SHA256 `9AA94315A6F945DE3D852CEC8D90DE07DCA81687D5B648F405B1AFC5BA31241D`；driver SHA256 `0D522FF1A258F609F881FAFF4A7DBD0EBAF29324F221BBD118D5DB1DB87C4AC7`。单位ms，所有index0及其他慢帧保留：
+
+| Saved/Stabilization运行名 | 完整MaxFullFrame | 初始化帧index1 | 首次Current | seal |
+| --- | ---: | ---: | ---: | ---: |
+| ParentMaterial_FinalLegacy2 | 22.834 | 13.646（无父预加载） | 22.834 | 22.782 |
+| ParentMaterial_FinalScene2 | 17.778 | 16.399 | 11.562 | 17.778 |
+| ParentMaterial_FinalLegacy3 | 21.944 | 7.751（无父预加载） | 21.063 | 21.879 |
+| ParentMaterial_FinalScene3 | 22.199 | 19.172 | 12.809 | 17.228 |
+
+第二对完整峰值分别在index0，不删除它们。完整窗口一对降低、另一对基本持平，**不宣称总工作量或稳定整体性能收益**。seal路径未改，不把其运行间波动归给本切片。
+
+| 首次Current分项，两次ms | Legacy | Scene持有 |
+| --- | --- | --- |
+| native memory更新 | 10.565 / 10.932 | 0.992 / 1.095 |
+| BindProxyMaterial | 9.552 / 10.030 | 0.181 / 0.198 |
+| ParentMaterialLoad/取得父对象 | 9.239 / 9.423 | 0.0012 / 0.0011 |
+| MID创建 | 0.131 / 0.225 | 0.077 / 0.103 |
+| mesh注册 | 0.108 / 0.246 | 0.079 / 0.070 |
+| 历史透明texture创建 | 0.294 / 0.172 | 0.233 / 0.254 |
+| Current texture | 0.102 / 0.187 | 0.080 / 0.071 |
+
+新Scene各loads=1、held=1贯穿窗口；旧Scene专有loads计数为0，不能解释为旧路径没做LoadObject。四次逐index的records/proxies/textures/MIDs/caps/fine_bytes/resident_samples/samples_scanned一致。最终仍1record/proxy、4textures、1MID、0cap、fine_bytes1327104，不减少合法资源。复算入口`Scripts/CompareHistoryParentMaterial.py`，汇总`Saved/ParentMaterial/final_abba.json`。
+
+FinalLegacy1/FinalScene1分别9473/1133次前台等待，完整窗口292.027/46.132ms，保留但不混入匹配组；早期LegacyA属于测试夹具修正前DLL，仅验证协议。未用不同二进制结果拼成A/B。
+
+### 构建、生命周期和视觉
+
+最终`Scripts/BuildEditor.ps1`完整DarkwellEditor Win64 Development成功，Saved/ParentMaterial/Build04.log；ParentMaterial_Target03 **3/3 clean PASS、severe0**：HistoryParentLifetime、OrdinaryHost、RecordScopedResourcesParityAndLifetime。新测试覆盖空Scene无BeginPlay加载、显式初始化幂等/无知识、旧路径不强持有、Scene强引用跨GC、Reset保留、SourceReplace只加载一次、Destroy/EndPlay清引用、world teardown/GC及下一世界重新初始化。使用临时材质实例作GC探针，避免真实资产被编辑器其他引用持有而掩盖UPROPERTY缺陷；不声称真实材质包必然已卸载。
+
+最初Target因测试世界未InitializeActorsForPlay而不路由EndPlay、释放断言失败；修正后Target02通过但缺WorldContext产生warning，再补正常context创建/销毁，Target03 clean通过。这是夹具修正，失败证据保留。
+
+视觉：ParentMaterial_ContractsLegacy/ParentMaterial_ContractsScene，P1均0，旧父路径由RunGrayMemoryAudit.ps1 -LegacyHistoryParent控制。各三次真实PIE、178图、正常world进入/退出与资源重建，exit0/severe0/teardown完成；两边各24张首次Whole退出连续帧全部通过，首图正确，额外首显延迟0帧。人工检查新路径首次Whole及Partial外切口。seal→首图读回墙钟上界旧58.019/43.069/44.277ms，新43.024/44.108/42.131ms，含截图读回开销；与无截图性能窗口分别记账，不当作GPU正常呈现延迟。
+
+原冷184独立新版本压力`ParentMaterial_ColdPressure`：MaxFullFrame **533.639ms**、setup257.921ms、native268.504ms，无前台等待/记录异常。setup184records/proxies、10 identities；合法后续反证后120records/proxies/caps/textures/MIDs、fine_bytes41157632。只有单条压力样本，不与旧版拼收益；约0.5s同步压力不变，**INITIALIZATION仍FAIL**。
+
+### PropLab资产边界与下一入口
+
+通用生产Scene确实硬编码依赖`/Game/Darkwell/Vision/PropLab/M_MovingAccumulatedMemory`。项目运行时使用项目材质符合C++规则/资产负责表现的架构，但该路径及制作脚本create_moving_history_ownership_material.py仍标为Lab derivative，资产归属和生产命名存在遗留边界问题。字符串LoadObject加Transient运行时引用也不是显式cook依赖声明，本轮未做Shipping cook验证，不能据Editor成功确认打包完整性。另有source/cap的PropLab材质依赖，不在本轮扩展整理。
+
+后续单独明确生产材质归属、用Unreal资产工具迁移及修复引用/建立可审查的资产引用与cook合同；本轮不重命名、复制或改写任何uasset。不要将材质中的灰层表现公式擅自改成新的知识规则。
+
+交互热点移除后，最高收益下一入口是用本版父材质就绪路径重新做既有P1 mode0/2联合验收，判断seal是否重新成为主峰；不扩大协议或直接默认2。冷184仍是整批同步建立架构问题，不能以这10ms迁移升级初始化评级。未做矩阵/十分钟/occupancy全集/随机生命周期穷举/Shipping/进程冷启动总时间/无截图GPU呈现延迟/真实材质反复卸载压力。stable、Docs/AI、黑色层、Large World未动。

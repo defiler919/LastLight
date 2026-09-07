@@ -6,6 +6,7 @@ param(
     [switch]$NormalTurns,
     [switch]$WholeSessions,
     [switch]$LegacyDirectClose,
+    [switch]$LegacyHistoryParent,
     [ValidateSet('None','FromStart','BeforeExit')][string]$ExitDebugger = 'None'
 )
 $ErrorActionPreference = 'Stop'
@@ -53,6 +54,7 @@ try {
         '-d3d12', '-sm6', '-nosound', '-unattended', '-UseFixedTimeStep', '-FPS=60',
         "-ExecutePythonScript=$output/driver.py", "-abslog=$output/editor.log"
     )
+    if ($LegacyHistoryParent) { $arguments += '-DPCvars=r.Darkwell.ObjectMemory.SceneHistoryParent=0' }
     if ($Protocol -eq 'ReobservationTiming') {
         $arguments = @($arguments | Where-Object { $_ -notin @('-UseFixedTimeStep','-FPS=60') })
         $arguments += @('-NoVSync','-ExecCmds=t.MaxFPS 0')

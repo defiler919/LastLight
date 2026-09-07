@@ -7,6 +7,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/GarbageCollection.h"
+#include "HAL/IConsoleManager.h"
+#include "Misc/ScopeExit.h"
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
@@ -129,6 +131,8 @@ bool FDarkwellObjectMemoryOrdinaryHost::RunTest(const FString&)
 	auto* NewPolicy=NewObject<USightWeaveObjectPolicyComponent>(Replacement);
 	Replacement->AddInstanceComponent(NewPolicy); NewPolicy->RegisterComponent(); Replacement->DispatchBeginPlay();
 	TestTrue(TEXT("A dead identity accepts a distinct source instance"),Scene->RegisterRememberable(NewMemory,NewPolicy));
+	if (IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ObjectMemory.SceneHistoryParent"))->GetInt())
+		TestEqual(TEXT("SourceReplace reuses Scene parent without another load"),Scene->HistoryParentLoads,1u);
 	Step(20);
 	TestEqual(TEXT("Replacement does not grant unseen geometry"),Scene->GetCurrentEpochCountForTesting(Ids[0]),0);
 	TestTrue(TEXT("Replacement does not erase unverified old geometry"),Scene->GetVisibleHistoricalProxyCountForTesting(Ids[0])>0);
@@ -139,11 +143,58 @@ bool FDarkwellObjectMemoryOrdinaryHost::RunTest(const FString&)
 	TestFalse(TEXT("Invalid publication rejected"),Fog->UpdateSource(Invalid));
 	TestFalse(TEXT("Invalid publication cannot keep stale legal evidence"),Fog->QueryLiveCoverageAtWorldPoint(FVector2D(0,400)).bValid);
 	Scene->ResetMemory();
+	if (IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ObjectMemory.SceneHistoryParent"))->GetInt())
+		TestNotNull(TEXT("Knowledge Reset preserves Scene parent resource"),Scene->HistoryParentMaterial.Get());
 	TestEqual(TEXT("Explicit reset releases knowledge and presentation"),Scene->GetTotalSpatialRecordCount(),0);
 	TestTrue(TEXT("Reset does not destroy ordinary source actors"),IsValid(Actors[4]));
 	Scene->Destroy(); World->DestroyWorld(true); GEngine->DestroyWorldContext(World);
 	CollectGarbage(RF_NoFlags);
 	for(const auto& Proxy:PreparedProxies) TestFalse(TEXT("Reset/world teardown releases prepared proxies"),Proxy.IsValid());
 	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellHistoryParentLifetime,
+ "Darkwell.ObjectMemory.HistoryParentLifetime",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellHistoryParentLifetime::RunTest(const FString&)
+{
+ auto* Mode=IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ObjectMemory.SceneHistoryParent"));
+ const int32 Previous=Mode->GetInt(); ON_SCOPE_EXIT { Mode->Set(Previous,ECVF_SetByCode); };
+ for(int32 M : {0,1,1})
+ {
+  Mode->Set(M,ECVF_SetByCode);
+  UWorld* World=UWorld::CreateWorld(EWorldType::Game,false);
+  World->AddToRoot();
+  GEngine->CreateNewWorldContext(EWorldType::Game).SetCurrentWorld(World);
+  auto* Scene=World->SpawnActor<ADarkwellObjectMemoryScene>();
+  World->InitializeActorsForPlay(FURL());
+  Scene->DispatchBeginPlay();
+  TestEqual(TEXT("Empty Scene has no eager BeginPlay load"),Scene->HistoryParentLoads,0u);
+  TestTrue(TEXT("Explicit resource admission succeeds"),Scene->InitializeHistoryPresentationResources());
+  TestTrue(TEXT("Resource admission is idempotent"),Scene->InitializeHistoryPresentationResources());
+  TestEqual(TEXT("No knowledge at resource admission"),Scene->GetTotalSpatialRecordCount(),0);
+  TestEqual(TEXT("Only one load per Scene; oracle stays lazy"),Scene->HistoryParentLoads,uint32(M));
+  TWeakObjectPtr<UMaterialInstanceDynamic> OwnedProbe;
+  if(M)
+  {
+   TestNotNull(TEXT("Real parent is available"),Scene->HistoryParentMaterial.Get());
+   // A transient interface avoids unrelated package/editor references masking
+   // whether the Scene UPROPERTY itself participates correctly in GC.
+   OwnedProbe=UMaterialInstanceDynamic::Create(Scene->HistoryParentMaterial,GetTransientPackage());
+   Scene->HistoryParentMaterial=OwnedProbe.Get();
+   CollectGarbage(RF_NoFlags);
+   TestTrue(TEXT("Scene strong reference survives GC"),OwnedProbe.IsValid());
+   Scene->ResetMemory();
+   TestTrue(TEXT("Reset preserves immutable dependency"),Scene->HistoryParentMaterial==OwnedProbe.Get());
+  }
+  TWeakObjectPtr<ADarkwellObjectMemoryScene> WeakScene=Scene;
+  Scene->Destroy();
+  TestNull(TEXT("EndPlay releases Scene resource reference"),Scene->HistoryParentMaterial.Get());
+  if(M) TestFalse(TEXT("Destroyed Scene cannot reacquire"),Scene->InitializeHistoryPresentationResources());
+  World->DestroyWorld(false); GEngine->DestroyWorldContext(World); World->RemoveFromRoot();
+  CollectGarbage(RF_NoFlags);
+  TestFalse(TEXT("World teardown releases Scene"),WeakScene.IsValid());
+  TestFalse(TEXT("World teardown releases transient resource"),OwnedProbe.IsValid());
+ }
+ return true;
 }
 #endif

@@ -99,7 +99,7 @@ def run():
         cases = [('Empty',0,180), ('OneWhole',1,180)]
     elif protocol == 'Knowledge':
         cases = [('ActualNewKnowledge',0,360)]
-    elif protocol == 'WholePreparation':
+    elif protocol in ('WholePreparation','ParentMaterial'):
         cases = [('WholePreparationLead',0,180)]
     elif protocol == 'Batch':
         # Short cold-entry diagnostic. The original Matrix stays unchanged.
@@ -173,6 +173,8 @@ def run():
             r = json.loads(room.get_history_runtime_telemetry())['frame_data']
             if name == 'WholePreparationLead':
                 r['preparation'] = json.loads(room.get_whole_preparation_telemetry())
+                if protocol == 'ParentMaterial':
+                    r['history_parent'] = json.loads(room.get_history_parent_telemetry())
             r['engine'] = json.loads(director.get_frame_environment_for_testing())
             r['engine']['editor_realtime_count'] = unreal.DarkwellEditorDiagnostics.get_realtime_editor_viewport_count() if not standalone else 0
             assert r['engine']['viewport'] == [1920,1080], r['engine']
@@ -182,6 +184,13 @@ def run():
             last_game = now_game
             samples.append(r)
             raw.write(json.dumps(r, separators=(',', ':'))+'\n')
+            if protocol == 'ParentMaterial' and index == 0:
+                # The entire resource-admission frame is recorded as index1.
+                # Both paths start with the parent absent; no off-window preload.
+                assert not r['history_parent']['object_loaded'], r['history_parent']
+                assert r['history_parent']['loads'] == 0, r['history_parent']
+                unreal.SystemLibrary.execute_console_command(w, 'r.Darkwell.ObjectMemory.SceneHistoryParent '+os.environ['DARKWELL_HISTORY_PARENT_MODE'])
+                assert room.initialize_history_presentation_resources()
             if name == 'WholePreparationLead' and index in (5,65):
                 player.set_actor_rotation(unreal.Rotator(yaw=90 if index==5 else -90), False)
             if name == 'LongInteraction':

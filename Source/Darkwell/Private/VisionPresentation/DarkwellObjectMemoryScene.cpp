@@ -27,6 +27,9 @@ DEFINE_LOG_CATEGORY_STATIC(LogDarkwellObjectMemory, Log, All);
 
 namespace
 {
+	const TCHAR* HistoryParentPath = TEXT("/Game/Darkwell/Vision/PropLab/M_MovingAccumulatedMemory.M_MovingAccumulatedMemory");
+	TAutoConsoleVariable<int32> CVarSceneHistoryParent(TEXT("r.Darkwell.ObjectMemory.SceneHistoryParent"), 1,
+		TEXT("Hold the immutable historical parent at source/resource admission. 0 preserves per-bind synchronous loading."));
 	TAutoConsoleVariable<int32> CVarJoinedSealedOwnership(
 		TEXT("r.Darkwell.ObjectMemory.JoinedSealedOwnership"), 1,
 		TEXT("Compute large sealed-history ownership batches on joined worker tasks. 0 keeps the serial oracle."));
@@ -51,7 +54,34 @@ namespace
 void ADarkwellObjectMemoryScene::EndPlay(EEndPlayReason::Type Reason)
 {
 	ResetMemory();
+	HistoryParentMaterial = nullptr;
 	Super::EndPlay(Reason);
+}
+
+bool ADarkwellObjectMemoryScene::InitializeHistoryPresentationResources()
+{
+	check(IsInGameThread());
+	if (CVarSceneHistoryParent.GetValueOnGameThread() == 0) return true;
+	if (IsActorBeingDestroyed() || !GetWorld()) return false;
+	if (IsValid(HistoryParentMaterial)) return true;
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ParentInitialize);
+	const double Start = FPlatformTime::Seconds();
+	HistoryParentMaterial = LoadObject<UMaterialInterface>(nullptr, HistoryParentPath);
+	HistoryParentLoadMs += (FPlatformTime::Seconds() - Start) * 1000;
+	++HistoryParentLoads;
+	if (!HistoryParentMaterial)
+	{
+		UE_LOG(LogDarkwellObjectMemory, Error, TEXT("Required history parent unavailable: %s"), HistoryParentPath);
+		return false;
+	}
+	return true;
+}
+
+FString ADarkwellObjectMemoryScene::GetHistoryParentTelemetry() const
+{
+	return FString::Printf(TEXT("{\"loads\":%u,\"load_ms\":%.6f,\"held\":%d,\"object_loaded\":%d}"),
+		HistoryParentLoads, HistoryParentLoadMs, IsValid(HistoryParentMaterial) ? 1 : 0,
+		FindObject<UMaterialInterface>(nullptr, HistoryParentPath) ? 1 : 0);
 }
 
 bool ADarkwellObjectMemoryScene::RegisterRememberable(
@@ -62,6 +92,9 @@ bool ADarkwellObjectMemoryScene::RegisterRememberable(
 		|| Memory->GetMemoryPrimitives().IsEmpty()) return false;
 	FTrackedProp* Existing=Tracked.Find(Memory->GetStableId());
 	if(Existing && Existing->Actual.IsValid() && !Existing->Actual->IsActorBeingDestroyed()) return false;
+	// A valid source admits the Scene's immutable presentation dependency once.
+	// No CDO/BeginPlay load, record, knowledge, MID or proxy is created here.
+	if (!InitializeHistoryPresentationResources()) return false;
 	UMaterialInterface* SourceMaterial=LoadObject<UMaterialInterface>(nullptr,
 		TEXT("/Game/Darkwell/Vision/PropLab/M_ManualFixedReveal.M_ManualFixedReveal"));
 	if (!SourceMaterial) return false;
@@ -3732,9 +3765,16 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MaterialLoad);
 		FScopedObjectMemoryTimer LoadTimer(RuntimeFrame.ProxyMaterialLoadUs);
-		Parent = LoadObject<UMaterialInterface>(
-			nullptr, TEXT("/Game/Darkwell/Vision/PropLab/M_MovingAccumulatedMemory.M_MovingAccumulatedMemory"));
+		if (CVarSceneHistoryParent.GetValueOnGameThread() != 0)
+		{
+			// Explicit preparation is optional for non-registering hosts; preserve
+			// same-call availability and visibility through synchronous fallback.
+			if (!InitializeHistoryPresentationResources()) return;
+			Parent = HistoryParentMaterial;
+		}
+		else Parent = LoadObject<UMaterialInterface>(nullptr, HistoryParentPath);
 	}
+	if (!Parent) { UE_LOG(LogDarkwellObjectMemory, Error, TEXT("Required history parent unavailable: %s"), HistoryParentPath); return; }
 	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
 	const FVector2D Inv = FVector2D(1, 1) / Bounds.GetSize();
 	TInlineComponentArray<UStaticMeshComponent*> Meshes(Proxy);

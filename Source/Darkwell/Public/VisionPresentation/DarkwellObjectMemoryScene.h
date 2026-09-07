@@ -35,6 +35,11 @@ public:
  double WholePreparationForegroundUsForTesting = 0;
 #endif
  virtual void EndPlay(EEndPlayReason::Type Reason) override;
+ /** Idempotent GT resource admission, independent of observation or knowledge. */
+ UFUNCTION(BlueprintCallable, Category="SightWeave")
+ bool InitializeHistoryPresentationResources();
+ UFUNCTION(BlueprintPure, Category="SightWeave|Diagnostics")
+ FString GetHistoryParentTelemetry() const;
  bool RegisterRememberable(UDarkwellRememberablePropComponent* Memory, USightWeaveObjectPolicyComponent* Policy);
  void UpdateMemory(float DeltaSeconds, FVector ObserverLocation);
  /** Explicit knowledge reset; never called merely because an actor moved or vanished. */
@@ -300,6 +305,7 @@ protected:
 	friend class FDarkwellObservedContentContract;
 	friend class FDarkwellTerminalSceneCompaction;
 	friend class FDarkwellObjectMemoryOrdinaryHost;
+	friend class FDarkwellHistoryParentLifetime;
 	friend class FDarkwellWholeReobservation;
 	static TArray<FVector2D> SubtractOwnedCapIntervals(FVector2D Candidate, TConstArrayView<FVector2D> Owned);
 
@@ -636,6 +642,9 @@ protected:
 
 	virtual void LogRotationFrame(const FTrackedProp&) const {}
 	UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> OwnedMaterials;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> HistoryParentMaterial;
+	uint32 HistoryParentLoads = 0;
+	double HistoryParentLoadMs = 0;
 	/** GC-visible ownership avoids rooting a material/actor/world cycle in plain C++ state. */
 	UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInterface>> OriginalSourceMaterials;
 	UPROPERTY(Transient) TArray<TObjectPtr<UTexture2D>> OwnedTextures;

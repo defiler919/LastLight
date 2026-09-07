@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$RunName,
     [ValidateSet('PIE','Standalone')][string]$Mode='PIE',
-    [ValidateSet('Smoke','Knowledge','Attribution','FrameAudit','Batch','Matrix','LongRun','Reference','WholePreparation')][string]$Protocol='Matrix',
+    [ValidateSet('Smoke','Knowledge','Attribution','FrameAudit','Batch','Matrix','LongRun','Reference','WholePreparation','ParentMaterial')][string]$Protocol='Matrix',
     [string]$Map='',
     [string]$EngineRoot='D:\UE_5.8',
     [switch]$NoAuthoringToolsets,
@@ -12,6 +12,7 @@ param(
     [switch]$SerialOccupancy,
     [switch]$LegacyRecordResources,
     [switch]$LegacyWholePreparationBudget,
+    [switch]$LegacyHistoryParent,
     [ValidateRange(0,2)][int]$WholeGeometryPreparationMode=0,
     [switch]$Trace
 )
@@ -34,6 +35,10 @@ $binary=Get-Item "$repo/Binaries/Win64/UnrealEditor-Darkwell.dll"
 $start=Get-Date
 $arguments=@("$repo/Darkwell.uproject",$Map,'-d3d12','-sm6','-NoSound','-unattended','-NoSplash','-NoVSync','-windowed','-ResX=1920','-ResY=1080','-ForceRes','-WinX=30','-WinY=30',"-abslog=$output/editor.log")
 $disabledPlugins=@()
+if ($LegacyHistoryParent -or $Protocol -eq 'ParentMaterial') {
+    # Device-profile command-line CVars apply before world/source registration.
+    $arguments += '-DPCvars=r.Darkwell.ObjectMemory.SceneHistoryParent=0'
+}
 if ($NoAuthoringToolsets) {
     # Explicit diagnostic environment only. The regular Editor/project remains
     # unchanged. Disable parents too: dependencies can re-enable ToolsetRegistry.
@@ -77,6 +82,7 @@ $metadata=[ordered]@{
     serial_occupancy=[bool]$SerialOccupancy
     legacy_record_resources=[bool]$LegacyRecordResources
     legacy_whole_preparation_budget=[bool]$LegacyWholePreparationBudget
+    legacy_history_parent=[bool]$LegacyHistoryParent
     editor_binary_sha256=(Get-FileHash "$repo/Binaries/Win64/UnrealEditor-DarkwellEditor.dll").Hash
     timing_note='Wall intervals between distinct game updates include Python measurement cost; engine GT/RT/RHI/GPU counters are delayed and overlap. PIE global Render/RHI counters can be overwritten by Slate window updates; use separate Insights capture for attribution. No subtraction attribution.'
 }
@@ -85,11 +91,13 @@ $priorOutput=$env:DARKWELL_STABILIZATION_OUTPUT
 $priorMode=$env:DARKWELL_STABILIZATION_MODE
 $priorProtocol=$env:DARKWELL_STABILIZATION_PROTOCOL
 $priorMap=$env:DARKWELL_STABILIZATION_MAP
+$priorParent=$env:DARKWELL_HISTORY_PARENT_MODE
 try {
     $env:DARKWELL_STABILIZATION_OUTPUT=$output
     $env:DARKWELL_STABILIZATION_MODE=$Mode
     $env:DARKWELL_STABILIZATION_PROTOCOL=$Protocol
     $env:DARKWELL_STABILIZATION_MAP=$Map
+    $env:DARKWELL_HISTORY_PARENT_MODE=if($LegacyHistoryParent){'0'}else{'1'}
     # This is the user's requested visible, foreground interactive benchmark.
     # SW_HIDE suppresses the native game window even when Slate reports active.
     $process=Start-Process "$EngineRoot/Engine/Binaries/Win64/UnrealEditor.exe" -ArgumentList $arguments -WindowStyle Normal -PassThru
@@ -134,6 +142,7 @@ public static class GrayBenchmarkForeground {
     $env:DARKWELL_STABILIZATION_MODE=$priorMode
     $env:DARKWELL_STABILIZATION_PROTOCOL=$priorProtocol
     $env:DARKWELL_STABILIZATION_MAP=$priorMap
+    $env:DARKWELL_HISTORY_PARENT_MODE=$priorParent
 }
 $log=Get-Content "$output/editor.log" -Raw
 $summary=[ordered]@{ exit_code=$code; exit_hex=('0x{0:X8}' -f ($code -band 0xffffffffL)); wall_seconds=((Get-Date)-$start).TotalSeconds; complete=(Test-Path "$output/complete.json"); severe_lines=@(Select-String "$output/editor.log" -Pattern 'Fatal error:|Assertion failed:|Ensure condition failed:|EXCEPTION_ACCESS_VIOLATION|Traceback').Count; log_closed=$log.Contains('Log file closed'); d3d12_sm6=$log.Contains('D3D12') -and $log.Contains('PCD3D_SM6') }

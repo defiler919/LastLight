@@ -1475,6 +1475,33 @@ bool FDarkwellWholePreparationHandoff::RunTest(const FString&)
   TestTrue(TEXT("reset releases all staging"), F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"pending\":0")));
  }
  Mode->Set(2, ECVF_SetByCode);
+ {
+  FRoom F;
+  F.Room->ResetTrackedRevealPolicyForLab(Id,Reveal::WholeObjectAfterSpan,100,History::StationaryOnly);
+  for (uint64 Frame=1; Frame<=30; ++Frame) { F.Room->WholePreparationFrameForTesting=Frame; F.Step(); }
+  F.Room->InvalidateWholePreparation();
+  F.Room->WholePreparationFrameForTesting=100;
+  F.Room->RuntimeFrame.TextureCreations=1;
+  F.Room->AdvanceWholePreparation();
+  TestTrue(TEXT("resource frame admits no packet"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"pending\":0")));
+  F.Room->RuntimeFrame = {};
+  F.Room->AdvanceWholePreparation();
+  TestTrue(TEXT("same-frame second update cannot bypass suppression"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"pending\":0")));
+  F.Room->InvalidateWholePreparation();
+  F.Room->AdvanceWholePreparation();
+  TestTrue(TEXT("invalidation does not clear busy-frame latch"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"suppressed\":1")));
+  F.Room->WholePreparationFrameForTesting=101;
+  F.Room->AdvanceWholePreparation();
+  TestTrue(TEXT("next idle frame admits exact current input"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"pending\":1")));
+  F.Room->WholePreparationFrameForTesting=102;
+  F.Room->WholePreparationForegroundUsForTesting=1000;
+  F.Room->AdvanceWholePreparation();
+  TestTrue(TEXT("native-heavy frame performs zero geometry work"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"frame_work\":0,")));
+  F.Face(-90); F.Room->WholePreparationFrameForTesting=103; F.Step();
+  TBitArray<> A,B;
+  TestTrue(TEXT("suppressed preparation never delays legal seal"),F.Room->GetNewestCaptureMasksForTesting(Id,A,B));
+  TestTrue(TEXT("suppressed fallback preserves both masks"),A==OracleCapture && B==OracleFrozen);
+ }
  for (int32 Case = 0; Case < 8; ++Case)
  {
   FRoom F;
@@ -1510,7 +1537,7 @@ bool FDarkwellWholePreparationHandoff::RunTest(const FString&)
   for(int32 I=0;I<12;++I) {
    auto Clone=*Original;
    Clone.StableId=FName(*FString::Printf(TEXT("Preparation.Admission.%d"),I));
-   F.Room->RequestWholePreparation(Clone);
+   F.Room->RequestWholePreparation(Clone, true);
   }
   TestTrue(TEXT("ninth packet cannot exceed bounded queue"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"pending\":8,")));
   TestEqual(TEXT("private admission grants no identity"),F.Room->Tracked.Num(),AuthorityCount);

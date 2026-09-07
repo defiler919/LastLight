@@ -38,6 +38,6 @@ struct FFrameBudget
 	int32 Work = 0;
 	void Begin(uint64 InFrame);
 	void Charge(double Seconds, int32 Units);
-	bool CanAdvance(double SecondsLimit, int32 WorkLimit) const;
+	bool CanAdvance(double SecondsLimit, int32 WorkLimit, double InFlightSeconds = 0) const;
 };
 }

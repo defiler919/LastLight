@@ -11,6 +11,7 @@ param(
     [switch]$SerialCapBuild,
     [switch]$SerialOccupancy,
     [switch]$LegacyRecordResources,
+    [switch]$LegacyWholePreparationBudget,
     [ValidateRange(0,2)][int]$WholeGeometryPreparationMode=0,
     [switch]$Trace
 )
@@ -42,6 +43,7 @@ if ($NoAuthoringToolsets) {
 }
 if($Mode -eq 'Standalone') {
     $startupCommands = @("r.Darkwell.ObjectMemory.WholeGeometryPreparation $WholeGeometryPreparationMode")
+    if ($LegacyWholePreparationBudget) { $startupCommands += 'r.Darkwell.ObjectMemory.WholePreparationFrameGuard 0' }
     if ($SerialSealedOwnership) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedSealedOwnership 0' }
     if ($SerialCapBuild) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedCapBuild 0' }
     if ($SerialOccupancy) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedOccupancy 0' }
@@ -74,6 +76,7 @@ $metadata=[ordered]@{
     serial_cap_build=[bool]$SerialCapBuild
     serial_occupancy=[bool]$SerialOccupancy
     legacy_record_resources=[bool]$LegacyRecordResources
+    legacy_whole_preparation_budget=[bool]$LegacyWholePreparationBudget
     editor_binary_sha256=(Get-FileHash "$repo/Binaries/Win64/UnrealEditor-DarkwellEditor.dll").Hash
     timing_note='Wall intervals between distinct game updates include Python measurement cost; engine GT/RT/RHI/GPU counters are delayed and overlap. PIE global Render/RHI counters can be overwritten by Slate window updates; use separate Insights capture for attribution. No subtraction attribution.'
 }

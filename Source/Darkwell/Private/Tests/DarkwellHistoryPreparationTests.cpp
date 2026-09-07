@@ -47,6 +47,9 @@ bool FDarkwellWholePreparationProtocol::RunTest(const FString&)
 	Age.Revoke(); Budget.Begin(10);
 	TestEqual(TEXT("cancel does not replenish units"), Budget.Work, 128);
 	Budget.Begin(11); TestTrue(TEXT("next engine frame replenishes"), Budget.CanAdvance(.001, 1024));
+	Budget.Charge(.0008, 0);
+	TestFalse(TEXT("snapshot in flight prevents another chunk or admission"), Budget.CanAdvance(.001, 1024, .0003));
+	TestTrue(TEXT("small snapshot leaves time for work"), Budget.CanAdvance(.001, 1024, .0001));
 	return true;
 }
 #endif

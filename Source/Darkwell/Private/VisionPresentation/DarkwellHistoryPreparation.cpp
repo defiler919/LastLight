@@ -80,8 +80,8 @@ void FFrameBudget::Charge(const double Seconds, const int32 Units)
 	Work += FMath::Max(0, Units);
 }
 
-bool FFrameBudget::CanAdvance(const double SecondsLimit, const int32 WorkLimit) const
+bool FFrameBudget::CanAdvance(const double SecondsLimit, const int32 WorkLimit, const double InFlightSeconds) const
 {
-	return SpentSeconds < SecondsLimit && Work < WorkLimit;
+	return SpentSeconds + FMath::Max(0.0, InFlightSeconds) < SecondsLimit && Work < WorkLimit;
 }
 }

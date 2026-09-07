@@ -32,6 +32,7 @@ public:
 #if WITH_DEV_AUTOMATION_TESTS
  uint64 WholePreparationFrameForTesting = MAX_uint64;
  int32 WholePreparationWorkForTesting = 65536;
+ double WholePreparationForegroundUsForTesting = 0;
 #endif
  virtual void EndPlay(EEndPlayReason::Type Reason) override;
  bool RegisterRememberable(UDarkwellRememberablePropComponent* Memory, USightWeaveObjectPolicyComponent* Policy);
@@ -100,6 +101,9 @@ public:
 		double TextureSubmissionUs = 0.0;
 		double CapPresentationUs = 0.0;
 		double CurrentRevealUs = 0.0;
+		double CurrentGeometryUs = 0, CurrentAdvanceUs = 0, CurrentVisualUs = 0, CurrentTexturesUs = 0, CurrentCapUs = 0;
+		double HistoryTextureCreateUs = 0, ProxyCreateUs = 0, ProxyBindUs = 0;
+		double ProxyMaterialLoadUs = 0, ProxyMidUs = 0, ProxyRegisterUs = 0;
 		double HistoricalCandidateUs = 0.0;
 		double HistoricalEvidenceUs = 0.0;
 		double OccupancySnapshotUs = 0.0;
@@ -502,7 +506,7 @@ protected:
 	friend struct FDarkwellWholePreparationState;
 	friend class FDarkwellWholePreparationHandoff;
 	TSharedPtr<FDarkwellWholePreparationState> WholePreparation;
-	void RequestWholePreparation(FTrackedProp& Prop);
+	void RequestWholePreparation(FTrackedProp& Prop, bool bFrameTail = false);
 	void AdvanceWholePreparation();
 	void InvalidateWholePreparation(FName Id = NAME_None);
 	bool TakeWholePreparation(FTrackedProp& Prop, TBitArray<>& Whole, TBitArray<>& Footprint);

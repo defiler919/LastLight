@@ -2546,6 +2546,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			});
 		if(bWhole && CoverageSnapshot.bValid)
 		{
+			FScopedObjectMemoryTimer GeometryTimer(RuntimeFrame.CurrentGeometryUs);
 			TArray<FDarkwellCurrentLiveGrid::FDescriptor> Descriptors;
 			for(const UStaticMeshComponent* Part:Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives())
 				if(Part && Part->GetStaticMesh()) Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part)});
@@ -2738,6 +2739,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 				&& CoverageSnapshot.GridRevision == Prop.GridRevision
 				&& Coverage.Num() == CoverageSize.X*CoverageSize.Y)
 			{
+				FScopedObjectMemoryTimer AdvanceTimer(RuntimeFrame.CurrentAdvanceUs);
 				TArray<FDarkwellCurrentLiveGrid::FDescriptor> Descriptors;
                 for(const UStaticMeshComponent* Part:Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives())
                     if(Part && Part->GetStaticMesh()) Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part)});
@@ -2794,15 +2796,15 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 					Prop.bDiagnosticsDirty = true;
 				}
 			}
-			EnsureRecordVisual(Prop, Current);
+			{ FScopedObjectMemoryTimer VisualTimer(RuntimeFrame.CurrentVisualUs); EnsureRecordVisual(Prop, Current); }
 			RequestWholePreparation(Prop);
 			if (bCoverageDirty || bTransformChanged
 				|| Prop.CurrentPresentationActiveSeconds > 0.0f)
 			{
                 if(!Prop.CurrentLive.IsUniformWholePresentation()) UpdateRecordTexture(Prop, Current);
-                UpdateCurrentPartTextures(Prop);
+                { FScopedObjectMemoryTimer CurrentTextureTimer(RuntimeFrame.CurrentTexturesUs); UpdateCurrentPartTextures(Prop); }
                 TraceQualificationAudit(Prop,TEXT("after_source_binding"));
-				UpdateRecordCap(Prop, Current);
+				{ FScopedObjectMemoryTimer CurrentCapTimer(RuntimeFrame.CurrentCapUs); UpdateRecordCap(Prop, Current); }
 				Prop.CurrentPresentationActiveSeconds = FMath::Max(
 					0.0f, Prop.CurrentPresentationActiveSeconds - DeltaSeconds);
 			}
@@ -3362,6 +3364,7 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 		|| (!Record.bCurrentObservedLocation && bTextureSizeChanged))
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_HistoryTextureCreate);
+		FScopedObjectMemoryTimer CreateTimer(RuntimeFrame.HistoryTextureCreateUs);
 		if(Visual.Texture.IsValid()) OwnedTextures.Remove(Visual.Texture.Get());
 		UTexture2D* Texture;
 		{
@@ -3658,6 +3661,7 @@ AActor* ADarkwellObjectMemoryScene::SpawnMemoryProxy(
 	const FDarkwellSpatialObservationRecord& Record)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxySpawn);
+	FScopedObjectMemoryTimer CreateTimer(RuntimeFrame.ProxyCreateUs);
 	if (Record.Primitives.IsEmpty())
 	{
 		return nullptr;
@@ -3718,6 +3722,7 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 	AActor* Proxy)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxyBind);
+	FScopedObjectMemoryTimer BindTimer(RuntimeFrame.ProxyBindUs);
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
 	if (!Visual || !Visual->Texture.IsValid() || !Proxy)
 	{
@@ -3726,6 +3731,7 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 	UMaterialInterface* Parent;
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MaterialLoad);
+		FScopedObjectMemoryTimer LoadTimer(RuntimeFrame.ProxyMaterialLoadUs);
 		Parent = LoadObject<UMaterialInterface>(
 			nullptr, TEXT("/Game/Darkwell/Vision/PropLab/M_MovingAccumulatedMemory.M_MovingAccumulatedMemory"));
 	}
@@ -3742,6 +3748,7 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 		{
 			{
 				TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MIDCreate);
+				FScopedObjectMemoryTimer MidTimer(RuntimeFrame.ProxyMidUs);
 				Material = UMaterialInstanceDynamic::Create(Parent, this);
 			}
 			++RuntimeFrame.MidCreations;
@@ -3760,6 +3767,7 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 		Mesh->SetMaterial(0, Material);
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxyMeshRegister);
+			FScopedObjectMemoryTimer RegisterTimer(RuntimeFrame.ProxyRegisterUs);
 			Mesh->RegisterComponent();
 		}
 	}

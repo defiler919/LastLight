@@ -10,8 +10,16 @@
 
 namespace
 {
+struct FPreparationTimer
+{
+ double& Total; double* Maximum; double Start = FPlatformTime::Seconds();
+ FPreparationTimer(double& InTotal, double* InMaximum = nullptr) : Total(InTotal), Maximum(InMaximum) {}
+ ~FPreparationTimer() { const double Elapsed = FPlatformTime::Seconds()-Start; Total += Elapsed; if(Maximum) *Maximum=FMath::Max(*Maximum,Elapsed); }
+};
 TAutoConsoleVariable<int32> Mode(TEXT("r.Darkwell.ObjectMemory.WholeGeometryPreparation"), 0,
 	TEXT("First stationary Whole geometry: 0 synchronous, 1 shadow parity, 2 prepare and consume."));
+TAutoConsoleVariable<int32> FrameGuard(TEXT("r.Darkwell.ObjectMemory.WholePreparationFrameGuard"), 1,
+	TEXT("Gate optional preparation after foreground work and check in-flight budget. 0: legacy diagnostic oracle."));
 uint64 PreparationFrame(const ADarkwellObjectMemoryScene& Scene)
 {
 #if WITH_DEV_AUTOMATION_TESTS
@@ -89,11 +97,18 @@ struct FDarkwellWholePreparationState
 	uint64 Generation = 1, Serial = 0;
 	int32 RoundRobin = 0, LastMode = 0;
 	bool bCharging = false;
+	uint64 SuppressedFrame = MAX_uint64;
+	uint64 SuppressedFrames = 0;
 	uint64 Requests = 0, Hits = 0, Fallbacks = 0, Cancelled = 0, Shadow = 0;
 	double LastSealStartSeconds = 0;
+ uint64 DiagnosticFrame = MAX_uint64;
+ double RequestSeconds=0, SnapshotSeconds=0, AdmissionSeconds=0, StepSeconds=0, MaxStepSeconds=0, CancelSeconds=0, TakeSeconds=0;
+ void BeginDiagnostics(uint64 Frame) { if(Frame==DiagnosticFrame) return; DiagnosticFrame=Frame; RequestSeconds=SnapshotSeconds=AdmissionSeconds=StepSeconds=MaxStepSeconds=CancelSeconds=TakeSeconds=0; }
+
 
 	static bool Snapshot(ADarkwellObjectMemoryScene& Scene, ADarkwellObjectMemoryScene::FTrackedProp& Prop, FInput& Out)
 	{
+		FPreparationTimer SnapshotTimer(Scene.WholePreparation->SnapshotSeconds);
 		const auto* Source = Prop.bExists ? Prop.Actual.Get() : nullptr;
 		const auto* Policy = Prop.ObjectPolicy.Get();
 		const int32 Index = Prop.History.GetCurrentIndex();
@@ -153,6 +168,8 @@ void ADarkwellObjectMemoryScene::InvalidateWholePreparation(const FName Id)
 	check(IsInGameThread());
 	if (!WholePreparation) return;
 	auto& S = *WholePreparation;
+	S.BeginDiagnostics(PreparationFrame(*this));
+	FPreparationTimer CancelTimer(S.CancelSeconds);
 	const bool bHadEntries = !S.Entries.IsEmpty();
 	const double Start = FPlatformTime::Seconds();
 	S.Cancelled += S.Entries.RemoveAll([&](const auto& E) { return Id.IsNone() || E.Input.Id == Id; });
@@ -161,10 +178,13 @@ void ADarkwellObjectMemoryScene::InvalidateWholePreparation(const FName Id)
 	// Preserve this engine frame's expenditure, including through ResetMemory.
 }
 
-void ADarkwellObjectMemoryScene::RequestWholePreparation(FTrackedProp& Prop)
+void ADarkwellObjectMemoryScene::RequestWholePreparation(FTrackedProp& Prop, bool bFrameTail)
 {
 	check(IsInGameThread());
+	if (FrameGuard.GetValueOnGameThread() != 0 && !bFrameTail) return;
 	auto& S = *WholePreparation;
+	S.BeginDiagnostics(PreparationFrame(*this));
+	FPreparationTimer RequestTimer(S.RequestSeconds);
 	const int32 CurrentMode = Mode.GetValueOnGameThread();
 	if (S.LastMode != CurrentMode) { InvalidateWholePreparation(); S.LastMode = CurrentMode; }
 	if (CurrentMode <= 0 || CurrentMode > 2 || S.Generation == MAX_uint64 || S.Serial == MAX_uint64) return;
@@ -183,8 +203,11 @@ void ADarkwellObjectMemoryScene::RequestWholePreparation(FTrackedProp& Prop)
 	{
 		const int32 Existing = S.Entries.IndexOfByPredicate([&](const auto& E) { return E.Input.Id == Prop.StableId; });
 		if (Existing != INDEX_NONE && !S.Entries[Existing].Input.Matches(Input)) InvalidateWholePreparation(Prop.StableId);
+		if (FrameGuard.GetValueOnGameThread() != 0
+			&& !S.Budget.CanAdvance(PreparationTimeLimit(*this), PreparationWorkLimit(*this), FPlatformTime::Seconds() - Start)) return;
 		if (!S.Entries.ContainsByPredicate([&](const auto& E) { return E.Input.Id == Prop.StableId; }) && S.Entries.Num() < 8)
 		{
+			FPreparationTimer AdmissionTimer(S.AdmissionSeconds);
 			auto& Entry = S.Entries.AddDefaulted_GetRef();
 			Entry.Input = MoveTemp(Input);
 			const uint64 Request = ++S.Serial;
@@ -198,6 +221,39 @@ void ADarkwellObjectMemoryScene::AdvanceWholePreparation()
 {
 	check(IsInGameThread());
 	auto& S = *WholePreparation;
+	S.BeginDiagnostics(PreparationFrame(*this));
+	S.Budget.Begin(PreparationFrame(*this));
+	const bool bAccountTail = FrameGuard.GetValueOnGameThread() != 0 && Mode.GetValueOnGameThread() > 0;
+	const double TailStart = FPlatformTime::Seconds(), SpentBeforeTail = S.Budget.SpentSeconds;
+	// Nested request/step/cancel scopes already charge their own work. Include
+	// loop, lookup and temporary-container cleanup once, without double charging.
+	auto ChargeTailOverhead = [&]() {
+		if (bAccountTail) S.Budget.Charge(FMath::Max(0.0, FPlatformTime::Seconds() - TailStart
+			- (S.Budget.SpentSeconds - SpentBeforeTail)), 0);
+	};
+	ON_SCOPE_EXIT { ChargeTailOverhead(); };
+	if (FrameGuard.GetValueOnGameThread() != 0)
+	{
+		const int32 CurrentMode = Mode.GetValueOnGameThread();
+		if (S.LastMode != CurrentMode) { InvalidateWholePreparation(); S.LastMode = CurrentMode; }
+		S.Budget.Begin(PreparationFrame(*this));
+		if (CurrentMode <= 0 || CurrentMode > 2) return;
+		// All authoritative Current/evidence/resource work has finished. Never
+		// add discretionary geometry to resource creation or >=1ms native work.
+		// The frame latch survives repeated UpdateMemory and Reset in this frame.
+		double ForegroundUs = RuntimeFrame.UpdateTrackedUs;
+#if WITH_DEV_AUTOMATION_TESTS
+		if (WholePreparationFrameForTesting != MAX_uint64) ForegroundUs = WholePreparationForegroundUsForTesting;
+#endif
+		if (RuntimeFrame.TextureCreations || RuntimeFrame.MidCreations || RuntimeFrame.CapMeshRebuilds
+			|| ForegroundUs >= 1000.0)
+		{
+			if (S.SuppressedFrame != PreparationFrame(*this)) ++S.SuppressedFrames;
+			S.SuppressedFrame = PreparationFrame(*this);
+		}
+		if (S.SuppressedFrame == PreparationFrame(*this)) return;
+		for (auto& Pair : Tracked) { ChargeTailOverhead(); RequestWholePreparation(Pair.Value, true); }
+	}
 	if (Mode.GetValueOnGameThread() != S.LastMode || Mode.GetValueOnGameThread() == 0) { InvalidateWholePreparation(); return; }
 	S.Budget.Begin(PreparationFrame(*this));
 	int32 Hosts = 0;
@@ -206,8 +262,10 @@ void ADarkwellObjectMemoryScene::AdvanceWholePreparation()
 	if (bHoldWholePreparationForTesting) return;
 	TSet<int32> Validated;
 	int32 Skipped = 0;
-	while (!S.Entries.IsEmpty() && Skipped < S.Entries.Num() && S.Budget.CanAdvance(PreparationTimeLimit(*this), PreparationWorkLimit(*this)))
+	while (!S.Entries.IsEmpty() && Skipped < S.Entries.Num())
 	{
+		ChargeTailOverhead();
+		if (!S.Budget.CanAdvance(PreparationTimeLimit(*this), PreparationWorkLimit(*this))) break;
 		const double Start = FPlatformTime::Seconds();
 		int32 Work = 0;
 		TGuardValue<bool> Charging(S.bCharging, true);
@@ -223,7 +281,12 @@ void ADarkwellObjectMemoryScene::AdvanceWholePreparation()
 			continue;
 		}
 		Validated.Add(S.RoundRobin - 1);
+		// Snapshot/matching is charged on scope exit; include it before starting
+		// the next indivisible chunk. A soft budget cannot preempt an OS stall.
+		if (FrameGuard.GetValueOnGameThread() != 0
+			&& !S.Budget.CanAdvance(PreparationTimeLimit(*this), PreparationWorkLimit(*this), FPlatformTime::Seconds() - Start)) break;
 		const auto& Input = Entry.Input;
+		{ FPreparationTimer StepTimer(S.StepSeconds, &S.MaxStepSeconds);
 		Work = Entry.Job.Step(PreparationFrame(*this), FMath::Min(128, PreparationWorkLimit(*this) - S.Budget.Work), [&](const bool bWhole, const int32 Index)
 		{
 			if (!bWhole) return PrepareFootprintCell(Input.Bounds, Input.Size, Index, Input.Capture);
@@ -233,6 +296,7 @@ void ADarkwellObjectMemoryScene::AdvanceWholePreparation()
 				if (FDarkwellCurrentLiveGrid::IntersectsWholeCell(Part.Bounds, Part.Pose, FBox2D(Min, Min + Step))) return true;
 			return false;
 		});
+		}
 		if (Work == 0) ++Skipped; else Skipped = 0;
 	}
 }
@@ -241,6 +305,8 @@ bool ADarkwellObjectMemoryScene::TakeWholePreparation(FTrackedProp& Prop, TBitAr
 {
 	check(IsInGameThread());
 	auto& S = *WholePreparation;
+	S.BeginDiagnostics(PreparationFrame(*this));
+	FPreparationTimer TakeTimer(S.TakeSeconds);
 	S.LastSealStartSeconds = FPlatformTime::Seconds();
 	const int32 Index = S.Entries.IndexOfByPredicate([&](const auto& E) { return E.Input.Id == Prop.StableId; });
 	if (Index == INDEX_NONE) { ++S.Fallbacks; return false; }
@@ -277,8 +343,9 @@ FString ADarkwellObjectMemoryScene::GetWholePreparationTelemetry() const
   Bytes += E.Input.Parts.GetAllocatedSize() + E.Input.Capture.GetAllocatedSize()
    + E.Job.Whole.GetAllocatedSize() + E.Job.Footprint.GetAllocatedSize();
  }
- return FString::Printf(TEXT("{\"requests\":%llu,\"hits\":%llu,\"fallbacks\":%llu,\"shadow\":%llu,\"cancelled\":%llu,\"pending\":%d,\"ready\":%d,\"rejected\":%d,\"bytes\":%llu,\"frame_work\":%d,\"frame_ms\":%.6f,\"seal_age_ms\":%.6f}"),
-  S.Requests,S.Hits,S.Fallbacks,S.Shadow,S.Cancelled,S.Entries.Num(),Ready,Revoked,uint64(Bytes),S.Budget.Work,S.Budget.SpentSeconds*1000, S.LastSealStartSeconds > 0 ? (FPlatformTime::Seconds()-S.LastSealStartSeconds)*1000 : -1);
+ FString Result = FString::Printf(TEXT("{\"requests\":%llu,\"hits\":%llu,\"fallbacks\":%llu,\"shadow\":%llu,\"cancelled\":%llu,\"pending\":%d,\"ready\":%d,\"rejected\":%d,\"bytes\":%llu,\"frame_work\":%d,\"frame_ms\":%.6f,\"seal_age_ms\":%.6f,\"request_ms\":%.6f,\"snapshot_ms\":%.6f,\"admission_ms\":%.6f,\"step_ms\":%.6f,\"max_step_ms\":%.6f,\"cancel_ms\":%.6f,\"take_ms\":%.6f,\"current_geometry_ms\":%.6f,\"current_advance_ms\":%.6f,\"current_visual_ms\":%.6f,\"current_textures_ms\":%.6f,\"current_cap_ms\":%.6f,\"history_texture_ms\":%.6f,\"proxy_create_ms\":%.6f,\"proxy_bind_ms\":%.6f}"),
+  S.Requests,S.Hits,S.Fallbacks,S.Shadow,S.Cancelled,S.Entries.Num(),Ready,Revoked,uint64(Bytes),S.Budget.Work,S.Budget.SpentSeconds*1000, S.LastSealStartSeconds > 0 ? (FPlatformTime::Seconds()-S.LastSealStartSeconds)*1000 : -1, S.RequestSeconds*1000,S.SnapshotSeconds*1000,S.AdmissionSeconds*1000,S.StepSeconds*1000,S.MaxStepSeconds*1000,S.CancelSeconds*1000,S.TakeSeconds*1000,RuntimeFrame.CurrentGeometryUs/1000,RuntimeFrame.CurrentAdvanceUs/1000,RuntimeFrame.CurrentVisualUs/1000,RuntimeFrame.CurrentTexturesUs/1000,RuntimeFrame.CurrentCapUs/1000,RuntimeFrame.HistoryTextureCreateUs/1000,RuntimeFrame.ProxyCreateUs/1000,RuntimeFrame.ProxyBindUs/1000);
+ return Result.LeftChop(1) + FString::Printf(TEXT(",\"suppressed_frames\":%llu,\"suppressed\":%d,\"material_load_ms\":%.6f,\"mid_create_ms\":%.6f,\"proxy_register_ms\":%.6f}"), S.SuppressedFrames, S.SuppressedFrame == PreparationFrame(*this) ? 1 : 0, RuntimeFrame.ProxyMaterialLoadUs/1000, RuntimeFrame.ProxyMidUs/1000, RuntimeFrame.ProxyRegisterUs/1000);
 }
 
 void ADarkwellObjectMemoryScene::SetWholePreparationDiagnosticForTesting(int32 Action)

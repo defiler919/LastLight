@@ -709,3 +709,76 @@ Contracts模式2三个周期分别为正常Ready、保持Preparing、显式Inval
 已知限制：多宿主只做保守回退，未做多宿主性能压测；票据错误/重复/取消由确定性GT测试覆盖，没有真实worker乱序完成测试（本实现没有worker）；没有完整随机生命周期组合、十分钟长测、完整性能矩阵、occupancy全集、Shipping打包或无关视觉全集。没有Large World、黑色层、跨帧evidence/知识/资格/资源创建。Docs/AI未维护，stable未移动。
 
 失败证据保留：最初Build01因不完整类型UniquePtr析构失败后修正；P1_protocol02有一个失效断言失败，后续补Destroy防护并使微位移测试确实修改精确输入，之后通过。初次真实P1_lead_mode2为60次请求/59次撤销/0命中，暴露TryResume探测入口每帧撤销；已移至真正resume前，并补“连续coverage只请求一次”断言。该早期快帧不是有效P1收益。
+
+
+## 24. P1 首次Current归因与重帧门控（2026-09-07，默认仍0）
+
+起点开发分支/远端dcc0855406f8435c9bc4a94e95bbcb9b5691054d，工作区干净；remote默认HEAD仍main/46d9f9d。已读AGENTS、第23节、交接及设计第8–9节。本轮运行时 **8831d86a3ef0bd8c4a0a6c349c01008de7c30a1b** 已commit/push。没有扩大FirstWholeGeometry、启动worker或改变知识/证据/资格/Partial/资源创建及冷184时序。
+
+### 实际成本与预算归因
+
+固定提前量路线index6首次Current，调用链为UpdateMemory → UpdateTracked → EnsureRecordVisual → BindProxyMaterial → LoadObject(M_MovingAccumulatedMemory)。六次匹配启动的同DLL实测：
+
+| 首次Current分项（ms） | 范围 |
+| --- | ---: |
+| native memory整次更新 | 11.518–17.216 |
+| EnsureRecordVisual（含下面子项） | 10.044–15.530 |
+| 历史材质LoadObject | **9.241–14.497** |
+| proxy Actor/mesh准备 | 0.242–0.452 |
+| 历史透明纹理创建 | 0.155–0.245 |
+| MID创建 / mesh注册 | 0.133–0.229 / 0.118–0.210 |
+| Whole几何资格块 / Current推进块 | 0.097–0.196 / 0.021–0.043 |
+| Current texture / cap调用 | 0.148–0.253 / 0.002–0.007 |
+
+材质同步加载是本路线首次Current的主要GT成本。LoadObject计时包含引擎内部加载/等待，本轮没有Trace深入其依赖序列化、资源初始化或等待占比，不能把全部时间称为磁盘I/O。表中存在嵌套，不能相加；也不能用native分项加总替代wall最大整帧。
+
+旧准备路径在Current资源提交未结束时准入，帧尾再花约1ms；snapshot/匹配后没有检查本作用域尚未入账的耗时，仍可能分配输出或进入128-cell不可抢占chunk。旧计账覆盖作用域析构和取消，但漏掉部分轮转/查找/临时容器等外围开销。本轮新增request/snapshot/admission/step/max_chunk/cancel/take及Current资源分项计时。
+
+**第23节的2.512ms未复现，不能追认其具体函数来源。** 本轮旧调度B/C的snapshot最大0.081/0.288ms，admission最大0.003/0.001ms。C的最大frame_ms=1.1837发生在index65：step=0，request=0.0237，snapshot=0.0069，cancel作用域=1.1618ms；cancelled计数未增加，说明这是失效检查作用域墙钟尖峰，不能说成释放了大量mask。可能包含系统抢占/等待，未进一步Trace确认。新路径仍保留必须立即执行的取消/消费，绝不为了1ms数字推迟失效。
+
+### 实施边界
+
+- 外层WholeGeometryPreparation仍默认0，0/1/2协议及原mask谓词、容量/寿命/精确域校验/一次Take/同步fallback不变。
+- 新诊断开关`r.Darkwell.ObjectMemory.WholePreparationFrameGuard=1`：在UpdateMemory帧尾、合法Current及历史/资源工作结束后重新查询并尝试原Snapshot准入。没有跨帧保存Actor引用或引入新发布队列。开关0保留旧调度，runner加`-LegacyWholePreparationBudget`用于同DLL对照。
+- 本帧有texture/MID创建、cap rebuild，或UpdateTracked合计达到1ms，就不做可选snapshot/admission/geometry step。按engine frame锁存，重复UpdateMemory/Reset/Invalidate不补发本帧机会；下个空闲帧可继续，既有包消费前仍精确验证。必要取消、合法Current和seal均不等待。
+- snapshot/匹配后，使用`Spent + InFlight`再次检查是否还能准入/step；总预算补入帧尾外围开销及清理，扣除已嵌套计账部分，避免重复收费。128-cell chunk仍不可抢占，1ms仍是软预算而非硬保证。
+- 新的确定性测试显式注入前台耗时，与已有显式frame/work配额一致；生产使用实际UpdateTracked耗时。首次测试因NullRHI夹具日常工作>1ms导致Ready断言失败，修正测试时钟输入后全部通过，未放宽生产门槛。
+
+### 同二进制D3D12短对照
+
+六次固定WholePreparation路线各180帧，均无等待前台更新、记录期前台异常0，Standalone/D3D12 SM6/1080p/SP100/原质量、NoTrace/无截图/无固定步长、NoAuthoringToolsets。DLL SHA256 `948220F699514AB76A06A84E8679D98332793EB4A56DE19F0DC82E15D7B8C66D`；driver SHA256 `2668B40D2ADDEB5181EE1FAD2339E65F6808505FA4BC97E336A390C77286DFCA`。源对应8831d86；部分记录在commit前采集，source.patch保留同一最终代码。下表保留所有窗口，不删除非Current慢帧，单位ms。
+
+| Saved/Stabilization运行名 | 整段MaxFullFrame | 首次Current | seal | preparation MaxFrame | 最大单chunk |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| P1Budget_Lead0_B（oracle） | 26.417 | 26.417 | 22.919 | 0 | 0 |
+| P1Budget_Lead0_C（oracle） | 27.572 | 27.572 | 20.169 | 0 | 0 |
+| P1Budget_Legacy2_B（改前） | 39.533 | 24.653 | 17.214 | 1.005 | 0.073 |
+| P1Budget_Legacy2_C（改前） | 32.898 | 32.898 | 16.696 | 1.184 | 0.012 |
+| P1Budget_Guard2_A（改后） | 28.404 | 28.404 | 18.239 | 1.007 | 0.017 |
+| P1Budget_Guard2_B（改后） | 24.101 | 24.101 | 16.608 | 1.030 | 0.114 |
+
+旧B最大帧在index1、尚无准备请求，不能把该39.533ms的下降归因于门控。两次整段中位：mode0 26.995、新mode2 26.253ms，仅约2.7%且一对反向；**稳定整体收益未成立，默认启用2条件未通过**。seal native两次中位mode0 7.958、新2 4.727ms；seal wall中位21.544→17.423ms，仍不能只报seal。
+
+门控结构效果成立：新两次首次Current都request/snapshot/step=0、work=0，仅门控计账0.0007/0.0003ms，原两次首次Current准备1.005/1.003ms。新单帧超支最大0.0074/0.0303ms，各4帧；最大单chunk反而有0.114ms样本，不能声称所有分项都变快。旧请求在index6，Ready index10/9；新从后续空闲帧准备，Ready index11/12，seal仍index66。双方均完整82944 cell、requests1/hits1/fallback0/cancelled0，峰值包内数组11840 bytes、最终0；新门控帧数2/3。
+
+新全窗口准备账合计11.683/11.049ms，旧5.291/6.516ms：新帧尾逐tracked尝试准入及更完整外围计账有总成本，不能当作等口径纯CPU回归百分比，也不能隐去它。没有减少合法工作或降低采样换成绩。六条路线逐index比较records/proxies/caps/textures/MIDs/fine_bytes/resident_samples/samples_scanned完全相同，最终1 record/proxy、0 cap、4 textures、1 MID、fine_bytes1327104；bit/寿命正确性由下列定向测试补足，计数相同不冒充所有像素逐bit证明。
+
+复算：`python Scripts/CompareWholePreparationBudget.py Saved/Stabilization/P1Budget_Guard2_A Saved/Stabilization/P1Budget_Legacy2_B Saved/Stabilization/P1Budget_Lead0_B Saved/Stabilization/P1Budget_Guard2_B Saved/Stabilization/P1Budget_Legacy2_C Saved/Stabilization/P1Budget_Lead0_C`；本机汇总`Saved/WholePreparationBudget/final_lead.json`。
+
+早期P1Budget_Lead0_A/Legacy2_A分别等待前台2826/3293次更新，最大窗口104.601/131.519ms；保留但不混入匹配启动组。P1Budget_Attribution_Mode2是早期instrumentation DLL，只用于发现binding入口，不混入最终A/B。
+
+### 正确性、视觉和冷184
+
+完整Editor构建`Scripts/BuildEditor.ps1`，最终`Saved/WholePreparationBudget/Build04.log`成功。`RunGrayObjectPolicyTests.ps1 -RunName P1Budget_Regression02 -Tests 'Darkwell.ObjectMemory.Preparation+Darkwell.ObjectMemory.OrdinaryHost+Darkwell.ObjectMemory.WholeReobservation+Darkwell.PropLab.ArchitectureAudit.RecordScopedResourcesParityAndLifetime'`：5/5 clean PASS、severe0。包括0/1/2两mask oracle、精确失效/一次消费/Preparing fallback，以及新增in-flight预算、资源重帧零准入、同frame不能绕过门控、Invalidate不清latch、下一空闲帧恢复及heavy frame零几何工作。实际SourceReplace/Destroy/GC和原资源生命周期回归通过。
+
+`DARKWELL_WHOLE_PREPARATION_MODE=0/2`分别运行`RunGrayMemoryAudit.ps1 -Protocol Contracts`，证据`Saved/ArchitectureAudit/P1Budget_Contracts0/2`，各178图/三次PIE、exit0/severe0/teardown完成。AnalyzeGrayWholeTransitions两边各24张首次Whole退出连续帧全PASS；人工查看新mode2首张Whole及Partial外切口。mode2 Ready首离开hits1，Preparing fallback1，Stale cancelled1/fallback1，三者消费后bytes0。测试范围**首显额外帧延迟仍0**，Current透明预备和原GT原子交接保持。
+
+seal→首图读回墙钟上界mode0三次43.394/45.218/45.847ms，mode2 Ready/Preparing/Stale为43.549/60.586/44.469ms；含截图读回开销，不是正常无截图呈现延迟，不纳入性能A/B。
+
+原Batch输入未改，本轮仅一对压力短测P1Budget_Cold0/Cold2：184 MaxFullFrame535.078/524.639ms，setup251.005/253.790ms，native276.348/263.071ms。mode0等待前台1348次、mode2为0，**启动不匹配，不宣称冷184改善**。两边setup184records/proxies、10 identities；后续原合法反证后均120records/proxies/caps/textures/MIDs、fine_bytes41157632，记录期前台异常0。INITIALIZATION仍FAIL，未升级长期资源判定。
+
+### 下一入口与刻意未做
+
+本轮落地的是重帧避让和计账安全切片，不是首次Current主成本已被消除。下一最高收益入口为BindProxyMaterial内首次历史父材质同步加载及其依赖初始化生命周期；先短Trace拆开LoadObject内部等待/依赖，再评估合法初始化阶段的材质可用性与GC持有。必须把初始化/预备帧纳入完整窗口，不能把这10余ms偷偷移到测量外当作收益。另可在现有P1范围限制帧尾候选扫描的总开销；不扩worker/Partial/evidence/资源池，不因这次seal收益扩大异步协议。
+
+没有重跑完整矩阵、十分钟长测、occupancy全集、无关视觉全集、Shipping、随机生命周期穷举、多宿主压力或无截图GPU呈现延迟。没有证明OS抢占下1ms硬上限，也没有复现归因旧2.512ms。默认仍0；stable、Docs/AI、黑色层、Large World未动。Saved原始证据留本机，源码/复算工具及本技术文档随Git交付。

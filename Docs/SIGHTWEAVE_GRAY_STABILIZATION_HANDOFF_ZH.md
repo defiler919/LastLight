@@ -1,5 +1,18 @@
 # 灰色层功能检查点与稳定化施工
 
+## P1 首次Current与准备预算切片（2026-09-07，8831d86，默认仍0）
+
+运行时 **8831d86a3ef0bd8c4a0a6c349c01008de7c30a1b** 已推送。首次Current主成本已定位到EnsureRecordVisual → BindProxyMaterial → 历史父材质LoadObject（匹配启动六次9.241–14.497ms），不是geometry或texture创建。实施帧尾准入、资源创建/≥1ms native重帧避让、engine frame门控锁存、snapshot后in-flight预算复检及外围清理计账；原P1资格/票据/两mask/一次消费/同步fallback不变，Current与seal不等待。`WholePreparationFrameGuard=0`保留同DLL旧调度；外层WholeGeometryPreparation默认仍0。
+
+最终同DLL固定提前量路线两次：mode0整段26.417/27.572ms，旧mode2 39.533/32.898ms，新mode2 28.404/24.101ms；旧39.533峰值发生在无准备的index1，不可全归因门控。新对mode0一对反向，稳定整体收益未成立，**不默认启用2，INITIALIZATION仍FAIL**。新首次Current准备work=0，之后仍完整82944 cell并hits1；Ready index11/12，合法seal仍index66。新准备MaxFrame1.007/1.030ms、单chunk最高0.114ms，软预算仍有超支；新全窗口账11.683/11.049ms含帧尾扫描/更完整计账，不隐去总开销。
+
+旧2.512ms未复现，不追认原因。本次旧1.184ms尖峰发生在取消检查作用域（1.162ms、step0且cancelled未增加），并非几何chunk；新检查阻止预算已耗尽后继续准入/step，但不会延后必要失效或声称能抢占系统停顿。完整分项、六条原始对照、失败/前台等待样本、hash及命令见[性能审计第24节](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md#24-p1-首次current归因与重帧门控2026-09-07默认仍0)。
+
+Build04完整Editor成功；P1Budget_Regression02定向5/5 clean PASS，含新门控/预算断言、0/1/2 parity、SourceReplace/Destroy/GC及资源生命周期。真实Contracts0/2各三次PIE/178图，两边各24张Whole首次退出帧通过；Ready/Preparing/Stale首图正确、额外首显0帧，Partial外切口人工抽查。新包峰值11840bytes、最终0，路线资源/驻留/扫描结果逐index与mode0一致。冷184本轮535.078/524.639ms，但mode0有1348次前台等待而mode2无，启动不匹配，只作压力、不宣称改善，原输入时序未改。
+
+下一最高收益入口：首次历史父材质同步加载/依赖初始化生命周期；用短Trace拆其内部等待，再做包含初始化帧的合法资源可用性优化，不能把工作移到测量外。P1帧尾逐tracked扫描的总成本也需保持可见。本轮不扩协议/worker/Partial/evidence/资源池；不重跑矩阵/十分钟/occupancy全集/Shipping。无截图呈现延迟、多宿主压力和旧2.512ms确切原因仍未完成。stable、Docs/AI、Large World、黑色层未动。
+
+
 ## P1 FirstWholeGeometry 可选生产切片（2026-09-07，默认0安全检查点）
 
 最终运行时 **9382461772468fd481a850783f2eba42a8706653** 已推送（主实现33ceecb，末次补析构/取消释放计账）。仅首次、静止、合法confirmed Whole的两种几何mask在GT按真实engine frame有界续算；0/1/2、私有值快照、History寿命与精确域验证、一次Take、完整同步回退已接通。没有worker、Partial/evidence/知识/资格或资源创建跨帧；Current透明预备及首次Current→Gray仍在原GT事务内。不是只有影子队列的半套实现。

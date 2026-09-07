@@ -13,7 +13,8 @@ bool FDarkwellHistoricalVisibilitySweep::IsSupported(
 {
 	// Without input-path/occluder history a teleport, origin move, lighting change
 	// or ambiguous >=170 degree turn cannot be proven. Fail closed, never guess.
-	return A.IsValid() && B.IsValid() && A.bConeLegallyLive && B.bConeLegallyLive
+	return A.bUseLegalLightGate==B.bUseLegalLightGate && A.LegalLights==B.LegalLights
+        && A.IsValid() && B.IsValid() && A.bConeLegallyLive && B.bConeLegallyLive
 		&& A.BodyCenter.Equals(B.BodyCenter, 1.e-4) && A.ConeOrigin.Equals(B.ConeOrigin, 1.e-4)
 		&& FMath::IsNearlyEqual(A.BodyRadiusCentimeters, B.BodyRadiusCentimeters, 1.e-4f)
 		&& FMath::IsNearlyEqual(A.ConeRangeCentimeters, B.ConeRangeCentimeters, 1.e-4f)
@@ -75,6 +76,7 @@ bool FDarkwellHistoricalVisibilitySweep::ProvePointSetCoverage(const FDarkwellFo
 	const double Margin = (FDarkwellSpatialPropMemory::LegalCoverage - .5) * 2.5;
 	for (const FVector2D Point : Points)
 	{
+		if(FDarkwellContinuousVisibilityBuilder::EvaluateLegalLightCoverage(A,Point,Occluders)<FDarkwellSpatialPropMemory::LegalCoverage) return false;
 		const FVector2D Relative = Point - A.ConeOrigin;
 		const double Distance = Relative.Size();
 		if (Distance <= Margin || A.ConeRangeCentimeters - Distance < Margin) return false;

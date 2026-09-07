@@ -1,5 +1,14 @@
 # 灰色层功能检查点与稳定化施工
 
+## Vision/Legal Illumination职责收尾完成（2026-09-07）
+
+[完整收尾报告](SIGHTWEAVE_VISION_ILLUMINATION_CLOSURE_ZH.md)，[Git内验证摘要](Evidence/SIGHTWEAVE_VISION_ILLUMINATION_CLOSURE_20260907.json)。checkpoint：`checkpoint/sightweave-gray-performance-closure-20260907`，指向包含本交接的最终修正提交。
+
+原耐久逻辑没有关闭底层Cone；实际错误是表现快照用Torch激活/范围替代几何与合法照明求交，以及仅接受Torch能力。现已固定Vision为2200cm/半角52°，Body120cm永久illumination bypass；手持Torch/Lantern只控制自身合法照明，Environment合法source可以独立满足Cone。无合法光时PureVision仍在，EffectiveLive正确只剩近身圆。CPU覆盖、旋转保护、uniform证明和现有GPU覆盖材质同步修正。
+
+完整Editor Build成功；最终真实D3D12 9/9 clean，四种状态的几何恒定、EffectiveLive/CPU/GPU读回、近身圆、灯笼有/无燃料通过；旧火把整张GPU覆盖最大差0.000488。没有开始黑色层或新性能专项，A1/P1/B0仍默认0、INITIALIZATION仍FAIL；原stable/tag不动。后续入口为游戏系统/另行授权的黑色层工作，不继续性能扩展。
+
+
 ## B0家里归因完成：建议性能专项止损（2026-09-07）
 
 运行时 **dba941fb7217b52739273f3985b38e064d1e1f7d** 已推送。详见 [B0完整归因](SIGHTWEAVE_B0_HOME_REENTRY_ATTRIBUTION_ZH.md) 及 [可移植数据](Evidence/SIGHTWEAVE_B0_HOME_20260907.json)。家里3900X/2070 SUPER、实际UE5.8.2，同DLL三对真实D3D12，固定16条（8W/8P）每批平均CPU准备9.502ms、对象2.477ms、提交2.184ms，其余0.397ms。家里每路线四次16条，第四次由原1秒保留自然到期产生，不改A1策略。

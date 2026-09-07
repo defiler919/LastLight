@@ -67,6 +67,18 @@ bool FDarkwellContinuousVisibilityBuilder::TryUniformCoverage(const FDarkwellFog
   MaxLeft=FMath::Max(MaxLeft,Left); MaxRight=FMath::Max(MaxRight,Right);
   FullCone &= Left>=Margin && Right>=Margin && D.Size()<=Source.ConeRangeCentimeters-Margin;
  }
+ if(FullCone && Source.bUseLegalLightGate)
+ {
+  bool Lit=false;
+  for(const auto& Light:Source.LegalLights)
+  {
+   if(Light.HalfAngle>90 && Light.HalfAngle<180) continue;
+   auto Single=Source;Single.LegalLights={Light};bool Covers=true;
+   for(auto P:C) Covers &= EvaluateLegalLightCoverage(Single,P,{},2.5f)>=1.f;
+   Lit |= Covers && IsOcclusionFree(Light.Origin,Bounds,Occluders);
+  }
+  FullCone=Lit;
+ }
  if((FullBody && IsOcclusionFree(Source.BodyCenter,Bounds,Occluders)) ||
     (FullCone && IsOcclusionFree(Source.ConeOrigin,Bounds,Occluders))) { Value=1; return true; }
  const bool NoBody=MinimumDistance(Source.BodyCenter,Bounds)>=Source.BodyRadiusCentimeters+Margin;

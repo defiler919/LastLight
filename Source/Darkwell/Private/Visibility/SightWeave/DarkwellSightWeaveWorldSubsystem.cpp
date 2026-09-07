@@ -806,11 +806,12 @@ bool UDarkwellSightWeaveWorldSubsystem::ValidateAndBuildDescriptions(
 	OutCone.HeightRange = HeightRange;
 	OutCone.Shape = ESightWeaveSourceShape::DirectionalCone;
 	OutCone.Range = 2200.0f;
-	OutCone.HalfAngleDegrees = FMath::Lerp(
-		52.0f, 35.0f, OutPlayer->GetShotgunAimProgress());
+	OutCone.HalfAngleDegrees = 52.0f;
 	OutCone.IlluminationPolicy = ESightWeaveIlluminationPolicy::RequiresLegalIllumination;
 	OutCone.Compatibility.AcceptedCapabilities.Add(
 		Darkwell::SightWeaveAdapter::TorchCapability);
+	OutCone.Compatibility.AcceptedCapabilities.Add(TEXT("Darkwell.Visible.Lantern"));
+	OutCone.Compatibility.AcceptedCapabilities.Add(TEXT("Darkwell.Visible.Environment"));
 	OutCone.Compatibility.Normalize();
 
 	const UDarkwellLoadoutComponent* Loadout = OutPlayer->GetLoadoutComponent();
@@ -819,11 +820,12 @@ bool UDarkwellSightWeaveWorldSubsystem::ValidateAndBuildDescriptions(
 	OutTorch.FloorId = OutFloor.FloorId;
 	OutTorch.HeightRange = HeightRange;
 	OutTorch.Shape = ESightWeaveSourceShape::Radial;
-	OutTorch.Range = 1250.0f;
+	OutTorch.Range = Loadout && Loadout->IsLanternOn() ? 900.0f : 1250.0f;
 	OutTorch.HalfAngleDegrees = 180.0f;
 	OutTorch.bActive = Loadout && OutPlayer->IsAlive()
-		&& Loadout->IsTorchOn() && Loadout->GetTorchCharge() > 0.0f;
-	OutTorch.EmittedCapabilities.Add(Darkwell::SightWeaveAdapter::TorchCapability);
+		&& ((Loadout->IsTorchOn() && Loadout->GetTorchCharge() > 0.0f) || Loadout->IsLanternOn());
+	OutTorch.EmittedCapabilities.Add(Loadout && Loadout->IsLanternOn()
+        ? FName(TEXT("Darkwell.Visible.Lantern")) : Darkwell::SightWeaveAdapter::TorchCapability);
 	OutTorch.NormalizeCapabilities();
 
 	TArray<FDarkwellVisionIntegrationSegment> FixtureSegments;
@@ -901,19 +903,16 @@ void UDarkwellSightWeaveWorldSubsystem::UpdateDynamicAuthority()
   const FSightWeaveIlluminationSourceHandle IlluminationHandles[]={TorchIlluminationHandle};
   RuntimeSubsystem->UpdateSourceGroupTransform(VisionHandles,IlluminationHandles,Transform);
 	}
-	const float HalfAngle = FMath::Lerp(
-		52.0f, 35.0f, Character->GetShotgunAimProgress());
-	if (!FMath::IsNearlyEqual(ConeDescription.HalfAngleDegrees, HalfAngle))
-	{
-		ConeDescription.HalfAngleDegrees = HalfAngle;
-		RuntimeSubsystem->UpdateVisionSource(ConeVisionHandle, ConeDescription);
-	}
 	const UDarkwellLoadoutComponent* Loadout = Character->GetLoadoutComponent();
 	const bool bTorchActive = Loadout && Character->IsAlive()
-		&& Loadout->IsTorchOn() && Loadout->GetTorchCharge() > 0.0f;
-	if (TorchDescription.bActive != bTorchActive)
+		&& ((Loadout->IsTorchOn() && Loadout->GetTorchCharge() > 0.0f) || Loadout->IsLanternOn());
+	const float LightRange=Loadout && Loadout->IsLanternOn() ? 900.0f : 1250.0f;
+ const FName Capability=Loadout && Loadout->IsLanternOn() ? FName(TEXT("Darkwell.Visible.Lantern")) : Darkwell::SightWeaveAdapter::TorchCapability;
+ if (TorchDescription.bActive != bTorchActive || TorchDescription.Range != LightRange || !TorchDescription.EmittedCapabilities.Contains(Capability))
 	{
 		TorchDescription.bActive = bTorchActive;
+        TorchDescription.Range=LightRange;
+        TorchDescription.EmittedCapabilities={Capability};
 		RuntimeSubsystem->UpdateIlluminationSource(TorchIlluminationHandle, TorchDescription);
 	}
 }
@@ -1002,9 +1001,26 @@ UDarkwellSightWeaveWorldSubsystem::BuildFogVisualSourceSnapshot() const
 	Result.ConeOrigin = FVector2D(ConeLocation.X, ConeLocation.Y);
 	Result.ConeForward = FVector2D(Forward3D.X, Forward3D.Y).GetSafeNormal();
 	Result.BodyRadiusCentimeters = BodyDescription.Range;
-	Result.ConeRangeCentimeters = FMath::Min(ConeDescription.Range, TorchDescription.Range);
+	Result.ConeRangeCentimeters = ConeDescription.Range;
 	Result.ConeHalfAngleDegrees = ConeDescription.HalfAngleDegrees;
-	Result.bConeLegallyLive = ConeDescription.bActive && TorchDescription.bActive;
+	Result.bConeLegallyLive = ConeDescription.bActive;
+ Result.bUseLegalLightGate=true;
+ if(RuntimeSubsystem)
+ {
+  RuntimeSubsystem->PublishSnapshot();
+  if(const auto Snapshot=RuntimeSubsystem->AcquirePublishedSnapshot())
+   for(const auto& Vision:Snapshot->VisionSources) if(Vision.Handle==ConeVisionHandle)
+    for(const int32 Index:Vision.CompatibleIlluminationSourceIndices)
+     if(Snapshot->IlluminationSources.IsValidIndex(Index))
+     {
+      const auto& D=Snapshot->IlluminationSources[Index].Description;
+      if(!D.bActive) continue;
+      auto& Light=Result.LegalLights.AddDefaulted_GetRef();
+      Light.Origin=FVector2D(D.Transform.GetLocation());
+      Light.Forward=FVector2D(D.Transform.GetUnitAxis(EAxis::X)).GetSafeNormal();
+      Light.Range=D.Range;Light.HalfAngle=D.Shape==ESightWeaveSourceShape::Radial?180.f:D.HalfAngleDegrees;
+     }
+ }
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	const FVector2D DiagnosticOffset = FVector2D(
 		Darkwell::SightWeaveAdapter::CVarDiagnosticFogSourceOffsetTexelsX.GetValueOnGameThread(),

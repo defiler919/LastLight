@@ -1,0 +1,80 @@
+{
+  "start_head": "ca0e12f812af4d38249f7827d6996f9a723580b9",
+  "machine": "Home",
+  "engine": {
+    "MajorVersion": 5,
+    "MinorVersion": 8,
+    "PatchVersion": 2,
+    "Changelist": 56702186,
+    "CompatibleChangelist": 55116800,
+    "IsLicenseeVersion": 0,
+    "IsPromotedBuild": 1,
+    "BranchName": "++UE5+Release-5.8"
+  },
+  "validation": {
+    "run": "VisionLightClosureFinal",
+    "selector": "Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority+Darkwell.ObjectMemory.PresentationResidency+Darkwell.FogVisual.CanonicalCoverage+Darkwell.PropLab.MovingRules.FastSweep.AuthorityRevisionAndReactivationGuards+Darkwell.PropLab.MovingRules.FastSweep.SlowFastSweepEquivalent+Darkwell.FogVisual.RememberedProp.RuntimeAtoB",
+    "exit_code": 0,
+    "wall_seconds": 40.7672577,
+    "total": 9,
+    "clean": 9,
+    "warnings": 0,
+    "failed": 0,
+    "not_run": 0,
+    "duration": 5.272212028503418,
+    "severe_lines": 0,
+    "requested_rhi": "D3D12/SM6",
+    "rhi_evidence": [
+      "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority+Darkwell.ObjectMemory.PresentationResidency+Darkwell.FogVisual.CanonicalCoverage+Darkwell.PropLab.MovingRules.FastSweep.AuthorityRevisionAndReactivationGuards+Darkwell.PropLab.MovingRules.FastSweep.SlowFastSweepEquivalent+Darkwell.FogVisual.RememberedProp.RuntimeAtoB\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\VisionLightClosureFinal\\VisionLightClosureFinal_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\VisionLightClosureFinal\\VisionLightClosureFinal.log"
+    ],
+    "passed": true
+  },
+  "legacy_torch_gpu_max_error": 0.000488,
+  "vision_range_cm": 2200,
+  "vision_half_angle_deg": 52,
+  "body_radius_cm": 120,
+  "images": [
+    {
+      "file": "01_TorchOn_Dark.png",
+      "sha256": "749471d6170b4896f143a3d1baeba607815d6f5a69dde98f60dddb3fb64df8d3",
+      "size": [
+        1400,
+        1000
+      ],
+      "pixels_over_250": 134364
+    },
+    {
+      "file": "02_TorchEmpty_Environment.png",
+      "sha256": "e38f5abfe62be02e12422bdae0ebdee87253a5ecd07ff3dd8cad9ff17790d876",
+      "size": [
+        1400,
+        1000
+      ],
+      "pixels_over_250": 46328
+    },
+    {
+      "file": "03_TorchEmpty_NoLight.png",
+      "sha256": "4a098a9e65292f10b73e5dcd704ab2394e4790e77ae18c9c3b1b6318c2fb790a",
+      "size": [
+        1400,
+        1000
+      ],
+      "pixels_over_250": 5956
+    },
+    {
+      "file": "04_TorchRestored.png",
+      "sha256": "749471d6170b4896f143a3d1baeba607815d6f5a69dde98f60dddb3fb64df8d3",
+      "size": [
+        1400,
+        1000
+      ],
+      "pixels_over_250": 134364
+    }
+  ],
+  "files": {
+    "Binaries\\Win64\\UnrealEditor-Darkwell.dll": "2522c3a5f292804e36aa464fde2b793712691cb8eeaffd261d64bfa332a7223f",
+    "Content\\Darkwell\\Vision\\ProjectFog\\M_DarkwellFogCoverage.uasset": "3ee949baf89c1adcf77a329581888d49d41638b52f8c3deac122428e154ec16f",
+    "Saved\\IlluminationClosure\\Build04.log": "2d9fb7a9c0acf0e871e6366a3edda8479fc690c7ef59c368837fcf66ccde386e",
+    "Saved\\IlluminationClosure\\MaterialFinal.log": "e49cb7a772d801f8d637c536c9eb3b383bedb35a0a344a0a1bac1bb8f2987522"
+  }
+}

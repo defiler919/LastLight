@@ -10,6 +10,9 @@
 #include "Engine/Engine.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/Texture2D.h"
+#include "ImageUtils.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Gameplay/DarkwellGameplayTags.h"
@@ -115,6 +118,118 @@ namespace Darkwell::SightWeaveAdapterTests
 		}
 		return Actor;
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellVisionLightBoundary,
+ "Darkwell.SightWeave.Closure.VisionIlluminationBoundary",Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellVisionLightBoundary::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld FixtureWorld(TEXT("VisionLightClosure"),GetTransientPackage(),true);
+ auto* W=FixtureWorld.Get();if(!W)return false;
+ auto* Fixture=Spawn<ADarkwellVisionIntegrationFixture>(*W,FVector::ZeroVector);
+ auto* Player=Spawn<ADarkwellCharacter>(*W,FVector(-650,0,92));
+ auto* Enemy=Spawn<ADarkwellStalkerCharacter>(*W,FVector(550,0,92));
+ Enemy->ConfigurePersistentId(TEXT("Enemy.Stalker.VisionIntegration"));
+ auto* Adapter=W->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ auto* Runtime=W->GetSubsystem<USightWeaveWorldSubsystem>();
+ auto* Fog=W->GetSubsystem<UDarkwellFogVisualSubsystem>();
+ if(!TestTrue(TEXT("Fixture authority starts"),Adapter->RequestSightWeaveAuthority(Fixture))
+  || !TestTrue(TEXT("Fixture authority active"),Adapter->IsSightWeaveAuthorityActive()))return false;
+ auto* Loadout=Player->GetLoadoutComponent();
+ auto SetCharge=[&](float Charge,float Fuel,FGameplayTag Tool)
+ {Loadout->RestorePersistentState(2,Charge,0,Fuel,DarkwellGameplayTags::Equipment_Left_Shotgun,Tool);};
+ FSightWeaveVisionSourceDescription Cone;
+ auto Geometry=[&]()
+ {
+  for(const auto& V:Runtime->AcquirePublishedSnapshot()->VisionSources)
+   if(V.Description.Shape==ESightWeaveSourceShape::DirectionalCone)Cone=V.Description;
+  TestTrue(TEXT("Cone stays active"),Cone.bActive);
+  TestEqual(TEXT("Fixed vision range"),Cone.Range,2200.f);
+  TestEqual(TEXT("Fixed vision half-angle"),Cone.HalfAngleDegrees,52.f);
+  TestEqual(TEXT("Two permanent vision sources"),Runtime->GetVisionSourceCount(),2);
+ };
+ auto Check=[&](const TCHAR* Name,bool NearTarget,bool FarTarget)
+ {
+  Adapter->Tick(0);Geometry();
+  const FVector Points[]={FVector(-590,0,92),FVector(550,0,92),FVector(950,0,92)};
+  const bool Expected[]={true,NearTarget,FarTarget};
+  TArray<FLinearColor> Pixels;
+  auto* Texture=Fog->GetLiveCoverageTexture();
+  if(!TestNotNull(TEXT("Live coverage texture exists"),Texture)) return;
+  FlushRenderingCommands();
+  bool Read=false;
+  if(GDynamicRHI && FString(GDynamicRHI->GetName()).Contains(TEXT("D3D12")))
+  {
+   Read=Texture->GameThread_GetRenderTargetResource()->ReadLinearColorPixels(Pixels,FReadSurfaceDataFlags(RCM_MinMax));
+   TestTrue(TEXT("D3D12 live texture readback"),Read);
+  }
+  for(int32 I=0;I<3;++I)
+  {
+   const auto Live=Runtime->QueryEffectiveLiveAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,Points[I]);
+   TestEqual(*FString::Printf(TEXT("%s effective live %d"),Name,I),Live.bVisible,Expected[I]);
+   const auto CPU=Fog->QueryLiveCoverageAtWorldPoint(FVector2D(Points[I]));
+   TestTrue(TEXT("CPU analytic query valid"),CPU.bValid);
+   TestEqual(*FString::Printf(TEXT("%s CPU coverage %d"),Name,I),CPU.Coverage>.99f,Expected[I]);
+   if(Read)
+   {
+    const auto& M=Fog->GetMapping();const auto UV=M.WorldToUV(FVector2D(Points[I]));
+    const int32 Index=FMath::Clamp(int32(UV.Y*M.TextureExtent.Y),0,M.TextureExtent.Y-1)*M.TextureExtent.X
+     +FMath::Clamp(int32(UV.X*M.TextureExtent.X),0,M.TextureExtent.X-1);
+    TestEqual(*FString::Printf(TEXT("%s GPU coverage %d"),Name,I),Pixels[Index].R>.99f,Expected[I]);
+   }
+  }
+  TestTrue(TEXT("Pure vision still reaches far point in darkness"),
+   Runtime->QueryPureVisionAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,Points[2]).bVisible);
+  if(Read && FString(Name)==TEXT("01_TorchOn_Dark"))
+  {
+   // A colocated radial torch must retain the original coverage at every pixel,
+   // including antialiased occluder edges (do not multiply their visibility twice).
+   FDarkwellFogVisualSourceSnapshot Legacy;
+   Legacy.BodyCenter=Legacy.ConeOrigin=FVector2D(-650,0);Legacy.ConeForward=FVector2D(1,0);
+   Legacy.BodyRadiusCentimeters=120;Legacy.ConeRangeCentimeters=1250;
+   Legacy.ConeHalfAngleDegrees=52;Legacy.bConeLegallyLive=true;
+   Fog->UpdateSource(Legacy);FlushRenderingCommands();
+   TArray<FLinearColor> Oracle;
+   const bool Valid=Texture->GameThread_GetRenderTargetResource()->ReadLinearColorPixels(Oracle,FReadSurfaceDataFlags(RCM_MinMax));
+   TestTrue(TEXT("Legacy torch GPU oracle readable"),Valid && Oracle.Num()==Pixels.Num());
+   float MaxError=0;
+   if(Valid && Oracle.Num()==Pixels.Num())
+    for(int32 I=0;I<Oracle.Num();++I) MaxError=FMath::Max(MaxError,FMath::Abs(Oracle[I].R-Pixels[I].R));
+   TestTrue(TEXT("Independent gate preserves every legacy torch edge pixel"),MaxError<=.002f);
+   AddInfo(FString::Printf(TEXT("Legacy torch full-texture max error=%.6f"),MaxError));
+   Adapter->Tick(0);
+  }
+  if(Read)
+  {
+   TArray<FColor> Colors;Colors.Reserve(Pixels.Num());
+   for(const auto& P:Pixels){uint8 V=uint8(FMath::Clamp(P.R,0.f,1.f)*255);Colors.Emplace(V,V,V,255);}
+   TArray<uint8> PNG;FImageUtils::CompressImageArray(Texture->SizeX,Texture->SizeY,Colors,PNG);
+   FFileHelper::SaveArrayToFile(PNG,*(FPaths::ProjectSavedDir()/TEXT("IlluminationClosure")/(FString(Name)+TEXT(".png"))));
+  }
+  AddInfo(FString::Printf(TEXT("%s: cone=2200/52 active; body bypass; target=%d far=%d; GPU=%d"),Name,NearTarget,FarTarget,Read));
+ };
+ SetCharge(.001f,100,DarkwellGameplayTags::Equipment_Right_Torch);
+ Check(TEXT("01_TorchOn_Dark"),true,false);
+ Loadout->TickComponent(1.f,LEVELTICK_All,nullptr);
+ TestEqual(TEXT("Real durability drains torch to zero"),Loadout->GetTorchCharge(),0.f);
+ FSightWeaveIlluminationSourceDescription Env;
+ Env.KnowledgeOwnerId=Cone.KnowledgeOwnerId;Env.FloorId=Cone.FloorId;Env.HeightRange=Cone.HeightRange;
+ Env.Transform=FTransform(FVector(750,0,92));Env.Range=300;Env.Shape=ESightWeaveSourceShape::Radial;
+ Env.EmittedCapabilities={FName(TEXT("Darkwell.Visible.Environment"))};
+ auto Light=Runtime->RegisterIlluminationSource(Env,Fixture);
+ Check(TEXT("02_TorchEmpty_Environment"),true,true);
+ TestFalse(TEXT("Environment only lights its own area"),Fog->QueryLiveCoverageAtWorldPoint(FVector2D(350,0)).Coverage>.99f);
+ Runtime->UnregisterIlluminationSource(Light);
+ Check(TEXT("03_TorchEmpty_NoLight"),false,false);
+ SetCharge(100,100,DarkwellGameplayTags::Equipment_Right_Torch);
+ Check(TEXT("04_TorchRestored"),true,false);
+ SetCharge(0,100,DarkwellGameplayTags::Equipment_Right_Lantern);Adapter->Tick(0);Geometry();
+ TestTrue(TEXT("Fueled lantern is legal illumination"),Runtime->QueryEffectiveLiveAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,FVector(-150,0,92)).bVisible);
+ TestTrue(TEXT("Lantern CPU coverage agrees"),Fog->QueryLiveCoverageAtWorldPoint(FVector2D(-150,0)).Coverage>.99f);
+ SetCharge(0,0,DarkwellGameplayTags::Equipment_Right_Lantern);Adapter->Tick(0);Geometry();
+ TestFalse(TEXT("Empty lantern stops illumination, not vision"),Runtime->QueryEffectiveLiveAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,FVector(-150,0,92)).bVisible);
+ return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -354,7 +469,7 @@ bool FDarkwellM6P1VerticalSliceAuthorityTest::RunTest(const FString& Parameters)
 	Adapter->Tick(0.0f);
 	TestTrue(TEXT("Lantern state still produces an authoritative decision"),
 		Adapter->TryGetSubjectSnapshot(Stalker->GetPersistentId(), Snapshot));
-	TestFalse(TEXT("Rendered/non-authoritative lantern light cannot satisfy the cone"),
+	TestFalse(TEXT("Legal lantern base range does not reach this 1200cm target"),
 		Snapshot.bHardLive);
 	TestTrue(TEXT("NeverRemember Stalker hides after losing HardLive"),
 		Stalker->IsHidden());
@@ -774,7 +889,7 @@ bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
 			Observe(FVector(0,-650,92),90);
 			FDarkwellVisibilitySubjectSnapshot Snapshot;
 			TestTrue(TEXT("Stalker has one authoritative snapshot"),Adapter->TryGetSubjectSnapshot(Stalker->GetPersistentId(),Snapshot));
-			TestEqual(TEXT("Only legal Torch reveals cone Stalker"),Snapshot.bHardLive,Tool==DarkwellGameplayTags::Equipment_Right_Torch);
+			TestEqual(TEXT("Torch reaches the distant target beyond lantern base range"),Snapshot.bHardLive,Tool==DarkwellGameplayTags::Equipment_Right_Torch);
 			TestEqual(TEXT("Enemy presentation matches HardLive"),Stalker->IsVisibleBySightWeaveAuthority(),Snapshot.bHardLive);
 			TestEqual(TEXT("HUD uses the same authority revision"),Stalker->GetAppliedVisibilityAuthorityRevision(),Snapshot.AuthorityRevision);
 		}

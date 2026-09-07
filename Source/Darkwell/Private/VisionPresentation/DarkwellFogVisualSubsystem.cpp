@@ -4,6 +4,7 @@
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 
 #include "Engine/TextureRenderTarget2D.h"
+#include "Engine/Texture2D.h"
 #include "Engine/Canvas.h"
 #include "CanvasTypes.h"
 #include "HAL/IConsoleManager.h"
@@ -79,7 +80,8 @@ bool FDarkwellFogVisualSourceSnapshot::IsEquivalentTo(
 		&& FMath::IsNearlyEqual(ConeRangeCentimeters, Other.ConeRangeCentimeters, 1.0e-4f)
 		&& FMath::IsNearlyEqual(ConeHalfAngleDegrees, Other.ConeHalfAngleDegrees, 1.0e-4f)
 		&& AuthorityRevision == Other.AuthorityRevision
-		&& bConeLegallyLive == Other.bConeLegallyLive;
+		&& bConeLegallyLive == Other.bConeLegallyLive
+        && bUseLegalLightGate==Other.bUseLegalLightGate && LegalLights==Other.LegalLights;
 }
 
 bool FDarkwellFogVisualMapping::IsValid() const
@@ -134,6 +136,28 @@ FIntRect FDarkwellContinuousVisibilityBuilder::GetCoverageDrawRect(
 	return FIntRect(Min, Max);
 }
 
+float FDarkwellContinuousVisibilityBuilder::EvaluateLegalLightCoverage(
+ const FDarkwellFogVisualSourceSnapshot& Source,const FVector2D& Point,
+ TConstArrayView<FDarkwellFogVisualSegment> Occluders,float Width)
+{
+ if(!Source.bUseLegalLightGate) return 1.f;
+ float Coverage=0;
+ for(const auto& Light:Source.LegalLights)
+ {
+  const auto D=Point-Light.Origin;
+  float Signed=Light.Range-D.Size();
+  if(Light.HalfAngle<180)
+  {
+   const float Angle=FMath::DegreesToRadians(Light.HalfAngle);
+   Signed=FMath::Min(Signed,float(FVector2D::DotProduct(D,Light.Forward)*FMath::Sin(Angle)
+    -FMath::Abs(D.X*Light.Forward.Y-D.Y*Light.Forward.X)*FMath::Cos(Angle)));
+  }
+  const float C=Darkwell::FogVisual::SignedLinearCoverage(Signed,Width);
+  if(C>Coverage && !IsBlockedBySegments(Light.Origin,Point,Occluders)) Coverage=C;
+ }
+ return Coverage;
+}
+
 float FDarkwellContinuousVisibilityBuilder::EvaluateNoOcclusionCoverage(
 	const FDarkwellFogVisualSourceSnapshot& Source,
 	const FVector2D& WorldPosition,
@@ -163,7 +187,7 @@ float FDarkwellContinuousVisibilityBuilder::EvaluateNoOcclusionCoverage(
 	const float ConeCoverage = Darkwell::FogVisual::SignedLinearCoverage(
 		FMath::Min(SideSignedDistance, RadialSignedDistance),
 		TransitionWidthCentimeters);
-	return FMath::Max(BodyCoverage, ConeCoverage);
+	return FMath::Max(BodyCoverage, FMath::Min(ConeCoverage, EvaluateLegalLightCoverage(Source,WorldPosition,{},TransitionWidthCentimeters)));
 }
 
 bool FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(
@@ -516,6 +540,7 @@ FDarkwellFogVisualCoverageQuery FDarkwellContinuousVisibilityBuilder::QuerySourc
 	{
 		ConeCoverage = 0.0f;
 	}
+	ConeCoverage=FMath::Min(ConeCoverage,EvaluateLegalLightCoverage(Source,WorldPosition,Occluders));
 	Result.Coverage = FMath::Max(BodyCoverage, ConeCoverage);
 	if (Result.Coverage > 0.0f)
 	{
@@ -554,6 +579,7 @@ void UDarkwellFogVisualSubsystem::Deactivate()
 	ActiveFixture.Reset();
 	LiveCoverageTexture = nullptr;
 	CoverageMaterial = nullptr;
+	LegalLightData = nullptr;
 	Mapping = FDarkwellFogVisualMapping();
 	LastSource = FDarkwellFogVisualSourceSnapshot();
 	PreviousSource = FDarkwellFogVisualSourceSnapshot();
@@ -655,6 +681,29 @@ bool UDarkwellFogVisualSubsystem::CreateResources(const FBox2D& WorldBounds)
 void UDarkwellFogVisualSubsystem::UpdateMaterialParameters(
 	const FDarkwellFogVisualSourceSnapshot& Source)
 {
+ const int32 Width=FMath::Max(2,Source.LegalLights.Num()*2);
+ if(!LegalLightData || LegalLightData->GetSizeX()!=Width)
+ {
+  LegalLightData=UTexture2D::CreateTransient(Width,1,PF_A32B32G32R32F);
+  LegalLightData->SRGB=false;LegalLightData->NeverStream=true;LegalLightData->Filter=TF_Nearest;
+  LegalLightData->UpdateResource();
+ }
+ if(LegalLightData->GetResource())
+ {
+  auto* Data=new FLinearColor[Width]();
+  for(int32 I=0;I<Source.LegalLights.Num();++I)
+  {
+   const auto& L=Source.LegalLights[I];const float A=FMath::DegreesToRadians(L.HalfAngle);
+   Data[I*2]=FLinearColor(L.Origin.X,L.Origin.Y,L.Range,L.HalfAngle<180?1.f:0.f);
+   Data[I*2+1]=FLinearColor(L.Forward.X,L.Forward.Y,FMath::Sin(A),FMath::Cos(A));
+  }
+  auto* Region=new FUpdateTextureRegion2D(0,0,0,0,Width,1);
+  LegalLightData->UpdateTextureRegions(0,1,Region,Width*sizeof(FLinearColor),sizeof(FLinearColor),reinterpret_cast<uint8*>(Data),
+   [](uint8* P,const FUpdateTextureRegion2D* R){delete[] reinterpret_cast<FLinearColor*>(P);delete R;});
+ }
+ CoverageMaterial->SetTextureParameterValue(TEXT("LegalLightData"),LegalLightData);
+ CoverageMaterial->SetScalarParameterValue(TEXT("LegalLightCount"),Source.LegalLights.Num());
+ CoverageMaterial->SetScalarParameterValue(TEXT("UseLegalLightGate"),Source.bUseLegalLightGate?1.f:0.f);
 	const FVector2D Forward = Source.ConeForward.GetSafeNormal();
 	const float HalfAngleRadians = FMath::DegreesToRadians(Source.ConeHalfAngleDegrees);
 	CoverageMaterial->SetVectorParameterValue(TEXT("FogWorldMin"), FLinearColor(

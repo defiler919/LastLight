@@ -28,6 +28,15 @@ enum class EDarkwellInitialKnowledgePolicy : uint8
 	FullyLive
 };
 
+/** Compatible, active legal light copied from the authority snapshot; never inferred from brightness. */
+struct DARKWELL_API FDarkwellLegalLight
+{
+ FVector2D Origin=FVector2D::ZeroVector, Forward=FVector2D(1,0);
+ float Range=0, HalfAngle=180;
+ bool operator==(const FDarkwellLegalLight& B) const
+ { return Origin==B.Origin && Range==B.Range && HalfAngle==B.HalfAngle && (HalfAngle>=180 || Forward==B.Forward); }
+};
+
 /** Immutable project-facing source data copied from the SightWeave authority adapter. */
 struct DARKWELL_API FDarkwellFogVisualSourceSnapshot
 {
@@ -38,7 +47,9 @@ struct DARKWELL_API FDarkwellFogVisualSourceSnapshot
 	float ConeRangeCentimeters = 0.0f;
 	float ConeHalfAngleDegrees = 0.0f;
 	uint64 AuthorityRevision = 0;
-	bool bConeLegallyLive = false;
+	bool bConeLegallyLive = false; // Geometry activation; explicit light gate is independent.
+ bool bUseLegalLightGate = false;
+ TArray<FDarkwellLegalLight> LegalLights;
 
 	bool IsValid() const;
 	bool IsEquivalentTo(const FDarkwellFogVisualSourceSnapshot& Other) const;
@@ -100,6 +111,8 @@ public:
  static bool TryUniformCoverage(const FDarkwellFogVisualSourceSnapshot& Source,const FBox2D& Bounds,
   TConstArrayView<FDarkwellFogVisualSegment> Occluders,float& Value);
  static bool IsOcclusionFree(const FVector2D& Origin,const FBox2D& Bounds,TConstArrayView<FDarkwellFogVisualSegment> Occluders);
+ static float EvaluateLegalLightCoverage(const FDarkwellFogVisualSourceSnapshot& Source,
+  const FVector2D& Point, TConstArrayView<FDarkwellFogVisualSegment> Occluders, float Width=2.5f);
  static float EvaluateNoOcclusionCoverage(
 		const FDarkwellFogVisualSourceSnapshot& Source,
 		const FVector2D& WorldPosition,
@@ -236,6 +249,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> CoverageMaterial;
+
+ UPROPERTY(Transient)
+ TObjectPtr<class UTexture2D> LegalLightData;
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<ADarkwellVisionIntegrationFixture> ActiveFixture;

@@ -308,6 +308,46 @@ return saturate(Visibility);
         400,
         "Continuous cone line-segment visibility",
     )
+    # Independent legal-light union gates only the cone; body remains bypass.
+    light_data = expr(material, unreal.MaterialExpressionTextureObjectParameter, 1700, 1000)
+    light_data.set_editor_property("parameter_name", "LegalLightData")
+    light_data.set_editor_property("texture", unreal.load_asset("/Engine/EngineResources/WhiteSquareTexture"))
+    light_count = scalar_parameter(material, "LegalLightCount", 0, 1700, 1100)
+    light_gate = scalar_parameter(material, "UseLegalLightGate", 0, 1700, 1200)
+    legal_code = f"""
+if (UseLegalLightGate < 0.5) return 1.0;
+float Legal = 0.0;
+float4 Segments[16] = {{ {segment_array} }};
+[loop] for (int L=0; L<(int)LegalLightCount; ++L)
+{{
+ float4 A=LegalLightData.Load(int3(L*2,0,0));
+ float4 B=LegalLightData.Load(int3(L*2+1,0,0));
+ float2 D=WorldXY-A.xy;
+ float Signed=A.z-length(D);
+ if(A.w>0.5) Signed=min(Signed,dot(D,B.xy)*B.z-abs(D.x*B.y-D.y*B.x)*B.w);
+ float C=saturate(0.5+Signed/max(CoverageWidth,0.001));
+ float Visibility=1.0;
+ [unroll] for(int S=0; S<16; ++S)
+ {{
+  float2 Edge=Segments[S].zw-Segments[S].xy;
+  float2 Relative=Segments[S].xy-A.xy;
+  float Den=D.x*Edge.y-D.y*Edge.x;
+  float Safe=Den>=0?max(Den,1.e-5):min(Den,-1.e-5);
+  float T=(Relative.x*Edge.y-Relative.y*Edge.x)/Safe;
+  float U=(Relative.x*D.y-Relative.y*D.x)/Safe;
+  float Margin=min(min(T,1-T),min(U,1-U));
+  float Blocked=smoothstep(-max(fwidth(Margin),1.e-4),max(fwidth(Margin),1.e-4),Margin)
+   *step(1.e-5,abs(Den))*step((float)S+0.5,OccluderSegmentCount);
+  Visibility*=1-Blocked;
+ }}
+ Legal=max(Legal,C*saturate(Visibility));
+}}
+return Legal;
+"""
+    legal = custom_expression(material, legal_code,
+        [("WorldXY", world), ("LegalLightData", light_data), ("LegalLightCount", light_count),
+         ("UseLegalLightGate", light_gate), ("CoverageWidth", width)] + shared_occlusion_inputs,
+        2000, 1000, "Legal illumination union, independent of player vision geometry")
     visible_body = binary(
         material,
         unreal.MaterialExpressionMultiply,
@@ -324,6 +364,8 @@ return saturate(Visibility);
         2050,
         250,
     )
+    # Intersect after each source occlusion; shared-origin edge visibility must not be squared.
+    visible_cone = binary(material, unreal.MaterialExpressionMin, visible_cone, legal, 2200, 550)
     live_coverage = binary(
         material, unreal.MaterialExpressionMax, visible_body, visible_cone, 2300, -150
     )

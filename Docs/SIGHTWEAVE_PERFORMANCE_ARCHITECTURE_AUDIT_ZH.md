@@ -638,3 +638,74 @@ python Scripts/AnalyzeGrayWholeTransitions.py Saved/ArchitectureAudit/ResourceSl
 **对184的结论修正为明确边界，而不是性能承诺**：现有一次调用内同时请求并seal184条，无准备提前量。P1普通Whole路线有机会提前分摊工作，但原冷184应完整保留、可能继续同步回退。若要硬性降低这个冷批次且不增加首显延迟，必须先提供语义上允许的准备阶段；单纯改seed时序不算优化。首显延迟/初始化交互门槛若需要变化，应独立定案，不能在实现时自行放宽。
 
 下一轮验收同时覆盖最大整帧（从合法观察/最初请求起，包含预备帧）、合法seal至首次正确图像的帧差与墙钟时间、AllReady/合法终止、取消/过期结果拒绝、内存高水位与回收。P1额外首显帧延迟要求0；软准备预算不是整帧硬上限。旧冷184与新增有提前量的Whole路线分别同二进制A/B，不跨路线比较。详细拟定测试未执行，不计为通过。
+
+
+## 23. P1 FirstWholeGeometry：可选生产路径与安全检查点（2026-09-07）
+
+最终运行时 **9382461772468fd481a850783f2eba42a8706653**，首个实现提交33ceecb869d99180fb1a0529d630873c391b0b85；均已推送开发分支。起点8df5665，工作区最初干净。**默认仍为模式0；模式2完整接通，但不宣称整体性能验收通过。INITIALIZATION仍FAIL。** 本阶段不是仅挂后台任务的半套系统：准入、续算、一次消费、拒绝/同帧回退和释放均已接入并测试；没有worker或跨帧发布。
+
+### 实际边界与接口
+
+- `DarkwellHistoryPreparation.h/.cpp`：私有纯票据、两个packed mask、游标、最多128 cell谓词/step、8个推进帧期限、一次Take及跨UpdateMemory保留的frame budget。每cell最多遍历16个primitive，期限失败释放mask并保留有界拒绝描述符，避免相同输入反复重算。
+- `DarkwellWholePreparation.cpp`：GT所有者与最多8个驻留包；每包最多65536 fine cells、两组各最多16个descriptor。这些硬数量界限使结果/描述符远小于设计32MiB上限，不是无限字节队列。输入不保存Actor/record/visual指针或借用数组view。
+- 只准入首次、合法confirmed Whole、静止策略状态、实际姿态/LastLegalPose/捕获姿态精确一致、没有FineHistory/封存mask的Current。Whole原SAT cell谓词和capture footprint原谓词提取共享，未改容差、分辨率或灰色层规则。
+- `UpdateTracked`在原EnsureRecordVisual后申请；`UpdateMemory`末尾按真实GFrameCounter轮转续算，软预算1ms。显式测试frame/work配额不依赖机器速度；同一engine frame、Reset和取消不重置已花预算。多宿主世界保守回退，不给每个宿主各发1ms。没有世界级后台任务服务。
+- `FreezeCurrentForHiddenMotion`仍在原合法seal事务内工作。通过精确域验证的Ready只替换Whole mask及后面的capture footprint；fine初始化、限制几何、pixels、proxy/texture/MID/cap、显隐/GT注册提交均留在原调用。未命中、不完整、失效均完整同步回退，不等下一帧。
+- 开关`r.Darkwell.ObjectMemory.WholeGeometryPreparation`：0为已有同帧oracle；1为影子计算/两mask比对并仍使用原输出；2为完整P1。之前的ownership/capture/cap/occupancy/resource开关不变。诊断Hold/Invalidate只用于构造Preparing/Stale视觉样本。
+
+### 失效、消费及统计
+
+域同时包含Scene/World/Source/Policy的FObjectKey（含UObject寿命serial）、History.Initialize生成的新FGuid、StableId/Epoch、内容/几何/策略/移动版本，以及精确pose、bounds、size、两组primitive输入。没有只依赖带容差TransformRevision或单个hash判断相等。resume的FineHistory资格检查也排除复用旧epoch。
+
+Reset/EndPlay、释放源/SourceReplace、实际resume、retire、abandon和Lab直接History.Initialize覆盖撤销；源进入Destroy流程即使弱引用尚可解析也拒绝。域变化在请求/推进/消费处重新校验。取出包先从私有队列移除，重复Take及旧ticket失败，失败也撤销旧发布权；不会FindOrAdd权威历史。完成本身不授予确认、知识或空证据，不恢复旧灰。SourceReplace仍保留原合法未反证历史。
+
+两个packed位图只由GT私有游标写。准备查询的统计隔离于权威历史查询统计；`frame_work`计两个mask的cell谓词工作。末次9382461用作用域计账覆盖快照/结果析构及显式取消释放，避免清理被漏在计时末尾之后。`pending`遥测指驻留私有包数（含Ready/Rejected），不是未完成工作数；另有ready/rejected/bytes字段。`bytes`是包内数组采样驻留量，不冒充进程RSS或分配器绝对高水位。
+
+### 构建与定向验证
+
+| 证据 | 结果 |
+| --- | --- |
+| `Saved/WholePreparation/Build08.log`，`Scripts/BuildEditor.ps1` | 完整DarkwellEditor Win64 Development成功，30.58s；非Live Coding |
+| `Saved/GrayObjectPolicy/P1_final_tests` | 5/5，无warning/failure/severe；新增Preparation.Protocol/FirstWholeHandoff，加OrdinaryHost、WholeReobservation、RecordScopedResourcesParityAndLifetime |
+| `Saved/GrayObjectPolicy/P1_budget_tests` | 末次释放计账修正后新增协议/交接2/2重验通过 |
+| `Saved/ArchitectureAudit/P1_final_contracts0` / `P1_final_contracts2` | 同二进制真实D3D12/SM6 Contracts；各3次PIE、178图，正常teardown，严重错误0 |
+| `Scripts/AnalyzeGrayWholeTransitions.py` | 两边各24张首次Whole退出帧全部通过；另人工检查Preparing首帧及Partial外切口 |
+
+新增确定性覆盖：1/127/128/129配额及非word对齐输出；两个独立原包装oracle逐bit比较薄边/旋转/反射；owner/history/record/source/request不匹配、重复消费、回退后拒绝、8推进帧期限；同frame配额不补发；九包以上拒绝（私有快照故障注入，不新增权威身份）；Reset/History.Initialize、极小捕获pose变化、内容/策略变化、Source Destroy、非法capture revision及Preparing同步回退。0/1/2最终capture/fine mask一致，模式1影子命中、模式2实际Ready命中；连续coverage更新只入队一次。
+
+普通宿主回归继续包含真实SourceReplace/Destroy/GC；Contracts覆盖Whole首次离开、StationaryOnly/Never、墙体/视锥、普通相机深度和Partial外切口。没有把这些回归说成任意生命周期排列的穷举证明。
+
+### 最终二进制真实D3D12结果
+
+运行时9382461的四条短测：`Saved/Stabilization/P1_accounted_lead0`、`P1_accounted_lead2`、`P1_accounted_cold0`、`P1_accounted_cold2`。DLL SHA256均为`E65ADD84F9AA45D1089DD2999ECC43C09789CEA6E19770560588F6BAF8DFBB05`；driver SHA256均为`2668B40D2ADDEB5181EE1FAD2339E65F6808505FA4BC97E336A390C77286DFCA`。均Standalone、D3D12/SM6、1080p/SP100、原质量、NoAuthoringToolsets、NoTrace、无固定步长/无截图；lead各180帧、Batch各480帧，记录期前台异常0。cold2启动阶段有9129个等待前台的更新（总进程约104s），保留startup证据，不混入记录窗口；**该最终冷对的启动条件不匹配，只作压力记录，不作为严格收益A/B。** 前述较早同DLL冷对照仍保留，不能用最终这一对更快的数字覆盖反向证据。
+
+| 路线/指标（ms） | 模式0 | 模式2 |
+| --- | ---: | ---: |
+| 有提前量Whole，整个窗口最大完整帧 | 28.033 | 26.130 |
+| 有提前量Whole，setup | 4.616 | 4.022 |
+| 有提前量Whole，native最大 | 14.821 | 16.525 |
+| 同一合法退出帧，完整帧 | 27.960 | 19.444 |
+| 同一合法退出帧，native | 9.216 | 4.513 |
+| 原冷184，最大完整帧 | 548.577 | 520.202 |
+| 原冷184，setup | 268.380 | 244.542 |
+| 原冷184，native最大 | 272.860 | 268.413 |
+
+提前量路线两边同轨迹：先记录未观察状态，index5转入合法观察、65转离；不是给模式2增加预热。模式2在index6请求、10 Ready、66消费，requests=1/hits=1/fallback=0，最后驻留包/bytes为0；两mask共82944 cell工作，准备计账合计7.981ms，单frame最高2.512ms，包内数组采样峰值11840 bytes。**1ms是软预算，实测有超支，不能写成硬上限达成。** 单目标AllReady为index10；没有以此冒充184目标跨帧收敛。
+
+两模式提前量路线最终同为1 record/proxy、0 cap、4 textures、1 MID、fine_bytes=1327104。冷184两边setup均184 records/proxies、10 identities；原后续合法证据推进后均120 records/proxies/caps/textures/MIDs、fine_bytes=41157632。没有减少合法创建或把184 seed拆到多帧；P1不改变该同步压力基线。
+
+**不能据最后一对宣称稳定整体收益。** 此前同二进制P1_final_lead0/2为23.538→26.723ms，最大帧转移到首次Current；P1_final_cold0/2为530.669→557.163ms；更早冷对照520.125→542.256ms。不同修订的样本不合并做中位数、也不裁掉反向结果。可重复的结构性事实是Ready消费能移走部分seal几何工作，但首次Current/resource整帧仍主导；冷184没有提前量，仍约半秒且有明显运行间波动。
+
+### 首显与视觉墙钟证据
+
+Contracts模式2三个周期分别为正常Ready、保持Preparing、显式Invalidate后Stale。对应第一张`whole_exit_00`均正确，后续连续8帧通过，与模式0相同；**本测试范围内首显额外帧延迟0**。Ready周期遥测hits=1；另两周期均原同步fallback，Stale还记录cancelled=1，最终队列/bytes为0。
+
+同次视觉诊断记录seal入口至截图读回完成的墙钟上界：模式0三次61.066/62.546/62.294ms；模式2 Ready/Preparing/Stale为41.143/60.012/59.831ms。三样本最近秩p95等于max（62.546/60.012ms），样本量小。这包含截图读回等待，**不是无读回正常游戏的GPU呈现/屏幕扫描延迟，也不能充当正常性能A/B**。图像/墙钟证据来自33ceecb；最后9382461只补释放计账，完整构建及定向测试重验，未机械重跑178图。
+
+### 判定、剩余风险和下一入口
+
+保留默认0作为安全检查点，模式2完整可选；不升级INITIALIZATION，不开始更大的跨帧系统。准备/消费/失效功能已接通并有实际命中，但**默认启用/整体性能收益门槛尚未通过**。下一轮优先在现有P1内核查首次Current重帧的准备预算、准入/校验开销与真实整体峰值，再补更细的取消原因/多宿主压力及无截图呈现延迟证据；不要因seal变快就直接扩展worker/Partial/资源池。
+
+已知限制：多宿主只做保守回退，未做多宿主性能压测；票据错误/重复/取消由确定性GT测试覆盖，没有真实worker乱序完成测试（本实现没有worker）；没有完整随机生命周期组合、十分钟长测、完整性能矩阵、occupancy全集、Shipping打包或无关视觉全集。没有Large World、黑色层、跨帧evidence/知识/资格/资源创建。Docs/AI未维护，stable未移动。
+
+失败证据保留：最初Build01因不完整类型UniquePtr析构失败后修正；P1_protocol02有一个失效断言失败，后续补Destroy防护并使微位移测试确实修改精确输入，之后通过。初次真实P1_lead_mode2为60次请求/59次撤销/0命中，暴露TryResume探测入口每帧撤销；已移至真正resume前，并补“连续coverage只请求一次”断言。该早期快帧不是有效P1收益。

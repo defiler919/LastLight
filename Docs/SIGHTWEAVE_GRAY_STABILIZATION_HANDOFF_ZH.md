@@ -1,5 +1,16 @@
 # 灰色层功能检查点与稳定化施工
 
+## P1 FirstWholeGeometry 可选生产切片（2026-09-07，默认0安全检查点）
+
+最终运行时 **9382461772468fd481a850783f2eba42a8706653** 已推送（主实现33ceecb，末次补析构/取消释放计账）。仅首次、静止、合法confirmed Whole的两种几何mask在GT按真实engine frame有界续算；0/1/2、私有值快照、History寿命与精确域验证、一次Take、完整同步回退已接通。没有worker、Partial/evidence/知识/资格或资源创建跨帧；Current透明预备及首次Current→Gray仍在原GT事务内。不是只有影子队列的半套实现。
+
+**默认仍0，模式2可选；整体性能收益未成立，INITIALIZATION仍FAIL。** 最终同DLL D3D12提前量路线最大整帧28.033→26.130ms，seal native 9.216→4.513ms，实际Ready命中1；但峰值仍落在首次Current，先前对照也出现反向结果，不能只报seal收益。原冷184输入时序未改，最终压力记录548.577/520.202ms（模式2长前台等待，非匹配启动A/B）；此前同DLL对照530.669→557.163ms，约半秒压力仍在，不承诺P1降低无提前量冷批次。
+
+Build08完整Editor成功；定向组合5/5，末次计账修正后协议/交接2/2。模式0/2真实Contracts各3次PIE、24张Whole退出帧通过；模式2区分Ready/Preparing/Stale，第一退出帧正确，测试范围额外首显延迟0帧。Partial外切口另有人工抽查。准备计账单frame实测最高2.512ms，1ms软预算有超支；最终包/数组字节归零。详细命令、SHA256、计时/图像证据、失败样本及墙钟读回上界见[性能审计第23节](SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md#23-p1-firstwholegeometry可选生产路径与安全检查点2026-09-07)。
+
+下一轮从9382461继续P1验收：先处理首次Current重帧与准备预算/准入开销，验证整段峰值和更细生命周期/取消计账；不要默认开启2或扩展worker、Partial、资源池。多宿主仅保守回退，未压力验收；无截图正常呈现墙钟延迟未完整测量，现有seal→截图读回含诊断开销。未跑完整矩阵/十分钟/occupancy全集/Shipping；Docs/AI、stable、黑色层和Large World均未动。
+
+
 ## 跨帧首次历史准备：架构定案（2026-09-07，084ab56之后，仅文档）
 
 已核验开发分支及远端084ab5664058badeacb754e1fef6fb487bb71f9d，初始工作区干净；阅读AGENTS、上阶段交接、审计第21节与相关生命周期源码。**本轮没有修改运行时/接口头文件、构建、跑基准或留下后台任务；实际运行时仍为bf48648。** 全文、拟定接口和可执行测试计划见 [首次历史准备与发布设计](SIGHTWEAVE_HISTORY_PREPARATION_SCHEDULING_DESIGN_ZH.md)，审计第22节为决策索引。

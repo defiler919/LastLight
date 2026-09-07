@@ -1,5 +1,15 @@
 # 灰色层功能检查点与稳定化施工
 
+## Unknown 样本横切阶段成果：视觉阻塞，未完成（2026-09-07）
+
+**当前任务未完成，不要进入下一黑色层切片。** [样本级 Clear/Block 报告](SIGHTWEAVE_UNKNOWN_PARTIAL_CUT_ZH.md) 和 [Git 内证据](Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_CUT_20260907.json) 与本提交同源。起点 `26eb673876875faffaa4a136fb5943b10440bd76`，本次家里生成证据，不要求公司 Saved 存在。
+
+固定 AABB 现按 `[Min, Max)` 中心分别切 coarse/fine，区域外旧知识/已知 AA 保留，Block 内 Live 正常但不写灰，解除 Block 旧灰恢复，Clear+Block 旧灰不复活；Whole 原子规则不变。A0 重建、GPU hard A / 区域知识镜像、旋转后 ownership/cap 边界与空闲签名断言通过。最终完整 Build24Final 成功；无人值守前台真实 D3D12 `UnknownPartialForegroundFinal` 自动测试 7/7 成功（6 clean，1 HTTP 探测超时 warning，severe 0）。复用既有前台握手及电源 guard，退出码 0，无人工点击。
+
+**视觉验收未通过**：37° 旋转后 Live 中 Clear+Block、离开并解除，第 09 阶段保留灰层仍有细竖条纹。区域外知识及 AA 支持无损失，cap-only 连续、无双贡献者或越界；灰层透明度/AA 合成待定位修正。隐藏 cap 的第 10 阶段和 cap-only 第 11 阶段只是诊断，禁止当成验收 PASS。已停止继续猜改，按无人值守阻塞约定保存开发阶段成果；下一步只处理本片此问题，不降低精度、不晚显示、不扩系统。
+
+运行时/测试/报告/证据同本阶段提交，最终 DLL SHA-256 `f7c280a69355c57878b841f7036aa426ca3017e168662dd11adaebdaf34ee399`。灰色 checkpoint、stable/tag 不动；A1/P1/B0 默认 0，cold184 不变，INITIALIZATION 仍 FAIL。下面“首片完成”是前一任务历史结论，不代表本横切片完成。
+
 ## Unknown 局部区域首片完成（2026-09-07）
 
 灰色层已在 `checkpoint/sightweave-gray-performance-closure-20260907` / `eeeec6506d1fecfd2d05bd08095b8230287a4d4f` 封板，该 checkpoint 不动。本次在其后完成 [Unknown 区域首片](SIGHTWEAVE_UNKNOWN_REGION_SLICE_ZH.md)，[Git 内验证摘要和截图索引](Evidence/SIGHTWEAVE_UNKNOWN_REGION_20260907.json)。运行时、文档、证据同本提交。

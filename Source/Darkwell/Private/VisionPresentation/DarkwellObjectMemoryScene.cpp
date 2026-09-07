@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
+#include "VisionPresentation/DarkwellMemoryRegionSamples.h"
 #include "DarkwellB0Probe.h"
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
@@ -196,6 +197,7 @@ namespace Darkwell::ObjectMemory
 	float HistoricalOpacity(const FDarkwellSpatialObservationRecord& Record, int32 FineIndex, int32 CoarseIndex)
 	{
 		if (!Record.FineHistory.IsInitialized()) return Record.SpatialMemory.Presentation(CoarseIndex).B;
+  if(Record.FineHistory.IsMemoryBlocked(FineIndex)) return 0;
 		const auto& S = Record.FineHistory.GetSamples()[FineIndex];
 		return S.State == FDarkwellHistoryGridV2::Superseded() || S.State == FDarkwellHistoryGridV2::NeverObserved()
 			? 0.f : S.Opacity * S.FrozenAAEnvelope;
@@ -647,7 +649,7 @@ bool ADarkwellObjectMemoryScene::CollectCurrentOwnedVerticalIntervals(
 {
 	check(!GOwnershipQueryCounts); // Live actor/policy queries are GT-only.
 	OutIntervals.Reset();
-	if (bOnlyDurableOwnership && (IsTentativeWhole(Prop) || Prop.bMemoryWritesBlocked)) return false;
+	if (bOnlyDurableOwnership && (IsTentativeWhole(Prop) || Prop.bMemoryWritesBlocked || (bMemoryBlockActive && Darkwell::MemoryRegionSamples::Contains(MemoryBlockBounds,Point)))) return false;
 	if (ProjectionTolerance == 0.0 && !HasCurrentObservedContributionAt(Prop, Point))
 	{
 		return false;
@@ -673,10 +675,10 @@ bool ADarkwellObjectMemoryScene::CollectCurrentOwnedVerticalIntervals(
 			Local.X = FMath::Clamp(Local.X, Geometry.LocalBounds.Min.X + 1.e-6, Geometry.LocalBounds.Max.X - 1.e-6);
 			Local.Y = FMath::Clamp(Local.Y, Geometry.LocalBounds.Min.Y + 1.e-6, Geometry.LocalBounds.Max.Y - 1.e-6);
 			const FVector2D EvidencePoint(Geometry.WorldTransform.TransformPosition(Local));
-            if (LocalCurrent ? !Prop.CurrentLive.HasObservedContributionAt(EvidencePoint,Geometry.PrimitiveIndex)
+            if (LocalCurrent ? !Prop.CurrentLive.HasObservedContributionAt(EvidencePoint,Geometry.PrimitiveIndex,!bOnlyDurableOwnership)
                 : !HasCurrentObservedContributionAt(Prop,EvidencePoint)) continue;
 		}
-        else if(LocalCurrent && !Prop.CurrentLive.HasObservedContributionAt(Point,Geometry.PrimitiveIndex)) continue;
+        else if(LocalCurrent && !Prop.CurrentLive.HasObservedContributionAt(Point,Geometry.PrimitiveIndex,!bOnlyDurableOwnership)) continue;
 		double MinimumZ = 0.0;
 		double MaximumZ = 0.0;
 		if (QueryVerticalInterval(Geometry, Point, MinimumZ, MaximumZ, ProjectionTolerance))
@@ -849,7 +851,7 @@ bool ADarkwellObjectMemoryScene::HasNewerObservedGeometryOverlapAt(
 		auto TestGeometry = [&](const FPrimitiveGeometrySnapshot& NewerGeometry)
 		{
 			if (bLocalCurrent && !Prop.CurrentLive.HasObservedContributionAt(
-				Point, NewerGeometry.PrimitiveIndex)) return false;
+				Point, NewerGeometry.PrimitiveIndex,!bOnlyDurableOwnership)) return false;
 			double NewerMinZ = 0.0;
 			double NewerMaxZ = 0.0;
 			if (!QueryVerticalInterval(NewerGeometry, Point, NewerMinZ, NewerMaxZ)) return false;
@@ -1524,7 +1526,7 @@ bool ADarkwellObjectMemoryScene::HasCurrentObservedContributionAt(
 	const FTrackedProp& Prop,
 	const FVector2D Point) const
 {
-	if (bOnlyDurableOwnership && (IsTentativeWhole(Prop) || Prop.bMemoryWritesBlocked)) return false;
+	if (bOnlyDurableOwnership && (IsTentativeWhole(Prop) || Prop.bMemoryWritesBlocked || (bMemoryBlockActive && Darkwell::MemoryRegionSamples::Contains(MemoryBlockBounds,Point)))) return false;
 	const int32 CurrentIndex = Prop.History.GetCurrentIndex();
 	const AActor* Actual = Prop.bExists ? Prop.Actual.Get() : nullptr;
 	if (!Actual || CurrentIndex == INDEX_NONE
@@ -1535,7 +1537,7 @@ bool ADarkwellObjectMemoryScene::HasCurrentObservedContributionAt(
 	const FDarkwellSpatialObservationRecord& Current = Prop.History.GetRecords()[CurrentIndex];
     if(Prop.LocalEpoch==Current.Epoch)
         return Prop.bLastCoverageValid && Current.SnapshotTransform.Equals(Actual->GetActorTransform())
-            && Prop.CurrentLive.HasObservedContributionAt(Point);
+            && Prop.CurrentLive.HasObservedContributionAt(Point,INDEX_NONE,!bOnlyDurableOwnership);
 	const FBox2D& Bounds = Current.SpatialMemory.GetBounds();
 	const FIntPoint Size = Current.SpatialMemory.GetSize();
 	if (!Bounds.bIsValid || Size.X <= 0 || Size.Y <= 0 || !Bounds.IsInside(Point))
@@ -1867,7 +1869,8 @@ void ADarkwellObjectMemoryScene::BuildGeometryDirtyIndices(
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_FineOccupancy);
 		BuildOccupiedSamples(Bounds, Size, OutPhysicalDirtyIndices,
-			Record.bConfirmedWholeCapture ? &Record.LastLegalCaptureMask : nullptr, Visual.CachedFineOccupied);
+			Record.bConfirmedWholeCapture ? &Record.LastLegalCaptureMask
+    : Prop.bSampleMemoryRegion ? &Record.GeometryFootprint : nullptr, Visual.CachedFineOccupied);
 	}
  // Publish revision/cache state only after all CPU results have joined.
  Visual.CachedPhysicalGeometry=MoveTemp(PhysicalGeometry); Visual.CachedNewerGeometry=MoveTemp(NewerGeometry);
@@ -2012,6 +2015,7 @@ bool ADarkwellObjectMemoryScene::UpdateHistoricalContributionExclusion(
 	for (int32 DirtyOffset = 0; DirtyOffset < DirtyIndices.Num(); ++DirtyOffset)
 	{
 		const int32 Index = DirtyIndices[DirtyOffset];
+  if(Record.FineHistory.IsMemoryBlocked(Index)) continue;
 		if (!Visual->SuppressedByCurrentEvidence.IsValidIndex(Index)
 			|| Visual->SuppressedByCurrentEvidence[Index])
 		{
@@ -2864,7 +2868,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			TArray<FDarkwellCurrentLiveGrid::FDescriptor> ResumeDescriptors;
 			for (const UStaticMeshComponent* Part : Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives())
 				if (Part && Part->GetStaticMesh()) ResumeDescriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part)});
-			if (!bWhole && IsCaptureEligible(Prop) && !ObjectPolicy->IsSightWeaveMoving()
+			if (!bWhole && (!bMemoryBlockActive || !MemoryBlockBounds.Intersect(Bounds)) && IsCaptureEligible(Prop) && !ObjectPolicy->IsSightWeaveMoving()
 				&& Prop.LastCaptureAppearanceRevision == Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->ComputeMemoryContentRevision()
 				&& Prop.CurrentLive.LastLegalPose.Equals(Transform, 1.e-6)
 				&& Prop.CurrentLive.MatchesGeometry(ResumeDescriptors, Transform)
@@ -2935,9 +2939,28 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
                     }
                     else
                     {
-                     if(!bWhole) Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query,Uniform);
+                     if(!bWhole)
+                     { Prop.CurrentLive.MemoryWriteBlock=bMemoryBlockActive?MemoryBlockBounds:FBox2D(ForceInit); Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query,Uniform); }
                      else Prop.CurrentLive.Queries=0;
                      Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
+                     if(!bWhole && Prop.bSampleMemoryRegion && bMemoryBlockActive)
+                     {
+                      // Scratch observation follows the unchanged local/coarse
+                      // legal sampling. Only outside fine centers enter authority;
+                      // a blocked coarse center must not widen the fine write gate.
+                      auto Observation=Current.SpatialMemory;
+                      Prop.CurrentLive.WriteWorldSnapshot(Observation,Bounds,true);
+                      Current.SpatialMemory=Observation;
+                      Current.SpatialMemory.ClearMemorySamples(MemoryBlockBounds);
+                      Observation.BeginAbsent();
+                      FDarkwellHistoryGridV2 Observed;Observed.Initialize(Observation);
+                      const auto FS=Observed.GetSize();
+                      if(Current.MemoryRegionRetainedMask.Num()!=FS.X*FS.Y)
+                      {Current.MemoryRegionRetainedMask.Init(false,FS.X*FS.Y);Current.MemoryRegionRetainedEnvelope.Init(0.f,FS.X*FS.Y);}
+                      for(int32 I=0;I<FS.X*FS.Y;++I)
+                       if(!Darkwell::MemoryRegionSamples::Contains(MemoryBlockBounds,Darkwell::MemoryRegionSamples::Center(Bounds,FS,I)) && Observed.GetSamples()[I].InitialRemembered>0)
+                       {Current.MemoryRegionRetainedMask[I]=true;Current.MemoryRegionRetainedEnvelope[I]=FMath::Max(Current.MemoryRegionRetainedEnvelope[I],Observed.GetSamples()[I].FrozenAAEnvelope);}
+                     }
                      auto Raster=[&](const FBox2D& B,FIntPoint S,TArray<float>& Values)
                      {
                       const auto Q=Fog->QueryCanonicalCoverageRaster(B,S,Values,RuntimeFrame.CoverageQueries);
@@ -3014,7 +3037,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 	{
 		if (!Record.bCurrentObservedLocation)
 		{
-            if (bMemoryBlockActive && MemoryBlockBounds.Intersect(Record.SpatialMemory.GetBounds())) continue;
+            if (bMemoryBlockActive && MemoryBlockBounds.Intersect(Record.SpatialMemory.GetBounds()) && Record.bConfirmedWholeCapture) continue;
 			const FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
 			bool bCandidate = IsHistoricalCandidate(Prop, Record, Visual);
 #if WITH_DEV_AUTOMATION_TESTS
@@ -3400,6 +3423,15 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 		if(Historical->GeometryFootprint.Num()==Historical->LastLegalCaptureMask.Num())
 			for(int32 I=0; I<Historical->GeometryFootprint.Num(); ++I)
 				if(!Historical->GeometryFootprint[I]) Historical->LastLegalCaptureMask[I]=false;
+        if(!Historical->bConfirmedWholeCapture && Historical->MemoryRegionRetainedMask.Num()==Historical->LastLegalCaptureMask.Num())
+         Historical->LastLegalCaptureMask.CombineWithBitwiseOR(Historical->MemoryRegionRetainedMask,EBitwiseOperatorFlags::MinSize);
+        if(!Historical->bConfirmedWholeCapture && bMemoryBlockActive)
+        {
+         const auto S=Historical->SpatialMemory.GetSize()*FDarkwellHistoryGridV2::SamplesPerCell;
+         for(int32 I=0;I<Historical->LastLegalCaptureMask.Num();++I)
+          if(Darkwell::MemoryRegionSamples::Contains(MemoryBlockBounds,Darkwell::MemoryRegionSamples::Center(Historical->SpatialMemory.GetBounds(),S,I))) Historical->LastLegalCaptureMask[I]=false;
+         Historical->SpatialMemory.ClearMemorySamples(MemoryBlockBounds);
+        }
 		const bool bSameCapture=Historical->FineHistory.IsInitialized() && PreviousCapture==Historical->LastLegalCaptureMask;
 		if(!bSameCapture)
 		{
@@ -3429,6 +3461,19 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 			Historical->GeometryFootprint=Footprint;
 			for(int32 I=0;I<Footprint.Num();++I) if(!Footprint[I]) Historical->LastLegalCaptureMask[I]=false;
 		}
+        if(Prop.bSampleMemoryRegion && !Historical->bConfirmedWholeCapture)
+         Historical->FineHistory.InheritObservedEnvelope(Historical->MemoryRegionRetainedEnvelope);
+        Historical->MemoryRegionRetainedMask.Empty(); Historical->MemoryRegionRetainedEnvelope.Empty();
+        if(Prop.bSampleMemoryRegion)
+        {
+         // Capture transfers fine edge ownership that the coarser local Live
+         // delta cannot represent. Revisit the old caps in this same GT frame.
+         Prop.CurrentLive.OwnershipDirtyRegions.Add(Historical->SpatialMemory.GetBounds());
+         ++Prop.ObservationOwnershipRevision;
+         for(auto& Pair:Prop.Visuals) if(Pair.Key<Historical->Epoch) Pair.Value.ProcessedOwnershipMaximumEpoch=0;
+        }
+        if(!Historical->bConfirmedWholeCapture)
+        { Historical->FineHistory.SetMemoryWriteBlock(bMemoryBlockActive?MemoryBlockBounds:FBox2D(ForceInit)); Historical->SpatialMemory.SetMemoryWriteBlock(bMemoryBlockActive?MemoryBlockBounds:FBox2D(ForceInit)); }
 		UpdateRecordTexture(Prop, *Historical);
 		UpdateRecordCap(Prop, *Historical);
 	}
@@ -3478,6 +3523,23 @@ void ADarkwellObjectMemoryScene::CaptureObservedContent(
 	Record.ContentRevision = Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->ComputeMemoryContentRevision();
 	Record.Tint = Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetRememberedTint();
 	Record.UVScale = Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetRememberedUVScale();
+ if(Prop.bSampleMemoryRegion && Prop.ObjectPolicy.IsValid() && Prop.ObjectPolicy->GetResolvedRevealMode()==ESightWeaveRevealMode::SpatialPartial)
+ {
+  const auto Size=Record.SpatialMemory.GetSize()*FDarkwellHistoryGridV2::SamplesPerCell;
+  Record.MemoryRegionRetainedMask.Init(false,Size.X*Size.Y); Record.MemoryRegionRetainedEnvelope.Init(0.f,Size.X*Size.Y);
+  for(const auto& Older:Prop.History.GetRecords())
+  {
+   if(Older.Epoch==Record.Epoch || Older.bCurrentObservedLocation || Older.ContentRevision!=Record.ContentRevision
+    || !Older.SnapshotTransform.Equals(Record.SnapshotTransform,1.e-6) || Older.FineHistory.GetSize()!=Size
+    || Older.FineHistory.GetBounds().Min!=Record.SpatialMemory.GetBounds().Min || Older.FineHistory.GetBounds().Max!=Record.SpatialMemory.GetBounds().Max) continue;
+   for(int32 I=0;I<Size.X*Size.Y;++I)
+   {
+    const auto& S=Older.FineHistory.GetSamples()[I];
+    if(S.State==FDarkwellHistoryGridV2::Unresolved() && S.InitialRemembered>0 && !Older.FineHistory.IsMemoryBlocked(I))
+    { Record.MemoryRegionRetainedMask[I]=true; Record.MemoryRegionRetainedEnvelope[I]=FMath::Max(Record.MemoryRegionRetainedEnvelope[I],S.FrozenAAEnvelope); }
+   }
+  }
+ }
 	Record.Primitives.Reset();
 	for (const UStaticMeshComponent* Part : Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives())
 		if (Part && Part->GetStaticMesh()) Record.Primitives.Add({Part->GetStaticMesh(),
@@ -4043,11 +4105,18 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 		for (int32 I = 0; I < FineCells.Num(); ++I)
 		{
 			const auto& S = Record.FineHistory.GetSamples()[I];
-			FineCells[I].InitialRemembered = S.State == FDarkwellHistoryGridV2::Unresolved() ? S.InitialRemembered : 0;
+			FineCells[I].InitialRemembered = !Record.FineHistory.IsMemoryBlocked(I) && S.State == FDarkwellHistoryGridV2::Unresolved() ? S.InitialRemembered : 0;
 			FineCells[I].VerifiedEmpty = S.bVerifiedEmpty ? 1.f : 0.f;
 		}
 	}
-	const TConstArrayView<FDarkwellSpatialPropMemory::FCell> Cells = bFineHistory
+	// Current caps describe visible Live as well as retained partial samples.
+ // These display-only cells are never copied back into observation authority.
+ if(Record.bCurrentObservedLocation && bMemoryBlockActive)
+ {
+  FineCells=Record.SpatialMemory.GetCells();
+  for(auto& C:FineCells) if(C.CurrentLegalCoverage>=FDarkwellSpatialPropMemory::LegalCoverage) C.DiscoveredPresent=1;
+ }
+ const TConstArrayView<FDarkwellSpatialPropMemory::FCell> Cells = !FineCells.IsEmpty()
 		? TConstArrayView<FDarkwellSpatialPropMemory::FCell>(FineCells) : Record.SpatialMemory.GetCells();
 	const FIntPoint Size = bFineHistory ? Record.FineHistory.GetSize() : Record.SpatialMemory.GetSize();
 	if ((!bPresent && !bAbsent) || Cells.IsEmpty() || Visual->PartBounds.IsEmpty())
@@ -4086,6 +4155,22 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 		}
 		return true;
 	};
+ // Region cuts can partition one unchanged pose across epochs. A cap is a
+ // boundary of their effective CPU knowledge union, not an internal epoch edge.
+ TBitArray<> AdjacentRetained(false,Prop.bSampleMemoryRegion && bFineHistory?Cells.Num():0);
+ if(Prop.bSampleMemoryRegion && bFineHistory)
+  for(const auto& Other:Prop.History.GetRecords())
+  {
+   if(Other.Epoch==Record.Epoch || Other.bCurrentObservedLocation || Other.ContentRevision!=Record.ContentRevision
+    || !Other.SnapshotTransform.Equals(Record.SnapshotTransform,1.e-6)
+    || Other.FineHistory.GetSize()!=Size || Other.FineHistory.GetBounds().Min!=Record.FineHistory.GetBounds().Min
+    || Other.FineHistory.GetBounds().Max!=Record.FineHistory.GetBounds().Max) continue;
+   for(int32 I=0;I<Cells.Num();++I)
+   {
+    const auto& S=Other.FineHistory.GetSamples()[I];
+    if(!Other.FineHistory.IsMemoryBlocked(I) && S.State==FDarkwellHistoryGridV2::Unresolved() && S.InitialRemembered>0) AdjacentRetained[I]=true;
+   }
+  }
 	uint64 Signature = (uint64(Record.SpatialMemory.GetGeneration()) << 1 | uint64(bPresent))
 		* 1099511628211ull;
 	{
@@ -4101,6 +4186,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 				| (IsSuppressedByCurrent(Index % Size.X, Index / Size.X) ? 4ull : 0ull));
 		Signature = (Signature ^ Bits) * 1099511628211ull;
 	}
+	for(int32 I=0;I<AdjacentRetained.Num();++I) Signature=(Signature^(AdjacentRetained[I]?1ull:0ull))*1099511628211ull;
 	Signature = (Signature ^ Prop.TransformRevision) * 1099511628211ull;
 	for (const auto& S : Record.FineHistory.GetSamples())
 		Signature = (Signature ^ GetTypeHash(S.State)) * 1099511628211ull;
@@ -4193,7 +4279,8 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 		const auto& Cell = Cells[Y * Size.X + X];
 		if (bFineHistory)
 		{
-			const auto State = ReadRecord.FineHistory.GetSamples()[Y * Size.X + X].State;
+			if(AdjacentRetained.IsValidIndex(Y*Size.X+X) && AdjacentRetained[Y*Size.X+X]) return false;
+			const auto State = ReadRecord.FineHistory.IsMemoryBlocked(Y*Size.X+X)?FDarkwellHistoryGridV2::NeverObserved():ReadRecord.FineHistory.GetSamples()[Y * Size.X + X].State;
 			return State == FDarkwellHistoryGridV2::NeverObserved() || State == FDarkwellHistoryGridV2::VerifiedEmpty();
 		}
 		return bPresent ? Cell.DiscoveredPresent == 0
@@ -5519,7 +5606,7 @@ bool ADarkwellObjectMemoryScene::UpdateTransientWholeExclusion(
 {
 	auto& Visual=Prop.Visuals.FindChecked(Record.Epoch);
 	const int32 CurrentIndex=Prop.History.GetCurrentIndex();
-	if (!Record.FineHistory.IsInitialized() || !IsTentativeWhole(Prop) || CurrentIndex==INDEX_NONE || !Prop.bLastCoverageValid)
+	if (!Record.FineHistory.IsInitialized() || (!IsTentativeWhole(Prop) && !(Prop.bSampleMemoryRegion && bMemoryBlockActive && Prop.ObjectPolicy.IsValid() && Prop.ObjectPolicy->GetResolvedRevealMode()==ESightWeaveRevealMode::SpatialPartial)) || CurrentIndex==INDEX_NONE || !Prop.bLastCoverageValid)
 	{
 		const bool Changed=Visual.TransientCurrentSuppression.CountSetBits()>0;
 		Visual.TransientCurrentSuppression.Empty();
@@ -6014,10 +6101,11 @@ bool ADarkwellObjectMemoryScene::CanApplyMemoryRegion(const FBox2D& Bounds) cons
  for(const auto& Pair:Tracked)
  {
   const auto& P=Pair.Value;
-  if(const auto* Actual=P.Actual.Get(); Actual && P.bExists)
+  const bool Partial=P.ObjectPolicy.IsValid() && P.ObjectPolicy->GetResolvedRevealMode()==ESightWeaveRevealMode::SpatialPartial;
+  if(const auto* Actual=P.Actual.Get(); Actual && P.bExists && !Partial)
   { const auto B=ActualBounds(*Actual); if(Bounds.Intersect(B) && !ContainsMemoryBounds(Bounds,B)) return false; }
   for(const auto& R:P.History.GetRecords())
-   if(Bounds.Intersect(R.SpatialMemory.GetBounds()) && !ContainsMemoryBounds(Bounds,R.SpatialMemory.GetBounds())) return false;
+   if((!Partial || R.bConfirmedWholeCapture) && Bounds.Intersect(R.SpatialMemory.GetBounds()) && !ContainsMemoryBounds(Bounds,R.SpatialMemory.GetBounds())) return false;
  }
  return true;
 }
@@ -6049,6 +6137,46 @@ void ADarkwellObjectMemoryScene::ClearMemoryInRegion(const FBox2D& Bounds)
  for(auto& Pair:Tracked)
  {
   auto& P=Pair.Value;
+  const bool Partial=P.ObjectPolicy.IsValid() && P.ObjectPolicy->GetResolvedRevealMode()==ESightWeaveRevealMode::SpatialPartial;
+  const bool CrossingPartial=Partial && ((P.Actual.IsValid() && Bounds.Intersect(ActualBounds(*P.Actual)) && !ContainsMemoryBounds(Bounds,ActualBounds(*P.Actual)))
+   || P.History.GetRecords().ContainsByPredicate([&](const auto& R) { return Bounds.Intersect(R.SpatialMemory.GetBounds()) && !ContainsMemoryBounds(Bounds,R.SpatialMemory.GetBounds()); }));
+  if(CrossingPartial)
+  {
+   P.bSampleMemoryRegion=true;
+   // Seal the pre-transaction episode first. Outside evidence stays in that
+   // immutable pose; no later local-grid resume may reinitialize cleared fine cells.
+   const bool WasLive=P.History.GetCurrentIndex()!=INDEX_NONE && P.bLastCoverageValid;
+   if(WasLive) FreezeCurrentForHiddenMotion(P,TEXT("BEFORE_SAMPLE_CLEAR"));
+   TArray<uint32> AtomicWhole;
+   for(const auto& R:P.History.GetRecords())
+    if(R.bConfirmedWholeCapture && ContainsMemoryBounds(Bounds,R.SpatialMemory.GetBounds())) AtomicWhole.Add(R.Epoch);
+   for(uint32 Epoch:AtomicWhole)
+   {if(auto* V=P.Visuals.Find(Epoch)) DestroyVisual(*V);P.Visuals.Remove(Epoch);P.History.ClearRecord(Epoch);}
+   if(!AtomicWhole.IsEmpty()) {P.ReusableWholeEpoch=0;InvalidateWholePreparation(P.StableId);}
+   for(auto& R:P.History.GetMutableRecords())
+   {
+    if(!Bounds.Intersect(R.SpatialMemory.GetBounds())) continue;
+    R.SpatialMemory.ClearMemorySamples(Bounds); R.FineHistory.ClearMemorySamples(Bounds);
+    const auto RS=R.SpatialMemory.GetSize()*FDarkwellHistoryGridV2::SamplesPerCell;
+    for(int32 I=0;I<R.MemoryRegionRetainedMask.Num();++I)
+     if(Darkwell::MemoryRegionSamples::Contains(Bounds,Darkwell::MemoryRegionSamples::Center(R.SpatialMemory.GetBounds(),RS,I)))
+     {R.MemoryRegionRetainedMask[I]=false;R.MemoryRegionRetainedEnvelope[I]=0;}
+    const auto S=R.FineHistory.GetSize();
+    for(int32 I=0;I<R.LastLegalCaptureMask.Num();++I)
+     if(S.X>0 && Darkwell::MemoryRegionSamples::Contains(Bounds,Darkwell::MemoryRegionSamples::Center(R.SpatialMemory.GetBounds(),S,I))) R.LastLegalCaptureMask[I]=false;
+    if(auto* V=P.Visuals.Find(R.Epoch))
+    { V->bPresentationDirty=V->bCapTopologyDirty=true; V->CapSignature=0; }
+   }
+   // All authority mutations precede any union-boundary cap rebuild.
+   for(auto& R:P.History.GetMutableRecords())
+    if(Bounds.Intersect(R.SpatialMemory.GetBounds())) {UpdateRecordTexture(P,R);UpdateRecordCap(P,R);}
+   P.LastCaptureAppearanceRevision=0; P.LocalEpoch=0; P.bLastCaptureEligible=false;
+   P.CurrentLive.ForgetKnowledgePreservingLive(); P.bRequeryMemoryLive=WasLive;
+   P.CachedCurrentAuthorityRevision=P.CachedCurrentCoverageDrawRevision=MAX_uint64;
+   P.CurrentPresentationActiveSeconds=.5f;
+   ++P.ObservationOwnershipRevision; P.bDiagnosticsDirty=true;
+   continue;
+  }
   // Remove every authority/capture/cache for matching old poses, including current.
   TArray<uint32> Removed;
   for(const auto& R:P.History.GetRecords())
@@ -6076,8 +6204,12 @@ void ADarkwellObjectMemoryScene::ClearMemoryInRegion(const FBox2D& Bounds)
 void ADarkwellObjectMemoryScene::RefreshMemoryWriteBlock(FTrackedProp& P)
 {
  const auto* Actual=P.Actual.Get();
- // Crossing objects fail closed for writes for their complete transient episode.
- const bool Block=bMemoryBlockActive && Actual && MemoryBlockBounds.Intersect(ActualBounds(*Actual));
+ // Whole remains atomic; crossing Partial uses the local sample write gate.
+ const bool Partial=P.ObjectPolicy.IsValid() && P.ObjectPolicy->GetResolvedRevealMode()==ESightWeaveRevealMode::SpatialPartial;
+ const bool Crossing=Partial && Actual && !ContainsMemoryBounds(MemoryBlockBounds,ActualBounds(*Actual));
+ if(Crossing && bMemoryBlockActive && MemoryBlockBounds.Intersect(ActualBounds(*Actual))) P.bSampleMemoryRegion=true;
+ P.CurrentLive.MemoryWriteBlock=Partial && bMemoryBlockActive?MemoryBlockBounds:FBox2D(ForceInit);
+ const bool Block=bMemoryBlockActive && Actual && MemoryBlockBounds.Intersect(ActualBounds(*Actual)) && !Crossing;
  if(Block==P.bMemoryWritesBlocked) return;
  const bool WasLive=P.History.GetCurrentIndex()!=INDEX_NONE && P.bLastCoverageValid;
  if(Block) FreezeCurrentForHiddenMotion(P,TEXT("BEFORE_MEMORY_WRITE_BLOCK"));
@@ -6097,7 +6229,23 @@ void ADarkwellObjectMemoryScene::RefreshMemoryWriteBlock(FTrackedProp& P)
 
 void ADarkwellObjectMemoryScene::SetMemoryWriteBlock(const FBox2D& Bounds,bool bEnabled)
 {
+ for(auto& Pair:Tracked)
+ {
+  auto& P=Pair.Value;
+  if(!P.ObjectPolicy.IsValid() || P.ObjectPolicy->GetResolvedRevealMode()!=ESightWeaveRevealMode::SpatialPartial
+   || !P.Actual.IsValid() || !Bounds.Intersect(ActualBounds(*P.Actual)) || ContainsMemoryBounds(Bounds,ActualBounds(*P.Actual))) continue;
+  P.bSampleMemoryRegion=true;
+  const bool WasLive=P.History.GetCurrentIndex()!=INDEX_NONE && P.bLastCoverageValid;
+  if(WasLive) FreezeCurrentForHiddenMotion(P,TEXT("BEFORE_SAMPLE_BLOCK_CHANGE"));
+  P.LastCaptureAppearanceRevision=0; P.LocalEpoch=0;
+  P.CurrentLive.ForgetKnowledgePreservingLive(); P.bRequeryMemoryLive=WasLive;
+  P.CachedCurrentAuthorityRevision=P.CachedCurrentCoverageDrawRevision=MAX_uint64;
+  P.CurrentPresentationActiveSeconds=.5f;
+ }
  MemoryBlockBounds=Bounds; bMemoryBlockActive=bEnabled; bMemoryRegionRestorePending=!bEnabled;
+ for(auto& Pair:Tracked) for(auto& R:Pair.Value.History.GetMutableRecords())
+  if(!R.bConfirmedWholeCapture)
+  { R.FineHistory.SetMemoryWriteBlock(bEnabled?Bounds:FBox2D(ForceInit)); R.SpatialMemory.SetMemoryWriteBlock(bEnabled?Bounds:FBox2D(ForceInit)); }
  for(auto& Pair:Tracked) RefreshMemoryWriteBlock(Pair.Value);
  for(auto& Pair:Tracked) if(Pair.Value.bRequeryMemoryLive) UpdateTracked(Pair.Value,0);
  bHistoricalSpatialIndexDirty=true;
@@ -6113,12 +6261,15 @@ void ADarkwellObjectMemoryScene::ApplyMemoryRegionPresentation()
  // The frozen gray phase pays no extra record scan when no block is active.
  if(!bMemoryBlockActive && !bMemoryRegionRestorePending) return;
  bMemoryRegionRestorePending=false;
- for(auto& Pair:Tracked) for(const auto& R:Pair.Value.History.GetRecords())
+ for(auto& Pair:Tracked) for(auto& R:Pair.Value.History.GetMutableRecords())
  {
   if(R.bCurrentObservedLocation) continue;
   if(auto* V=Pair.Value.Visuals.Find(R.Epoch); V && !V->bPresentationRetired)
   {
-   const bool Block=bMemoryBlockActive && MemoryBlockBounds.Intersect(R.SpatialMemory.GetBounds());
+   const bool Intersects=bMemoryBlockActive && MemoryBlockBounds.Intersect(R.SpatialMemory.GetBounds());
+   const bool Block=Intersects && (R.bConfirmedWholeCapture || ContainsMemoryBounds(MemoryBlockBounds,R.SpatialMemory.GetBounds()));
+   if(!R.bConfirmedWholeCapture && (V->bPresentationDirty || V->bCapTopologyDirty))
+   { UpdateRecordTexture(Pair.Value,R); UpdateRecordCap(Pair.Value,R); V->bPresentationDirty=V->bCapTopologyDirty=false; }
    if(Block || V->bMemoryRegionHidden)
    {
     if(V->Render.Proxy.IsValid()) V->Render.Proxy->SetActorHiddenInGame(Block);

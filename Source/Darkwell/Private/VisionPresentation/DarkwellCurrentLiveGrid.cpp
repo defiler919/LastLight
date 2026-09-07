@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellCurrentLiveGrid.h"
+#include "VisionPresentation/DarkwellMemoryRegionSamples.h"
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 
 namespace
@@ -343,21 +344,25 @@ bool FDarkwellCurrentLiveGrid::Advance(float Dt,const FTransform& ActorPose,TFun
     const int32 I=Y*S.X+X;
     const bool PreviouslyOwned=P.LastLegalCaptureMask[I];
     P.CurrentLegalObservationMask[I]=P.Coverage[I]>=FDarkwellSpatialPropMemory::LegalCoverage;
-    if(P.CurrentLegalObservationMask[I]) P.LastLegalCaptureMask[I]=true;
-    const bool bNewOwnership=!PreviouslyOwned && P.CurrentLegalObservationMask[I];
+    const bool Blocked=MemoryWriteBlock.bIsValid && Darkwell::MemoryRegionSamples::Contains(MemoryWriteBlock,FVector2D(Pose.TransformPosition(FVector(B.Min+Step*FVector2D(X+.5,Y+.5),0))));
+    if(Blocked) P.LastLegalCaptureMask[I]=false;
+    else if(P.CurrentLegalObservationMask[I]) P.LastLegalCaptureMask[I]=true;
+    const bool bNewOwnership=!PreviouslyOwned && P.LastLegalCaptureMask[I];
     if(bNewOwnership && OwnershipRunStart==INDEX_NONE) OwnershipRunStart=X;
     if(!bNewOwnership && OwnershipRunStart!=INDEX_NONE)
     { AddOwnershipRun(Y,OwnershipRunStart,X); OwnershipRunStart=INDEX_NONE; }
    }
    AddOwnershipRun(Y,OwnershipRunStart,S.X);
   }
-  P.Local.Advance(Dt,P.Coverage); SamplesTouched+=P.Coverage.Num();
+  P.Local.Advance(Dt,P.Coverage);
+  P.Local.ClearMemorySamples(MemoryWriteBlock,Pose);
+  SamplesTouched+=P.Coverage.Num();
   for(int32 I=0;I<P.Coverage.Num();++I) bFullyObservedAtPose &= P.LastLegalCaptureMask[I] && P.Local.GetCells()[I].DiscoveredPresent>0;
  }
  LastLegalPose=ActorPose;
  return true;
 }
-FDarkwellSpatialPropMemory::FCell FDarkwellCurrentLiveGrid::Sample(const FPart& P,FVector2D World,bool bClamp)
+FDarkwellSpatialPropMemory::FCell FDarkwellCurrentLiveGrid::Sample(const FPart& P,FVector2D World,bool bClamp,bool bIncludeBlockedLegal)
 {
  const FVector Local=P.Pose.InverseTransformPosition(FVector(World,P.Pose.TransformPosition(P.Geometry.LocalBounds.GetCenter()).Z));
  const auto B=P.Local.GetBounds(); const auto S=P.Local.GetSize(); const FVector2D L(Local);
@@ -366,15 +371,26 @@ FDarkwellSpatialPropMemory::FCell FDarkwellCurrentLiveGrid::Sample(const FPart& 
  const int32 I=FMath::Clamp(FMath::FloorToInt(UV.Y*S.Y),0,S.Y-1)*S.X+FMath::Clamp(FMath::FloorToInt(UV.X*S.X),0,S.X-1);
  auto C=P.Local.GetCells()[I];
  // Preserved appearance is not knowledge of the new world position.
- if(!P.LastLegalCaptureMask[I]) { C.DiscoveredPresent=0; C.AppearanceBlend=0; C.LiveBlend=0; }
+ if(!P.LastLegalCaptureMask[I])
+ {
+  if(bIncludeBlockedLegal && P.CurrentLegalObservationMask[I]) C.DiscoveredPresent=1;
+  else {C.DiscoveredPresent=0;C.AppearanceBlend=0;C.LiveBlend=0;}
+ }
  return C;
 }
-void FDarkwellCurrentLiveGrid::WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds)
+void FDarkwellCurrentLiveGrid::WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds,bool bIncludeBlockedLegal)
 {
  const auto S=GridSize(Bounds); auto Cells=Out.PrepareCurrentRaster(Bounds,S,AtlasCells.X*AtlasCells.Y);
  const auto Step=Bounds.GetSize()/FVector2D(S);
+ bool FullyObserved=bFullyObservedAtPose;
+ if(bIncludeBlockedLegal)
+ {
+  FullyObserved=!Parts.IsEmpty();
+  for(const auto& P:Parts) for(int32 I=0;I<P.Local.GetCells().Num();++I)
+   FullyObserved &= P.LastLegalCaptureMask[I] || P.CurrentLegalObservationMask[I];
+ }
  FDarkwellSpatialPropMemory::FCell CompleteEnvelope;
- if(bFullyObservedAtPose)
+ if(FullyObserved)
  {
   CompleteEnvelope.DiscoveredPresent=1;
   CompleteEnvelope.AppearanceBlend=CompleteEnvelope.LiveBlend=1;
@@ -388,14 +404,15 @@ void FDarkwellCurrentLiveGrid::WriteWorldSnapshot(FDarkwellSpatialPropMemory& Ou
   auto& C=Cells[Y*S.X+X]; C={}; const auto World=Bounds.Min+Step*FVector2D(X+.5,Y+.5);
   for(const auto& P:Parts)
   {
-   const auto V=Sample(P,World,false);
+   const auto V=Sample(P,World,false,bIncludeBlockedLegal);
    if(V.DiscoveredPresent>C.DiscoveredPresent || V.AppearanceBlend>C.AppearanceBlend) C=V;
+   if(MemoryWriteBlock.bIsValid) C.CurrentLegalCoverage=FMath::Max(C.CurrentLegalCoverage,V.CurrentLegalCoverage);
   }
   // The compatibility world raster describes a geometry-clipped envelope.
   // Once every real primitive sample is observed, holes outside geometry are
   // not observation cuts. Match the original fully observed snapshot envelope;
   // neither source rendering nor fine ownership reads these padding cells.
-  if(C.DiscoveredPresent==0 && bFullyObservedAtPose) C=CompleteEnvelope;
+  if(C.DiscoveredPresent==0 && FullyObserved) C=CompleteEnvelope;
  }
 }
 void FDarkwellCurrentLiveGrid::WritePartRasters(TFunctionRef<float(FVector2D)> Query,bool bTransient,TFunction<bool(const FBox2D&,float&)> Uniform,
@@ -409,17 +426,27 @@ void FDarkwellCurrentLiveGrid::WritePartRasters(TFunctionRef<float(FVector2D)> Q
   const bool CachedRaster=!ConstantRegion && CanonicalRaster && CanonicalRaster(B,S,P.RasterCoverage) && P.RasterCoverage.Num()==S.X*S.Y;
   for(int32 Y=0;Y<S.Y;++Y) for(int32 X=0;X<S.X;++X)
   {
-   const auto Min=B.Min+Step*FVector2D(X,Y); auto C=Sample(P,Min+Step*.5,true);
+   const auto Min=B.Min+Step*FVector2D(X,Y); auto C=Sample(P,Min+Step*.5,true,MemoryWriteBlock.bIsValid);
    float Coverage=ConstantRegion?Constant:CachedRaster?P.RasterCoverage[Y*S.X+X]:1;
    if(!ConstantRegion && !CachedRaster) for(const FVector2D Offset : {FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)})
    { ++Queries; Coverage=FMath::Min(Coverage,Query(Min+Step*Offset)); }
+   if(Darkwell::MemoryRegionSamples::Contains(MemoryWriteBlock,Min+Step*.5))
+   {
+    // Display copy only: legal Live does not feed back into Local or the capture.
+    const auto Local=FVector2D(P.Pose.InverseTransformPosition(FVector(Min+Step*.5,P.Pose.GetLocation().Z)));
+    const auto LS=P.Local.GetSize(); const auto UV=(Local-P.Local.GetBounds().Min)/P.Local.GetBounds().GetSize();
+    const int32 LI=FMath::Clamp(FMath::FloorToInt(UV.Y*LS.Y),0,LS.Y-1)*LS.X+FMath::Clamp(FMath::FloorToInt(UV.X*LS.X),0,LS.X-1);
+    C=P.Local.GetCells()[LI];
+    C.AppearanceBlend=Coverage>=FDarkwellSpatialPropMemory::LegalCoverage?C.AppearanceBlend:0;
+    C.DiscoveredPresent=0;
+   }
    C.CurrentLegalCoverage=Coverage;
    if(Coverage<FDarkwellSpatialPropMemory::LegalCoverage && bTransient) C.AppearanceBlend=0;
    Cells[Y*S.X+X]=C;
   }
  }
 }
-bool FDarkwellCurrentLiveGrid::HasObservedContributionAt(FVector2D World,int32 PrimitiveIndex) const
+bool FDarkwellCurrentLiveGrid::HasObservedContributionAt(FVector2D World,int32 PrimitiveIndex,bool bAllowBlockedLive) const
 {
  for(int32 I=0;I<Parts.Num();++I)
  {
@@ -434,6 +461,16 @@ bool FDarkwellCurrentLiveGrid::HasObservedContributionAt(FVector2D World,int32 P
    const int32 Cell=FMath::Clamp(FMath::FloorToInt(UV.Y*S.Y),0,S.Y-1)*S.X+FMath::Clamp(FMath::FloorToInt(UV.X*S.X),0,S.X-1);
    if(P.Raster.GetCells()[Cell].DiscoveredPresent>0) return true;
    continue;
+  }
+  if(bAllowBlockedLive && MemoryWriteBlock.bIsValid)
+  {
+   const auto Local=FVector2D(P.Pose.InverseTransformPosition(FVector(World,P.Pose.GetLocation().Z)));
+   if(P.Local.GetBounds().IsInside(Local))
+   {
+    const auto S=P.Local.GetSize(); const auto UV=(Local-P.Local.GetBounds().Min)/P.Local.GetBounds().GetSize();
+    const auto& C=P.Local.GetCells()[FMath::Clamp(FMath::FloorToInt(UV.Y*S.Y),0,S.Y-1)*S.X+FMath::Clamp(FMath::FloorToInt(UV.X*S.X),0,S.X-1)];
+    if(C.CurrentLegalCoverage>=FDarkwellSpatialPropMemory::LegalCoverage && C.AppearanceBlend>0) return true;
+   }
   }
   const auto C=Sample(Parts[I],World,false);
   if(C.DiscoveredPresent>0 && C.AppearanceBlend>0

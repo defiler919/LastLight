@@ -36,6 +36,11 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	TConstArrayView<FSample> GetSamples() const { return Samples; }
 	bool IsInitialized() const { return !Samples.IsEmpty(); }
 	bool HasResidualSurface() const;
+ void ClearMemorySamples(const FBox2D& Region);
+ void InheritObservedEnvelope(TConstArrayView<float> Previous);
+ void SetMemoryWriteBlock(const FBox2D& Region) { MemoryWriteBlock=Region; }
+ bool IsMemoryBlocked(int32 I) const { return BlockedSamplesAt(I); }
+
 	void BuildPresentation(TArray<FLinearColor>& OutPixels) const;
 	bool IsFullyVerifiedEmpty() const;
 	bool CanEmitCap(int32 RetainedIndex, int32 NeighborIndex) const;
@@ -55,4 +60,6 @@ private:
 	TArray<int32> ActiveSamples;
 	TBitArray<> ActiveFlags;
 	TBitArray<> MutableEvidence;
+ FBox2D MemoryWriteBlock=FBox2D(ForceInit);
+ bool BlockedSamplesAt(int32 I) const;
 };

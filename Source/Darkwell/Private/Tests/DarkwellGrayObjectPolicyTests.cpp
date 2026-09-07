@@ -26,6 +26,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Misc/ScopeExit.h"
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
+#include "VisionPresentation/DarkwellMemoryRegionSamples.h"
 #include "SightWeaveWorldSubsystem.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -1935,7 +1936,7 @@ bool FDarkwellUnknownRegionContract::RunTest(const FString& ModeName)
   }
   TestTrue(TEXT("Outside comparison contains real retained gray, not an empty control"),OutsideKnown>0);
   const FBox2D B=Old.SpatialMemory.GetBounds().ExpandBy(10);
-  TestFalse(TEXT("Straddling object box is refused without side effects"),Region->ConfigureRegion(B.GetCenter(),B.Max));
+  if(!Partial) TestFalse(TEXT("Straddling Whole object box is refused without side effects"),Region->ConfigureRegion(B.GetCenter(),B.Max));
   if(!TestTrue(TEXT("Configure complete deterministic room region"),Region->ConfigureRegion(B.Min,B.Max))) return false;
   TestTrue(TEXT("Same region is idempotent"),Region->ConfigureRegion(B.Min,B.Max));
   TestFalse(TEXT("Cannot silently replace the authority domain"),Region->ConfigureRegion(B.Min-FVector2D(1),B.Max));
@@ -2080,6 +2081,295 @@ bool FDarkwellUnknownRegionContract::RunTest(const FString& ModeName)
   TestEqual(TEXT("Blocked observations never write retained ground"),Region->GetStoredSampleCount(),0);
   Snapshot(TEXT("08_no_resurrection"));
   AddInfo(FString::Printf(TEXT("UNKNOWN_REGION mode=%s sequence=%s passed_old_resurrection=0 revision=%llu"),*ModeName,Sequence,Region->GetAuthorityRevision()));
+  if(CaptureOwner) CaptureOwner->Destroy();
+ }
+ return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellUnknownPartialCut,"Darkwell.UnknownPartial.SampleCut",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellUnknownPartialCut::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ using namespace Darkwell::MemoryRegionSamples;
+ FDarkwellHistoryGridV2 UnblockedReference;
+ for(bool Block:{false,true})
+ {
+  FRoom F;F.World->AddToRoot();ON_SCOPE_EXIT {F.World->RemoveFromRoot();};
+  F.Face(-90);F.Step(2);
+  auto& Scene=*F.Room;Scene.ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::StationaryOnly);
+  auto& P=Scene.Tracked.FindChecked(Id);const auto OB=Scene.ActualBounds(*P.Actual);
+  const FBox2D B(FVector2D(OB.GetCenter().X-19.83,OB.Min.Y-5),FVector2D(OB.GetCenter().X+20.17,OB.Max.Y+5));
+  if(Block)
+  {auto* Region=F.World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();TestTrue(TEXT("Fresh straddle configure"),Region->ConfigureRegion(B.Min,B.Max));TestTrue(TEXT("Fresh straddle block"),Region->SetBlockMemoryWrites(true));}
+  F.Face(90);F.Step(25);F.Face(-90);F.Step(15);
+  if(!TestTrue(TEXT("Fresh observation seals Partial"),!P.History.GetRecords().IsEmpty())) return false;
+  const auto& Grid=P.History.GetRecords().Last().FineHistory;
+  if(!Block) UnblockedReference=Grid;
+  else
+  {
+   TestEqual(TEXT("Same fine sampling resolution"),Grid.GetSize(),UnblockedReference.GetSize());
+   int32 InsideLeak=0,LostFacts=0,LostKnownAA=0,ChangedUnknownAA=0;
+   for(int32 I=0;I<Grid.GetSamples().Num();++I)
+   {
+    const auto& C=Grid.GetSamples()[I];const auto& R=UnblockedReference.GetSamples()[I];
+    if(Contains(B,Darkwell::MemoryRegionSamples::Center(Grid.GetBounds(),Grid.GetSize(),I))) InsideLeak+=C.InitialRemembered>0;
+    else
+    {
+     LostFacts+=C.InitialRemembered!=R.InitialRemembered;
+     LostKnownAA+=R.InitialRemembered>0 && C.FrozenAAEnvelope!=R.FrozenAAEnvelope;
+     ChangedUnknownAA+=R.InitialRemembered==0 && C.FrozenAAEnvelope!=R.FrozenAAEnvelope;
+    }
+   }
+   TestEqual(TEXT("Block only removes inside fine samples, including mixed coarse boundary cells"),InsideLeak,0);
+   AddInfo(FString::Printf(TEXT("OUTSIDE_FINE_REFERENCE facts=%d known_aa=%d unknown_unused_aa=%d"),LostFacts,LostKnownAA,ChangedUnknownAA));
+   TestEqual(TEXT("Every newly observed outside fine fact matches no-Block reference"),LostFacts,0);
+   TestEqual(TEXT("Every known outside AA envelope matches no-Block reference"),LostKnownAA,0);
+  }
+ }
+ for(const TCHAR* Sequence:{TEXT("A"),TEXT("B"),TEXT("C")})
+ {
+  FRoom F; F.World->AddToRoot(); ON_SCOPE_EXIT {F.World->RemoveFromRoot();};
+  auto& Scene=*F.Room;
+  Scene.ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::StationaryOnly);
+  auto Observe=[&](){F.Face(90);F.Step(25);};
+  auto Leave=[&](){F.Face(-90);F.Step(15);};
+  Observe();Leave();
+  auto& P=Scene.Tracked.FindChecked(Id);
+  if(!TestTrue(TEXT("Existing Partial history"),!P.History.GetRecords().IsEmpty())) return false;
+  const auto Old=P.History.GetRecords()[0]; const auto OB=Old.SpatialMemory.GetBounds();
+  const FVector2D Center=OB.GetCenter();
+  // Two interior cuts; deliberately not aligned to coarse or fine edges.
+  const FBox2D B(FVector2D(Center.X-19.83,OB.Min.Y-5),FVector2D(Center.X+20.17,OB.Max.Y+5));
+  auto* Region=F.World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
+  if(!TestTrue(TEXT("Fixed AABB can straddle Partial"),Region->ConfigureRegion(B.Min,B.Max))) return false;
+  TestTrue(TEXT("Min is inside"),Contains(B,B.Min)); TestFalse(TEXT("Max is outside"),Contains(B,B.Max));
+  const auto S=Old.FineHistory.GetSize();
+  auto Inside=[&](int32 I){return Contains(B,Darkwell::MemoryRegionSamples::Center(OB,S,I));};
+  const bool Clear=FCString::Strcmp(Sequence,TEXT("B"))!=0;
+  const bool Block=FCString::Strcmp(Sequence,TEXT("A"))!=0;
+  auto Stored=[&](bool In){int32 N=0;for(const auto& R:P.History.GetRecords()) if(!R.bCurrentObservedLocation)
+   for(int32 I=0;I<R.FineHistory.GetSamples().Num();++I)
+    if(Contains(B,Darkwell::MemoryRegionSamples::Center(R.FineHistory.GetBounds(),R.FineHistory.GetSize(),I))==In && R.FineHistory.GetSamples()[I].InitialRemembered>0) ++N;return N;};
+  TestTrue(TEXT("Positive retained samples on both sides"),Stored(true)>0 && Stored(false)>0);
+  // Fixed overhead scene view plus direct CPU-mirror readback, never input to authority.
+  AActor* CaptureOwner=nullptr; USceneCaptureComponent2D* Capture=nullptr; UTextureRenderTarget2D* Target=nullptr;
+  if(!GUsingNullRHI)
+  {
+   CaptureOwner=F.World->SpawnActor<AActor>();
+   Capture=NewObject<USceneCaptureComponent2D>(CaptureOwner); CaptureOwner->AddInstanceComponent(Capture);
+   Capture->RegisterComponent(); Capture->ProjectionType=ECameraProjectionMode::Orthographic;
+   const FVector Eye(Center.X-500,Center.Y-600,750);
+   Capture->SetWorldLocation(Eye); Capture->SetWorldRotation((FVector(Center,70)-Eye).Rotation());
+   Capture->OrthoWidth=440; Capture->bCaptureEveryFrame=false; Capture->bCaptureOnMovement=false;
+   Capture->CaptureSource=ESceneCaptureSource::SCS_FinalColorLDR;
+   Capture->ShowFlags.SetTemporalAA(false); Capture->ShowFlags.SetMotionBlur(false);
+   Target=NewObject<UTextureRenderTarget2D>(CaptureOwner); Target->InitCustomFormat(384,384,PF_B8G8R8A8,false);
+   Target->UpdateResourceImmediate(); Capture->TextureTarget=Target;
+  }
+  auto Snapshot=[&](const TCHAR* Stage)
+  {
+   TestTrue(*FString::Printf(TEXT("No double gray contributors %s %s"),Sequence,Stage),Scene.GetMaxOverlapContributorsForTesting(Id)<=1);
+   TestTrue(*FString::Printf(TEXT("No double cap contributors %s %s"),Sequence,Stage),Scene.GetMaxCapContributorsForTesting(Id)<=1);
+   if(GUsingNullRHI) return;
+   for(const auto& Pair:P.Visuals)
+   {
+    const auto& V=Pair.Value;
+    if(!V.Render.Texture.IsValid() || V.SubmittedPresentation.IsEmpty()) continue;
+    const FIntPoint TS(V.Render.Texture->GetSizeX(),V.Render.Texture->GetSizeY());
+    const FTextureRHIRef Tex=V.Render.Texture->GetResource()->TextureRHI;
+    TArray<FFloat16Color> Readback;
+    ENQUEUE_RENDER_COMMAND(UnknownPartialReadFineMirror)([Tex,TS,&Readback](FRHICommandListImmediate& Cmd)
+     {Cmd.ReadSurfaceFloatData(Tex,FIntRect(0,0,TS.X,TS.Y),Readback,ECubeFace::CubeFace_PosX,0,0);});
+    FlushRenderingCommands(); int32 Bad=0;
+    for(int32 I=0;I<V.SubmittedPresentation.Num();++I)
+     if(!Readback.IsValidIndex(I) || float(Readback[I].A)!=V.SubmittedPresentation[I].A) ++Bad;
+    TestEqual(TEXT("D3D12 fine hard gate exactly mirrors CPU submission"),Bad,0);
+   }
+   const auto Size=Region->GetSize(); TArray<FColor> Pixels;
+   const FTextureRHIRef Texture=Region->GetPresentationTexture()->GetResource()->TextureRHI;
+   ENQUEUE_RENDER_COMMAND(UnknownReadAuthorityMirror)([Texture,Size,&Pixels](FRHICommandListImmediate& RHICmdList)
+    {RHICmdList.ReadSurfaceData(Texture,FIntRect(0,0,Size.X,Size.Y),Pixels,FReadSurfaceDataFlags(RCM_UNorm));});
+   FlushRenderingCommands();
+   int32 Mismatch=0; const FVector2D Step=B.GetSize()/FVector2D(Size);
+   for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X)
+   {
+    const bool Known=Region->QueryKnowledge(B.Min+FVector2D(X+.5,Y+.5)*Step)==Region->Remembered();
+    if(!Pixels.IsValidIndex(Y*Size.X+X) || (Pixels[Y*Size.X+X].R>127)!=Known) ++Mismatch;
+   }
+   TestEqual(TEXT("D3D12 texture exactly mirrors CPU knowledge; no renderer grants"),Mismatch,0);
+   FString ReportPath;
+   FParse::Value(FCommandLine::Get(),TEXT("ReportExportPath="),ReportPath);
+   const FString Root=ReportPath.IsEmpty()?FPaths::ProjectSavedDir()/TEXT("UnknownRegion"):FPaths::GetPath(ReportPath)/TEXT("Captures");
+   const FString Dir=Root/TEXT("SpatialPartialCut")/Sequence;
+   IFileManager::Get().MakeDirectory(*Dir,true);
+   auto Save=[&](const FString& Path,int32 W,int32 H,const TArray<FColor>& Data)
+   {TArray<uint8> PNG;FImageUtils::CompressImageArray(W,H,Data,PNG);FFileHelper::SaveArrayToFile(PNG,*Path);};
+   Save(Dir/(FString(Stage)+TEXT("_knowledge.png")),Size.X,Size.Y,Pixels);
+   FAssetCompilingManager::Get().FinishAllCompilation();
+#if WITH_EDITOR
+   if(GShaderCompilingManager) GShaderCompilingManager->FinishAllCompilation();
+#endif
+   F.World->SendAllEndOfFrameUpdates(); Capture->CaptureScene(); FlushRenderingCommands();
+   // The first capture admits scene-view shader/PSO work in a fresh automation
+   // world. Resolve it, then read the same unchanged CPU state, not a fallback.
+#if WITH_EDITOR
+   if(GShaderCompilingManager) GShaderCompilingManager->FinishAllCompilation();
+#endif
+   F.World->SendAllEndOfFrameUpdates(); Capture->CaptureScene(); FlushRenderingCommands();
+   TArray<FColor> View; Target->GameThread_GetRenderTargetResource()->ReadPixels(View);
+   if(TestEqual(TEXT("D3D12 scene capture is complete"),View.Num(),384*384)) Save(Dir/(FString(Stage)+TEXT("_scene.png")),384,384,View);
+  };
+
+  Snapshot(TEXT("01_gray"));
+  ADarkwellObjectMemoryScene::FPresentationTicket Ticket;
+  TestTrue(TEXT("Release genuine A0 resources before transaction"),Scene.ReleaseHistoricalPresentationForTesting(Id,Old.Epoch,Ticket));
+  if(Clear) TestTrue(TEXT("Sample clear"),Region->ClearMemory());
+  if(Block) TestTrue(TEXT("Sample block"),Region->SetBlockMemoryWrites(true));
+  TestTrue(TEXT("A0 rebuild reads latest CPU sample state"),Scene.RebuildHistoricalPresentationForTesting(Ticket));
+  auto* R=P.History.FindRecord(Old.Epoch);
+  if(!TestNotNull(TEXT("Outside knowledge retains record identity"),R)) return false;
+  int32 WrongInside=0,WrongOutside=0;
+  for(int32 I=0;I<S.X*S.Y;++I)
+  {
+   const auto& Now=R->FineHistory.GetSamples()[I]; const auto& Before=Old.FineHistory.GetSamples()[I];
+   if(Inside(I)) {if(Clear && (Now.InitialRemembered!=0 || Now.Opacity!=0 || Now.FrozenAAEnvelope!=0 || Now.bVerifiedEmpty || Now.State!=FDarkwellHistoryGridV2::NeverObserved())) ++WrongInside;}
+   else if(Now.State!=Before.State || Now.InitialRemembered!=Before.InitialRemembered || Now.Opacity!=Before.Opacity || Now.FrozenAAEnvelope!=Before.FrozenAAEnvelope || Now.bVerifiedEmpty!=Before.bVerifiedEmpty) ++WrongOutside;
+  }
+  TestEqual(TEXT("Inside clear erases all fine facts and AA"),WrongInside,0);
+  TestEqual(TEXT("Every outside fine sample is unchanged"),WrongOutside,0);
+  const auto CS=Old.SpatialMemory.GetSize(); WrongOutside=0;WrongInside=0;
+  for(int32 I=0;I<CS.X*CS.Y;++I)
+  {
+   const auto& C=R->SpatialMemory.GetCells()[I]; const auto& O=Old.SpatialMemory.GetCells()[I];
+   if(Contains(B,Darkwell::MemoryRegionSamples::Center(OB,CS,I))) {if(Clear && (C.InitialRemembered!=0 || C.DiscoveredPresent!=0 || C.RemainingStale!=0 || C.StaleOpacity!=0)) ++WrongInside;}
+   else if(FMemory::Memcmp(&C,&O,sizeof(C))!=0) ++WrongOutside;
+  }
+  TestEqual(TEXT("Inside coarse facts erased"),WrongInside,0);TestEqual(TEXT("Outside coarse exactly preserved"),WrongOutside,0);
+  auto CheckPresentation=[&](bool HiddenInside)
+  {
+   const auto* V=P.Visuals.Find(Old.Epoch); if(!V) {AddError(TEXT("Missing old visual"));return;}
+   int32 Leak=0,Lost=0;
+   for(int32 I=0;I<V->SubmittedPresentation.Num();++I)
+    if(Inside(I)) {if(HiddenInside && V->SubmittedPresentation[I].A>0) ++Leak;}
+    else if(Old.FineHistory.GetSamples()[I].InitialRemembered>0 && R->FineHistory.GetSamples()[I].State==FDarkwellHistoryGridV2::Unresolved() && V->SubmittedPresentation[I].A==0) ++Lost;
+   TestEqual(TEXT("No hard-gate leak inside"),Leak,0);TestEqual(TEXT("Retained outside surface survives"),Lost,0);
+   TestTrue(TEXT("Cut has cap geometry"),V->CapTriangles>0);
+   TestEqual(TEXT("Cap stays within recorded geometry"),Scene.GetCapVerticesOutsideSourceForTesting(Id),0);
+  };
+  CheckPresentation(true);Snapshot(TEXT("02_cut"));
+  Observe();
+  TestTrue(TEXT("Live remains visible during crossing Block"),Scene.IsCurrentSourceVisibleForTesting(Id));
+  TestTrue(TEXT("Partial capture remains enabled outside"),Scene.IsCaptureEligible(P));
+  if(Block) for(const auto& Part:P.CurrentLive.Parts)
+  {
+   const auto LS=Part.Local.GetSize();
+   int32 Leaks=0,OutsideWritten=0,LiveInside=0,InsideSamples=0;
+   for(int32 I=0;I<Part.Local.GetCells().Num();++I)
+   {
+    const auto W=FVector2D(Part.Pose.TransformPosition(FVector(Darkwell::MemoryRegionSamples::Center(Part.Local.GetBounds(),LS,I),0)));
+    const auto& C=Part.Local.GetCells()[I];
+    if(Contains(B,W)) {++InsideSamples;Leaks+=C.DiscoveredPresent>0 || Part.LastLegalCaptureMask[I];LiveInside+=C.CurrentLegalCoverage>=.99f && C.AppearanceBlend>0;}
+    else OutsideWritten+=C.DiscoveredPresent>0;
+   }
+   TestEqual(TEXT("Blocked local knowledge stays empty"),Leaks,0);
+   TestTrue(TEXT("Outside local writes continue"),OutsideWritten>0);
+   if(InsideSamples>0) TestTrue(TEXT("Inside legal Live has independent appearance"),LiveInside>0);
+  }
+  Snapshot(TEXT("03_live"));Leave();
+  if(Block)
+  {
+   int32 NewInside=0,NewOutside=0;
+   for(const auto& N:P.History.GetRecords()) if(N.Epoch!=Old.Epoch)
+    for(int32 I=0;I<N.FineHistory.GetSamples().Num();++I) if(N.FineHistory.GetSamples()[I].InitialRemembered>0)
+     {if(Contains(B,Darkwell::MemoryRegionSamples::Center(N.FineHistory.GetBounds(),N.FineHistory.GetSize(),I))) ++NewInside;else ++NewOutside;}
+   TestEqual(TEXT("New captures contain no blocked fine knowledge"),NewInside,0);
+   TestTrue(TEXT("New captures retain outside fine knowledge"),NewOutside>0);
+   Snapshot(TEXT("04_left"));
+   TestTrue(TEXT("Unblock"),Region->SetBlockMemoryWrites(false));F.Step(5);
+   TestEqual(TEXT("Clear plus Block cannot restore old inside facts"),Stored(true)>0,!Clear);
+   if(!Clear)
+   {
+    const auto* Original=P.History.FindRecord(Old.Epoch);int32 Changed=0;
+    if(!Original) ++Changed;
+    else for(int32 I=0;I<S.X*S.Y;++I) if(Inside(I))
+    {const auto& N=Original->FineHistory.GetSamples()[I];const auto& O=Old.FineHistory.GetSamples()[I];
+     if(N.State!=O.State || N.InitialRemembered!=O.InitialRemembered || N.Opacity!=O.Opacity || N.FrozenAAEnvelope!=O.FrozenAAEnvelope || N.bVerifiedEmpty!=O.bVerifiedEmpty) ++Changed;}
+    TestEqual(TEXT("Block-only preserves every old inside fine field"),Changed,0);
+   }
+   Snapshot(TEXT("05_unblock"));
+  }
+  if(Clear && Block) {F.Step(10);TestEqual(TEXT("Idle does not resurrect gray"),Stored(true),0);}
+  Observe();Leave();TestTrue(TEXT("New legal observation rebuilds inside gray"),Stored(true)>0);
+  Snapshot(TEXT("06_rebuilt"));
+  if(Clear)
+  {
+   const auto* Previous=P.History.FindRecord(Old.Epoch);int32 Revived=0;
+   if(Previous) for(int32 I=0;I<S.X*S.Y;++I) if(Inside(I)) Revived+=Previous->FineHistory.GetSamples()[I].InitialRemembered>0;
+   TestEqual(TEXT("Fresh observation cannot reinitialize cleared old epoch"),Revived,0);
+  }
+  // Hidden rigid pose change, then legal resweep: old world samples must stay erased.
+  auto Pose=P.Actual->GetActorTransform();Pose.SetRotation(FRotator(0,37,0).Quaternion());
+  TestTrue(TEXT("Rotate actual geometry"),Scene.SetTrackedTransformForTesting(Id,Pose));F.Step(3);
+  Observe();F.Face(146);F.Step(15);Leave();Snapshot(TEXT("07_rotated_resweep"));
+  TestEqual(TEXT("Rotated caps remain inside source geometry"),Scene.GetCapVerticesOutsideSourceForTesting(Id),0);
+  const auto NewestRotated=P.History.GetRecords().Last();int32 FalseEmpty=0;
+  for(int32 I=0;I<NewestRotated.FineHistory.GetSamples().Num();++I)
+   if(NewestRotated.FineHistory.GetSamples()[I].InitialRemembered>0 && NewestRotated.GeometryFootprint[I]) FalseEmpty+=NewestRotated.FineHistory.GetSamples()[I].bVerifiedEmpty;
+  TestEqual(TEXT("Rotated recorded edge cells intersecting unchanged actual geometry are not false-empty"),FalseEmpty,0);
+  if(Clear)
+  {
+   const auto* Previous=P.History.FindRecord(Old.Epoch);int32 Revived=0;
+   if(Previous) for(int32 I=0;I<S.X*S.Y;++I) if(Inside(I)) Revived+=Previous->FineHistory.GetSamples()[I].InitialRemembered>0;
+   TestEqual(TEXT("Rotation does not resurrect old pose gray"),Revived,0);
+  }
+  Observe();
+  TestTrue(TEXT("Enable cut Block during rotated Live"),Region->SetBlockMemoryWrites(true));
+  TestTrue(TEXT("Cut Block does not add a first-display frame"),Scene.IsCurrentSourceVisibleForTesting(Id));
+  TestTrue(TEXT("Clear cut during rotated blocked Live"),Region->ClearMemory());
+  TestTrue(TEXT("Clear preserves same-call Live"),Scene.IsCurrentSourceVisibleForTesting(Id));
+  Snapshot(TEXT("08_live_transaction"));
+  Leave();TestTrue(TEXT("Unblock after rotated Live transaction"),Region->SetBlockMemoryWrites(false));F.Step(10);
+  TestEqual(TEXT("No retained inside sample after rotated Clear plus Block"),Stored(true),0);
+  TestTrue(TEXT("Outside gray survives rotated transaction"),Stored(false)>0);
+  auto SubmissionHash=[&](){uint64 H=0;for(const auto& V:P.Visuals) {H=HashCombineFast(H,V.Value.TextureSignature);H=HashCombineFast(H,V.Value.CapSignature);}return H;};
+  const auto Stable=SubmissionHash();
+  for(int32 Frame=0;Frame<10;++Frame) {F.Step();TestEqual(TEXT("Idle cut has no cap or texture oscillation"),SubmissionHash(),Stable);}
+  int32 OutsideRotatedAALoss=0;
+  const auto& AfterRotated=P.History.GetRecords().Last();
+  for(int32 I=0;I<AfterRotated.FineHistory.GetSamples().Num();++I)
+   if(!Contains(B,Darkwell::MemoryRegionSamples::Center(AfterRotated.FineHistory.GetBounds(),AfterRotated.FineHistory.GetSize(),I)))
+   {
+    const auto& BeforeSample=NewestRotated.FineHistory.GetSamples()[I];
+    const auto& AfterSample=AfterRotated.FineHistory.GetSamples()[I];
+    if(BeforeSample.InitialRemembered>0 && (AfterSample.InitialRemembered==0 || AfterSample.FrozenAAEnvelope<BeforeSample.FrozenAAEnvelope)) ++OutsideRotatedAALoss;
+   }
+  TestEqual(TEXT("Rotated Clear Block preserves all outside known AA support"),OutsideRotatedAALoss,0);
+  Snapshot(TEXT("09_no_resurrection"));
+  // Diagnostic isolation only. Acceptance uses 09 with the real gray and caps
+  // both enabled. These images must never substitute for its visual review.
+  if(FCString::Strcmp(Sequence,TEXT("A"))==0)
+  {
+   int32 Quads=0,AxisX=0,AxisY=0;FString CSV=TEXT("epoch,visible,yaw,ax,ay,az,bx,by,bz,cx,cy,cz,dx,dy,dz\n");
+   for(auto& V:P.Visuals)
+   {
+    for(const auto& Q:V.Value.CapQuads) {++Quads;AxisX+=FMath::Abs(Q.A.X-Q.B.X)<.001;AxisY+=FMath::Abs(Q.A.Y-Q.B.Y)<.001;}
+    const auto* DiagnosticRecord=P.History.FindRecord(V.Key);
+    for(const auto& Q:V.Value.CapQuads) CSV+=FString::Printf(TEXT("%u,%d,%.5f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n"),V.Key,V.Value.Render.Cap.IsValid() && V.Value.Render.Cap->IsVisible(),DiagnosticRecord?DiagnosticRecord->SnapshotTransform.Rotator().Yaw:0,Q.A.X,Q.A.Y,Q.A.Z,Q.B.X,Q.B.Y,Q.B.Z,Q.C.X,Q.C.Y,Q.C.Z,Q.D.X,Q.D.Y,Q.D.Z);
+    if(V.Value.Render.Cap.IsValid()) V.Value.Render.Cap->SetVisibility(false);
+   }
+   FFileHelper::SaveStringToFile(CSV,*(FPaths::ProjectSavedDir()/TEXT("UnknownPartial/rotated_caps.csv")));
+   AddInfo(FString::Printf(TEXT("ROTATED_CAP_DIAGNOSTIC quads=%d axis_x=%d axis_y=%d"),Quads,AxisX,AxisY));
+   Snapshot(TEXT("10_diagnostic_caps_off"));
+   for(auto& V:P.Visuals)
+   {
+    if(V.Value.Render.Cap.IsValid()) V.Value.Render.Cap->SetVisibility(V.Value.CapTriangles>0);
+    if(V.Value.Render.Proxy.IsValid()) V.Value.Render.Proxy->SetActorHiddenInGame(true);
+   }
+   Snapshot(TEXT("11_diagnostic_caps_only"));
+  }
+  AddInfo(FString::Printf(TEXT("UNKNOWN_PARTIAL_CUT sequence=%s fine=%dx%d no_resurrection=1"),Sequence,S.X,S.Y));
   if(CaptureOwner) CaptureOwner->Destroy();
  }
  return true;

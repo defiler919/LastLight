@@ -89,7 +89,9 @@ bool FDarkwellSpatialObservationHistory::RebaseCurrentObservedLocation(
 bool FDarkwellSpatialObservationHistory::UpdateCurrentObservedPosePreservingEvidence(const FTransform& Pose)
 {
 	if(!Records.IsValidIndex(CurrentIndex)) return false;
-	auto& Record=Records[CurrentIndex]; Record.SnapshotTransform=Pose; ++Record.PoseUpdates; return true;
+	auto& Record=Records[CurrentIndex];
+ if(!Record.SnapshotTransform.Equals(Pose,1.e-6)) {Record.MemoryRegionRetainedMask.Empty();Record.MemoryRegionRetainedEnvelope.Empty();}
+ Record.SnapshotTransform=Pose; ++Record.PoseUpdates; return true;
 }
 
 bool FDarkwellSpatialObservationHistory::FreezeCurrentForHiddenMovement()

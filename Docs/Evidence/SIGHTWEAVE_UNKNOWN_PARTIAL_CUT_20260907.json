@@ -1,0 +1,1448 @@
+{
+  "task": "Fixed AABB SpatialPartial sample Clear/Block",
+  "task_complete": false,
+  "visual_acceptance": "FAIL: rotated cut gray surface retains thin vertical striping; automation success does not close visual acceptance.",
+  "machine": "home",
+  "repository": "D:\\UE_pro\\Darkwell",
+  "base_head": "26eb673876875faffaa4a136fb5943b10440bd76",
+  "final_commit": "Runtime, tests, report and evidence share this Git commit; resolve via git log for this file. This is an incomplete development result, not a production checkpoint.",
+  "engine": "D:/UE_5.8 (5.8.2 CL56702186)",
+  "build": {
+    "command": "& Scripts/BuildEditor.ps1 -EngineRoot D:/UE_5.8",
+    "log": "Saved/UnknownPartial/Build24Final.log",
+    "sha256": "5d78c46b3e87269ee945979ffe56134237383cd9677791040aabdf1e65df1db8",
+    "result": "Succeeded",
+    "dll_sha256": "f7c280a69355c57878b841f7036aa426ca3017e168662dd11adaebdaf34ee399"
+  },
+  "command": "& Scripts/RunUnknownPartialCutTests.ps1 -RunName UnknownPartialForegroundFinal",
+  "summary": {
+    "run": "UnknownPartialForegroundFinal",
+    "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+    "runner_failure": null,
+    "exit_code": 0,
+    "foreground_approved": true,
+    "foreground_attempts": 0,
+    "wall_seconds": 44.3233693,
+    "total": 7,
+    "clean": 6,
+    "warnings": 1,
+    "failed": 0,
+    "not_run": 0,
+    "severe_lines": 0,
+    "requested_rhi": "D3D12/SM6",
+    "passed": true
+  },
+  "tests": [
+    {
+      "testDisplayName": "PresentationResidency",
+      "fullTestPath": "Darkwell.ObjectMemory.PresentationResidency",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "3EBB35DB48008CBFB5C750BF3CAE545A"
+      ],
+      "duration": 2.181006669998169,
+      "dateTime": "2026.09.07-15.23.59",
+      "entries": [
+        {
+          "event": {
+            "type": "Info",
+            "message": "A0 offline frames=12 changed-evidence frames=8 cap meshes=1 GPU readbacks=2; first Whole exit extra frames=0",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.01"
+        }
+      ],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    },
+    {
+      "testDisplayName": "SpatialPartialStaticKeepsLegalCap",
+      "fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "3EBB35DB48008CBFB5C750BF3CAE545A"
+      ],
+      "duration": 0.23038940131664276,
+      "dateTime": "2026.09.07-15.24.01",
+      "entries": [],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    },
+    {
+      "testDisplayName": "WholeObjectConfirmedStaticHistory",
+      "fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "3EBB35DB48008CBFB5C750BF3CAE545A"
+      ],
+      "duration": 0.22517280280590057,
+      "dateTime": "2026.09.07-15.24.01",
+      "entries": [],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    },
+    {
+      "testDisplayName": "VisionIlluminationBoundary",
+      "fullTestPath": "Darkwell.SightWeave.Closure.VisionIlluminationBoundary",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "3EBB35DB48008CBFB5C750BF3CAE545A"
+      ],
+      "duration": 0.2190731018781662,
+      "dateTime": "2026.09.07-15.24.01",
+      "entries": [
+        {
+          "event": {
+            "type": "Info",
+            "message": "Legacy torch full-texture max error=0.000488",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.02"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "01_TorchOn_Dark: cone=2200/52 active; body bypass; target=1 far=0; GPU=1",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.02"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "02_TorchEmpty_Environment: cone=2200/52 active; body bypass; target=1 far=1; GPU=1",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.02"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "03_TorchEmpty_NoLight: cone=2200/52 active; body bypass; target=0 far=0; GPU=1",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.02"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "04_TorchRestored: cone=2200/52 active; body bypass; target=1 far=0; GPU=1",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.02"
+        }
+      ],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    },
+    {
+      "testDisplayName": "SampleCut",
+      "fullTestPath": "Darkwell.UnknownPartial.SampleCut",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "3EBB35DB48008CBFB5C750BF3CAE545A"
+      ],
+      "duration": 7.314901828765869,
+      "dateTime": "2026.09.07-15.24.02",
+      "entries": [
+        {
+          "event": {
+            "type": "Info",
+            "message": "OUTSIDE_FINE_REFERENCE facts=0 known_aa=0 unknown_unused_aa=32",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.02"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "ROTATED_CAP_DIAGNOSTIC quads=440 axis_x=357 axis_y=177",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.04"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_PARTIAL_CUT sequence=A fine=240x136 no_resurrection=1",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.04"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_PARTIAL_CUT sequence=B fine=240x136 no_resurrection=1",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.07"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_PARTIAL_CUT sequence=C fine=240x136 no_resurrection=1",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.09"
+        }
+      ],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    },
+    {
+      "testDisplayName": "SpatialPartial",
+      "fullTestPath": "Darkwell.UnknownRegion.SpatialPartial",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "3EBB35DB48008CBFB5C750BF3CAE545A"
+      ],
+      "duration": 2.9679198265075684,
+      "dateTime": "2026.09.07-15.24.09",
+      "entries": [
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=SpatialPartial sequence=A passed_old_resurrection=0 revision=6",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.10"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=SpatialPartial sequence=B passed_old_resurrection=0 revision=6",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.11"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=SpatialPartial sequence=C passed_old_resurrection=0 revision=8",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.12"
+        }
+      ],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    },
+    {
+      "testDisplayName": "Whole",
+      "fullTestPath": "Darkwell.UnknownRegion.Whole",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "3EBB35DB48008CBFB5C750BF3CAE545A"
+      ],
+      "duration": 3.309920072555542,
+      "dateTime": "2026.09.07-15.24.12",
+      "entries": [
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=Whole sequence=A passed_old_resurrection=0 revision=6",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.13"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=Whole sequence=B passed_old_resurrection=0 revision=6",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.14"
+        },
+        {
+          "event": {
+            "type": "Warning",
+            "message": "LogHttp: HTTP request timed out after 3.00 seconds URL=https://www.google.com/generate_204",
+            "context": "log",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.15"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=Whole sequence=C passed_old_resurrection=0 revision=8",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-15.24.15"
+        }
+      ],
+      "warnings": 1,
+      "errors": 0,
+      "artifacts": []
+    }
+  ],
+  "foreground": {
+    "foreground-approved": {
+      "time": "2026-09-07T23:23:48.9260084+08:00",
+      "attempts": 0,
+      "engine": {
+        "frame": 15,
+        "viewport": [
+          0,
+          0
+        ],
+        "window": [
+          0,
+          0
+        ],
+        "foreground": 1,
+        "window_active": 0,
+        "minimized": 0,
+        "screen_percentage": 100.0,
+        "secondary_percentage": 0.0,
+        "aa": 4,
+        "dynamic_resolution": 0,
+        "vsync": 0,
+        "max_fps": 0.0,
+        "fixed_step": 0,
+        "game_ms": 6.2664,
+        "render_ms": 0.0001,
+        "rhi_ms": 0.151,
+        "gpu_ms": 12.9539,
+        "game_wait_ms": 9.7395,
+        "render_wait_ms": 0.0065,
+        "present_ms": 0.0065,
+        "smooth_frame_rate": 0,
+        "engine_fixed_frame_rate": 0,
+        "fog_extent": [
+          0,
+          0
+        ],
+        "rhi_texture_bytes": 1952464896
+      },
+      "stable_frames": 14
+    },
+    "foreground-confirmed": {
+      "engine": {
+        "frame": 17,
+        "viewport": [
+          0,
+          0
+        ],
+        "window": [
+          0,
+          0
+        ],
+        "foreground": 1,
+        "window_active": 0,
+        "minimized": 0,
+        "screen_percentage": 100.0,
+        "secondary_percentage": 0.0,
+        "aa": 4,
+        "dynamic_resolution": 0,
+        "vsync": 0,
+        "max_fps": 0.0,
+        "fixed_step": 0,
+        "game_ms": 7.3592,
+        "render_ms": 0.0001,
+        "rhi_ms": 0.175,
+        "gpu_ms": 13.7615,
+        "game_wait_ms": 9.4881,
+        "render_wait_ms": 0.005,
+        "present_ms": 0.005,
+        "smooth_frame_rate": 0,
+        "engine_fixed_frame_rate": 0,
+        "fog_extent": [
+          0,
+          0
+        ],
+        "rhi_texture_bytes": 1952464896
+      },
+      "consecutive": 16
+    },
+    "power-guard": {
+      "acquired": 2147483648,
+      "restored": 2147483651
+    }
+  },
+  "foreground_note": "Unreal Editor application foreground, not a PIE/performance viewport. Existing GrayBenchmarkSession and await_foreground handshake reused; 12 engine frames required. D3D12 SceneCapture and readback run in isolated deterministic automation worlds.",
+  "rhi_log_evidence": [
+    "[2026.09.07-15.23.34:474][  0]LogD3D12RHI: Found D3D12 adapter 0: NVIDIA GeForce RTX 2070 SUPER (VendorId: 10de, DeviceId: 1e84, SubSysId: c7261462, Revision: 00a1",
+    "[2026.09.07-15.23.34:474][  0]LogD3D12RHI: Found D3D12 adapter 1: Microsoft Basic Render Driver (VendorId: 1414, DeviceId: 008c, SubSysId: 0000, Revision: 0000",
+    "[2026.09.07-15.23.34:474][  0]LogD3D12RHI: Chosen D3D12 Adapter Id = 0",
+    "[2026.09.07-15.23.35:055][  0]LogCsvProfiler: Display: Metadata set : shaderplatform=\"PCD3D_SM6\"",
+    "[2026.09.07-15.23.39:740][  0]LogShaderCompilers: Display: Compiling shader autogen file: ../../../../UE_pro/Darkwell/Intermediate/ShaderAutogen/PCD3D_SM6/AutogenShaderHeaders.ush",
+    "[2026.09.07-15.24.15:822][652]LogExit: Display: **** TestExit: Automation Test Queue Empty ****"
+  ],
+  "boundary_reference": {
+    "outside_fine_facts_difference": 0,
+    "outside_known_frozen_AA_difference": 0,
+    "outside_unknown_unused_AA_difference": 32,
+    "note": "Only unobserved geometry-exterior zero-opacity scratch AA fields differ; every outside known fact and its AA matches the same-sampling no-Block control. No precision or legal coverage changes."
+  },
+  "checks": {
+    "ABC_authority": "PASS",
+    "coarse_fine_membership": "sample center in [Min,Max), existing 4x4 fine resolution",
+    "outside_old_fields": "exact preserved",
+    "rotated_outside_known_AA": "no loss",
+    "old_cleared_epoch_resurrection": 0,
+    "cap_vertices_outside_source": 0,
+    "max_gray_and_cap_contributors": "<=1",
+    "idle_submission_hash": "stable for 10 frames",
+    "same_call_live": "PASS",
+    "whole_atomic_contract": "PASS",
+    "GPU_hard_A_and_region_knowledge_readback": "exact CPU mirror"
+  },
+  "visual_blocker": {
+    "view": "Captures/SpatialPartialCut/A/09_no_resurrection_scene.png",
+    "reproduction": "Observe full Partial, rotate 37 degrees and resweep, enable crossing Block during Live, Clear, leave, unblock, idle. Cap-on view has gray striping.",
+    "isolation": "Cap-only surface is continuous. Outside authoritative samples and frozen AA support are preserved. Transparency/AA composition is suspected; final root cause and correction are not established. Do not disable caps, force opacity, reduce precision or delay publication to obtain PASS.",
+    "next_step": "Resolve this same slice visual seam before any next black-layer slice."
+  },
+  "source_files": {
+    "Content/Python/run_unknown_partial_cut_tests.py": "e39989895f745ac93383408891b765b7876d419f2464b8580b4fb95f8ac88530",
+    "Scripts/RunUnknownPartialCutTests.ps1": "10a7c09c89c6614c4e573f44d40391c58dbaeeb9e808f33f4c9bae3cef17c005",
+    "Source/Darkwell/Private/Tests/DarkwellGrayObjectPolicyTests.cpp": "29b3e8bf2846da9feca24bc16de3eca580e3f23db90e8a53c453abda9d34fbce",
+    "Source/Darkwell/Private/VisionPresentation/DarkwellCurrentLiveGrid.cpp": "09d35ef78703738ac8bea071948910e4cedb422f775ce869d86f2a411c2c857a",
+    "Source/Darkwell/Private/VisionPresentation/DarkwellHistoryGridV2.cpp": "326ee31ea92779223461f942132d9a99d8a8f237ed73c2732bb7bf9a6ad28507",
+    "Source/Darkwell/Private/VisionPresentation/DarkwellObjectMemoryScene.cpp": "23bbfb36d1b2218aa71f255d477770f7bff62f6d8c013becf906429167576bf4",
+    "Source/Darkwell/Private/VisionPresentation/DarkwellSpatialObservationHistory.cpp": "a33adf7a468d3d92ac8efd390604d7d529106654182ec98f0008885cdd9715cf",
+    "Source/Darkwell/Private/VisionPresentation/DarkwellSpatialPropMemory.cpp": "ee560a7f2d4094c4f37fdea2ef961a8dc98789f8e629a5b19ca48e3883f0bff9",
+    "Source/Darkwell/Public/VisionPresentation/DarkwellCurrentLiveGrid.h": "dc7b81f09d1746c7a491c65209336437e783deb323144c524710a179b37cd1da",
+    "Source/Darkwell/Public/VisionPresentation/DarkwellHistoryGridV2.h": "334a1398ece482aee5c8ff3c9383ecc380225c757df892a1959bffe5c02c2556",
+    "Source/Darkwell/Public/VisionPresentation/DarkwellMemoryRegionSamples.h": "8f09881f8052bc7755fe19ad720cf0d1f9e7d185a3b05caf2292b4642b7e1684",
+    "Source/Darkwell/Public/VisionPresentation/DarkwellMemoryRegionSubsystem.h": "28b1c3f82d8b4b0efa7f25d30074970601f29954f9837e3fb25cda0504014588",
+    "Source/Darkwell/Public/VisionPresentation/DarkwellObjectMemoryScene.h": "55a32b1af1b1e103fe3b46393a237f7dad8857b1e023c3837a456f31886d31c7",
+    "Source/Darkwell/Public/VisionPresentation/DarkwellSpatialObservationHistory.h": "122c2e73ad030e51fd09bdf44dee127d6c764e13134ca45a9f72e284c3c72dd8",
+    "Source/Darkwell/Public/VisionPresentation/DarkwellSpatialPropMemory.h": "2da4413efdac2446baccbbfea519421a03a23cec3a82d56f75a80e2d3a74c4f6"
+  },
+  "portable_images": [
+    {
+      "path": "Docs/Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_CUT_20260907.png",
+      "sha256": "71e370547a1181bbac39dc6fa8a17d6976a4075a6ee1ea1e4ea4862fa2573133"
+    },
+    {
+      "path": "Docs/Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_CUT_VISUAL_BLOCKER_20260907.png",
+      "sha256": "2650b5f150fdeb6a7f3bf4cc6ba33b047b8d4b2e2b6b5bd14076333079c8e379"
+    }
+  ],
+  "raw_evidence": [
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/01_gray_scene.png",
+      "sha256": "cef0ef8d1f0db09bd1c82d51e6e52dfbe20d0fdcbc311e2c75272d3480d60b74"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/02_unknown_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/03_live_knowledge.png",
+      "sha256": "8289616faa579de542c42ca1bfa7b8cd08121274818fc9ee2a3a3871c7253dc8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/03_live_scene.png",
+      "sha256": "4945923de80ca269fbd3c43feae619fc444dc106bb6b4ca7732a9a6753c5666b"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/06_final_gray_knowledge.png",
+      "sha256": "8289616faa579de542c42ca1bfa7b8cd08121274818fc9ee2a3a3871c7253dc8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/06_final_gray_scene.png",
+      "sha256": "6ec54910eefc774cc37bd7eaa9f29446c4ab3db18e1cbabba1dc0a6259bc69c0"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/07_clear_block_still_live_scene.png",
+      "sha256": "07110e72531208bd736e034bde75de427ba72091aade93a023b33ca73c7eb1a5"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/A/08_no_resurrection_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/01_gray_scene.png",
+      "sha256": "cef0ef8d1f0db09bd1c82d51e6e52dfbe20d0fdcbc311e2c75272d3480d60b74"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/02_unknown_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/03_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/03_live_scene.png",
+      "sha256": "07110e72531208bd736e034bde75de427ba72091aade93a023b33ca73c7eb1a5"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/04_left_black_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/04_left_black_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/05_unblocked_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/05_unblocked_scene.png",
+      "sha256": "cef0ef8d1f0db09bd1c82d51e6e52dfbe20d0fdcbc311e2c75272d3480d60b74"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/06_final_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/06_final_gray_scene.png",
+      "sha256": "cef0ef8d1f0db09bd1c82d51e6e52dfbe20d0fdcbc311e2c75272d3480d60b74"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/07_clear_block_still_live_scene.png",
+      "sha256": "07110e72531208bd736e034bde75de427ba72091aade93a023b33ca73c7eb1a5"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/B/08_no_resurrection_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/01_gray_scene.png",
+      "sha256": "cef0ef8d1f0db09bd1c82d51e6e52dfbe20d0fdcbc311e2c75272d3480d60b74"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/02_unknown_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/03_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/03_live_scene.png",
+      "sha256": "07110e72531208bd736e034bde75de427ba72091aade93a023b33ca73c7eb1a5"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/04_left_black_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/04_left_black_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/05_unblocked_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/05_unblocked_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/06_final_gray_knowledge.png",
+      "sha256": "8289616faa579de542c42ca1bfa7b8cd08121274818fc9ee2a3a3871c7253dc8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/06_final_gray_scene.png",
+      "sha256": "6ec54910eefc774cc37bd7eaa9f29446c4ab3db18e1cbabba1dc0a6259bc69c0"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/07_clear_block_still_live_scene.png",
+      "sha256": "07110e72531208bd736e034bde75de427ba72091aade93a023b33ca73c7eb1a5"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartial/C/08_no_resurrection_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/01_gray_knowledge.png",
+      "sha256": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/01_gray_scene.png",
+      "sha256": "27fad37bf975299887ee6d1cd58693d547d94f5b052080c48b9f73d01565d4c9"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/02_cut_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/02_cut_scene.png",
+      "sha256": "756fc7dcbeb01a8851038d2e8107b739745f3d39a4c9227abed97c5c607a0f94"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/03_live_knowledge.png",
+      "sha256": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/03_live_scene.png",
+      "sha256": "4fb84a90d52ec4385524c0eab548cdeaf702415e500a66e4b41204ba8baac630"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/06_rebuilt_knowledge.png",
+      "sha256": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/06_rebuilt_scene.png",
+      "sha256": "27fad37bf975299887ee6d1cd58693d547d94f5b052080c48b9f73d01565d4c9"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/07_rotated_resweep_knowledge.png",
+      "sha256": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/07_rotated_resweep_scene.png",
+      "sha256": "7ce9b266a8e93b93bf3c44088c1810ea5e24653e70de6a39081eb0a51580f235"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/08_live_transaction_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/08_live_transaction_scene.png",
+      "sha256": "a935b3f90067f4a20b01b1366597b055e3d9fe5e9cd23aaf03d920356b09ad0b"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/09_no_resurrection_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/09_no_resurrection_scene.png",
+      "sha256": "3e2f6f083bcaeb46bc39340a653917ad750e98ac89253493ec0bbd74d1059bed"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/10_diagnostic_caps_off_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/10_diagnostic_caps_off_scene.png",
+      "sha256": "7a253b6742e89610aa661f8fe1e78fae5c9a667b774b1fe22c2412f10f329501"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/11_diagnostic_caps_only_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/A/11_diagnostic_caps_only_scene.png",
+      "sha256": "926a743a82767151e4cda70a30a54508bcd2bd938b808e929f7e3e4a922102a6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/01_gray_knowledge.png",
+      "sha256": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/01_gray_scene.png",
+      "sha256": "27fad37bf975299887ee6d1cd58693d547d94f5b052080c48b9f73d01565d4c9"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/02_cut_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/02_cut_scene.png",
+      "sha256": "664a314c0927e883b74ef634804dd83555d0e47345c05597b2c2c8a0b5f2b988"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/03_live_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/03_live_scene.png",
+      "sha256": "fcd14171fdc2a58d58c868699674e8c0e16d18d9bc1ce878a9d8d8e43b12fe1e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/04_left_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/04_left_scene.png",
+      "sha256": "756fc7dcbeb01a8851038d2e8107b739745f3d39a4c9227abed97c5c607a0f94"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/05_unblock_knowledge.png",
+      "sha256": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/05_unblock_scene.png",
+      "sha256": "7d28ae85d3be9ecd0315918b458d8bcac80b856076e47bb0734c6475ae02d981"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/06_rebuilt_knowledge.png",
+      "sha256": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/06_rebuilt_scene.png",
+      "sha256": "27fad37bf975299887ee6d1cd58693d547d94f5b052080c48b9f73d01565d4c9"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/07_rotated_resweep_knowledge.png",
+      "sha256": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/07_rotated_resweep_scene.png",
+      "sha256": "7ce9b266a8e93b93bf3c44088c1810ea5e24653e70de6a39081eb0a51580f235"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/08_live_transaction_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/08_live_transaction_scene.png",
+      "sha256": "a935b3f90067f4a20b01b1366597b055e3d9fe5e9cd23aaf03d920356b09ad0b"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/09_no_resurrection_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/B/09_no_resurrection_scene.png",
+      "sha256": "3e2f6f083bcaeb46bc39340a653917ad750e98ac89253493ec0bbd74d1059bed"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/01_gray_knowledge.png",
+      "sha256": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/01_gray_scene.png",
+      "sha256": "27fad37bf975299887ee6d1cd58693d547d94f5b052080c48b9f73d01565d4c9"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/02_cut_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/02_cut_scene.png",
+      "sha256": "756fc7dcbeb01a8851038d2e8107b739745f3d39a4c9227abed97c5c607a0f94"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/03_live_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/03_live_scene.png",
+      "sha256": "fcd14171fdc2a58d58c868699674e8c0e16d18d9bc1ce878a9d8d8e43b12fe1e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/04_left_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/04_left_scene.png",
+      "sha256": "756fc7dcbeb01a8851038d2e8107b739745f3d39a4c9227abed97c5c607a0f94"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/05_unblock_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/05_unblock_scene.png",
+      "sha256": "756fc7dcbeb01a8851038d2e8107b739745f3d39a4c9227abed97c5c607a0f94"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/06_rebuilt_knowledge.png",
+      "sha256": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/06_rebuilt_scene.png",
+      "sha256": "27fad37bf975299887ee6d1cd58693d547d94f5b052080c48b9f73d01565d4c9"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/07_rotated_resweep_knowledge.png",
+      "sha256": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/07_rotated_resweep_scene.png",
+      "sha256": "7ce9b266a8e93b93bf3c44088c1810ea5e24653e70de6a39081eb0a51580f235"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/08_live_transaction_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/08_live_transaction_scene.png",
+      "sha256": "a935b3f90067f4a20b01b1366597b055e3d9fe5e9cd23aaf03d920356b09ad0b"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/09_no_resurrection_knowledge.png",
+      "sha256": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/SpatialPartialCut/C/09_no_resurrection_scene.png",
+      "sha256": "3e2f6f083bcaeb46bc39340a653917ad750e98ac89253493ec0bbd74d1059bed"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/01_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/02_unknown_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/03_live_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/03_live_scene.png",
+      "sha256": "f9ac6cbbd440c0fc62a21ae4f8adfeafe60e85e7f2a6d1508b95a3f4d25661f5"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/06_final_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/06_final_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/07_clear_block_still_live_scene.png",
+      "sha256": "3fb27ee2efb3cd0f8a685f4cef9ae6fb265942f454b953a87e65465ee924e4b0"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/A/08_no_resurrection_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/01_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/02_unknown_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/03_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/03_live_scene.png",
+      "sha256": "3fb27ee2efb3cd0f8a685f4cef9ae6fb265942f454b953a87e65465ee924e4b0"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/04_left_black_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/04_left_black_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/05_unblocked_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/05_unblocked_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/06_final_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/06_final_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/07_clear_block_still_live_scene.png",
+      "sha256": "3fb27ee2efb3cd0f8a685f4cef9ae6fb265942f454b953a87e65465ee924e4b0"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/B/08_no_resurrection_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/01_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/02_unknown_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/03_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/03_live_scene.png",
+      "sha256": "3fb27ee2efb3cd0f8a685f4cef9ae6fb265942f454b953a87e65465ee924e4b0"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/04_left_black_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/04_left_black_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/05_unblocked_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/05_unblocked_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/06_final_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/06_final_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/07_clear_block_still_live_scene.png",
+      "sha256": "3fb27ee2efb3cd0f8a685f4cef9ae6fb265942f454b953a87e65465ee924e4b0"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/Captures/Whole/C/08_no_resurrection_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac"
+    }
+  ],
+  "bounded_runs": [
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialBoundary/UnknownPartialBoundary.summary.json",
+      "sha256": "85130e69aa11c94490f802266c31e04761c7ffdba452c20720f12f7b43fdd291",
+      "summary": {
+        "run": "UnknownPartialBoundary",
+        "selector": "Darkwell.UnknownPartial",
+        "exit_code": 0,
+        "wall_seconds": 36.9717123,
+        "total": 1,
+        "clean": 0,
+        "warnings": 0,
+        "failed": 1,
+        "not_run": 0,
+        "duration": 7.4834513664245605,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialBoundary\\UnknownPartialBoundary_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialBoundary\\UnknownPartialBoundary.log"
+        ],
+        "passed": false
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialBoundaryCPU/UnknownPartialBoundaryCPU.summary.json",
+      "sha256": "0c3a4b930a636bce6e3cf577c279f09f5ac8d3a6e61d90b2daaa4e243d154a45",
+      "summary": {
+        "run": "UnknownPartialBoundaryCPU",
+        "selector": "Darkwell.UnknownPartial",
+        "exit_code": 0,
+        "wall_seconds": 26.0396042,
+        "total": 1,
+        "clean": 0,
+        "warnings": 0,
+        "failed": 1,
+        "not_run": 0,
+        "duration": 5.793828964233398,
+        "severe_lines": 0,
+        "requested_rhi": "NullRHI",
+        "rhi_evidence": [
+          "LogCsvProfiler: Display: Metadata set : commandline=\"\" D:\\UE_pro\\Darkwell/Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialBoundaryCPU\\UnknownPartialBoundaryCPU_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialBoundaryCPU\\UnknownPartialBoundaryCPU.log\"\"",
+          "LogInit: Command Line: -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialBoundaryCPU\\UnknownPartialBoundaryCPU_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialBoundaryCPU\\UnknownPartialBoundaryCPU.log"
+        ],
+        "passed": false
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialCapIsolation/UnknownPartialCapIsolation.summary.json",
+      "sha256": "7ce99d8632e3ac34bfde22d49d39d25e716717078211acce1929d839f6241697",
+      "summary": {
+        "run": "UnknownPartialCapIsolation",
+        "selector": "Darkwell.UnknownPartial",
+        "exit_code": 0,
+        "wall_seconds": 39.1898426,
+        "total": 1,
+        "clean": 1,
+        "warnings": 0,
+        "failed": 0,
+        "not_run": 0,
+        "duration": 7.584311008453369,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCapIsolation\\UnknownPartialCapIsolation_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCapIsolation\\UnknownPartialCapIsolation.log"
+        ],
+        "passed": true
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialCapPlanes/UnknownPartialCapPlanes.summary.json",
+      "sha256": "a6376559760f474ce2e365e9505610f46802bbfdeaca746e03615935b39ff778",
+      "summary": {
+        "run": "UnknownPartialCapPlanes",
+        "selector": "Darkwell.UnknownPartial",
+        "exit_code": 0,
+        "wall_seconds": 27.6487635,
+        "total": 1,
+        "clean": 0,
+        "warnings": 1,
+        "failed": 0,
+        "not_run": 0,
+        "duration": 5.695033073425293,
+        "severe_lines": 0,
+        "requested_rhi": "NullRHI",
+        "rhi_evidence": [
+          "LogCsvProfiler: Display: Metadata set : commandline=\"\" D:\\UE_pro\\Darkwell/Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCapPlanes\\UnknownPartialCapPlanes_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCapPlanes\\UnknownPartialCapPlanes.log\"\"",
+          "LogInit: Command Line: -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCapPlanes\\UnknownPartialCapPlanes_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCapPlanes\\UnknownPartialCapPlanes.log"
+        ],
+        "passed": true
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialCapsOnly/UnknownPartialCapsOnly.summary.json",
+      "sha256": "a1f1dcdf572e60555272624a5ac41eaae250bd8c87bd3a1db92bab3c61d53d7f",
+      "summary": {
+        "run": "UnknownPartialCapsOnly",
+        "selector": "Darkwell.UnknownPartial",
+        "exit_code": 0,
+        "wall_seconds": 39.390488,
+        "total": 1,
+        "clean": 1,
+        "warnings": 0,
+        "failed": 0,
+        "not_run": 0,
+        "duration": 7.482109069824219,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCapsOnly\\UnknownPartialCapsOnly_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCapsOnly\\UnknownPartialCapsOnly.log"
+        ],
+        "passed": true
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialCPU01/UnknownPartialCPU01.summary.json",
+      "sha256": "6cd474002c7205f71d1dddb72eba62b70be3373d34db3eeb4751362e5b3147ec",
+      "summary": {
+        "run": "UnknownPartialCPU01",
+        "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion",
+        "exit_code": 0,
+        "wall_seconds": 28.285951,
+        "total": 3,
+        "clean": 2,
+        "warnings": 0,
+        "failed": 1,
+        "not_run": 0,
+        "duration": 7.3159003257751465,
+        "severe_lines": 0,
+        "requested_rhi": "NullRHI",
+        "rhi_evidence": [
+          "LogCsvProfiler: Display: Metadata set : commandline=\"\" D:\\UE_pro\\Darkwell/Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial+Darkwell.UnknownRegion\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCPU01\\UnknownPartialCPU01_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCPU01\\UnknownPartialCPU01.log\"\"",
+          "LogInit: Command Line: -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial+Darkwell.UnknownRegion\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCPU01\\UnknownPartialCPU01_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialCPU01\\UnknownPartialCPU01.log"
+        ],
+        "passed": false
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialD3D01/UnknownPartialD3D01.summary.json",
+      "sha256": "bceb417dc6b8182b534935c6ebd1fb1c5c587d12247bfd84e385585241215ac3",
+      "summary": {
+        "run": "UnknownPartialD3D01",
+        "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+        "exit_code": 0,
+        "wall_seconds": 44.4405345,
+        "total": 7,
+        "clean": 5,
+        "warnings": 2,
+        "failed": 0,
+        "not_run": 0,
+        "duration": 13.083147048950195,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialD3D01\\UnknownPartialD3D01_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialD3D01\\UnknownPartialD3D01.log"
+        ],
+        "passed": true
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialD3D02/UnknownPartialD3D02.summary.json",
+      "sha256": "1f858daf8ed6d5ebd05c78baa52bf8a1960568a218eed561fc438b312a2f9985",
+      "summary": {
+        "run": "UnknownPartialD3D02",
+        "selector": "Darkwell.UnknownPartial",
+        "exit_code": 0,
+        "wall_seconds": 35.6665207,
+        "total": 1,
+        "clean": 0,
+        "warnings": 0,
+        "failed": 1,
+        "not_run": 0,
+        "duration": 5.296346664428711,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialD3D02\\UnknownPartialD3D02_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialD3D02\\UnknownPartialD3D02.log"
+        ],
+        "passed": false
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialD3D03/UnknownPartialD3D03.summary.json",
+      "sha256": "d5adf1734f160264b2eaf8e5306523458515091a566c30f8303199bf3832003f",
+      "summary": {
+        "run": "UnknownPartialD3D03",
+        "selector": "Darkwell.UnknownPartial",
+        "exit_code": 0,
+        "wall_seconds": 36.1687241,
+        "total": 1,
+        "clean": 0,
+        "warnings": 0,
+        "failed": 1,
+        "not_run": 0,
+        "duration": 4.721180438995361,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialD3D03\\UnknownPartialD3D03_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialD3D03\\UnknownPartialD3D03.log"
+        ],
+        "passed": false
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialD3D04/UnknownPartialD3D04.summary.json",
+      "sha256": "1fdd2c13fa5cc6a0875fe8d3f3a03eb1a0090ffa5688dade1ad16b8d7a73912a",
+      "summary": {
+        "run": "UnknownPartialD3D04",
+        "selector": "Darkwell.UnknownPartial",
+        "exit_code": 0,
+        "wall_seconds": 37.6520252,
+        "total": 1,
+        "clean": 0,
+        "warnings": 0,
+        "failed": 1,
+        "not_run": 0,
+        "duration": 4.80646276473999,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialD3D04\\UnknownPartialD3D04_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialD3D04\\UnknownPartialD3D04.log"
+        ],
+        "passed": false
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialD3D05/UnknownPartialD3D05.summary.json",
+      "sha256": "78ce39fcfd684cf35c482ac159a35c1ac076f7dce9920a32dfea8636b31bc7ef",
+      "summary": {
+        "run": "UnknownPartialD3D05",
+        "selector": "Darkwell.UnknownPartial",
+        "exit_code": 0,
+        "wall_seconds": 35.6256775,
+        "total": 1,
+        "clean": 1,
+        "warnings": 0,
+        "failed": 0,
+        "not_run": 0,
+        "duration": 4.80283784866333,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialD3D05\\UnknownPartialD3D05_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialD3D05\\UnknownPartialD3D05.log"
+        ],
+        "passed": true
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialFinal/UnknownPartialFinal.summary.json",
+      "sha256": "17dfad8bc34f81ee109c121e7ca04cd64b5c435774a060751ba504cc49f68055",
+      "summary": {
+        "run": "UnknownPartialFinal",
+        "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+        "exit_code": 0,
+        "wall_seconds": 49.6965416,
+        "total": 7,
+        "clean": 6,
+        "warnings": 1,
+        "failed": 0,
+        "not_run": 0,
+        "duration": 15.81704330444336,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialFinal\\UnknownPartialFinal_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialFinal\\UnknownPartialFinal.log"
+        ],
+        "passed": true
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialFootprintCheck/UnknownPartialFootprintCheck.summary.json",
+      "sha256": "dc9939c6237ff8689361bef49515eba99bac92716de07d3b39f329de5ff08d44",
+      "summary": {
+        "run": "UnknownPartialFootprintCheck",
+        "selector": "Darkwell.UnknownPartial",
+        "exit_code": 0,
+        "wall_seconds": 39.7231493,
+        "total": 1,
+        "clean": 1,
+        "warnings": 0,
+        "failed": 0,
+        "not_run": 0,
+        "duration": 7.4310688972473145,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialFootprintCheck\\UnknownPartialFootprintCheck_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialFootprintCheck\\UnknownPartialFootprintCheck.log"
+        ],
+        "passed": true
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialForegroundFinal/UnknownPartialForegroundFinal.summary.json",
+      "sha256": "ba3e160ca5decf95b1f853c10f03a5b5da3a1f937e4ea5ade54214c40a54247e",
+      "summary": {
+        "run": "UnknownPartialForegroundFinal",
+        "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+        "runner_failure": null,
+        "exit_code": 0,
+        "foreground_approved": true,
+        "foreground_attempts": 0,
+        "wall_seconds": 44.3233693,
+        "total": 7,
+        "clean": 6,
+        "warnings": 1,
+        "failed": 0,
+        "not_run": 0,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "passed": true
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialReady/UnknownPartialReady.summary.json",
+      "sha256": "eec8fcd58f1253bb677a7ae371271495544e14557fb1cdedb2ea5975c54b2296",
+      "summary": {
+        "run": "UnknownPartialReady",
+        "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+        "exit_code": 0,
+        "wall_seconds": 47.426517,
+        "total": 7,
+        "clean": 5,
+        "warnings": 2,
+        "failed": 0,
+        "not_run": 0,
+        "duration": 16.68657112121582,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialReady\\UnknownPartialReady_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialReady\\UnknownPartialReady.log"
+        ],
+        "passed": true
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialReadyFinal/UnknownPartialReadyFinal.summary.json",
+      "sha256": "fc4b53aaf74f5765fdd48230dc896139482a9ad1ce1ef4b3ddc5bf235a624f73",
+      "summary": {
+        "run": "UnknownPartialReadyFinal",
+        "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+        "exit_code": 0,
+        "wall_seconds": 48.6914978,
+        "total": 7,
+        "clean": 6,
+        "warnings": 1,
+        "failed": 0,
+        "not_run": 0,
+        "duration": 15.983054161071777,
+        "severe_lines": 0,
+        "requested_rhi": "D3D12/SM6",
+        "rhi_evidence": [
+          "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialReadyFinal\\UnknownPartialReadyFinal_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialReadyFinal\\UnknownPartialReadyFinal.log"
+        ],
+        "passed": true
+      }
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownPartialRotatedSupport/UnknownPartialRotatedSupport.summary.json",
+      "sha256": "baa3fb9a27845a38c758da7e810dd51ca34fa88a707c73e1dca906f6cc9f550c",
+      "summary": {
+        "run": "UnknownPartialRotatedSupport",
+        "selector": "Darkwell.UnknownPartial",
+        "exit_code": 0,
+        "wall_seconds": 26.5014884,
+        "total": 1,
+        "clean": 1,
+        "warnings": 0,
+        "failed": 0,
+        "not_run": 0,
+        "duration": 5.654128074645996,
+        "severe_lines": 0,
+        "requested_rhi": "NullRHI",
+        "rhi_evidence": [
+          "LogCsvProfiler: Display: Metadata set : commandline=\"\" D:\\UE_pro\\Darkwell/Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialRotatedSupport\\UnknownPartialRotatedSupport_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialRotatedSupport\\UnknownPartialRotatedSupport.log\"\"",
+          "LogInit: Command Line: -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialRotatedSupport\\UnknownPartialRotatedSupport_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownPartialRotatedSupport\\UnknownPartialRotatedSupport.log"
+        ],
+        "passed": true
+      }
+    }
+  ],
+  "unchanged": {
+    "INITIALIZATION": "FAIL",
+    "A1_default": 0,
+    "P1_default": 0,
+    "B0_default": 0,
+    "cold184": "unchanged, not remeasured",
+    "gray_checkpoint": "eeeec6506d1fecfd2d05bd08095b8230287a4d4f",
+    "stable_tags": "not moved"
+  }
+}

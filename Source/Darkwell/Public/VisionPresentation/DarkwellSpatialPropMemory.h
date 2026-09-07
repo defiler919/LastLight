@@ -30,6 +30,9 @@ struct DARKWELL_API FDarkwellSpatialPropMemory
  /** Forget retained facts without restarting the independent Live appearance blend. */
  void ForgetKnowledgePreservingLive();
  void BeginAbsent();
+ void ClearMemorySamples(const FBox2D& Region,const FTransform& SampleToWorld=FTransform::Identity);
+ void SetMemoryWriteBlock(const FBox2D& Region) { MemoryWriteBlock=Region; }
+
  /** One conservative legal coverage value per fixed cell, from the existing adapter. */
  bool Advance(float DeltaSeconds,TConstArrayView<float> Coverage);
  /** Derived current raster only. Evidence is supplied by stable local samples;
@@ -57,4 +60,5 @@ private:
  FBox2D Bounds;
  FIntPoint Size=FIntPoint::ZeroValue;
  TArray<FCell> Cells;
+ FBox2D MemoryWriteBlock=FBox2D(ForceInit);
 };

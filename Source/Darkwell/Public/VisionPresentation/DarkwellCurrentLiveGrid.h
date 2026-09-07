@@ -64,9 +64,11 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
 	/** Reentry changes lighting blend, never the already known surface. */
 	void ResumeStationaryKnowledge();
  void ForgetKnowledgePreservingLive();
+ FBox2D MemoryWriteBlock=FBox2D(ForceInit);
+
  bool MatchesGeometry(TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose) const;
  bool Advance(float Dt,const FTransform& ActorPose,TFunctionRef<float(FVector2D)> LegalCoverage,TFunction<bool(const FBox2D&,float&)> Uniform={});
- void WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds);
+ void WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds,bool bIncludeBlockedLegal=false);
  void WritePartRasters(TFunctionRef<float(FVector2D)> LegalCoverage,bool bTransient,TFunction<bool(const FBox2D&,float&)> Uniform={},
   TFunction<bool(const FBox2D&,FIntPoint,TArray<float>&)> CanonicalRaster={});
  bool HasAnyLegalObservation(const FTransform& ActorPose,TFunctionRef<float(FVector2D)> Query,TFunctionRef<bool(const FBox2D&,float&)> Uniform);
@@ -91,7 +93,7 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  FVector2D ObservationStepCm=FVector2D::ZeroVector;
  TBitArray<> ObservationFootprint;
  /** Exact primitive-local evidence query, including fine historical ownership. */
- bool HasObservedContributionAt(FVector2D World,int32 PrimitiveIndex=INDEX_NONE) const;
+ bool HasObservedContributionAt(FVector2D World,int32 PrimitiveIndex=INDEX_NONE,bool bAllowBlockedLive=false) const;
  uint64 StateHash() const;
  FLinearColor GetWholeAppearanceForTesting() const { return WholeAppearance.GetCells().IsEmpty()?FLinearColor::Transparent:WholeAppearance.Presentation(0); }
  /** Preserve clamp sampling at the active rectangle inside a reusable atlas.
@@ -114,6 +116,6 @@ private:
  mutable FTransform CachedFullGeometryPose;
  TArray<TArray<int32>> ObservationPartIndices;
  FDarkwellSpatialPropMemory WholeAppearance;
- static FDarkwellSpatialPropMemory::FCell Sample(const FPart& P,FVector2D World,bool bClamp);
+ static FDarkwellSpatialPropMemory::FCell Sample(const FPart& P,FVector2D World,bool bClamp,bool bIncludeBlockedLegal=false);
  FVector RegisteredScale=FVector::OneVector;
 };

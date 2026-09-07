@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellSpatialPropMemory.h"
+#include "VisionPresentation/DarkwellMemoryRegionSamples.h"
 #include "NativeGameplayTags.h"
 
 namespace Darkwell::SpatialPropMemory
@@ -54,6 +55,7 @@ bool FDarkwellSpatialPropMemory::Advance(float DeltaSeconds,TConstArrayView<floa
  for(int32 I=0;I<Cells.Num();++I)
  {
   FCell& C=Cells[I];
+  if(IsAbsent() && MemoryWriteBlock.bIsValid && Darkwell::MemoryRegionSamples::Contains(MemoryWriteBlock,Darkwell::MemoryRegionSamples::Center(Bounds,Size,I))) continue;
   C.CurrentLegalCoverage=FMath::IsFinite(Coverage[I])?FMath::Clamp(Coverage[I],0.f,1.f):0.f;
   const bool bLegal=C.CurrentLegalCoverage>=LegalCoverage;
   if(IsPresent())
@@ -145,4 +147,15 @@ void FDarkwellSpatialPropMemory::ForgetKnowledgePreservingLive()
   C.DiscoveredPresent=C.VerifiedEmpty=C.InitialRemembered=C.RemainingStale=0;
   C.StaleOpacity=C.EmptyDwell=0;
  }
+}
+
+void FDarkwellSpatialPropMemory::ClearMemorySamples(const FBox2D& Region,const FTransform& SampleToWorld)
+{
+ if(!Region.bIsValid) return;
+ for(int32 I=0;I<Cells.Num();++I)
+  if(Darkwell::MemoryRegionSamples::Contains(Region,FVector2D(SampleToWorld.TransformPosition(FVector(Darkwell::MemoryRegionSamples::Center(Bounds,Size,I),0)))))
+  {
+   auto& C=Cells[I]; C.DiscoveredPresent=C.VerifiedEmpty=C.InitialRemembered=C.RemainingStale=0;
+   C.StaleOpacity=C.EmptyDwell=0;
+  }
 }

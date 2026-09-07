@@ -19,7 +19,7 @@ class DARKWELL_API UDarkwellMemoryRegionSubsystem : public UWorldSubsystem
  GENERATED_BODY()
 public:
  /** Idempotent for the same box. A different box requires a new world in this slice.
-  * Grid is 2.5 cm, maximum 256 x 256. Straddling object records are refused. */
+  * Grid is 2.5 cm, maximum 256 x 256. Straddling Whole records are refused; Partial uses sample-center membership. */
  UFUNCTION(BlueprintCallable, Category="SightWeave|Memory")
  bool ConfigureRegion(FVector2D Min, FVector2D Max);
  UFUNCTION(BlueprintCallable, Category="SightWeave|Memory") bool ClearMemory();

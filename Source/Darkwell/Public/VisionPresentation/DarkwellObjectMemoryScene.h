@@ -47,7 +47,7 @@ public:
  void UpdateMemory(float DeltaSeconds, FVector ObserverLocation);
  /** Explicit knowledge reset; never called merely because an actor moved or vanished. */
  void ResetMemory();
- /** First regional slice accepts complete records, refuses straddling records atomically. */
+ /** Whole keeps complete-record admission; SpatialPartial accepts sample-center cuts. */
  bool CanApplyMemoryRegion(const FBox2D& Bounds) const;
  void ClearMemoryInRegion(const FBox2D& Bounds);
  void SetMemoryWriteBlock(const FBox2D& Bounds, bool bEnabled);
@@ -327,6 +327,7 @@ protected:
 	friend class FDarkwellRecordResourcesParity;
 	friend class FDarkwellPresentationResidency;
 	friend class FDarkwellUnknownRegionContract;
+ friend class FDarkwellUnknownPartialCut;
 	friend class FDarkwellA1Residency;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
@@ -491,6 +492,7 @@ protected:
 		TArray<FSourceBinding> SourceBindings;
 		FResolvedSightWeaveObjectPolicy RegisteredPolicy;
 		bool bLastCaptureEligible = false;
+		bool bSampleMemoryRegion = false;
 		bool bMemoryWritesBlocked = false;
         bool bRequeryMemoryLive = false;
 		FName StableId;

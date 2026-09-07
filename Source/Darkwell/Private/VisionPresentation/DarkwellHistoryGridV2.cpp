@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellHistoryGridV2.h"
+#include "VisionPresentation/DarkwellMemoryRegionSamples.h"
 #include "NativeGameplayTags.h"
 
 namespace Darkwell::HistoryGridV2
@@ -115,7 +116,7 @@ bool FDarkwellHistoryGridV2::AdvanceDirty(float DeltaSeconds,
 	};
 	for (const int32 Index : DirtyIndices)
 	{
-		if (!Samples.IsValidIndex(Index)) continue;
+		if (!Samples.IsValidIndex(Index) || BlockedSamplesAt(Index)) continue;
 		FSample& S = Samples[Index];
 		// Superseded is terminal in the existing state machine. Its evidence and
 		// zero dwell cannot change again; avoid rewriting every retained epoch.
@@ -152,6 +153,7 @@ bool FDarkwellHistoryGridV2::AdvanceDirty(float DeltaSeconds,
 	for (int32 ActiveIndex = ActiveSamples.Num() - 1; ActiveIndex >= 0; --ActiveIndex)
 	{
 		const int32 Index = ActiveSamples[ActiveIndex];
+  if(BlockedSamplesAt(Index)) continue;
 		if (!ActiveFlags.IsValidIndex(Index) || !ActiveFlags[Index])
 		{
 			ActiveSamples.RemoveAtSwap(ActiveIndex, 1, EAllowShrinking::No);
@@ -207,7 +209,7 @@ void FDarkwellHistoryGridV2::BuildPresentation(TArray<FLinearColor>& OutPixels) 
 		// Keep the frozen 4x4 envelope and bilinear RGB. Binary A is loaded
 		// unfiltered by M_MovingAccumulatedMemory at the FINAL shader output.
 		const bool Gate = S.State == Unresolved() || (S.State == VerifiedEmpty() && S.Opacity > 0);
-		OutPixels[I] = FLinearColor(0, 0, S.Opacity * S.FrozenAAEnvelope, Gate ? 1.f : 0.f);
+		OutPixels[I] = FLinearColor(0, 0, S.Opacity * S.FrozenAAEnvelope, Gate && !BlockedSamplesAt(I) ? 1.f : 0.f);
 	}
 }
 bool FDarkwellHistoryGridV2::IsFullyVerifiedEmpty() const
@@ -225,11 +227,11 @@ int32 FDarkwellHistoryGridV2::Count(FGameplayTag State) const
 }
 bool FDarkwellHistoryGridV2::CanEmitCap(int32 RetainedIndex, int32 NeighborIndex) const
 {
-	if (!Samples.IsValidIndex(RetainedIndex) || !Samples.IsValidIndex(NeighborIndex)) return false;
+	if (!Samples.IsValidIndex(RetainedIndex) || !Samples.IsValidIndex(NeighborIndex) || BlockedSamplesAt(RetainedIndex)) return false;
 	const auto& Source = Samples[RetainedIndex];
 	const auto& Neighbor = Samples[NeighborIndex];
 	return Source.State == Unresolved() && Source.InitialRemembered > 0
-		&& (Neighbor.State == NeverObserved() || Neighbor.State == VerifiedEmpty());
+		&& (BlockedSamplesAt(NeighborIndex) || Neighbor.State == NeverObserved() || Neighbor.State == VerifiedEmpty());
 }
 int32 FDarkwellHistoryGridV2::CountMixedCoarseCells() const
 {
@@ -272,4 +274,27 @@ uint64 FDarkwellHistoryGridV2::StateHash() const
 		Hash = (Hash ^ State) * 1099511628211ull;
 	}
 	return Hash;
+}
+
+bool FDarkwellHistoryGridV2::BlockedSamplesAt(int32 I) const
+{
+ return MemoryWriteBlock.bIsValid && Samples.IsValidIndex(I) && Darkwell::MemoryRegionSamples::Contains(MemoryWriteBlock,Darkwell::MemoryRegionSamples::Center(Bounds,Size,I));
+}
+void FDarkwellHistoryGridV2::ClearMemorySamples(const FBox2D& Region)
+{
+ for(int32 I=0;I<Samples.Num();++I)
+  if(Darkwell::MemoryRegionSamples::Contains(Region,Darkwell::MemoryRegionSamples::Center(Bounds,Size,I)))
+  {
+   Samples[I]=FSample(); Samples[I].State=NeverObserved();
+   ActiveFlags[I]=false; MutableEvidence[I]=true;
+  }
+ ActiveSamples.RemoveAll([&](int32 I) { return !ActiveFlags[I]; });
+}
+
+void FDarkwellHistoryGridV2::InheritObservedEnvelope(TConstArrayView<float> Previous)
+{
+ if(Samples.Num()!=Previous.Num()) return;
+ for(int32 I=0;I<Samples.Num();++I)
+  if(Samples[I].InitialRemembered>0)
+   Samples[I].FrozenAAEnvelope=FMath::Max(Samples[I].FrozenAAEnvelope,Previous[I]);
 }

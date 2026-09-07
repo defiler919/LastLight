@@ -1023,3 +1023,32 @@ A1达到可重复的驻留资源削减及定向正确性闭环，作为默认关
 下一轮中档入口：围绕本次boundary/turn180/teleport各16条重入，用已有RebuildUploads/RebuildCaps/MaxRebuildMs和A0生成/提交入口建立密集必显K的B可行性小证据；区分纯CPU cap/pixels与GT注册/提交，评估共享提交/后端能否降低整组重建，而不是再降预取范围或允许晚一帧。当前已触及B的“多个必显record同步重建造成帧峰值”条件，尚无证据支持直接上完整atlas/custom proxy。CPU权威密集场景另审，B也不会消除O(N)证据工作。
 
 未跑完整矩阵/十分钟/P1或occupancy全集、Shipping cook、多视图/任意瞬移随机穷举、所有资产类型、长时间内存压力或全局VRAM回收曲线。stable、Docs/AI未动。A1仅对旧历史释放，原cold初始化合同没有转为PASS。
+
+
+## 29. 无人值守性能前台基础设施（2026-09-07，15b5593）
+
+用户在A1完成后追加无人值守要求；A1运行时仍 **a8d12dd52ac1109c483b7cc93ddece9222bce03a**，A1技术交接71dcc9239a2be3b74261c83055f0b6f88488817e。基础设施提交 **15b55936034e320f3c4adab0f8e85559319b6136**。只改性能runner/三个性能Python driver和独立辅助代码/测试，不改C++、NullRHI、功能测试或普通unattended入口。每run仍启动自己的新UE进程，不复用人工窗口。
+
+### 前台协议
+
+`Scripts/GrayBenchmarkSession.cs`提供目标PID校验、有效HWND检查、ShowWindowAsync restore、将调用线程分别Attach到目标/原前台线程、短暂TOPMOST、BringWindowToTop/SetForegroundWindow/SetFocus；finally恢复非TOPMOST并解除Attach。不发送键鼠，不改全局前台锁配置，Win32返回值只记日志。
+
+`gray_benchmark_foreground.py`在各driver正式测量前用引擎既有foreground/minimized/frame遥测生成live文件；**连续12个不同游戏帧为前台**才ready，重复frame不增加计数、丢失前台清零。runner核验新鲜遥测（2秒内），结束所有激活动作后才写approved；driver收到approved再次校验并写confirmed，然后继续quality/测量。该双向门控消除了旧runner检查quality与driver开始测量之间的激活竞态；正式测量中没有周期性抢焦点。每个正式样本验证现有engine telemetry，非前台/最小化立即保存foreground-lost并判整run失败，不作为有效数据。
+
+启动deadline默认90秒（包含进程加载/有效MainWindowHandle等待），有viewport-ready及有效目标句柄才尝试，每2秒至多一次、最多8次；driver侧等待上限45秒。仍失败写foreground-abort，先等driver记录/QUIT 10秒，再只关闭本run主窗口并等5秒，最后必要时结束该run拥有的进程。整个性能run还有默认1200秒watchdog，不因无Python tick无限等。Reference也接入同一门控，不依赖它是否生成quality.json。
+
+独立C#后台线程在runner存活期间调用SetThreadExecutionState(CONTINUOUS|SYSTEM_REQUIRED|DISPLAY_REQUIRED)，finally在**同一线程**恢复CONTINUOUS并退出；成功/失败都保存power-guard。没有永久修改电源计划，不要求用户维持键鼠活动。该请求防自动睡眠/关闭显示，不解锁Windows安全桌面，不规避用户主动锁屏或系统会话策略；无法取得前台时按有界失败处理，不能声称所有Windows会话都能强行激活。
+
+证据文件：window-activation.jsonl、foreground-live/approved/confirmed/abort/lost.json、power-guard.json、runner summary、原始帧及UE日志。helper和C#副本随run保存。A1原foreground_waits字段改为保存真实foreground_handshake，避免旧等待数组移除后误报0等待。握手I/O只发生测量前，正式样本仅验证已经取得的engine字典。
+
+### 验证
+
+- C# Add-Type编译和PowerShell AST解析通过；Python语法通过。`python Scripts/Tests/test_gray_benchmark_foreground.py` **5/5 PASS**：稳定帧仍必须等runner许可、重复帧/丢焦清零、abort、deadline、批准/测量时丢焦拒绝。这是独立无UE的基础设施测试，不给功能测试增加焦点要求。
+- `RunGrayPerformanceBaseline.ps1 -RunName UnattendedForegroundSmoke01 -Protocol Smoke -Mode Standalone -NoAuthoringToolsets`：用户无操作，新进程首次Win32组合激活后，UE连续13帧确认前台；360正式帧foreground invalid=0，exit0/complete/severe0/log closed，17.720秒。日志时间证明activation早于approved，approved早于quality。没有请求人工点击。
+- `UnattendedForegroundTimeout01`相同短协议但`-ForegroundTimeoutSeconds 1`：故意触发启动超时，runner返回失败，foreground_approved=false、complete=false，14.405秒结束；UE捕获abort记录预期Traceback后正常QUIT（进程exit0/log closed，不把进程exit0误判run成功）。power-guard恢复。这个负测不算有效性能样本。
+- `A1_UnattendedIntegration01 -Protocol A1 -Mode Standalone -NoAuthoringToolsets -HistoryResidencyMode 1`：已有自动前台，无需额外激活；confirmed17帧，22.725秒正常完成，exit0/severe0/foreground invalid0，N64/K16、初末CPU hash一致。只是新runner接入验证，不替代第28节同driver A/B，也不宣称性能变化。
+- 成功/失败power-guard均记录acquired=2147483648、restored=2147483651；Win32函数返回的是**之前**的execution state，恢复调用参数为CONTINUOUS，后台线程随后结束，不能把restored返回值误读为仍持有防休眠。
+
+本次没有C++变化，因此沿用A1完整Editor Build06和D3D12定向3/3，不机械重建/重跑矩阵。新Reference/PIE握手做源码接入，未另外重跑其完整协议；同session已验证A1 PIE视觉，新无人值守真实smoke与A1均为Standalone。未做真实锁屏/断开会话、八次Win32拒绝注入或长时间电源休眠试验。DEFAULT A1/P1仍0，INITIALIZATION仍FAIL，stable与Docs/AI不动。
+
+用户已明确授权全部工作完成后关机：先提交推送并核验远端、工作区和UE/测试进程，然后执行`shutdown.exe /s /t 60`。关机不是runner默认副作用，未写入任何性能脚本。

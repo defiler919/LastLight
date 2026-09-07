@@ -1,5 +1,16 @@
 # 灰色层功能检查点与稳定化施工
 
+## 无人值守前台基础设施完成（2026-09-07，15b5593）
+
+基础设施 **15b55936034e320f3c4adab0f8e85559319b6136** 已推送；A1实际运行时仍 **a8d12dd52ac1109c483b7cc93ddece9222bce03a**，A1正式证据见下节/审计28。A1已完成，本补充不扩A1、不改运行时；DEFAULT A1/P1仍0，INITIALIZATION仍FAIL。
+
+性能runner继续每次新UE进程：有效主HWND/PID校验，restore+AttachThreadInput+BringWindowToTop+SetForegroundWindow+SetFocus，短暂TOPMOST后立即恢复普通窗口。最多8次/2秒间隔，启动默认90秒上限；UE连续12个游戏帧真实foreground才可由runner批准正式测量。批准后不再激活，测量中丢焦立即判无效。失败保存证据、有限等待后结束本run进程，不等人工点击。独立线程在runner期间持有system/display execution state，finally同线程恢复，不改电源计划；锁屏/会话策略无法满足时显式失败。
+
+无人操作真实D3D12 smoke：新UE一次自动激活成功，连续13帧前台，360正式帧无非前台样本，17.720秒正常退出。启动1秒超时负测14.405秒安全失败退出；随后A1新握手接入22.725秒通过、N64/K16与CPU摘要不变。基础设施5项测试通过；成功/失败防休眠均恢复。详见审计第29节及Saved/Stabilization/UnattendedForegroundSmoke01、UnattendedForegroundTimeout01、A1_UnattendedIntegration01。
+
+后续无需请求用户手点UE；焦点失败应有限退出并保留日志。功能/NullRHI路径不变，关机不嵌入runner。用户本晚另行授权：完成commit/push、远端/干净工作区/进程核验后，执行shutdown.exe /s /t 60。
+
+
 ## A1保守旧历史需求驻留完成，默认关闭（2026-09-07，a8d12dd）
 
 运行时 **a8d12dd52ac1109c483b7cc93ddece9222bce03a** 已推送，起点d3ed085。`r.Darkwell.ObjectMemory.HistoryResidency`默认0，mode1启用保守自动驻留；P1仍0。实现与证据详见性能审计第28节、批量架构第10节。未扩worker/Partial证据/资源池/B/atlas，stable与Docs/AI未动。

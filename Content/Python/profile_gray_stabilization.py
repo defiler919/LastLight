@@ -7,10 +7,13 @@ import json
 import os
 import time
 import traceback
+import sys
 from pathlib import Path
 import unreal
 
 root = Path(os.environ['DARKWELL_STABILIZATION_OUTPUT']).resolve()
+sys.path.insert(0, str(root))
+from gray_benchmark_foreground import await_foreground, require_foreground
 run_mode = os.environ['DARKWELL_STABILIZATION_MODE']
 protocol = os.environ['DARKWELL_STABILIZATION_PROTOCOL']
 standalone = run_mode == 'Standalone'
@@ -71,12 +74,7 @@ def run():
     if not standalone:
         unreal.DarkwellEditorDiagnostics.focus_performance_pie()
     startup=[]
-    (root/'viewport-ready.json').write_text(director.get_frame_environment_for_testing(),encoding='utf-8')
-    foreground_deadline=time.perf_counter()+90
-    while not json.loads(director.get_frame_environment_for_testing())['foreground']:
-        assert time.perf_counter()<foreground_deadline, 'OS foreground was not established; sample is invalid'
-        startup.append(dict(phase='waiting_for_foreground',wall_ms=latest_wall_ms,engine=json.loads(director.get_frame_environment_for_testing())))
-        yield 1
+    yield from await_foreground(root, lambda: json.loads(director.get_frame_environment_for_testing()))
     for startup_index in range(12):
         yield 1
         startup.append(dict(index=startup_index,wall_ms=latest_wall_ms,engine=json.loads(director.get_frame_environment_for_testing()),telemetry=json.loads(room.get_history_runtime_telemetry())['frame_data']))
@@ -85,6 +83,7 @@ def run():
     quality_names += ['r.RayTracing','r.Lumen.HardwareRayTracing','r.Shadow.Virtual.Enable','r.TemporalAA.Upsampling','r.Editor.Viewport.OverridePIEScreenPercentage','Slate.bAllowThrottling','t.IdleWhenNotForeground','r.GTSyncType','r.OneFrameThreadLag']
     settings = {key:unreal.SystemLibrary.get_console_variable_float_value(key) for key in quality_names}
     settings.update(mode=run_mode, protocol=protocol, editor_realtime=False if not standalone else None, initial=json.loads(director.get_frame_environment_for_testing()), seed=0, screenshots=False)
+    require_foreground(root, settings['initial'])
     (root/'quality.json').write_text(json.dumps(settings,indent=2), encoding='utf-8')
     (root/'render_settings.json').write_text(json.dumps(dict(
         viewport=list(controller.get_viewport_size()),
@@ -176,6 +175,7 @@ def run():
                 if protocol == 'ParentMaterial':
                     r['history_parent'] = json.loads(room.get_history_parent_telemetry())
             r['engine'] = json.loads(director.get_frame_environment_for_testing())
+            require_foreground(root, r['engine'])
             r['engine']['editor_realtime_count'] = unreal.DarkwellEditorDiagnostics.get_realtime_editor_viewport_count() if not standalone else 0
             assert r['engine']['viewport'] == [1920,1080], r['engine']
             r.update(case=name, index=index, elapsed_seconds=time.perf_counter()-started, wall_ms=latest_wall_ms,

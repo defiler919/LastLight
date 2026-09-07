@@ -16,7 +16,9 @@ param(
     [switch]$LegacyWholePreparationBudget,
     [switch]$LegacyHistoryParent,
     [ValidateRange(0,2)][int]$WholeGeometryPreparationMode=0,
-    [switch]$Trace
+    [switch]$Trace,
+    [ValidateRange(1,180)][int]$ForegroundTimeoutSeconds=90,
+    [ValidateRange(30,1800)][int]$RunTimeoutSeconds=1200
 )
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
@@ -32,6 +34,8 @@ if ($Protocol -ne 'Reference' -and $Map -ne '/Game/Maps/L_SightWeaveGrayPolicyLa
 $driver=if ($Protocol -eq 'Reference') { "$repo/Content/Python/profile_gray_project_reference.py" } else { "$repo/Content/Python/profile_gray_stabilization.py" }
 if ($Protocol -eq 'A1') { $driver="$repo/Content/Python/profile_gray_old_history_demand.py" }
 Copy-Item -LiteralPath $driver -Destination "$output/driver.py"
+Copy-Item -LiteralPath "$repo/Content/Python/gray_benchmark_foreground.py" -Destination "$output/gray_benchmark_foreground.py"
+Copy-Item -LiteralPath "$PSScriptRoot/GrayBenchmarkSession.cs" -Destination "$output/GrayBenchmarkSession.cs"
 git -C $repo diff HEAD --binary | Set-Content "$output/source.patch"
 git -C $repo status --porcelain=v1 | Set-Content "$output/worktree.txt"
 Copy-Item -LiteralPath "$repo/Config/DefaultEngine.ini" -Destination "$output/DefaultEngine.ini"
@@ -98,7 +102,17 @@ $priorMode=$env:DARKWELL_STABILIZATION_MODE
 $priorProtocol=$env:DARKWELL_STABILIZATION_PROTOCOL
 $priorMap=$env:DARKWELL_STABILIZATION_MAP
 $priorParent=$env:DARKWELL_HISTORY_PARENT_MODE
+$process=$null
+$guard=$null
+$failure=$null
+$code=-1
+$attempts=0
+$approved=$false
 try {
+    if (-not ('GrayBenchmarkSession' -as [type])) { Add-Type -Path "$PSScriptRoot/GrayBenchmarkSession.cs" }
+    $guard=[GrayBenchmarkSession]::new()
+    if (!$guard.ExecutionState) { throw 'SetThreadExecutionState failed; unattended run cannot start' }
+    [ordered]@{ acquired=$guard.ExecutionState; scope='runner lifetime; system and display; dedicated thread' } | ConvertTo-Json | Set-Content "$output/power-guard.json"
     $env:DARKWELL_STABILIZATION_OUTPUT=$output
     $env:DARKWELL_STABILIZATION_MODE=$Mode
     $env:DARKWELL_STABILIZATION_PROTOCOL=$Protocol
@@ -108,42 +122,59 @@ try {
     # SW_HIDE suppresses the native game window even when Slate reports active.
     $process=Start-Process "$EngineRoot/Engine/Binaries/Win64/UnrealEditor.exe" -ArgumentList $arguments -WindowStyle Normal -PassThru
     $process.Id | Set-Content "$output/pid.txt"
-    # Activate only this newly launched benchmark, before measurement starts.
-    # No global keyboard input and no refocusing once quality.json is captured.
-    if (-not ('GrayBenchmarkForeground' -as [type])) {
-        Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class GrayBenchmarkForeground {
-    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
-    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
-    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint from, uint to, bool attach);
-    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window, int command);
-    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
-    public static bool Activate(IntPtr window) {
-        uint ignored, current = GetCurrentThreadId();
-        uint foreground = GetWindowThreadProcessId(GetForegroundWindow(), out ignored);
-        bool attached = foreground != 0 && foreground != current && AttachThreadInput(current, foreground, true);
-        try { ShowWindow(window, 9); return SetForegroundWindow(window); }
-        finally { if (attached) AttachThreadInput(current, foreground, false); }
+    # Driver cannot start measuring before our approval file. We stop all
+    # activation calls before writing that file, closing the quality.json race.
+    $activationDeadline=(Get-Date).AddSeconds($ForegroundTimeoutSeconds)
+    $nextAttempt=Get-Date
+    while (!$process.HasExited -and !$approved) {
+        if ((Get-Date) -ge $activationDeadline) { throw 'Bounded foreground startup timeout' }
+        if (Test-Path "$output/failed.txt") { throw 'Driver failed before foreground approval' }
+        $process.Refresh()
+        $live=$null
+        if (Test-Path "$output/foreground-live.json") {
+            try { $live=Get-Content "$output/foreground-live.json" -Raw | ConvertFrom-Json } catch { $live=$null }
+        }
+        $fresh=$live -and ((Get-Date)-(Get-Item "$output/foreground-live.json").LastWriteTime).TotalSeconds -lt 2
+        if ($fresh -and $live.ready -and $live.engine.foreground -eq 1 -and !$live.engine.minimized) {
+            $approved=$true
+            [ordered]@{ time=(Get-Date).ToString('o'); attempts=$attempts; engine=$live.engine; stable_frames=$live.consecutive } |
+                ConvertTo-Json -Depth 6 | Set-Content "$output/foreground-approved.json"
+            break
+        }
+        if ((Test-Path "$output/quality.json") -or (Test-Path "$output/foreground-confirmed.json")) {
+            throw 'Driver entered measurement without runner approval'
+        }
+        if ((Test-Path "$output/viewport-ready.json") -and $process.MainWindowHandle -ne 0 -and (Get-Date) -ge $nextAttempt -and
+            !($fresh -and $live.engine.foreground -eq 1)) {
+            if ($attempts -ge 8) { throw 'Foreground activation exhausted eight attempts' }
+            $attempts++
+            [ordered]@{ time=(Get-Date).ToString('o'); attempt=$attempts; pid=$process.Id; handle=$process.MainWindowHandle.ToInt64();
+                win32_result=[GrayBenchmarkSession]::Activate($process.MainWindowHandle,$process.Id); telemetry=$live } |
+                ConvertTo-Json -Depth 6 -Compress | Add-Content "$output/window-activation.jsonl"
+            $nextAttempt=(Get-Date).AddSeconds(2)
+        }
+        Start-Sleep -Milliseconds 100
     }
-}
-'@
-    }
-    $activationDeadline=(Get-Date).AddSeconds(60)
-    while (!$process.HasExited -and !(Test-Path "$output/viewport-ready.json") -and (Get-Date) -lt $activationDeadline) {
-        Start-Sleep -Milliseconds 250
-    }
-    $process.Refresh()
-    if (!$process.HasExited -and !(Test-Path "$output/quality.json") -and $process.MainWindowHandle -ne 0) {
-        [ordered]@{ time=(Get-Date).ToString('o'); pid=$process.Id; handle=$process.MainWindowHandle.ToInt64();
-            activated=[GrayBenchmarkForeground]::Activate($process.MainWindowHandle) } |
-            ConvertTo-Json | Set-Content "$output/window-activation.json"
-    }
-    $process.WaitForExit()
+    if (!$approved) { throw 'UE exited before foreground approval' }
+    if (!$process.WaitForExit($RunTimeoutSeconds*1000)) { throw 'Bounded performance run timeout' }
     $code=$process.ExitCode
+} catch {
+    $failure=$_.Exception.Message
+    [ordered]@{ time=(Get-Date).ToString('o'); reason=$failure; attempts=$attempts; approved=$approved } |
+        ConvertTo-Json | Set-Content "$output/foreground-abort.json"
+    # Give the Python driver a chance to log/QUIT, then close only our own UE.
+    if ($process -and !$process.HasExited -and !$process.WaitForExit(10000)) {
+        $null=$process.CloseMainWindow()
+        if (!$process.WaitForExit(5000)) { $process.Kill(); $process.WaitForExit() }
+    }
+    if ($process -and $process.HasExited) { $code=$process.ExitCode }
+
 } finally {
+    if ($guard) {
+        $guard.Dispose()
+        [ordered]@{ acquired=$guard.ExecutionState; restored=$guard.RestoreState; finished=(Get-Date).ToString('o') } |
+            ConvertTo-Json | Set-Content "$output/power-guard.json"
+    }
     $env:DARKWELL_STABILIZATION_OUTPUT=$priorOutput
     $env:DARKWELL_STABILIZATION_MODE=$priorMode
     $env:DARKWELL_STABILIZATION_PROTOCOL=$priorProtocol
@@ -151,8 +182,8 @@ public static class GrayBenchmarkForeground {
     $env:DARKWELL_HISTORY_PARENT_MODE=$priorParent
     $env:DARKWELL_A1_VISUAL=$priorA1Visual
 }
-$log=Get-Content "$output/editor.log" -Raw
-$summary=[ordered]@{ exit_code=$code; exit_hex=('0x{0:X8}' -f ($code -band 0xffffffffL)); wall_seconds=((Get-Date)-$start).TotalSeconds; complete=(Test-Path "$output/complete.json"); severe_lines=@(Select-String "$output/editor.log" -Pattern 'Fatal error:|Assertion failed:|Ensure condition failed:|EXCEPTION_ACCESS_VIOLATION|Traceback').Count; log_closed=$log.Contains('Log file closed'); d3d12_sm6=$log.Contains('D3D12') -and $log.Contains('PCD3D_SM6') }
+$log=if(Test-Path "$output/editor.log"){Get-Content "$output/editor.log" -Raw}else{""}
+$summary=[ordered]@{ runner_failure=$failure; foreground_approved=$approved; foreground_attempts=$attempts; exit_code=$code; exit_hex=('0x{0:X8}' -f ($code -band 0xffffffffL)); wall_seconds=((Get-Date)-$start).TotalSeconds; complete=(Test-Path "$output/complete.json"); severe_lines=([regex]::Matches($log,'Fatal error:|Assertion failed:|Ensure condition failed:|EXCEPTION_ACCESS_VIOLATION|Traceback')).Count; log_closed=$log.Contains('Log file closed'); d3d12_sm6=$log.Contains('D3D12') -and $log.Contains('PCD3D_SM6') }
 $summary | ConvertTo-Json | Set-Content "$output/summary.json"
 $summary | ConvertTo-Json
-if($code -ne 0 -or -not $summary.complete -or $summary.severe_lines -gt 0){exit 1}
+if($failure -or !$approved -or (Test-Path "$output/failed.txt") -or (Test-Path "$output/foreground-lost.json") -or $code -ne 0 -or -not $summary.complete -or $summary.severe_lines -gt 0){exit 1}

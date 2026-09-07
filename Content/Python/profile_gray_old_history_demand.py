@@ -7,10 +7,13 @@ import json
 import os
 import time
 import traceback
+import sys
 from pathlib import Path
 import unreal
 
 root = Path(os.environ['DARKWELL_STABILIZATION_OUTPUT']).resolve()
+sys.path.insert(0, str(root))
+from gray_benchmark_foreground import await_foreground, require_foreground
 run_mode = os.environ['DARKWELL_STABILIZATION_MODE']
 protocol = os.environ['DARKWELL_STABILIZATION_PROTOCOL']
 standalone = run_mode == 'Standalone'
@@ -49,12 +52,7 @@ def run():
     if not standalone:
         unreal.DarkwellEditorDiagnostics.focus_performance_pie()
     startup=[]
-    (root/'viewport-ready.json').write_text(director.get_frame_environment_for_testing(),encoding='utf-8')
-    foreground_deadline=time.perf_counter()+90
-    while not json.loads(director.get_frame_environment_for_testing())['foreground']:
-        assert time.perf_counter()<foreground_deadline, 'OS foreground was not established; sample is invalid'
-        startup.append(dict(phase='waiting_for_foreground',wall_ms=latest_wall_ms,engine=json.loads(director.get_frame_environment_for_testing())))
-        yield 1
+    yield from await_foreground(root, lambda: json.loads(director.get_frame_environment_for_testing()))
     for startup_index in range(12):
         yield 1
         startup.append(dict(index=startup_index,wall_ms=latest_wall_ms,engine=json.loads(director.get_frame_environment_for_testing()),telemetry=json.loads(room.get_history_runtime_telemetry())['frame_data']))
@@ -63,6 +61,7 @@ def run():
     quality_names += ['r.RayTracing','r.Lumen.HardwareRayTracing','r.Shadow.Virtual.Enable','r.TemporalAA.Upsampling','r.Editor.Viewport.OverridePIEScreenPercentage','Slate.bAllowThrottling','t.IdleWhenNotForeground','r.GTSyncType','r.OneFrameThreadLag']
     settings = {key:unreal.SystemLibrary.get_console_variable_float_value(key) for key in quality_names}
     settings.update(mode=run_mode, protocol=protocol, editor_realtime=False if not standalone else None, initial=json.loads(director.get_frame_environment_for_testing()), seed=0, screenshots=os.environ.get('DARKWELL_A1_VISUAL')=='1')
+    require_foreground(root, settings['initial'])
     (root/'quality.json').write_text(json.dumps(settings,indent=2), encoding='utf-8')
     (root/'render_settings.json').write_text(json.dumps(dict(
         viewport=list(controller.get_viewport_size()),
@@ -82,6 +81,7 @@ def run():
         r.update(phase=phase,index=index,wall_ms=latest_wall_ms,
                  residency=json.loads(room.get_presentation_residency_telemetry()),
                  engine=json.loads(director.get_frame_environment_for_testing()))
+        require_foreground(root, r['engine'])
         r['camera']=[camera.get_world_location().x,camera.get_world_location().y,camera.get_world_location().z,
                      camera.get_world_rotation().yaw]
         all_rows.append(r)
@@ -122,7 +122,7 @@ def run():
                 max_full_window_ms=max(r['wall_ms'] for r in all_rows),
                 max_aged_route_ms=max(r['wall_ms'] for r in route_rows),
                 max_residency_ms=max(r['residency']['frame_ms'] for r in route_rows),
-                foreground_waits=sum(r.get('phase')=='waiting_for_foreground' for r in startup),
+                foreground_handshake=json.loads((root/'foreground-confirmed.json').read_text(encoding='utf-8')),
                 foreground_bad=sum(not r['engine']['foreground'] for r in all_rows),
                 phases={name:dict(max_frame_ms=max(r['wall_ms'] for r in route_rows if r['phase']==name),
                                  first=next(r['residency'] for r in route_rows if r['phase']==name),

@@ -4,10 +4,13 @@ import math
 import os
 import time
 import traceback
+import sys
 from pathlib import Path
 import unreal
 
 root = Path(os.environ['DARKWELL_STABILIZATION_OUTPUT'])
+sys.path.insert(0, str(root))
+from gray_benchmark_foreground import await_foreground, require_foreground
 MAP = os.environ['DARKWELL_STABILIZATION_MAP']
 standalone = os.environ['DARKWELL_STABILIZATION_MODE'] == 'Standalone'
 editor = levels = None
@@ -54,11 +57,7 @@ def run():
     paused_at_entry = unreal.GameplayStatics.is_game_paused(w)
     for command in ['t.MaxFPS 0','r.VSync 0','r.ScreenPercentage 100','r.SecondaryScreenPercentage.GameViewport 100','r.AntiAliasingMethod 4','r.DynamicRes.OperationMode 0']:
         unreal.SystemLibrary.execute_console_command(w,command)
-    (root/'viewport-ready.json').write_text(json.dumps(environment()))
-    deadline = time.perf_counter()+90
-    while not environment()['foreground']:
-        assert time.perf_counter()<deadline, 'Reference foreground timeout'
-        yield
+    yield from await_foreground(root, environment)
     if paused_at_entry:
         controller.execute_menu_action(unreal.DarkwellMenuAction.RESUME_GAME)
     (root/'ordinary-entry.json').write_text(json.dumps(dict(paused_at_entry=paused_at_entry,paused_after_action=unreal.GameplayStatics.is_game_paused(w))))
@@ -68,6 +67,7 @@ def run():
     for index in range(240):
         yield
         e = environment()
+        require_foreground(root, e)
         health = float(player.get_editor_property('Health'))
         assert health > 0, 'Ordinary reference entered the death presentation'
         assert not unreal.GameplayStatics.is_game_paused(w)

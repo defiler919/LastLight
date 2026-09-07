@@ -6,13 +6,13 @@
 
 - Repository: `defiler919/LastLight`
 - Development Branch: `codex/darkwell-prop-memory-gameplay-lab`
-- Verified Commit: `a1a67a955da04f3a50153c920efd7cc4beed3626`
+- Verified Commit: `21cbd519c09c451f9cd1fda339bcc6ec6b2109dd`
 - Verified Date: 2026-09-07
 
 ## 当前推进位置
 
 - 灰色层性能收敛中，Occupancy 切片已收尾；进入下一轮前查询开发分支真实 HEAD。阶段依据：[性能审计第 20 节](../SIGHTWEAVE_PERFORMANCE_ARCHITECTURE_AUDIT_ZH.md)。
-- 职位上下文采用本目录入口与两份快照；网页端 Project 设置仍需用户手工复制入口中的短指令。文档机制不自动启动下一轮工程；本次未运行构建或功能/视觉/性能/长测。
+- 职位上下文机制 V1 已完成实际对齐验收（用户于 2026-09-07 本次归档请求明确确认）：新窗口一句任命即可恢复上下文，正确核验开发分支、实时 HEAD 与 Verified Commit，恢复 SightWeave 阶段、冻结规则、性能状态、blocker 和下一步；未误用 main 或把旧 148/148 冒充当前完整验证。此为用户实际使用验收，不是本次重新运行测试；机制不自动启动下一轮工程。
 - 审核施工时保护公共层引用的冻结规则；将已提交报告、亲自检查的原始证据、本次新运行分别标明。不得把上轮 148/148 或已完成长测写作当前版本的新验证。
 
 ## Blocker 与审查关注

@@ -6,7 +6,7 @@
 
 - Repository: `defiler919/LastLight`
 - Development Branch: `codex/darkwell-prop-memory-gameplay-lab`
-- Verified Commit: `a1a67a955da04f3a50153c920efd7cc4beed3626`
+- Verified Commit: `21cbd519c09c451f9cd1fda339bcc6ec6b2109dd`
 - Verified Date: 2026-09-07
 
 此 SHA 是写入本快照前已核验的仓库基点，不是本文件提交的自引用；不承诺此后的 HEAD 自动有效。
@@ -30,6 +30,7 @@
 
 ## 当前有效状态
 
+- 项目顾问职位上下文机制 V1 已完成实际对齐验收；依据为用户于 2026-09-07 本次归档请求中的明确确认，验收范围见 [顾问快照](PROJECT_ADVISOR_STATE_ZH.md#当前推进位置)。此结论不改变 SightWeave 的验收状态。
 - 仍处于灰色层性能收敛，整体 `PARTIAL — GRAY_STABILIZATION_BLOCKED`；本阶段不开始黑色层、不移动 stable。
 - Occupancy 同帧生产切片已完成，最终运行时 `f12c6c1`；最新阶段证据见性能审计第 20 节。184 压力两对同二进制 A/B 的最大整帧中位 587.833→543.815 ms；仅支持该切片收益。
 - INITIALIZATION / BATCH HITCHES：FAIL（最终峰值约 535–552 ms）；FRAME PERFORMANCE：FAIL；LONG-RUN RESOURCES：PARTIAL；ARCHITECTURE AUDIT：PARTIAL。局部优化未替代全系统验收。

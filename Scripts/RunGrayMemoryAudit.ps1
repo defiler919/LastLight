@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$RunName,
     [string]$EngineRoot = 'D:\UE_5.8',
-    [ValidateSet('Episodes','Contracts','Reobservation','ReobservationTiming','Qualification')][string]$Protocol = 'Episodes',
+    [ValidateSet('Episodes','Contracts','Reobservation','ReobservationTiming','Qualification','A0')][string]$Protocol = 'Episodes',
     [switch]$NormalTurns,
     [switch]$WholeSessions,
     [switch]$LegacyDirectClose,
@@ -18,6 +18,7 @@ $output = Join-Path $repo "Saved/ArchitectureAudit/$RunName"
 if (Test-Path -LiteralPath $output) { throw "Evidence already exists: $output" }
 New-Item -ItemType Directory -Path $output | Out-Null
 $driverName = switch ($Protocol) {
+    'A0' { 'audit_gray_presentation_residency.py' }
     'Qualification' { 'audit_whole_qualification.py' }
     'Contracts' { 'audit_gray_memory_contracts.py' }
     'Reobservation' { 'audit_gray_memory_reobservation.py' }

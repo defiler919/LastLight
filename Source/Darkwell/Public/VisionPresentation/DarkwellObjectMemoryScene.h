@@ -149,6 +149,23 @@ public:
 	UFUNCTION(BlueprintPure, Category="Object Memory") int32 GetTotalProxyCount() const;
 	UFUNCTION(BlueprintPure, Category="Object Memory") int32 GetTotalCapTriangles() const;
 	UFUNCTION(BlueprintPure, Category="Object Memory") FTransform GetTrackedTransform(FName StableId) const;
+#if WITH_DEV_AUTOMATION_TESTS
+	struct FPresentationTicket
+	{
+		TWeakObjectPtr<ADarkwellObjectMemoryScene> Scene;
+		TWeakObjectPtr<AActor> Source;
+		FName StableId;
+		FGuid HistoryLifetime;
+		uint32 Epoch = 0;
+		uint64 RequestSerial = 0;
+	};
+	bool ReleaseHistoricalPresentationForTesting(FName Id, uint32 Epoch, FPresentationTicket& Out);
+	bool RebuildHistoricalPresentationForTesting(const FPresentationTicket& Ticket);
+#endif
+	/** Bounded PIE diagnostic bridge. No automatic residency policy; disabled outside development tests. */
+	UFUNCTION(BlueprintCallable, Category="Object Memory|Diagnostics") FString ReleaseOldestPresentationForTesting(FName Id);
+	UFUNCTION(BlueprintCallable, Category="Object Memory|Diagnostics") bool RebuildPresentationForTesting(const FString& Request);
+
 	bool DoSpatialRecordTexturesMatchForTesting(FName StableId) const;
 	int32 GetHiddenFreezeCountForTesting(FName StableId) const;
 	int32 GetHistoricalProxyVisibilityTransitionsForTesting(FName StableId) const;
@@ -300,6 +317,7 @@ protected:
 	friend class FDarkwellJoinedCapParity;
 	friend class FDarkwellJoinedOccupancyParity;
 	friend class FDarkwellRecordResourcesParity;
+	friend class FDarkwellPresentationResidency;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
 	friend class FDarkwellObservedContentContract;
@@ -329,12 +347,31 @@ protected:
 		int32 LiveTextureCreations=0,LiveTextureUploads=0;
 	};
 
-	struct FRecordVisual
+	/** Disposable resources only. GC ownership remains in the Scene's Owned* arrays/world. */
+	struct FRecordRenderResources
 	{
-		uint32 Epoch = 0;
 		TWeakObjectPtr<AActor> Proxy;
 		TWeakObjectPtr<UTexture2D> Texture;
 		TWeakObjectPtr<UDynamicMeshComponent> Cap;
+		TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> Materials;
+		uint64 UploadedTextureSignature = 0;
+		bool bCapUploadPending = true;
+		bool bPublishPending = false;
+		bool bProxyPreparedForCapture = false;
+		bool bHasProxyVisibilitySample = false;
+		bool bLastProxyVisible = false;
+	};
+
+	/** Persistent CPU record state. Its existence/retirement never depends on Render residency.
+	 * Cap topology remains CPU state: it participates in terminal-history decisions.
+	 */
+	struct FRecordVisual
+	{
+		uint32 Epoch = 0;
+		FRecordRenderResources Render;
+		// Explicit A0 diagnostic control, never a visibility/evidence eligibility bit.
+		bool bRenderResourcesReleased = false;
+		uint64 PresentationRequestSerial = 0;
 		TArray<FBox> PartBounds;
 		TArray<FPrimitiveGeometrySnapshot> PartGeometry;
 		TArray<FCapQuadSnapshot> CapQuads;
@@ -355,7 +392,6 @@ protected:
 		TBitArray<> TransientCurrentSuppression;
 		TArray<FVector2D> CapSamplePoints;
 		TArray<FLinearColor> SubmittedPresentation;
-		TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> Materials;
 		TArray<float> CachedCoarseCoverage;
 		TArray<float> CachedCoarseEvidence;
 		TArray<float> CachedFineCoverage;
@@ -373,9 +409,6 @@ protected:
 		bool bPresentationDirty = true;
 		bool bCapTopologyDirty = true;
 		bool bPresentationRetired = false;
-		bool bProxyPreparedForCapture = false;
-		bool bHasProxyVisibilitySample = false;
-		bool bLastProxyVisible = false;
 	};
 	struct FHistorySpatialKey
 	{
@@ -540,7 +573,13 @@ protected:
 	bool IsTentativeWhole(const FTrackedProp& Prop) const;
 	bool TryResumeQualifiedWhole(FTrackedProp& Prop);
 	bool UpdateTransientWholeExclusion(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
+	void ReleaseRenderResources(FRecordVisual& Visual);
 	void DestroyVisual(FRecordVisual& Visual, bool bDiscardEvidence = true);
+	uint64 NextPresentationRequestSerial = 0;
+#if WITH_DEV_AUTOMATION_TESTS
+	FPresentationTicket DiagnosticPresentationTicket;
+	FGuid DiagnosticPresentationRequest;
+#endif
 	void ReleaseSourcePresentation(FTrackedProp& Prop);
 	bool FreezeCurrentForHiddenMotion(FTrackedProp& Prop, const TCHAR* Reason, bool bSealLastEligibleObservation = false);
 	void AbandonCurrentObservationWithoutHistory(FTrackedProp& Prop);

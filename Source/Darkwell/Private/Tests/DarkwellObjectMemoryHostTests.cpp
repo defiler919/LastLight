@@ -67,14 +67,14 @@ bool FDarkwellObjectMemoryOrdinaryHost::RunTest(const FString&)
 		TestFalse(TEXT("Preparation cannot seal knowledge"),Record.FineHistory.IsInitialized());
 		if(I%3==2)
 		{
-			TestFalse(TEXT("Never allocates no history proxy"),Visual.Proxy.IsValid());
-			TestFalse(TEXT("Never allocates no history texture"),Visual.Texture.IsValid());
+			TestFalse(TEXT("Never allocates no history proxy"),Visual.Render.Proxy.IsValid());
+			TestFalse(TEXT("Never allocates no history texture"),Visual.Render.Texture.IsValid());
 			continue;
 		}
-		TestTrue(TEXT("Eligible capture prepares its render resources"),Visual.Proxy.IsValid() && Visual.Texture.IsValid());
+		TestTrue(TEXT("Eligible capture prepares its render resources"),Visual.Render.Proxy.IsValid() && Visual.Render.Texture.IsValid());
 		TestEqual(TEXT("Preparation submits no historical pixels"),Visual.TextureUploadCount,0);
-		PreparedProxies.Add(Visual.Proxy);
-		for(const auto& Material:Visual.Materials)
+		PreparedProxies.Add(Visual.Render.Proxy);
+		for(const auto& Material:Visual.Render.Materials)
 		{
 			float Ready=-1;
 			TestTrue(TEXT("Prepared material explicitly draws zero opacity"),Material.IsValid()
@@ -93,9 +93,9 @@ bool FDarkwellObjectMemoryOrdinaryHost::RunTest(const FString&)
 		const auto& Prop=Scene->Tracked.FindChecked(Ids[0]);
 		const auto& Record=Prop.History.GetRecords()[0];
 		const auto& Visual=Prop.Visuals.FindChecked(Record.Epoch);
-		TestTrue(TEXT("First seal reuses prepared proxy"),PreparedProxies[0]==Visual.Proxy);
+		TestTrue(TEXT("First seal reuses prepared proxy"),PreparedProxies[0]==Visual.Render.Proxy);
 		TestTrue(TEXT("Always seals its last observed pose"),Record.SnapshotTransform.Equals(LastObservedPose));
-		TInlineComponentArray<UStaticMeshComponent*> Parts(Visual.Proxy.Get());
+		TInlineComponentArray<UStaticMeshComponent*> Parts(Visual.Render.Proxy.Get());
 		TestEqual(TEXT("Prepared capture retains all primitives"),Parts.Num(),Record.Primitives.Num());
 		for(int32 I=0;I<Parts.Num();++I)
 		{
@@ -105,7 +105,7 @@ bool FDarkwellObjectMemoryOrdinaryHost::RunTest(const FString&)
 			float Ready=0; UTexture* BoundTexture=nullptr; FLinearColor Domain;
 			const auto& Bounds=Record.SpatialMemory.GetBounds(); const auto Inv=FVector2D(1,1)/Bounds.GetSize();
 			TestTrue(TEXT("Sealed material becomes renderable"),Material && Material->GetScalarParameterValue(TEXT("SpatialReady"),Ready) && Ready==1);
-			TestTrue(TEXT("Sealed material binds final texture"),Material && Material->GetTextureParameterValue(TEXT("SpatialStateTexture"),BoundTexture) && BoundTexture==Visual.Texture.Get());
+			TestTrue(TEXT("Sealed material binds final texture"),Material && Material->GetTextureParameterValue(TEXT("SpatialStateTexture"),BoundTexture) && BoundTexture==Visual.Render.Texture.Get());
 			TestTrue(TEXT("Sealed domain matches final observed bounds"),Material && Material->GetVectorParameterValue(TEXT("SpatialMinInv"),Domain)
 				&& Domain.Equals(FLinearColor(Bounds.Min.X,Bounds.Min.Y,Inv.X,Inv.Y)));
 		}

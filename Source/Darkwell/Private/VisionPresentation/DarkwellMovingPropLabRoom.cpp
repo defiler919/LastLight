@@ -885,9 +885,9 @@ void ADarkwellMovingPropLabRoom::LogRotationFrame(const FTrackedProp& Prop) cons
 		{
 			++StaleEpochs;
 			const FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
-			const bool bVisible = Visual && Visual->Proxy.IsValid() && !Visual->Proxy->IsHidden();
-			const bool bCapVisible = Visual && Visual->Cap.IsValid()
-				&& Visual->Cap->IsVisible() && Visual->CapTriangles > 0;
+			const bool bVisible = Visual && Visual->Render.Proxy.IsValid() && !Visual->Render.Proxy->IsHidden();
+			const bool bCapVisible = Visual && Visual->Render.Cap.IsValid()
+				&& Visual->Render.Cap->IsVisible() && Visual->CapTriangles > 0;
 			int32 SupersededSamples = 0;
 			if (Visual)
 			{
@@ -900,12 +900,12 @@ void ADarkwellMovingPropLabRoom::LogRotationFrame(const FTrackedProp& Prop) cons
 			VisibleCaps += bCapVisible ? 1 : 0;
 			Historical.Add(FString::Printf(TEXT("%u@%.2f/proxy=%d/visible=%d/cap=%d/tri=%d/tex=%dx%d/gen=%u/superseded=%d"),
 				Record.Epoch, Record.SnapshotTransform.Rotator().Yaw,
-				Visual && Visual->Proxy.IsValid() ? Visual->Proxy->GetUniqueID() : 0,
+				Visual && Visual->Render.Proxy.IsValid() ? Visual->Render.Proxy->GetUniqueID() : 0,
 				bVisible ? 1 : 0,
-				Visual && Visual->Cap.IsValid() ? Visual->Cap->GetUniqueID() : 0,
+				Visual && Visual->Render.Cap.IsValid() ? Visual->Render.Cap->GetUniqueID() : 0,
 				Visual ? Visual->CapTriangles : 0,
-				Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeX() : 0,
-				Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeY() : 0,
+				Visual && Visual->Render.Texture.IsValid() ? Visual->Render.Texture->GetSizeX() : 0,
+				Visual && Visual->Render.Texture.IsValid() ? Visual->Render.Texture->GetSizeY() : 0,
 				Record.SpatialMemory.GetGeneration(), SupersededSamples));
 		}
 		for (const FDarkwellSpatialPropMemory::FCell& Cell : Record.SpatialMemory.GetCells())

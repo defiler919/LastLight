@@ -137,12 +137,12 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 			TestEqual(FString(Stage)+TEXT(" no wall burned into frozen AA"),MissingAA,0);
 			TestEqual(FString(Stage)+TEXT(" complete submitted history"),MissingSubmitted,0);
 			TestTrue(TEXT("No hidden pose change"),R.SnapshotTransform.Equals(OriginalPose));
-			if(V && V->Proxy.IsValid())
+			if(V && V->Render.Proxy.IsValid())
 			{
-				TInlineComponentArray<UStaticMeshComponent*> Parts(V->Proxy.Get());
+				TInlineComponentArray<UStaticMeshComponent*> Parts(V->Render.Proxy.Get());
 				for(const auto* Part:Parts) { auto* MID=Cast<UMaterialInstanceDynamic>(Part->GetMaterial(0)); UTexture* Bound=nullptr; float Ready=0;
-					TestTrue(TEXT("Actual visible proxy selects the submitted texture"),MID&&MID->GetTextureParameterValue(TEXT("SpatialStateTexture"),Bound)&&Bound==V->Texture.Get());
-					TestTrue(TEXT("Actual proxy is ready"),MID&&MID->GetScalarParameterValue(TEXT("SpatialReady"),Ready)&&Ready==1&&!V->Proxy->IsHidden()); }
+					TestTrue(TEXT("Actual visible proxy selects the submitted texture"),MID&&MID->GetTextureParameterValue(TEXT("SpatialStateTexture"),Bound)&&Bound==V->Render.Texture.Get());
+					TestTrue(TEXT("Actual proxy is ready"),MID&&MID->GetScalarParameterValue(TEXT("SpatialReady"),Ready)&&Ready==1&&!V->Render.Proxy->IsHidden()); }
 			}
 			AddInfo(FString::Printf(TEXT("REOBSERVATION dt=%.6f multi_primitive=%d stage=%s interior=%d missing_capture=%d missing_AA=%d missing_pixels=%d %s"),Dt,MultiPrimitive,Stage,Tested,MissingCapture,MissingAA,MissingSubmitted,*Scene->GetCaptureRefreshAuditForTesting(Id)));
 		};
@@ -155,7 +155,7 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 			return Count;
 		};
 		const uint32 Epoch=Prop.History.GetRecords()[0].Epoch;
-		const auto InitialProxy=Prop.Visuals.FindChecked(Epoch).Proxy; const auto InitialTexture=Prop.Visuals.FindChecked(Epoch).Texture;
+		const auto InitialProxy=Prop.Visuals.FindChecked(Epoch).Render.Proxy; const auto InitialTexture=Prop.Visuals.FindChecked(Epoch).Render.Texture;
 		TArray<FLinearColor> SequencePixels;
 		for(int32 Cycle=0;Cycle<4;++Cycle)
 		{
@@ -167,7 +167,7 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 			{ View(FVector2D(70,-250),Yaw); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92)); }
 			View(FVector2D(70,-250),-90); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));
 			CheckHistory(TEXT("H2 first exit frame")); Step(.4f);
-			TestTrue(TEXT("Repeated observation reuses proxy and texture"),InitialProxy==Prop.Visuals.FindChecked(Epoch).Proxy && InitialTexture==Prop.Visuals.FindChecked(Epoch).Texture);
+			TestTrue(TEXT("Repeated observation reuses proxy and texture"),InitialProxy==Prop.Visuals.FindChecked(Epoch).Render.Proxy && InitialTexture==Prop.Visuals.FindChecked(Epoch).Render.Texture);
 			SequencePixels=Prop.Visuals.FindChecked(Epoch).SubmittedPresentation;
 			View(FVector2D(70,-1000),115); Step(.4f); View(FVector2D(70,-1000),-90); Step(.4f);
 			CheckHistory(TEXT("Repeated far exit"));
@@ -213,7 +213,7 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 			View(FVector2D(70,-1000),-90); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));
 			CheckHistory(TEXT("Subthreshold exit first frame"));
 			TestTrue(TEXT("Subthreshold exit restores identical correct history pixels"),Prop.Visuals.FindChecked(Epoch).SubmittedPresentation==BeforeShortPixels);
-			TestTrue(TEXT("Short sessions retain history proxy and texture"),InitialProxy==Prop.Visuals.FindChecked(Epoch).Proxy && InitialTexture==Prop.Visuals.FindChecked(Epoch).Texture);
+			TestTrue(TEXT("Short sessions retain history proxy and texture"),InitialProxy==Prop.Visuals.FindChecked(Epoch).Render.Proxy && InitialTexture==Prop.Visuals.FindChecked(Epoch).Render.Texture);
 			if(Session==0) WarmTextureCreations=Prop.CurrentPresentation.LiveTextureCreations;
 			else TestEqual(TEXT("Repeated tentative entries reuse local textures"),Prop.CurrentPresentation.LiveTextureCreations,WarmTextureCreations);
 		}
@@ -257,7 +257,7 @@ bool FDarkwellWholeReobservation::RunTest(const FString&)
 			View(FVector2D(70,-1000),-90); Scene->UpdateMemory(Dt,FVector(Source.BodyCenter,92));
 			TestFalse(TEXT("First true exit frame retires qualification"),Scene->IsRevealConfirmedForTesting(Id));
 			CheckHistory(TEXT("Requalified exit first frame"));
-			TestTrue(TEXT("All qualified cycles reuse the history resources"),InitialProxy==Prop.Visuals.FindChecked(Epoch).Proxy && InitialTexture==Prop.Visuals.FindChecked(Epoch).Texture);
+			TestTrue(TEXT("All qualified cycles reuse the history resources"),InitialProxy==Prop.Visuals.FindChecked(Epoch).Render.Proxy && InitialTexture==Prop.Visuals.FindChecked(Epoch).Render.Texture);
 			TestEqual(TEXT("Whole/local mode switches reuse warmed textures"),Prop.CurrentPresentation.LiveTextureCreations,WarmTextureCreations);
 		}
 		const uint64 HiddenEvidence=Prop.History.FindRecord(Epoch)->FineHistory.EvidenceHash();

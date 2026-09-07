@@ -252,33 +252,36 @@ FString ADarkwellObjectMemoryScene::GetMovingLiveTelemetry(FName Id) const
 
 }
 
-void ADarkwellObjectMemoryScene::DestroyVisual(
-	FRecordVisual& Visual, const bool bDiscardEvidence)
+void ADarkwellObjectMemoryScene::ReleaseRenderResources(FRecordVisual& Visual)
 {
-	if (AActor* Proxy = Visual.Proxy.Get())
+	check(IsInGameThread());
+	if (AActor* Proxy = Visual.Render.Proxy.Get())
 	{
 		Proxy->Destroy();
 	}
-	if (UDynamicMeshComponent* Cap = Visual.Cap.Get())
+	if (UDynamicMeshComponent* Cap = Visual.Render.Cap.Get())
 	{
 		OwnedCaps.Remove(Cap);
 		Cap->DestroyComponent();
 	}
-	if (UTexture2D* Texture = Visual.Texture.Get())
+	if (UTexture2D* Texture = Visual.Render.Texture.Get())
 	{
 		OwnedTextures.Remove(Texture);
 	}
-	for (const TWeakObjectPtr<UMaterialInstanceDynamic>& Material : Visual.Materials)
+	for (const TWeakObjectPtr<UMaterialInstanceDynamic>& Material : Visual.Render.Materials)
 	{
 		if (UMaterialInstanceDynamic* MaterialObject = Material.Get())
 		{
 			OwnedMaterials.Remove(MaterialObject);
 		}
 	}
-	Visual.Proxy.Reset();
-	Visual.Cap.Reset();
-	Visual.Texture.Reset();
-	Visual.Materials.Reset();
+	Visual.Render = {};
+}
+
+void ADarkwellObjectMemoryScene::DestroyVisual(
+	FRecordVisual& Visual, const bool bDiscardEvidence)
+{
+	ReleaseRenderResources(Visual);
 	Visual.CapTriangles = 0;
 	Visual.CapSamplePoints.Reset();
 	Visual.CapQuads.Reset();
@@ -292,6 +295,107 @@ void ADarkwellObjectMemoryScene::DestroyVisual(
 		Visual.CachedFineOccupied.Reset(); Visual.CachedCoarseOccupied.Reset();
 		Visual.CachedGeometryRegions.Reset(); Visual.CachedPhysicalGeometry.Reset(); Visual.CachedNewerGeometry.Reset();
 	}
+}
+
+#if WITH_DEV_AUTOMATION_TESTS
+bool ADarkwellObjectMemoryScene::ReleaseHistoricalPresentationForTesting(
+	FName Id, uint32 Epoch, FPresentationTicket& Out)
+{
+	check(IsInGameThread());
+	Out = {};
+	if (!GetWorld() || GetWorld()->bIsTearingDown || IsActorBeingDestroyed()) return false;
+	FTrackedProp* Prop = Tracked.Find(Id);
+	FDarkwellSpatialObservationRecord* Record = Prop ? Prop->History.FindRecord(Epoch) : nullptr;
+	FRecordVisual* Visual = Prop ? Prop->Visuals.Find(Epoch) : nullptr;
+	if (!Record || !Visual || Record->bCurrentObservedLocation || Visual->bPresentationRetired
+		|| !Record->FineHistory.IsInitialized()) return false;
+	// A synchronous explicit diagnostic, not an eviction policy or a knowledge event.
+	// Repeated release is harmless; issuing a new ticket revokes the previous request.
+	ReleaseRenderResources(*Visual);
+	Visual->bRenderResourcesReleased = true;
+	Visual->PresentationRequestSerial = ++NextPresentationRequestSerial;
+	Out = {this, Prop->Actual, Id, Prop->History.GetPreparationLifetime(), Epoch, Visual->PresentationRequestSerial};
+	Prop->bDiagnosticsDirty = true;
+	return true;
+}
+
+bool ADarkwellObjectMemoryScene::RebuildHistoricalPresentationForTesting(const FPresentationTicket& Ticket)
+{
+	check(IsInGameThread());
+	if (Ticket.Scene.Get() != this || !GetWorld() || GetWorld()->bIsTearingDown || IsActorBeingDestroyed()) return false;
+	FTrackedProp* Prop = Tracked.Find(Ticket.StableId);
+	if (!Prop || Ticket.HistoryLifetime != Prop->History.GetPreparationLifetime() || Ticket.Source != Prop->Actual) return false;
+	FDarkwellSpatialObservationRecord* Record = Prop->History.FindRecord(Ticket.Epoch);
+	FRecordVisual* Visual = Prop->Visuals.Find(Ticket.Epoch);
+	if (!Record || !Visual || Record->bCurrentObservedLocation || Visual->bPresentationRetired
+		|| !Record->FineHistory.IsInitialized() || Ticket.RequestSerial != Visual->PresentationRequestSerial) return false;
+	if (!Visual->bRenderResourcesReleased) return true; // successful request is idempotent
+	// Snapshot asset paths survive source replacement/GC. Do not publish a partial
+	// proxy on failure or silently substitute the current source's mesh/content.
+	if (Record->Primitives.IsEmpty()) return false;
+	for (const auto& Primitive : Record->Primitives)
+	{
+		if (!Primitive.Mesh.LoadSynchronous())
+		{
+			UE_LOG(LogDarkwellObjectMemory, Error, TEXT("A0 missing captured mesh id=%s epoch=%u asset=%s"),
+				*Ticket.StableId.ToString(), Ticket.Epoch, *Primitive.Mesh.ToString());
+			return false;
+		}
+	}
+	Visual->bRenderResourcesReleased = false;
+	Visual->Render.bPublishPending = true;
+	EnsureRecordVisual(*Prop, *Record);
+	if (!Visual->Render.Proxy.IsValid() || !Visual->Render.Texture.IsValid() || Visual->Render.Materials.IsEmpty()
+		|| (!Record->bConfirmedWholeCapture && !Visual->Render.Cap.IsValid()))
+	{
+		ReleaseRenderResources(*Visual);
+		Visual->bRenderResourcesReleased = true;
+		return false;
+	}
+	// Recompute from current committed CPU state, never from a released resource.
+	UpdateRecordTexture(*Prop, *Record);
+	UpdateRecordCap(*Prop, *Record);
+	for (const auto& Material : Visual->Render.Materials)
+		if (Material.IsValid()) Material->SetScalarParameterValue(TEXT("SpatialReady"), 1.f);
+	Visual->Render.bPublishPending = false;
+	Visual->Render.Proxy->SetActorHiddenInGame(false);
+	if (Visual->Render.Cap.IsValid()) Visual->Render.Cap->SetVisibility(Visual->CapTriangles > 0);
+	Visual->Render.bLastProxyVisible = true;
+	Visual->bPresentationDirty = Visual->bCapTopologyDirty = false;
+	Prop->bDiagnosticsDirty = true;
+	return true;
+}
+#endif
+
+FString ADarkwellObjectMemoryScene::ReleaseOldestPresentationForTesting(FName Id)
+{
+#if WITH_DEV_AUTOMATION_TESTS
+	check(IsInGameThread());
+	if (const auto* PendingProp = Tracked.Find(DiagnosticPresentationTicket.StableId))
+		if (const auto* Pending = PendingProp->Visuals.Find(DiagnosticPresentationTicket.Epoch);
+			Pending && Pending->bRenderResourcesReleased && !Pending->bPresentationRetired
+			&& PendingProp->History.GetPreparationLifetime() == DiagnosticPresentationTicket.HistoryLifetime)
+			return FString(); // only one explicitly offline record through this bridge
+	if (const auto* Prop = Tracked.Find(Id))
+		for (const auto& Record : Prop->History.GetRecords())
+			if (ReleaseHistoricalPresentationForTesting(Id, Record.Epoch, DiagnosticPresentationTicket))
+			{
+				DiagnosticPresentationRequest = FGuid::NewGuid();
+				return DiagnosticPresentationRequest.ToString();
+			}
+#endif
+	return FString();
+}
+
+bool ADarkwellObjectMemoryScene::RebuildPresentationForTesting(const FString& Request)
+{
+#if WITH_DEV_AUTOMATION_TESTS
+	FGuid Guid;
+	return FGuid::Parse(Request, Guid) && Guid.IsValid() && Guid == DiagnosticPresentationRequest
+		&& RebuildHistoricalPresentationForTesting(DiagnosticPresentationTicket);
+#else
+	return false;
+#endif
 }
 
 FBox2D ADarkwellObjectMemoryScene::ActualBounds(
@@ -1980,9 +2084,9 @@ void ADarkwellObjectMemoryScene::RetireHistoricalPresentation(
 	UE_LOG(LogDarkwellObjectMemory, Display,
 		TEXT("MOVING_RULES_PRESENTATION_RETIRED id=%s epoch=%u proxy=%d cap=%d texture=%d"),
 		*Prop.StableId.ToString(), Visual.Epoch,
-		Visual.Proxy.IsValid() ? Visual.Proxy->GetUniqueID() : 0,
-		Visual.Cap.IsValid() ? Visual.Cap->GetUniqueID() : 0,
-		Visual.Texture.IsValid() ? Visual.Texture->GetUniqueID() : 0);
+		Visual.Render.Proxy.IsValid() ? Visual.Render.Proxy->GetUniqueID() : 0,
+		Visual.Render.Cap.IsValid() ? Visual.Render.Cap->GetUniqueID() : 0,
+		Visual.Render.Texture.IsValid() ? Visual.Render.Texture->GetUniqueID() : 0);
 	// No surface or 3D cap remains. The host releases the terminal record after
 	// all candidate queries, without rewriting any sample as VerifiedEmpty.
 	DestroyVisual(Visual, false);
@@ -2015,7 +2119,7 @@ void ADarkwellObjectMemoryScene::RefreshContributionDiagnostics(
   if(const auto* V=Prop.Visuals.Find(R.Epoch))
   {
    Mix(V->bPresentationRetired); Mix(V->TextureSignature);
-   Mix(V->Proxy.IsValid() && !V->Proxy->IsHidden()); Mix(V->Cap.IsValid() && V->Cap->IsVisible());
+   Mix(V->Render.Proxy.IsValid() && !V->Render.Proxy->IsHidden()); Mix(V->Render.Cap.IsValid() && V->Render.Cap->IsVisible());
    Mix(V->CapTriangles); if(V->CapTriangles>0) Mix(V->CapSignature);
    for(auto H:Prop.CurrentPresentation.LiveSignatures) Mix(H);
   }
@@ -2044,8 +2148,8 @@ void ADarkwellObjectMemoryScene::RefreshContributionDiagnostics(
  for(const auto& Pair:Prop.Visuals)
  {
   const auto& V=Pair.Value;
-  AnyCap |= V.CapTriangles>0 && V.Cap.IsValid() && V.Cap->IsVisible();
-  VisibleSurfaces += V.Proxy.IsValid() && !V.Proxy->IsHidden()?1:0;
+  AnyCap |= V.CapTriangles>0 && V.Render.Cap.IsValid() && V.Render.Cap->IsVisible();
+  VisibleSurfaces += V.Render.Proxy.IsValid() && !V.Render.Proxy->IsHidden()?1:0;
  }
  if(!AnyCap && VisibleSurfaces<=1)
  {
@@ -2098,7 +2202,7 @@ void ADarkwellObjectMemoryScene::RefreshContributionDiagnostics(
  TMap<FIntPoint,TArray<TPair<uint32,FVector2D>>> CapBuckets;
  auto Bucket=[](FVector2D P){return FIntPoint(FMath::FloorToInt(P.X/.25),FMath::FloorToInt(P.Y/.25));};
  for(const auto& Pair:Prop.Visuals)
-  if(Pair.Value.Cap.IsValid() && Pair.Value.Cap->IsVisible() && Pair.Value.CapTriangles>0)
+  if(Pair.Value.Render.Cap.IsValid() && Pair.Value.Render.Cap->IsVisible() && Pair.Value.CapTriangles>0)
    for(auto P:Pair.Value.CapSamplePoints) CapBuckets.FindOrAdd(Bucket(P)).Emplace(Pair.Key,P);
  auto CapContributorsAt=[&](FVector2D Point)
  {
@@ -2151,8 +2255,8 @@ void ADarkwellObjectMemoryScene::RefreshContributionDiagnostics(
 			continue;
 		}
 		SamplePoints.Append(Visual->CapSamplePoints);
-		if (!Record.bCurrentObservedLocation && Visual->Cap.IsValid()
-			&& Visual->Cap->IsVisible() && Visual->CapTriangles > 0)
+		if (!Record.bCurrentObservedLocation && Visual->Render.Cap.IsValid()
+			&& Visual->Render.Cap->IsVisible() && Visual->CapTriangles > 0)
 		{
 			++Prop.VisibleHistoricalCaps;
 		}
@@ -2745,7 +2849,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 				&& Prop.History.ResumeUncontradictedObservation(Prop.LocalEpoch))
 			{
 				Prop.CurrentLive.ResumeStationaryKnowledge();
-				if (auto* V = Prop.Visuals.Find(Prop.LocalEpoch); V && V->Proxy.IsValid()) V->Proxy->SetActorHiddenInGame(true);
+				if (auto* V = Prop.Visuals.Find(Prop.LocalEpoch); V && V->Render.Proxy.IsValid()) V->Render.Proxy->SetActorHiddenInGame(true);
 				bHistoricalSpatialIndexDirty = true;
 			}
 			const int32 NewIndex = Prop.History.BeginCurrentObservation(
@@ -3311,9 +3415,9 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 		*Prop.StableId.ToString(), Epoch, Prop.ObservationEpisode, Reason,
 		Prop.HiddenFreezeCount, Prop.TransformRevision, Prop.CoverageRevision,
 		Prop.GridRevision,
-		Visual && Visual->Proxy.IsValid() ? Visual->Proxy->GetUniqueID() : 0,
-		Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeX() : 0,
-		Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeY() : 0,
+		Visual && Visual->Render.Proxy.IsValid() ? Visual->Render.Proxy->GetUniqueID() : 0,
+		Visual && Visual->Render.Texture.IsValid() ? Visual->Render.Texture->GetSizeX() : 0,
+		Visual && Visual->Render.Texture.IsValid() ? Visual->Render.Texture->GetSizeY() : 0,
 		Visual ? Visual->TextureUploadCount : 0);
 	return true;
 }
@@ -3391,14 +3495,34 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 			Visual.SuppressedByCurrentEvidence.Init(false, Size.X * Size.Y);
 		}
 	}
-	const bool bTextureSizeChanged = Visual.Texture.IsValid()
-		&& (Visual.Texture->GetSizeX() != Size.X || Visual.Texture->GetSizeY() != Size.Y);
-	if ((!Visual.Texture.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
+	if (Visual.PartBounds.IsEmpty())
+	{
+		for (const auto& Part : Record.Primitives)
+		{
+			FPrimitiveGeometrySnapshot Geometry;
+			Geometry.LocalBounds = Part.LocalBounds;
+			Geometry.WorldTransform = Part.RelativeTransform * Record.SnapshotTransform;
+			Geometry.PrimitiveIndex = Visual.PartGeometry.Num();
+			Geometry.CachePlanarProjection();
+			Visual.PartBounds.Add(Part.LocalBounds.TransformBy(Geometry.WorldTransform));
+			Visual.PartGeometry.Add(Geometry);
+		}
+	}
+	// Resume is legal synchronous Current work, never held behind A0 residency.
+	if (Record.bCurrentObservedLocation && Visual.bRenderResourcesReleased)
+	{
+		Visual.bRenderResourcesReleased = false;
+		Visual.PresentationRequestSerial = ++NextPresentationRequestSerial;
+	}
+	if (Visual.bRenderResourcesReleased) return;
+	const bool bTextureSizeChanged = Visual.Render.Texture.IsValid()
+		&& (Visual.Render.Texture->GetSizeX() != Size.X || Visual.Render.Texture->GetSizeY() != Size.Y);
+	if ((!Visual.Render.Texture.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
 		|| (!Record.bCurrentObservedLocation && bTextureSizeChanged))
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_HistoryTextureCreate);
 		FScopedObjectMemoryTimer CreateTimer(RuntimeFrame.HistoryTextureCreateUs);
-		if(Visual.Texture.IsValid()) OwnedTextures.Remove(Visual.Texture.Get());
+		if(Visual.Render.Texture.IsValid()) OwnedTextures.Remove(Visual.Render.Texture.Get());
 		UTexture2D* Texture;
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_TextureAllocate);
@@ -3419,10 +3543,10 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_TextureUpdateResource);
 			Texture->UpdateResource();
 		}
-		Visual.Texture = Texture;
+		Visual.Render.Texture = Texture;
 		++Visual.TextureCreationCount;
 		++RuntimeFrame.TextureCreations;
-		Visual.TextureSignature = 0;
+		Visual.Render.UploadedTextureSignature = 0;
 		OwnedTextures.Add(Texture);
 		if (bTextureSizeChanged)
 		{
@@ -3431,30 +3555,17 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 				*Prop.StableId.ToString(), Record.Epoch, Size.X, Size.Y);
 		}
 	}
-	if (Visual.PartBounds.IsEmpty())
-	{
-		for (const auto& Part : Record.Primitives)
-		{
-			FPrimitiveGeometrySnapshot Geometry;
-			Geometry.LocalBounds = Part.LocalBounds;
-			Geometry.WorldTransform = Part.RelativeTransform * Record.SnapshotTransform;
-			Geometry.PrimitiveIndex = Visual.PartGeometry.Num();
-			Geometry.CachePlanarProjection();
-			Visual.PartBounds.Add(Part.LocalBounds.TransformBy(Geometry.WorldTransform));
-			Visual.PartGeometry.Add(Geometry);
-		}
-	}
 	const bool bWholeWithoutCap = Record.bConfirmedWholeCapture;
-	if ((bWholeWithoutCap || (Record.bCurrentObservedLocation && !IsCaptureEligible(Prop))) && Visual.Cap.IsValid())
+	if ((bWholeWithoutCap || (Record.bCurrentObservedLocation && !IsCaptureEligible(Prop))) && Visual.Render.Cap.IsValid())
 	{
-		OwnedCaps.Remove(Visual.Cap.Get());
-		Visual.Cap->DestroyComponent();
-		Visual.Cap.Reset();
+		OwnedCaps.Remove(Visual.Render.Cap.Get());
+		Visual.Render.Cap->DestroyComponent();
+		Visual.Render.Cap.Reset();
 		Visual.CapQuads.Reset();
 		Visual.CapTriangles = 0;
 		Visual.CapSignature = 0;
 	}
-	if (!bWholeWithoutCap && !Visual.Cap.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
+	if (!bWholeWithoutCap && !Visual.Render.Cap.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_CapCreate);
 		// A destroyed component can still be awaiting render-thread cleanup.
@@ -3477,45 +3588,46 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 		}
 		Cap->SetMaterial(0, LoadObject<UMaterialInterface>(
 			nullptr, TEXT("/Game/Darkwell/Vision/PropLab/M_ManualStaleCutCap.M_ManualStaleCutCap")));
-		Visual.Cap = Cap;
+		Visual.Render.Cap = Cap;
+		Visual.Render.bCapUploadPending = true;
 		OwnedCaps.Add(Cap);
 	}
-	if ((!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)) && !Visual.Proxy.IsValid())
+	if ((!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)) && !Visual.Render.Proxy.IsValid())
 	{
 		if (AActor* Proxy = SpawnMemoryProxy(Prop, Record))
 		{
-			Visual.Proxy = Proxy;
+			Visual.Render.Proxy = Proxy;
 			++Visual.ProxyCreationCount;
 			BindProxyMaterial(Prop, Record, Proxy);
-			Visual.bProxyPreparedForCapture = Record.bCurrentObservedLocation;
+			Visual.Render.bProxyPreparedForCapture = Record.bCurrentObservedLocation;
 		}
 	}
-	if (!Record.bCurrentObservedLocation && Visual.Proxy.IsValid())
+	if (!Record.bCurrentObservedLocation && Visual.Render.Proxy.IsValid())
 	{
-		if (Visual.bProxyPreparedForCapture)
+		if (Visual.Render.bProxyPreparedForCapture)
 		{
 			// Always may continue observing motion after allocation. Commit the
 			// final legally captured pose/domain, never the source's hidden pose.
 			const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
 			const FVector2D Inv = FVector2D(1, 1) / Bounds.GetSize();
-			Visual.Proxy->SetActorTransform(Record.SnapshotTransform);
+			Visual.Render.Proxy->SetActorTransform(Record.SnapshotTransform);
 			// Each entry owns one MID, possibly bound by multiple proxy parts.
 			// Publish the final captured domain once per material on the GT.
-			for (const auto& MaterialPtr : Visual.Materials)
+			for (const auto& MaterialPtr : Visual.Render.Materials)
 			{
 				if (auto* Material = MaterialPtr.Get())
 				{
-					Material->SetTextureParameterValue(TEXT("SpatialStateTexture"), Visual.Texture.Get());
+					Material->SetTextureParameterValue(TEXT("SpatialStateTexture"), Visual.Render.Texture.Get());
 					Material->SetVectorParameterValue(TEXT("SpatialMinInv"),
 						FLinearColor(Bounds.Min.X, Bounds.Min.Y, Inv.X, Inv.Y));
 					Material->SetScalarParameterValue(TEXT("SpatialReady"), 1.0f);
 				}
 			}
-			Visual.bProxyPreparedForCapture = false;
+			Visual.Render.bProxyPreparedForCapture = false;
 		}
-		Visual.Proxy->SetActorHiddenInGame(false);
-		const bool bVisible = !Visual.Proxy->IsHidden();
-		if (Visual.bHasProxyVisibilitySample && Visual.bLastProxyVisible != bVisible)
+		Visual.Render.Proxy->SetActorHiddenInGame(Visual.Render.bPublishPending);
+		const bool bVisible = !Visual.Render.Proxy->IsHidden();
+		if (Visual.Render.bHasProxyVisibilitySample && Visual.Render.bLastProxyVisible != bVisible)
 		{
 			++Visual.ProxyVisibilityTransitions;
 			UE_LOG(LogDarkwellObjectMemory, Warning,
@@ -3523,8 +3635,8 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 				*Prop.StableId.ToString(), Record.Epoch, bVisible,
 				Visual.ProxyVisibilityTransitions);
 		}
-		Visual.bHasProxyVisibilitySample = true;
-		Visual.bLastProxyVisible = bVisible;
+		Visual.Render.bHasProxyVisibilitySample = true;
+		Visual.Render.bLastProxyVisible = bVisible;
 	}
 }
 
@@ -3616,7 +3728,8 @@ void ADarkwellObjectMemoryScene::UpdateRecordTexture(
 	FScopedObjectMemoryTimer TextureTimer(RuntimeFrame.TextureSubmissionUs);
 	++RuntimeFrame.UpdateRecordTextureCalls;
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
-	if (!Visual || !Visual->Texture.IsValid())
+	if (!Visual || Visual->bPresentationRetired
+		|| (!Visual->Render.Texture.IsValid() && !Visual->bRenderResourcesReleased))
 	{
 		return;
 	}
@@ -3662,16 +3775,17 @@ void ADarkwellObjectMemoryScene::UpdateRecordTexture(
 		MixFloat(Pixel.B);
 		MixFloat(Pixel.A);
 	}
-	if (Visual->TextureSignature == Signature)
+	Visual->TextureSignature = Signature;
+	if (!Visual->Render.Texture.IsValid() || Visual->Render.UploadedTextureSignature == Signature)
 	{
 		return;
 	}
-	Visual->TextureSignature = Signature;
+	Visual->Render.UploadedTextureSignature = Signature;
 	++Visual->TextureUploadCount;
 	++RuntimeFrame.TextureUploads;
     // NullRHI has no texture resource; UTexture2D does not call DataCleanupFunc
     // in that case. Keep CPU submission diagnostics without leaking a buffer.
-    if(!Visual->Texture->GetResource()) return;
+    if(!Visual->Render.Texture->GetResource()) return;
 	++RuntimeFrame.GpuTextureUploads;
 	FFloat16Color* Pixels = new FFloat16Color[Presentation.Num()];
 	for (int32 Index = 0; Index < Presentation.Num(); ++Index)
@@ -3679,7 +3793,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordTexture(
 		Pixels[Index] = FFloat16Color(Presentation[Index]);
 	}
 	FUpdateTextureRegion2D* Region = new FUpdateTextureRegion2D(0, 0, 0, 0, Size.X, Size.Y);
-	Visual->Texture->UpdateTextureRegions(
+	Visual->Render.Texture->UpdateTextureRegions(
 		0, 1, Region, Size.X * sizeof(FFloat16Color), sizeof(FFloat16Color),
 		reinterpret_cast<uint8*>(Pixels),
 		[](uint8* Data, const FUpdateTextureRegion2D* UpdatedRegion)
@@ -3757,7 +3871,7 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxyBind);
 	FScopedObjectMemoryTimer BindTimer(RuntimeFrame.ProxyBindUs);
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
-	if (!Visual || !Visual->Texture.IsValid() || !Proxy)
+	if (!Visual || !Visual->Render.Texture.IsValid() || !Proxy)
 	{
 		return;
 	}
@@ -3794,15 +3908,15 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 			++RuntimeFrame.MidCreations;
 			{
 				TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MIDParameters);
-				Material->SetTextureParameterValue(TEXT("SpatialStateTexture"), Visual->Texture.Get());
+				Material->SetTextureParameterValue(TEXT("SpatialStateTexture"), Visual->Render.Texture.Get());
 				Material->SetVectorParameterValue(TEXT("SpatialMinInv"),
 					FLinearColor(Bounds.Min.X, Bounds.Min.Y, Inv.X, Inv.Y));
 				Material->SetVectorParameterValue(TEXT("OriginalBaseColorTint"), Record.Tint);
 				Material->SetScalarParameterValue(TEXT("OriginalUVScale"), Record.UVScale);
-				Material->SetScalarParameterValue(TEXT("SpatialReady"), Record.bCurrentObservedLocation ? 0.0f : 1.0f);
+				Material->SetScalarParameterValue(TEXT("SpatialReady"), (Record.bCurrentObservedLocation || Visual->Render.bPublishPending) ? 0.0f : 1.0f);
 			}
 			OwnedMaterials.Add(Material);
-			Visual->Materials.Add(Material);
+			Visual->Render.Materials.Add(Material);
 		}
 		Mesh->SetMaterial(0, Material);
 		{
@@ -3846,11 +3960,11 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
 	if (Record.bConfirmedWholeCapture)
 	{
-		if (Visual && Visual->Cap.IsValid())
+		if (Visual && Visual->Render.Cap.IsValid())
 		{
-			OwnedCaps.Remove(Visual->Cap.Get());
-			Visual->Cap->DestroyComponent();
-			Visual->Cap.Reset();
+			OwnedCaps.Remove(Visual->Render.Cap.Get());
+			Visual->Render.Cap->DestroyComponent();
+			Visual->Render.Cap.Reset();
 			Visual->CapTriangles = 0;
 			Visual->CapSignature = 0;
 			Visual->CapQuads.Reset();
@@ -3858,7 +3972,8 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 		}
 		return;
 	}
-	if (!Visual || !Visual->Cap.IsValid())
+	if (!Visual || Visual->bPresentationRetired
+		|| (!Visual->Render.Cap.IsValid() && !Visual->bRenderResourcesReleased))
 	{
 		return;
 	}
@@ -3866,8 +3981,8 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
     // world AABB outside rotated geometry is not an undiscovered cabinet part.
     if(Record.bCurrentObservedLocation && Prop.LocalEpoch==Record.Epoch && Prop.CurrentLive.bFullyObservedAtPose)
     {
-        if(Visual->CapTriangles>0) { ++RuntimeFrame.CapMeshRebuilds; Visual->Cap->SetMesh(FDynamicMesh3()); }
-        Visual->Cap->SetVisibility(false); Visual->CapTriangles=0; Visual->CapSignature=0;
+        if(Visual->CapTriangles>0) { ++RuntimeFrame.CapMeshRebuilds; if (Visual->Render.Cap.IsValid()) Visual->Render.Cap->SetMesh(FDynamicMesh3()); }
+        if (Visual->Render.Cap.IsValid()) Visual->Render.Cap->SetVisibility(false); Visual->CapTriangles=0; Visual->CapSignature=0;
         Visual->CapQuads.Reset(); Visual->CapSamplePoints.Reset();
         return;
     }
@@ -3892,8 +4007,8 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 	if ((!bPresent && !bAbsent) || Cells.IsEmpty() || Visual->PartBounds.IsEmpty())
 	{
 		++RuntimeFrame.CapMeshRebuilds;
-		Visual->Cap->SetMesh(FDynamicMesh3());
-		Visual->Cap->SetVisibility(false);
+		if (Visual->Render.Cap.IsValid()) Visual->Render.Cap->SetMesh(FDynamicMesh3());
+		if (Visual->Render.Cap.IsValid()) Visual->Render.Cap->SetVisibility(false);
 		Visual->CapTriangles = 0;
 		Visual->CapSamplePoints.Reset();
 		Visual->CapQuads.Reset();
@@ -3994,7 +4109,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 		Signature = (Signature ^ Dependency) * 1099511628211ull;
 	}
 	}
-	if (Signature == Visual->CapSignature)
+	if (Signature == Visual->CapSignature && !(Visual->Render.Cap.IsValid() && Visual->Render.bCapUploadPending))
 	{
 		return;
 	}
@@ -4003,7 +4118,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 	const auto& ReadVisual = static_cast<const FRecordVisual&>(*Visual);
 	const uint32 BuildEpoch = Record.Epoch;
 	const uint64 BuildRevision = Prop.TransformRevision;
-	UDynamicMeshComponent* const TargetCap = Visual->Cap.Get();
+	UDynamicMeshComponent* const TargetCap = Visual->Render.Cap.Get();
 	FDynamicMesh3 Mesh;
 	struct FRowResult
 	{
@@ -4364,7 +4479,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 	// Same-frame join prevents epoch/revision/resource mutation. Validate that
 	// contract before atomically publishing diagnostics and the GT resource.
 	check(IsInGameThread() && Record.Epoch == BuildEpoch && Prop.TransformRevision == BuildRevision
-		&& Prop.Visuals.Find(BuildEpoch) == Visual && Visual->Cap.Get() == TargetCap);
+		&& Prop.Visuals.Find(BuildEpoch) == Visual && Visual->Render.Cap.Get() == TargetCap);
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CapSubmitGT);
 	Visual->CapSignature = Signature;
 	++RuntimeFrame.CapMeshRebuilds;
@@ -4375,8 +4490,12 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 	for (const auto& Q : Visual->CapQuads)
 		Visual->CapSamplePoints.Add(FVector2D((Q.A + Q.B + Q.C + Q.D) * 0.25));
 	Visual->CapTriangles = Mesh.TriangleCount();
-	TargetCap->SetMesh(MoveTemp(Mesh));
-	TargetCap->SetVisibility(Visual->CapTriangles > 0);
+	if (TargetCap)
+	{
+		TargetCap->SetMesh(MoveTemp(Mesh));
+		TargetCap->SetVisibility(Visual->CapTriangles > 0 && !Visual->Render.bPublishPending);
+		Visual->Render.bCapUploadPending = false;
+	}
 }
 
 void ADarkwellObjectMemoryScene::RebuildHistoricalSpatialIndex()
@@ -4643,7 +4762,7 @@ int32 ADarkwellObjectMemoryScene::GetTotalProxyCount() const
 	{
 		for (const TPair<uint32, FRecordVisual>& Visual : Pair.Value.Visuals)
 		{
-			Total += Visual.Value.Proxy.IsValid() ? 1 : 0;
+			Total += Visual.Value.Render.Proxy.IsValid() ? 1 : 0;
 		}
 	}
 	return Total;
@@ -4673,7 +4792,7 @@ bool ADarkwellObjectMemoryScene::DoSpatialRecordTexturesMatchForTesting(
 	for (const FDarkwellSpatialObservationRecord& Record : Prop->History.GetRecords())
 	{
 		const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
-		const UTexture2D* Texture = Visual ? Visual->Texture.Get() : nullptr;
+		const UTexture2D* Texture = Visual ? Visual->Render.Texture.Get() : nullptr;
 		const FIntPoint Expected = (Record.bCurrentObservedLocation && Prop->LocalEpoch==Record.Epoch
             ? Prop->CurrentLive.AtlasCells : Record.SpatialMemory.GetSize())
 			* Darkwell::ObjectMemory::PresentationSamples;
@@ -4788,11 +4907,11 @@ uint64 ADarkwellObjectMemoryScene::GetHistoricalVisualSignatureForTesting(
 		if (Record.bCurrentObservedLocation) continue;
 		Mix(Record.Epoch);
 		const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
-		Mix(Visual && Visual->Proxy.IsValid() ? Visual->Proxy->GetUniqueID() : 0);
-		Mix(Visual && Visual->Texture.IsValid() ? Visual->Texture->GetUniqueID() : 0);
-		Mix(Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeX() : 0);
-		Mix(Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeY() : 0);
-		Mix(Visual && Visual->bLastProxyVisible ? 1 : 0);
+		Mix(Visual && Visual->Render.Proxy.IsValid() ? Visual->Render.Proxy->GetUniqueID() : 0);
+		Mix(Visual && Visual->Render.Texture.IsValid() ? Visual->Render.Texture->GetUniqueID() : 0);
+		Mix(Visual && Visual->Render.Texture.IsValid() ? Visual->Render.Texture->GetSizeX() : 0);
+		Mix(Visual && Visual->Render.Texture.IsValid() ? Visual->Render.Texture->GetSizeY() : 0);
+		Mix(Visual && Visual->Render.bLastProxyVisible ? 1 : 0);
 		for (const FDarkwellSpatialPropMemory::FCell& Cell : Record.SpatialMemory.GetCells())
 		{
 			MixFloat(Cell.DiscoveredPresent);
@@ -4818,12 +4937,12 @@ FString ADarkwellObjectMemoryScene::GetHistoricalVisualTelemetryForTesting(
 		Records.Add(FString::Printf(
 			TEXT("epoch=%u proxy=%d visible=%d transitions=%d texture=%d size=%dx%d creates=%d uploads=%d"),
 			Record.Epoch,
-			Visual && Visual->Proxy.IsValid() ? Visual->Proxy->GetUniqueID() : 0,
-			Visual && Visual->bLastProxyVisible ? 1 : 0,
+			Visual && Visual->Render.Proxy.IsValid() ? Visual->Render.Proxy->GetUniqueID() : 0,
+			Visual && Visual->Render.bLastProxyVisible ? 1 : 0,
 			Visual ? Visual->ProxyVisibilityTransitions : 0,
-			Visual && Visual->Texture.IsValid() ? Visual->Texture->GetUniqueID() : 0,
-			Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeX() : 0,
-			Visual && Visual->Texture.IsValid() ? Visual->Texture->GetSizeY() : 0,
+			Visual && Visual->Render.Texture.IsValid() ? Visual->Render.Texture->GetUniqueID() : 0,
+			Visual && Visual->Render.Texture.IsValid() ? Visual->Render.Texture->GetSizeX() : 0,
+			Visual && Visual->Render.Texture.IsValid() ? Visual->Render.Texture->GetSizeY() : 0,
 			Visual ? Visual->ProxyCreationCount : 0,
 			Visual ? Visual->TextureUploadCount : 0));
 	}
@@ -4858,7 +4977,7 @@ int32 ADarkwellObjectMemoryScene::GetVisibleHistoricalProxyCountForTesting(
 				continue;
 			}
 			const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
-			Count += Visual && Visual->Proxy.IsValid() && !Visual->Proxy->IsHidden() ? 1 : 0;
+			Count += Visual && Visual->Render.Proxy.IsValid() && !Visual->Render.Proxy->IsHidden() ? 1 : 0;
 		}
 	}
 	return Count;
@@ -4876,8 +4995,8 @@ int32 ADarkwellObjectMemoryScene::GetVisibleHistoricalCapCountForTesting(
 {
  const auto* Prop=Tracked.Find(StableId); int32 Count=0;
  if(Prop) for(const auto& Pair:Prop->Visuals)
-  Count+=Pair.Value.CapTriangles>0 && Pair.Value.Cap.IsValid() && Pair.Value.Cap->IsVisible()
-   && Pair.Value.Proxy.IsValid() && !Pair.Value.Proxy->IsHidden();
+  Count+=Pair.Value.CapTriangles>0 && Pair.Value.Render.Cap.IsValid() && Pair.Value.Render.Cap->IsVisible()
+   && Pair.Value.Render.Proxy.IsValid() && !Pair.Value.Render.Proxy->IsHidden();
  return Count;
 }
 
@@ -4892,8 +5011,8 @@ int32 ADarkwellObjectMemoryScene::GetHistoricalPresentationResourceCountForTesti
 		{
 			if (Record.bCurrentObservedLocation) continue;
 			const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
-			Count += Visual && (Visual->Proxy.IsValid() || Visual->Cap.IsValid()
-				|| Visual->Texture.IsValid() || !Visual->Materials.IsEmpty()) ? 1 : 0;
+			Count += Visual && (Visual->Render.Proxy.IsValid() || Visual->Render.Cap.IsValid()
+				|| Visual->Render.Texture.IsValid() || !Visual->Render.Materials.IsEmpty()) ? 1 : 0;
 		}
 	}
 	return Count;
@@ -5023,7 +5142,7 @@ FString ADarkwellObjectMemoryScene::GetFalseOccupiedHistoryTelemetryForTesting(F
 				if (!QueryVerticalInterval(Geometry, Point, MinZ, MaxZ)) continue;
 				Result += FString::Printf(TEXT("epoch=%u primitive=%d type=STALE_SURFACE world=(%.4f,%.4f,%.4f..%.4f) legal=%.3f D=%.3f V=%.3f R=%.3f opacity=%.3f occupancy=AABB_FALSE_POSITIVE newer3D=0 material=M_ManualAccumulatedMemory component=%s retired=0;\n"),
 					Record.Epoch, Geometry.PrimitiveIndex, Point.X, Point.Y, MinZ, MaxZ, Coverage.Values[I],
-					Cell.DiscoveredPresent, Cell.VerifiedEmpty, Cell.RemainingStale, Cell.StaleOpacity, *GetNameSafe(Visual->Proxy.Get()));
+					Cell.DiscoveredPresent, Cell.VerifiedEmpty, Cell.RemainingStale, Cell.StaleOpacity, *GetNameSafe(Visual->Render.Proxy.Get()));
 			}
 		}
 	}
@@ -5070,8 +5189,8 @@ FString ADarkwellObjectMemoryScene::GetCapLifecycleTelemetryForTesting(FName Sta
 			const FRecordVisual& V = Pair.Value;
 			Result += FString::Printf(TEXT("epoch=%u CAP_EXPECTED=%d CAP_GENERATED=%d CAP_CLIPPED=%d CAP_RENDERED=%d missing_candidate=%d retired=%d component=%s; "),
 				Pair.Key, V.CapExpected, V.CapGenerated, V.CapClipped,
-				V.Cap.IsValid() && V.Cap->IsVisible() ? V.CapTriangles : 0,
-				V.MissingHistoricalCuts, V.bPresentationRetired, *GetNameSafe(V.Cap.Get()));
+				V.Render.Cap.IsValid() && V.Render.Cap->IsVisible() ? V.CapTriangles : 0,
+				V.MissingHistoricalCuts, V.bPresentationRetired, *GetNameSafe(V.Render.Cap.Get()));
 		}
 	return Result;
 }
@@ -5107,12 +5226,12 @@ FString ADarkwellObjectMemoryScene::GetResidualFragmentTelemetryForTesting(
 				Result += FString::Printf(TEXT("\nepoch=%u primitive=%d type=STALE_SURFACE world=(%.4f,%.4f,%.4f..%.4f) legal=%.3f D=%.3f V=%.3f R=%.3f smooth=%.3f hard=%.0f material=M_MovingAccumulatedMemory component=%s retired=0"),
 					Pair.Key, Geometry.PrimitiveIndex, Point.X, Point.Y, MinZ, MaxZ,
 					Coverage.Values.IsValidIndex(CellIndex) ? Coverage.Values[CellIndex] : 0.0f,
-					Cell.DiscoveredPresent, Cell.VerifiedEmpty, Cell.RemainingStale, Submitted.B, Submitted.A, *GetNameSafe(Visual.Proxy.Get()));
+					Cell.DiscoveredPresent, Cell.VerifiedEmpty, Cell.RemainingStale, Submitted.B, Submitted.A, *GetNameSafe(Visual.Render.Proxy.Get()));
 				++Reported;
 				break;
 			}
 		}
-		if (!Visual.Cap.IsValid() || !Visual.Cap->IsVisible()) continue;
+		if (!Visual.Render.Cap.IsValid() || !Visual.Render.Cap->IsVisible()) continue;
 		for (const auto& Q : Pair.Value.CapQuads)
 		{
 			const FVector C = (Q.A+Q.B+Q.C+Q.D)*.25;
@@ -5336,7 +5455,7 @@ bool ADarkwellObjectMemoryScene::TryResumeQualifiedWhole(FTrackedProp& Prop)
 	TraceQualificationAudit(Prop,TEXT("after_capture_resume"));
 	if (auto* Visual=Prop.Visuals.Find(Prop.LocalEpoch))
 	{
-		if (Visual->Proxy.IsValid()) Visual->Proxy->SetActorHiddenInGame(true);
+		if (Visual->Render.Proxy.IsValid()) Visual->Render.Proxy->SetActorHiddenInGame(true);
 		Visual->TransientCurrentSuppression.Empty();
 	}
 	Prop.ObservationState=EObservationState::ObservedArmed;
@@ -5683,7 +5802,7 @@ FString ADarkwellObjectMemoryScene::BuildQualificationAuditState(const FTrackedP
  for(const auto& Record:Prop.History.GetRecords()) if(const auto* V=Prop.Visuals.Find(Record.Epoch))
  {
   Transient+=V->TransientCurrentSuppression.CountSetBits();
-  if(Record.bCurrentObservedLocation || !V->Proxy.IsValid() || V->Proxy->IsHidden() || !Record.FineHistory.IsInitialized()) continue;
+  if(Record.bCurrentObservedLocation || !V->Render.Proxy.IsValid() || V->Render.Proxy->IsHidden() || !Record.FineHistory.IsInitialized()) continue;
   const auto B=Record.FineHistory.GetBounds(); const auto S=Record.FineHistory.GetSize();
   if(!B.IsInside(Point)) continue;
   const auto UV=(Point-B.Min)/B.GetSize(); const int32 Index=FMath::Clamp(int32(UV.Y*S.Y),0,S.Y-1)*S.X+FMath::Clamp(int32(UV.X*S.X),0,S.X-1);
@@ -5722,12 +5841,12 @@ FString ADarkwellObjectMemoryScene::GetCaptureRefreshAuditForTesting(FName Id) c
 		{ ++Remembered; MinAA=FMath::Min(MinAA,S.FrozenAAEnvelope); ZeroAA+=S.FrozenAAEnvelope<=0;
 			Empty+=S.bVerifiedEmpty; Superseded+=S.State==FDarkwellHistoryGridV2::Superseded(); }
 		const auto* V=Prop->Visuals.Find(R.Epoch); TArray<FString> Bindings;
-		if(V && V->Proxy.IsValid()) { TInlineComponentArray<UStaticMeshComponent*> Meshes(V->Proxy.Get());
+		if(V && V->Render.Proxy.IsValid()) { TInlineComponentArray<UStaticMeshComponent*> Meshes(V->Render.Proxy.Get());
 			for(const auto* Mesh:Meshes) Bindings.Add(Binding(Mesh)); }
 		Records.Add(FString::Printf(TEXT("{\"epoch\":%u,\"current\":%s,\"whole_capture\":%s,\"capture_valid\":%s,\"content_revision\":\"%llu\",\"authority_revision\":\"%llu\",\"coverage_revision\":\"%llu\",\"geometry_revision\":\"%llu\",\"capture_set\":%d,\"remembered\":%d,\"zero_aa\":%d,\"min_aa\":%.6f,\"empty\":%d,\"superseded\":%d,\"proxy\":\"%s\",\"proxy_hidden\":%s,\"texture\":\"%s\",\"texture_hash\":\"%llu\",\"uploads\":%d,\"bindings\":[%s]}"),
 			R.Epoch,R.bCurrentObservedLocation?TEXT("true"):TEXT("false"),R.bConfirmedWholeCapture?TEXT("true"):TEXT("false"),R.bCaptureRevisionValid?TEXT("true"):TEXT("false"),
 			R.ContentRevision,R.CaptureAuthorityRevision,R.CaptureCoverageRevision,R.CaptureGeometryRevision,R.LastLegalCaptureMask.CountSetBits(),Remembered,ZeroAA,MinAA,Empty,Superseded,
-			V?*GetNameSafe(V->Proxy.Get()):TEXT("None"),V&&V->Proxy.IsValid()&&V->Proxy->IsHidden()?TEXT("true"):TEXT("false"),V?*GetNameSafe(V->Texture.Get()):TEXT("None"),V?V->TextureSignature:0,V?V->TextureUploadCount:0,*FString::Join(Bindings,TEXT(","))));
+			V?*GetNameSafe(V->Render.Proxy.Get()):TEXT("None"),V&&V->Render.Proxy.IsValid()&&V->Render.Proxy->IsHidden()?TEXT("true"):TEXT("false"),V?*GetNameSafe(V->Render.Texture.Get()):TEXT("None"),V?V->TextureSignature:0,V?V->TextureUploadCount:0,*FString::Join(Bindings,TEXT(","))));
 	}
 	return FString::Printf(TEXT("{\"eligible\":%s,\"source_bindings\":[%s],\"records\":[%s]}"),IsCaptureEligible(*Prop)?TEXT("true"):TEXT("false"),*FString::Join(Sources,TEXT(",")),*FString::Join(Records,TEXT(",")));
 }
@@ -5769,7 +5888,7 @@ TArray<TWeakObjectPtr<UObject>> ADarkwellObjectMemoryScene::GetOwnedPresentation
  {
   const auto& Prop=Pair.Value;
   Objects.Add(Prop.Actual.Get()); Objects.Add(Prop.ObjectPolicy.Get());
-  for(const auto& Visual:Prop.Visuals) if(Visual.Value.Proxy.IsValid()) Objects.Add(Visual.Value.Proxy.Get());
+  for(const auto& Visual:Prop.Visuals) if(Visual.Value.Render.Proxy.IsValid()) Objects.Add(Visual.Value.Render.Proxy.Get());
   if(const auto* Actual=Prop.Actual.Get())
    for(const UStaticMeshComponent* Part:Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives()) if(Part)
     for(int32 Index=0;Index<Part->GetNumMaterials();++Index)

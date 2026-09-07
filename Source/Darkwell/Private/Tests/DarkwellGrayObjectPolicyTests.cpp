@@ -18,6 +18,10 @@
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/Texture2D.h"
+#include "TextureResource.h"
+#include "RHICommandList.h"
+#include "RenderingThread.h"
+#include "Math/Float16Color.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/ScopeExit.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
@@ -775,7 +779,7 @@ bool FDarkwellCapturePreparationParity::RunTest(const FString&)
      if(const auto* V=Prop.Visuals.Find(R.Epoch))
      {
       Mix(V->TextureSignature); Mix(V->CapTriangles); Bits(V->SuppressedByCurrentEvidence);
-      Mix(V->Cap.IsValid() && V->Cap->IsVisible());
+      Mix(V->Render.Cap.IsValid() && V->Render.Cap->IsVisible());
       for(const auto& Q:V->CapQuads) for(const FVector P:{Q.A,Q.B,Q.C,Q.D}) Mix(GetTypeHash(P));
      }
     }
@@ -826,7 +830,7 @@ bool FDarkwellJoinedCapParity::RunTest(const FString&)
    auto& Prop=F.Room->Tracked.FindChecked(Id);
    for(auto& R:Prop.History.GetMutableRecords())
    {
-    auto* V=Prop.Visuals.Find(R.Epoch); if(!V || !V->Cap.IsValid()) continue;
+    auto* V=Prop.Visuals.Find(R.Epoch); if(!V || !V->Render.Cap.IsValid()) continue;
     const auto FineBefore=R.FineHistory.GetSamples();
     TArray<FDarkwellHistoryGridV2::FSample> SavedSamples; SavedSamples.Append(FineBefore.GetData(),FineBefore.Num());
     const auto Suppression=V->SuppressedByCurrentEvidence;
@@ -835,10 +839,10 @@ bool FDarkwellJoinedCapParity::RunTest(const FString&)
     {
      uint64 H=1469598103934665603ull; auto Mix=[&](uint64 X){H=(H^X)*1099511628211ull;};
      Mix(V->CapSignature); Mix(V->CapTriangles); Mix(V->CapExpected); Mix(V->CapGenerated);
-     Mix(V->CapClipped); Mix(V->MissingHistoricalCuts); Mix(V->Cap->IsVisible());
+     Mix(V->CapClipped); Mix(V->MissingHistoricalCuts); Mix(V->Render.Cap->IsVisible());
      for(const auto& Q:V->CapQuads) { Mix(Q.PrimitiveIndex); for(const FVector P:{Q.A,Q.B,Q.C,Q.D}) Mix(GetTypeHash(P)); }
      for(const auto P:V->CapSamplePoints) Mix(GetTypeHash(P));
-     V->Cap->ProcessMesh([&](const UE::Geometry::FDynamicMesh3& Mesh)
+     V->Render.Cap->ProcessMesh([&](const UE::Geometry::FDynamicMesh3& Mesh)
      {
       Mix(Mesh.VertexCount()); Mix(Mesh.TriangleCount());
       for(int32 I:Mesh.VertexIndicesItr()) { Mix(I); Mix(GetTypeHash(Mesh.GetVertex(I))); }
@@ -885,6 +889,200 @@ bool FDarkwellJoinedCapParity::RunTest(const FString&)
  return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellPresentationResidency,
+ "Darkwell.ObjectMemory.PresentationResidency",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellPresentationResidency::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ using FTicket=ADarkwellObjectMemoryScene::FPresentationTicket;
+ TArray<TWeakObjectPtr<UObject>> Released;
+ FTicket PreviousWorldTicket;
+ int32 OfflineFrames=0, EvidenceChanges=0, CapChecks=0, GpuReadbacks=0;
+ for(const Reveal Mode:{Reveal::SpatialPartial,Reveal::WholeObjectAfterSpan})
+ {
+  TArray<uint64> Reference;
+  for(const bool Evict:{false,true})
+  {
+   {
+    FRoom F;
+    F.World->AddToRoot();
+    ON_SCOPE_EXIT { F.World->RemoveFromRoot(); };
+    auto& Scene=*F.Room;
+    TestFalse(TEXT("A previous world's ticket cannot address a recreated Scene"),Scene.RebuildHistoricalPresentationForTesting(PreviousWorldTicket));
+    Scene.ResetTrackedRevealPolicyForLab(Id,Mode,100,History::StationaryOnly);
+    F.Face(Mode==Reveal::SpatialPartial?146:90); F.Step(25);
+    auto& Prop=Scene.Tracked.FindChecked(Id);
+    FTicket Ticket, SupersededTicket;
+    const uint32 Epoch=Prop.History.GetRecords()[0].Epoch;
+    TestFalse(TEXT("Current cannot be explicitly evicted"),Scene.ReleaseHistoricalPresentationForTesting(Id,Epoch,Ticket));
+    F.Face(-90); F.Step();
+    auto* R=Prop.History.FindRecord(Epoch);
+    if(!TestNotNull(TEXT("Legal first exit creates existing history"),R)) return false;
+    TestTrue(TEXT("First exit publishes in this update, zero extra frames"),!R->bCurrentObservedLocation
+     && Prop.Visuals.FindChecked(Epoch).Render.Proxy.IsValid() && !Prop.Visuals.FindChecked(Epoch).Render.Proxy->IsHidden());
+    F.Step(2);
+    auto Hash=[&]()
+    {
+     uint64 H=1469598103934665603ull;
+     auto Mix=[&](uint64 V){H=(H^V)*1099511628211ull;};
+     auto Bits=[&](const TBitArray<>& B){Mix(B.Num());for(int32 I=0;I<B.Num();++I)Mix(B[I]);};
+     auto Floats=[&](const TArray<float>& A){Mix(A.Num());for(float V:A)Mix(GetTypeHash(V));};
+     Mix(Prop.History.GetRecords().Num());
+     for(const auto& Record:Prop.History.GetRecords())
+     {
+      Mix(Record.Epoch); Mix(Record.bCurrentObservedLocation); Mix(Record.FineHistory.EvidenceHash());
+      Mix(Record.bConfirmedWholeCapture); Mix(Record.bCaptureRevisionValid);
+      Bits(Record.LastLegalCaptureMask); Bits(Record.GeometryFootprint);
+      Mix(GetTypeHash(Record.SnapshotTransform.ToString()));
+      Mix(GetTypeHash(Record.Tint)); Mix(GetTypeHash(Record.UVScale));
+      for(const auto& P:Record.Primitives) {Mix(GetTypeHash(P.Mesh.ToSoftObjectPath()));Mix(GetTypeHash(P.RelativeTransform.ToString()));}
+      for(const auto& C:Record.SpatialMemory.GetCells())
+       for(float V:{C.CurrentLegalCoverage,C.DiscoveredPresent,C.VerifiedEmpty,C.InitialRemembered,C.RemainingStale,
+        C.AppearanceBlend,C.LiveBlend,C.StaleOpacity,C.ExitAge,C.EmptyDwell}) Mix(GetTypeHash(V));
+      const auto* V=Prop.Visuals.Find(Record.Epoch); Mix(V!=nullptr); if(!V)continue;
+      Bits(V->SuppressedByCurrentEvidence); Bits(V->TransientCurrentSuppression);
+      Bits(V->CachedFineOccupied); Bits(V->CachedCoarseOccupied);
+      Floats(V->CachedCoarseCoverage); Floats(V->CachedCoarseEvidence); Floats(V->CachedFineCoverage);
+      Mix(V->ProcessedGeometryRevision); Mix(V->ProcessedOwnershipRevision); Mix(V->ProcessedOwnershipMaximumEpoch);
+      Mix(V->bPresentationRetired); Mix(V->CapTriangles); Mix(V->CapExpected); Mix(V->CapGenerated); Mix(V->CapClipped); Mix(V->MissingHistoricalCuts);
+      Mix(V->SubmittedPresentation.Num()); for(const auto& P:V->SubmittedPresentation)Mix(GetTypeHash(P));
+      for(const auto& Q:V->CapQuads) for(const auto& P:{Q.A,Q.B,Q.C,Q.D})Mix(GetTypeHash(P));
+      for(const auto& G:V->PartGeometry) {Mix(GetTypeHash(G.WorldTransform.ToString()));Mix(GetTypeHash(G.LocalBounds.Min));Mix(GetTypeHash(G.LocalBounds.Max));}
+     }
+     return H;
+    };
+    const uint64 BeforeRelease=Hash();
+    if(Evict)
+    {
+     auto& V=Prop.Visuals.FindChecked(Epoch);
+     Released.Add(V.Render.Proxy); Released.Add(V.Render.Texture); if(V.Render.Cap.IsValid())Released.Add(V.Render.Cap);
+     for(const auto& M:V.Render.Materials)Released.Add(M);
+     TestTrue(TEXT("Explicit single sealed-record release"),Scene.ReleaseHistoricalPresentationForTesting(Id,Epoch,SupersededTicket));
+     TestEqual(TEXT("Release changes no CPU state"),Hash(),BeforeRelease);
+     TestTrue(TEXT("Repeated release is safe"),Scene.ReleaseHistoricalPresentationForTesting(Id,Epoch,Ticket));
+     TestFalse(TEXT("An older request cannot publish"),Scene.RebuildHistoricalPresentationForTesting(SupersededTicket));
+     CollectGarbage(RF_NoFlags,true);
+     for(const auto& Object:Released)TestFalse(TEXT("Released render objects reclaimed while CPU history lives"),Object.IsValid());
+    }
+    uint64 InitialEvidence=Prop.History.FindRecord(Epoch)->FineHistory.EvidenceHash();
+    // Hidden motion changes occupancy; renewed legal viewing supplies real empty
+    // evidence and new observed ownership. No synthetic FineHistory writes.
+    auto Pose=Scene.GetTrackedTransform(Id); Pose.AddToTranslation(FVector(65,0,0));
+    Pose.SetRotation(FRotator(0,23,0).Quaternion()); Scene.SetTrackedTransformForTesting(Id,Pose);
+    for(int32 Frame=0;Frame<12;++Frame)
+    {
+     F.Face(Frame<2?-90:146); F.Step();
+     const auto* Record=Prop.History.FindRecord(Epoch);
+     auto* V=Prop.Visuals.Find(Epoch);
+     if(Evict && Frame<6 && Record && V && !V->bPresentationRetired)
+     {
+      TestFalse(TEXT("UpdateTracked cannot automatically rematerialize an evicted old record"),V->Render.Proxy.IsValid()||V->Render.Texture.IsValid()||V->Render.Cap.IsValid()||!V->Render.Materials.IsEmpty());
+      ++OfflineFrames;
+      if(Record->FineHistory.EvidenceHash()!=InitialEvidence)++EvidenceChanges;
+     }
+     const uint64 H=Hash();
+     if(!Evict)Reference.Add(H);else if(!TestEqual(*FString::Printf(TEXT("CPU/ownership/occupancy/pixels/cap oracle frame %d"),Frame),H,Reference[Frame]))return false;
+     if(Frame==5 && Evict)
+     {
+      if(!TestTrue(TEXT("Rebuild surviving old history from latest CPU state"),Scene.RebuildHistoricalPresentationForTesting(Ticket)))return false;
+      TestEqual(TEXT("Rebuild does not change CPU/knowledge result"),Hash(),H);
+      V=Prop.Visuals.Find(Epoch); Record=Prop.History.FindRecord(Epoch);
+      TestTrue(TEXT("Rebuild publishes captured pose immediately"),V->Render.Proxy.IsValid() && !V->Render.Proxy->IsHidden() && V->Render.Proxy->GetActorTransform().Equals(Record->SnapshotTransform));
+      TestEqual(TEXT("New texture receives current pixels"),V->Render.UploadedTextureSignature,V->TextureSignature);
+      if(V->Render.Texture->GetResource())
+      {
+       TArray<FFloat16Color> Readback;
+       const FTextureRHIRef Texture=V->Render.Texture->GetResource()->TextureRHI;
+       const FIntPoint Size=Record->FineHistory.GetSize();
+       ENQUEUE_RENDER_COMMAND(A0ReadCurrentTexture)([Texture,Size,&Readback](FRHICommandListImmediate& RHICmdList)
+       { RHICmdList.ReadSurfaceFloatData(Texture,FIntRect(0,0,Size.X,Size.Y),Readback,ECubeFace::CubeFace_PosX,0,0); });
+       FlushRenderingCommands();
+       TestEqual(TEXT("D3D12 readback dimensions retained"),Readback.Num(),V->SubmittedPresentation.Num());
+       int32 Mismatches=0;
+       for(int32 I=0;I<Readback.Num() && I<V->SubmittedPresentation.Num();++I)
+       {
+        const FFloat16Color Expected(V->SubmittedPresentation[I]);
+        if(FMemory::Memcmp(&Readback[I],&Expected,sizeof(Expected))!=0)++Mismatches;
+       }
+       TestEqual(TEXT("D3D12 texture contains exact latest Float16 pixels"),Mismatches,0);
+       ++GpuReadbacks;
+      }
+      for(const auto& M:V->Render.Materials)
+       TestTrue(TEXT("New MID binds latest texture and is ready"),M.IsValid() && M->K2_GetTextureParameterValue(TEXT("SpatialStateTexture"))==V->Render.Texture.Get() && M->K2_GetScalarParameterValue(TEXT("SpatialReady"))==1.f);
+      if(V->Render.Cap.IsValid())V->Render.Cap->ProcessMesh([&](const UE::Geometry::FDynamicMesh3& Mesh)
+      {
+       TestEqual(TEXT("Rebuilt cap contains current CPU topology"),Mesh.TriangleCount(),V->CapTriangles);
+       int32 Vertex=0;for(const auto& Q:V->CapQuads)for(const auto& P:{Q.A,Q.B,Q.C,Q.D})TestTrue(TEXT("Rebuilt cap vertices equal current CPU quads"),Mesh.GetVertex(Vertex++).Equals(P-Scene.GetActorLocation()));
+       ++CapChecks;
+      });
+      const int32 Resources=Scene.GetHistoricalPresentationResourceCountForTesting(Id);
+      TestTrue(TEXT("Successful rebuild is idempotent"),Scene.RebuildHistoricalPresentationForTesting(Ticket));
+      TestEqual(TEXT("No duplicate registration/resources"),Scene.GetHistoricalPresentationResourceCountForTesting(Id),Resources);
+     }
+    }
+    // Source replacement revokes a request, but must retain prior captured content.
+    if(Evict)
+    {
+     if(!TestTrue(TEXT("Old record survives for replacement contract"),Scene.ReleaseHistoricalPresentationForTesting(Id,Epoch,Ticket)))return false;
+     const auto OldCapture=*Prop.History.FindRecord(Epoch);
+     Prop.Actual->Destroy();
+     auto* Replacement=F.World->SpawnActor<AActor>();
+     auto* Mesh=NewObject<UStaticMeshComponent>(Replacement); Replacement->SetRootComponent(Mesh); Replacement->AddInstanceComponent(Mesh);
+     Mesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Sphere.Sphere")));
+     Mesh->SetMobility(EComponentMobility::Movable); Mesh->RegisterComponent(); Replacement->SetActorLocation(FVector(5000,5000,0));
+     auto* Memory=NewObject<UDarkwellRememberablePropComponent>(Replacement); Memory->bUseSpatialMemory=true; Memory->ConfigureStableId(Id); Memory->AddMemoryPrimitive(Mesh);
+     Replacement->AddInstanceComponent(Memory); Memory->RegisterComponent();
+     auto* Policy=NewObject<USightWeaveObjectPolicyComponent>(Replacement); Replacement->AddInstanceComponent(Policy); Policy->RegisterComponent(); Replacement->DispatchBeginPlay();
+     TestTrue(TEXT("SourceReplace uses production registration"),Scene.RegisterRememberable(Memory,Policy));
+     TestFalse(TEXT("Pre-replacement request is stale"),Scene.RebuildHistoricalPresentationForTesting(Ticket));
+     CollectGarbage(RF_NoFlags,true);
+     TestTrue(TEXT("Fresh request can address preserved old knowledge"),Scene.ReleaseHistoricalPresentationForTesting(Id,Epoch,Ticket));
+     auto& MissingMesh=Prop.History.FindRecord(Epoch)->Primitives[0].Mesh;
+     const auto SavedMesh=MissingMesh; MissingMesh.Reset();
+     AddExpectedError(TEXT("A0 missing captured mesh"),EAutomationExpectedErrorFlags::Contains,1);
+     TestFalse(TEXT("Missing captured asset fails explicitly"),Scene.RebuildHistoricalPresentationForTesting(Ticket));
+     TestFalse(TEXT("Failed preparation publishes no partial proxy"),Prop.Visuals.FindChecked(Epoch).Render.Proxy.IsValid());
+     MissingMesh=SavedMesh;
+     TestTrue(TEXT("Rebuild after source GC uses captured asset paths"),Scene.RebuildHistoricalPresentationForTesting(Ticket));
+     const auto* Record=Prop.History.FindRecord(Epoch);
+     TestTrue(TEXT("Source replacement retains original capture and pose"),Record && Record->ContentRevision==OldCapture.ContentRevision && Record->SnapshotTransform.Equals(OldCapture.SnapshotTransform));
+     TestTrue(TEXT("Release before legal terminal evidence"),Scene.ReleaseHistoricalPresentationForTesting(Id,Epoch,Ticket));
+     F.Face(90); F.Step(35);
+     TestFalse(TEXT("Legal empty evidence retires/removes the offline old record"),Prop.History.FindRecord(Epoch)!=nullptr);
+     TestFalse(TEXT("Terminal record cannot be resurrected by old request"),Scene.RebuildHistoricalPresentationForTesting(Ticket));
+     // Reset and History.Initialize may reuse epoch numbers, never tickets.
+     Scene.ResetRoom(F.Player);
+     TestFalse(TEXT("Reset rejects old ticket"),Scene.RebuildHistoricalPresentationForTesting(Ticket));
+     Scene.ResetTrackedRevealPolicyForLab(Id,Mode,100,History::StationaryOnly);
+     F.Face(90);F.Step(25);F.Face(-90);F.Step(3);
+     const uint32 ResumeEpoch=Scene.Tracked.FindChecked(Id).History.GetRecords()[0].Epoch;
+     FTicket Resume;
+     TestTrue(TEXT("Explicitly release uncontradicted stationary history"),Scene.ReleaseHistoricalPresentationForTesting(Id,ResumeEpoch,Resume));
+     F.Face(90);F.Step(25);
+     TestFalse(TEXT("Legal resume revokes the old resource request"),Scene.RebuildHistoricalPresentationForTesting(Resume));
+     F.Face(-90);F.Step();
+     TestTrue(TEXT("Resumed capture seals with no extra blank frame"),Scene.GetVisibleHistoricalProxyCountForTesting(Id)>0);
+     Scene.ConfigureHistoricalEpochCountForTesting(Id,2);
+     FTicket Fresh;
+     TestTrue(TEXT("Reused epoch exists after History.Initialize"),Scene.ReleaseHistoricalPresentationForTesting(Id,1,Fresh));
+     Scene.ConfigureHistoricalEpochCountForTesting(Id,2);
+     TestFalse(TEXT("History lifetime rejects same-epoch old work"),Scene.RebuildHistoricalPresentationForTesting(Fresh));
+     PreviousWorldTicket=Fresh;
+    }
+    Released.Append(Scene.GetOwnedPresentationObjectsForTesting());
+   }
+   CollectGarbage(RF_NoFlags,true);
+   for(const auto& Object:Released)TestFalse(TEXT("World teardown releases concrete resources"),Object.IsValid());
+  }
+ }
+ TestTrue(TEXT("Positive offline update coverage"),OfflineFrames>=6);
+ TestTrue(TEXT("Offline authority actually changed, not just sleeping parity"),EvidenceChanges>0);
+ TestTrue(TEXT("Partial rebuilt cap mesh checked"),CapChecks>0);
+ AddInfo(FString::Printf(TEXT("A0 offline frames=%d changed-evidence frames=%d cap meshes=%d GPU readbacks=%d; first Whole exit extra frames=0"),OfflineFrames,EvidenceChanges,CapChecks,GpuReadbacks));
+ return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellRecordResourcesParity,
  "Darkwell.PropLab.ArchitectureAudit.RecordScopedResourcesParityAndLifetime",
  EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
@@ -917,11 +1115,11 @@ bool FDarkwellRecordResourcesParity::RunTest(const FString&)
      {
       Mix(R.Epoch); Mix(R.bCurrentObservedLocation); Mix(R.FineHistory.EvidenceHash());
       const auto* V=Prop.Visuals.Find(R.Epoch);
-      if(!V || !V->Proxy.IsValid()) continue;
-      TInlineComponentArray<UStaticMeshComponent*> Meshes(V->Proxy.Get());
+      if(!V || !V->Render.Proxy.IsValid()) continue;
+      TInlineComponentArray<UStaticMeshComponent*> Meshes(V->Render.Proxy.Get());
       TestEqual(TEXT("All captured primitive components retained"),Meshes.Num(),R.Primitives.Num());
-      TestEqual(TEXT("MID ownership is per record, legacy per part"),V->Materials.Num(),Legacy?Meshes.Num():1);
-      for(const auto& M:V->Materials)
+      TestEqual(TEXT("MID ownership is per record, legacy per part"),V->Render.Materials.Num(),Legacy?Meshes.Num():1);
+      for(const auto& M:V->Render.Materials)
       {
        TestFalse(TEXT("Materials never alias across records"),RecordMaterials.Contains(M.Get()));
        RecordMaterials.Add(M.Get());
@@ -933,9 +1131,9 @@ bool FDarkwellRecordResourcesParity::RunTest(const FString&)
        auto* M=Cast<UMaterialInstanceDynamic>(Mesh->GetMaterial(0));
        if(!TestNotNull(TEXT("Every mesh has a dynamic material"),M)) return false;
        TestTrue(TEXT("Each mesh registered"),Mesh->IsRegistered());
-       TestTrue(TEXT("Binding belongs to the record"),V->Materials.Contains(M));
+       TestTrue(TEXT("Binding belongs to the record"),V->Render.Materials.Contains(M));
        TestEqual(TEXT("Prepared Current is transparent, sealed is ready"),M->K2_GetScalarParameterValue(TEXT("SpatialReady")),R.bCurrentObservedLocation?0.f:1.f);
-       TestTrue(TEXT("Texture binding is record-local"),M->K2_GetTextureParameterValue(TEXT("SpatialStateTexture"))==V->Texture.Get());
+       TestTrue(TEXT("Texture binding is record-local"),M->K2_GetTextureParameterValue(TEXT("SpatialStateTexture"))==V->Render.Texture.Get());
        TestTrue(TEXT("Captured bounds unchanged"),M->K2_GetVectorParameterValue(TEXT("SpatialMinInv"))==FLinearColor(Bounds.Min.X,Bounds.Min.Y,Inv.X,Inv.Y));
        TestTrue(TEXT("Captured tint unchanged"),M->K2_GetVectorParameterValue(TEXT("OriginalBaseColorTint"))==R.Tint);
        TestEqual(TEXT("Captured UV unchanged"),M->K2_GetScalarParameterValue(TEXT("OriginalUVScale")),R.UVScale);
@@ -943,13 +1141,13 @@ bool FDarkwellRecordResourcesParity::RunTest(const FString&)
       }
       if(!R.bCurrentObservedLocation)
       {
-       TestFalse(TEXT("First exit publishes the proxy in this call"),V->Proxy->IsHidden());
-       TestFalse(TEXT("First exit finishes prepared-resource handoff"),V->bProxyPreparedForCapture);
-       TestTrue(TEXT("History uses captured pose"),V->Proxy->GetActorTransform().Equals(R.SnapshotTransform));
+       TestFalse(TEXT("First exit publishes the proxy in this call"),V->Render.Proxy->IsHidden());
+       TestFalse(TEXT("First exit finishes prepared-resource handoff"),V->Render.bProxyPreparedForCapture);
+       TestTrue(TEXT("History uses captured pose"),V->Render.Proxy->GetActorTransform().Equals(R.SnapshotTransform));
        TestTrue(TEXT("First exit submits complete pixels"),!V->SubmittedPresentation.IsEmpty());
       }
-      if(R.bConfirmedWholeCapture) TestFalse(TEXT("Confirmed Whole has no cap"),V->Cap.IsValid());
-      Mix(V->Texture->GetSizeX()); Mix(V->Texture->GetSizeY());
+      if(R.bConfirmedWholeCapture) TestFalse(TEXT("Confirmed Whole has no cap"),V->Render.Cap.IsValid());
+      Mix(V->Render.Texture->GetSizeX()); Mix(V->Render.Texture->GetSizeY());
       Mix(V->TextureSignature); Mix(V->CapSignature); Mix(V->CapTriangles);
       Mix(V->ProxyCreationCount); Mix(V->TextureCreationCount);
      }
@@ -966,14 +1164,14 @@ bool FDarkwellRecordResourcesParity::RunTest(const FString&)
     for(auto& R:Prop.History.GetMutableRecords())
     {
      auto& V=Prop.Visuals.FindChecked(R.Epoch);
-     const FName PreviousCap=V.Cap.IsValid()?V.Cap->GetFName():NAME_None;
+     const FName PreviousCap=V.Render.Cap.IsValid()?V.Render.Cap->GetFName():NAME_None;
      Released.Append(F.Room->GetOwnedPresentationObjectsForTesting());
-     const auto PreviousMaterials=V.Materials;
+     const auto PreviousMaterials=V.Render.Materials;
      F.Room->DestroyVisual(V,false);
      for(const auto& M:PreviousMaterials) TestFalse(TEXT("Retired MID leaves owning array"),F.Room->OwnedMaterials.Contains(M.Get()));
      F.Room->EnsureRecordVisual(Prop,R); F.Room->UpdateRecordTexture(Prop,R); F.Room->UpdateRecordCap(Prop,R);
      if(!Legacy && PreviousCap!=NAME_None)
-      TestTrue(TEXT("Cap reconstruction cannot overwrite pending destruction"),V.Cap.IsValid() && V.Cap->GetFName()!=PreviousCap);
+      TestTrue(TEXT("Cap reconstruction cannot overwrite pending destruction"),V.Render.Cap.IsValid() && V.Render.Cap->GetFName()!=PreviousCap);
      const int32 Materials=F.Room->OwnedMaterials.Num();
      F.Room->EnsureRecordVisual(Prop,R);
      TestEqual(TEXT("Ensure is allocation-idempotent"),F.Room->OwnedMaterials.Num(),Materials);
@@ -1278,7 +1476,7 @@ bool FDarkwellMemoryEpisodeContract::RunTest(const FString& Case)
  else { F.Face(90); F.Step(Frames,Dt); F.Face(-90); F.Step(Frames,Dt); }
  const int32 InitialRecords=F.Room->GetSpatialRecordCount(Id);
  const auto InitialTextures=F.Room->Tracked.FindChecked(Id).CurrentPresentation.LiveTextures;
- const auto InitialProxy=F.Room->Tracked.FindChecked(Id).Visuals.CreateConstIterator().Value().Proxy;
+ const auto InitialProxy=F.Room->Tracked.FindChecked(Id).Visuals.CreateConstIterator().Value().Render.Proxy;
  if(Case==TEXT("ErasedDoesNotRebuild"))
  {
   auto& Prop=F.Room->Tracked.FindChecked(Id);
@@ -1350,7 +1548,7 @@ bool FDarkwellMemoryEpisodeContract::RunTest(const FString& Case)
  if(Explore) TestTrue(TEXT("External known/unknown cut still has a cap"),F.Room->GetVisibleHistoricalCapCountForTesting(Id)>0);
  TestEqual(TEXT("Repeated operations without new knowledge do not grow retained records"),F.Room->GetSpatialRecordCount(Id),InitialRecords);
  TestTrue(TEXT("Same source reuses live texture allocations across episodes"),InitialTextures==F.Room->Tracked.FindChecked(Id).CurrentPresentation.LiveTextures);
- TestTrue(TEXT("Unchanged captured state reuses its concrete history proxy"),InitialProxy==F.Room->Tracked.FindChecked(Id).Visuals.CreateConstIterator().Value().Proxy);
+ TestTrue(TEXT("Unchanged captured state reuses its concrete history proxy"),InitialProxy==F.Room->Tracked.FindChecked(Id).Visuals.CreateConstIterator().Value().Render.Proxy);
  AddInfo(FString::Printf(TEXT("EPISODE_ORACLE missing=%d internal_caps=%d initial_records=%d final_records=%d"),Missing,InternalCaps,InitialRecords,F.Room->GetSpatialRecordCount(Id)));
  return true;
 }
@@ -1389,9 +1587,9 @@ bool FDarkwellObservedContentContract::RunTest(const FString&)
   Source->Destroy(); Prop.Actual.Reset(); Prop.bExists=false;
   F.Room->EnsureRecordVisual(Prop,*Record);
   auto& Visual=Prop.Visuals.FindChecked(Epoch);
-  TestTrue(TEXT("Memory proxy rebuilds without a live source"),Visual.Proxy.IsValid());
-  if(!Visual.Proxy.IsValid()) return false;
-  TArray<UStaticMeshComponent*> Parts; Visual.Proxy->GetComponents(Parts);
+  TestTrue(TEXT("Memory proxy rebuilds without a live source"),Visual.Render.Proxy.IsValid());
+  if(!Visual.Render.Proxy.IsValid()) return false;
+  TArray<UStaticMeshComponent*> Parts; Visual.Render.Proxy->GetComponents(Parts);
   TestEqual(TEXT("Rebuilt part count comes from capture"),Parts.Num(),Original.Primitives.Num());
   if(Parts.IsEmpty()) return false;
   TestTrue(TEXT("Rebuilt mesh is the observed mesh"),Parts[0]->GetStaticMesh()==Original.Primitives[0].Mesh.Get());

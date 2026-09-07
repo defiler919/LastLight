@@ -661,6 +661,20 @@ def create_surface(asset_tools, lab=False):
         320,
     )
 
+    # CPU knowledge mirror can only remove remembered surface; it never grants Live.
+    region_tex = expr(material, unreal.MaterialExpressionTextureObjectParameter, 2000, 2600)
+    region_tex.set_editor_property("parameter_name", "MemoryRegionKnowledge")
+    region_tex.set_editor_property("texture", unreal.load_asset("/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"))
+    region_tex.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR)
+    region_min = mask(material, vector_parameter(material, "MemoryRegionMin", unreal.LinearColor(0,0,0,0), 1600, 2700), "rg", 1800, 2700)
+    region_inv = mask(material, vector_parameter(material, "MemoryRegionInvExtent", unreal.LinearColor(1,1,0,0), 1600, 2800), "rg", 1800, 2800)
+    known = custom_expression(material,
+        "float2 uv=(World-Min)*Inv; if(Enabled<0.5 || any(uv<0) || any(uv>=1)) return 1; return Texture2DSampleLevel(Knowledge,KnowledgeSampler,uv,0).r >= 0.5 ? 1 : 0;",
+        [("World",world_float),("Min",region_min),("Inv",region_inv),("Knowledge",region_tex),
+         ("Enabled",scalar_parameter(material,"MemoryRegionEnabled",0,1800,2900))],
+        2200,2600,"CPU Remembered authority mirror; unknown is black")
+    one_minus_coverage = binary(material, unreal.MaterialExpressionMultiply, one_minus_coverage, known, 2400, 3000)
+
     luminance_weights = vector_parameter(
         material,
         "RememberedLuminanceWeights",

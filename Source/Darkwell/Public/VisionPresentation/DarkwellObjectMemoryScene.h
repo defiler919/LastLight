@@ -47,6 +47,11 @@ public:
  void UpdateMemory(float DeltaSeconds, FVector ObserverLocation);
  /** Explicit knowledge reset; never called merely because an actor moved or vanished. */
  void ResetMemory();
+ /** First regional slice accepts complete records, refuses straddling records atomically. */
+ bool CanApplyMemoryRegion(const FBox2D& Bounds) const;
+ void ClearMemoryInRegion(const FBox2D& Bounds);
+ void SetMemoryWriteBlock(const FBox2D& Bounds, bool bEnabled);
+ void ApplyMemoryRegionPresentation();
 	struct FHistoryRuntimeTelemetry
 	{
 		uint64 FrameNumber = 0;
@@ -321,6 +326,7 @@ protected:
 	friend class FDarkwellJoinedOccupancyParity;
 	friend class FDarkwellRecordResourcesParity;
 	friend class FDarkwellPresentationResidency;
+	friend class FDarkwellUnknownRegionContract;
 	friend class FDarkwellA1Residency;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
@@ -415,6 +421,7 @@ protected:
 		bool bPresentationDirty = true;
 		bool bCapTopologyDirty = true;
 		bool bPresentationRetired = false;
+        bool bMemoryRegionHidden = false;
 	};
 	struct FHistorySpatialKey
 	{
@@ -484,6 +491,8 @@ protected:
 		TArray<FSourceBinding> SourceBindings;
 		FResolvedSightWeaveObjectPolicy RegisteredPolicy;
 		bool bLastCaptureEligible = false;
+		bool bMemoryWritesBlocked = false;
+        bool bRequeryMemoryLive = false;
 		FName StableId;
 		TWeakObjectPtr<AActor> Actual;
 		TWeakObjectPtr<USightWeaveObjectPolicyComponent> ObjectPolicy;
@@ -571,6 +580,11 @@ protected:
 	};
 
 	bool IsCaptureEligible(const FTrackedProp& Prop) const;
+ FBox2D MemoryBlockBounds;
+ bool bMemoryBlockActive=false;
+ bool bMemoryRegionRestorePending=false;
+ void RefreshMemoryWriteBlock(FTrackedProp& Prop);
+ void ResetTransientObservation(FTrackedProp& Prop);
  bool BuildNewerOwnershipIndex(const FTrackedProp& Prop,
   TConstArrayView<const FDarkwellSpatialObservationRecord*> Candidates,
   FNewerOwnershipIndex& Out) const;

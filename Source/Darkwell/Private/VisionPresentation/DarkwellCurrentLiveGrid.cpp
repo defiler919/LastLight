@@ -490,3 +490,14 @@ bool FDarkwellCurrentLiveGrid::BuildSweptObservationMask(const FTransform& Actor
  }
  return Contact;
 }
+
+void FDarkwellCurrentLiveGrid::ForgetKnowledgePreservingLive()
+{
+ for(auto& P:Parts)
+ {
+  P.Local.ForgetKnowledgePreservingLive(); P.Raster.ForgetKnowledgePreservingLive();
+  P.LastLegalCaptureMask.Init(false,P.LastLegalCaptureMask.Num());
+ }
+ WholeAppearance.ForgetKnowledgePreservingLive();
+ bFullyObservedAtPose=false;
+}

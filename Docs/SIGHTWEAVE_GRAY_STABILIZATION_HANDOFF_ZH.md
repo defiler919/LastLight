@@ -1,5 +1,18 @@
 # 灰色层功能检查点与稳定化施工
 
+## Unknown 局部区域首片完成（2026-09-07）
+
+灰色层已在 `checkpoint/sightweave-gray-performance-closure-20260907` / `eeeec6506d1fecfd2d05bd08095b8230287a4d4f` 封板，该 checkpoint 不动。本次在其后完成 [Unknown 区域首片](SIGHTWEAVE_UNKNOWN_REGION_SLICE_ZH.md)，[Git 内验证摘要和截图索引](Evidence/SIGHTWEAVE_UNKNOWN_REGION_20260907.json)。运行时、文档、证据同本提交。
+
+`UDarkwellMemoryRegionSubsystem` 提供单固定 XY AABB 的 Configure / ClearMemory / BlockMemoryWrites：CPU 地面 bits 与物体历史为权威，同时桥接插件 HardMemory。Clear 真正删除匹配记录与捕获缓存，旧 A0 票据不能复活；Block 保留旧灰但禁止写入和灰色贡献，Live 独立正常。解除仅 Block 可恢复旧灰；Clear+Block 解除不能恢复，必须新合法观察。Live 中切换也在同 GT 重新合法查询并发布，保留 Whole 确认与 Live blend。
+
+边界明确：地面网格最大 256×256，区域最大 640×640 cm；物体只接受完整 Whole / SpatialPartial 记录，straddle 时事务拒绝，不偷偷扩大 Clear 或改变 Whole 精度。动态跨边界不是本轮验证范围；下一最小切片建议只补同一 AABB 切穿 SpatialPartial 的样本级 Clear/Block，不扩全套形状。
+
+完整 Editor Build10 成功；最终真实 D3D12 `UnknownRegionReadyFinal` **6/6 clean PASS，warning 0、severe 0**。Whole/Partial 各 A/B/C、Live 中切换、实际区域外灰色保护、GPU 镜像逐样本、A0 重建阻写门和清除后票据失效通过；已核对俯视 Whole 与斜视 Partial 场景图。四项既有灰色/照明/A0 回归通过。原始图在 Saved，摘要及两张阶段图进 Git，换机器不要求本机 Saved 存在。
+
+未做 SuppressLiveVision、SaveGame、Monster Adapter、全套 shape 或新性能专项。A1/P1/B0 仍默认0，Synthetic cold184 未改未重测，**INITIALIZATION 仍 FAIL**；stable/tag 不移动。
+
+
 ## Vision/Legal Illumination职责收尾完成（2026-09-07）
 
 [完整收尾报告](SIGHTWEAVE_VISION_ILLUMINATION_CLOSURE_ZH.md)，[Git内验证摘要](Evidence/SIGHTWEAVE_VISION_ILLUMINATION_CLOSURE_20260907.json)。checkpoint：`checkpoint/sightweave-gray-performance-closure-20260907`，指向包含本交接的最终修正提交。

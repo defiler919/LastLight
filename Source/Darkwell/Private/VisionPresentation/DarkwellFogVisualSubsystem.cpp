@@ -2,6 +2,7 @@
 
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
+#include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
 
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/Texture2D.h"
@@ -430,6 +431,7 @@ bool UDarkwellFogVisualSubsystem::UpdateSource(
 	{
 		return false;
 	}
+	GetWorld()->GetSubsystem<UDarkwellMemoryRegionSubsystem>()->ObservePublishedCoverage(*this);
 	TryDiagnosticReadback();
 	return true;
 }

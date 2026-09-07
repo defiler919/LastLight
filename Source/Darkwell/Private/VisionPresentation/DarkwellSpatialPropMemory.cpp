@@ -62,7 +62,7 @@ bool FDarkwellSpatialPropMemory::Advance(float DeltaSeconds,TConstArrayView<floa
    {
     C.DiscoveredPresent=1;
     // Re-observing an old gray cell cannot briefly erase its visible surface.
-    C.AppearanceBlend=C.RemainingStale;
+    C.AppearanceBlend=FMath::Max(C.AppearanceBlend,C.RemainingStale);
    }
    if(C.DiscoveredPresent>0)
    {
@@ -136,4 +136,13 @@ FIntPoint FDarkwellSpatialPropMemory::BuildConservativePresentation(int32 Sample
    OutPixels[(Y*SamplesPerCell+SY)*ResultSize.X+X*SamplesPerCell+SX]=Result;
   }
  return ResultSize;
+}
+
+void FDarkwellSpatialPropMemory::ForgetKnowledgePreservingLive()
+{
+ for(auto& C:Cells)
+ {
+  C.DiscoveredPresent=C.VerifiedEmpty=C.InitialRemembered=C.RemainingStale=0;
+  C.StaleOpacity=C.EmptyDwell=0;
+ }
 }

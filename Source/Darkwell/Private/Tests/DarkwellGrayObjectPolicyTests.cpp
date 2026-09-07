@@ -25,6 +25,15 @@
 #include "Math/Float16Color.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/ScopeExit.h"
+#include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
+#include "SightWeaveWorldSubsystem.h"
+#include "Components/SceneCaptureComponent2D.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "ImageUtils.h"
+#include "AssetCompilingManager.h"
+#include "ShaderCompiler.h"
+#include "Misc/FileHelper.h"
+#include "HAL/FileManager.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 
 namespace Darkwell::GrayObjectPolicyTests
@@ -1888,6 +1897,191 @@ bool FDarkwellWholePreparationHandoff::RunTest(const FString&)
   TestTrue(TEXT("fallback clears pending"),F.Room->GetWholePreparationTelemetry().Contains(TEXT("\"pending\":0")));
  }
 
+ return true;
+}
+
+
+IMPLEMENT_COMPLEX_AUTOMATION_TEST(FDarkwellUnknownRegionContract,"Darkwell.UnknownRegion",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+void FDarkwellUnknownRegionContract::GetTests(TArray<FString>& Names,TArray<FString>& Commands) const
+{ for(const TCHAR* N:{TEXT("Whole"),TEXT("SpatialPartial")}) {Names.Add(N);Commands.Add(N);} }
+bool FDarkwellUnknownRegionContract::RunTest(const FString& ModeName)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ const bool Partial=ModeName==TEXT("SpatialPartial");
+ for(const TCHAR* Sequence:{TEXT("A"),TEXT("B"),TEXT("C")})
+ {
+  FRoom F; F.World->AddToRoot(); ON_SCOPE_EXIT { F.World->RemoveFromRoot(); };
+  auto& Scene=*F.Room;
+  Scene.ResetTrackedRevealPolicyForLab(Id,Partial?Reveal::SpatialPartial:Reveal::WholeObjectAfterSpan,100,History::StationaryOnly);
+  auto* Fog=F.World->GetSubsystem<UDarkwellFogVisualSubsystem>();
+  auto* Region=F.World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
+  auto Observe=[&](){F.Face(Partial?146:90);F.Step(25);};
+  auto Leave=[&](){F.Face(-90);F.Step(15);};
+  F.Face(146); F.Step(25); // Positive gray control at another, outside identity.
+  Observe(); Leave();
+  auto& P=Scene.Tracked.FindChecked(Id);
+  if(!TestTrue(TEXT("Initial real legal observation produces gray"),!P.History.GetRecords().IsEmpty())) return false;
+  const auto Old=P.History.GetRecords()[0];
+  const uint64 OldEvidence=Old.FineHistory.EvidenceHash();
+  auto* Runtime=F.World->GetSubsystem<USightWeaveWorldSubsystem>();
+  TMap<FName,uint64> Outside;
+  auto OutsideHash=[&](const auto& Other){uint64 H=0;for(const auto& R:Other.History.GetRecords()) H=HashCombineFast(H,R.FineHistory.EvidenceHash());return H;};
+  int32 OutsideKnown=0;
+  for(const auto& Pair:Scene.Tracked) if(Pair.Key!=Id)
+  {
+   Outside.Add(Pair.Key,OutsideHash(Pair.Value));
+   for(const auto& R:Pair.Value.History.GetRecords()) OutsideKnown+=R.FineHistory.HasResidualSurface()?1:0;
+  }
+  TestTrue(TEXT("Outside comparison contains real retained gray, not an empty control"),OutsideKnown>0);
+  const FBox2D B=Old.SpatialMemory.GetBounds().ExpandBy(10);
+  TestFalse(TEXT("Straddling object box is refused without side effects"),Region->ConfigureRegion(B.GetCenter(),B.Max));
+  if(!TestTrue(TEXT("Configure complete deterministic room region"),Region->ConfigureRegion(B.Min,B.Max))) return false;
+  TestTrue(TEXT("Same region is idempotent"),Region->ConfigureRegion(B.Min,B.Max));
+  TestFalse(TEXT("Cannot silently replace the authority domain"),Region->ConfigureRegion(B.Min-FVector2D(1),B.Max));
+  const FVector2D Center=B.GetCenter();
+  TestEqual(TEXT("Initial CPU ground is remembered"),Region->QueryKnowledge(Center),Region->Remembered());
+  TestTrue(TEXT("Partial starts with legal cut, Whole starts without cap"),
+   Partial?Scene.GetVisibleHistoricalCapCountForTesting(Id)>0:Scene.GetVisibleHistoricalCapCountForTesting(Id)==0);
+  // Fixed overhead scene view plus direct CPU-mirror readback, never input to authority.
+  AActor* CaptureOwner=nullptr; USceneCaptureComponent2D* Capture=nullptr; UTextureRenderTarget2D* Target=nullptr;
+  if(!GUsingNullRHI)
+  {
+   CaptureOwner=F.World->SpawnActor<AActor>();
+   Capture=NewObject<USceneCaptureComponent2D>(CaptureOwner); CaptureOwner->AddInstanceComponent(Capture);
+   Capture->RegisterComponent(); Capture->SetWorldLocation(FVector(Center.X,Center.Y,1100));
+   Capture->SetWorldRotation(FRotator(-90,0,0)); Capture->ProjectionType=ECameraProjectionMode::Orthographic;
+   if(Partial)
+   {
+    const FVector Eye(Center.X-500,Center.Y-600,750);
+    Capture->SetWorldLocation(Eye); Capture->SetWorldRotation((FVector(Center,70)-Eye).Rotation());
+   }
+   Capture->OrthoWidth=440; Capture->bCaptureEveryFrame=false; Capture->bCaptureOnMovement=false;
+   Capture->CaptureSource=ESceneCaptureSource::SCS_FinalColorLDR;
+   Capture->ShowFlags.SetTemporalAA(false); Capture->ShowFlags.SetMotionBlur(false);
+   Target=NewObject<UTextureRenderTarget2D>(CaptureOwner); Target->InitCustomFormat(384,384,PF_B8G8R8A8,false);
+   Target->UpdateResourceImmediate(); Capture->TextureTarget=Target;
+  }
+  auto Snapshot=[&](const TCHAR* Stage)
+  {
+   if(GUsingNullRHI) return;
+   const auto Size=Region->GetSize(); TArray<FColor> Pixels;
+   const FTextureRHIRef Texture=Region->GetPresentationTexture()->GetResource()->TextureRHI;
+   ENQUEUE_RENDER_COMMAND(UnknownReadAuthorityMirror)([Texture,Size,&Pixels](FRHICommandListImmediate& RHICmdList)
+    {RHICmdList.ReadSurfaceData(Texture,FIntRect(0,0,Size.X,Size.Y),Pixels,FReadSurfaceDataFlags(RCM_UNorm));});
+   FlushRenderingCommands();
+   int32 Mismatch=0; const FVector2D Step=B.GetSize()/FVector2D(Size);
+   for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X)
+   {
+    const bool Known=Region->QueryKnowledge(B.Min+FVector2D(X+.5,Y+.5)*Step)==Region->Remembered();
+    if(!Pixels.IsValidIndex(Y*Size.X+X) || (Pixels[Y*Size.X+X].R>127)!=Known) ++Mismatch;
+   }
+   TestEqual(TEXT("D3D12 texture exactly mirrors CPU knowledge; no renderer grants"),Mismatch,0);
+   FString ReportPath;
+   FParse::Value(FCommandLine::Get(),TEXT("ReportExportPath="),ReportPath);
+   const FString Root=ReportPath.IsEmpty()?FPaths::ProjectSavedDir()/TEXT("UnknownRegion"):FPaths::GetPath(ReportPath)/TEXT("Captures");
+   const FString Dir=Root/ModeName/Sequence;
+   IFileManager::Get().MakeDirectory(*Dir,true);
+   auto Save=[&](const FString& Path,int32 W,int32 H,const TArray<FColor>& Data)
+   {TArray<uint8> PNG;FImageUtils::CompressImageArray(W,H,Data,PNG);FFileHelper::SaveArrayToFile(PNG,*Path);};
+   Save(Dir/(FString(Stage)+TEXT("_knowledge.png")),Size.X,Size.Y,Pixels);
+   FAssetCompilingManager::Get().FinishAllCompilation();
+#if WITH_EDITOR
+   if(GShaderCompilingManager) GShaderCompilingManager->FinishAllCompilation();
+#endif
+   F.World->SendAllEndOfFrameUpdates(); Capture->CaptureScene(); FlushRenderingCommands();
+   // The first capture admits scene-view shader/PSO work in a fresh automation
+   // world. Resolve it, then read the same unchanged CPU state, not a fallback.
+#if WITH_EDITOR
+   if(GShaderCompilingManager) GShaderCompilingManager->FinishAllCompilation();
+#endif
+   F.World->SendAllEndOfFrameUpdates(); Capture->CaptureScene(); FlushRenderingCommands();
+   TArray<FColor> View; Target->GameThread_GetRenderTargetResource()->ReadPixels(View);
+   if(TestEqual(TEXT("D3D12 scene capture is complete"),View.Num(),384*384)) Save(Dir/(FString(Stage)+TEXT("_scene.png")),384,384,View);
+  };
+  Snapshot(TEXT("01_gray"));
+  const bool Block=FCString::Strcmp(Sequence,TEXT("A"))!=0;
+  const bool Clear=FCString::Strcmp(Sequence,TEXT("B"))!=0;
+  if(Clear)
+  {
+   ADarkwellObjectMemoryScene::FPresentationTicket Ticket;
+   TestTrue(TEXT("Get genuine old presentation ticket"),Scene.ReleaseHistoricalPresentationForTesting(Id,Old.Epoch,Ticket));
+   TestTrue(TEXT("Authoritative clear succeeds"),Region->ClearMemory());
+   TestFalse(TEXT("Clear destroys stored CPU ground bits"),Region->HasStoredMemory(Center));
+   TestFalse(TEXT("Plugin CPU HardMemory is also destructively cleared"),Runtime->QueryHardMemoryAtLocation(FVector(Center,0)));
+   TestNull(TEXT("Clear deletes the old fine/coarse/capture record"),P.History.FindRecord(Old.Epoch));
+   TestFalse(TEXT("Old A0 ticket cannot resurrect a cleared record"),Scene.RebuildHistoricalPresentationForTesting(Ticket));
+   TestEqual(TEXT("Clear removes gray resources"),Scene.GetVisibleHistoricalProxyCountForTesting(Id),0);
+  }
+  if(Block) TestTrue(TEXT("Enable write block"),Region->SetBlockMemoryWrites(true));
+  for(const auto& Pair:Outside) TestEqual(TEXT("Region transaction leaves outside record evidence intact"),OutsideHash(Scene.Tracked.FindChecked(Pair.Key)),Pair.Value);
+  TestEqual(TEXT("Half-open maximum boundary is outside and unchanged"),Region->QueryKnowledge(B.Max),Region->Remembered());
+  TestEqual(TEXT("Without Live the region is authoritative Unknown"),Region->QueryKnowledge(Center),Region->Unknown());
+  Snapshot(TEXT("02_unknown"));
+  Observe();
+  TestTrue(TEXT("Block does not disable legal Live"),Scene.IsCurrentSourceVisibleForTesting(Id));
+  TestTrue(TEXT("Legal contact remains authoritative"),Scene.GetLastLegalCoverageRatioForTesting(Id)>0);
+  TestEqual(TEXT("Capture eligibility follows write gate, not Live"),Scene.IsCaptureEligible(P),!Block);
+  if(Block)
+  {
+   TestEqual(TEXT("Block never edits the stored ground memory"),Region->HasStoredMemory(Center),!Clear);
+   if(Clear) TestFalse(TEXT("Blocked legal observation cannot write plugin HardMemory either"),Runtime->QueryHardMemoryAtLocation(FVector(Center,0)));
+   int32 NewSealed=0;
+   for(const auto& R:P.History.GetRecords()) if(!R.bCurrentObservedLocation && R.Epoch!=Old.Epoch) ++NewSealed;
+   TestEqual(TEXT("Blocked observation creates no new sealed gray"),NewSealed,0);
+   if(!Clear)
+   {
+    TestEqual(TEXT("Block preserves old fine evidence"),P.History.FindRecord(Old.Epoch)->FineHistory.EvidenceHash(),OldEvidence);
+    ADarkwellObjectMemoryScene::FPresentationTicket T;
+    TestTrue(TEXT("A0 release works on blocked resident history"),Scene.ReleaseHistoricalPresentationForTesting(Id,Old.Epoch,T));
+    TestTrue(TEXT("A0 rebuild remains a resource operation"),Scene.RebuildHistoricalPresentationForTesting(T));
+    TestEqual(TEXT("Rebuilding presentation cannot bypass CPU Block"),Scene.GetVisibleHistoricalProxyCountForTesting(Id),0);
+   }
+  }
+  Snapshot(TEXT("03_live")); Leave();
+  if(Block)
+  {
+   TestEqual(TEXT("After blocked Live exits there is no gray proxy"),Scene.GetVisibleHistoricalProxyCountForTesting(Id),0);
+   TestEqual(TEXT("Blocked live slot is discarded"),P.History.GetCurrentIndex(),INDEX_NONE);
+   Snapshot(TEXT("04_left_black"));
+   TestTrue(TEXT("Unblock succeeds"),Region->SetBlockMemoryWrites(false));
+   Snapshot(TEXT("05_unblocked"));
+   TestEqual(TEXT("Unblock restores only pre-existing CPU ground knowledge"),Region->HasStoredMemory(Center),!Clear);
+   TestEqual(TEXT("Old object record restoration matches destructive clear"),P.History.FindRecord(Old.Epoch)!=nullptr,!Clear);
+   TestEqual(TEXT("Old gray visible only for Block-only"),Scene.GetVisibleHistoricalProxyCountForTesting(Id)>0,!Clear);
+   if(!Clear) TestEqual(TEXT("Unblock preserves exact old fine evidence"),P.History.FindRecord(Old.Epoch)->FineHistory.EvidenceHash(),OldEvidence);
+   else
+   {
+    F.Step(10);
+    TestEqual(TEXT("Idle updates after unblock do not resurrect cleared gray"),P.History.GetRecords().Num(),0);
+    TestFalse(TEXT("Idle outside-Live updates cannot grant ground memory"),Region->HasStoredMemory(Center));
+    Observe(); Leave();
+   }
+  }
+  TestTrue(TEXT("Fresh unblocked legal observation produces gray"),Scene.GetVisibleHistoricalProxyCountForTesting(Id)>0);
+  TestTrue(TEXT("New legal observation rebuilds actual CPU ground samples"),Region->GetStoredSampleCount()>0);
+  if(Clear) for(const auto& R:P.History.GetRecords()) TestTrue(TEXT("New knowledge has a new epoch; no old identity reuse"),R.Epoch>Old.Epoch);
+  Snapshot(TEXT("06_final_gray"));
+  // Commands issued after the normal scene update must still preserve Live.
+  Observe();
+  const auto RawBefore=Fog->QueryLiveCoverageAtWorldPoint(Center);
+  TestTrue(TEXT("Activate Block during Live"),Region->SetBlockMemoryWrites(true));
+  TestTrue(TEXT("Block publishes Live in same call"),Scene.IsCurrentSourceVisibleForTesting(Id));
+  if(!Partial) TestTrue(TEXT("Block keeps Whole confirmation"),Scene.IsRevealConfirmedForTesting(Id));
+  TestTrue(TEXT("Clear during blocked Live"),Region->ClearMemory());
+  TestTrue(TEXT("Clear publishes Live in same call"),Scene.IsCurrentSourceVisibleForTesting(Id));
+  if(!Partial) TestTrue(TEXT("Clear keeps Whole Live qualification"),Scene.IsRevealConfirmedForTesting(Id));
+  const auto RawAfter=Fog->QueryLiveCoverageAtWorldPoint(Center);
+  TestEqual(TEXT("Memory operations do not alter Live coverage"),RawAfter.Coverage,RawBefore.Coverage);
+  TestEqual(TEXT("Memory operations do not alter Vision revision"),RawAfter.AuthorityRevision,RawBefore.AuthorityRevision);
+  Snapshot(TEXT("07_clear_block_still_live"));
+  Leave(); TestTrue(TEXT("Unblock after Live clear"),Region->SetBlockMemoryWrites(false)); F.Step(5);
+  TestEqual(TEXT("Live clear then departure cannot revive old or blocked captures"),P.History.GetRecords().Num(),0);
+  TestEqual(TEXT("Blocked observations never write retained ground"),Region->GetStoredSampleCount(),0);
+  Snapshot(TEXT("08_no_resurrection"));
+  AddInfo(FString::Printf(TEXT("UNKNOWN_REGION mode=%s sequence=%s passed_old_resurrection=0 revision=%llu"),*ModeName,Sequence,Region->GetAuthorityRevision()));
+  if(CaptureOwner) CaptureOwner->Destroy();
+ }
  return true;
 }
 

@@ -258,3 +258,13 @@ bool FDarkwellSpatialObservationHistory::IsFullyErased(
 	}
 	return true;
 }
+
+bool FDarkwellSpatialObservationHistory::ClearRecord(uint32 Epoch)
+{
+ const int32 Index=Records.IndexOfByPredicate([&](const auto& R){return R.Epoch==Epoch;});
+ if(Index==INDEX_NONE) return false;
+ if(CurrentIndex==Index) CurrentIndex=INDEX_NONE;
+ else if(CurrentIndex>Index) --CurrentIndex;
+ Records.RemoveAt(Index);
+ return true;
+}

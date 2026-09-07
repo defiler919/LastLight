@@ -63,6 +63,7 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  void ResetGeometry(FName Id,TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose);
 	/** Reentry changes lighting blend, never the already known surface. */
 	void ResumeStationaryKnowledge();
+ void ForgetKnowledgePreservingLive();
  bool MatchesGeometry(TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose) const;
  bool Advance(float Dt,const FTransform& ActorPose,TFunctionRef<float(FVector2D)> LegalCoverage,TFunction<bool(const FBox2D&,float&)> Uniform={});
  void WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds);

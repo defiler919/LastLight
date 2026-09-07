@@ -56,6 +56,8 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 	static constexpr int32 MaxResidentRecords = 64;
 
 	void Initialize(FName InStableId);
+	/** Destructive authority operation; epoch IDs are never reused. */
+	bool ClearRecord(uint32 Epoch);
 	int32 BeginObservedLocation(
 		const FTransform& SnapshotTransform,
 		const FBox2D& WorldBounds,

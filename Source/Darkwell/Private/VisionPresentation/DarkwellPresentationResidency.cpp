@@ -45,6 +45,7 @@ void ADarkwellObjectMemoryScene::Tick(float DeltaSeconds)
   }
  }
  ApplyPresentationDemand(Valid?&Frustum:nullptr,Camera,GetWorld()->GetTimeSeconds(),Enabled);
+ ApplyMemoryRegionPresentation();
 }
 
 void ADarkwellObjectMemoryScene::ApplyPresentationDemand(

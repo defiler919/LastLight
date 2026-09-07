@@ -1,0 +1,1151 @@
+{
+  "base_sha": "eeeec6506d1fecfd2d05bd08095b8230287a4d4f",
+  "implementation_commit": "The commit containing this evidence and report",
+  "machine": "home",
+  "repo": "D:/UE_pro/Darkwell",
+  "engine_root": "D:/UE_5.8",
+  "engine_build": {
+    "MajorVersion": 5,
+    "MinorVersion": 8,
+    "PatchVersion": 2,
+    "Changelist": 56702186,
+    "CompatibleChangelist": 55116800,
+    "IsLicenseeVersion": 0,
+    "IsPromotedBuild": 1,
+    "BranchName": "++UE5+Release-5.8"
+  },
+  "build": {
+    "command": "Scripts/BuildEditor.ps1 -EngineRoot D:/UE_5.8",
+    "log": "Saved/UnknownRegion/Build10.log",
+    "result": "Succeeded",
+    "log_sha256": "e760028929c295d1c766c3efed96fefa7185df881a8644c6bcbc5102db67ed9d"
+  },
+  "dll_sha256": "1df54d29232647fe021184442166f5527ee187d1b24a1858f50189f0929ef9ef",
+  "final_summary": {
+    "run": "UnknownRegionReadyFinal",
+    "selector": "Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+    "exit_code": 0,
+    "wall_seconds": 37.9621044,
+    "total": 6,
+    "clean": 6,
+    "warnings": 0,
+    "failed": 0,
+    "not_run": 0,
+    "duration": 8.045995712280273,
+    "severe_lines": 0,
+    "requested_rhi": "D3D12/SM6",
+    "rhi_evidence": [
+      "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionReadyFinal\\UnknownRegionReadyFinal_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionReadyFinal\\UnknownRegionReadyFinal.log"
+    ],
+    "passed": true
+  },
+  "tests": [
+    {
+      "testDisplayName": "PresentationResidency",
+      "fullTestPath": "Darkwell.ObjectMemory.PresentationResidency",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "13AEA62344D0D20F6DFB14843B23287C"
+      ],
+      "duration": 2.1850035190582275,
+      "dateTime": "2026.09.07-13.51.34",
+      "entries": [
+        {
+          "event": {
+            "type": "Info",
+            "message": "A0 offline frames=12 changed-evidence frames=8 cap meshes=1 GPU readbacks=2; first Whole exit extra frames=0",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.36"
+        }
+      ],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    },
+    {
+      "testDisplayName": "SpatialPartialStaticKeepsLegalCap",
+      "fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "13AEA62344D0D20F6DFB14843B23287C"
+      ],
+      "duration": 0.2286188006401062,
+      "dateTime": "2026.09.07-13.51.36",
+      "entries": [],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    },
+    {
+      "testDisplayName": "WholeObjectConfirmedStaticHistory",
+      "fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "13AEA62344D0D20F6DFB14843B23287C"
+      ],
+      "duration": 0.22552870213985443,
+      "dateTime": "2026.09.07-13.51.36",
+      "entries": [],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    },
+    {
+      "testDisplayName": "VisionIlluminationBoundary",
+      "fullTestPath": "Darkwell.SightWeave.Closure.VisionIlluminationBoundary",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "13AEA62344D0D20F6DFB14843B23287C"
+      ],
+      "duration": 0.21323120594024658,
+      "dateTime": "2026.09.07-13.51.36",
+      "entries": [
+        {
+          "event": {
+            "type": "Info",
+            "message": "Legacy torch full-texture max error=0.000488",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.36"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "01_TorchOn_Dark: cone=2200/52 active; body bypass; target=1 far=0; GPU=1",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.36"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "02_TorchEmpty_Environment: cone=2200/52 active; body bypass; target=1 far=1; GPU=1",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.37"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "03_TorchEmpty_NoLight: cone=2200/52 active; body bypass; target=0 far=0; GPU=1",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.37"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "04_TorchRestored: cone=2200/52 active; body bypass; target=1 far=0; GPU=1",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.37"
+        }
+      ],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    },
+    {
+      "testDisplayName": "SpatialPartial",
+      "fullTestPath": "Darkwell.UnknownRegion.SpatialPartial",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "13AEA62344D0D20F6DFB14843B23287C"
+      ],
+      "duration": 2.7582263946533203,
+      "dateTime": "2026.09.07-13.51.37",
+      "entries": [
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=SpatialPartial sequence=A passed_old_resurrection=0 revision=6",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.37"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=SpatialPartial sequence=B passed_old_resurrection=0 revision=6",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.38"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=SpatialPartial sequence=C passed_old_resurrection=0 revision=8",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.39"
+        }
+      ],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    },
+    {
+      "testDisplayName": "Whole",
+      "fullTestPath": "Darkwell.UnknownRegion.Whole",
+      "tags": [],
+      "state": "Success",
+      "deviceInstance": [
+        "13AEA62344D0D20F6DFB14843B23287C"
+      ],
+      "duration": 2.435386896133423,
+      "dateTime": "2026.09.07-13.51.39",
+      "entries": [
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=Whole sequence=A passed_old_resurrection=0 revision=6",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.40"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=Whole sequence=B passed_old_resurrection=0 revision=6",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.41"
+        },
+        {
+          "event": {
+            "type": "Info",
+            "message": "UNKNOWN_REGION mode=Whole sequence=C passed_old_resurrection=0 revision=8",
+            "context": "",
+            "artifact": "00000000000000000000000000000000"
+          },
+          "filename": "",
+          "lineNumber": -1,
+          "timestamp": "2026.09.07-13.51.42"
+        }
+      ],
+      "warnings": 0,
+      "errors": 0,
+      "artifacts": []
+    }
+  ],
+  "scope": {
+    "shape": "one immutable XY AABB, current world/player/floor",
+    "max_cm_per_axis": 640,
+    "max_cells_per_axis": 256,
+    "ground_pitch_max_cm": 2.5,
+    "objects": "complete Whole and SpatialPartial records; reject straddlers before mutation",
+    "gpu_role": "read-only authority mirror; no writeback"
+  },
+  "raw_captures": [
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/01_gray_scene.png",
+      "sha256": "cef0ef8d1f0db09bd1c82d51e6e52dfbe20d0fdcbc311e2c75272d3480d60b74",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/02_unknown_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/03_live_knowledge.png",
+      "sha256": "8289616faa579de542c42ca1bfa7b8cd08121274818fc9ee2a3a3871c7253dc8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 745
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/03_live_scene.png",
+      "sha256": "4945923de80ca269fbd3c43feae619fc444dc106bb6b4ca7732a9a6753c5666b",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/06_final_gray_knowledge.png",
+      "sha256": "8289616faa579de542c42ca1bfa7b8cd08121274818fc9ee2a3a3871c7253dc8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 745
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/06_final_gray_scene.png",
+      "sha256": "6ec54910eefc774cc37bd7eaa9f29446c4ab3db18e1cbabba1dc0a6259bc69c0",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/07_clear_block_still_live_scene.png",
+      "sha256": "07110e72531208bd736e034bde75de427ba72091aade93a023b33ca73c7eb1a5",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/A/08_no_resurrection_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/01_gray_scene.png",
+      "sha256": "cef0ef8d1f0db09bd1c82d51e6e52dfbe20d0fdcbc311e2c75272d3480d60b74",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/02_unknown_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/03_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/03_live_scene.png",
+      "sha256": "07110e72531208bd736e034bde75de427ba72091aade93a023b33ca73c7eb1a5",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/04_left_black_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/04_left_black_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/05_unblocked_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/05_unblocked_scene.png",
+      "sha256": "9c4dc73e219e2ddc9faf32c95bef7dffd9a766f775cd5d2f57cc74cdf57ebc36",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/06_final_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/06_final_gray_scene.png",
+      "sha256": "9c4dc73e219e2ddc9faf32c95bef7dffd9a766f775cd5d2f57cc74cdf57ebc36",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/07_clear_block_still_live_scene.png",
+      "sha256": "07110e72531208bd736e034bde75de427ba72091aade93a023b33ca73c7eb1a5",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/B/08_no_resurrection_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/01_gray_scene.png",
+      "sha256": "cef0ef8d1f0db09bd1c82d51e6e52dfbe20d0fdcbc311e2c75272d3480d60b74",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/02_unknown_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/03_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/03_live_scene.png",
+      "sha256": "07110e72531208bd736e034bde75de427ba72091aade93a023b33ca73c7eb1a5",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/04_left_black_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/04_left_black_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/05_unblocked_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/05_unblocked_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/06_final_gray_knowledge.png",
+      "sha256": "8289616faa579de542c42ca1bfa7b8cd08121274818fc9ee2a3a3871c7253dc8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 745
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/06_final_gray_scene.png",
+      "sha256": "6ec54910eefc774cc37bd7eaa9f29446c4ab3db18e1cbabba1dc0a6259bc69c0",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/07_clear_block_still_live_scene.png",
+      "sha256": "07110e72531208bd736e034bde75de427ba72091aade93a023b33ca73c7eb1a5",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/SpatialPartial/C/08_no_resurrection_scene.png",
+      "sha256": "17a353624ba65c3ae3df9878f5282dae2e3df53d9faea65f87353a49ec092d0e",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/01_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/02_unknown_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/03_live_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/03_live_scene.png",
+      "sha256": "f9ac6cbbd440c0fc62a21ae4f8adfeafe60e85e7f2a6d1508b95a3f4d25661f5",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/06_final_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/06_final_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/07_clear_block_still_live_scene.png",
+      "sha256": "3fb27ee2efb3cd0f8a685f4cef9ae6fb265942f454b953a87e65465ee924e4b0",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/A/08_no_resurrection_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/01_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/02_unknown_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/03_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/03_live_scene.png",
+      "sha256": "3fb27ee2efb3cd0f8a685f4cef9ae6fb265942f454b953a87e65465ee924e4b0",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/04_left_black_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/04_left_black_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/05_unblocked_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/05_unblocked_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/06_final_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/06_final_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/07_clear_block_still_live_scene.png",
+      "sha256": "3fb27ee2efb3cd0f8a685f4cef9ae6fb265942f454b953a87e65465ee924e4b0",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/B/08_no_resurrection_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/01_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/01_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/02_unknown_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/02_unknown_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/03_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/03_live_scene.png",
+      "sha256": "3fb27ee2efb3cd0f8a685f4cef9ae6fb265942f454b953a87e65465ee924e4b0",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/04_left_black_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/04_left_black_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/05_unblocked_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/05_unblocked_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/06_final_gray_knowledge.png",
+      "sha256": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 2856
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/06_final_gray_scene.png",
+      "sha256": "373c0d58ec3fe301fcd7f07ffbc38cf3ddc69592c9d8382f440a40acb3dead55",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/07_clear_block_still_live_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/07_clear_block_still_live_scene.png",
+      "sha256": "3fb27ee2efb3cd0f8a685f4cef9ae6fb265942f454b953a87e65465ee924e4b0",
+      "size": [
+        384,
+        384
+      ]
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/08_no_resurrection_knowledge.png",
+      "sha256": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+      "size": [
+        68,
+        42
+      ],
+      "remembered_texels": 0
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/UnknownRegionReadyFinal/Captures/Whole/C/08_no_resurrection_scene.png",
+      "sha256": "5bae1bdb7fa604ecbc4ef0d0c67b9c3a4b69772500243bf4e60a844ef48d81ac",
+      "size": [
+        384,
+        384
+      ]
+    }
+  ],
+  "portable_sheets": [
+    {
+      "path": "Docs/Evidence/SIGHTWEAVE_UNKNOWN_REGION_PARTIAL_20260907.png",
+      "sha256": "7832a593f29b161364e712a9f8efe0f05b5bdcd6a028878f70eec3004f61d653"
+    },
+    {
+      "path": "Docs/Evidence/SIGHTWEAVE_UNKNOWN_REGION_WHOLE_20260907.png",
+      "sha256": "8830d90bbc23763dedfb06b92193886a8b9b4f751905b1720e4a4e55c7478abc"
+    }
+  ],
+  "initialization": "FAIL; no performance run or cold184 change",
+  "checkpoint_unchanged": "checkpoint/sightweave-gray-performance-closure-20260907 -> eeeec6506d1fecfd2d05bd08095b8230287a4d4f",
+  "earlier_runs": [
+    {
+      "run": "UnknownRegion01",
+      "selector": "Darkwell.UnknownRegion",
+      "exit_code": 0,
+      "wall_seconds": 25.5451088,
+      "total": 2,
+      "clean": 1,
+      "warnings": 1,
+      "failed": 0,
+      "not_run": 0,
+      "duration": 2.327540397644043,
+      "severe_lines": 0,
+      "requested_rhi": "NullRHI",
+      "rhi_evidence": [
+        "LogCsvProfiler: Display: Metadata set : commandline=\"\" D:\\UE_pro\\Darkwell/Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownRegion\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegion01\\UnknownRegion01_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegion01\\UnknownRegion01.log\"\"",
+        "LogInit: Command Line: -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownRegion\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegion01\\UnknownRegion01_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegion01\\UnknownRegion01.log"
+      ],
+      "passed": true
+    },
+    {
+      "run": "UnknownRegionD3D12_01",
+      "selector": "Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+      "exit_code": 0,
+      "wall_seconds": 40.055921,
+      "total": 6,
+      "clean": 6,
+      "warnings": 0,
+      "failed": 0,
+      "not_run": 0,
+      "duration": 6.6456170082092285,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "rhi_evidence": [
+        "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionD3D12_01\\UnknownRegionD3D12_01_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionD3D12_01\\UnknownRegionD3D12_01.log"
+      ],
+      "passed": true
+    },
+    {
+      "run": "UnknownRegionD3D12_02",
+      "selector": "Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+      "exit_code": 0,
+      "wall_seconds": 40.61756,
+      "total": 6,
+      "clean": 5,
+      "warnings": 1,
+      "failed": 0,
+      "not_run": 0,
+      "duration": 7.406227111816406,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "rhi_evidence": [
+        "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionD3D12_02\\UnknownRegionD3D12_02_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionD3D12_02\\UnknownRegionD3D12_02.log"
+      ],
+      "passed": true
+    },
+    {
+      "run": "UnknownRegionD3D12_03",
+      "selector": "Darkwell.UnknownRegion",
+      "exit_code": 0,
+      "wall_seconds": 35.0724949,
+      "total": 2,
+      "clean": 2,
+      "warnings": 0,
+      "failed": 0,
+      "not_run": 0,
+      "duration": 4.603177547454834,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "rhi_evidence": [
+        "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownRegion\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionD3D12_03\\UnknownRegionD3D12_03_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionD3D12_03\\UnknownRegionD3D12_03.log"
+      ],
+      "passed": true
+    },
+    {
+      "run": "UnknownRegionFinal",
+      "selector": "Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+      "exit_code": 0,
+      "wall_seconds": 39.4756267,
+      "total": 6,
+      "clean": 6,
+      "warnings": 0,
+      "failed": 0,
+      "not_run": 0,
+      "duration": 7.779974460601807,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "rhi_evidence": [
+        "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionFinal\\UnknownRegionFinal_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionFinal\\UnknownRegionFinal.log"
+      ],
+      "passed": true
+    },
+    {
+      "run": "UnknownRegionFinalVisual",
+      "selector": "Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+      "exit_code": 0,
+      "wall_seconds": 38.3159633,
+      "total": 6,
+      "clean": 6,
+      "warnings": 0,
+      "failed": 0,
+      "not_run": 0,
+      "duration": 7.919684410095215,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "rhi_evidence": [
+        "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionFinalVisual\\UnknownRegionFinalVisual_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\UnknownRegionFinalVisual\\UnknownRegionFinalVisual.log"
+      ],
+      "passed": true
+    }
+  ]
+}

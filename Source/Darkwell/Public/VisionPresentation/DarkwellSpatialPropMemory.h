@@ -27,6 +27,8 @@ struct DARKWELL_API FDarkwellSpatialPropMemory
  };
  void Initialize(FName InStableId,const FBox2D& InBounds,float CellSize=2.5f);
  void BeginPresent();
+ /** Forget retained facts without restarting the independent Live appearance blend. */
+ void ForgetKnowledgePreservingLive();
  void BeginAbsent();
  /** One conservative legal coverage value per fixed cell, from the existing adapter. */
  bool Advance(float DeltaSeconds,TConstArrayView<float> Coverage);

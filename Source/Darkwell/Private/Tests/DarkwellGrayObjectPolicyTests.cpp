@@ -16,6 +16,9 @@
 #include "DynamicMesh/DynamicMesh3.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/Texture2D.h"
+#include "HAL/IConsoleManager.h"
+#include "Misc/ScopeExit.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 
 namespace Darkwell::GrayObjectPolicyTests
@@ -878,6 +881,109 @@ bool FDarkwellJoinedCapParity::RunTest(const FString&)
  TestTrue(TEXT("Non-vacuous submitted caps and joined large grids"),Compared>0 && NonEmpty>0 && Joined>0);
  TestTrue(TEXT("Exercised historical cap with live Current fallback"),CurrentFallback>0);
  AddInfo(FString::Printf(TEXT("CAP_PARITY compared=%d nonempty=%d joined=%d live_current_fallback=%d; reset/reseed/invalid coverage/Whole/Partial/world teardown"),Compared,NonEmpty,Joined,CurrentFallback));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellRecordResourcesParity,
+ "Darkwell.PropLab.ArchitectureAudit.RecordScopedResourcesParityAndLifetime",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellRecordResourcesParity::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ auto* CVar=IConsoleManager::Get().FindConsoleVariable(TEXT("r.Darkwell.ObjectMemory.RecordScopedResources"));
+ if(!TestNotNull(TEXT("Same-binary resource oracle"),CVar)) return false;
+ const int32 Original=CVar->GetInt();
+ ON_SCOPE_EXIT { CVar->Set(Original,ECVF_SetByCode); };
+ for(const Reveal Mode:{Reveal::SpatialPartial,Reveal::WholeObjectAfterSpan})
+ {
+  TArray<uint64> Reference;
+  for(const bool Legacy:{true,false})
+  {
+   CVar->Set(Legacy?0:1,ECVF_SetByCode);
+   TArray<TWeakObjectPtr<UObject>> Released;
+   {
+    FRoom F;
+    F.Room->ResetTrackedRevealPolicyForLab(Id,Mode,100,History::StationaryOnly);
+    F.Face(90); F.Step(25);
+    auto Check=[&](int32 Phase)
+    {
+     auto& Prop=F.Room->Tracked.FindChecked(Id);
+     uint64 H=1469598103934665603ull;
+     auto Mix=[&](uint64 V){H=(H^V)*1099511628211ull;};
+     TSet<UMaterialInstanceDynamic*> RecordMaterials;
+     int32 CheckedMeshes=0;
+     for(const auto& R:Prop.History.GetRecords())
+     {
+      Mix(R.Epoch); Mix(R.bCurrentObservedLocation); Mix(R.FineHistory.EvidenceHash());
+      const auto* V=Prop.Visuals.Find(R.Epoch);
+      if(!V || !V->Proxy.IsValid()) continue;
+      TInlineComponentArray<UStaticMeshComponent*> Meshes(V->Proxy.Get());
+      TestEqual(TEXT("All captured primitive components retained"),Meshes.Num(),R.Primitives.Num());
+      TestEqual(TEXT("MID ownership is per record, legacy per part"),V->Materials.Num(),Legacy?Meshes.Num():1);
+      for(const auto& M:V->Materials)
+      {
+       TestFalse(TEXT("Materials never alias across records"),RecordMaterials.Contains(M.Get()));
+       RecordMaterials.Add(M.Get());
+      }
+      const auto& Bounds=R.SpatialMemory.GetBounds();
+      const FVector2D Inv=FVector2D(1,1)/Bounds.GetSize();
+      for(auto* Mesh:Meshes)
+      {
+       auto* M=Cast<UMaterialInstanceDynamic>(Mesh->GetMaterial(0));
+       if(!TestNotNull(TEXT("Every mesh has a dynamic material"),M)) return false;
+       TestTrue(TEXT("Each mesh registered"),Mesh->IsRegistered());
+       TestTrue(TEXT("Binding belongs to the record"),V->Materials.Contains(M));
+       TestEqual(TEXT("Prepared Current is transparent, sealed is ready"),M->K2_GetScalarParameterValue(TEXT("SpatialReady")),R.bCurrentObservedLocation?0.f:1.f);
+       TestTrue(TEXT("Texture binding is record-local"),M->K2_GetTextureParameterValue(TEXT("SpatialStateTexture"))==V->Texture.Get());
+       TestTrue(TEXT("Captured bounds unchanged"),M->K2_GetVectorParameterValue(TEXT("SpatialMinInv"))==FLinearColor(Bounds.Min.X,Bounds.Min.Y,Inv.X,Inv.Y));
+       TestTrue(TEXT("Captured tint unchanged"),M->K2_GetVectorParameterValue(TEXT("OriginalBaseColorTint"))==R.Tint);
+       TestEqual(TEXT("Captured UV unchanged"),M->K2_GetScalarParameterValue(TEXT("OriginalUVScale")),R.UVScale);
+       ++CheckedMeshes;
+      }
+      if(!R.bCurrentObservedLocation)
+      {
+       TestFalse(TEXT("First exit publishes the proxy in this call"),V->Proxy->IsHidden());
+       TestFalse(TEXT("First exit finishes prepared-resource handoff"),V->bProxyPreparedForCapture);
+       TestTrue(TEXT("History uses captured pose"),V->Proxy->GetActorTransform().Equals(R.SnapshotTransform));
+       TestTrue(TEXT("First exit submits complete pixels"),!V->SubmittedPresentation.IsEmpty());
+      }
+      if(R.bConfirmedWholeCapture) TestFalse(TEXT("Confirmed Whole has no cap"),V->Cap.IsValid());
+      Mix(V->Texture->GetSizeX()); Mix(V->Texture->GetSizeY());
+      Mix(V->TextureSignature); Mix(V->CapSignature); Mix(V->CapTriangles);
+      Mix(V->ProxyCreationCount); Mix(V->TextureCreationCount);
+     }
+     TestTrue(TEXT("Positive resource assertions"),CheckedMeshes>0);
+     if(Legacy) Reference.Add(H); else TestEqual(TEXT("Resource allocation preserves complete presentation/evidence"),H,Reference[Phase]);
+     return true;
+    };
+    if(!Check(0)) return false;
+    F.Face(-90); F.Step();
+    if(!Check(1)) return false;
+    if(!TestTrue(TEXT("Distinct record batch"),F.Room->ConfigureHistoricalEpochCountForTesting(Id,8))) return false;
+    if(!Check(2)) return false;
+    auto& Prop=F.Room->Tracked.FindChecked(Id);
+    for(auto& R:Prop.History.GetMutableRecords())
+    {
+     auto& V=Prop.Visuals.FindChecked(R.Epoch);
+     const FName PreviousCap=V.Cap.IsValid()?V.Cap->GetFName():NAME_None;
+     Released.Append(F.Room->GetOwnedPresentationObjectsForTesting());
+     const auto PreviousMaterials=V.Materials;
+     F.Room->DestroyVisual(V,false);
+     for(const auto& M:PreviousMaterials) TestFalse(TEXT("Retired MID leaves owning array"),F.Room->OwnedMaterials.Contains(M.Get()));
+     F.Room->EnsureRecordVisual(Prop,R); F.Room->UpdateRecordTexture(Prop,R); F.Room->UpdateRecordCap(Prop,R);
+     if(!Legacy && PreviousCap!=NAME_None)
+      TestTrue(TEXT("Cap reconstruction cannot overwrite pending destruction"),V.Cap.IsValid() && V.Cap->GetFName()!=PreviousCap);
+     const int32 Materials=F.Room->OwnedMaterials.Num();
+     F.Room->EnsureRecordVisual(Prop,R);
+     TestEqual(TEXT("Ensure is allocation-idempotent"),F.Room->OwnedMaterials.Num(),Materials);
+    }
+    if(!Check(3)) return false;
+    Released.Append(F.Room->GetOwnedPresentationObjectsForTesting());
+   }
+   CollectGarbage(RF_NoFlags,true);
+   for(const auto& Object:Released) TestFalse(TEXT("Reset/world teardown releases all presentation objects"),Object.IsValid());
+  }
+ }
  return true;
 }
 

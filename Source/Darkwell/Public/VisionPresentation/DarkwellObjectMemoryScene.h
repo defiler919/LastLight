@@ -279,6 +279,7 @@ protected:
 	friend class FDarkwellCapturePreparationParity;
 	friend class FDarkwellJoinedCapParity;
 	friend class FDarkwellJoinedOccupancyParity;
+	friend class FDarkwellRecordResourcesParity;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
 	friend class FDarkwellObservedContentContract;

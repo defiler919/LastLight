@@ -39,6 +39,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarJoinedOccupancy(
 		TEXT("r.Darkwell.ObjectMemory.JoinedOccupancy"), 1,
 		TEXT("Evaluate large occupancy batches against read-only frame snapshots, join, then publish on GT. 0 keeps serial queries."));
+	TAutoConsoleVariable<int32> CVarRecordScopedResources(
+		TEXT("r.Darkwell.ObjectMemory.RecordScopedResources"), 1,
+		TEXT("Allocate distinct cap objects and share identical proxy materials within each record. 0 keeps the legacy resource allocation oracle."));
 	// Only the three pure ownership query counters may be updated inside the
 	// joined read phase. Per-task storage avoids atomics and shared telemetry writes.
 	struct FOwnershipQueryCounts { uint64 Geometry = 0, Records = 0, Footprints = 0; };
@@ -3403,8 +3406,14 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 	if (!bWholeWithoutCap && !Visual.Cap.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_CapCreate);
+		// A destroyed component can still be awaiting render-thread cleanup.
+		// StableId/epoch reuse must not replace that UObject in place and force
+		// StaticAllocateObject to wait for its destruction before constructing us.
+		const FName BaseName(*FString::Printf(TEXT("MovingCap_%s_%u"), *Prop.StableId.ToString(), Record.Epoch));
+		const FName CapName = CVarRecordScopedResources.GetValueOnGameThread() != 0
+			? MakeUniqueObjectName(this, UDynamicMeshComponent::StaticClass(), BaseName) : BaseName;
 		UDynamicMeshComponent* Cap = NewObject<UDynamicMeshComponent>(
-			this, *FString::Printf(TEXT("MovingCap_%s_%u"), *Prop.StableId.ToString(), Record.Epoch));
+			this, CapName);
 		Cap->SetupAttachment(GetRootComponent());
 		Cap->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Cap->SetGenerateOverlapEvents(false);
@@ -3439,10 +3448,11 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 			const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
 			const FVector2D Inv = FVector2D(1, 1) / Bounds.GetSize();
 			Visual.Proxy->SetActorTransform(Record.SnapshotTransform);
-			TInlineComponentArray<UStaticMeshComponent*> Meshes(Visual.Proxy.Get());
-			for (UStaticMeshComponent* Mesh : Meshes)
+			// Each entry owns one MID, possibly bound by multiple proxy parts.
+			// Publish the final captured domain once per material on the GT.
+			for (const auto& MaterialPtr : Visual.Materials)
 			{
-				if (auto* Material = Cast<UMaterialInstanceDynamic>(Mesh->GetMaterial(0)))
+				if (auto* Material = MaterialPtr.Get())
 				{
 					Material->SetTextureParameterValue(TEXT("SpatialStateTexture"), Visual.Texture.Get());
 					Material->SetVectorParameterValue(TEXT("SpatialMinInv"),
@@ -3707,30 +3717,36 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 	const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
 	const FVector2D Inv = FVector2D(1, 1) / Bounds.GetSize();
 	TInlineComponentArray<UStaticMeshComponent*> Meshes(Proxy);
+	const bool bRecordScoped = CVarRecordScopedResources.GetValueOnGameThread() != 0;
+	UMaterialInstanceDynamic* Material = nullptr;
 	for (UStaticMeshComponent* Mesh : Meshes)
 	{
-		UMaterialInstanceDynamic* Material;
+		// These parameters describe the captured record, not the mesh part.
+		// Never share across records: readiness, texture and pose domain diverge.
+		if (!Material || !bRecordScoped)
 		{
-			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MIDCreate);
-			Material = UMaterialInstanceDynamic::Create(Parent, this);
+			{
+				TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MIDCreate);
+				Material = UMaterialInstanceDynamic::Create(Parent, this);
+			}
+			++RuntimeFrame.MidCreations;
+			{
+				TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MIDParameters);
+				Material->SetTextureParameterValue(TEXT("SpatialStateTexture"), Visual->Texture.Get());
+				Material->SetVectorParameterValue(TEXT("SpatialMinInv"),
+					FLinearColor(Bounds.Min.X, Bounds.Min.Y, Inv.X, Inv.Y));
+				Material->SetVectorParameterValue(TEXT("OriginalBaseColorTint"), Record.Tint);
+				Material->SetScalarParameterValue(TEXT("OriginalUVScale"), Record.UVScale);
+				Material->SetScalarParameterValue(TEXT("SpatialReady"), Record.bCurrentObservedLocation ? 0.0f : 1.0f);
+			}
+			OwnedMaterials.Add(Material);
+			Visual->Materials.Add(Material);
 		}
-		++RuntimeFrame.MidCreations;
-		{
-		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MIDParameters);
-		Material->SetTextureParameterValue(TEXT("SpatialStateTexture"), Visual->Texture.Get());
-		Material->SetVectorParameterValue(TEXT("SpatialMinInv"),
-			FLinearColor(Bounds.Min.X, Bounds.Min.Y, Inv.X, Inv.Y));
-		Material->SetVectorParameterValue(TEXT("OriginalBaseColorTint"), Record.Tint);
-		Material->SetScalarParameterValue(TEXT("OriginalUVScale"), Record.UVScale);
-		Material->SetScalarParameterValue(TEXT("SpatialReady"), Record.bCurrentObservedLocation ? 0.0f : 1.0f);
 		Mesh->SetMaterial(0, Material);
-		}
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxyMeshRegister);
 			Mesh->RegisterComponent();
 		}
-		OwnedMaterials.Add(Material);
-		Visual->Materials.Add(Material);
 	}
 }
 

@@ -1476,6 +1476,17 @@ void ADarkwellObjectMemoryScene::BuildOccupiedSamples(
 		}
 		return;
 	}
+	// The existing center predicate returns false before touching the point
+	// cache for an empty ROI. Partial has no footprint fallback: apply that exact
+	// result in bulk without allocating tasks/points for a constant predicate.
+	// Whole must still test thin cell-edge intersections against ALL snapshots.
+	if (bFilterFrameOccupancy && FrameOccupancyCandidates.IsEmpty() && !WholeCaptureMask)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_EmptyOccupancyGT);
+		for (const int32 Index : Indices) OutOccupied[Index] = false;
+		RuntimeFrame.OccupancyTests += Indices.Num();
+		return;
+	}
 	// A same-frame lease: no mutation of scene caches, candidates, geometry or
 	// record storage until ParallelFor returns. Workers never enter the live-actor
 	// fallback and never write packed bits or the shared point cache.

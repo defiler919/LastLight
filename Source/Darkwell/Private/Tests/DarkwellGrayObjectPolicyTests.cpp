@@ -902,13 +902,13 @@ bool FDarkwellJoinedOccupancyParity::RunTest(const FString&)
  };
  // Analytic cells include a thin strip crossing cell edges but no centers.
  // These tests do not derive expected thin-edge results from the serial path.
- for(int32 Case=0;Case<15;++Case)
+ for(int32 Case=0;Case<16;++Case)
  {
   const FIntPoint Size=Case==10?FIntPoint(16,16):FIntPoint(128,128);
   const FBox2D Bounds(FVector2D(0,0),FVector2D(Size));
   Scene.FrameOccupancy.Reset(); Scene.FrameOccupancyPoints.Reset();
   Scene.bUseFrameOccupancy=Case!=11;
-  Scene.bFilterFrameOccupancy=Case==3 || Case==13;
+  Scene.bFilterFrameOccupancy=Case==3 || Case==13 || Case==15;
   Scene.FrameOccupancyCandidates={};
   Scene.bCacheFrameOccupancyPoints=Case!=7;
   auto AddGeometry=[&](FBox Box,FTransform Pose)
@@ -933,7 +933,7 @@ bool FDarkwellJoinedOccupancyParity::RunTest(const FString&)
   if(Case==12) { Indices.Add(0); Indices.Add(0); } // overlapping outputs only written on GT
   TBitArray<> Mask(true,Size.X*Size.Y);
   if(Case==2) for(int32 I=0;I<Mask.Num();I+=2) Mask[I]=false;
-  const TBitArray<>* Whole=Case==0 || Case==11?nullptr:&Mask;
+  const TBitArray<>* Whole=Case==0 || Case==11 || Case==15?nullptr:&Mask;
   if(Case==8) for(int32 I=0;I<131070;++I) Scene.FrameOccupancyPoints.Add(FVector2D(-I-1,-1),false);
   if(Case==9)
   {
@@ -958,8 +958,9 @@ bool FDarkwellJoinedOccupancyParity::RunTest(const FString&)
   if(Case==1 || Case==3) TestTrue(TEXT("Whole retains physical thin strip at cell edge even without center candidates"),Joined[0]);
   if(Case==2) TestFalse(TEXT("Whole mask exclusion is authoritative"),Joined[0]);
   if(Case==4) TestEqual(TEXT("Empty physical frame produces empty occupancy"),Joined.CountSetBits(),0);
+  if(Case==15) TestTrue(TEXT("Empty Partial ROI clears bits without populating point cache"),Joined.CountSetBits()==0 && Scene.FrameOccupancyPoints.IsEmpty());
   if(Case==8) TestEqual(TEXT("Point cache retains original cap"),Scene.FrameOccupancyPoints.Num(),131072);
-  TestEqual(TEXT("Only large snapshot batches join"),Scene.JoinedOccupancyBuildsForTesting-JoinedBefore,Case==10 || Case==11?0:1);
+  TestEqual(TEXT("Only nonconstant large snapshot batches join"),Scene.JoinedOccupancyBuildsForTesting-JoinedBefore,Case==10 || Case==11 || Case==15?0:1);
   ++Compared;
  }
  Scene.bFilterFrameOccupancy=false; Scene.FrameOccupancyCandidates={}; Scene.bUseFrameOccupancy=true; Scene.bCacheFrameOccupancyPoints=true;

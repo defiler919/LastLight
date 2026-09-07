@@ -499,3 +499,12 @@ CapSlice_Target02已补非空cap（30次比较、20次非空、50次joined全部
 完整 `Scripts/BuildEditor.ps1`：Saved/OccupancySlice/Build01.log成功91.08秒（项目/插件依赖重编译），Build02/03分别成功10.82/10.47秒（仅补测试fixture）。Target01实际NullRHI **4/4 clean PASS**：新增occupancy、RepeatedHistoryEvidenceMatchesFullUpdate、FramePhysicalCacheMatchesGeometryOracle、PlanarProjectionMatchesOriginalSlab，测试1.680秒/进程58.053秒、exit0/severe0。补充大coarse fixture的Target02因尚未BeginAbsent就初始化FineHistory触发现有断言，exit3/severe2，失败日志保留；修正测试状态顺序，生产源码未变。最终Target03 **1/1 clean PASS**，23次比较、19个joined批次，测试0.133秒/进程16.532秒、exit0/severe0：逐位fine/coarse、dirty列表、缓存值/容量和修订一致，Whole薄边/掩码、空ROI/物理帧、非空ROI、旋转/倾斜/负缩放/奇异回退、小批/live回退、重复索引、ownership-only/微小位移/物理移除、geometry复用及世界销毁均覆盖；大coarse确有并行dispatch、稀疏映射有独立中心oracle。此前三项规则验证仍适用，未重跑完整148项、全矩阵或长测。
 
 先提交推送该可恢复检查点，再做真实D3D12短Batch A/B与必要首次Whole/cap视觉。此检查点尚未宣称性能收益，初始化/完整帧FAIL、长期资源PARTIAL维持；seal外资源创建是否继续由本切片真实结果决定。stable保持7534163/404a582，不开始黑色层。
+### 20.1 首版A/B及空ROI修正
+
+4ccda80首版有效三对（Serial02/03/04、Joined01/02/03）均同二进制、前台D3D12/SM6、1080p/SP100/原Epic/TSR/Lumen/VSM、NoTrace、无固定步长/截图；每次480帧环境异常0、complete/exit0/severe0。双方统一使用已有-NoAuthoringToolsets：原Serial01因364帧失去前台及5条引擎Toolsets在-game缺少Python API错误而无效，已保留，不混入对照。
+
+首版184 occupancy中位62.6565→50.2412ms，但setup282.271→314.794ms、最大整帧599.044→622.071ms，整帧收益不成立。64 occupancy8.1495→9.2162ms有调度退化。独立TraceJoined01（非正常性能样本，环境异常0、complete/exit0/severe0）184 GT专属scope：GeometryDirtyIndices42.083ms，其中FineOccupancy28.793ms，后者CPU/join13.166ms、GT合并15.409ms；GeometryDirtyIndices exclusive13.289ms，coarse另2.824ms。不能重复相加父子scope，不能把独立Trace毫秒加到无Trace样本。导出stats与命令保留Saved/Stabilization/OccupancySlice_TraceJoined01。
+
+据此补严格空ROI分支：原IsOccupiedByActual在空center候选时先于cache直接false；对没有Whole footprint回退的Partial批次，GT按同样索引直接写false并计入全部logical occupancy tests，不分配point/任务/结果数组、不触及点cache。Whole即使center ROI为空也仍走完整footprint查询。没有减少coverage/fine authority采样、改变精度或用空ROI作为VerifiedEmpty；原合法证据仍在随后推进。该分支只随JoinedOccupancy开启，串行对照保留逐点路径。
+
+Build04完整Editor构建成功13.66秒；最终Target04实际NullRHI四项 **4/4 clean PASS**，测试1.488秒/进程18.063秒、exit0/severe0。新增空Partial ROI逐位/零cache写断言，与Whole薄边空ROI正例并存。首版Contracts01也完成178图/三次PIE，24帧Whole oracle PASS、exit0/severe0；它只作为首版证据，最终运行时视觉和重新配对A/B继续补充。seal外资源创建未施工。

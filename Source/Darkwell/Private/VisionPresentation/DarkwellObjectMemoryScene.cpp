@@ -36,6 +36,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarJoinedCapBuild(
 		TEXT("r.Darkwell.ObjectMemory.JoinedCapBuild"), 1,
 		TEXT("Build large cap row ranges from joined read-only CPU inputs. 0 keeps serial row evaluation."));
+	TAutoConsoleVariable<int32> CVarJoinedOccupancy(
+		TEXT("r.Darkwell.ObjectMemory.JoinedOccupancy"), 1,
+		TEXT("Evaluate large occupancy batches against read-only frame snapshots, join, then publish on GT. 0 keeps serial queries."));
 	// Only the three pure ownership query counters may be updated inside the
 	// joined read phase. Per-task storage avoids atomics and shared telemetry writes.
 	struct FOwnershipQueryCounts { uint64 Geometry = 0, Records = 0, Footprints = 0; };
@@ -1417,6 +1420,165 @@ bool ADarkwellObjectMemoryScene::HasNewerObservedContributionAt(
 	return CollectNewerOwnedVerticalIntervals(Prop, OlderEpoch, Point, Intervals);
 }
 
+void ADarkwellObjectMemoryScene::UpdateCoarseOccupancy(
+ const FDarkwellSpatialObservationRecord& Record, FRecordVisual& Visual,
+ const TConstArrayView<int32> PhysicalDirtyIndices, const bool bCoverageDirty)
+{
+ TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CoarseOccupancy);
+		const FIntPoint CoarseSize=Record.SpatialMemory.GetSize();
+  const FBox2D& CoarseBounds=Record.SpatialMemory.GetBounds();
+
+  const int32 CoarseCount=CoarseSize.X*CoarseSize.Y;
+  TBitArray<> CoarseDirty(false,CoarseCount);
+  if(Visual.CachedCoarseOccupied.Num()!=CoarseCount)
+  { Visual.CachedCoarseOccupied.Init(false,CoarseCount); CoarseDirty.Init(true,CoarseCount); }
+  else if(!PhysicalDirtyIndices.IsEmpty() && PhysicalDirtyIndices.Num()==Record.FineHistory.GetSamples().Num()) CoarseDirty.Init(true,CoarseCount);
+  else
+  {
+   const int32 FineX=Record.FineHistory.GetSize().X;
+   for(const int32 I:PhysicalDirtyIndices)
+    CoarseDirty[(I/FineX/FDarkwellHistoryGridV2::SamplesPerCell)*CoarseSize.X+(I%FineX/FDarkwellHistoryGridV2::SamplesPerCell)]=true;
+  }
+#if WITH_DEV_AUTOMATION_TESTS
+  if(bForceFullHistoryEvidenceForTesting && bCoverageDirty) CoarseDirty.Init(true,CoarseCount);
+#endif
+  TArray<int32> Indices;
+  Indices.Reserve(CoarseDirty.CountSetBits());
+  for(TConstSetBitIterator<> It(CoarseDirty);It;++It) Indices.Add(It.GetIndex());
+  BuildOccupiedSamples(CoarseBounds, CoarseSize, Indices, nullptr, Visual.CachedCoarseOccupied);
+}
+
+void ADarkwellObjectMemoryScene::BuildOccupiedSamples(
+	const FBox2D& Bounds, const FIntPoint Size, const TConstArrayView<int32> Indices,
+	const TBitArray<>* WholeCaptureMask, TBitArray<>& OutOccupied)
+{
+	check(IsInGameThread());
+	if (Indices.IsEmpty()) return;
+	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
+	auto PointAt = [&](int32 Index)
+	{
+		return Bounds.Min + Step * FVector2D(Index % Size.X + 0.5, Index / Size.X + 0.5);
+	};
+	bool bJoined = bUseFrameOccupancy && Indices.Num() >= 4096
+		&& CVarJoinedOccupancy.GetValueOnGameThread() != 0;
+#if WITH_DEV_AUTOMATION_TESTS
+	bJoined &= !bForceSerialOccupancyForTesting && !bForceFullHistoryEvidenceForTesting;
+#endif
+	if (!bJoined)
+	{
+		for (const int32 Index : Indices)
+		{
+			const FVector2D Point = PointAt(Index);
+			bool bOccupied = IsOccupiedByActual(Point, NAME_None);
+			if (!bOccupied && WholeCaptureMask && WholeCaptureMask->IsValidIndex(Index) && (*WholeCaptureMask)[Index])
+				bOccupied = IsOccupiedWithinWholeFootprint(FBox2D(Point - Step * .5, Point + Step * .5));
+			OutOccupied[Index] = bOccupied;
+		}
+		return;
+	}
+	// A same-frame lease: no mutation of scene caches, candidates, geometry or
+	// record storage until ParallelFor returns. Workers never enter the live-actor
+	// fallback and never write packed bits or the shared point cache.
+	const uint64 InputGeometryRevision = GeometryRevision;
+	const int32 OutputSize = OutOccupied.Num();
+	const TConstArrayView<FActualOccupancySnapshot> Snapshots = MakeArrayView(FrameOccupancy);
+	const auto Candidates = FrameOccupancyCandidates;
+	const bool bFiltered = bFilterFrameOccupancy;
+	const bool bEmptyCandidates = bFiltered && Candidates.IsEmpty();
+	const bool bUsePointCache = bCacheFrameOccupancyPoints && !bEmptyCandidates;
+	const TMap<FVector2D, bool>& PointCache = FrameOccupancyPoints;
+	const int32 CacheSize = PointCache.Num();
+	struct FSampleResult
+	{
+		FVector2D Point;
+		bool bCenterOccupied = false, bOccupied = false, bCacheHit = false;
+	};
+	struct FChunkResult
+	{
+		FOwnershipQueryCounts Counts;
+		uint64 CacheHits = 0;
+	};
+	TArray<FSampleResult> Results;
+	Results.SetNumUninitialized(Indices.Num());
+	const int32 NumTasks = FMath::Min(8, FMath::DivideAndRoundUp(Indices.Num(), 2048));
+	TArray<FChunkResult> Chunks;
+	Chunks.SetNum(NumTasks);
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_OccupancyCPU);
+		ParallelFor(TEXT("DarkwellOccupancy"), NumTasks, 1, [&](int32 Task)
+		{
+			FChunkResult Local;
+			TGuardValue<FOwnershipQueryCounts*> CountScope(GOwnershipQueryCounts, &Local.Counts);
+			auto Occupies = [&](const FActualOccupancySnapshot& Snapshot, FVector2D Point)
+			{
+				if (Snapshot.StableId.IsNone() || !Snapshot.Bounds.IsInside(Point)) return false;
+				for (const auto& Geometry : Snapshot.Geometry)
+				{
+					double MinZ, MaxZ;
+					if (QueryVerticalInterval(Geometry, Point, MinZ, MaxZ)) return true;
+				}
+				return false;
+			};
+			const int32 Begin = int64(Indices.Num()) * Task / NumTasks;
+			const int32 End = int64(Indices.Num()) * (Task + 1) / NumTasks;
+			for (int32 I = Begin; I < End; ++I)
+			{
+				FSampleResult Result;
+				Result.Point = PointAt(Indices[I]);
+				if (bUsePointCache)
+					if (const bool* Cached = PointCache.Find(Result.Point))
+					{
+						Result.bCacheHit = true; Result.bCenterOccupied = *Cached; ++Local.CacheHits;
+					}
+				if (!Result.bCacheHit && !bEmptyCandidates)
+				{
+					if (bFiltered)
+					{
+						for (const auto* Snapshot : Candidates)
+							if (Occupies(*Snapshot, Result.Point)) { Result.bCenterOccupied = true; break; }
+					}
+					else for (const auto& Snapshot : Snapshots)
+						if (Occupies(Snapshot, Result.Point)) { Result.bCenterOccupied = true; break; }
+				}
+				Result.bOccupied = Result.bCenterOccupied;
+				if (!Result.bOccupied && WholeCaptureMask && WholeCaptureMask->IsValidIndex(Indices[I]) && (*WholeCaptureMask)[Indices[I]])
+				{
+					// This const CPU method takes the frozen FrameOccupancy branch,
+					// including ALL footprint candidates, never the center-only ROI.
+					Result.bOccupied = IsOccupiedWithinWholeFootprint(
+						FBox2D(Result.Point - Step * .5, Result.Point + Step * .5));
+				}
+				Results[I] = Result;
+			}
+			Chunks[Task] = Local;
+		}, EParallelForFlags::Unbalanced);
+	}
+	check(IsInGameThread() && GeometryRevision == InputGeometryRevision
+		&& bUseFrameOccupancy && OutOccupied.Num() == OutputSize && PointCache.Num() == CacheSize);
+	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_OccupancyMergeGT);
+	RuntimeFrame.OccupancyTests += Indices.Num();
+	for (const auto& Chunk : Chunks)
+	{
+		RuntimeFrame.PrimitiveGeometryTests += Chunk.Counts.Geometry;
+		RuntimeFrame.OccupancyCacheHits += Chunk.CacheHits;
+	}
+	for (int32 I = 0; I < Indices.Num(); ++I)
+	{
+		const auto& Result = Results[I];
+		OutOccupied[Indices[I]] = Result.bOccupied;
+		// Original index order and capacity; only the CENTER result belongs in
+		// this cache. Whole footprint occupancy depends on the cell and its mask.
+		if (bUsePointCache && !Result.bCacheHit && FrameOccupancyPoints.Num() < 131072)
+			FrameOccupancyPoints.Add(Result.Point, Result.bCenterOccupied);
+	}
+	// A repeated exact coordinate within this batch may be computed more than
+	// once against the immutable cache. Counters report real worker queries/hits,
+	// not hypothetical serial reuse; stored values and insertion order are equal.
+#if WITH_DEV_AUTOMATION_TESTS
+	++JoinedOccupancyBuildsForTesting;
+#endif
+}
+
 void ADarkwellObjectMemoryScene::BuildGeometryDirtyIndices(
 	const FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record,
 	FRecordVisual& Visual, TArray<int32>& OutDirtyIndices, TArray<int32>& OutPhysicalDirtyIndices)
@@ -1523,28 +1685,26 @@ void ADarkwellObjectMemoryScene::BuildGeometryDirtyIndices(
 #if WITH_DEV_AUTOMATION_TESTS
  if(bForceFullHistoryEvidenceForTesting) PhysicalDirty=Dirty;
 #endif
- Visual.CachedPhysicalGeometry=MoveTemp(PhysicalGeometry); Visual.CachedNewerGeometry=MoveTemp(NewerGeometry);
- Visual.ProcessedGeometryRevision=GeometryRevision;
- Visual.ProcessedOwnershipRevision=Prop.ObservationOwnershipRevision;
 	if (Visual.CachedFineOccupied.Num() != Size.X * Size.Y)
 		Visual.CachedFineOccupied.Init(false, Size.X * Size.Y);
+	OutDirtyIndices.Reserve(Dirty.CountSetBits());
+	OutPhysicalDirtyIndices.Reserve(PhysicalDirty.CountSetBits());
 	for (TConstSetBitIterator<> It(Dirty); It; ++It)
 	{
 		const int32 Index = It.GetIndex();
-        if(PhysicalDirty[Index])
-        {
-            const int32 X = Index % Size.X;
-            const int32 Y = Index / Size.X;
-            const FVector2D Point = Bounds.Min + Step * FVector2D(X + 0.5, Y + 0.5);
-            Visual.CachedFineOccupied[Index] = IsOccupiedByActual(Point, NAME_None);
-            if (!Visual.CachedFineOccupied[Index] && Record.bConfirmedWholeCapture
-             && Record.LastLegalCaptureMask.IsValidIndex(Index) && Record.LastLegalCaptureMask[Index])
-             Visual.CachedFineOccupied[Index]=IsOccupiedWithinWholeFootprint(FBox2D(Point-Step*.5,Point+Step*.5));
-            OutPhysicalDirtyIndices.Add(Index);
-        }
+        if(PhysicalDirty[Index]) OutPhysicalDirtyIndices.Add(Index);
         else ++RuntimeFrame.HistoryOccupancySamplesReused;
 		OutDirtyIndices.Add(Index);
 	}
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_FineOccupancy);
+		BuildOccupiedSamples(Bounds, Size, OutPhysicalDirtyIndices,
+			Record.bConfirmedWholeCapture ? &Record.LastLegalCaptureMask : nullptr, Visual.CachedFineOccupied);
+	}
+ // Publish revision/cache state only after all CPU results have joined.
+ Visual.CachedPhysicalGeometry=MoveTemp(PhysicalGeometry); Visual.CachedNewerGeometry=MoveTemp(NewerGeometry);
+ Visual.ProcessedGeometryRevision=GeometryRevision;
+ Visual.ProcessedOwnershipRevision=Prop.ObservationOwnershipRevision;
  if(Cached) { Cached->Occupied=Visual.CachedFineOccupied; Cached->DirtyIndices=OutDirtyIndices; Cached->PhysicalDirtyIndices=OutPhysicalDirtyIndices; }
 }
 
@@ -2733,25 +2893,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 		TArray<int32> GeometryDirtyIndices, PhysicalDirtyIndices;
 		const uint64 OccupancyStartCycles = FPlatformTime::Cycles64();
 		BuildGeometryDirtyIndices(Prop, *Record, *Visual, GeometryDirtyIndices, PhysicalDirtyIndices);
-		const FIntPoint CoarseSize=Record->SpatialMemory.GetSize();
-  const FBox2D& CoarseBounds=Record->SpatialMemory.GetBounds();
-  const FVector2D CoarseStep=CoarseBounds.GetSize()/FVector2D(CoarseSize.X,CoarseSize.Y);
-  const int32 CoarseCount=CoarseSize.X*CoarseSize.Y;
-  TBitArray<> CoarseDirty(false,CoarseCount);
-  if(Visual->CachedCoarseOccupied.Num()!=CoarseCount)
-  { Visual->CachedCoarseOccupied.Init(false,CoarseCount); CoarseDirty.Init(true,CoarseCount); }
-  else if(!PhysicalDirtyIndices.IsEmpty() && PhysicalDirtyIndices.Num()==Record->FineHistory.GetSamples().Num()) CoarseDirty.Init(true,CoarseCount);
-  else
-  {
-   const int32 FineX=Record->FineHistory.GetSize().X;
-   for(const int32 I:PhysicalDirtyIndices)
-    CoarseDirty[(I/FineX/FDarkwellHistoryGridV2::SamplesPerCell)*CoarseSize.X+(I%FineX/FDarkwellHistoryGridV2::SamplesPerCell)]=true;
-  }
-#if WITH_DEV_AUTOMATION_TESTS
-  if(bForceFullHistoryEvidenceForTesting && bCoverageDirty) CoarseDirty.Init(true,CoarseCount);
-#endif
-  for(TConstSetBitIterator<> It(CoarseDirty);It;++It)
-  { const int32 I=It.GetIndex(); Visual->CachedCoarseOccupied[I]=IsOccupiedByActual(CoarseBounds.Min+CoarseStep*FVector2D(I%CoarseSize.X+.5,I/CoarseSize.X+.5),NAME_None); }
+		UpdateCoarseOccupancy(*Record, *Visual, PhysicalDirtyIndices, bCoverageDirty);
 		RuntimeFrame.OccupancyUs += FPlatformTime::ToMilliseconds64(
 			FPlatformTime::Cycles64() - OccupancyStartCycles) * 1000.0;
   if(bCoverageDirty || !GeometryDirtyIndices.IsEmpty())

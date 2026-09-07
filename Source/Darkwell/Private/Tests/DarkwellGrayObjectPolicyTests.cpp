@@ -881,6 +881,172 @@ bool FDarkwellJoinedCapParity::RunTest(const FString&)
  return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellJoinedOccupancyParity,
+ "Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellJoinedOccupancyParity::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ FRoom F;
+ auto& Scene=*F.Room;
+ using FGeometry=ADarkwellObjectMemoryScene::FPrimitiveGeometrySnapshot;
+ using FSnapshot=ADarkwellObjectMemoryScene::FActualOccupancySnapshot;
+ TGuardValue<bool> FrameScope(Scene.bUseFrameOccupancy,true);
+ Scene.bCacheFrameOccupancyPoints=true;
+ int32 Compared=0;
+ auto SameCache=[&](const TMap<FVector2D,bool>& A,const TMap<FVector2D,bool>& B)
+ {
+  if(A.Num()!=B.Num()) return false;
+  for(const auto& Pair:A) { const bool* V=B.Find(Pair.Key); if(!V || *V!=Pair.Value) return false; }
+  return true;
+ };
+ // Analytic cells include a thin strip crossing cell edges but no centers.
+ // These tests do not derive expected thin-edge results from the serial path.
+ for(int32 Case=0;Case<15;++Case)
+ {
+  const FIntPoint Size=Case==10?FIntPoint(16,16):FIntPoint(128,128);
+  const FBox2D Bounds(FVector2D(0,0),FVector2D(Size));
+  Scene.FrameOccupancy.Reset(); Scene.FrameOccupancyPoints.Reset();
+  Scene.bUseFrameOccupancy=Case!=11;
+  Scene.bFilterFrameOccupancy=Case==3 || Case==13;
+  Scene.FrameOccupancyCandidates={};
+  Scene.bCacheFrameOccupancyPoints=Case!=7;
+  auto AddGeometry=[&](FBox Box,FTransform Pose)
+  {
+   FGeometry Geometry; Geometry.LocalBounds=Box; Geometry.WorldTransform=Pose;
+   Geometry.PrimitiveIndex=0; Geometry.CachePlanarProjection();
+   FSnapshot Snapshot; Snapshot.StableId=FName(TEXT("Occupancy.Oracle.Physical"));
+   const FBox WorldBox=Box.TransformBy(Pose);
+   Snapshot.Bounds=FBox2D(FVector2D(WorldBox.Min),FVector2D(WorldBox.Max));
+   Snapshot.Geometry.Add(Geometry); Scene.FrameOccupancy.Add(MoveTemp(Snapshot));
+  };
+  if(Case!=4)
+  {
+   AddGeometry(FBox(FVector(0.99,0,-1),FVector(1.01,128,1)),FTransform::Identity);
+   FTransform Pose(FRotator(Case==5?23:0,37,0),FVector(30,30,0),Case==6?FVector(-1,2,1):Case==14?FVector(0,1,1):FVector(1));
+   AddGeometry(FBox(FVector(-10,-3,-8),FVector(10,3,8)),Pose);
+  }
+  TArray<const FSnapshot*> Candidates;
+  if(Case==13) { for(const auto& Snapshot:Scene.FrameOccupancy) Candidates.Add(&Snapshot); Scene.FrameOccupancyCandidates=MakeArrayView(Candidates); }
+  TArray<int32> Indices;
+  for(int32 I=0;I<Size.X*Size.Y;++I) Indices.Add(I);
+  if(Case==12) { Indices.Add(0); Indices.Add(0); } // overlapping outputs only written on GT
+  TBitArray<> Mask(true,Size.X*Size.Y);
+  if(Case==2) for(int32 I=0;I<Mask.Num();I+=2) Mask[I]=false;
+  const TBitArray<>* Whole=Case==0 || Case==11?nullptr:&Mask;
+  if(Case==8) for(int32 I=0;I<131070;++I) Scene.FrameOccupancyPoints.Add(FVector2D(-I-1,-1),false);
+  if(Case==9)
+  {
+   Scene.bForceSerialOccupancyForTesting=true;
+   TBitArray<> Warm(false,Mask.Num()); Scene.BuildOccupiedSamples(Bounds,Size,Indices,Whole,Warm);
+  }
+  const auto CacheBefore=Scene.FrameOccupancyPoints;
+  TBitArray<> Serial(true,Mask.Num()), Joined=Serial;
+  Scene.bForceSerialOccupancyForTesting=true;
+  const auto CountsBefore=Scene.RuntimeFrame;
+  Scene.BuildOccupiedSamples(Bounds,Size,Indices,Whole,Serial);
+  const auto CountsSerial=Scene.RuntimeFrame; const auto CacheSerial=Scene.FrameOccupancyPoints;
+  Scene.FrameOccupancyPoints=CacheBefore; Scene.RuntimeFrame=CountsBefore;
+  Scene.bForceSerialOccupancyForTesting=false;
+  const int32 JoinedBefore=Scene.JoinedOccupancyBuildsForTesting;
+  Scene.BuildOccupiedSamples(Bounds,Size,Indices,Whole,Joined);
+  if(!TestTrue(*FString::Printf(TEXT("All occupancy bits/cache values and capacity equal case=%d"),Case),
+   Serial==Joined && SameCache(CacheSerial,Scene.FrameOccupancyPoints))) return false;
+  TestEqual(TEXT("Same logical sample count"),Scene.RuntimeFrame.OccupancyTests,CountsSerial.OccupancyTests);
+  if(Case!=12) TestEqual(TEXT("Same real geometry query count for unique centers"),Scene.RuntimeFrame.PrimitiveGeometryTests,CountsSerial.PrimitiveGeometryTests);
+  if(Case==0) TestFalse(TEXT("Thin strip does not contain cell zero center"),Joined[0]);
+  if(Case==1 || Case==3) TestTrue(TEXT("Whole retains physical thin strip at cell edge even without center candidates"),Joined[0]);
+  if(Case==2) TestFalse(TEXT("Whole mask exclusion is authoritative"),Joined[0]);
+  if(Case==4) TestEqual(TEXT("Empty physical frame produces empty occupancy"),Joined.CountSetBits(),0);
+  if(Case==8) TestEqual(TEXT("Point cache retains original cap"),Scene.FrameOccupancyPoints.Num(),131072);
+  TestEqual(TEXT("Only large snapshot batches join"),Scene.JoinedOccupancyBuildsForTesting-JoinedBefore,Case==10 || Case==11?0:1);
+  ++Compared;
+ }
+ Scene.bFilterFrameOccupancy=false; Scene.FrameOccupancyCandidates={}; Scene.bUseFrameOccupancy=true; Scene.bCacheFrameOccupancyPoints=true;
+ // A coarse grid large enough to dispatch, followed by sparse fine-to-coarse
+ // invalidation. Assert against independent center queries, including unchanged bits.
+ {
+  FDarkwellSpatialObservationRecord CoarseRecord;
+  CoarseRecord.SpatialMemory.Initialize(Id,FBox2D(FVector2D(0,0),FVector2D(128,128)),1);
+  CoarseRecord.SpatialMemory.BeginPresent();
+  CoarseRecord.SpatialMemory.BeginAbsent();
+  CoarseRecord.FineHistory.Initialize(CoarseRecord.SpatialMemory);
+  ADarkwellObjectMemoryScene::FRecordVisual CoarseVisual;
+  const int32 BeforeJoined=Scene.JoinedOccupancyBuildsForTesting;
+  Scene.FrameOccupancyPoints.Reset();
+  Scene.UpdateCoarseOccupancy(CoarseRecord,CoarseVisual,{},true);
+  TestEqual(TEXT("Large coarse batch really joins"),Scene.JoinedOccupancyBuildsForTesting,BeforeJoined+1);
+  TBitArray<> Expected(false,128*128);
+  for(int32 I=0;I<Expected.Num();++I) Expected[I]=Scene.IsOccupiedByActual(FVector2D(I%128+.5,I/128+.5),NAME_None);
+  TestTrue(TEXT("Every coarse center matches independent serial point oracle"),CoarseVisual.CachedCoarseOccupied==Expected);
+  Scene.FrameOccupancy.Reset(); Scene.FrameOccupancyPoints.Reset();
+  TArray<int32> FineDirty{0,4,512*4};
+  Expected[0]=false; Expected[1]=false; Expected[128]=false;
+  Scene.UpdateCoarseOccupancy(CoarseRecord,CoarseVisual,FineDirty,false);
+  TestTrue(TEXT("Sparse coarse mapping preserves all untouched bits"),CoarseVisual.CachedCoarseOccupied==Expected);
+  TestEqual(TEXT("Sparse coarse mapping stays serial"),Scene.JoinedOccupancyBuildsForTesting,BeforeJoined+1);
+  ++Compared;
+ }
+ Scene.FrameOccupancy.Reset(); Scene.FrameOccupancyPoints.Reset();
+ Scene.ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::StationaryOnly);
+ if(!TestTrue(TEXT("Seed records for production dirty/coarse path"),Scene.ConfigureHistoricalEpochCountForTesting(Id,2))) return false;
+ auto& Prop=Scene.Tracked.FindChecked(Id);
+ auto& Record=Prop.History.GetMutableRecords()[0];
+ auto& Visual=Prop.Visuals.FindChecked(Record.Epoch);
+ const auto CaptureBefore=Record.LastLegalCaptureMask;
+ const auto FineBefore=Record.FineHistory.GetSamples();
+ TArray<FDarkwellHistoryGridV2::FSample> Samples; Samples.Append(FineBefore.GetData(),FineBefore.Num());
+ FSnapshot Physical; Physical.StableId=Id; Physical.Bounds=Record.FineHistory.GetBounds();
+ Physical.Geometry=Visual.PartGeometry; Scene.FrameOccupancy.Add(Physical);
+ Visual.ProcessedGeometryRevision=0; Visual.ProcessedOwnershipRevision=0;
+ Visual.CachedFineOccupied.Reset(); Visual.CachedCoarseOccupied.Reset();
+ for(int32 Phase=0;Phase<7;++Phase)
+ {
+  if(Phase==2) { ++Prop.ObservationOwnershipRevision; Prop.CurrentLive.OwnershipDirtyRegions.Add(Record.FineHistory.GetBounds()); }
+  if(Phase==3) { Scene.FrameOccupancy[0].Geometry[0].WorldTransform.AddToTranslation(FVector(1.e-8,0,0)); Scene.FrameOccupancy[0].Geometry[0].CachePlanarProjection(); ++Scene.GeometryRevision; }
+  if(Phase==4) { Scene.FrameOccupancy.Reset(); ++Scene.GeometryRevision; }
+  if(Phase==5) { Scene.FrameOccupancy.Add(Physical); ++Scene.GeometryRevision; Record.bConfirmedWholeCapture=true; Visual.ProcessedGeometryRevision=0; }
+  if(Phase==6) { Visual.CachedFineOccupied.Reset(); Visual.CachedCoarseOccupied.Reset(); ++Scene.GeometryRevision; }
+  Scene.FrameHistoryGeometry.Reset(); Scene.FrameOccupancyPoints.Reset();
+  const auto Before=Visual;
+  const auto Telemetry=Scene.RuntimeFrame;
+  TArray<int32> SerialDirty,SerialPhysical,JoinedDirty,JoinedPhysical;
+  Scene.bForceSerialOccupancyForTesting=true;
+  Scene.BuildGeometryDirtyIndices(Prop,Record,Visual,SerialDirty,SerialPhysical);
+  Scene.UpdateCoarseOccupancy(Record,Visual,SerialPhysical,true);
+  const auto SerialVisual=Visual; const auto SerialCache=Scene.FrameOccupancyPoints;
+  Visual=Before; Scene.FrameHistoryGeometry.Reset(); Scene.FrameOccupancyPoints.Reset(); Scene.RuntimeFrame=Telemetry;
+  Scene.bForceSerialOccupancyForTesting=false;
+  Scene.BuildGeometryDirtyIndices(Prop,Record,Visual,JoinedDirty,JoinedPhysical);
+  Scene.UpdateCoarseOccupancy(Record,Visual,JoinedPhysical,true);
+  if(!TestTrue(*FString::Printf(TEXT("Dirty lists, fine/coarse bits, revisions and point cache match phase=%d"),Phase),
+   SerialDirty==JoinedDirty && SerialPhysical==JoinedPhysical && SerialVisual.CachedFineOccupied==Visual.CachedFineOccupied
+   && SerialVisual.CachedCoarseOccupied==Visual.CachedCoarseOccupied && SerialVisual.ProcessedGeometryRevision==Visual.ProcessedGeometryRevision
+   && SerialVisual.ProcessedOwnershipRevision==Visual.ProcessedOwnershipRevision && SameCache(SerialCache,Scene.FrameOccupancyPoints))) return false;
+  if(Phase==1) TestTrue(TEXT("Unchanged revisions produce no dirty samples"),JoinedDirty.IsEmpty());
+  if(Phase==2) TestTrue(TEXT("Ownership-only dirty preserves exact physical occupancy"),!JoinedDirty.IsEmpty() && JoinedPhysical.IsEmpty());
+  if(Phase==3) TestTrue(TEXT("Sub-tolerance physical motion invalidates occupancy"),!JoinedPhysical.IsEmpty());
+  if(Phase==4) TestEqual(TEXT("Removed/collision-disabled geometry clears occupancy"),Visual.CachedFineOccupied.CountSetBits(),0);
+  // Replay the SAME before-state to exercise the frame geometry reuse path.
+  const int32 JoinedCount=Scene.JoinedOccupancyBuildsForTesting;
+  Visual=Before; TArray<int32> ReusedDirty,ReusedPhysical;
+  Scene.BuildGeometryDirtyIndices(Prop,Record,Visual,ReusedDirty,ReusedPhysical);
+  TestTrue(TEXT("Geometry cache replay retains exact fine output and lists"),Visual.CachedFineOccupied==SerialVisual.CachedFineOccupied && ReusedDirty==SerialDirty && ReusedPhysical==SerialPhysical);
+  TestEqual(TEXT("Geometry reuse dispatches no duplicate worker batch"),Scene.JoinedOccupancyBuildsForTesting,JoinedCount);
+  Visual=SerialVisual; ++Compared;
+ }
+ TestTrue(TEXT("Occupancy never changes captured knowledge mask"),Record.LastLegalCaptureMask==CaptureBefore);
+ for(int32 I=0;I<Samples.Num();++I)
+ {
+  const auto& A=Samples[I]; const auto& B=Record.FineHistory.GetSamples()[I];
+  if(!TestTrue(TEXT("Occupancy does not write fine authority fields"),A.State==B.State && A.Opacity==B.Opacity && A.InitialRemembered==B.InitialRemembered
+   && A.FrozenAAEnvelope==B.FrozenAAEnvelope && A.EmptyDwell==B.EmptyDwell && A.bVerifiedEmpty==B.bVerifiedEmpty)) return false;
+ }
+ TestTrue(TEXT("Non-vacuous joined occupancy coverage"),Scene.JoinedOccupancyBuildsForTesting>=12);
+ AddInfo(FString::Printf(TEXT("OCCUPANCY_PARITY compared=%d joined=%d; thin Whole/Partial, rotated/tilted/negative-scale, empty ROI/frame, cache capacity/hits, small/live fallback, duplicate indices, dirty/reuse/revision/coarse/world teardown"),Compared,Scene.JoinedOccupancyBuildsForTesting));
+ return true;
+}
+
 // Bounded CPU diagnostic of the actual 64+64+56 stress constructor. Kept out
 // of the functional manifest and never reported as a real D3D12 frame sample.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellJoinedDistributedBatch,

@@ -487,3 +487,15 @@ CapSlice_Target02已补非空cap（30次比较、20次非空、50次joined全部
 **Large World / 全地图灰色记忆**的分块、流式表现资源和增量空间索引列为后续独立scalability audit，单独建立规模、复杂度与资源生命周期证据，不混入本次初始化收尾，也不视为已实现能力。
 
 收尾核对起点local/upstream/实时remote均为51eb837，工作树与暂存区干净，git lfs status正常、git lfs fsck OK，无遗留测试/构建/Trace进程。两条stable仍分别为7534163b9c5718700b610e7677f47fbaa79cf977与404a5820739638f1097eaae0aa7fba19733298c3。本次仅暂存、提交、推送两份收尾文档，保留全部Saved证据；最终文档SHA以该提交及Git核对为准。
+
+## 20. Occupancy 同帧生产切片（32f6abe 之后）
+
+按上一轮侦察直接施工，不重开旧审计。BuildGeometryDirtyIndices保留原几何/ownership修订失效、精确几何比较、dirty区域和frame geometry复用；先形成有序physical dirty索引，再交给BuildOccupiedSamples。fine与抽出的UpdateCoarseOccupancy共用批量接口：至少4096个查询且具备FrameOccupancy时，最多8个任务借用只读几何、候选、Whole mask和冻结点缓存，写独占逐样本结果/局部计数；同帧join后GT验证geometry revision、输出及cache尺寸，按原索引合并位图、点缓存和统计，随后发布Visual修订，再继续原record证据顺序。小批量、live Actor回退与forced-full oracle串行。没有跨帧持有、异步队列、UObject worker操作或资源创建改动。
+
+点缓存仍精确XY、容量131072、按原序插入且只存center结果，Whole薄边继续检查完整FrameOccupancy，不误用center ROI。worker的TMap只有const读取、没有并发TBitArray写；重复坐标可能在同批多算一次（无并发cache填充），统计报告真实工作量而非虚构串行命中，结果与cache内容不变。暂存O(D)，每个待计算样本保存point及三个bool，生命周期仅本次join；未复制整个history。新增FineOccupancy/CoarseOccupancy/OccupancyCPU/OccupancyMergeGT Trace边界。
+
+控制量 `r.Darkwell.ObjectMemory.JoinedOccupancy=0` / runner `-SerialOccupancy` 保留串行查询；ownership/capture/cap原开关保持开启。串行对照也经过新的有序索引/共用接口，不冒充32f6abe原二进制。没有更改灰层规则、采样精度、Whole/Partial、源隐藏/预备代理/首次显示发布。
+
+完整 `Scripts/BuildEditor.ps1`：Saved/OccupancySlice/Build01.log成功91.08秒（项目/插件依赖重编译），Build02/03分别成功10.82/10.47秒（仅补测试fixture）。Target01实际NullRHI **4/4 clean PASS**：新增occupancy、RepeatedHistoryEvidenceMatchesFullUpdate、FramePhysicalCacheMatchesGeometryOracle、PlanarProjectionMatchesOriginalSlab，测试1.680秒/进程58.053秒、exit0/severe0。补充大coarse fixture的Target02因尚未BeginAbsent就初始化FineHistory触发现有断言，exit3/severe2，失败日志保留；修正测试状态顺序，生产源码未变。最终Target03 **1/1 clean PASS**，23次比较、19个joined批次，测试0.133秒/进程16.532秒、exit0/severe0：逐位fine/coarse、dirty列表、缓存值/容量和修订一致，Whole薄边/掩码、空ROI/物理帧、非空ROI、旋转/倾斜/负缩放/奇异回退、小批/live回退、重复索引、ownership-only/微小位移/物理移除、geometry复用及世界销毁均覆盖；大coarse确有并行dispatch、稀疏映射有独立中心oracle。此前三项规则验证仍适用，未重跑完整148项、全矩阵或长测。
+
+先提交推送该可恢复检查点，再做真实D3D12短Batch A/B与必要首次Whole/cap视觉。此检查点尚未宣称性能收益，初始化/完整帧FAIL、长期资源PARTIAL维持；seal外资源创建是否继续由本切片真实结果决定。stable保持7534163/404a582，不开始黑色层。

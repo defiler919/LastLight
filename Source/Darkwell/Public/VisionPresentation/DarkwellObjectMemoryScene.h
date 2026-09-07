@@ -219,6 +219,8 @@ public:
  bool bForceLegacyCapturePreparationForTesting=false;
  bool bForceSerialCapBuildForTesting=false;
  int32 JoinedCapBuildsForTesting=0;
+ bool bForceSerialOccupancyForTesting=false;
+ int32 JoinedOccupancyBuildsForTesting=0;
 #endif
 protected:
 	struct FPrimitiveGeometrySnapshot
@@ -276,6 +278,7 @@ protected:
 	friend class FDarkwellJoinedOwnershipParity;
 	friend class FDarkwellCapturePreparationParity;
 	friend class FDarkwellJoinedCapParity;
+	friend class FDarkwellJoinedOccupancyParity;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;
 	friend class FDarkwellObservedContentContract;
@@ -574,6 +577,11 @@ protected:
 	void BuildGeometryDirtyIndices(const FTrackedProp& Prop,
 		FDarkwellSpatialObservationRecord& Record, FRecordVisual& Visual,
 		TArray<int32>& OutDirtyIndices, TArray<int32>& OutPhysicalDirtyIndices);
+	void BuildOccupiedSamples(const FBox2D& Bounds, FIntPoint Size,
+		TConstArrayView<int32> Indices, const TBitArray<>* WholeCaptureMask,
+		TBitArray<>& OutOccupied);
+	void UpdateCoarseOccupancy(const FDarkwellSpatialObservationRecord& Record,
+		FRecordVisual& Visual, TConstArrayView<int32> PhysicalDirtyIndices, bool bCoverageDirty);
 	bool IsHistoricalPresentationResolved(
 		const FDarkwellSpatialObservationRecord& Record,
 		const FRecordVisual& Visual) const;

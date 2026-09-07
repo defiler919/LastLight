@@ -1,5 +1,17 @@
 # 灰色层功能检查点与稳定化施工
 
+## Occupancy 生产切片完成（2026-09-07，32f6abe之后）
+
+最终运行时 **f12c6c1**（首版4ccda80）均已推送。BuildGeometryDirtyIndices维持原失效/候选/精度规则，fine/coarse共用只读快照批量求值：大批最多8任务同帧join，GT按原序写bit/cache/统计及发布修订；小批/live Actor回退串行。空Partial ROI沿原谓词直接false的语义批量回填，避免无效任务开销；Whole空center ROI仍查完整footprint，薄边合同不变。worker不写共享TMap/TBitArray，不改资源准备/首次显示/灰层规则，无跨帧队列。
+
+最终 `Scripts/BuildEditor.ps1` Build04成功13.66秒；Target04 **4/4 clean PASS**，包括原完整证据/物理几何/精确slab oracle及新增occupancy（24次比较、19批joined，含大coarse/稀疏回填、缓存容量/复用/失效、Whole薄边/空ROI、微小位移、碰撞几何移除及live回退）。最终Contracts178图/三次PIE/24帧Whole oracle、Episodes51图/六组896内部样本全PASS，exit0/severe0，原图已查看。没有宣称本版完整149项通过；旧148项不重复跑。
+
+最终四组 `Saved/Stabilization/OccupancyFinal_Serial01 / Joined01 / Joined02 / Serial02` 同DLL/driver/配置，正常前台1080p/SP100、原质量D3D12/SM6，双方-NoAuthoringToolsets，NoTrace/无固定步长/无截图；每次480帧环境异常0、complete/exit0/severe0。两次中位：184 occupancy **64.916→38.129ms（-41.3%）**、native296.635→265.191ms、最大整帧 **587.833→543.815ms（-7.5%）**。setup282.208→270.824ms变化不全归因于本切片。setup184条，采样首末120条/fine bytes41,157,632；occupancy查询2,095,981、geometry tests8,018,953、samples_scanned1,972,688一致，冷帧完整保留。64 occupancy8.047→6.001ms，但整帧200.492→201.994ms，没有宣称64整帧改善。
+
+首版三对CPU有改善而整帧未改善，促成空ROI修正；Target02测试fixture缺少BeginAbsent断言失败和Serial01前台/引擎Toolsets启动错误的无效样本均保留。最终只用最终版本两对作结论，不跨版本/机器拼接旧约80ms与新值。首次普通-game的Toolsets Python API错误通过双方使用既有-NoAuthoringToolsets隔离，没有改项目画质或全局插件配置。完整表格/hash/命令与限制见性能审计第20节；可复算JSON在Saved/OccupancySlice/comparison-OccupancyFinal_Serial01.json。
+
+**该生产切片已完成且收益成立，初始化仍FAIL（最终535–552ms峰值）/完整帧FAIL/长期资源PARTIAL。** 本轮不继续叠加资源创建修改；下一入口是seal外首次proxy/texture/resource的GT创建、注册及提交，保持透明预备/Whole首次离开原子交接；无需再做本轮已完成的occupancy侦察、完整矩阵或十分钟长测。最终必要定向和视觉验证已完成。跨帧与Large World继续独立留待后续，不开始黑色层、stable不移动。源码/测试/runner与本文均随Git交付，Saved原始证据仅在本机。
+
 ## 下一阶段定向侦察（2026-09-07，起点 a41928beec12f56fa6d68887b1669ea8bf7915e7）
 
 本轮仅阅读 AGENTS.md、最新性能审计第18–19节、交接和相关源码；不改运行时、不构建、不运行测试、不引入跨帧任务。下列行号对应起点源码。最新审计引用的 Saved/Stabilization/CapSlice_Joined02 与 CapSlice_TraceJoined01 在本机不存在，因此计时沿用已提交证据，不声称重新核验原始 Trace。此前148/148和必要视觉结果不重复执行。

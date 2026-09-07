@@ -1,5 +1,7 @@
 # SightWeave 灰色层性能架构审计
 
+最新occupancy生产切片 **f12c6c1** 已完成：最终4/4定向、Contracts/Episodes必要视觉PASS；同二进制两对真实D3D12中位occupancy **64.916→38.129ms**、最大整帧 **587.833→543.815ms**，初始化仍FAIL。完整边界、失败/修正和最终证据见第20节。
+
 阶段性收尾已完成：三个生产切片、现有证据和后续施工顺序统一见第19节。本次仅更新文档，运行时保持9c14ecc。
 
 当前19f2e76之后的cap运行时切片 **9c14ecc** 已推送，最终完整构建、**148/148功能**及Episodes/Contracts必要视觉通过。两次真实A/B中位最大整帧 **836.191→771.154ms**（-7.8%），setup **449.593→397.038ms**；初始化仍FAIL。完整成本、验证和下一入口见第18节。以下capture阶段数据是此前已完成证据。
@@ -508,3 +510,29 @@ CapSlice_Target02已补非空cap（30次比较、20次非空、50次joined全部
 据此补严格空ROI分支：原IsOccupiedByActual在空center候选时先于cache直接false；对没有Whole footprint回退的Partial批次，GT按同样索引直接写false并计入全部logical occupancy tests，不分配point/任务/结果数组、不触及点cache。Whole即使center ROI为空也仍走完整footprint查询。没有减少coverage/fine authority采样、改变精度或用空ROI作为VerifiedEmpty；原合法证据仍在随后推进。该分支只随JoinedOccupancy开启，串行对照保留逐点路径。
 
 Build04完整Editor构建成功13.66秒；最终Target04实际NullRHI四项 **4/4 clean PASS**，测试1.488秒/进程18.063秒、exit0/severe0。新增空Partial ROI逐位/零cache写断言，与Whole薄边空ROI正例并存。首版Contracts01也完成178图/三次PIE，24帧Whole oracle PASS、exit0/severe0；它只作为首版证据，最终运行时视觉和重新配对A/B继续补充。seal外资源创建未施工。
+### 20.2 最终同二进制真实 D3D12 A/B
+
+最终运行时 **f12c6c1** 冻结，按 Serial01→Joined01→Joined02→Serial02 运行 `OccupancyFinal_*` 四个独立进程。均Standalone Batch、-NoAuthoringToolsets、D3D12/SM6、前台1920×1080/SP100、原Epic/TSR/Lumen HWRT/VSM、NoTrace/无固定步长/无截图；各480帧环境异常0、valid_normal_sample=true、complete/exit0/severe0/log关闭。进程分别19.105/18.924/19.391/19.014秒。本机引擎仍5.8.2 CL56702186；只比较本次同环境A/B，不直接拿旧机器/旧批次约80ms或771ms作本次对照。
+
+四次同DLL SHA256 `AF689CAA3CC76BBC2DC407B131B1DD290DD50971A94A952DB60C5AA3B79261E9`，driver SHA256 `90096AC63F248D5B0AB789F1735FF6613248B3036FD988E83B77784DD7FBDB34`，同DefaultEngine.ini及全部quality配置值。quality.json的initial包含动态帧计时，不把其时长当质量值要求相等；逐帧viewport/foreground/画质均由原分析器严格判定。比较脚本和带全部hash/首末资源/12项case结果的JSON保存在 `Saved/OccupancySlice/compare.py`、`comparison-OccupancyFinal_Serial01.json`；原始逐帧及metadata在各Saved/Stabilization运行目录。
+
+| 184 distributed，ms | Serial01 | Serial02 | Joined01 | Joined02 |
+| --- | ---: | ---: | ---: | ---: |
+| Setup | 285.192 | 279.223 | 264.319 | 277.329 |
+| 首次 occupancy | 64.727 | 65.106 | 37.736 | 38.522 |
+| 首次 native memory | 297.824 | 295.445 | 262.604 | 267.777 |
+| 最大完整帧 | 591.081 | 584.586 | 535.312 | 552.318 |
+
+两次中位 occupancy **64.916→38.129ms**（减少26.787ms，41.3%），首次native **296.635→265.191ms**，最大完整帧 **587.833→543.815ms**（减少44.018ms，7.5%）。setup中位282.208→270.824ms；没有改seal资源构造，不能把setup及其它阶段的小幅变化都归到occupancy，更不能将父子/跨帧计时相加或声称GPU同等收益。
+
+四次setup均184 records/184 proxies/10 tracked identities；首update均occupancy_tests **2,095,981**、geometry_tests **8,018,953**、samples_scanned **1,972,688**、occupancy_hits0；合法反证后首/末均records/proxies/caps/textures=120、MIDs360、fine bytes41,157,632，resident_samples1,286,176。没有减少seed、合法知识或采样换收益。每次184仍保留1个>100ms帧。64 occupancy中位8.047→6.001ms，但最大帧200.492→201.994ms，未测得64整帧改善；Empty p95中位14.095→13.893ms，不替代旧完整矩阵FAIL。
+
+最终收益同时来自非空查询的同帧并行与空Partial ROI的等价批量回填，不把全部26.787ms归为worker加速。首版三对“CPU有收益、整帧不成立”和初始无效前台样本全部保留，未挑选删除不利结果；最终两对只使用最终二进制，不跨版本混合。
+
+### 20.3 最终正确性、交接决定
+
+最终Build04完整 `DarkwellEditor Win64 Development` 成功；Target04 **4/4 clean PASS**，新增测试24次比较、19批joined，原串行/完整证据oracle通过。没有重跑完整功能manifest，旧148/148仍是上一阶段证据，不冒称本版149/149。最终 `OccupancyFinal_Contracts01`：178图、三次PIE、24/24 Whole离开图像oracle通过，45.428秒；`OccupancyFinal_Episodes01`：51图、六组各896内部样本全无缺失，30.451秒。两组正常D3D12/SM6、protocol/teardown完成、exit0/severe0，已查看首次Whole灰影、完整历史与Partial外部cap原图，未见空帧/内部接缝。固定时间步、2233×911图像只作正确性证据，不混入真实性能。
+
+可复核命令：`Scripts/BuildEditor.ps1`；`Scripts/RunGrayObjectPolicyTests.ps1 -RunName OccupancySlice_Target04 -Tests <summary.json中的四项selector>`；`Scripts/RunGrayPerformanceBaseline.ps1 -RunName <OccupancyFinal运行名> -Mode Standalone -Protocol Batch -NoAuthoringToolsets`（Serial另加-SerialOccupancy）；`python Scripts/AnalyzeGrayStabilization.py <运行目录>`；`Scripts/RunGrayMemoryAudit.ps1 -RunName <上述视觉运行名> -Protocol Contracts/Episodes`，分别经AnalyzeGrayWholeTransitions.py、AnalyzeGrayMemoryEpisodes.py验证。已存在的证据目录不可覆盖，复测应另取唯一RunName。
+
+**本occupancy生产切片完成且收益成立；INITIALIZATION仍FAIL（535–552ms尖峰），FRAME PERFORMANCE仍FAIL，LONG-RUN RESOURCES仍PARTIAL。** 本轮决定不叠加seal外首次proxy/texture/resource施工：GT对象创建/注册/上传和首次显示生命周期是另一完整切片，留作下一入口。现有细胞/签名、资源创建以及约38ms occupancy余量仍在；当前无跨帧队列，不开始黑色层，不移动stable。未重跑完整矩阵、十分钟长测或无关视觉全集，失败fixture和原始Saved证据均保留。

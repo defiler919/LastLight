@@ -537,7 +537,7 @@ Build04完整Editor构建成功13.66秒；最终Target04实际NullRHI四项 **4/
 
 **本occupancy生产切片完成且收益成立；INITIALIZATION仍FAIL（535–552ms尖峰），FRAME PERFORMANCE仍FAIL，LONG-RUN RESOURCES仍PARTIAL。** 本轮决定不叠加seal外首次proxy/texture/resource施工：GT对象创建/注册/上传和首次显示生命周期是另一完整切片，留作下一入口。现有细胞/签名、资源创建以及约38ms occupancy余量仍在；当前无跨帧队列，不开始黑色层，不移动stable。未重跑完整矩阵、十分钟长测或无关视觉全集，失败fixture和原始Saved证据均保留。
 
-## 21. 首次表现资源切片（2026-09-07，起点 a8df0d9，归因检查点）
+## 21. 首次表现资源切片完成（2026-09-07，起点 a8df0d9，运行时 bf48648）
 
 运行时基线仍为 f12c6c1；中间提交仅维护项目顾问文档。本阶段不重做 occupancy。初始分支干净，开发远端 a8df0d9；远端默认 HEAD 实为 main/46d9f9d，不能与开发分支尖端混称。
 
@@ -547,4 +547,82 @@ Build04完整Editor构建成功13.66秒；最终Target04实际NullRHI四项 **4/
 
 真实异常落点：184首个cap耗时14.760ms，嵌套构造0.146ms、注册0.024ms、LoadObject0.010ms。editor.log明确报告同名MovingCap_Lab.V2.Stress.000_1替换等待清理**14.44ms**，随后同名epoch也有短等待。引擎UObjectGlobals.cpp StaticAllocateObject同名覆盖执行ConditionalBeginDestroy并在IsReadyForFinishDestroy前Sleep(0)。历史销毁/重建复用StableId+Epoch的显式cap名称，使待回收组件被原位替换；这是可安全修复的生命周期成本，不能解释为cap几何生成。
 
-下一实施候选：cap分配使用独立UObject身份，仍同步创建/注册新的合法cap；同一record所有mesh具有完全相同的parent/texture/bounds/tint/UV/ready参数，可共享record内MID，禁止跨record共享。先对这一资源生命周期切片做同二进制对照；若整帧收益不足，再按证据判断纹理CPU准备或整体同步架构，不降低合法结果、不跨帧。
+### 生产实施与生命周期边界
+
+归因检查点0899a7f及最终运行时**bf48648ee46e119155e16616c977f3a251bc179b**均已推送。cap分配使用MakeUniqueObjectName取得独立UObject身份，仍在原GT调用中立即创建/注册所有合法cap；已销毁组件沿DestroyComponent/正常GC回收，不再被新对象原位覆盖。没有对象池，旧cap可能短暂存活至GC，不能把“消除覆盖等待”描述为取消清理工作。
+
+同一record所有mesh具有相同parent/texture/bounds/tint/UV/ready参数，仅在record内共享一个MID，禁止跨record共享。OwnedMaterials与Visual.Materials每个MID只登记一次；所有mesh仍在材质完整绑定后注册。prepared Current维持SpatialReady=0；合法seal对唯一MID一次更新最终texture/domain/ready，保留捕获SnapshotTransform和同GT调用原子交接。源Current每part texture、精度、cap算法、ownership、缓存失效及玩家知识规则未改变。
+
+同二进制开关`r.Darkwell.ObjectMemory.RecordScopedResources=0`与runner `-LegacyRecordResources`使用旧cap命名/每part MID路径；默认1启用生产切片。没有创建跨帧任务，也未将首显/合法资源工作挪到预热或未计时帧。
+
+### 正常真实D3D12 A/B（验收数据）
+
+四次ABBA顺序：ResourceSlice_Legacy01 / Scoped01 / Scoped02 / Legacy02。每次480帧、环境异常0、complete/exit0/severe0，正常前台1920×1080/SP100、原质量D3D12/SM6，NoTrace、无固定步长/截图，双方-NoAuthoringToolsets；未修改全局插件/画质。源证据记录HEAD0899a7f与source.patch，补丁与随后提交bf48648的运行时/测试/runner一致；比较脚本另行加入且不改变被测DLL。
+
+| 样本 | 184 setup ms | 184 native ms | 184真实最大整帧 ms | 64最大整帧 ms |
+| --- | ---: | ---: | ---: | ---: |
+| Legacy01 | 324.900 | 268.836 | 602.475 | 197.236 |
+| Scoped01 | 238.567 | 275.185 | 520.370 | 191.714 |
+| Scoped02 | 238.337 | 270.024 | 515.810 | 190.924 |
+| Legacy02 | 261.376 | 283.921 | 552.176 | 193.416 |
+| 旧两次中位 | 293.138 | 276.378 | 577.325 | 195.326 |
+| 新两次中位 | 238.452 | 272.604 | 518.090 | 191.319 |
+
+184完整帧两对-13.6%/-6.6%，中位-10.3%（59.236ms）；setup中位-18.7%，native约-1.4%，不宣称native本身显著改善。184每次均保留唯一>100ms完整冷帧。旧路径setup/整帧波动较大，样本只有两对；不把全部中位差归给MID或cap单个函数，也不与旧occupancy的543.815ms跨DLL拼接计算本轮收益。
+
+同DLL SHA256 `A6947266594DA055116A7D4C6AFF6FA79EACF9239A5A38ED76BAEE2E879B3101`；DarkwellEditor模块 `1BC1EE5EAC9CE8B1C7D4B92C31B85FEF00BDEA5C707D3F5FE0298438B10012BF`；driver `90096AC63F248D5B0AB789F1735FF6613248B3036FD988E83B77784DD7FBDB34`；DefaultEngine.ini `9a1584044ffeeee73defc9aca4b908ec68581396e31f100aff9dc7ba644f517e`。比较器校验质量快照时仅排除initial动态计时，保留全部质量项。
+
+setup184记录/proxy；经原合法反证后采样首末120 records/proxies/caps/textures、fine bytes41,157,632、resident_samples1,286,176、samples_scanned1,972,688、occupancy_tests2,095,981、geometry_tests8,018,953、occupancy_hits0，四次一致。MID360→120是同record重复实例合并，全部mesh仍保留。四次日志64+184共248个seal身份/epoch/texture尺寸逐项相同，共2,659,200 texel，尺寸清单在Saved/ResourceSlice/resource_inventory.json。新旧采样UObject数各自平稳（新56751、旧57615）；WorkingSet有启动波动，不作为精确内存节省结论。短样本及GC测试不证明十分钟长期稳定。
+
+复算命令（PowerShell；所有Saved结果只在本机）：
+
+```powershell
+./Scripts/BuildEditor.ps1
+./Scripts/RunGrayPerformanceBaseline.ps1 -RunName ResourceSlice_Legacy01 -Mode Standalone -Protocol Batch -NoAuthoringToolsets -LegacyRecordResources
+./Scripts/RunGrayPerformanceBaseline.ps1 -RunName ResourceSlice_Scoped01 -Mode Standalone -Protocol Batch -NoAuthoringToolsets
+./Scripts/RunGrayPerformanceBaseline.ps1 -RunName ResourceSlice_Scoped02 -Mode Standalone -Protocol Batch -NoAuthoringToolsets
+./Scripts/RunGrayPerformanceBaseline.ps1 -RunName ResourceSlice_Legacy02 -Mode Standalone -Protocol Batch -NoAuthoringToolsets -LegacyRecordResources
+python Scripts/AnalyzeGrayStabilization.py Saved/Stabilization/ResourceSlice_Legacy01 Saved/Stabilization/ResourceSlice_Scoped01 Saved/Stabilization/ResourceSlice_Scoped02 Saved/Stabilization/ResourceSlice_Legacy02
+python Scripts/CompareGrayResourceSlice.py Saved/Stabilization/ResourceSlice_Legacy01 Saved/Stabilization/ResourceSlice_Scoped01 Saved/Stabilization/ResourceSlice_Scoped02 Saved/Stabilization/ResourceSlice_Legacy02 --output Saved/ResourceSlice/FinalABBA.json
+```
+
+### Trace复核（不混入正常A/B）
+
+ResourceSlice_TraceScoped01同样480帧环境异常0，exit0/severe0；旧TraceBefore01与新Trace均用于定位，不充当同二进制正常验收。两次独立Trace的184资源分项如下：
+
+| 分项 | 旧 ms | 新 ms | 数量/边界 |
+| --- | ---: | ---: | --- |
+| EnsureResources | 70.824 | 47.504 | 均736调用，包含下列子项 |
+| cap创建 | 25.489 | 9.170 | 均184；旧64次覆盖等待，新0 |
+| proxy绑定 | 23.437 | 16.081 | 均184；含MID/参数/mesh注册 |
+| MID创建 | 10.252 | 5.076 | 552→184 |
+| MID参数 | 4.071 | 1.863 | 552→184 |
+| proxy mesh注册 | 8.330 | 7.832 | 均552 |
+| proxy创建 | 11.953 | 12.341 | 均184 |
+| history texture创建 | 6.917 | 7.239 | 均184；格式/尺寸不变 |
+| TextureSubmission | 44.421 | 43.463 | 均368；包括CPU内容/签名/Float16，并非纯RHI |
+| SealCapture | 206.370 | 198.559 | 均184；与上述部分嵌套 |
+
+正常旧两次也各出现64次同名覆盖等待，新两次与新Trace为0。资源确保下降23.320ms的方向与完整帧改善一致；表中父子计时不相加。Source.Mesh.LoadSynchronous约0.1ms/552次、parent LoadObject约0.5ms/184次，没有证据支持继续堆加载缓存。Current纹理路径在本seed不执行，真实Current准备由下述合同/视觉检查覆盖。
+
+### 最小正确性、生命周期与视觉
+
+- Build02完整DarkwellEditor Win64 Development成功，34.56秒，既有引擎弃用/浮点转换警告；代码之后未修改或重建DLL。
+- ResourceSlice_Target01：3/3 clean PASS、exit0/severe0，实际测试1.75秒（进程44.25秒）。新增RecordScopedResourcesParityAndLifetime覆盖两种分配路径×Partial/Whole，Current透明ready、首离开立即发布捕获姿态、全部mesh注册/参数、跨record隔离、证据/texture signature/尺寸/cap signature/三角数一致，同epoch销毁重建采用不同cap对象名、Ensure幂等、MID移出强引用、世界销毁后GC弱引用全部失效。同时运行PlayStopResourceLifetime及StaticPartialEpisodes.ErasedDoesNotRebuild，保护实际释放和旧灰影不复活。
+- ResourceSlice_Contracts01：正常D3D12/SM6固定步长视觉合同，178图、三次PIE与GC/teardown，exit0/severe0；whole_handoff_oracle.json 24帧visual_pass=true。实际查看pie0_whole_exit_00.png及pie2_partial_outer_cut.png，首次Whole与Partial外切口正常。此固定步长视觉协议不作性能数据。
+
+```powershell
+./Scripts/RunGrayObjectPolicyTests.ps1 -RunName ResourceSlice_Target01 -Tests 'Darkwell.PropLab.ArchitectureAudit.RecordScopedResourcesParityAndLifetime+Darkwell.PropLab.GrayObjectPolicy.PlayStopResourceLifetime+Darkwell.PropLab.ArchitectureAudit.StaticPartialEpisodes.ErasedDoesNotRebuild'
+./Scripts/RunGrayMemoryAudit.ps1 -RunName ResourceSlice_Contracts01 -Protocol Contracts
+python Scripts/AnalyzeGrayWholeTransitions.py Saved/ArchitectureAudit/ResourceSlice_Contracts01
+```
+
+本轮没有失败/裁掉的正常A/B或定向测试；两条Trace明确不属于valid_normal_sample。未跑完整矩阵、十分钟长测、occupancy全集、Episodes/其他无关视觉全集、Shipping打包或独立D3D12 C++自动化；NullRHI C++及真实D3D12视觉/性能证据分别列明。Git diff检查和LFS fsck通过，stable仍404a582/7534163；Docs/AI未维护。
+
+### 验收与下一最高收益入口
+
+**本资源切片收益成立；INITIALIZATION仍FAIL（新516–520ms），完整帧FAIL/长期资源PARTIAL没有升级。** 当前资源创建已分散为proxy约12ms、cap约9ms、texture约7ms、绑定约16ms；大量同帧seal/证据/表现工作远大于任一单独创建函数。新Trace seal约198.6ms，后续native仍约273ms，并且部分scope互相嵌套，不能简单相加做归因。
+
+下一优先级应提升到整批首次历史准备/发布的调度合同：**跨帧调度 + epoch/revision/lifetime校验 + GT原子发布**，先明确合法观察何时形成可展示历史、旧Current/预备资源如何持续有效、reset/销毁/新证据如何取消过期产物，以及整批峰值/最坏首显延迟的双重验收。需要单独授权，不能直接把Freeze或UObject创建搬到worker，不能让晚到结果恢复旧灰影。本轮完全没有开始该系统。
+
+若下一轮仍限定同帧，可评估TextureSubmission内约43ms的像素生成/顺序签名/Float16准备，优先做纯CPU数据路径；其收益上限不足以独自解决半秒首次整帧。共享跨record可变texture/MID、盲目池化、移动Whole首次发布或拆分合法知识都不是本轮建议的安全续作。

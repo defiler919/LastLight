@@ -1,5 +1,31 @@
 # 灰色层功能检查点与稳定化施工
 
+## 首次表现资源生产切片完成（2026-09-07，a8df0d9之后）
+
+最终运行时 **bf48648ee46e119155e16616c977f3a251bc179b** 已推送；最小归因检查点0899a7f。启动核验开发分支/远端a8df0d9、工作区干净；remote默认HEAD是main/46d9f9d，并非开发分支。只沿第20节之后处理首次表现资源，没有重做occupancy、维护Docs/AI、启动黑色层或移动stable。
+
+定位到两个资源生命周期成本：①cap用StableId+Epoch固定UObject名称，销毁后同epoch重建会触发引擎原位覆盖和渲染清理等待；Trace首个cap14.760ms，日志明确同名覆盖等待14.44ms。②同record三个proxy mesh的MID参数完全相同却分别创建。现在cap使用MakeUniqueObjectName，保留旧组件正常销毁/GC生命周期；MID仅在**同record内部**共享，GC强引用OwnedMaterials及Visual.Materials各登记一次，seal按唯一MID更新最终texture/bounds/SpatialReady。不同record不共享，Current仍SpatialReady=0透明预备，首次离开在原GT调用内发布捕获姿态及完整资源。没有跨帧队列、池化、降低精度或省略合法创建/提交。诊断开关r.Darkwell.ObjectMemory.RecordScopedResources=0保留同二进制旧分配对照。
+
+正常真实D3D12/SM6两对ABBA，四次各480帧环境异常0，1080p/SP100/原质量、前台、NoTrace/无固定步长/无截图，双方-NoAuthoringToolsets，同DLL/driver/config。结果如下（毫秒）：
+
+| 184 distributed | 旧分配 | 新分配 |
+| --- | ---: | ---: |
+| 第1对最大完整帧 | 602.475 | 520.370 |
+| 第2对最大完整帧 | 552.176 | 515.810 |
+| 最大完整帧两次中位 | 577.325 | 518.090 |
+| setup中位 | 293.138 | 238.452 |
+| native memory更新中位 | 276.378 | 272.604 |
+
+整帧两对分别-13.6%/-6.6%，中位-10.3%；旧路径波动明显，不将全部59.236ms中位差归给某个局部函数。native基本持平。独立归因Trace的EnsureResources70.824→47.504ms、cap创建25.489→9.170、proxy绑定23.437→16.081；旧路径64次同名覆盖等待，新路径0次。texture创建仍约7ms，不是剩余唯一瓶颈。
+
+setup仍184条/proxy，首次采样经原合法反证后120条/proxy/texture/cap、fine bytes41,157,632；MID360→120，减少的是重复材质实例。184首次创建Trace仍184texture/184cap/184proxy/552mesh，MID552→184。四次64+184共248次seal逐条身份/epoch/纹理尺寸相同，共2,659,200 texel；所有既有occupancy/geometry查询及resident/scanned计数相同。新组件不覆盖尚待回收的旧对象，短期可能共存至正常GC；未创建资源池，也未把首显推迟到GC之后。
+
+验证：BuildEditor Build02完整成功34.56秒；ResourceSlice_Target01 **3/3 clean PASS**（新资源oracle/隔离/透明准备/首离开/重建/GC，既有PlayStopResourceLifetime和ErasedDoesNotRebuild）。ResourceSlice_Contracts01 **178图、三次PIE、24帧Whole交接oracle PASS**，Partial外切口及首次Whole原图已查看，exit0/severe0/teardown完成。测试比较证据/texture signature/尺寸/cap signature/三角数，检查所有mesh已注册且绑定正确，重建Ensure幂等、旧MID移出强引用、销毁后弱引用经GC失效。短样本UObject计数平稳，不能据此升级长期资源结论。
+
+**INITIALIZATION仍FAIL（新最大整帧516–520ms）；完整帧FAIL/长期资源PARTIAL沿用未升级。** 下一最高收益方向是整批首次历史seal/证据/表现准备与GT发布的同步架构；建议下一轮先明确跨帧调度+epoch/revision/lifetime校验+GT原子发布合同，须另获授权，本轮未实施。现有新Trace seal198.559ms、资源47.504ms，另有历史更新；单个texture创建约7ms、纹理内容与提交43.463ms，继续局部优化的上限不足以消除约半秒峰值。若坚持同帧边界，可另评估texture像素/签名/Float16纯CPU准备，但不优先堆小型NewObject/LoadObject缓存。
+
+证据：Saved/Stabilization/ResourceSlice_{Legacy01,Scoped01,Scoped02,Legacy02,TraceBefore01,TraceScoped01}，Saved/ResourceSlice/FinalABBA.json及resource_inventory.json；复算工具Scripts/CompareGrayResourceSlice.py。完整命令/hash/限制见性能审计第21节。未重跑完整矩阵、十分钟长测、occupancy全集、Episodes/无关视觉全集或打包Shipping；这些不是本版通过证据。Git LFS fsck OK，两个stable SHA仍为404a582/7534163。原始Saved证据仅在本机，代码/验证工具/本技术交接随Git交付。
+
 ## Occupancy 生产切片完成（2026-09-07，32f6abe之后）
 
 最终运行时 **f12c6c1**（首版4ccda80）均已推送。BuildGeometryDirtyIndices维持原失效/候选/精度规则，fine/coarse共用只读快照批量求值：大批最多8任务同帧join，GT按原序写bit/cache/统计及发布修订；小批/live Actor回退串行。空Partial ROI沿原谓词直接false的语义批量回填，避免无效任务开销；Whole空center ROI仍查完整footprint，薄边合同不变。worker不写共享TMap/TBitArray，不改资源准备/首次显示/灰层规则，无跨帧队列。

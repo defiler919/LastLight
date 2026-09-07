@@ -1052,3 +1052,9 @@ A1达到可重复的驻留资源削减及定向正确性闭环，作为默认关
 本次没有C++变化，因此沿用A1完整Editor Build06和D3D12定向3/3，不机械重建/重跑矩阵。新Reference/PIE握手做源码接入，未另外重跑其完整协议；同session已验证A1 PIE视觉，新无人值守真实smoke与A1均为Standalone。未做真实锁屏/断开会话、八次Win32拒绝注入或长时间电源休眠试验。DEFAULT A1/P1仍0，INITIALIZATION仍FAIL，stable与Docs/AI不动。
 
 用户已明确授权全部工作完成后关机：先提交推送并核验远端、工作区和UE/测试进程，然后执行`shutdown.exe /s /t 60`。关机不是runner默认副作用，未写入任何性能脚本。
+
+## 30. B0家里固定16重入归因及投资止损（2026-09-07）
+
+运行时dba941fb7217b52739273f3985b38e064d1e1f7d。完整口径、误差/上界限制、对象及提交分项、同DLL三对、36图、构建/定向测试、失败启动和原始hash见 [B0归因报告](SIGHTWEAVE_B0_HOME_REENTRY_ATTRIBUTION_ZH.md)，[Git内可移植证据](Evidence/SIGHTWEAVE_B0_HOME_20260907.json)。公司A1历史结论不因家里Saved缺失而失效。
+
+基线12批平均14.560ms：CPU准备9.502、表现对象2.477、GT提交2.184、其他0.397。仅同帧批量注册一个小实验，注册省0.337ms、整帧无改善。全免对象+提交的GT乐观预算4.661ms、约16–17%，不是任意renderer的数学极限，且现实仍有必要传输。无证据支持25–30%门槛，**建议停止性能专项，进入后续游戏系统；A1仍默认关闭作为内存选项，不投入B1**。INITIALIZATION仍FAIL，cold184原合同不动，stable/Docs/AI不动。

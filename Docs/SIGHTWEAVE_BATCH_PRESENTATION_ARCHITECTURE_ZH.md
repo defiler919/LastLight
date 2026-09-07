@@ -174,3 +174,9 @@ OldHistory64FewDemand两次同DLL实测N64/K16，32Whole+32Partial，proxy/textu
 结论：A1达到旧历史多/需求少的可重复驻留资源收益，未达到默认启用或整体峰值改善条件。保留可选择的内存策略，不继续扩A的距离/LRU/队列。下一轮明确入口为RebuildHistoricalPresentation、UpdateRecordTexture/UpdateRecordCap和Residency.Rebuild*遥测，针对同帧16条必显重入拆分CPU重生成与GT注册/提交，做B共享提交/后端可行性判断；尚不支持直接建设完整atlas/custom proxy。当前CPU权威结果并未被卸载，CPU密集场景仍需独立建模。
 
 Editor Build、D3D12定向3/3、PIE36图通过；invalid camera/Reset/SourceReplace/GC/world/terminal沿A0合同验证，边界往返未见thrash。原cold184只短压力回归539.999ms、184→120合法记录；输入与gate未变、INITIALIZATION仍FAIL。冻结旧P1/局部微项，stable不动。
+
+## 11. B0实证决策：不投入B1（2026-09-07，家里）
+
+[B0同DLL归因与原型报告](SIGHTWEAVE_B0_HOME_REENTRY_ATTRIBUTION_ZH.md)：运行时dba941f。固定16条平均CPU准备9.50ms，对象+GT提交仅4.66ms，后者全部免掉也只有约16–17%的家里完整帧预算。唯一实验用引擎FRegisterComponentContext同调用末注册24个组件，仍保留独立SceneProxy/texture/MID；注册约省0.34ms，无稳定完整帧收益。不是atlas/shared renderer已完成，不把API名当作合并所有render command的证据。
+
+25–30%投资门槛没有可信支持，建议停止SightWeave性能专项，保留A1可选内存策略后进入游戏系统。默认A1/P1/B0均0，INITIALIZATION仍FAIL，不制定B1生产切片；未来如有新产品压力另立证据，不延长本专项追局部微项。

@@ -6,7 +6,16 @@ import time
 def write_state(root, name, value):
     temporary = root / (name + '.tmp')
     temporary.write_text(json.dumps(value), encoding='utf-8')
-    temporary.replace(root / name)
+    # Startup-only IPC can briefly collide with Windows metadata readers or
+    # scanners. Preserve atomic publication, bound retries, and fail explicitly.
+    for attempt in range(8):
+        try:
+            temporary.replace(root / name)
+            return
+        except PermissionError:
+            if attempt == 7:
+                raise
+            time.sleep(0.005)
 
 
 def require_foreground(root, engine):

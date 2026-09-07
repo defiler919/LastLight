@@ -1,3 +1,4 @@
+#include "DarkwellB0Probe.h"
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/GameViewportClient.h"
@@ -51,6 +52,7 @@ void ADarkwellObjectMemoryScene::ApplyPresentationDemand(
 {
  check(IsInGameThread());
  const double Start=FPlatformTime::Seconds();
+ Darkwell::B0::Begin();
  bResidencyWasEnabled=bEnabled;
  Residency.Needed=Residency.Missing=0;
  for(auto& Pair:Tracked)
@@ -103,6 +105,8 @@ void ADarkwellObjectMemoryScene::ApplyPresentationDemand(
    Prop.bDiagnosticsDirty=true;
   }
  }
+ Darkwell::B0::Flush(GetWorld());
+ Darkwell::B0::End();
  Residency.FrameMs=(FPlatformTime::Seconds()-Start)*1000.0;
  Residency.MaxFrameMs=FMath::Max(Residency.MaxFrameMs,Residency.FrameMs);
 }
@@ -120,7 +124,7 @@ FString ADarkwellObjectMemoryScene::GetPresentationResidencyTelemetry() const
   Caps+=V->Render.Cap.IsValid();
   for(const auto& M:V->Render.Materials) Materials+=M.IsValid();
  }
- return FString::Printf(TEXT("{\"n\":%llu,\"k\":%llu,\"proxies\":%llu,\"textures\":%llu,\"mids\":%llu,\"caps\":%llu,\"texture_payload_bytes\":%llu,\"evictions\":%llu,\"rebuilds\":%llu,\"failures\":%llu,\"needed\":%llu,\"missing\":%llu,\"rebuild_uploads\":%llu,\"rebuild_caps\":%llu,\"rebuild_geometry_tests\":%llu,\"frame_ms\":%.6f,\"max_frame_ms\":%.6f,\"max_rebuild_ms\":%.6f}"),
+ return TEXT("{\"b0\":")+Darkwell::B0::Telemetry()+TEXT(",")+FString::Printf(TEXT("\"n\":%llu,\"k\":%llu,\"proxies\":%llu,\"textures\":%llu,\"mids\":%llu,\"caps\":%llu,\"texture_payload_bytes\":%llu,\"evictions\":%llu,\"rebuilds\":%llu,\"failures\":%llu,\"needed\":%llu,\"missing\":%llu,\"rebuild_uploads\":%llu,\"rebuild_caps\":%llu,\"rebuild_geometry_tests\":%llu,\"frame_ms\":%.6f,\"max_frame_ms\":%.6f,\"max_rebuild_ms\":%.6f}"),
  N,K,Proxies,Textures,Materials,Caps,Bytes,Residency.Evictions,Residency.Rebuilds,Residency.Failures,Residency.Needed,Residency.Missing,
  Residency.RebuildUploads,Residency.RebuildCaps,Residency.RebuildGeometryTests,Residency.FrameMs,Residency.MaxFrameMs,Residency.MaxRebuildMs);
 }

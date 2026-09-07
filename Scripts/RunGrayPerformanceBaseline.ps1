@@ -8,6 +8,7 @@ param(
     [switch]$NoAuthoringToolsets,
     [ValidateSet(0,1)][int]$HistoryResidencyMode=0,
     [switch]$A1Visual,
+    [ValidateRange(0,2)][int]$B0Mode=0,
     [switch]$SerialSealedOwnership,
     [switch]$LegacyCapturePreparation,
     [switch]$SerialCapBuild,
@@ -55,7 +56,7 @@ if ($NoAuthoringToolsets) {
     $arguments += "-DisablePlugins=$($disabledPlugins -join ',')"
 }
 if($Mode -eq 'Standalone') {
-    $startupCommands = @("r.Darkwell.ObjectMemory.HistoryResidency $HistoryResidencyMode","r.Darkwell.ObjectMemory.WholeGeometryPreparation $WholeGeometryPreparationMode")
+    $startupCommands = @("r.Darkwell.ObjectMemory.B0Probe $B0Mode","r.Darkwell.ObjectMemory.HistoryResidency $HistoryResidencyMode","r.Darkwell.ObjectMemory.WholeGeometryPreparation $WholeGeometryPreparationMode")
     if ($LegacyWholePreparationBudget) { $startupCommands += 'r.Darkwell.ObjectMemory.WholePreparationFrameGuard 0' }
     if ($SerialSealedOwnership) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedSealedOwnership 0' }
     if ($SerialCapBuild) { $startupCommands += 'r.Darkwell.ObjectMemory.JoinedCapBuild 0' }
@@ -66,7 +67,7 @@ if($Mode -eq 'Standalone') {
     $startup = $startupCommands -join ','
     $arguments+=@('-game','-EnablePython',"-ExecCmds=`"$startup`"")
 }
-else { $arguments+=@("-ExecutePythonScript=$output/driver.py", "-ExecCmds=`"r.Darkwell.ObjectMemory.HistoryResidency $HistoryResidencyMode`"") }
+else { $arguments+=@("-ExecutePythonScript=$output/driver.py", "-ExecCmds=`"r.Darkwell.ObjectMemory.HistoryResidency $HistoryResidencyMode,r.Darkwell.ObjectMemory.B0Probe $B0Mode`"") }
 if ($SerialSealedOwnership -and $Mode -ne 'Standalone') { throw 'Serial ownership comparison is scoped to Standalone' }
 if ($LegacyCapturePreparation -and $Mode -ne 'Standalone') { throw 'Capture comparison is scoped to Standalone' }
 if ($SerialCapBuild -and $Mode -ne 'Standalone') { throw 'Cap comparison is scoped to Standalone' }
@@ -74,7 +75,7 @@ if ($SerialOccupancy -and $Mode -ne 'Standalone') { throw 'Occupancy comparison 
 if ($LegacyRecordResources -and $Mode -ne 'Standalone') { throw 'Resource comparison is scoped to Standalone' }
 if($Trace) { $arguments+=@('-trace=cpu,gpu,frame,bookmark,region',"-tracefile=$output/capture.utrace") }
 $metadata=[ordered]@{
-    schema=1; sha=(& git -C $repo rev-parse HEAD); started_utc=$start.ToUniversalTime().ToString('o'); mode=$Mode; protocol=$Protocol
+    b0_mode=$B0Mode; schema=1; sha=(& git -C $repo rev-parse HEAD); started_utc=$start.ToUniversalTime().ToString('o'); mode=$Mode; protocol=$Protocol
     engine=(Get-Content "$EngineRoot/Engine/Build/Build.version" -Raw | ConvertFrom-Json)
     cpu=@(Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors)
     gpu=@(Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,DriverDate)
@@ -132,7 +133,18 @@ try {
         $process.Refresh()
         $live=$null
         if (Test-Path "$output/foreground-live.json") {
-            try { $live=Get-Content "$output/foreground-live.json" -Raw | ConvertFrom-Json } catch { $live=$null }
+            # Python atomically replaces this file every startup frame. The reader
+            # must share deletion on Windows or it can make os.replace fail.
+            $liveStream=$null; $liveReader=$null
+            try {
+                $liveStream=[IO.File]::Open("$output/foreground-live.json",[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+                $liveReader=[IO.StreamReader]::new($liveStream)
+                $live=$liveReader.ReadToEnd() | ConvertFrom-Json
+            } catch { $live=$null }
+            finally {
+                if($liveReader){$liveReader.Dispose()}
+                elseif($liveStream){$liveStream.Dispose()}
+            }
         }
         $fresh=$live -and ((Get-Date)-(Get-Item "$output/foreground-live.json").LastWriteTime).TotalSeconds -lt 2
         if ($fresh -and $live.ready -and $live.engine.foreground -eq 1 -and !$live.engine.minimized) {

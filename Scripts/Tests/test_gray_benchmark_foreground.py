@@ -22,6 +22,18 @@ class ForegroundGateTests(unittest.TestCase):
         self.engine['frame'] += 1
         return next(self.sequence)
 
+    def test_atomic_publication_retries_are_bounded(self):
+        with patch.object(Path, 'replace', side_effect=[PermissionError(), None]) as replace:
+            with patch.object(gate.time, 'sleep') as sleep:
+                gate.write_state(self.root, 'test.json', {})
+                self.assertEqual(replace.call_count, 2)
+                sleep.assert_called_once_with(0.005)
+        with patch.object(Path, 'replace', side_effect=PermissionError()) as replace:
+            with patch.object(gate.time, 'sleep'):
+                with self.assertRaises(PermissionError):
+                    gate.write_state(self.root, 'test.json', {})
+                self.assertEqual(replace.call_count, 8)
+
     def test_stable_frames_still_need_runner_approval(self):
         for _ in range(12): self.step()
         self.assertTrue(json.loads((self.root/'foreground-live.json').read_text())['ready'])

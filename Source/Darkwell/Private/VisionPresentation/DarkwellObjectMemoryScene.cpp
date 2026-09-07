@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
+#include "DarkwellB0Probe.h"
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 #include "Async/ParallelFor.h"
 
@@ -338,6 +339,8 @@ bool ADarkwellObjectMemoryScene::RebuildHistoricalPresentationForTesting(const F
 bool ADarkwellObjectMemoryScene::RebuildHistoricalPresentation(
  FTrackedProp& InProp, FDarkwellSpatialObservationRecord& InRecord, FRecordVisual& InVisual)
 {
+ Darkwell::B0::FRecord B0Record(InRecord.bConfirmedWholeCapture);
+ TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_B0_Reentry);
  check(IsInGameThread());
  if (!GetWorld() || GetWorld()->bIsTearingDown || IsActorBeingDestroyed()
   || InRecord.bCurrentObservedLocation || InVisual.bPresentationRetired
@@ -369,6 +372,7 @@ bool ADarkwellObjectMemoryScene::RebuildHistoricalPresentation(
 	// Recompute from current committed CPU state, never from a released resource.
 	UpdateRecordTexture(*Prop, *Record);
 	UpdateRecordCap(*Prop, *Record);
+	DARKWELL_B0_SCOPE(Visibility);
 	for (const auto& Material : Visual->Render.Materials)
 		if (Material.IsValid()) Material->SetScalarParameterValue(TEXT("SpatialReady"), 1.f);
 	Visual->bAutoResidencyReleased = false;
@@ -3478,6 +3482,7 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 	FDarkwellSpatialObservationRecord& Record)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Memory_EnsureResources);
+	DARKWELL_B0_SCOPE(Other);
 	FRecordVisual& Visual = Prop.Visuals.FindOrAdd(Record.Epoch);
 	Visual.Epoch = Record.Epoch;
 	if (Visual.LastCaptureTime < 0 || Record.bCurrentObservedLocation)
@@ -3537,6 +3542,7 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 		|| (!Record.bCurrentObservedLocation && bTextureSizeChanged))
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_HistoryTextureCreate);
+	DARKWELL_B0_SCOPE(TextureObject);
 		FScopedObjectMemoryTimer CreateTimer(RuntimeFrame.HistoryTextureCreateUs);
 		if(Visual.Render.Texture.IsValid()) OwnedTextures.Remove(Visual.Render.Texture.Get());
 		UTexture2D* Texture;
@@ -3551,12 +3557,14 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 		Texture->NeverStream = true;
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_TextureClear);
+			DARKWELL_B0_SCOPE(Pixels);
 			auto& Bulk = Texture->GetPlatformData()->Mips[0].BulkData;
 			FMemory::Memzero(Bulk.Lock(LOCK_READ_WRITE), Bulk.GetBulkDataSize());
 			Bulk.Unlock();
 		}
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_TextureUpdateResource);
+	DARKWELL_B0_SCOPE(TextureSubmit);
 			Texture->UpdateResource();
 		}
 		Visual.Render.Texture = Texture;
@@ -3584,6 +3592,7 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 	if (!bWholeWithoutCap && !Visual.Render.Cap.IsValid() && (!Record.bCurrentObservedLocation || IsCaptureEligible(Prop)))
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_CapCreate);
+	DARKWELL_B0_SCOPE(CapObject);
 		// A destroyed component can still be awaiting render-thread cleanup.
 		// StableId/epoch reuse must not replace that UObject in place and force
 		// StaticAllocateObject to wait for its destruction before constructing us.
@@ -3600,7 +3609,8 @@ void ADarkwellObjectMemoryScene::EnsureRecordVisual(
 		Cap->SetVisibility(false);
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_CapRegister);
-			Cap->RegisterComponent();
+	DARKWELL_B0_SCOPE(Register);
+			Darkwell::B0::RegisterComponent(Cap);
 		}
 		Cap->SetMaterial(0, LoadObject<UMaterialInterface>(
 			nullptr, TEXT("/Game/Darkwell/Vision/PropLab/M_ManualStaleCutCap.M_ManualStaleCutCap")));
@@ -3741,6 +3751,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordTexture(
 	// Current originals bind their per-part raster; no redundant world atlas.
 	if (Record.bCurrentObservedLocation) return;
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_TextureSubmission);
+	DARKWELL_B0_SCOPE(Pixels);
 	FScopedObjectMemoryTimer TextureTimer(RuntimeFrame.TextureSubmissionUs);
 	++RuntimeFrame.UpdateRecordTextureCalls;
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
@@ -3778,6 +3789,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordTexture(
 		if (Presentation.IsValidIndex(It.GetIndex())) Presentation[It.GetIndex()].A=0;
 	Visual->SubmittedPresentation = Presentation;
 	uint64 Signature = 1469598103934665603ull;
+	{ DARKWELL_B0_SCOPE(Signatures);
 	auto MixFloat = [&Signature](const float Value)
 	{
 		uint32 Bits = 0;
@@ -3791,6 +3803,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordTexture(
 		MixFloat(Pixel.B);
 		MixFloat(Pixel.A);
 	}
+	}
 	Visual->TextureSignature = Signature;
 	if (!Visual->Render.Texture.IsValid() || Visual->Render.UploadedTextureSignature == Signature)
 	{
@@ -3803,11 +3816,15 @@ void ADarkwellObjectMemoryScene::UpdateRecordTexture(
     // in that case. Keep CPU submission diagnostics without leaking a buffer.
     if(!Visual->Render.Texture->GetResource()) return;
 	++RuntimeFrame.GpuTextureUploads;
-	FFloat16Color* Pixels = new FFloat16Color[Presentation.Num()];
+	FFloat16Color* Pixels;
+	{ DARKWELL_B0_SCOPE(Float16);
+	Pixels = new FFloat16Color[Presentation.Num()];
 	for (int32 Index = 0; Index < Presentation.Num(); ++Index)
 	{
 		Pixels[Index] = FFloat16Color(Presentation[Index]);
 	}
+	}
+	DARKWELL_B0_SCOPE(TextureSubmit);
 	FUpdateTextureRegion2D* Region = new FUpdateTextureRegion2D(0, 0, 0, 0, Size.X, Size.Y);
 	Visual->Render.Texture->UpdateTextureRegions(
 		0, 1, Region, Size.X * sizeof(FFloat16Color), sizeof(FFloat16Color),
@@ -3824,6 +3841,7 @@ AActor* ADarkwellObjectMemoryScene::SpawnMemoryProxy(
 	const FDarkwellSpatialObservationRecord& Record)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxySpawn);
+	DARKWELL_B0_SCOPE(ProxyObject);
 	FScopedObjectMemoryTimer CreateTimer(RuntimeFrame.ProxyCreateUs);
 	if (Record.Primitives.IsEmpty())
 	{
@@ -3842,7 +3860,7 @@ AActor* ADarkwellObjectMemoryScene::SpawnMemoryProxy(
 	Proxy->SetActorEnableCollision(false);
 	USceneComponent* Root = NewObject<USceneComponent>(Proxy, TEXT("SpatialMemoryRoot"));
 	Proxy->SetRootComponent(Root);
-	Root->RegisterComponent();
+	{ DARKWELL_B0_SCOPE(Register); Root->RegisterComponent(); }
 	Proxy->SetActorTransform(Record.SnapshotTransform);
 	int32 Index = 0;
 	for (const auto& Source : Record.Primitives)
@@ -3857,6 +3875,7 @@ AActor* ADarkwellObjectMemoryScene::SpawnMemoryProxy(
 			continue;
 		}
 		TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxyMeshCreate);
+	DARKWELL_B0_SCOPE(MeshObject);
 		UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(
 			Proxy, *FString::Printf(TEXT("SpatialMemoryMesh_%d"), Index++));
 		Mesh->SetupAttachment(Root);
@@ -3885,6 +3904,7 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 	AActor* Proxy)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxyBind);
+	DARKWELL_B0_SCOPE(Material);
 	FScopedObjectMemoryTimer BindTimer(RuntimeFrame.ProxyBindUs);
 	FRecordVisual* Visual = Prop.Visuals.Find(Record.Epoch);
 	if (!Visual || !Visual->Render.Texture.IsValid() || !Proxy)
@@ -3918,6 +3938,7 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 		{
 			{
 				TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_MIDCreate);
+	DARKWELL_B0_SCOPE(MIDObject);
 				FScopedObjectMemoryTimer MidTimer(RuntimeFrame.ProxyMidUs);
 				Material = UMaterialInstanceDynamic::Create(Parent, this);
 			}
@@ -3937,8 +3958,9 @@ void ADarkwellObjectMemoryScene::BindProxyMaterial(
 		Mesh->SetMaterial(0, Material);
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_Resources_ProxyMeshRegister);
+	DARKWELL_B0_SCOPE(Register);
 			FScopedObjectMemoryTimer RegisterTimer(RuntimeFrame.ProxyRegisterUs);
-			Mesh->RegisterComponent();
+			Darkwell::B0::RegisterComponent(Mesh);
 		}
 	}
 }
@@ -3970,6 +3992,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 	FDarkwellSpatialObservationRecord& Record)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CapPresentation);
+	DARKWELL_B0_SCOPE(CapCPU);
 	FScopedObjectMemoryTimer CapTimer(RuntimeFrame.CapPresentationUs);
 	++RuntimeFrame.UpdateRecordCapCalls;
 	using namespace UE::Geometry;
@@ -4060,6 +4083,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 		* 1099511628211ull;
 	{
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_CapSignature);
+	DARKWELL_B0_SCOPE(Signatures);
 	for (int32 Index = 0; Index < Cells.Num(); ++Index)
 	{
 		const FDarkwellSpatialPropMemory::FCell& Cell = Cells[Index];
@@ -4508,6 +4532,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
 	Visual->CapTriangles = Mesh.TriangleCount();
 	if (TargetCap)
 	{
+		DARKWELL_B0_SCOPE(CapSubmit);
 		TargetCap->SetMesh(MoveTemp(Mesh));
 		TargetCap->SetVisibility(Visual->CapTriangles > 0 && !Visual->Render.bPublishPending);
 		Visual->Render.bCapUploadPending = false;

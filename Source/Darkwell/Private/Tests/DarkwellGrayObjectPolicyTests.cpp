@@ -919,6 +919,17 @@ bool FDarkwellA1Residency::RunTest(const FString&)
     S.ApplyPresentationDemand(Valid?&Volume:nullptr,Camera,Now,Enabled);
     TestEqual(TEXT("Demand changes no authority/occupancy/ownership"),S.GetOldHistoryEvidenceHashForTesting(),Before);
     TestEqual(TEXT("Every needed record is materialized in this call"),S.Residency.Missing,uint64(0));
+    // B0 must flush registrations before returning, never on a later frame.
+    for(const auto& Pair:S.Tracked) for(const auto& Entry:Pair.Value.Visuals)
+    {
+     const auto& V=Entry.Value;
+     if(auto* Proxy=V.Render.Proxy.Get())
+     {
+      TInlineComponentArray<UStaticMeshComponent*> Meshes(Proxy);
+      for(auto* Mesh:Meshes) TestTrue(TEXT("Same-call mesh registration"),Mesh->IsRegistered());
+     }
+     if(auto* Cap=V.Render.Cap.Get()) TestTrue(TEXT("Same-call cap registration"),Cap->IsRegistered());
+    }
    };
    Apply(1,0,FVector::ZeroVector);
    auto Count=[&](){int32 K=0;for(const auto& Pair:S.Tracked)if(Pair.Key.ToString().StartsWith(TEXT("Lab.A1.Old.")))

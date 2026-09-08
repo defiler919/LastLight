@@ -1,4 +1,51 @@
-# Unknown：固定 AABB 切穿 SpatialPartial（2026-09-07，未完成）
+# Unknown：固定 AABB 切穿 SpatialPartial（2026-09-08，完成）
+
+**当前切片已完成：37° 灰层竖条纹根因已复现并修正，完整 Editor Build、21 项定向自动回归和真实 D3D12 视觉验收通过。** 本次在公司 `D:\UE_projects\LastLight`，从 `81db0f1f96aa33fd7558a4d07f565962432e875d` 继续，分支 `codex/darkwell-prop-memory-gameplay-lab`。实际引擎仍为 `D:\UE_5.8`，5.8.2 CL56702186。全部新证据在公司生成，没有比较跨机器毫秒数。最终 SHA 由本文件所属提交确定。
+
+## 条纹根因与修正
+
+`RestrictToRecordedGeometry` 正确地把几何 footprint 外的 fine 样本 opacity 清为 0；原 `BuildPresentation` 随之把这些纹素的 B 也清成 0。材质以世界 XY 采样 B 的双线性透明度，再乘未过滤的 A 硬门。37° 实体边缘穿过栅格时，过滤核周期性混入几何外的零 B；垂直面具有相同 XY，因而整条高度出现细竖纹。它不是 cap 越界、双贡献、旧 epoch 复活或已知 FrozenAAEnvelope 下降。
+
+第 09 阶段可贡献样本 21,958 个，opacity / FrozenAAEnvelope 均为 1。沿真实几何轮廓检查 1,986 个过滤位置，旧路径 1,974 个位置的 B 低于 0.999，修复后 0；第 07 阶段为 2,047 → 0。A/B/C 三条流程一致。用最终测试恢复原纹理提交调用的反证运行 `OfficeBeforeVerified` 中，SampleCut 只在新增轮廓断言上按预期失败；TemporalSurface 的 CPU 流程通过，但截图仍有条纹。
+
+修正只作用于 Partial 的提交纹理：根据原 footprint，给**几何外**的一圈纹素延续最近几何样本的 `Opacity * FrozenAAEnvelope`，等距样本取平均；供给值只读原样本，不能多圈传播。几何内的观察边界、Clear/Block 样本和 AA 原值完全不变，A 不扩展，Whole 使用原路径。没有强制 alpha、降低纹理或 Vision 精度、关闭 AA、隐藏 cap、延迟首显或修改资产。cap 仍读原 CPU fine 语义；封存/清除/恢复均在原调用内提交。
+
+同公司、同测试前后逐项比较 A/B/C 各 65,392 个导出样本：初始知识、opacity、FrozenAAEnvelope、state、footprint、A 与样本坐标差异 0；几何内 B 差异 0；仅 938 个几何外 B 纹素不同。GPU 读回验证 A 与 CPU 完全相同，B 与提交的 half-float 完全相同。
+
+## 37° 视觉验收与证据
+
+已审阅 A/B/C 的旋转扫视、再次 Live 中 Clear+Block、离开、解除、空闲与重新观察：**未见竖条纹、非预期 seam、灰残留或旧 pose / 旧 epoch 灰复活**。切割时合法 cap 连续，重新观察后切口恢复。cap 顶点越界 0，gray/cap 最大贡献者均 ≤1；原同调用 Live 和 0 额外首显合同断言通过。第 10/11 隔离图继续保留，验收使用 gray 与 cap 同时开启的正常图。
+
+原 384×384 同步、无时序历史图用于精确复现和 A/B/C 比较；另外新增 `Darkwell.UnknownPartial.TemporalSurface`，在 **227 个真实引擎帧**中驱动相同旋转事务，以 768×768 SceneCapture、持久 view state、时序 AA 开启（项目 AA=4）、固定曝光验证。保存离开 Block、解除首帧（1028）、空闲（1038）和重新观察（1078）图；没有把同一引擎帧内反复捕获当作时序 AA 证据。这是测试世界真实 D3D12/SM6 渲染，**不是 PIE 游戏视口或性能测量**。
+
+- [A/B/C 修复前后及 4× 原像素裁剪](Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908.png)
+- [A/B/C 最终流程](Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908_STAGES.png)
+- [AA 开启的修复前后](Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908_TEMPORAL.png)
+- [真实引擎帧 AA 流程](Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908_TEMPORAL_STAGES.png)
+- [修复前 37° 原图](Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908_BEFORE_AA37.png) / [修复后 37° 原图](Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908_AFTER_AA37.png)
+- [哈希、样本比较、测试及所有有界运行摘要](Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908.json)
+
+## 最终构建与自动回归
+
+```powershell
+& Scripts/BuildEditor.ps1
+& Scripts/RunUnknownPartialCutTests.ps1 -RunName OfficeStripeFinalVerified -Tests 'Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap+Darkwell.PropLab.MovingRules.HistoryGridV2+Darkwell.PropLab.MovingRules.SpatialHistory'
+python Scripts/AnalyzeUnknownPartialStripe.py OfficeBeforeVerified OfficeStripeFinalVerified Docs/Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908
+```
+
+完整 `DarkwellEditor Win64 Development` **Succeeded**，日志 `Saved/GrayObjectPolicy/OfficeStripeFinalBuild.log`。最终 DLL SHA-256 `4068ec503329f776eca14e20ccdd8529a2f9696cb3a3d2d592d1e07ecfc48ae6`；之后未改 C++。
+
+最终真实 D3D12 回归 **21/21 通过：19 clean、2 warning、0 failed / not-run / severe，exit 0**。两条 warning 分别是 `CapacityFailsClosed` 预期容量拒绝日志，以及 UE Google `generate_204` HTTP 超时。除原 7 项，包含新的时序流程、fine history 混格/ownership/fade/重新获取及历史生命周期回归。原始 161 张 PNG、样本 CSV 和日志位于 `Saved/GrayObjectPolicy/OfficeStripeFinalVerified`。
+
+过程失败没有删除：若干次前台丢失被原守卫中止；新增时序测试首次编译缺少测试访问声明，已修正；首次补充的无复活计数仅检查 X，把旋转后 Y 在 AABB 外的 1,135 个合法样本误计入，已改用原完整 XY `Contains`。同一引擎帧内增加 AA 的早期实验有无效时序历史，已由真实帧测试替代，未用作验收。`OfficeBeforeVerified` 是刻意恢复旧提交路径的反证，不是最终代码回归失败。各运行的摘要与原因均在 JSON 中。
+
+## 下一黑色层最小切片
+
+建议只增加一个 **C++ 固定 AABB 玩法触发器**，接入已有 Configure / ClearMemory / BlockMemoryWrites：验证一次激活 Clear+Block、结束解除、重复触发幂等，以及销毁时解除；Whole 原子规则、Partial 样本边界、Live 独立和重新观察重建规则直接复用。先用现有 Lab 的明确交互触发，不扩形状、Monster Adapter、SuppressLiveVision 或 SaveGame。本轮未实现这个后续切片。
+
+灰色 checkpoint `eeeec6506d1fecfd2d05bd08095b8230287a4d4f` 和 stable/tag 不动；A1/P1/B0 默认仍为 0，cold184 未改未重测，**INITIALIZATION 仍 FAIL**。此次完成只指 Unknown Partial Cut 功能/视觉切片。
+
+## 以下为 2026-09-07 原始历史交接（当时未完成，保留反证）
 
 **本轮状态：CPU 样本级 Clear / Block 闭环和定向自动回归已通过；旋转切割的灰层细条纹尚未消除，D3D12 视觉验收未通过。不能宣布本生产切片完成。** 这是当前开发分支上的可恢复阶段成果，不创建生产 checkpoint，不移动已有 stable/tag。下一次应继续修复本片，而非开始下一黑色层功能。
 

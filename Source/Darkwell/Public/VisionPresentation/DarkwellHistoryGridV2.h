@@ -41,7 +41,7 @@ struct DARKWELL_API FDarkwellHistoryGridV2
  void SetMemoryWriteBlock(const FBox2D& Region) { MemoryWriteBlock=Region; }
  bool IsMemoryBlocked(int32 I) const { return BlockedSamplesAt(I); }
 
-	void BuildPresentation(TArray<FLinearColor>& OutPixels) const;
+	void BuildPresentation(TArray<FLinearColor>& OutPixels, const TBitArray<>* GeometryFootprint = nullptr) const;
 	bool IsFullyVerifiedEmpty() const;
 	bool CanEmitCap(int32 RetainedIndex, int32 NeighborIndex) const;
 	uint64 EvidenceHash() const;

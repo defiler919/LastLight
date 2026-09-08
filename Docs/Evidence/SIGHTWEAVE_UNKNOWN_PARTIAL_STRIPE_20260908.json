@@ -1,0 +1,833 @@
+{
+  "before": "OfficeBeforeVerified",
+  "after": "OfficeStripeFinalVerified",
+  "sequences": {
+    "A": {
+      "samples": 65392,
+      "cpu_and_hard_a_differences": 0,
+      "geometry_b_differences": 0,
+      "exterior_b_changes": 938
+    },
+    "B": {
+      "samples": 65392,
+      "cpu_and_hard_a_differences": 0,
+      "geometry_b_differences": 0,
+      "exterior_b_changes": 938
+    },
+    "C": {
+      "samples": 65392,
+      "cpu_and_hard_a_differences": 0,
+      "geometry_b_differences": 0,
+      "exterior_b_changes": 938
+    }
+  },
+  "files": [
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeBeforeVerified/Captures/SpatialPartialCut/A/09_no_resurrection_scene.png",
+      "sha256": "9619a594f45fd9b2f3ff29fe30c5c295eb2dbba26e76c01cf2b072bed4d60c09"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeBeforeVerified/Captures/SpatialPartialCut/A/09_no_resurrection_samples.csv",
+      "sha256": "e9ca8e65efbf38b21617b61da36ea560c75d52a5b5775de5b5e4f399f5e2b41f"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/09_no_resurrection_scene.png",
+      "sha256": "0dab2531941841531a27d063058bd563356da3967cf1b95a560415dd6ba8a533"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/09_no_resurrection_samples.csv",
+      "sha256": "970811f1e58658cf3e9e8fed724f88cf3392c7d523498d51dcd8fa76a03356a7"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeBeforeVerified/Captures/SpatialPartialCut/B/09_no_resurrection_scene.png",
+      "sha256": "9619a594f45fd9b2f3ff29fe30c5c295eb2dbba26e76c01cf2b072bed4d60c09"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeBeforeVerified/Captures/SpatialPartialCut/B/09_no_resurrection_samples.csv",
+      "sha256": "6e72249b848e24b9edd982a00916c11a03eb01e94248b179e070e541db9f4b26"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/09_no_resurrection_scene.png",
+      "sha256": "0dab2531941841531a27d063058bd563356da3967cf1b95a560415dd6ba8a533"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/09_no_resurrection_samples.csv",
+      "sha256": "05c3ec817b21ffbc9a5564e30b2d0745c343b5405d5e14a42654b43d48cc0554"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeBeforeVerified/Captures/SpatialPartialCut/C/09_no_resurrection_scene.png",
+      "sha256": "9619a594f45fd9b2f3ff29fe30c5c295eb2dbba26e76c01cf2b072bed4d60c09"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeBeforeVerified/Captures/SpatialPartialCut/C/09_no_resurrection_samples.csv",
+      "sha256": "6e72249b848e24b9edd982a00916c11a03eb01e94248b179e070e541db9f4b26"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/09_no_resurrection_scene.png",
+      "sha256": "0dab2531941841531a27d063058bd563356da3967cf1b95a560415dd6ba8a533"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/09_no_resurrection_samples.csv",
+      "sha256": "05c3ec817b21ffbc9a5564e30b2d0745c343b5405d5e14a42654b43d48cc0554"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/07_rotated_resweep_scene.png",
+      "sha256": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/08_live_transaction_scene.png",
+      "sha256": "bcc73d24cf3929ebd00566ccce3e137a2c4eafe862499b889b10fa4ade1bc4a5"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/09_no_resurrection_scene.png",
+      "sha256": "0dab2531941841531a27d063058bd563356da3967cf1b95a560415dd6ba8a533"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/12_rotated_reobserved_scene.png",
+      "sha256": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/07_rotated_resweep_scene.png",
+      "sha256": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/08_live_transaction_scene.png",
+      "sha256": "bcc73d24cf3929ebd00566ccce3e137a2c4eafe862499b889b10fa4ade1bc4a5"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/09_no_resurrection_scene.png",
+      "sha256": "0dab2531941841531a27d063058bd563356da3967cf1b95a560415dd6ba8a533"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/12_rotated_reobserved_scene.png",
+      "sha256": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/07_rotated_resweep_scene.png",
+      "sha256": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/08_live_transaction_scene.png",
+      "sha256": "bcc73d24cf3929ebd00566ccce3e137a2c4eafe862499b889b10fa4ade1bc4a5"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/09_no_resurrection_scene.png",
+      "sha256": "0dab2531941841531a27d063058bd563356da3967cf1b95a560415dd6ba8a533"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/12_rotated_reobserved_scene.png",
+      "sha256": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeBeforeVerified/Captures/SpatialPartialTemporal/09_no_resurrection.png",
+      "sha256": "3c42f1beea2f604954e2ce5353d699118002dd7975ec98191775b1cef7c1e40a"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/09_no_resurrection.png",
+      "sha256": "b6e39155e5a99b3131db53644357bb6f6f861a74ffffb266dde96e36e49ea89e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/01_gray.png",
+      "sha256": "9cb530fe2bbfe0b1f445cbb63a4f4a0bdac0124a4ff24e57e80305d4b6496396"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/07_rotated_resweep.png",
+      "sha256": "73d342d91d732ab01c7636b0ff56a7cba79289134851eb419da82e2495036302"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/08_live_transaction.png",
+      "sha256": "3b91bb8c346e0318c642b3024ffa274662bc483623b4f4328f2910df4e3acb55"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/08b_left_blocked.png",
+      "sha256": "24ddaa2a75f5054dea1e3c281d954e350d343a3b2950aa593a0168814aacbaf2"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/08c_unblock_first_frame.png",
+      "sha256": "4c499ac0e899de16837d1b18f0d4fd05168a7d8db6b4175e35466f0476d9a33a"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/09_no_resurrection.png",
+      "sha256": "b6e39155e5a99b3131db53644357bb6f6f861a74ffffb266dde96e36e49ea89e"
+    },
+    {
+      "path": "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/12_rotated_reobserved.png",
+      "sha256": "fe790d1ac8f59fa9c7f4282cb42d5da500830b08bfb43ba43fd291d3fa9de215"
+    }
+  ],
+  "task_complete": true,
+  "visual_acceptance": "PASS for the tested 37-degree Unknown Partial Cut sequence; no stripes, unintended seam, residual or old-gray resurrection.",
+  "machine": "office",
+  "repository": "D:\\UE_projects\\LastLight",
+  "base_head": "81db0f1f96aa33fd7558a4d07f565962432e875d",
+  "final_commit": "Resolve the commit containing this report; source, tests, documentation and evidence are committed together.",
+  "engine": "D:/UE_5.8, 5.8.2 CL56702186",
+  "adapter": "NVIDIA GeForce RTX 4060",
+  "preserved_checkpoint": "eeeec6506d1fecfd2d05bd08095b8230287a4d4f",
+  "initialization_status": "FAIL, unchanged and not retested",
+  "build": {
+    "command": "& Scripts/BuildEditor.ps1",
+    "target": "DarkwellEditor Win64 Development",
+    "result": "Succeeded",
+    "log": "Saved/GrayObjectPolicy/OfficeStripeFinalBuild.log",
+    "log_sha256": "47555c68e26122fabb4f5094fc6d7ad9836c46e9673101ae39c28100681847af",
+    "dll_sha256": "4068ec503329f776eca14e20ccdd8529a2f9696cb3a3d2d592d1e07ecfc48ae6"
+  },
+  "summary": {
+    "run": "OfficeStripeFinalVerified",
+    "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap+Darkwell.PropLab.MovingRules.HistoryGridV2+Darkwell.PropLab.MovingRules.SpatialHistory",
+    "runner_failure": null,
+    "exit_code": 0,
+    "foreground_approved": true,
+    "foreground_attempts": 1,
+    "wall_seconds": 79.4910499,
+    "total": 21,
+    "clean": 19,
+    "warnings": 2,
+    "failed": 0,
+    "not_run": 0,
+    "severe_lines": 0,
+    "requested_rhi": "D3D12/SM6",
+    "passed": true
+  },
+  "command": "& Scripts/RunUnknownPartialCutTests.ps1 -RunName OfficeStripeFinalVerified -Tests 'Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap+Darkwell.PropLab.MovingRules.HistoryGridV2+Darkwell.PropLab.MovingRules.SpatialHistory'",
+  "tests": [
+    {
+      "name": "Darkwell.ObjectMemory.PresentationResidency",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 2.0107882022857666,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.2324787974357605,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.2350257933139801,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.HistoryGridV2.LateRotationAnglesFastFinalReacquire",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 12.245833396911621,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.HistoryGridV2.MixedCellEmptyOccupiedUnresolved",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.014879800379276276,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.HistoryGridV2.MutableMaskPreservesTerminalEvidence",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.05907540023326874,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.HistoryGridV2.ParallelLateReacquire",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 6.858273029327393,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.HistoryGridV2.PositiveHistoricalCapAndNoCapForSupersededBoundary",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.009332500398159027,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.HistoryGridV2.SlowFinalReacquireMatchesFast",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 6.094204902648926,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.HistoryGridV2.SurfaceOwnershipAndFade",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.014597699046134949,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.SpatialHistory.AtoBtoC",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.2717323899269104,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.SpatialHistory.CapacityFailsClosed",
+      "state": "Success",
+      "warnings": 1,
+      "errors": 0,
+      "duration_seconds": 0.01848669722676277,
+      "warning_messages": [
+        "LogDarkwellSpatialObservationHistory: SpatialEvidenceOnly history capacity reached; new location remains undisclosed id=Lab.Moving.Capacity records=64"
+      ]
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.SpatialHistory.CurrentAdmissionIndependentOfHistoryCapacity",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.020539797842502594,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.SpatialHistory.MultiIdentityIsolation",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.015144400298595428,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.SpatialHistory.TerminalReleaseDoesNotInventEmpty",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.01273379847407341,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.PropLab.MovingRules.SpatialHistory.VisibleMovementNoTrail",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.01374630257487297,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.SightWeave.Closure.VisionIlluminationBoundary",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 0.2124059945344925,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.UnknownPartial.SampleCut",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 7.888864994049072,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.UnknownPartial.TemporalSurface",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 7.334995269775391,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.UnknownRegion.SpatialPartial",
+      "state": "Success",
+      "warnings": 0,
+      "errors": 0,
+      "duration_seconds": 3.9959661960601807,
+      "warning_messages": []
+    },
+    {
+      "name": "Darkwell.UnknownRegion.Whole",
+      "state": "Success",
+      "warnings": 1,
+      "errors": 0,
+      "duration_seconds": 4.328757286071777,
+      "warning_messages": [
+        "LogHttp: HTTP request timed out after 3.00 seconds URL=https://www.google.com/generate_204"
+      ]
+    }
+  ],
+  "counterexample": {
+    "run": "OfficeBeforeVerified",
+    "change": "Temporarily use the original BuildPresentation(Presentation) call; the footprint padding helper is not invoked. Restored before final build.",
+    "expected_failure": "SampleCut fails six physical-silhouette assertions: A/B/C stages 07 and 09. TemporalSurface CPU assertions pass, rendered stripe remains.",
+    "summary": {
+      "run": "OfficeBeforeVerified",
+      "selector": "Darkwell.UnknownPartial",
+      "runner_failure": null,
+      "exit_code": 0,
+      "foreground_approved": true,
+      "foreground_attempts": 1,
+      "wall_seconds": 45.2326319,
+      "total": 2,
+      "clean": 1,
+      "warnings": 0,
+      "failed": 1,
+      "not_run": 0,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "passed": false
+    }
+  },
+  "root_cause": {
+    "stage09_visible_samples": 21958,
+    "stage09_visible_opacity_and_frozen_aa": 1,
+    "stage07_probes": 2060,
+    "stage07_before_dips": 2047,
+    "stage07_after_dips": 0,
+    "stage09_probes": 1986,
+    "stage09_before_dips": 1974,
+    "stage09_after_dips": 0,
+    "dip_threshold": 0.999,
+    "cause": "Bilinear B taps cross the physical footprint into zero opacity texels; world-XY opacity repeats along vertical geometry.",
+    "fix": "One immutable-source nearest-neighbor ring of exterior B support, nearest ties averaged; no interior B, A, knowledge, precision, Whole or cap changes."
+  },
+  "capture_contract": {
+    "type": "D3D12/SM6 test-world SceneCapture and CPU-mirror readback, not PIE or performance measurement",
+    "synchronous_size": [
+      384,
+      384
+    ],
+    "temporal_size": [
+      768,
+      768
+    ],
+    "temporal_real_engine_frames": 227,
+    "temporal_aa": 4,
+    "persistent_view_state": true,
+    "fixed_exposure_for_temporal_comparison": true,
+    "cap_enabled_for_acceptance": true,
+    "extra_first_display_frames": 0,
+    "raw_png_count": 161
+  },
+  "temporal_stages": [
+    {
+      "stage": "01_gray",
+      "engine_frame": 891,
+      "aa": 4
+    },
+    {
+      "stage": "07_rotated_resweep",
+      "engine_frame": 986,
+      "aa": 4
+    },
+    {
+      "stage": "08_live_transaction",
+      "engine_frame": 1012,
+      "aa": 4
+    },
+    {
+      "stage": "08b_left_blocked",
+      "engine_frame": 1027,
+      "aa": 4
+    },
+    {
+      "stage": "08c_unblock_first_frame",
+      "engine_frame": 1028,
+      "aa": 4
+    },
+    {
+      "stage": "09_no_resurrection",
+      "engine_frame": 1038,
+      "aa": 4
+    },
+    {
+      "stage": "12_rotated_reobserved",
+      "engine_frame": 1078,
+      "aa": 4
+    }
+  ],
+  "runs": [
+    {
+      "run": "OfficeBeforeRegression",
+      "selector": "Darkwell.UnknownPartial",
+      "runner_failure": null,
+      "exit_code": 0,
+      "foreground_approved": true,
+      "foreground_attempts": 1,
+      "wall_seconds": 42.2128926,
+      "total": 2,
+      "clean": 0,
+      "warnings": 0,
+      "failed": 2,
+      "not_run": 0,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "passed": false
+    },
+    {
+      "run": "OfficeBeforeVerified",
+      "selector": "Darkwell.UnknownPartial",
+      "runner_failure": null,
+      "exit_code": 0,
+      "foreground_approved": true,
+      "foreground_attempts": 1,
+      "wall_seconds": 45.2326319,
+      "total": 2,
+      "clean": 1,
+      "warnings": 0,
+      "failed": 1,
+      "not_run": 0,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "passed": false
+    },
+    {
+      "run": "OfficeStripeBefore",
+      "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+      "runner_failure": "Driver or foreground validation failed",
+      "exit_code": -1,
+      "foreground_approved": true,
+      "foreground_attempts": 1,
+      "wall_seconds": 98.6159044,
+      "total": null,
+      "clean": null,
+      "warnings": null,
+      "failed": null,
+      "not_run": null,
+      "severe_lines": 1,
+      "requested_rhi": "D3D12/SM6",
+      "passed": false
+    },
+    {
+      "run": "OfficeStripeDiagnosticBefore",
+      "selector": "Darkwell.UnknownPartial",
+      "runner_failure": null,
+      "exit_code": 0,
+      "foreground_approved": true,
+      "foreground_attempts": 1,
+      "wall_seconds": 45.7636101,
+      "total": 1,
+      "clean": 1,
+      "warnings": 0,
+      "failed": 0,
+      "not_run": 0,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "passed": true
+    },
+    {
+      "run": "OfficeStripeFinal",
+      "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap+Darkwell.PropLab.MovingRules.HistoryGridV2+Darkwell.PropLab.MovingRules.SpatialHistory",
+      "runner_failure": "Driver or foreground validation failed",
+      "exit_code": 0,
+      "foreground_approved": true,
+      "foreground_attempts": 0,
+      "wall_seconds": 52.5724517,
+      "total": null,
+      "clean": null,
+      "warnings": null,
+      "failed": null,
+      "not_run": null,
+      "severe_lines": 2,
+      "requested_rhi": "D3D12/SM6",
+      "passed": false
+    },
+    {
+      "run": "OfficeStripeFinalVerified",
+      "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap+Darkwell.PropLab.MovingRules.HistoryGridV2+Darkwell.PropLab.MovingRules.SpatialHistory",
+      "runner_failure": null,
+      "exit_code": 0,
+      "foreground_approved": true,
+      "foreground_attempts": 1,
+      "wall_seconds": 79.4910499,
+      "total": 21,
+      "clean": 19,
+      "warnings": 2,
+      "failed": 0,
+      "not_run": 0,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "passed": true
+    },
+    {
+      "run": "OfficeStripeFix01",
+      "selector": "Darkwell.UnknownPartial",
+      "runner_failure": "Driver or foreground validation failed",
+      "exit_code": 0,
+      "foreground_approved": true,
+      "foreground_attempts": 1,
+      "wall_seconds": 20.9897253,
+      "total": null,
+      "clean": null,
+      "warnings": null,
+      "failed": null,
+      "not_run": null,
+      "severe_lines": 1,
+      "requested_rhi": "D3D12/SM6",
+      "passed": false
+    },
+    {
+      "run": "OfficeStripeFix02",
+      "selector": "Darkwell.UnknownPartial",
+      "runner_failure": null,
+      "exit_code": 0,
+      "foreground_approved": true,
+      "foreground_attempts": 1,
+      "wall_seconds": 38.0557522,
+      "total": 1,
+      "clean": 1,
+      "warnings": 0,
+      "failed": 0,
+      "not_run": 0,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "passed": true
+    },
+    {
+      "run": "OfficeTemporalBefore",
+      "selector": "Darkwell.UnknownPartial.TemporalSurface",
+      "runner_failure": "Driver or foreground validation failed",
+      "exit_code": 0,
+      "foreground_approved": true,
+      "foreground_attempts": 1,
+      "wall_seconds": 27.8724449,
+      "total": null,
+      "clean": null,
+      "warnings": null,
+      "failed": null,
+      "not_run": null,
+      "severe_lines": 1,
+      "requested_rhi": "D3D12/SM6",
+      "passed": false
+    },
+    {
+      "run": "OfficeTemporalFix01",
+      "selector": "Darkwell.UnknownPartial.TemporalSurface",
+      "runner_failure": null,
+      "exit_code": 0,
+      "foreground_approved": true,
+      "foreground_attempts": 1,
+      "wall_seconds": 34.5410827,
+      "total": 1,
+      "clean": 1,
+      "warnings": 0,
+      "failed": 0,
+      "not_run": 0,
+      "severe_lines": 0,
+      "requested_rhi": "D3D12/SM6",
+      "passed": true
+    }
+  ],
+  "retained_failures": [
+    "Foreground losses aborted OfficeStripeBefore, OfficeStripeFix01, OfficeTemporalBefore and OfficeStripeFinal; none counted as acceptance.",
+    "OfficeTemporalBuild failed because the new test needed protected-member access; test-only friend declaration added.",
+    "OfficeBeforeRegression temporal counter incorrectly tested X only; corrected to the existing full XY Contains, retaining the outside-Y legal samples and the failed run.",
+    "OfficeStripeFix02 synchronous repeated temporal captures had invalid view history; not used for temporal acceptance. Replaced by real-frame TemporalSurface.",
+    "OfficeBeforeVerified intentionally executes the old submission path and retains the expected SampleCut failures."
+  ],
+  "source_hashes": {
+    "Source/Darkwell/Private/VisionPresentation/DarkwellHistoryGridV2.cpp": "ab6d9c4e63fa38f7aa6b2f8ae5724b86a8ef0625da3a60e21ca1f7e59150e4c1",
+    "Source/Darkwell/Public/VisionPresentation/DarkwellHistoryGridV2.h": "bd4ae8fcd3db74907e9dd8a4a269ae55733e5d8643b978eae42fddf07f12e314",
+    "Source/Darkwell/Private/VisionPresentation/DarkwellObjectMemoryScene.cpp": "abfa56300038d7e584e117c90176d131ce47cdbbe2302dda8e664c46acb51364",
+    "Source/Darkwell/Public/VisionPresentation/DarkwellObjectMemoryScene.h": "22f70d4c689daaf7ec56eaa58891231d637c1375998418acfb0827fb7b3e4d0c",
+    "Source/Darkwell/Private/Tests/DarkwellGrayObjectPolicyTests.cpp": "c0c2b418a015a1513b4d3a7fba12763868272f3c9d7b90f6adc6de5503ef4b34",
+    "Scripts/AnalyzeUnknownPartialStripe.py": "5026e2b47da50146c7d5c553e8593f0009fa9b6cca3d06dc5a941354b978f895"
+  },
+  "raw_hashes": {
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/01_gray_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/01_gray_scene.png": "156d7cb08329a628b031706dfc0a09ae2ded6dcb459c63f00fb18dd0a5d61eaf",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/02_unknown_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/02_unknown_scene.png": "03812d5187322404e3ac721402a62836d29f10c645308bbbfb9304babb3fbb4f",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/03_live_knowledge.png": "8289616faa579de542c42ca1bfa7b8cd08121274818fc9ee2a3a3871c7253dc8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/03_live_scene.png": "4f14b849105d14d6879a829d4894ac40196e78024ada2e094778e50caa03393d",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/06_final_gray_knowledge.png": "8289616faa579de542c42ca1bfa7b8cd08121274818fc9ee2a3a3871c7253dc8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/06_final_gray_scene.png": "f753fe9f32220003e07d3043996e68e5ce9dd91d0b036979e831b65327d1e355",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/07_clear_block_still_live_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/07_clear_block_still_live_scene.png": "d9b5a137154a52c400bd6e8f605c45d574dbeeee0066087066ab69a8471ee689",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/08_no_resurrection_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/A/08_no_resurrection_scene.png": "03812d5187322404e3ac721402a62836d29f10c645308bbbfb9304babb3fbb4f",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/01_gray_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/01_gray_scene.png": "156d7cb08329a628b031706dfc0a09ae2ded6dcb459c63f00fb18dd0a5d61eaf",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/02_unknown_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/02_unknown_scene.png": "03812d5187322404e3ac721402a62836d29f10c645308bbbfb9304babb3fbb4f",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/03_live_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/03_live_scene.png": "d9b5a137154a52c400bd6e8f605c45d574dbeeee0066087066ab69a8471ee689",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/04_left_black_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/04_left_black_scene.png": "03812d5187322404e3ac721402a62836d29f10c645308bbbfb9304babb3fbb4f",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/05_unblocked_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/05_unblocked_scene.png": "156d7cb08329a628b031706dfc0a09ae2ded6dcb459c63f00fb18dd0a5d61eaf",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/06_final_gray_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/06_final_gray_scene.png": "156d7cb08329a628b031706dfc0a09ae2ded6dcb459c63f00fb18dd0a5d61eaf",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/07_clear_block_still_live_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/07_clear_block_still_live_scene.png": "d9b5a137154a52c400bd6e8f605c45d574dbeeee0066087066ab69a8471ee689",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/08_no_resurrection_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/B/08_no_resurrection_scene.png": "03812d5187322404e3ac721402a62836d29f10c645308bbbfb9304babb3fbb4f",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/01_gray_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/01_gray_scene.png": "156d7cb08329a628b031706dfc0a09ae2ded6dcb459c63f00fb18dd0a5d61eaf",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/02_unknown_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/02_unknown_scene.png": "03812d5187322404e3ac721402a62836d29f10c645308bbbfb9304babb3fbb4f",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/03_live_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/03_live_scene.png": "d9b5a137154a52c400bd6e8f605c45d574dbeeee0066087066ab69a8471ee689",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/04_left_black_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/04_left_black_scene.png": "03812d5187322404e3ac721402a62836d29f10c645308bbbfb9304babb3fbb4f",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/05_unblocked_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/05_unblocked_scene.png": "03812d5187322404e3ac721402a62836d29f10c645308bbbfb9304babb3fbb4f",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/06_final_gray_knowledge.png": "8289616faa579de542c42ca1bfa7b8cd08121274818fc9ee2a3a3871c7253dc8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/06_final_gray_scene.png": "f753fe9f32220003e07d3043996e68e5ce9dd91d0b036979e831b65327d1e355",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/07_clear_block_still_live_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/07_clear_block_still_live_scene.png": "d9b5a137154a52c400bd6e8f605c45d574dbeeee0066087066ab69a8471ee689",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/08_no_resurrection_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartial/C/08_no_resurrection_scene.png": "03812d5187322404e3ac721402a62836d29f10c645308bbbfb9304babb3fbb4f",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/01_gray_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/01_gray_scene.png": "69b05d07cc3d7e01025fdd72f87f2a03052f4b320cb03930360e938cfca3c1eb",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/02_cut_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/02_cut_scene.png": "15f4a18ecc30b163c18a2db0147434e77a685d2552f793fd7730ca150c57f7ca",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/03_live_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/03_live_scene.png": "0b77ce893c095cec0bc9031860d657bd1a4e2d80f45a6d88c8ead8cf538cedd6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/06_rebuilt_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/06_rebuilt_scene.png": "69b05d07cc3d7e01025fdd72f87f2a03052f4b320cb03930360e938cfca3c1eb",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/07_rotated_resweep_epoch3_B.png": "15f71ee765e288ccf49d0c4b847077d6f8da90a50a67aef2802f8d4df9717ac9",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/07_rotated_resweep_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/07_rotated_resweep_samples.csv": "9d897bc413c3a9124746caf1011a3cdf9ebab7a1d6aab7bf98b10e224757d751",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/07_rotated_resweep_scene.png": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/08_live_transaction_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/08_live_transaction_scene.png": "bcc73d24cf3929ebd00566ccce3e137a2c4eafe862499b889b10fa4ade1bc4a5",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/09_no_resurrection_epoch5_B.png": "0025d21767723b85dc6e5924edcbaf38db59e7cda9c7ac960905a4be87ad7212",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/09_no_resurrection_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/09_no_resurrection_samples.csv": "970811f1e58658cf3e9e8fed724f88cf3392c7d523498d51dcd8fa76a03356a7",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/09_no_resurrection_scene.png": "0dab2531941841531a27d063058bd563356da3967cf1b95a560415dd6ba8a533",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/10_diagnostic_caps_off_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/10_diagnostic_caps_off_scene.png": "b2a9a59744e71fb289e2a5b1b896c1f1dc3d1ac5ea0d0df02ace9bec4d3a3b8d",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/11_diagnostic_caps_only_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/11_diagnostic_caps_only_scene.png": "897c05c173d66b3cc18c28bfb7d10928afa149af55c54235a5d6692be3630a20",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/12_rotated_reobserved_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/A/12_rotated_reobserved_scene.png": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/01_gray_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/01_gray_scene.png": "69b05d07cc3d7e01025fdd72f87f2a03052f4b320cb03930360e938cfca3c1eb",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/02_cut_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/02_cut_scene.png": "eb04996a00d8f24a79bd46d009cf64a5b72c9a2aa7928b8bdd5ef6b449d182c9",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/03_live_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/03_live_scene.png": "1b855acd71f8dc40a02f858691e89b1cf8cbe825127558c471c650bfa7d3eed7",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/04_left_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/04_left_scene.png": "15f4a18ecc30b163c18a2db0147434e77a685d2552f793fd7730ca150c57f7ca",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/05_unblock_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/05_unblock_scene.png": "1936553fc7c4ea0422f87956d574d3649afa87f8c8fd7d565051c23329888591",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/06_rebuilt_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/06_rebuilt_scene.png": "69b05d07cc3d7e01025fdd72f87f2a03052f4b320cb03930360e938cfca3c1eb",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/07_rotated_resweep_epoch4_B.png": "15f71ee765e288ccf49d0c4b847077d6f8da90a50a67aef2802f8d4df9717ac9",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/07_rotated_resweep_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/07_rotated_resweep_samples.csv": "485960a5cee6b812b1c7c9316997ecc6151cc3540a16248a0c87e0edd503e9be",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/07_rotated_resweep_scene.png": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/08_live_transaction_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/08_live_transaction_scene.png": "bcc73d24cf3929ebd00566ccce3e137a2c4eafe862499b889b10fa4ade1bc4a5",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/09_no_resurrection_epoch6_B.png": "0025d21767723b85dc6e5924edcbaf38db59e7cda9c7ac960905a4be87ad7212",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/09_no_resurrection_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/09_no_resurrection_samples.csv": "05c3ec817b21ffbc9a5564e30b2d0745c343b5405d5e14a42654b43d48cc0554",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/09_no_resurrection_scene.png": "0dab2531941841531a27d063058bd563356da3967cf1b95a560415dd6ba8a533",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/12_rotated_reobserved_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/B/12_rotated_reobserved_scene.png": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/01_gray_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/01_gray_scene.png": "69b05d07cc3d7e01025fdd72f87f2a03052f4b320cb03930360e938cfca3c1eb",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/02_cut_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/02_cut_scene.png": "15f4a18ecc30b163c18a2db0147434e77a685d2552f793fd7730ca150c57f7ca",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/03_live_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/03_live_scene.png": "1b855acd71f8dc40a02f858691e89b1cf8cbe825127558c471c650bfa7d3eed7",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/04_left_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/04_left_scene.png": "15f4a18ecc30b163c18a2db0147434e77a685d2552f793fd7730ca150c57f7ca",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/05_unblock_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/05_unblock_scene.png": "15f4a18ecc30b163c18a2db0147434e77a685d2552f793fd7730ca150c57f7ca",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/06_rebuilt_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/06_rebuilt_scene.png": "69b05d07cc3d7e01025fdd72f87f2a03052f4b320cb03930360e938cfca3c1eb",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/07_rotated_resweep_epoch4_B.png": "15f71ee765e288ccf49d0c4b847077d6f8da90a50a67aef2802f8d4df9717ac9",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/07_rotated_resweep_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/07_rotated_resweep_samples.csv": "485960a5cee6b812b1c7c9316997ecc6151cc3540a16248a0c87e0edd503e9be",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/07_rotated_resweep_scene.png": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/08_live_transaction_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/08_live_transaction_scene.png": "bcc73d24cf3929ebd00566ccce3e137a2c4eafe862499b889b10fa4ade1bc4a5",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/09_no_resurrection_epoch6_B.png": "0025d21767723b85dc6e5924edcbaf38db59e7cda9c7ac960905a4be87ad7212",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/09_no_resurrection_knowledge.png": "db1455ea617e8ddb22e40b22f02c23fdfd1b648ba7d020ae19fe805f3a8bfb7c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/09_no_resurrection_samples.csv": "05c3ec817b21ffbc9a5564e30b2d0745c343b5405d5e14a42654b43d48cc0554",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/09_no_resurrection_scene.png": "0dab2531941841531a27d063058bd563356da3967cf1b95a560415dd6ba8a533",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/12_rotated_reobserved_knowledge.png": "6545316b60a92aa4307487918582cf10f4075207c5e087a557eac6340c6c0cb6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialCut/C/12_rotated_reobserved_scene.png": "8a42fd6c0e85e5557adec75ad48cb838d7b879592b63882523e47bc5f9abd110",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/01_gray.png": "9cb530fe2bbfe0b1f445cbb63a4f4a0bdac0124a4ff24e57e80305d4b6496396",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/07_rotated_resweep.png": "73d342d91d732ab01c7636b0ff56a7cba79289134851eb419da82e2495036302",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/08_live_transaction.png": "3b91bb8c346e0318c642b3024ffa274662bc483623b4f4328f2910df4e3acb55",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/08b_left_blocked.png": "24ddaa2a75f5054dea1e3c281d954e350d343a3b2950aa593a0168814aacbaf2",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/08c_unblock_first_frame.png": "4c499ac0e899de16837d1b18f0d4fd05168a7d8db6b4175e35466f0476d9a33a",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/09_no_resurrection.png": "b6e39155e5a99b3131db53644357bb6f6f861a74ffffb266dde96e36e49ea89e",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/SpatialPartialTemporal/12_rotated_reobserved.png": "fe790d1ac8f59fa9c7f4282cb42d5da500830b08bfb43ba43fd291d3fa9de215",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/01_gray_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/01_gray_scene.png": "34500529506ca24a3d69d1a4ab74ec0c92d33181f362070195d4beaf46ec76a0",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/02_unknown_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/02_unknown_scene.png": "5eb39ea0e0bb591e355218607c289d61d483a7573e6a455d0df86eaf365f9321",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/03_live_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/03_live_scene.png": "52c1a7bf5d8f8f0ce633c6ca3ec854acc85576484660fa9ec619def15a00763c",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/06_final_gray_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/06_final_gray_scene.png": "34500529506ca24a3d69d1a4ab74ec0c92d33181f362070195d4beaf46ec76a0",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/07_clear_block_still_live_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/07_clear_block_still_live_scene.png": "74d72daf05c169aa57f14a3ebea80d40d19a42e3f36bedc9d6ee7fe8d17ffc01",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/08_no_resurrection_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/A/08_no_resurrection_scene.png": "5eb39ea0e0bb591e355218607c289d61d483a7573e6a455d0df86eaf365f9321",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/01_gray_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/01_gray_scene.png": "34500529506ca24a3d69d1a4ab74ec0c92d33181f362070195d4beaf46ec76a0",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/02_unknown_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/02_unknown_scene.png": "5eb39ea0e0bb591e355218607c289d61d483a7573e6a455d0df86eaf365f9321",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/03_live_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/03_live_scene.png": "74d72daf05c169aa57f14a3ebea80d40d19a42e3f36bedc9d6ee7fe8d17ffc01",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/04_left_black_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/04_left_black_scene.png": "5eb39ea0e0bb591e355218607c289d61d483a7573e6a455d0df86eaf365f9321",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/05_unblocked_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/05_unblocked_scene.png": "34500529506ca24a3d69d1a4ab74ec0c92d33181f362070195d4beaf46ec76a0",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/06_final_gray_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/06_final_gray_scene.png": "34500529506ca24a3d69d1a4ab74ec0c92d33181f362070195d4beaf46ec76a0",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/07_clear_block_still_live_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/07_clear_block_still_live_scene.png": "74d72daf05c169aa57f14a3ebea80d40d19a42e3f36bedc9d6ee7fe8d17ffc01",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/08_no_resurrection_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/B/08_no_resurrection_scene.png": "5eb39ea0e0bb591e355218607c289d61d483a7573e6a455d0df86eaf365f9321",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/01_gray_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/01_gray_scene.png": "34500529506ca24a3d69d1a4ab74ec0c92d33181f362070195d4beaf46ec76a0",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/02_unknown_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/02_unknown_scene.png": "5eb39ea0e0bb591e355218607c289d61d483a7573e6a455d0df86eaf365f9321",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/03_live_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/03_live_scene.png": "74d72daf05c169aa57f14a3ebea80d40d19a42e3f36bedc9d6ee7fe8d17ffc01",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/04_left_black_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/04_left_black_scene.png": "5eb39ea0e0bb591e355218607c289d61d483a7573e6a455d0df86eaf365f9321",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/05_unblocked_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/05_unblocked_scene.png": "5eb39ea0e0bb591e355218607c289d61d483a7573e6a455d0df86eaf365f9321",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/06_final_gray_knowledge.png": "45a1b1a52b867b6b63529006852930c8799428a27c35b466ad625bf006f726df",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/06_final_gray_scene.png": "34500529506ca24a3d69d1a4ab74ec0c92d33181f362070195d4beaf46ec76a0",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/07_clear_block_still_live_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/07_clear_block_still_live_scene.png": "74d72daf05c169aa57f14a3ebea80d40d19a42e3f36bedc9d6ee7fe8d17ffc01",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/08_no_resurrection_knowledge.png": "d989fcf449941ab433f8019ead2be72a0daa5a3aefc24775ecd54d197f7c15b8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/Captures/Whole/C/08_no_resurrection_scene.png": "5eb39ea0e0bb591e355218607c289d61d483a7573e6a455d0df86eaf365f9321",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/foreground-approved.json": "cea93a9a26a9c55da9ba63504fe073b0271db898836a2701826b729d9f394082",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/foreground-confirmed.json": "731e4a22fde8949a929ef3fd13ab8e924dd6e621bb6d9c4f5fc136a0dd4089a6",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/foreground-live.json": "63bc7ca7b9e971559ce93e082c432ab5e46baa651f9b1be713ced2a0a87bc635",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/OfficeStripeFinalVerified.log": "49b8c1a570ca00b3f61d7751b8c5d6e049da1ac23b7fb21f2f9cd262fa4c8c2f",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/OfficeStripeFinalVerified.summary.json": "280b6b5b0521fd957eb35cceaf92b68d8592e27ffc1dcebb49cea31b2dcb32a8",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/OfficeStripeFinalVerified_Report/index.json": "8fe059b4e69b567e2baab68d93c329ffb4aaf89ea54fe74fb680d84ccfa37317",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/power-guard.json": "e01f6e18b92f7e5c439cf714eeab5c4ce04f4feef7395d3a743a865bd3aa931d",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/source.json": "c71499efea697e7d2e591ffe00218b7f1242ad325cf317dc3656a1a8b9baa18a",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/source.patch": "7e27377dbcbafe05b5b433413017d0adcf866a0510fe3202bef059216f8361d3",
+    "Saved/GrayObjectPolicy/OfficeStripeFinalVerified/viewport-ready.json": "cc75647e554cf6231dd6a97086a49e0000523033bb79c6175e13472a3dcd6d4a"
+  },
+  "portable_image_hashes": {
+    "Docs/Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908.png": "fde515a4cfc115822b38af50817255cc39de2987f1e2a0a608bf657b7f9e1d82",
+    "Docs/Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908_AFTER_AA37.png": "b6e39155e5a99b3131db53644357bb6f6f861a74ffffb266dde96e36e49ea89e",
+    "Docs/Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908_BEFORE_AA37.png": "3c42f1beea2f604954e2ce5353d699118002dd7975ec98191775b1cef7c1e40a",
+    "Docs/Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908_STAGES.png": "23a85018fca661772217e8aa21556473cfa6d16630bd1f3075222ddeb5f575f1",
+    "Docs/Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908_TEMPORAL.png": "02e2da52fe6e2744f2cd838f3ab4902780018fec5eaefa4d20d98367bbe238f4",
+    "Docs/Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908_TEMPORAL_STAGES.png": "45550e33dc6f732449028e8c4597feedff7a7d794db3b4c1fef6b86d87bf225b"
+  },
+  "next_slice": "Single C++ fixed-AABB gameplay trigger with Clear+Block activation, unblock on end, idempotence and teardown; reuse existing authority. No new shapes, Monster Adapter, SuppressLiveVision or SaveGame."
+}

@@ -200,7 +200,7 @@ bool FDarkwellHistoryGridV2::HasResidualSurface() const
 			|| (S.State == VerifiedEmpty() && S.Opacity > 0);
 	});
 }
-void FDarkwellHistoryGridV2::BuildPresentation(TArray<FLinearColor>& OutPixels) const
+void FDarkwellHistoryGridV2::BuildPresentation(TArray<FLinearColor>& OutPixels, const TBitArray<>* GeometryFootprint) const
 {
 	OutPixels.SetNumUninitialized(Samples.Num());
 	for (int32 I = 0; I < Samples.Num(); ++I)
@@ -210,6 +210,28 @@ void FDarkwellHistoryGridV2::BuildPresentation(TArray<FLinearColor>& OutPixels) 
 		// unfiltered by M_MovingAccumulatedMemory at the FINAL shader output.
 		const bool Gate = S.State == Unresolved() || (S.State == VerifiedEmpty() && S.Opacity > 0);
 		OutPixels[I] = FLinearColor(0, 0, S.Opacity * S.FrozenAAEnvelope, Gate && !BlockedSamplesAt(I) ? 1.f : 0.f);
+	}
+	if (GeometryFootprint && GeometryFootprint->Num() == Samples.Num())
+	{
+		// Mesh clipping is a physical silhouette, not an observation/opacity edge.
+		// Bilinear filtering reaches half a texel beyond intersecting footprint cells.
+		// Extend B by one immutable-source ring there; never extend A, knowledge,
+		// or any hole INSIDE the geometry (Clear, Block, or an observation cut).
+		for (int32 I = 0; I < Samples.Num(); ++I) if (!(*GeometryFootprint)[I])
+		{
+			float Sum = 0; int32 Count = 0, Distance = 3;
+			for (int32 DY = -1; DY <= 1; ++DY) for (int32 DX = -1; DX <= 1; ++DX)
+			{
+				const int32 X = I % Size.X + DX, Y = I / Size.X + DY;
+				const int32 D = DX * DX + DY * DY;
+				if (X < 0 || Y < 0 || X >= Size.X || Y >= Size.Y || D > Distance) continue;
+				const int32 N = Y * Size.X + X;
+				if (!(*GeometryFootprint)[N]) continue;
+				if (D < Distance) { Distance = D; Sum = 0; Count = 0; }
+				Sum += Samples[N].Opacity * Samples[N].FrozenAAEnvelope; ++Count;
+			}
+			if (Count) OutPixels[I].B = Sum / Count;
+		}
 	}
 }
 bool FDarkwellHistoryGridV2::IsFullyVerifiedEmpty() const

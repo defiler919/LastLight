@@ -1,5 +1,13 @@
 # 灰色层功能检查点与稳定化施工
 
+## Unknown Partial Cut 视觉阻塞已关闭（2026-09-08）
+
+**当前切片完成。** 公司从 `81db0f1f96aa33fd7558a4d07f565962432e875d` 继续，已复现并修正 37° 灰表面条纹：几何外零 B 纹素被双线性过滤混入斜向实体轮廓。只补充几何外一圈 B 过滤支持，CPU knowledge、内部 FrozenAAEnvelope、硬 A、Whole、cap 与 0 额外首显合同不变。
+
+完整 Editor Build 成功；最终 `OfficeStripeFinalVerified` 真实 D3D12/SM6 **21/21 通过，19 clean + 2 warning，0 failed / severe**。A/B/C 各 65,392 个导出样本的知识/AA/A 与几何内部 B 差异均为 0；第 09 阶段轮廓透明度跌落 1,974 → 0。真实引擎帧的时序 AA 开启流程核对离开、解除首帧、空闲和重新观察，未见 seam 或旧灰复活。
+
+最新详细交接、构建命令、反证与修复前后原图见 [Unknown Partial Cut](SIGHTWEAVE_UNKNOWN_PARTIAL_CUT_ZH.md) 和 [公司证据摘要](Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_STRIPE_20260908.json)。下一最小切片建议为固定 AABB 的 C++ 玩法触发器，复用既有 Clear/Block；本轮未扩功能。checkpoint / stable / tag 不动，INITIALIZATION 仍 FAIL。下面各节是历史记录，其中“未完成”是 2026-09-07 当时的状态。
+
 ## Unknown 样本横切阶段成果：视觉阻塞，未完成（2026-09-07）
 
 **当前任务未完成，不要进入下一黑色层切片。** [样本级 Clear/Block 报告](SIGHTWEAVE_UNKNOWN_PARTIAL_CUT_ZH.md) 和 [Git 内证据](Evidence/SIGHTWEAVE_UNKNOWN_PARTIAL_CUT_20260907.json) 与本提交同源。起点 `26eb673876875faffaa4a136fb5943b10440bd76`，本次家里生成证据，不要求公司 Saved 存在。

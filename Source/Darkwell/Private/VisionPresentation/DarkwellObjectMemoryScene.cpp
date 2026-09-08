@@ -3834,7 +3834,7 @@ void ADarkwellObjectMemoryScene::UpdateRecordTexture(
 	FIntPoint Size;
 	if (FineHistory)
 	{
-		Record.FineHistory.BuildPresentation(Presentation);
+		Record.FineHistory.BuildPresentation(Presentation, Record.bConfirmedWholeCapture ? nullptr : &Record.GeometryFootprint);
 		Size = Record.FineHistory.GetSize();
 	}
 	else Size = Record.SpatialMemory.BuildConservativePresentation(

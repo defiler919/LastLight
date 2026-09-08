@@ -2182,10 +2182,14 @@ bool FDarkwellUnknownPartialCut::RunTest(const FString&)
     TArray<FFloat16Color> Readback;
     ENQUEUE_RENDER_COMMAND(UnknownPartialReadFineMirror)([Tex,TS,&Readback](FRHICommandListImmediate& Cmd)
      {Cmd.ReadSurfaceFloatData(Tex,FIntRect(0,0,TS.X,TS.Y),Readback,ECubeFace::CubeFace_PosX,0,0);});
-    FlushRenderingCommands(); int32 Bad=0;
+    FlushRenderingCommands(); int32 Bad=0, BadB=0;
     for(int32 I=0;I<V.SubmittedPresentation.Num();++I)
+    {
      if(!Readback.IsValidIndex(I) || float(Readback[I].A)!=V.SubmittedPresentation[I].A) ++Bad;
+     if(!Readback.IsValidIndex(I) || float(Readback[I].B)!=float(FFloat16Color(V.SubmittedPresentation[I]).B)) ++BadB;
+    }
     TestEqual(TEXT("D3D12 fine hard gate exactly mirrors CPU submission"),Bad,0);
+    TestEqual(TEXT("D3D12 bilinear B exactly mirrors half-float submission"),BadB,0);
    }
    const auto Size=Region->GetSize(); TArray<FColor> Pixels;
    const FTextureRHIRef Texture=Region->GetPresentationTexture()->GetResource()->TextureRHI;
@@ -2207,6 +2211,55 @@ bool FDarkwellUnknownPartialCut::RunTest(const FString&)
    auto Save=[&](const FString& Path,int32 W,int32 H,const TArray<FColor>& Data)
    {TArray<uint8> PNG;FImageUtils::CompressImageArray(W,H,Data,PNG);FFileHelper::SaveArrayToFile(PNG,*Path);};
    Save(Dir/(FString(Stage)+TEXT("_knowledge.png")),Size.X,Size.Y,Pixels);
+   if(FString(Stage).StartsWith(TEXT("07")) || FString(Stage).StartsWith(TEXT("09")))
+   {
+    FString CSV=TEXT("epoch,index,x,y,initial,opacity,aa,b,a,footprint,state\n");
+    for(const auto& R:P.History.GetRecords())
+    {
+     const auto* V=P.Visuals.Find(R.Epoch); if(!V) continue;
+     const auto FS=R.FineHistory.GetSize(); TArray<FColor> Gray;
+     for(int32 I=0;I<R.FineHistory.GetSamples().Num();++I)
+     {
+      const auto& Q=R.FineHistory.GetSamples()[I];
+      const auto W=Darkwell::MemoryRegionSamples::Center(R.FineHistory.GetBounds(),FS,I);
+      const auto T=V->SubmittedPresentation.IsValidIndex(I)?V->SubmittedPresentation[I]:FLinearColor::Transparent;
+      CSV+=FString::Printf(TEXT("%u,%d,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.0f,%d,%s\n"),R.Epoch,I,W.X,W.Y,Q.InitialRemembered,Q.Opacity,Q.FrozenAAEnvelope,T.B,T.A,R.GeometryFootprint.IsValidIndex(I)&&R.GeometryFootprint[I],*Q.State.ToString());
+      Gray.Add(FLinearColor(T.B,T.B,T.B,1).ToFColor(false));
+     }
+     if(!Gray.IsEmpty()) Save(Dir/FString::Printf(TEXT("%s_epoch%u_B.png"),Stage,R.Epoch),FS.X,FS.Y,Gray);
+    }
+    FFileHelper::SaveStringToFile(CSV,*(Dir/(FString(Stage)+TEXT("_samples.csv"))));
+    int32 Probes=0,UnpaddedDips=0,SubmittedDips=0;
+    for(const auto& R:P.History.GetRecords())
+    {
+     const auto* V=P.Visuals.Find(R.Epoch); if(!V || V->bPresentationRetired) continue;
+     const auto FS=R.FineHistory.GetSize(); const auto Bounds=R.FineHistory.GetBounds();
+     if(V->SubmittedPresentation.Num()!=FS.X*FS.Y || R.GeometryFootprint.Num()!=FS.X*FS.Y) continue;
+     TArray<FLinearColor> Raw; R.FineHistory.BuildPresentation(Raw);
+     for(const auto& Part:V->PartGeometry)
+     {
+      const auto L=Part.LocalBounds;
+      const FVector Corners[]{FVector(L.Min.X,L.Min.Y,L.GetCenter().Z),FVector(L.Max.X,L.Min.Y,L.GetCenter().Z),FVector(L.Max.X,L.Max.Y,L.GetCenter().Z),FVector(L.Min.X,L.Max.Y,L.GetCenter().Z)};
+      for(int32 Edge=0;Edge<4;++Edge) for(int32 K=1;K<512;++K)
+      {
+       const FVector2D W(Part.WorldTransform.TransformPosition(FMath::Lerp(Corners[Edge],Corners[(Edge+1)%4],K/512.0)));
+       const auto UV=(W-Bounds.Min)/Bounds.GetSize()*FVector2D(FS)-FVector2D(.5);
+       const int32 X=FMath::FloorToInt(UV.X),Y=FMath::FloorToInt(UV.Y);
+       if(X<0 || Y<0 || X+1>=FS.X || Y+1>=FS.Y) continue;
+       const int32 Indices[]{Y*FS.X+X,Y*FS.X+X+1,(Y+1)*FS.X+X,(Y+1)*FS.X+X+1};
+       bool InteriorFull=true,Exterior=false;
+       for(int32 I:Indices) if(R.GeometryFootprint[I]) InteriorFull &= Raw[I].B==1 && V->SubmittedPresentation[I].A==1; else Exterior=true;
+       if(!InteriorFull || !Exterior) continue; // Exclude genuine observation/cut/fade edges.
+       const float FX=UV.X-X,FY=UV.Y-Y;
+       auto Filter=[&](const TArray<FLinearColor>& T){return FMath::Lerp(FMath::Lerp(T[Indices[0]].B,T[Indices[1]].B,FX),FMath::Lerp(T[Indices[2]].B,T[Indices[3]].B,FX),FY);};
+       ++Probes; UnpaddedDips+=Filter(Raw)<.999f; SubmittedDips+=Filter(V->SubmittedPresentation)<.999f;
+      }
+     }
+    }
+    AddInfo(FString::Printf(TEXT("ROTATED_FILTER stage=%s probes=%d unpadded_dips=%d submitted_dips=%d"),Stage,Probes,UnpaddedDips,SubmittedDips));
+    TestTrue(TEXT("Rotated silhouette exercises bilinear exterior taps"),Probes>0 && UnpaddedDips>0);
+    TestEqual(TEXT("Physical silhouette does not modulate fully retained gray"),SubmittedDips,0);
+   }
    FAssetCompilingManager::Get().FinishAllCompilation();
 #if WITH_EDITOR
    if(GShaderCompilingManager) GShaderCompilingManager->FinishAllCompilation();
@@ -2220,6 +2273,7 @@ bool FDarkwellUnknownPartialCut::RunTest(const FString&)
    F.World->SendAllEndOfFrameUpdates(); Capture->CaptureScene(); FlushRenderingCommands();
    TArray<FColor> View; Target->GameThread_GetRenderTargetResource()->ReadPixels(View);
    if(TestEqual(TEXT("D3D12 scene capture is complete"),View.Num(),384*384)) Save(Dir/(FString(Stage)+TEXT("_scene.png")),384,384,View);
+
   };
 
   Snapshot(TEXT("01_gray"));
@@ -2368,10 +2422,133 @@ bool FDarkwellUnknownPartialCut::RunTest(const FString&)
     if(V.Value.Render.Proxy.IsValid()) V.Value.Render.Proxy->SetActorHiddenInGame(true);
    }
    Snapshot(TEXT("11_diagnostic_caps_only"));
+   for(auto& V:P.Visuals) if(V.Value.Render.Proxy.IsValid()) V.Value.Render.Proxy->SetActorHiddenInGame(V.Value.bPresentationRetired);
   }
+  Observe();Leave();
+  TestTrue(TEXT("Post-rotation fresh observation rebuilds cleared region"),Stored(true)>0);
+  TestEqual(TEXT("Post-rotation reobservation caps remain inside geometry"),Scene.GetCapVerticesOutsideSourceForTesting(Id),0);
+  Snapshot(TEXT("12_rotated_reobserved"));
   AddInfo(FString::Printf(TEXT("UNKNOWN_PARTIAL_CUT sequence=%s fine=%dx%d no_resurrection=1"),Sequence,S.X,S.Y));
   if(CaptureOwner) CaptureOwner->Destroy();
  }
+ return true;
+}
+
+// Temporal history must advance on real engine frames, not repeated captures
+// inside RunTest's single frame. This is visual validation, never CPU knowledge.
+class FUnknownPartialTemporalCommand final : public IAutomationLatentCommand
+{
+public:
+ explicit FUnknownPartialTemporalCommand(FAutomationTestBase* InTest):Test(InTest) {}
+ virtual ~FUnknownPartialTemporalCommand()
+ {
+  if(Room) { if(Owner) Owner->Destroy(); Room->World->RemoveFromRoot(); Room.Reset(); }
+ }
+ virtual bool Update() override
+ {
+  using namespace Darkwell::GrayObjectPolicyTests;
+  if(!Room)
+  {
+   Room=MakeUnique<FRoom>(); Room->World->AddToRoot();
+   Room->Room->ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::StationaryOnly);
+   auto& P=Room->Room->Tracked.FindChecked(Id); const auto B=Room->Room->ActualBounds(*P.Actual);
+   Center=B.GetCenter();
+   Region=Room->World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
+   Owner=Room->World->SpawnActor<AActor>(); Capture=NewObject<USceneCaptureComponent2D>(Owner);
+   Owner->AddInstanceComponent(Capture); Capture->RegisterComponent();
+   const FVector Eye(Center.X-500,Center.Y-600,750);
+   Capture->SetWorldLocation(Eye); Capture->SetWorldRotation((FVector(Center,70)-Eye).Rotation());
+   Capture->ProjectionType=ECameraProjectionMode::Orthographic; Capture->OrthoWidth=440;
+   Capture->bCaptureEveryFrame=false; Capture->bCaptureOnMovement=false; Capture->bAlwaysPersistRenderingState=true;
+   Capture->CaptureSource=ESceneCaptureSource::SCS_FinalColorLDR;
+   Capture->ShowFlags.SetTemporalAA(true); Capture->ShowFlags.SetMotionBlur(false);
+   // Fixed exposure makes independent before/after sessions comparable.
+   Capture->PostProcessSettings.bOverride_AutoExposureMinBrightness=true;
+   Capture->PostProcessSettings.bOverride_AutoExposureMaxBrightness=true;
+   Capture->PostProcessSettings.AutoExposureMinBrightness=1;
+   Capture->PostProcessSettings.AutoExposureMaxBrightness=1;
+   Target=NewObject<UTextureRenderTarget2D>(Owner); Target->InitCustomFormat(768,768,PF_B8G8R8A8,false);
+   Target->UpdateResourceImmediate(); Capture->TextureTarget=Target;
+   FString Report; FParse::Value(FCommandLine::Get(),TEXT("ReportExportPath="),Report);
+   Dir=(Report.IsEmpty()?FPaths::ProjectSavedDir()/TEXT("UnknownRegion"):FPaths::GetPath(Report)/TEXT("Captures"))/TEXT("SpatialPartialTemporal");
+   IFileManager::Get().MakeDirectory(*Dir,true);
+   FAssetCompilingManager::Get().FinishAllCompilation();
+   if(GShaderCompilingManager) GShaderCompilingManager->FinishAllCompilation();
+  }
+  auto& Scene=*Room->Room; auto& P=Scene.Tracked.FindChecked(Id);
+  if(Frame==26 || Frame==66 || Frame==121 || Frame==162 || Frame==213) Room->Face(-90);
+  if(Frame==41)
+  {
+   const auto B=P.History.GetRecords()[0].FineHistory.GetBounds();
+   CutBounds=FBox2D(FVector2D(Center.X-19.83,B.Min.Y-5),FVector2D(Center.X+20.17,B.Max.Y+5));
+   Test->TestTrue(TEXT("Temporal fixed region"),Region->ConfigureRegion(CutBounds.Min,CutBounds.Max));
+   Test->TestTrue(TEXT("Temporal initial Clear"),Region->ClearMemory()); Room->Face(90);
+  }
+  if(Frame==81)
+  {
+   auto Pose=P.Actual->GetActorTransform(); Pose.SetRotation(FRotator(0,37,0).Quaternion());
+   Test->TestTrue(TEXT("Temporal rotate 37 degrees"),Scene.SetTrackedTransformForTesting(Id,Pose)); Room->Face(90);
+  }
+  if(Frame==106) Room->Face(146);
+  if(Frame==136 || Frame==188) Room->Face(90);
+  if(Frame==161)
+  {
+   Test->TestTrue(TEXT("Temporal Block"),Region->SetBlockMemoryWrites(true));
+   Test->TestTrue(TEXT("Temporal Clear in Live"),Region->ClearMemory());
+   Test->TestTrue(TEXT("Temporal transaction same-call Live"),Scene.IsCurrentSourceVisibleForTesting(Id));
+   for(const auto& R:P.History.GetRecords()) ClearedEpoch=FMath::Max(ClearedEpoch,R.Epoch);
+  }
+  if(Frame==177) Test->TestTrue(TEXT("Temporal unblock"),Region->SetBlockMemoryWrites(false));
+  Room->Step();
+  Room->World->SendAllEndOfFrameUpdates(); Capture->CaptureScene(); FlushRenderingCommands();
+  const TCHAR* Stage=Frame==40?TEXT("01_gray"):Frame==135?TEXT("07_rotated_resweep"):
+   Frame==161?TEXT("08_live_transaction"):Frame==176?TEXT("08b_left_blocked"):
+   Frame==177?TEXT("08c_unblock_first_frame"):Frame==187?TEXT("09_no_resurrection"):
+   Frame==227?TEXT("12_rotated_reobserved"):nullptr;
+  if(Stage)
+  {
+   if(Frame>=176)
+   {
+    int32 OldInside=0,NewInside=0;
+    for(const auto& R:P.History.GetRecords()) for(int32 I=0;I<R.FineHistory.GetSamples().Num();++I)
+    {
+     const auto W=Darkwell::MemoryRegionSamples::Center(R.FineHistory.GetBounds(),R.FineHistory.GetSize(),I);
+     if(Darkwell::MemoryRegionSamples::Contains(CutBounds,W) && R.FineHistory.GetSamples()[I].InitialRemembered>0)
+      { if(R.Epoch<=ClearedEpoch) ++OldInside; else ++NewInside; }
+    }
+    Test->TestEqual(TEXT("Temporal old cleared epochs never revive"),OldInside,0);
+    if(Frame<188) Test->TestEqual(TEXT("Temporal leave and unblock do not grant new gray"),NewInside,0);
+    if(Frame==227) Test->TestTrue(TEXT("Temporal new legal observation rebuilds gray"),NewInside>0);
+   }
+   TArray<FColor> View; Target->GameThread_GetRenderTargetResource()->ReadPixels(View);
+   Test->TestEqual(TEXT("Temporal real D3D12 capture complete"),View.Num(),768*768);
+   TArray<uint8> PNG; FImageUtils::CompressImageArray(768,768,View,PNG); FFileHelper::SaveArrayToFile(PNG,*(Dir/(FString(Stage)+TEXT(".png"))));
+   Test->TestEqual(TEXT("Temporal cap stays inside source"),Scene.GetCapVerticesOutsideSourceForTesting(Id),0);
+   Test->TestTrue(TEXT("Temporal single gray contributor"),Scene.GetMaxOverlapContributorsForTesting(Id)<=1);
+   Test->TestTrue(TEXT("Temporal single cap contributor"),Scene.GetMaxCapContributorsForTesting(Id)<=1);
+   Test->AddInfo(FString::Printf(TEXT("TEMPORAL_SURFACE stage=%s engine_frame=%llu aa=%d"),Stage,GFrameCounter,IConsoleManager::Get().FindConsoleVariable(TEXT("r.AntiAliasingMethod"))->GetInt()));
+  }
+  return ++Frame>227;
+ }
+private:
+ FAutomationTestBase* Test;
+ TUniquePtr<Darkwell::GrayObjectPolicyTests::FRoom> Room;
+ AActor* Owner=nullptr;
+ USceneCaptureComponent2D* Capture=nullptr;
+ UTextureRenderTarget2D* Target=nullptr;
+ UDarkwellMemoryRegionSubsystem* Region=nullptr;
+ FVector2D Center;
+ FBox2D CutBounds=FBox2D(ForceInit);
+ FString Dir;
+ int32 Frame=1;
+ uint32 ClearedEpoch=0;
+};
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellUnknownPartialTemporal,"Darkwell.UnknownPartial.TemporalSurface",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellUnknownPartialTemporal::RunTest(const FString&)
+{
+ if(GUsingNullRHI) { AddError(TEXT("TemporalSurface requires real D3D12 rendering")); return false; }
+ ADD_LATENT_AUTOMATION_COMMAND(FUnknownPartialTemporalCommand(this));
  return true;
 }
 

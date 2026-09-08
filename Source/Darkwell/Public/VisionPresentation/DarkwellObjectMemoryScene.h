@@ -328,6 +328,7 @@ protected:
 	friend class FDarkwellPresentationResidency;
 	friend class FDarkwellUnknownRegionContract;
  friend class FDarkwellUnknownPartialCut;
+ friend class FUnknownPartialTemporalCommand;
 	friend class FDarkwellA1Residency;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;

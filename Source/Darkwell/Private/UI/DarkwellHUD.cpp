@@ -4,6 +4,7 @@
 #include "VisionPresentation/DarkwellCleanBlackRegionLab.h"
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
 #include "VisionPresentation/DarkwellBlackRegionEventAdapter.h"
+#include "VisionPresentation/DarkwellBlackoutEventVolume.h"
 
 #include "AI/DarkwellStalkerCharacter.h"
 #include "AI/DarkwellStalkerController.h"
@@ -343,9 +344,9 @@ void ADarkwellHUD::DrawHUD()
 	if (Font && MissionGameState)
 	{
 		const FString Objective = CleanBlackLab
-            ? FString::Printf(TEXT("BLACK REGION  |  %s  |  WHOLE + PARTIAL 37 deg  |  TEST EVENT: %s"),
+            ? FString::Printf(TEXT("BLACK REGION  |  %s  |  WHOLE + PARTIAL 37 deg  |  VOLUME EVENT: %s"),
                 CleanBlackLab->Trigger && CleanBlackLab->Trigger->IsActive()?TEXT("ACTIVE"):TEXT("INACTIVE"),
-                IsValid(CleanBlackLab->DemoEvent) && CleanBlackLab->DemoEvent->IsEventStarted()?TEXT("STARTED"):TEXT("IDLE"))
+                IsValid(CleanBlackLab->EventVolume) && IsValid(CleanBlackLab->EventVolume->EventAdapter) && CleanBlackLab->EventVolume->EventAdapter->IsEventStarted()?TEXT("STARTED"):TEXT("IDLE"))
             : Darkwell::GrayPolicyLab::IsWorld(GetWorld())
 			? TEXT("GRAY POLICY LAB V2  |  SIX ISOLATED ROOMS  |  PRESS F AT LAB CONSOLES")
 			: Darkwell::PropLab::IsLabWorld(GetWorld())
@@ -392,7 +393,7 @@ void ADarkwellHUD::DrawHUD()
 	if (Font)
 	{
 		DrawText(
-			CleanBlackLab ? TEXT("WASD MOVE   MOUSE AIM   APPROACH GREEN CONSOLE + FACE IT   F TOGGLE (150 cm)")
+			CleanBlackLab ? TEXT("WASD MOVE   MOUSE AIM   CYAN BOX: WALK IN/OUT TO START/END BLACKOUT   GREEN CONSOLE: F OVERRIDE")
             : TEXT("WASD MOVE   SHIFT SPRINT   MOUSE AIM   LMB TAP FIRE / HOLD AIM   RMB TAP/HOLD TOOL   R RELOAD   Q/E WHEELS   F INTERACT   TAB BACKPACK   F5 SAVE   F9 LOAD"),
 			FLinearColor(0.55f, 0.58f, 0.62f),
 			35.0f,

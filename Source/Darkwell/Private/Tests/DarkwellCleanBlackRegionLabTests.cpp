@@ -10,6 +10,10 @@
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
 #include "VisionPresentation/DarkwellBlackRegionSwitch.h"
 #include "VisionPresentation/DarkwellBlackRegionEventAdapter.h"
+#include "VisionPresentation/DarkwellBlackoutEventVolume.h"
+#include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Engine/DamageEvents.h"
 #include "Interaction/DarkwellInteractionComponent.h"
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
@@ -39,6 +43,7 @@ class FDarkwellCleanLabFrames : public IAutomationLatentCommand
  int32 Frame=0,IdleRecords=0;
  bool bPartialProbe=false;
  bool bEventDemo=false;
+ bool bVolumeDemo=false;
  float ProbeYaw=-15;
  void Render(const TCHAR* Name=nullptr)
  {
@@ -60,7 +65,7 @@ class FDarkwellCleanLabFrames : public IAutomationLatentCommand
   TArray<FColor> Pixels; Test->TestTrue(TEXT("D3D12 image readback"),Target->GameThread_GetRenderTargetResource()->ReadPixels(Pixels));
   Test->TestTrue(TEXT("Capture contains a rendered scene, not an empty frame"),Pixels.ContainsByPredicate([](FColor C){return C.R>80 || C.G>80 || C.B>80;}));
   const FString Root=FPlatformMisc::GetEnvironmentVariable(TEXT("DARKWELL_UNKNOWN_TEST_OUTPUT"));
-  const FString Dir=(Root.IsEmpty()?FPaths::ProjectSavedDir():Root)/(bEventDemo?TEXT("Captures/EventBlackLab"):TEXT("Captures/CleanBlackLab"));
+  const FString Dir=(Root.IsEmpty()?FPaths::ProjectSavedDir():Root)/(bVolumeDemo?TEXT("Captures/VolumeBlackLab"):bEventDemo?TEXT("Captures/EventBlackLab"):TEXT("Captures/CleanBlackLab"));
   IFileManager::Get().MakeDirectory(*Dir,true); TArray64<uint8> PNG; FImageUtils::PNGCompressImageArray(768,768,Pixels,PNG);
   Test->TestTrue(TEXT("Save real-frame Lab scene"),FFileHelper::SaveArrayToFile(PNG,*(Dir/(FString(Name)+TEXT(".png")))));
   Test->AddInfo(FString::Printf(TEXT("CLEAN_LAB_FRAME %s engine_frame=%llu %s"),Name,GFrameCounter,*Scene->GetStorageTelemetry()));
@@ -129,7 +134,7 @@ class FDarkwellCleanLabFrames : public IAutomationLatentCommand
 
  }
 public:
- explicit FDarkwellCleanLabFrames(FAutomationTestBase* InTest,bool Probe=false,bool EventDemo=false):Test(InTest),bPartialProbe(Probe),bEventDemo(EventDemo)
+ explicit FDarkwellCleanLabFrames(FAutomationTestBase* InTest,bool Probe=false,bool EventDemo=false,bool VolumeDemo=false):Test(InTest),bPartialProbe(Probe),bEventDemo(EventDemo),bVolumeDemo(VolumeDemo)
  {
   const auto Value=FPlatformMisc::GetEnvironmentVariable(TEXT("DARKWELL_PARTIAL_PROBE_YAW"));
   if(bPartialProbe && !Value.IsEmpty()) ProbeYaw=FCString::Atof(*Value);
@@ -137,7 +142,7 @@ public:
  virtual ~FDarkwellCleanLabFrames()
  {
   if(Fixture) Fixture->Destroy();
-  if(World) { World->DestroyWorld(true); GEngine->DestroyWorldContext(World); }
+  if(World) { if(World->HasBegunPlay()) World->EndPlay(EEndPlayReason::Quit); World->DestroyWorld(true); GEngine->DestroyWorldContext(World); }
  }
  virtual bool Update() override
  {
@@ -152,6 +157,7 @@ public:
    Player=World->SpawnActor<ADarkwellCharacter>(FVector(-200,-130,92),FRotator(0,-90,0),P);
    Player->PostInitializeComponents(); Player->DispatchBeginPlay();
    Fixture=World->SpawnActor<ADarkwellCleanBlackRegionLab>(); Fixture->PostInitializeComponents(); Fixture->DispatchBeginPlay();
+   Fixture->EventVolume->PostInitializeComponents(); Fixture->EventVolume->DispatchBeginPlay();
    Fixture->Console->PostInitializeComponents(); Fixture->Console->DispatchBeginPlay();
    Scene=Fixture->MemoryScene; Trigger=Fixture->Trigger; Trigger->PostInitializeComponents(); Trigger->DispatchBeginPlay();
    Test->TestEqual(TEXT("No pre-observed records"),Scene->GetTotalSpatialRecordCount(),0);
@@ -169,6 +175,7 @@ public:
    Render(); Render(TEXT("00_unknown"));
    Adapter=World->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
    Test->TestTrue(TEXT("Clean fixture uses existing authority"),Adapter->RequestSightWeaveAuthority(Fixture));
+   if(bVolumeDemo) { World->InitializeActorsForPlay(FURL()); World->SetBegunPlay(true); World->Tick(LEVELTICK_All,1.f/60); } // Publish physics bodies and enable real overlap dispatch.
   }
   ++Frame;
   if(bPartialProbe)
@@ -180,7 +187,18 @@ public:
   }
   if(Frame==61 || Frame==151 || Frame==241) Player->SetActorRotation(FRotator(0,45,0));
   if(Frame==91 || Frame==181 || Frame==271) Player->SetActorRotation(FRotator(0,-90,0));
-  if(bEventDemo && (Frame==121 || Frame==211))
+  if(bVolumeDemo && (Frame==121 || Frame==211))
+  {
+   Player->SetActorLocation(FVector(Frame==121?-80:-200,-130,92));
+   auto* Volume=Fixture->EventVolume.Get(); auto* Event=Volume->EventAdapter.Get();
+   Test->AddInfo(FString::Printf(TEXT("VOLUME_OVERLAP frame=%d world_begun=%d actor_begun=%d capsule_events=%d overlaps=%d box=%s player=%s"),Frame,World->HasBegunPlay(),Volume->HasActorBegunPlay(),Player->GetCapsuleComponent()->GetGenerateOverlapEvents(),Volume->EventBounds->IsOverlappingComponent(Player->GetCapsuleComponent()),*Volume->GetActorLocation().ToString(),*Player->GetActorLocation().ToString()));
+   Test->TestEqual(TEXT("Real capsule overlap drives event edge"),Event->IsEventStarted(),Frame==121);
+   Test->TestEqual(TEXT("Overlap drives fixed target"),Trigger->IsActive(),Frame==121);
+   const auto Revision=World->GetSubsystem<UDarkwellMemoryRegionSubsystem>()->GetAuthorityRevision();
+   Player->GetCapsuleComponent()->UpdateOverlaps(); Volume->EventBounds->UpdateOverlaps();
+   Test->TestEqual(TEXT("Repeated overlap updates are idempotent"),World->GetSubsystem<UDarkwellMemoryRegionSubsystem>()->GetAuthorityRevision(),Revision);
+  }
+  else if(bEventDemo && (Frame==121 || Frame==211))
   {
    auto* Event=Fixture->DemoEvent.Get(); auto* Region=World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
    const auto Location=Player->GetActorLocation();
@@ -251,6 +269,45 @@ public:
   Render(Name);
   if(Frame<300) return false;
   Test->TestFalse(TEXT("Deactivation releases block"),World->GetSubsystem<UDarkwellMemoryRegionSubsystem>()->IsBlocked());
+  if(bVolumeDemo)
+  {
+   auto* Volume=Fixture->EventVolume.Get(); auto* Event=Volume->EventAdapter.Get();
+   auto* Region=World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
+   Player->SetActorLocation(FVector(-100,-30,92));
+   Test->TestTrue(TEXT("Reentry starts again"),Event->IsEventStarted());
+   Player->SetActorRotation((Fixture->Console->GetActorLocation()-Player->GetActorLocation()).Rotation());
+   Test->TestTrue(TEXT("F works while overlapping"),Player->GetInteractionComponent()->TryInteract());
+   Test->TestFalse(TEXT("F overrides target off"),Trigger->IsActive());
+   Player->GetCapsuleComponent()->UpdateOverlaps();
+   Test->TestFalse(TEXT("Duplicate overlap does not undo F"),Trigger->IsActive());
+   Test->TestTrue(TEXT("F reactivates"),Player->GetInteractionComponent()->TryInteract());
+   Player->TakeDamage(1000,FDamageEvent(),nullptr,nullptr);
+   Test->TestFalse(TEXT("Death immediately ends event"),Event->IsEventStarted());
+   Test->TestFalse(TEXT("Death immediately unblocks"),Region->IsBlocked());
+   Player->SetActorLocation(FVector(-200,-130,92)); Player->SetActorLocation(FVector(-80,-130,92));
+   Test->TestFalse(TEXT("Corpse cannot start event"),Event->IsEventStarted());
+   Player->Destroy();
+   FActorSpawnParameters Spawn; Spawn.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+   Player=World->SpawnActor<ADarkwellCharacter>(FVector(-200,-130,92),FRotator::ZeroRotator,Spawn);
+   if(!Player->HasActorBegunPlay()) { Player->PostInitializeComponents(); Player->DispatchBeginPlay(); } Player->SetActorLocation(FVector(-80,-130,92));
+   Test->TestTrue(TEXT("New live pawn starts event"),Event->IsEventStarted());
+   Player->Destroy();
+   Test->TestFalse(TEXT("Pawn destruction ends event"),Event->IsEventStarted());
+   Test->TestFalse(TEXT("Pawn destruction unblocks"),Region->IsBlocked());
+   Player=World->SpawnActor<ADarkwellCharacter>(FVector(-200,-130,92),FRotator::ZeroRotator,Spawn);
+   if(!Player->HasActorBegunPlay()) { Player->PostInitializeComponents(); Player->DispatchBeginPlay(); } Player->SetActorLocation(FVector(-80,-130,92));
+   Test->TestTrue(TEXT("Volume active before removal"),Event->IsEventStarted());
+   Volume->Destroy();
+   Test->TestFalse(TEXT("Volume destruction unblocks"),Region->IsBlocked());
+   const FTransform Pose(FVector(10,-30,90));
+   auto* Replacement=World->SpawnActorDeferred<ADarkwellBlackoutEventVolume>(ADarkwellBlackoutEventVolume::StaticClass(),Pose);
+   Replacement->EventAdapter->Target=Trigger; Replacement->FinishSpawning(Pose);
+   Test->TestTrue(TEXT("Spawned volume discovers player already inside"),Replacement->EventAdapter->IsEventStarted());
+   World->EndPlay(EEndPlayReason::Quit);
+   Test->TestFalse(TEXT("World EndPlay releases Volume block"),Region->IsBlocked());
+   Test->TestFalse(TEXT("World EndPlay ends event"),Replacement->EventAdapter->IsEventStarted());
+   return true;
+  }
   if(bEventDemo)
   {
    auto* Event=Fixture->DemoEvent.Get(); auto* Region=World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
@@ -311,6 +368,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellBlackEventDemo,"Darkwell.BlackRegion.E
 bool FDarkwellBlackEventDemo::RunTest(const FString&)
 {
  ADD_LATENT_AUTOMATION_COMMAND(FDarkwellCleanLabFrames(this,false,true));
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellBlackVolumeDemo,"Darkwell.BlackRegion.VolumeDemo",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellBlackVolumeDemo::RunTest(const FString&)
+{
+ ADD_LATENT_AUTOMATION_COMMAND(FDarkwellCleanLabFrames(this,false,false,true));
  return true;
 }
 #endif

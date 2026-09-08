@@ -838,4 +838,5 @@ void ADarkwellCharacter::HandleDeath()
 	UpdateInteractionFocus(nullptr);
 	GetCharacterMovement()->DisableMovement();
 	LoadoutComponent->DeactivateForOwnerIncapacitated();
+ OnDied.Broadcast();
 }

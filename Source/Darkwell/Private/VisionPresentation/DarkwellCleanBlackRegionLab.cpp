@@ -3,6 +3,7 @@
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
 #include "VisionPresentation/DarkwellBlackRegionSwitch.h"
 #include "VisionPresentation/DarkwellBlackRegionEventAdapter.h"
+#include "VisionPresentation/DarkwellBlackoutEventVolume.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "Player/DarkwellCharacter.h"
@@ -80,6 +81,11 @@ void ADarkwellCleanBlackRegionLab::BeginPlay()
  Console=Sources.IsEmpty()?nullptr:Cast<ADarkwellBlackRegionSwitch>(Sources.Last());
  if(Console) Console->Target=Trigger;
  DemoEvent->Target=Trigger;
+ const FTransform EventPose(FVector(10,-30,90));
+ EventVolume=GetWorld()->SpawnActorDeferred<ADarkwellBlackoutEventVolume>(ADarkwellBlackoutEventVolume::StaticClass(),EventPose,this);
+ EventVolume->EventAdapter->Target=Trigger;
+ EventVolume->EventBounds->SetHiddenInGame(false); EventVolume->EventBounds->ShapeColor=FColor::Cyan;
+ EventVolume->FinishSpawning(EventPose);
  UE_LOG(LogTemp,Display,TEXT("CLEAN_BLACK_LAB initial=Unknown records=%d sources=4 (ground,Whole,Partial37,console) moving_room=0 trigger=Inactive"),MemoryScene->GetTotalSpatialRecordCount());
 }
 bool ADarkwellCleanBlackRegionLab::EnableDarkwellProjectFogP4(UTexture* Raw,FVector2D Min,FVector2D Inv)
@@ -110,6 +116,7 @@ void ADarkwellCleanBlackRegionLab::Tick(float Dt)
 }
 void ADarkwellCleanBlackRegionLab::EndPlay(EEndPlayReason::Type Reason)
 {
+ if(IsValid(EventVolume)) EventVolume->Destroy();
  if(IsValid(DemoEvent)) DemoEvent->EndEvent();
  if(IsValid(Console)) Console->Destroy();
  if(Trigger) Trigger->Destroy();

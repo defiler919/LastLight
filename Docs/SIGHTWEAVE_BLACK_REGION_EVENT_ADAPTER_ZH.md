@@ -1,5 +1,7 @@
 # Black Region：玩法事件适配器（2026-09-08，完成）
 
+最新切片：[Blackout Event Volume](SIGHTWEAVE_BLACKOUT_EVENT_VOLUME_ZH.md)，已绑定真实角色 overlap；本页保留适配器合同。
+
 起点 `b4ed5f175f590a23f6c372dca803dab7ab37044a`，公司 `D:\UE_projects\LastLight`，实际 UE 5.8.2。仅实现通用事件边沿到现有固定 AABB Trigger 的适配，不引入事件总线、Monster、移动黑区、shape、SaveGame、SuppressLiveVision 或性能专项。
 
 ## 接口 / 事件语义

@@ -21,6 +21,8 @@ class USpringArmComponent;
 class UStaticMeshComponent;
 struct FInputActionValue;
 
+DECLARE_MULTICAST_DELEGATE(FDarkwellCharacterDied);
+
 /** Native player pawn for the DARKWELL greybox prototype. */
 UCLASS()
 class DARKWELL_API ADarkwellCharacter : public ACharacter
@@ -29,6 +31,7 @@ class DARKWELL_API ADarkwellCharacter : public ACharacter
 
 public:
 	ADarkwellCharacter();
+ FDarkwellCharacterDied OnDied;
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual float TakeDamage(

@@ -40,6 +40,7 @@ bool FDarkwellCurrentLiveGrid::FDescriptor::Matches(const FDescriptor& O) const
 void FDarkwellCurrentLiveGrid::ResetGeometry(FName Id,TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose)
 {
  ++GeometryResets; Updates=0; Parts.Reset(); OwnershipDirtyRegions.Reset(); RegisteredScale=ActorPose.GetScale3D(); LastLegalPose=ActorPose;
+ bFullyObservedAtPose=false; bTransientWholePresentation=false;
  CachedFullGeometry.Empty();
  double Radius=0;
  for(const auto& D:Descriptors)
@@ -89,6 +90,7 @@ void FDarkwellCurrentLiveGrid::ResetGeometry(FName Id,TConstArrayView<FDescripto
 
 void FDarkwellCurrentLiveGrid::BuildCurrentLegalObservationMask(TBitArray<>& Out) const
 {
+ checkf(!IsUniformWholePresentation(),TEXT("Dense observation requested from uniform Whole state"));
  Out.Init(false,ObservationFootprint.Num());
  for(int32 PartIndex=0;PartIndex<Parts.Num();++PartIndex)
  {
@@ -100,6 +102,7 @@ void FDarkwellCurrentLiveGrid::BuildCurrentLegalObservationMask(TBitArray<>& Out
 
 void FDarkwellCurrentLiveGrid::ResumeStationaryKnowledge()
 {
+	checkf(!IsUniformWholePresentation(),TEXT("Only dense stationary observations may resume local knowledge"));
 	auto Resume = [](FDarkwellSpatialPropMemory& Memory)
 	{
 		for (auto& Cell : Memory.PrepareCurrentRaster(Memory.GetBounds(), Memory.GetSize()))
@@ -294,9 +297,17 @@ bool FDarkwellCurrentLiveGrid::Advance(float Dt,const FTransform& ActorPose,TFun
  {
   const auto Pose=P.Geometry.RelativeTransform*ActorPose;
   const bool Moved=!Pose.Equals(P.Pose,1.e-6);
+  checkf(P.Coverage.Num()==P.Local.GetCells().Num() && P.Local.GetCells().Num()==P.Local.GetSize().X*P.Local.GetSize().Y,
+   TEXT("Local geometry/cell/coverage lifetime mismatch"));
+  if(P.bUniformWholePresentation)
+  {
+   check(P.LastLegalCaptureMask.Num()==0 && P.CurrentLegalObservationMask.Num()==0);
+   P.LastLegalCaptureMask.Init(false,P.Coverage.Num());
+   P.CurrentLegalObservationMask.Init(false,P.Coverage.Num());
+  }
+  else checkf(P.LastLegalCaptureMask.Num()==P.Coverage.Num() && P.CurrentLegalObservationMask.Num()==P.Coverage.Num(),
+   TEXT("Dense observation masks changed without ResetGeometry or compact Whole transition"));
   P.bUniformWholePresentation=false; P.bWholePresentation=false;
-  if(P.LastLegalCaptureMask.Num()!=P.Coverage.Num()) P.LastLegalCaptureMask.Init(false,P.Coverage.Num());
-  if(P.CurrentLegalObservationMask.Num()!=P.Coverage.Num()) P.CurrentLegalObservationMask.Init(false,P.Coverage.Num());
   P.Pose=Pose; if(Moved) P.LastLegalCaptureMask.SetRange(0,P.LastLegalCaptureMask.Num(),false);
   const auto B=P.Local.GetBounds(); const auto S=P.Local.GetSize(); const auto Step=B.GetSize()/FVector2D(S);
   auto AddOwnershipRun=[&](const int32 Y,const int32 StartX,const int32 EndX)
@@ -380,6 +391,11 @@ FDarkwellSpatialPropMemory::FCell FDarkwellCurrentLiveGrid::Sample(const FPart& 
 }
 void FDarkwellCurrentLiveGrid::WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds,bool bIncludeBlockedLegal)
 {
+ checkf(!IsUniformWholePresentation(),TEXT("Uniform Whole capture must not enter dense snapshot lifecycle"));
+ for(const auto& P:Parts)
+  checkf(P.Local.GetCells().Num()==P.Local.GetSize().X*P.Local.GetSize().Y
+   && P.LastLegalCaptureMask.Num()==P.Local.GetCells().Num() && P.CurrentLegalObservationMask.Num()==P.Local.GetCells().Num(),
+   TEXT("Dense snapshot geometry/mask mismatch: cells=%d capture=%d observation=%d"),P.Local.GetCells().Num(),P.LastLegalCaptureMask.Num(),P.CurrentLegalObservationMask.Num());
  const auto S=GridSize(Bounds); auto Cells=Out.PrepareCurrentRaster(Bounds,S,AtlasCells.X*AtlasCells.Y);
  const auto Step=Bounds.GetSize()/FVector2D(S);
  bool FullyObserved=bFullyObservedAtPose;

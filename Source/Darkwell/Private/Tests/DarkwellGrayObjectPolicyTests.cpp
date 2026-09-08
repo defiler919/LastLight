@@ -2732,4 +2732,51 @@ bool FDarkwellBlackRegionContract::RunTest(const FString& Mode)
  return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellRejectedWholeLifecycle,
+ "Darkwell.CurrentGrid.RejectedWholeLifecycle", EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellRejectedWholeLifecycle::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ FRoom F;
+ F.Face(90); F.Step(30);
+ auto& Prop=F.Room->Tracked.FindChecked(Id);
+ const int32 Index=Prop.History.GetCurrentIndex();
+ if(!TestTrue(TEXT("Confirmed current exists"),Index!=INDEX_NONE)) return false;
+ TestTrue(TEXT("Compact Whole path exercised"),Prop.CurrentLive.IsUniformWholePresentation());
+ auto& Current=Prop.History.GetMutableRecords()[Index];
+ TestTrue(TEXT("Atomic Whole capture established"),Current.bConfirmedWholeCapture && Current.bCaptureRevisionValid);
+ const int32 PriorRecords=Prop.History.GetRecords().Num();
+ // Reproduce the invalid atomic pose left by the old swept-capture ordering.
+ Current.SnapshotTransform.AddToTranslation(FVector(1,0,0));
+ AddExpectedError(TEXT("WHOLE_FREEZE_REJECTED"),EAutomationExpectedErrorFlags::Contains,1);
+ TestFalse(TEXT("Inconsistent candidate is rejected"),F.Room->FreezeCurrentForHiddenMotion(Prop,TEXT("REPRO_REJECTED_POSE")));
+ TestEqual(TEXT("Rejected candidate releases the current slot"),Prop.History.GetCurrentIndex(),INDEX_NONE);
+ TestEqual(TEXT("Only invalid candidate removed"),Prop.History.GetRecords().Num(),PriorRecords-1);
+ F.Face(-90); F.Step(30);
+ TestEqual(TEXT("No unobserved current survives session end"),Prop.History.GetCurrentIndex(),INDEX_NONE);
+ F.Face(90); F.Step(30); F.Face(-90); F.Step(30);
+ TestTrue(TEXT("Fresh legal observation can still seal Whole"),F.Room->GetSpatialRecordCount(Id)>0);
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellSubthresholdWholePose,
+ "Darkwell.CurrentGrid.SubthresholdWholePose", EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellSubthresholdWholePose::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ FRoom F; F.Face(90); F.Step(30);
+ auto& Prop=F.Room->Tracked.FindChecked(Id);
+ auto Pose=F.Room->GetTrackedTransform(Id); Pose.AddToTranslation(FVector(.1,0,0));
+ F.Room->SetTrackedTransformForTesting(Id,Pose);
+ F.Face(91); F.Step();
+ const int32 Index=Prop.History.GetCurrentIndex();
+ if(!TestTrue(TEXT("Whole remains current after tiny legal motion"),Index!=INDEX_NONE)) return false;
+ const auto& Current=Prop.History.GetRecords()[Index];
+ AddInfo(FString::Printf(TEXT("TINY_POSE snapshot=%s grid=%s actual=%s"),*Current.SnapshotTransform.GetLocation().ToString(),*Prop.CurrentLive.LastLegalPose.GetLocation().ToString(),*Pose.GetLocation().ToString()));
+ TestTrue(TEXT("Exact capture pose matches the raster without loosening tolerance"),Current.SnapshotTransform.Equals(Prop.CurrentLive.LastLegalPose,1.e-6));
+ F.Face(-90); F.Step(30);
+ TestEqual(TEXT("Loss of sight closes current"),Prop.History.GetCurrentIndex(),INDEX_NONE);
+ TestTrue(TEXT("Tiny motion does not discard legally observed Whole"),F.Room->GetSpatialRecordCount(Id)>0);
+ return true;
+}
 #endif

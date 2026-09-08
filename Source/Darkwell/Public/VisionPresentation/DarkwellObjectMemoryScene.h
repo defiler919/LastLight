@@ -152,6 +152,8 @@ public:
 	UFUNCTION(BlueprintPure, Category="Object Memory") FString GetMovingLiveTelemetry(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Object Memory") int32 GetTrackedIdentityCount() const { return Tracked.Num(); }
 	UFUNCTION(BlueprintPure, Category="Object Memory") int32 GetTotalSpatialRecordCount() const;
+ FString GetStorageTelemetry() const;
+ double StorageProbeStart=0, StorageProbeNext=0;
 	UFUNCTION(BlueprintPure, Category="Object Memory") int32 GetSpatialRecordCount(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Object Memory") bool IsActualPresent(FName StableId) const;
 	UFUNCTION(BlueprintPure, Category="Object Memory") int32 GetTotalProxyCount() const;
@@ -330,6 +332,8 @@ protected:
  friend class FDarkwellUnknownPartialCut;
  friend class FUnknownPartialTemporalCommand;
  friend class FDarkwellBlackRegionContract;
+ friend class FDarkwellRejectedWholeLifecycle;
+ friend class FDarkwellSubthresholdWholePose;
 	friend class FDarkwellA1Residency;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;

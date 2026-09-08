@@ -1,5 +1,7 @@
 # 固定 AABB 黑区玩法触发器（2026-09-08，完成）
 
+最新运行时崩溃修复、独立干净 Lab 入口与验证见 [运行时稳定性交接](SIGHTWEAVE_BLACK_REGION_RUNTIME_STABILITY_ZH.md)。本文件下方保留前一切片记录；旧 Moving Lab 人工入口已被替换。
+
 **本切片完成：可放置 C++ Actor、显式启停接口、Lab 演示入口、生命周期清理、完整 Editor Build 和 12 项真实 D3D12 定向回归通过。** 公司仓库 `D:\UE_projects\LastLight`，分支 `codex/darkwell-prop-memory-gameplay-lab`，起点 `e39351e3481f7a7819697386d1d5d0cf43bd4a70`。实际引擎 `D:\UE_5.8` 为 5.8.2 CL56702186。运行时、测试、交接和证据同本提交，最终 SHA 由本文件所属提交确定。
 
 ## Actor 与接口

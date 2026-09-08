@@ -1,5 +1,7 @@
 # Unknown：固定 AABB 切穿 SpatialPartial（2026-09-08，完成）
 
+最新运行时崩溃修复、独立干净 Lab 入口与验证见 [运行时稳定性交接](SIGHTWEAVE_BLACK_REGION_RUNTIME_STABILITY_ZH.md)。本文件下方保留前一切片记录；旧 Moving Lab 人工入口已被替换。
+
 后续“固定 AABB 黑区玩法触发器”切片已完成，最新接口、Lab 人工步骤及 12 项验收见 [黑区触发器交接](SIGHTWEAVE_BLACK_REGION_TRIGGER_ZH.md)。下文保留本样本/视觉切片的原始验收记录。
 
 **当前切片已完成：37° 灰层竖条纹根因已复现并修正，完整 Editor Build、21 项定向自动回归和真实 D3D12 视觉验收通过。** 本次在公司 `D:\UE_projects\LastLight`，从 `81db0f1f96aa33fd7558a4d07f565962432e875d` 继续，分支 `codex/darkwell-prop-memory-gameplay-lab`。实际引擎仍为 `D:\UE_5.8`，5.8.2 CL56702186。全部新证据在公司生成，没有比较跨机器毫秒数。最终 SHA 由本文件所属提交确定。

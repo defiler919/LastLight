@@ -34,7 +34,7 @@ namespace
    const FString Command=Args.IsEmpty()?TEXT("help"):Args[0].ToLower();
    if(Command==TEXT("open"))
    {
-    UGameplayStatics::OpenLevel(World,TEXT("/Game/Maps/L_ProjectFogPropGameplayLab"),true,TEXT("PropLabOriginal?InWorldControls")); return;
+    UGameplayStatics::OpenLevel(World,TEXT("/Game/Maps/L_BlackRegionLab")); return;
    }
    if(!Darkwell::PropLab::IsLabWorld(World)) { Feedback(TEXT("Enter demo: Darkwell.BlackRegionLab open")); return; }
    auto* Demo=FindDemo(World);

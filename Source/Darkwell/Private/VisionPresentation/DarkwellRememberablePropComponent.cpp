@@ -73,6 +73,7 @@ uint64 UDarkwellRememberablePropComponent::ComputeMemoryContentRevision() const
 	{
 		Mix(GetTypeHash(Primitive));
 		if (!Primitive) continue;
+		if (Primitive->TranslucencySortPriority != 0) Mix(GetTypeHash(Primitive->TranslucencySortPriority));
 		Mix(GetTypeHash(Primitive->GetStaticMesh()));
 		const FTransform Relative = GetPrimitiveTransform(*Primitive);
 		Mix(GetTypeHash(Relative.GetTranslation()));

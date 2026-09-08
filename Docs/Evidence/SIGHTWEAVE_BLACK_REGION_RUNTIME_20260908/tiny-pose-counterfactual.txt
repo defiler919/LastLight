@@ -1,0 +1,28 @@
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.36:682][  0]LogAutomationTest: Error: Condition failed
+[2026.09.08-02.35.40:671][ 17]Cmd: Automation RunTests Darkwell.CurrentGrid.SubthresholdWholePose
+[2026.09.08-02.35.40:671][ 17]Automation: RunTests='Darkwell.CurrentGrid.SubthresholdWholePose' Queued.
+[2026.09.08-02.35.50:896][160]LogAutomationCommandLine: Display: Found 1 automation tests based on 'Darkwell.CurrentGrid.SubthresholdWholePose'
+[2026.09.08-02.35.50:896][160]LogAutomationCommandLine: Display: 	Darkwell.CurrentGrid.SubthresholdWholePose
+[2026.09.08-02.35.50:904][160]LogAutomationController: Sending RunTest SubthresholdWholePose to 369F998C4B6DC15F56450EB9154F97C9
+[2026.09.08-02.35.50:904][160]LogAutomationController: Display: Test Started. Name={SubthresholdWholePose} Path={Darkwell.CurrentGrid.SubthresholdWholePose}
+[2026.09.08-02.35.50:912][161]LogAutomationWorker: Received RunTests SubthresholdWholePose from F571146C4AD44D3C382B69A3C95563F7
+[2026.09.08-02.35.51:166][161]LogDarkwellObjectMemory: Warning: WHOLE_FREEZE_REJECTED id=Lab.InWorld.Rotate.Cabinet epoch=1 atomic=0 authority_rev=6 coverage_rev=2 pose_rev=1 policy_rev=1 geometry_rev=1 current_policy_rev=1 current_geometry_rev=1
+[2026.09.08-02.35.51:249][162]LogAutomationController: Error: Test Completed. Result={Fail} Name={SubthresholdWholePose} Path={Darkwell.CurrentGrid.SubthresholdWholePose}
+[2026.09.08-02.35.51:249][162]LogAutomationController: BeginEvents: Darkwell.CurrentGrid.SubthresholdWholePose
+[2026.09.08-02.35.51:249][162]LogAutomationController: TINY_POSE snapshot=X=-300.000 Y=650.000 Z=0.000 grid=X=-299.900 Y=650.000 Z=0.000 actual=X=-299.900 Y=650.000 Z=0.000
+[2026.09.08-02.35.51:249][162]LogAutomationController: Error: Expected 'Exact capture pose matches the raster without loosening tolerance' to be true. [D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(2777)]
+[2026.09.08-02.35.51:249][162]LogAutomationController: Warning: LogDarkwellObjectMemory: WHOLE_FREEZE_REJECTED id=Lab.InWorld.Rotate.Cabinet epoch=1 atomic=0 authority_rev=6 coverage_rev=2 pose_rev=1 policy_rev=1 geometry_rev=1 current_policy_rev=1 current_geometry_rev=1 [log]
+[2026.09.08-02.35.51:249][162]LogAutomationController: Error: Expected 'Tiny motion does not discard legally observed Whole' to be true. [D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(2780)]
+[2026.09.08-02.35.51:249][162]LogAutomationController: EndEvents: Darkwell.CurrentGrid.SubthresholdWholePose

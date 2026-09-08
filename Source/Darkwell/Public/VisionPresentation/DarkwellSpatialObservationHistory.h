@@ -13,6 +13,8 @@ struct DARKWELL_API FDarkwellObservedPrimitive
 	FBox LocalBounds = FBox(ForceInit);
 	FTransform RelativeTransform = FTransform::Identity;
 	uint64 PrimitiveKey = 0;
+ /** Authored translucent layering must survive source -> historical proxy. */
+ int32 TranslucencySortPriority = 0;
 };
 
 /**

@@ -1,0 +1,26 @@
+[2026.09.08-03.22.52:420][  0]LogRHI: Using Forced Feature Level in Editor: SM6
+[2026.09.08-03.22.52:423][  0]LogRHI: Checking if RHI D3D12 with Feature Level SM6 is supported by your system.
+[2026.09.08-03.22.52:758][  0]LogD3D12RHI:   Max supported Feature Level 12_2, shader model 6.7, binding tier 3, wave ops supported, atomic64 supported
+[2026.09.08-03.22.52:760][  0]LogD3D12RHI:   Max supported Feature Level 12_1, shader model 6.7, binding tier 3, wave ops supported, atomic64 unsupported
+[2026.09.08-03.22.52:760][  0]LogD3D12RHI:   Max supported Feature Level 12_1, shader model 6.7, binding tier 3, wave ops supported, atomic64 supported
+[2026.09.08-03.22.52:760][  0]LogRHI: RHI D3D12 with Feature Level SM6 is supported and will be used.
+[2026.09.08-03.22.52:880][  0]LogD3D12RHI: Display: Creating D3D12 RHI with Max Feature Level SM6
+[2026.09.08-03.23.15:847][ 86]LogAutomationCommandLine: Display: 	Darkwell.CurrentGrid.SubthresholdWholePose
+[2026.09.08-03.23.46:493][392]LogAutomationController: CLEAN_LAB_FRAME 00_unknown engine_frame=1092 identities=3 records=0 local_cells=0 local_mask_bits=0 fine_samples=0 uniform_parts=0 resets=0 episodes=0 record_cells=0 record_mask_bits=0 private_bytes=7502467072
+[2026.09.08-03.23.46:493][392]LogAutomationController: CLEAN_LAB_FRAME 01_live engine_frame=1181 identities=3 records=3 local_cells=40512 local_mask_bits=79488 fine_samples=0 uniform_parts=1 resets=3 episodes=3 record_cells=42348 record_mask_bits=0 private_bytes=7725940736
+[2026.09.08-03.23.46:493][392]LogAutomationController: CLEAN_LAB_FRAME 02_memory engine_frame=1211 identities=3 records=3 local_cells=40512 local_mask_bits=79488 fine_samples=63168 uniform_parts=1 resets=3 episodes=3 record_cells=42348 record_mask_bits=63168 private_bytes=7569698816
+[2026.09.08-03.23.46:493][392]LogAutomationController: CLEAN_LAB_FRAME 03_clear engine_frame=1241 identities=3 records=4 local_cells=40512 local_mask_bits=81024 fine_samples=1279680 uniform_parts=0 resets=3 episodes=5 record_cells=118380 record_mask_bits=1894080 private_bytes=7566696448
+[2026.09.08-03.23.46:493][392]LogAutomationController: CLEAN_LAB_FRAME 04_blocked_live engine_frame=1271 identities=3 records=4 local_cells=40512 local_mask_bits=79488 fine_samples=50880 uniform_parts=1 resets=4 episodes=7 record_cells=45528 record_mask_bits=716160 private_bytes=7550382080
+[2026.09.08-03.23.46:493][392]LogAutomationController: CLEAN_LAB_FRAME 05_left_blocked engine_frame=1301 identities=3 records=2 local_cells=40512 local_mask_bits=79488 fine_samples=50880 uniform_parts=1 resets=4 episodes=7 record_cells=41580 record_mask_bits=665280 private_bytes=7550447616
+[2026.09.08-03.23.46:493][392]LogAutomationController: CLEAN_LAB_FRAME 06_deactivated_first_frame engine_frame=1302 identities=3 records=3 local_cells=40512 local_mask_bits=81024 fine_samples=665280 uniform_parts=0 resets=4 episodes=8 record_cells=79980 record_mask_bits=1279680 private_bytes=7588732928
+[2026.09.08-03.23.46:493][392]LogAutomationController: CLEAN_LAB_FRAME 06_deactivated_idle engine_frame=1331 identities=3 records=3 local_cells=40512 local_mask_bits=81024 fine_samples=665280 uniform_parts=0 resets=4 episodes=8 record_cells=79980 record_mask_bits=1279680 private_bytes=7588798464
+[2026.09.08-03.23.46:493][392]LogAutomationController: CLEAN_LAB_FRAME 07_reobserved engine_frame=1391 identities=3 records=3 local_cells=40512 local_mask_bits=79488 fine_samples=63168 uniform_parts=1 resets=5 episodes=10 record_cells=42348 record_mask_bits=677568 private_bytes=7556227072
+[2026.09.08-03.23.51:891][626]LogAutomationController: GRID_REPRO confirmed=1 cells=256 size=16x16 capture=0 observation=0
+[2026.09.08-03.23.52:009][626]LogDarkwellObjectMemory: Verbose: WHOLE_FREEZE_REJECTED id=Lab.InWorld.Rotate.Cabinet epoch=1 atomic=0 authority_rev=5 coverage_rev=1 pose_rev=1 policy_rev=1 geometry_rev=1 current_policy_rev=1 current_geometry_rev=1
+[2026.09.08-03.23.52:245][627]LogAutomationController: Sending RunTest SubthresholdWholePose to 03B5B9004F203EF235161893BEE20580
+[2026.09.08-03.23.52:245][627]LogAutomationController: Display: Test Started. Name={SubthresholdWholePose} Path={Darkwell.CurrentGrid.SubthresholdWholePose}
+[2026.09.08-03.23.52:255][628]LogAutomationWorker: Received RunTests SubthresholdWholePose from 2F81A58448E52FB3D1809793FDEAAFC5
+[2026.09.08-03.23.52:465][629]LogAutomationController: Display: Test Completed. Result={Success} Name={SubthresholdWholePose} Path={Darkwell.CurrentGrid.SubthresholdWholePose}
+[2026.09.08-03.23.52:466][629]LogAutomationController: BeginEvents: Darkwell.CurrentGrid.SubthresholdWholePose
+[2026.09.08-03.23.52:466][629]LogAutomationController: TINY_POSE snapshot=X=-299.900 Y=650.000 Z=0.000 grid=X=-299.900 Y=650.000 Z=0.000 actual=X=-299.900 Y=650.000 Z=0.000
+[2026.09.08-03.23.52:466][629]LogAutomationController: EndEvents: Darkwell.CurrentGrid.SubthresholdWholePose

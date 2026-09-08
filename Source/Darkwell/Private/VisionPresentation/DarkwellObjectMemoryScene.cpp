@@ -17,6 +17,10 @@
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMemory.h"
 #include "HAL/PlatformTime.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+#include "Misc/Paths.h"
+#include "UnrealClient.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Math/Float16Color.h"
@@ -2809,6 +2813,10 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
          if(SweptIndex!=INDEX_NONE)
          {
           auto& Current=Prop.History.GetMutableRecords()[SweptIndex]; Prop.LocalEpoch=Current.Epoch;
+          // The sweep proves the current physical pose, including when this
+          // slot was opened at a different last-visible pose. Commit pose and
+          // raster together before stamping or sealing the atomic Whole capture.
+          Prop.History.UpdateCurrentObservedPosePreservingEvidence(Transform);
           Prop.CurrentLive.AdvanceConfirmedWhole(DeltaSeconds,Transform,Current.SpatialMemory,Bounds,Coverage);
           StampConfirmedWholeCapture(Prop,Current,CoverageSnapshot);
           Prop.ObservationState=EObservationState::ObservedArmed;
@@ -3243,6 +3251,9 @@ void ADarkwellObjectMemoryScene::StampConfirmedWholeCapture(
 	const FCoverageSnapshot& CoverageSnapshot) const
 {
 	if (Record.Primitives.IsEmpty()) CaptureObservedContent(Prop, Record);
+	// A capture owns the exact pose used to build its raster. Dirty/cache
+	// tolerances (including sub-0.25 cm motion) must not skip this transaction.
+	Record.SnapshotTransform = Prop.CurrentLive.LastLegalPose;
 	Record.bConfirmedWholeCapture = true;
 	Record.bCaptureRevisionValid = CoverageSnapshot.bValid
 		&& CoverageSnapshot.TransformRevision == Prop.TransformRevision
@@ -3377,8 +3388,11 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 				*Prop.StableId.ToString(), Epoch, bAtomicCapture ? 1 : 0,
 				Current.CaptureAuthorityRevision, Current.CaptureCoverageRevision,
 				Current.CapturePoseRevision, Current.CapturePolicyRevision,
-				Current.CaptureGeometryRevision, Prop.PolicyRevision,
-				Prop.CurrentLive.GeometryResets);
+					Current.CaptureGeometryRevision, Prop.PolicyRevision,
+					Prop.CurrentLive.GeometryResets);
+			// Rejection ends this invalid candidate. It must not survive EndSession
+			// and enter the dense snapshot path with a uniform Whole representation.
+			AbandonCurrentObservationWithoutHistory(Prop);
 			return false;
 		}
 	}
@@ -3543,7 +3557,7 @@ void ADarkwellObjectMemoryScene::CaptureObservedContent(
 	Record.Primitives.Reset();
 	for (const UStaticMeshComponent* Part : Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives())
 		if (Part && Part->GetStaticMesh()) Record.Primitives.Add({Part->GetStaticMesh(),
-			Part->GetStaticMesh()->GetBoundingBox(), UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part), Part->GetUniqueID()});
+			Part->GetStaticMesh()->GetBoundingBox(), UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part), Part->GetUniqueID(),Part->TranslucencySortPriority});
 }
 
 void ADarkwellObjectMemoryScene::EnsureRecordVisual(
@@ -3950,6 +3964,7 @@ AActor* ADarkwellObjectMemoryScene::SpawnMemoryProxy(
 		Mesh->SetupAttachment(Root);
 		Mesh->SetStaticMesh(SourceMesh);
 		Mesh->SetRelativeTransform(Source.RelativeTransform);
+		Mesh->TranslucencySortPriority=Source.TranslucencySortPriority;
 		Mesh->SetMobility(EComponentMobility::Movable);
 		Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Mesh->SetGenerateOverlapEvents(false);
@@ -6034,6 +6049,21 @@ TArray<TWeakObjectPtr<UObject>> ADarkwellObjectMemoryScene::GetOwnedPresentation
 }
 #endif
 
+FString ADarkwellObjectMemoryScene::GetStorageTelemetry() const
+{
+ int64 Cells=0,Masks=0,Fine=0,Records=0,Resets=0,Episodes=0,RecordMasks=0,RecordCells=0;
+ int32 Uniform=0;
+ for(const auto& Pair:Tracked)
+ {
+  const auto& P=Pair.Value; Records+=P.History.GetRecords().Num(); Resets+=P.CurrentLive.GeometryResets; Episodes+=P.ObservationEpisode;
+  for(const auto& Part:P.CurrentLive.Parts)
+  { Cells+=Part.Local.GetCells().Num(); Masks+=Part.LastLegalCaptureMask.Num()+Part.CurrentLegalObservationMask.Num(); Uniform+=Part.bUniformWholePresentation?1:0; }
+  for(const auto& R:P.History.GetRecords()) { Fine+=R.FineHistory.GetSamples().Num(); RecordMasks+=R.LastLegalCaptureMask.Num()+R.MemoryRegionRetainedMask.Num(); RecordCells+=R.SpatialMemory.GetCells().Num(); }
+ }
+ return FString::Printf(TEXT("identities=%d records=%lld local_cells=%lld local_mask_bits=%lld fine_samples=%lld uniform_parts=%d resets=%lld episodes=%lld record_cells=%lld record_mask_bits=%lld private_bytes=%llu"),
+  Tracked.Num(),Records,Cells,Masks,Fine,Uniform,Resets,Episodes,RecordCells,RecordMasks,FPlatformMemory::GetStats().UsedVirtual);
+}
+
 void ADarkwellObjectMemoryScene::UpdateMemory(
 	const float DeltaSeconds,
 	FVector ObserverLocation)
@@ -6085,6 +6115,23 @@ void ADarkwellObjectMemoryScene::UpdateMemory(
  RuntimeFrame.CoverageCacheHits=CoverageFog?CoverageFog->GetCoverageCacheHitsForTesting()-HitsBefore:0;
 	AdvanceWholePreparation();
 	FinalizeHistoryRuntimeTelemetry(UpdateRoomStartCycles);
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+ int32 SoakSeconds=0;
+ if(FParse::Value(FCommandLine::Get(),TEXT("DarkwellMemorySoakSeconds="),SoakSeconds) && SoakSeconds>0)
+ {
+  const double Now=FPlatformTime::Seconds(); if(StorageProbeStart==0) StorageProbeStart=Now;
+  const double Elapsed=Now-StorageProbeStart;
+  if(Elapsed>=StorageProbeNext || Elapsed>=SoakSeconds)
+  {
+   UE_LOG(LogDarkwellObjectMemory,Display,TEXT("MEMORY_STORAGE seconds=%.2f frame=%llu update_us=%.2f %s"),Elapsed,RuntimeFrameSequence,RuntimeFrame.MovingPropLabGameThreadUs,*GetStorageTelemetry());
+   StorageProbeNext=Elapsed+10;
+   FString Output;
+   if(Elapsed>=10 && Elapsed<20 && FParse::Value(FCommandLine::Get(),TEXT("DarkwellMemorySoakOutput="),Output))
+    FScreenshotRequest::RequestScreenshot(Output/TEXT("GameViewport.png"),false,false);
+  }
+  if(Elapsed>=SoakSeconds) { UE_LOG(LogDarkwellObjectMemory,Display,TEXT("MEMORY_SOAK_COMPLETE")); FPlatformMisc::RequestExit(false); }
+ }
+#endif
 }
 
 namespace

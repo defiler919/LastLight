@@ -52,6 +52,8 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
   FDescriptor Geometry;
   FDarkwellSpatialPropMemory Local, Raster;
   TArray<float> Coverage, RasterCoverage;
+  // Dense state: masks match Local cells exactly. Confirmed uniform Whole
+  // intentionally releases both masks; only Advance may reenter dense sampling.
   // Current contact and accumulated knowledge at the last legal rigid pose.
   TBitArray<> CurrentLegalObservationMask, LastLegalCaptureMask;
   FTransform Pose=FTransform::Identity;

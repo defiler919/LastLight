@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "UI/DarkwellHUD.h"
+#include "VisionPresentation/DarkwellCleanBlackRegionLab.h"
+#include "VisionPresentation/DarkwellBlackRegionTrigger.h"
 
 #include "AI/DarkwellStalkerCharacter.h"
 #include "AI/DarkwellStalkerController.h"
@@ -332,12 +334,17 @@ void ADarkwellHUD::DrawHUD()
 		}
 	}
 
+	ADarkwellCleanBlackRegionLab* CleanBlackLab=nullptr;
+	for(TActorIterator<ADarkwellCleanBlackRegionLab> It(GetWorld());It;++It) { CleanBlackLab=*It; break; }
 	const ADarkwellGameState* MissionGameState = GetWorld()
 		? GetWorld()->GetGameState<ADarkwellGameState>()
 		: nullptr;
 	if (Font && MissionGameState)
 	{
-		const FString Objective = Darkwell::GrayPolicyLab::IsWorld(GetWorld())
+		const FString Objective = CleanBlackLab
+            ? FString::Printf(TEXT("BLACK REGION  |  %s  |  WHOLE + PARTIAL 37 deg  |  Observe / activate / leave / deactivate / observe"),
+                CleanBlackLab->Trigger && CleanBlackLab->Trigger->IsActive()?TEXT("ACTIVE"):TEXT("INACTIVE"))
+            : Darkwell::GrayPolicyLab::IsWorld(GetWorld())
 			? TEXT("GRAY POLICY LAB V2  |  SIX ISOLATED ROOMS  |  PRESS F AT LAB CONSOLES")
 			: Darkwell::PropLab::IsLabWorld(GetWorld())
 			? TEXT("PROP GAMEPLAY LAB  |  Darkwell.PropLab help  |  MOVING MEMORY: SpatialEvidenceOnly") : FString::Printf(
@@ -383,7 +390,8 @@ void ADarkwellHUD::DrawHUD()
 	if (Font)
 	{
 		DrawText(
-			TEXT("WASD MOVE   SHIFT SPRINT   MOUSE AIM   LMB TAP FIRE / HOLD AIM   RMB TAP/HOLD TOOL   R RELOAD   Q/E WHEELS   F INTERACT   TAB BACKPACK   F5 SAVE   F9 LOAD"),
+			CleanBlackLab ? TEXT("WASD MOVE   MOUSE AIM   ~ CONSOLE: Darkwell.BlackRegionLab activate / deactivate / status")
+            : TEXT("WASD MOVE   SHIFT SPRINT   MOUSE AIM   LMB TAP FIRE / HOLD AIM   RMB TAP/HOLD TOOL   R RELOAD   Q/E WHEELS   F INTERACT   TAB BACKPACK   F5 SAVE   F9 LOAD"),
 			FLinearColor(0.55f, 0.58f, 0.62f),
 			35.0f,
 			Canvas->ClipY - 42.0f,

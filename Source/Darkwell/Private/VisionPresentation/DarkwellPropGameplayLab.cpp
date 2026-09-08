@@ -73,7 +73,8 @@ namespace Darkwell::PropLab
   const FString Prefix = World->StreamingLevelsPrefix;
   if (!Prefix.IsEmpty()) Name.ReplaceInline(*Prefix, TEXT(""));
 	return Name == TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")
-		|| Name == TEXT("/Game/Maps/L_SightWeaveGrayPolicyLab");
+		|| Name == TEXT("/Game/Maps/L_SightWeaveGrayPolicyLab")
+        || Name == TEXT("/Game/Maps/L_BlackRegionLab");
 #else
   return false;
 #endif

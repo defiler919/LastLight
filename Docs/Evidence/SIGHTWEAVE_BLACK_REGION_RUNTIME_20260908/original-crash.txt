@@ -1,0 +1,4 @@
+[2026.09.08-02.17.54:961][ 82]LogWindows: Error: appError called: Assertion failed: Index>=0 && Index<NumBits [File:D:\UE_5.8\Engine\Source\Runtime\Core\Public\Containers\BitArray.h] [Line: 1489]
+[2026.09.08-02.17.56:107][ 82]LogWindows: Error: Assertion failed: Index>=0 && Index<NumBits [File:D:\UE_5.8\Engine\Source\Runtime\Core\Public\Containers\BitArray.h] [Line: 1489]
+[2026.09.08-02.17.56:107][ 82]LogWindows: Error: [Callstack] 0x000002908e25d374 UnrealEditor-Darkwell.dll!FDarkwellCurrentLiveGrid::Sample() [D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCurrentLiveGrid.cpp:374]
+[2026.09.08-02.17.56:107][ 82]LogWindows: Error: [Callstack] 0x000002908e26fdd1 UnrealEditor-Darkwell.dll!FDarkwellCurrentLiveGrid::WriteWorldSnapshot() [D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCurrentLiveGrid.cpp:407]

@@ -71,6 +71,10 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  bool MatchesGeometry(TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose) const;
  bool Advance(float Dt,const FTransform& ActorPose,TFunctionRef<float(FVector2D)> LegalCoverage,TFunction<bool(const FBox2D&,float&)> Uniform={});
  void WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds,bool bIncludeBlockedLegal=false);
+ /** Physical-edge display envelope; capture must independently keep per-part geometry gates. */
+ void WritePresentationSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds,bool bIncludeBlockedLegal=false);
+ /** Repair only coarse geometry-exterior zeros using the same part's proven local edge. */
+ void ExtendCaptureAtPhysicalEdges(const FBox2D& Bounds,FIntPoint CoarseSize,int32 SamplesPerCell,TBitArray<>& Mask) const;
  void WritePartRasters(TFunctionRef<float(FVector2D)> LegalCoverage,bool bTransient,TFunction<bool(const FBox2D&,float&)> Uniform={},
   TFunction<bool(const FBox2D&,FIntPoint,TArray<float>&)> CanonicalRaster={});
  bool HasAnyLegalObservation(const FTransform& ActorPose,TFunctionRef<float(FVector2D)> Query,TFunctionRef<bool(const FBox2D&,float&)> Uniform);
@@ -112,6 +116,7 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
  uint64 Updates=0, GeometryResets=0, Queries=0, SamplesTouched=0;
  FIntPoint AtlasCells=FIntPoint::ZeroValue;
 private:
+ void WriteSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds,bool bIncludeBlockedLegal,bool bPresentation);
  mutable TBitArray<> CachedFullGeometry;
  mutable FBox2D CachedFullGeometryBounds;
  mutable FIntPoint CachedFullGeometrySize=FIntPoint::ZeroValue;

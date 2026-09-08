@@ -34,6 +34,8 @@ class FDarkwellCleanLabFrames : public IAutomationLatentCommand
  USceneCaptureComponent2D* Capture=nullptr;
  UTextureRenderTarget2D* Target=nullptr;
  int32 Frame=0,IdleRecords=0;
+ bool bPartialProbe=false;
+ float ProbeYaw=-15;
  void Render(const TCHAR* Name=nullptr)
  {
   FAssetCompilingManager::Get().FinishAllCompilation();
@@ -52,15 +54,82 @@ class FDarkwellCleanLabFrames : public IAutomationLatentCommand
     }
    }
   TArray<FColor> Pixels; Test->TestTrue(TEXT("D3D12 image readback"),Target->GameThread_GetRenderTargetResource()->ReadPixels(Pixels));
+  Test->TestTrue(TEXT("Capture contains a rendered scene, not an empty frame"),Pixels.ContainsByPredicate([](FColor C){return C.R>80 || C.G>80 || C.B>80;}));
   const FString Root=FPlatformMisc::GetEnvironmentVariable(TEXT("DARKWELL_UNKNOWN_TEST_OUTPUT"));
   const FString Dir=(Root.IsEmpty()?FPaths::ProjectSavedDir():Root)/TEXT("Captures/CleanBlackLab");
   IFileManager::Get().MakeDirectory(*Dir,true); TArray64<uint8> PNG; FImageUtils::PNGCompressImageArray(768,768,Pixels,PNG);
   Test->TestTrue(TEXT("Save real-frame Lab scene"),FFileHelper::SaveArrayToFile(PNG,*(Dir/(FString(Name)+TEXT(".png")))));
   Test->AddInfo(FString::Printf(TEXT("CLEAN_LAB_FRAME %s engine_frame=%llu %s"),Name,GFrameCounter,*Scene->GetStorageTelemetry()));
+  if(bPartialProbe)
+  {
+   const auto& Prop=Scene->Tracked.FindChecked(TEXT("BlackLab.Partial"));
+   for(const auto& Record:Prop.History.GetRecords())
+   {
+    if(!Record.FineHistory.IsInitialized()) continue;
+    FString Fine=TEXT("index,capture,geometry,initial,opacity,envelope,state\n");
+    const auto& Samples=Record.FineHistory.GetSamples();
+    for(int32 I=0;I<Samples.Num();++I)
+    {const auto& S=Samples[I];Fine+=FString::Printf(TEXT("%d,%d,%d,%.9g,%.9g,%.9g,%s\n"),I,Record.LastLegalCaptureMask[I]?1:0,Record.GeometryFootprint[I]?1:0,S.InitialRemembered,S.Opacity,S.FrozenAAEnvelope,*S.State.ToString());}
+    FFileHelper::SaveStringToFile(Fine,*(Dir/(FString(Name)+TEXT("_fine.csv"))));
+    const auto* Visual=Prop.Visuals.Find(Record.Epoch);
+    if(FCString::Strcmp(Name,TEXT("probe_left"))==0)
+    {
+     const auto& Part=Prop.CurrentLive.Parts[0]; const auto Size=Record.FineHistory.GetSize();
+     int32 Checked=0,Missing=0;
+     for(int32 X=5;X<Part.Local.GetSize().X-5;++X)
+     {
+      const int32 Row=ProbeYaw<0?0:Part.Local.GetSize().Y-1;
+      if(!Part.LastLegalCaptureMask[Row*Part.Local.GetSize().X+X]) continue;
+      const auto B=Part.Local.GetBounds();
+      const auto L=B.Min+B.GetSize()*FVector2D((X+.5)/Part.Local.GetSize().X,ProbeYaw<0?0.00001:0.99999);
+      const auto W=FVector2D(Part.Pose.TransformPosition(FVector(L,0)));
+      const auto UV=(W-Record.FineHistory.GetBounds().Min)/Record.FineHistory.GetBounds().GetSize();
+      const int32 I=FMath::FloorToInt(UV.Y*Size.Y)*Size.X+FMath::FloorToInt(UV.X*Size.X);
+      ++Checked; Missing+=!Record.LastLegalCaptureMask[I] || !Visual || Visual->SubmittedPresentation[I].A<1 || Visual->SubmittedPresentation[I].B<=0;
+     }
+     Test->TestTrue(TEXT("Partially observed front has enough proven edge samples"),Checked>20);
+     Test->TestEqual(TEXT("Proven physical edge survives capture and final gate without a fence"),Missing,0);
+     Test->AddInfo(FString::Printf(TEXT("PARTIAL_EDGE observer_yaw=%.3f checked=%d missing=%d"),ProbeYaw,Checked,Missing));
+    }
+        if(Visual && !Visual->SubmittedPresentation.IsEmpty())
+    for(int32 Channel=2;Channel<4;++Channel)
+    {
+     TArray<FColor> Mask; for(const auto& P:Visual->SubmittedPresentation) {const uint8 V=FMath::RoundToInt(FMath::Clamp(Channel==2?P.B:P.A,0.f,1.f)*255);Mask.Add(FColor(V,V,V,255));}
+     TArray64<uint8> Bytes;const auto S=Record.FineHistory.GetSize();FImageUtils::PNGCompressImageArray(S.X,S.Y,Mask,Bytes);
+     FFileHelper::SaveArrayToFile(Bytes,*(Dir/FString::Printf(TEXT("%s_history_%d.png"),Name,Channel)));
+    }
+   }
+   for(int32 PartIndex=0;PartIndex<Prop.CurrentLive.Parts.Num();++PartIndex)
+   {
+    const auto& Part=Prop.CurrentLive.Parts[PartIndex];
+    FString CSV=TEXT("index,coverage,observation,capture,appearance,live\n");
+    for(int32 I=0;I<Part.Local.GetCells().Num();++I)
+    { const auto& C=Part.Local.GetCells()[I]; CSV+=FString::Printf(TEXT("%d,%.9g,%d,%d,%.9g,%.9g\n"),I,Part.Coverage[I],Part.CurrentLegalObservationMask[I]?1:0,Part.LastLegalCaptureMask[I]?1:0,C.AppearanceBlend,C.LiveBlend); }
+    FFileHelper::SaveStringToFile(CSV,*(Dir/(FString(Name)+TEXT("_local.csv"))));
+    CSV=TEXT("index,R,G,B,A\n");
+    for(int32 I=0;I<Part.Raster.GetCells().Num();++I)
+    {const auto C=Part.Raster.Presentation(I); CSV+=FString::Printf(TEXT("%d,%.9g,%.9g,%.9g,%.9g\n"),I,C.R,C.G,C.B,C.A);}
+    FFileHelper::SaveStringToFile(CSV,*(Dir/(FString(Name)+TEXT("_world.csv"))));
+    const auto Size=Part.Raster.GetSize()*4;
+    const auto& Submitted=Prop.CurrentPresentation.LivePixels[PartIndex];
+    if(Submitted.Num()==Size.X*Size.Y)
+    for(int32 Channel=0;Channel<4;++Channel)
+    {
+     TArray<FColor> Mask; for(const auto& P:Submitted) {const float V=Channel==0?P.R:Channel==1?P.G:Channel==2?P.B:P.A; const uint8 B=FMath::RoundToInt(FMath::Clamp(V,0.f,1.f)*255);Mask.Add(FColor(B,B,B,255));}
+     TArray64<uint8> Bytes;FImageUtils::PNGCompressImageArray(Size.X,Size.Y,Mask,Bytes);
+     FFileHelper::SaveArrayToFile(Bytes,*(Dir/FString::Printf(TEXT("%s_submitted_%d.png"),Name,Channel)));
+    }
+    Test->AddInfo(FString::Printf(TEXT("PARTIAL_PROBE %s parts=%d local=%dx%d raster=%dx%d bounds=%s pose=%s"),Name,Prop.CurrentLive.Parts.Num(),Part.Local.GetSize().X,Part.Local.GetSize().Y,Part.Raster.GetSize().X,Part.Raster.GetSize().Y,*Part.Raster.GetBounds().ToString(),*Part.Pose.ToHumanReadableString()));
+   }
+  }
 
  }
 public:
- explicit FDarkwellCleanLabFrames(FAutomationTestBase* InTest):Test(InTest) {}
+ explicit FDarkwellCleanLabFrames(FAutomationTestBase* InTest,bool Probe=false):Test(InTest),bPartialProbe(Probe)
+ {
+  const auto Value=FPlatformMisc::GetEnvironmentVariable(TEXT("DARKWELL_PARTIAL_PROBE_YAW"));
+  if(bPartialProbe && !Value.IsEmpty()) ProbeYaw=FCString::Atof(*Value);
+ }
  virtual ~FDarkwellCleanLabFrames()
  {
   if(Fixture) Fixture->Destroy();
@@ -97,6 +166,13 @@ public:
    Test->TestTrue(TEXT("Clean fixture uses existing authority"),Adapter->RequestSightWeaveAuthority(Fixture));
   }
   ++Frame;
+  if(bPartialProbe)
+  {
+   Player->SetActorRotation(FRotator(0,Frame<=180?ProbeYaw:Frame<=210?-90:45,0));
+   Adapter->Tick(1.f/60); Scene->UpdateMemory(1.f/60,Player->GetActorLocation());
+   Render(Frame==30?TEXT("probe_30"):Frame==90?TEXT("probe_90"):Frame==180?TEXT("probe_180"):Frame==210?TEXT("probe_left"):Frame==270?TEXT("probe_full"):nullptr);
+   return Frame>=270;
+  }
   if(Frame==61 || Frame==151 || Frame==241) Player->SetActorRotation(FRotator(0,45,0));
   if(Frame==91 || Frame==181 || Frame==271) Player->SetActorRotation(FRotator(0,-90,0));
   if(Frame==121) Test->TestTrue(TEXT("Box fully contains Whole and cuts Partial"),Trigger->Activate());
@@ -138,6 +214,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellCleanBlackRegionLabTest,
 bool FDarkwellCleanBlackRegionLabTest::RunTest(const FString&)
 {
  ADD_LATENT_AUTOMATION_COMMAND(FDarkwellCleanLabFrames(this));
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellCleanPartialProbe,"Darkwell.BlackRegion.CurrentPartialProbe",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellCleanPartialProbe::RunTest(const FString&)
+{
+ ADD_LATENT_AUTOMATION_COMMAND(FDarkwellCleanLabFrames(this,true));
  return true;
 }
 #endif

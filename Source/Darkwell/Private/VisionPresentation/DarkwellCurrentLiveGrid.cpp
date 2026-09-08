@@ -390,6 +390,34 @@ FDarkwellSpatialPropMemory::FCell FDarkwellCurrentLiveGrid::Sample(const FPart& 
  return C;
 }
 void FDarkwellCurrentLiveGrid::WriteWorldSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds,bool bIncludeBlockedLegal)
+{ WriteSnapshot(Out,Bounds,bIncludeBlockedLegal,false); }
+void FDarkwellCurrentLiveGrid::ExtendCaptureAtPhysicalEdges(const FBox2D& Bounds,FIntPoint Coarse,int32 K,TBitArray<>& Mask) const
+{
+ check(K>0 && Mask.Num()==Coarse.X*Coarse.Y*K*K);
+ const FIntPoint Fine=Coarse*K; const auto Step=Bounds.GetSize()/FVector2D(Coarse);
+ for(const auto& P:Parts)
+ {
+  const auto PartBounds=XY(P.Geometry.LocalBounds.TransformBy(P.Pose));
+  for(int32 Y=0;Y<Coarse.Y;++Y) for(int32 X=0;X<Coarse.X;++X)
+  {
+   const auto Min=Bounds.Min+Step*FVector2D(X,Y); const auto Center=Min+Step*.5;
+   if(!PartBounds.Intersect(FBox2D(Min,Min+Step))) continue;
+   // Interior unknown cells are real observation cuts and must stay untouched.
+   const auto Local=FVector2D(P.Pose.InverseTransformPosition(FVector(Center,P.Pose.GetLocation().Z)));
+   if(P.Local.GetBounds().IsInside(Local) || Sample(P,Center,true).DiscoveredPresent<=0) continue;
+   for(int32 SY=0;SY<K;++SY) for(int32 SX=0;SX<K;++SX)
+   {
+    const auto FineMin=Min+Step*FVector2D(SX,SY)/K;
+    if(IntersectsWholeCell(P.Geometry.LocalBounds,P.Pose,FBox2D(FineMin,FineMin+Step/K))
+     && Sample(P,FineMin+Step/(2*K),true).DiscoveredPresent>0)
+     Mask[(Y*K+SY)*Fine.X+X*K+SX]=true;
+   }
+  }
+ }
+}
+void FDarkwellCurrentLiveGrid::WritePresentationSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds,bool bIncludeBlockedLegal)
+{ WriteSnapshot(Out,Bounds,bIncludeBlockedLegal,true); }
+void FDarkwellCurrentLiveGrid::WriteSnapshot(FDarkwellSpatialPropMemory& Out,const FBox2D& Bounds,bool bIncludeBlockedLegal,bool bPresentation)
 {
  checkf(!IsUniformWholePresentation(),TEXT("Uniform Whole capture must not enter dense snapshot lifecycle"));
  for(const auto& P:Parts)
@@ -415,12 +443,19 @@ void FDarkwellCurrentLiveGrid::WriteWorldSnapshot(FDarkwellSpatialPropMemory& Ou
    CompleteEnvelope.LiveBlend=FMath::Min(CompleteEnvelope.LiveBlend,C.LiveBlend);
   }
  }
+ TArray<FBox2D> DisplayBounds;
+ if(bPresentation) for(const auto& P:Parts) DisplayBounds.Add(XY(P.Geometry.LocalBounds.TransformBy(P.Pose)));
  for(int32 Y=0;Y<S.Y;++Y) for(int32 X=0;X<S.X;++X)
  {
   auto& C=Cells[Y*S.X+X]; C={}; const auto World=Bounds.Min+Step*FVector2D(X+.5,Y+.5);
-  for(const auto& P:Parts)
+  for(int32 PartIndex=0;PartIndex<Parts.Num();++PartIndex)
   {
-   const auto V=Sample(P,World,false,bIncludeBlockedLegal);
+   const auto& P=Parts[PartIndex];
+   // Match the source part raster's clamped physical silhouette. Geometry-exterior
+   // zeros in the authority snapshot are not unknown cuts in a real surface.
+   // Keep different part AABBs separate; the actual mesh/cap clips this padding.
+   if(bPresentation && !DisplayBounds[PartIndex].IsInside(World)) continue;
+   const auto V=Sample(P,World,bPresentation,bIncludeBlockedLegal);
    if(V.DiscoveredPresent>C.DiscoveredPresent || V.AppearanceBlend>C.AppearanceBlend) C=V;
    if(MemoryWriteBlock.bIsValid) C.CurrentLegalCoverage=FMath::Max(C.CurrentLegalCoverage,V.CurrentLegalCoverage);
   }

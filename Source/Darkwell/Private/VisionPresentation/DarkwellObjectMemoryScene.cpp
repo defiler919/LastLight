@@ -3434,6 +3434,22 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 	++Prop.HiddenFreezeCount;
 	if (FDarkwellSpatialObservationRecord* Historical = Prop.History.FindRecord(Epoch))
 	{
+        FDarkwellSpatialPropMemory CaptureDisplay;
+        const bool bLocalPartialCapture=Prop.RegisteredPolicy.RevealMode==ESightWeaveRevealMode::SpatialPartial
+         && Prop.LocalEpoch==Epoch && !Prop.CurrentLive.Parts.IsEmpty();
+        if(bLocalPartialCapture)
+        {
+         // The coarse world AABB has exterior cell centers at a rotated edge.
+         // Replicating its geometry zeros used to discard proven local edge
+         // samples. Extend only the physical silhouette, then retain the exact
+         // fine geometry and region gates below. Interior observation cuts are
+         // sampled identically to WriteWorldSnapshot; no new Live proof is made.
+         CaptureDisplay.Initialize(Prop.StableId,Historical->SpatialMemory.GetBounds()); CaptureDisplay.BeginPresent();
+         Prop.CurrentLive.WritePresentationSnapshot(CaptureDisplay,Historical->SpatialMemory.GetBounds());
+         Prop.CurrentLive.ExtendCaptureAtPhysicalEdges(Historical->SpatialMemory.GetBounds(),
+          CaptureDisplay.GetSize(),FDarkwellHistoryGridV2::SamplesPerCell,Historical->LastLegalCaptureMask);
+         CaptureDisplay.BeginAbsent();
+        }
 		if(Historical->GeometryFootprint.Num()==Historical->LastLegalCaptureMask.Num())
 			for(int32 I=0; I<Historical->GeometryFootprint.Num(); ++I)
 				if(!Historical->GeometryFootprint[I]) Historical->LastLegalCaptureMask[I]=false;
@@ -3451,7 +3467,13 @@ bool ADarkwellObjectMemoryScene::FreezeCurrentForHiddenMotion(
 		{
 			if(Historical->bConfirmedWholeCapture)
 				Historical->FineHistory.InitializeWholeCapture(Historical->SpatialMemory, Historical->LastLegalCaptureMask);
-			else Historical->FineHistory.Initialize(Historical->SpatialMemory, Historical->LastLegalCaptureMask);
+			else
+            {
+             // Freeze AA from the same physical-edge extension as Current, not
+             // the geometry-clipped knowledge raster. Initialize's capture mask
+             // still owns every state/opacity bit; only the AA input differs.
+             Historical->FineHistory.Initialize(bLocalPartialCapture?CaptureDisplay:Historical->SpatialMemory,Historical->LastLegalCaptureMask);
+            }
 		}
 		EnsureRecordVisual(Prop, *Historical);
 		if (auto* Sealed = Prop.Visuals.Find(Epoch))
@@ -4130,6 +4152,17 @@ void ADarkwellObjectMemoryScene::UpdateRecordCap(
  {
   FineCells=Record.SpatialMemory.GetCells();
   for(auto& C:FineCells) if(C.CurrentLegalCoverage>=FDarkwellSpatialPropMemory::LegalCoverage) C.DiscoveredPresent=1;
+ }
+ if(Record.bCurrentObservedLocation && Prop.LocalEpoch==Record.Epoch && Prop.CurrentLive.Parts.Num()==1
+  && Prop.RegisteredPolicy.RevealMode==ESightWeaveRevealMode::SpatialPartial)
+ {
+  // Single-part Current uses exactly its source raster domain. Composite cap
+  // topology keeps its existing union domain rather than borrowing padding
+  // from a different primitive whose AABB overlaps an unknown part.
+  FDarkwellSpatialPropMemory Display;
+  Display.Initialize(Prop.StableId,Record.SpatialMemory.GetBounds()); Display.BeginPresent();
+  Prop.CurrentLive.WritePresentationSnapshot(Display,Record.SpatialMemory.GetBounds(),bMemoryBlockActive);
+  FineCells=Display.GetCells();
  }
  const TConstArrayView<FDarkwellSpatialPropMemory::FCell> Cells = !FineCells.IsEmpty()
 		? TConstArrayView<FDarkwellSpatialPropMemory::FCell>(FineCells) : Record.SpatialMemory.GetCells();

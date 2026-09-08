@@ -1,0 +1,44 @@
+{
+  "current_files": [
+    {
+      "file": "probe_180_local.csv",
+      "before_sha256": "D40E5CB0D26AEDCFDA65510C4F133A29AC87A2CA5FF3479093FF41370C212586",
+      "after_sha256": "D40E5CB0D26AEDCFDA65510C4F133A29AC87A2CA5FF3479093FF41370C212586",
+      "identical": true
+    },
+    {
+      "file": "probe_180_world.csv",
+      "before_sha256": "CFB06732576893619A7F8AF1A9D145C7E046C31D22A977F521D6D0328A0B34EE",
+      "after_sha256": "CFB06732576893619A7F8AF1A9D145C7E046C31D22A977F521D6D0328A0B34EE",
+      "identical": true
+    },
+    {
+      "file": "probe_180_submitted_0.png",
+      "before_sha256": "F8596BE7CB13B242C6D48345F492E9F0B846EB377B958FBC24C0F05AB4B5768B",
+      "after_sha256": "F8596BE7CB13B242C6D48345F492E9F0B846EB377B958FBC24C0F05AB4B5768B",
+      "identical": true
+    },
+    {
+      "file": "probe_180_submitted_1.png",
+      "before_sha256": "F8596BE7CB13B242C6D48345F492E9F0B846EB377B958FBC24C0F05AB4B5768B",
+      "after_sha256": "F8596BE7CB13B242C6D48345F492E9F0B846EB377B958FBC24C0F05AB4B5768B",
+      "identical": true
+    },
+    {
+      "file": "probe_180_submitted_2.png",
+      "before_sha256": "C3C79795C3DFC978F0F237DBC2BD7AF26AE125A5FB0DB690A8476A640BC384F2",
+      "after_sha256": "C3C79795C3DFC978F0F237DBC2BD7AF26AE125A5FB0DB690A8476A640BC384F2",
+      "identical": true
+    },
+    {
+      "file": "probe_180_submitted_3.png",
+      "before_sha256": "FC2C6604B6000A3653AD284F1BCC2D1596F920300A83D48D20330DCBE7A20877",
+      "after_sha256": "FC2C6604B6000A3653AD284F1BCC2D1596F920300A83D48D20330DCBE7A20877",
+      "identical": true
+    }
+  ],
+  "before_capture": 20866,
+  "after_capture": 21235,
+  "before_captured_zero_envelope": 710,
+  "after_captured_zero_envelope": 284
+}

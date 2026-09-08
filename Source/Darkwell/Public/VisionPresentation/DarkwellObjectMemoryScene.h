@@ -334,6 +334,7 @@ protected:
  friend class FDarkwellBlackRegionContract;
  friend class FDarkwellRejectedWholeLifecycle;
  friend class FDarkwellSubthresholdWholePose;
+ friend class FDarkwellCleanLabFrames;
 	friend class FDarkwellA1Residency;
 	friend class FDarkwellRepeatedHistoryEvidenceParity;
 	friend class FDarkwellMemoryEpisodeContract;

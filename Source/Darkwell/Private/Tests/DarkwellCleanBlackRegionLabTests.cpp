@@ -16,6 +16,7 @@
 #include "Engine/DamageEvents.h"
 #include "Interaction/DarkwellInteractionComponent.h"
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
+#include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 #include "Engine/SceneCapture2D.h"
 #include "Components/SceneCaptureComponent2D.h"
@@ -44,6 +45,9 @@ class FDarkwellCleanLabFrames : public IAutomationLatentCommand
  bool bPartialProbe=false;
  bool bEventDemo=false;
  bool bVolumeDemo=false;
+ bool bRepeated=false;
+ double PreviousFrameStart=0;
+ FString TransitionFrames=TEXT("frame,cycle,phase,host_frame_ms\n");
  float ProbeYaw=-15;
  void Render(const TCHAR* Name=nullptr)
  {
@@ -133,8 +137,159 @@ class FDarkwellCleanLabFrames : public IAutomationLatentCommand
   }
 
  }
+ void DumpRegionEdges()
+ {
+  const FBox2D Region=Trigger->GetFixedBounds();
+  FString CSV=TEXT("edge,x,y,region_known,history_known,alpha,contributors,min_envelope\n");
+  const auto& P=Scene->Tracked.FindChecked(TEXT("BlackLab.Ground"));
+  int32 Proven=0,Missing=0; float MinAlpha=1;
+  for(int32 Edge=0;Edge<4;++Edge) for(int32 Along=0;Along<=200;++Along) for(int32 Across=-8;Across<=8;++Across)
+  {
+   const float T=Along/200.f;
+   FVector2D W=Edge<2?FVector2D(Edge==0?Region.Min.X:Region.Max.X,FMath::Lerp(Region.Min.Y,Region.Max.Y,T))
+    :FVector2D(FMath::Lerp(Region.Min.X,Region.Max.X,T),Edge==2?Region.Min.Y:Region.Max.Y);
+   (Edge<2?W.X:W.Y)+=Across*.125;
+   float Alpha=0,Envelope=1; int32 Known=0,Contributors=0;
+   for(const auto& R:P.History.GetRecords())
+   {
+    const auto* V=P.Visuals.Find(R.Epoch); if(!V || V->bPresentationRetired || R.bCurrentObservedLocation) continue;
+    const auto S=R.FineHistory.GetSize(); const auto UV=(W-R.FineHistory.GetBounds().Min)/R.FineHistory.GetBounds().GetSize();
+    if(UV.X<0 || UV.X>=1 || UV.Y<0 || UV.Y>=1 || V->SubmittedPresentation.Num()!=S.X*S.Y) continue;
+    const int32 I=FMath::FloorToInt(UV.Y*S.Y)*S.X+FMath::FloorToInt(UV.X*S.X);
+    Known+=R.FineHistory.GetSamples()[I].State==FDarkwellHistoryGridV2::Unresolved();
+    const FVector2D Q=UV*FVector2D(S)-FVector2D(.5); const int32 X=FMath::FloorToInt(Q.X),Y=FMath::FloorToInt(Q.Y);
+    auto B=[&](int32 DX,int32 DY){return V->SubmittedPresentation[FMath::Clamp(Y+DY,0,S.Y-1)*S.X+FMath::Clamp(X+DX,0,S.X-1)].B;};
+    const float A=V->SubmittedPresentation[I].A>0.5?FMath::Lerp(FMath::Lerp(B(0,0),B(1,0),Q.X-X),FMath::Lerp(B(0,1),B(1,1),Q.X-X),Q.Y-Y):0;
+    Alpha=1-(1-Alpha)*(1-A); Contributors+=A>0;
+    if(V->SubmittedPresentation[I].A>.5) Envelope=FMath::Min(Envelope,R.FineHistory.GetSamples()[I].FrozenAAEnvelope);
+   }
+   const bool RegionKnown=World->GetSubsystem<UDarkwellMemoryRegionSubsystem>()->HasStoredMemory(W);
+   if(Known){++Proven;MinAlpha=FMath::Min(MinAlpha,Alpha);Missing+=Alpha<.99;}
+   CSV+=FString::Printf(TEXT("%d,%.6f,%.6f,%d,%d,%.6f,%d,%.6f\n"),Edge,W.X,W.Y,RegionKnown,Known,Alpha,Contributors,Envelope);
+  }
+  const FString Root=FPlatformMisc::GetEnvironmentVariable(TEXT("DARKWELL_UNKNOWN_TEST_OUTPUT"));
+  FFileHelper::SaveStringToFile(CSV,*(Root/TEXT("region_edges_history_only.csv")));
+  Test->AddInfo(FString::Printf(TEXT("REGION_EDGE_HISTORY_ONLY diagnostic_not_gate proven_gray=%d low_alpha=%d min_alpha=%.6f"),Proven,Missing,MinAlpha));
+ }
+ void DumpSurface(const TCHAR* Name)
+ {
+  const auto& P=Scene->Tracked.FindChecked(TEXT("BlackLab.Ground"));
+  {
+   TArray<const FDarkwellSpatialObservationRecord*> Candidates;
+   uint32 Maximum=0;
+   for(const auto& R:P.History.GetRecords())
+    if(R.bCurrentObservedLocation || (P.Visuals.Find(R.Epoch) && !P.Visuals.FindChecked(R.Epoch).bPresentationRetired))
+    { Candidates.Add(&R); Maximum=FMath::Max(Maximum,R.Epoch); }
+   TGuardValue<bool> Use(Scene->bUseNewerCandidates,true);
+   TGuardValue<FName> Id(Scene->NewerCandidateId,P.StableId);
+   TGuardValue<uint32> Epoch(Scene->NewerCandidateMaximumEpoch,Maximum);
+   TGuardValue<TConstArrayView<const FDarkwellSpatialObservationRecord*>> View(Scene->FrameNewerCandidates,MakeArrayView(Candidates));
+   int32 Compared=0,Mismatch=0;
+   for(bool Durable:{false,true})
+   {
+    TGuardValue<bool> Ownership(Scene->bOnlyDurableOwnership,Durable);
+    for(const auto& R:P.History.GetRecords())
+    {
+     const auto* V=P.Visuals.Find(R.Epoch); if(!V || R.bCurrentObservedLocation) continue;
+     TArray<uint8> Batched; if(!Scene->BuildRegionOwnershipSamples(P,R,*V,Batched)) continue;
+     TGuardValue<bool> Scalar(Scene->bUseNewerCandidates,false);
+     const auto Size=R.FineHistory.GetSize(); const auto B=R.FineHistory.GetBounds(); const auto Step=B.GetSize()/FVector2D(Size);
+     for(int32 I=0;I<Batched.Num();++I)
+     {
+      if(Batched[I]==2) continue;
+      const auto Min=B.Min+Step*FVector2D(I%Size.X,I/Size.X);
+      const bool Expected=Scene->HasNewerObservedGeometryOverlapWithinFootprint(P,*V,R.Epoch,FBox2D(Min,Min+Step));
+      ++Compared; Mismatch+=(Batched[I]!=0)!=Expected;
+     }
+    }
+   }
+   Test->AddInfo(FString::Printf(TEXT("REGION_BATCH_ORACLE %s compared=%d mismatches=%d"),Name,Compared,Mismatch));
+   Test->TestEqual(TEXT("Region batch matches scalar ownership at every eligible fine sample"),Mismatch,0);
+  }
+  auto PixelAt=[](FVector2D W,const FBox2D& B,FIntPoint S,const TArray<FLinearColor>& Pixels,bool History)
+  {
+   if(Pixels.Num()!=S.X*S.Y || !B.IsInside(W)) return 0.f;
+   const auto UV=(W-B.Min)/B.GetSize(); const auto Q=UV*FVector2D(S)-FVector2D(.5);
+   const int32 X=FMath::FloorToInt(Q.X),Y=FMath::FloorToInt(Q.Y);
+   const int32 I=FMath::Clamp(FMath::FloorToInt(UV.Y*S.Y),0,S.Y-1)*S.X+FMath::Clamp(FMath::FloorToInt(UV.X*S.X),0,S.X-1);
+   if(History && Pixels[I].A<.5) return 0.f;
+   auto V=[&](int32 DX,int32 DY){const auto C=Pixels[FMath::Clamp(Y+DY,0,S.Y-1)*S.X+FMath::Clamp(X+DX,0,S.X-1)];return History?C.B:C.R;};
+   return float(FMath::Lerp(FMath::Lerp(V(0,0),V(1,0),Q.X-X),FMath::Lerp(V(0,1),V(1,1),Q.X-X),Q.Y-Y));
+  };
+  auto ProvenAt=[&](FVector2D W)
+  {
+   if(P.CurrentLive.HasObservedContributionAt(W,INDEX_NONE,true)) return true;
+   for(const auto& R:P.History.GetRecords())
+   {
+    const auto S=R.FineHistory.GetSize(); const auto B=R.FineHistory.GetBounds(); if(!R.FineHistory.IsInitialized() || !B.IsInside(W)) continue;
+    const auto UV=(W-B.Min)/B.GetSize(); const int32 I=FMath::FloorToInt(UV.Y*S.Y)*S.X+FMath::FloorToInt(UV.X*S.X);
+    if(R.FineHistory.GetSamples()[I].InitialRemembered>0 && !R.FineHistory.GetSamples()[I].bVerifiedEmpty && !R.FineHistory.IsMemoryBlocked(I)) return true;
+   }
+   return false;
+  };
+  FString CSV=TEXT("x,y,alpha,current,history,continuous_proof,details\n"); int32 Missing=0,ProvenSamples=0;
+  for(int32 Y=-190;Y<190;++Y) for(int32 X=-290;X<290;++X)
+  {
+   const FVector2D W(X+.125,Y+.125); float Current=0,History=0;
+   for(int32 I=0;I<P.CurrentLive.Parts.Num();++I) if(P.CurrentPresentation.LivePixels.IsValidIndex(I))
+   {const auto& Part=P.CurrentLive.Parts[I];Current=FMath::Max(Current,PixelAt(W,Part.Raster.GetBounds(),Part.Raster.GetSize()*4,P.CurrentPresentation.LivePixels[I],false));}
+   for(const auto& R:P.History.GetRecords()) if(const auto* V=P.Visuals.Find(R.Epoch);V && !V->bPresentationRetired && !R.bCurrentObservedLocation)
+    History=1-(1-History)*(1-PixelAt(W,R.FineHistory.GetBounds(),R.FineHistory.GetSize(),V->SubmittedPresentation,true));
+   const float Alpha=1-(1-Current)*(1-History);
+   bool Continuous=true; for(int32 DY=-1;Continuous && DY<=1;++DY) for(int32 DX=-1;DX<=1;++DX) Continuous &= ProvenAt(W+FVector2D(DX,DY)*2.5);
+   if(!Continuous) continue; ++ProvenSamples;
+   if(Alpha>=.99) continue; ++Missing;
+   FString Details;
+   for(const auto& Part:P.CurrentLive.Parts)
+   {
+    const auto L=FVector2D(Part.Pose.InverseTransformPosition(FVector(W,Part.Pose.GetLocation().Z)));
+    const auto UV=(L-Part.Local.GetBounds().Min)/Part.Local.GetBounds().GetSize(); const auto S=Part.Local.GetSize();
+    const int32 I=FMath::Clamp(FMath::FloorToInt(UV.Y*S.Y),0,S.Y-1)*S.X+FMath::Clamp(FMath::FloorToInt(UV.X*S.X),0,S.X-1);
+    Details+=FString::Printf(TEXT("local_D%.3f_A%.3f_mask%d_legal%d;"),Part.Local.GetCells()[I].DiscoveredPresent,Part.Local.GetCells()[I].AppearanceBlend,Part.LastLegalCaptureMask[I]?1:0,Part.CurrentLegalObservationMask[I]?1:0);
+   }
+   for(const auto& R:P.History.GetRecords())
+   {
+    const auto* V=P.Visuals.Find(R.Epoch); const auto S=R.FineHistory.GetSize(); if(!V || !R.FineHistory.IsInitialized()) continue;
+    const auto UV=(W-R.FineHistory.GetBounds().Min)/R.FineHistory.GetBounds().GetSize();
+    const int32 I=FMath::Clamp(FMath::FloorToInt(UV.Y*S.Y),0,S.Y-1)*S.X+FMath::Clamp(FMath::FloorToInt(UV.X*S.X),0,S.X-1);
+    const auto& Cell=R.FineHistory.GetSamples()[I];
+    Details+=FString::Printf(TEXT("epoch%u_%s_known%.3f_env%.3f_gate%.3f_retired%d;"),R.Epoch,*Cell.State.ToString(),Cell.InitialRemembered,Cell.FrozenAAEnvelope,V->SubmittedPresentation.IsValidIndex(I)?V->SubmittedPresentation[I].A:-1,V->bPresentationRetired);
+   }
+   CSV+=FString::Printf(TEXT("%.6f,%.6f,%.6f,%.6f,%.6f,1,%s\n"),W.X,W.Y,Alpha,Current,History,*Details);
+  }
+  const FString Root=FPlatformMisc::GetEnvironmentVariable(TEXT("DARKWELL_UNKNOWN_TEST_OUTPUT"));
+  FFileHelper::SaveStringToFile(CSV,*(Root/(FString(Name)+TEXT("_surface.csv"))));
+  Test->AddInfo(FString::Printf(TEXT("SURFACE_PROBE %s proven_samples=%d continuous_proof_low_alpha=%d"),Name,ProvenSamples,Missing));
+  Test->TestTrue(TEXT("Seam probe includes a nonempty continuously proven surface"),ProvenSamples>100);
+  Test->TestEqual(FString::Printf(TEXT("No dark seam within continuous proven surface: %s"),Name),Missing,0);
+  FString Records;
+  for(const auto& R:P.History.GetRecords())
+  {
+   const auto* V=P.Visuals.Find(R.Epoch); if(!V || !R.FineHistory.IsInitialized()) continue;
+   const auto Size=R.FineHistory.GetSize(); const auto B=R.FineHistory.GetBounds();
+   int32 Residual=0,Shown=0;
+   FString Points;
+   for(int32 I=0;I<R.FineHistory.GetSamples().Num();++I)
+   {
+    const auto& C=R.FineHistory.GetSamples()[I];
+    if(C.State!=FDarkwellHistoryGridV2::Unresolved() || C.InitialRemembered<=0) continue;
+    ++Residual; if(Shown++>=4) continue;
+    const auto W=B.Min+B.GetSize()/FVector2D(Size)*FVector2D(I%Size.X+.5,I/Size.X+.5);
+    Points+=FString::Printf(TEXT(" point=%s env=%.2f current=%d\n"),*W.ToString(),C.FrozenAAEnvelope,P.CurrentLive.HasObservedContributionAt(W,INDEX_NONE,true));
+    for(const auto& N:P.History.GetRecords())
+    {
+     if(N.Epoch<=R.Epoch || !N.FineHistory.IsInitialized() || !N.FineHistory.GetBounds().IsInside(W)) continue;
+     const auto NS=N.FineHistory.GetSize(); const auto UV=(W-N.FineHistory.GetBounds().Min)/N.FineHistory.GetBounds().GetSize();
+     const int32 NI=FMath::FloorToInt(UV.Y*NS.Y)*NS.X+FMath::FloorToInt(UV.X*NS.X); const auto& S=N.FineHistory.GetSamples()[NI];
+     Points+=FString::Printf(TEXT("  newer=%u initial=%.2f opacity=%.2f envelope=%.2f state=%s\n"),N.Epoch,S.InitialRemembered,S.Opacity,S.FrozenAAEnvelope,*S.State.ToString());
+    }
+   }
+   Records+=FString::Printf(TEXT("epoch=%u current=%d residual=%d caps=%d min=%s max=%s\n%s"),R.Epoch,R.bCurrentObservedLocation,Residual,V->CapTriangles,*B.Min.ToString(),*B.Max.ToString(),*Points);
+  }
+  FFileHelper::SaveStringToFile(Records,*(Root/(FString(Name)+TEXT("_records.txt"))));
+ }
 public:
- explicit FDarkwellCleanLabFrames(FAutomationTestBase* InTest,bool Probe=false,bool EventDemo=false,bool VolumeDemo=false):Test(InTest),bPartialProbe(Probe),bEventDemo(EventDemo),bVolumeDemo(VolumeDemo)
+ explicit FDarkwellCleanLabFrames(FAutomationTestBase* InTest,bool Probe=false,bool EventDemo=false,bool VolumeDemo=false,bool Repeated=false):Test(InTest),bPartialProbe(Probe),bEventDemo(EventDemo),bVolumeDemo(VolumeDemo),bRepeated(Repeated)
  {
   const auto Value=FPlatformMisc::GetEnvironmentVariable(TEXT("DARKWELL_PARTIAL_PROBE_YAW"));
   if(bPartialProbe && !Value.IsEmpty()) ProbeYaw=FCString::Atof(*Value);
@@ -178,6 +333,29 @@ public:
    if(bVolumeDemo) { World->InitializeActorsForPlay(FURL()); World->SetBegunPlay(true); World->Tick(LEVELTICK_All,1.f/60); } // Publish physics bodies and enable real overlap dispatch.
   }
   ++Frame;
+  if(bRepeated && Frame>300)
+  {
+   const double Now=FPlatformTime::Seconds(); const int32 Phase=(Frame-301)%150,Cycle=(Frame-301)/150;
+   if(PreviousFrameStart) TransitionFrames+=FString::Printf(TEXT("%d,%d,%d,%.6f\n"),Frame-1,(Frame-302)/150,(Frame-302)%150,(Now-PreviousFrameStart)*1000);
+   PreviousFrameStart=Now;
+   if(Cycle>=20)
+   {
+    const FString Root=FPlatformMisc::GetEnvironmentVariable(TEXT("DARKWELL_UNKNOWN_TEST_OUTPUT"));
+    FFileHelper::SaveStringToFile(TransitionFrames,*(Root/TEXT("transition_frames.csv")));
+    DumpRegionEdges(); Render(TEXT("20_cycles_reobserved"));
+    Test->TestFalse(TEXT("20 cycles end with no Block"),Trigger->IsActive()); return true;
+   }
+   if(Phase==0 || Phase==60)
+   {
+    Player->SetActorLocation(FVector(Phase==0?-80:-200,-130,92));
+    Test->TestEqual(TEXT("Repeated real capsule transition"),Fixture->EventVolume->EventAdapter->IsEventStarted(),Phase==0);
+    Player->GetCapsuleComponent()->UpdateOverlaps();
+   }
+   if(Phase==30 || Phase==90) Player->SetActorRotation(FRotator(0,45,0));
+   if(Phase==50 || Phase==120) Player->SetActorRotation(FRotator(0,-90,0));
+   Adapter->Tick(1.f/60); Scene->UpdateMemory(1.f/60,Player->GetActorLocation()); Render();
+   return false;
+  }
   if(bPartialProbe)
   {
    Player->SetActorRotation(FRotator(0,Frame<=180?ProbeYaw:Frame<=210?-90:45,0));
@@ -267,10 +445,14 @@ public:
    case 300:Name=TEXT("07_reobserved");break;
   }
   Render(Name);
+  if(bVolumeDemo && !bRepeated && (Frame==151 || Frame==181 || Frame==211 || Frame==221)) DumpSurface(*FString::Printf(TEXT("frame_%d"),Frame));
   if(Frame<300) return false;
+  if(bRepeated) return false;
   Test->TestFalse(TEXT("Deactivation releases block"),World->GetSubsystem<UDarkwellMemoryRegionSubsystem>()->IsBlocked());
   if(bVolumeDemo)
   {
+   DumpRegionEdges();
+   DumpSurface(TEXT("final"));
    auto* Volume=Fixture->EventVolume.Get(); auto* Event=Volume->EventAdapter.Get();
    auto* Region=World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
    Player->SetActorLocation(FVector(-100,-30,92));
@@ -376,4 +558,10 @@ bool FDarkwellBlackVolumeDemo::RunTest(const FString&)
  ADD_LATENT_AUTOMATION_COMMAND(FDarkwellCleanLabFrames(this,false,false,true));
  return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellBlackTransitionProbe,"Darkwell.BlackRegion.TransitionProbe",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellBlackTransitionProbe::RunTest(const FString&)
+{
+ ADD_LATENT_AUTOMATION_COMMAND(FDarkwellCleanLabFrames(this,false,false,true,true)); return true;
+}
+
 #endif

@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellCurrentLiveGrid.h"
+#include "Async/ParallelFor.h"
 #include "VisionPresentation/DarkwellMemoryRegionSamples.h"
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 
@@ -445,7 +446,7 @@ void FDarkwellCurrentLiveGrid::WriteSnapshot(FDarkwellSpatialPropMemory& Out,con
  }
  TArray<FBox2D> DisplayBounds;
  if(bPresentation) for(const auto& P:Parts) DisplayBounds.Add(XY(P.Geometry.LocalBounds.TransformBy(P.Pose)));
- for(int32 Y=0;Y<S.Y;++Y) for(int32 X=0;X<S.X;++X)
+ auto WriteRow=[&](int32 Y) { for(int32 X=0;X<S.X;++X)
  {
   auto& C=Cells[Y*S.X+X]; C={}; const auto World=Bounds.Min+Step*FVector2D(X+.5,Y+.5);
   for(int32 PartIndex=0;PartIndex<Parts.Num();++PartIndex)
@@ -464,7 +465,9 @@ void FDarkwellCurrentLiveGrid::WriteSnapshot(FDarkwellSpatialPropMemory& Out,con
   // not observation cuts. Match the original fully observed snapshot envelope;
   // neither source rendering nor fine ownership reads these padding cells.
   if(C.DiscoveredPresent==0 && FullyObserved) C=CompleteEnvelope;
- }
+ }};
+ if(Cells.Num()>=16384) ParallelFor(TEXT("DarkwellWorldSnapshotRows"),S.Y,8,WriteRow,EParallelForFlags::Unbalanced);
+ else for(int32 Y=0;Y<S.Y;++Y) WriteRow(Y);
 }
 void FDarkwellCurrentLiveGrid::WritePartRasters(TFunctionRef<float(FVector2D)> Query,bool bTransient,TFunction<bool(const FBox2D&,float&)> Uniform,
  TFunction<bool(const FBox2D&,FIntPoint,TArray<float>&)> CanonicalRaster)
@@ -475,7 +478,7 @@ void FDarkwellCurrentLiveGrid::WritePartRasters(TFunctionRef<float(FVector2D)> Q
   auto Cells=P.Raster.PrepareCurrentRaster(B,S,P.AtlasCells.X*P.AtlasCells.Y); const auto Step=B.GetSize()/FVector2D(S);
   float Constant=0; const bool ConstantRegion=Uniform && Uniform(B,Constant);
   const bool CachedRaster=!ConstantRegion && CanonicalRaster && CanonicalRaster(B,S,P.RasterCoverage) && P.RasterCoverage.Num()==S.X*S.Y;
-  for(int32 Y=0;Y<S.Y;++Y) for(int32 X=0;X<S.X;++X)
+  auto WriteRow=[&](int32 Y) { for(int32 X=0;X<S.X;++X)
   {
    const auto Min=B.Min+Step*FVector2D(X,Y); auto C=Sample(P,Min+Step*.5,true,MemoryWriteBlock.bIsValid);
    float Coverage=ConstantRegion?Constant:CachedRaster?P.RasterCoverage[Y*S.X+X]:1;
@@ -494,7 +497,12 @@ void FDarkwellCurrentLiveGrid::WritePartRasters(TFunctionRef<float(FVector2D)> Q
    C.CurrentLegalCoverage=Coverage;
    if(Coverage<FDarkwellSpatialPropMemory::LegalCoverage && bTransient) C.AppearanceBlend=0;
    Cells[Y*S.X+X]=C;
-  }
+  }};
+  // Only immutable canonical coverage may be read by workers. The point-query
+  // fallback, including its query counter, stays on the calling thread.
+  if(Cells.Num()>=16384 && (ConstantRegion || CachedRaster))
+   ParallelFor(TEXT("DarkwellPartRasterRows"),S.Y,8,WriteRow,EParallelForFlags::Unbalanced);
+  else for(int32 Y=0;Y<S.Y;++Y) WriteRow(Y);
  }
 }
 bool FDarkwellCurrentLiveGrid::HasObservedContributionAt(FVector2D World,int32 PrimitiveIndex,bool bAllowBlockedLive) const
@@ -548,8 +556,10 @@ void FDarkwellCurrentLiveGrid::CopyAtlasWithClampBorder(TConstArrayView<FLinearC
  // dithered. Reproduce TA_Clamp of the logical texture without changing its
  // coordinates, interior AA samples or legal gate. Illegal edge texels stay
  // zero. All other padding is cleared, including a previous larger rectangle.
- for(int32 Y=0;Y<=Size.Y;++Y) for(int32 X=0;X<=Size.X;++X)
-  Out[Y*Atlas.X+X]=FFloat16Color(Pixels[FMath::Min(Y,Size.Y-1)*Size.X+FMath::Min(X,Size.X-1)]);
+ auto CopyRow=[&](int32 Y) { for(int32 X=0;X<=Size.X;++X)
+  Out[Y*Atlas.X+X]=FFloat16Color(Pixels[FMath::Min(Y,Size.Y-1)*Size.X+FMath::Min(X,Size.X-1)]); };
+ if(Pixels.Num()>=65536) ParallelFor(TEXT("DarkwellAtlasRows"),Size.Y+1,8,CopyRow,EParallelForFlags::Unbalanced);
+ else for(int32 Y=0;Y<=Size.Y;++Y) CopyRow(Y);
 }
 
 bool FDarkwellCurrentLiveGrid::BuildSweptObservationMask(const FTransform& ActorPose,
@@ -587,5 +597,21 @@ void FDarkwellCurrentLiveGrid::ForgetKnowledgePreservingLive()
   P.LastLegalCaptureMask.Init(false,P.LastLegalCaptureMask.Num());
  }
  WholeAppearance.ForgetKnowledgePreservingLive();
+ bFullyObservedAtPose=false;
+}
+
+void FDarkwellCurrentLiveGrid::ForgetKnowledgeInRegionPreservingLive(const FBox2D& Region)
+{
+ for(auto& P:Parts)
+ {
+  P.Local.ClearMemorySamples(Region,P.Pose);
+  P.Raster.ClearMemorySamples(Region);
+  check(P.LastLegalCaptureMask.Num()==P.Local.GetCells().Num());
+  for(int32 I=0;I<P.LastLegalCaptureMask.Num();++I)
+  {
+   const auto L=Darkwell::MemoryRegionSamples::Center(P.Local.GetBounds(),P.Local.GetSize(),I);
+   if(Darkwell::MemoryRegionSamples::Contains(Region,FVector2D(P.Pose.TransformPosition(FVector(L,0))))) P.LastLegalCaptureMask[I]=false;
+  }
+ }
  bFullyObservedAtPose=false;
 }

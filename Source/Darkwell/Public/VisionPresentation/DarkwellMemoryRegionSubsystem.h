@@ -31,6 +31,8 @@ public:
  UFUNCTION(BlueprintCallable, Category="SightWeave|Memory") bool ClearMemory();
  UFUNCTION(BlueprintCallable, Category="SightWeave|Memory") bool SetBlockMemoryWrites(bool bEnabled);
  UFUNCTION(BlueprintPure, Category="SightWeave|Memory") FGameplayTag QueryKnowledge(FVector2D Point) const;
+ /** Same-call Clear + Block: share render preparation without delaying authority or publication. */
+ bool ClearAndBlockMemory();
  bool HasStoredMemory(FVector2D Point) const;
  bool IsBlocked() const { return bBlocked; }
  bool IsConfigured() const { return Bounds.bIsValid; }

@@ -66,6 +66,7 @@ struct DARKWELL_API FDarkwellCurrentLiveGrid
 	/** Reentry changes lighting blend, never the already known surface. */
 	void ResumeStationaryKnowledge();
  void ForgetKnowledgePreservingLive();
+ void ForgetKnowledgeInRegionPreservingLive(const FBox2D& Region);
  FBox2D MemoryWriteBlock=FBox2D(ForceInit);
 
  bool MatchesGeometry(TConstArrayView<FDescriptor> Descriptors,const FTransform& ActorPose) const;

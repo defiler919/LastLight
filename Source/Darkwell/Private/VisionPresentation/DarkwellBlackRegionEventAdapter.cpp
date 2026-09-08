@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellBlackRegionEventAdapter.h"
+#include "VisionPresentation/DarkwellBlackoutTiming.h"
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
 #include "Engine/World.h"
 #include "NativeGameplayTags.h"
@@ -17,6 +18,7 @@ bool UDarkwellBlackRegionEventAdapter::IsEventStarted() const
 }
 bool UDarkwellBlackRegionEventAdapter::BeginEvent()
 {
+ DW_BLACKOUT_SCOPE(BeginEvent);
  if(!HasBegunPlay() || !IsValid(GetOwner()) || GetOwner()->IsActorBeingDestroyed()
   || !GetWorld() || GetWorld()->bIsTearingDown) return false;
  // Duplicate notifications never re-clear, even after a manual F override.
@@ -27,6 +29,7 @@ bool UDarkwellBlackRegionEventAdapter::BeginEvent()
 }
 void UDarkwellBlackRegionEventAdapter::EndEvent()
 {
+ DW_BLACKOUT_SCOPE(EndEvent);
  if(!IsEventStarted()) return;
  if(auto* Trigger=StartedTarget.Get()) Trigger->Deactivate();
  StartedTarget.Reset(); EventState=TAG_EventIdle;

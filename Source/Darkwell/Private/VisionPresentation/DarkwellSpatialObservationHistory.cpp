@@ -30,6 +30,17 @@ int32 FDarkwellSpatialObservationHistory::BeginCurrentObservation(
 	return BeginObservation(SnapshotTransform, WorldBounds, CellSize, MAX_int32);
 }
 
+uint32 FDarkwellSpatialObservationHistory::RekeyCurrentObservation()
+{
+ if(!Records.IsValidIndex(CurrentIndex) || !Records[CurrentIndex].bCurrentObservedLocation) return 0;
+ auto Current=MoveTemp(Records[CurrentIndex]);
+ Records.RemoveAt(CurrentIndex);
+ Current.Epoch=NextEpoch++;
+ // Keep chronological storage order for historical ownership readers.
+ CurrentIndex=Records.Add(MoveTemp(Current));
+ return Records[CurrentIndex].Epoch;
+}
+
 int32 FDarkwellSpatialObservationHistory::BeginObservation(
 	const FTransform& SnapshotTransform, const FBox2D& WorldBounds,
 	const float CellSize, const int32 ResidentLimit)

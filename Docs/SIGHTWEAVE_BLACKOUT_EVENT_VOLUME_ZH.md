@@ -1,4 +1,41 @@
-# Blackout Event Volume（2026-09-08，完成）
+# Blackout Event Volume（2026-09-08，基线与 gameplay 修复）
+
+## 人工反馈后的修复（2026-09-08）
+
+稳定基线 `c4a6e83c44c3a61e0c8e7413ef378cee2258bf94` / `stable/sightweave-blackout-event-volume-20260908` 保持不动。下文原始交接记录的是该基线；第一次真实人工 gameplay 随后发现事件边界 hitch 与原视野边缘黑缝。本次只修这两个问题，不开始新切片。
+
+详细证据、配置区别及命令见 [gameplay 修复证据](Evidence/SIGHTWEAVE_BLACKOUT_GAMEPLAY_FIX_20260908/README.md)。所有本次路线均为自动验证与代理检查的真实 D3D12 画面，**不是用户的新一轮人工 gameplay 验收**；仍需用户在实际关卡重测。
+
+### 黑缝根因与修复
+
+不是固定 AABB 四边的 epsilon/取整差，也不是 GPU 纹理未刷新。跨区 SpatialPartial 在 Begin/End 时原来会强制 `FreezeCurrentForHiddenMotion`，随后 `ForgetKnowledgePreservingLive()` 清掉整个 Local 的已知 D/capture mask（包括目标外），再用零 delta 重建 Current。旧历史按 footprint overlap 交出贡献时，新的 Current 未完整接住原边缘的 bilinear/AA 支持，留下沿**切换当时视野**的黑线。因此进出均能制造一条线，后续新扫过区域却正常。
+
+现在同 pose/content/geometry、仍合法 Current 的静态 Partial 把已有数据和资源转入单调递增的新 write epoch，不为一次区域开关制造历史捕获；真正离开观察、移动或 revision 改变仍走原封存路径。区域清理只按原半开 AABB 样本中心谓词删除目标内事实，保留目标外 Local 知识。独立 Block 保留原先的 pre-block 捕获语义，不能把复合 Clear+Block 的优化直接套上去；没有 Current 的解封仍失效旧 LocalEpoch，防止旧 Clear epoch resume。
+
+历史/Current 交接只在已有事实证明的完整滤波内部消除人为 AA 分界，使用已有 appearance/remembered mass，不强制 alpha；Current G 和二值历史 A gate 不扩大。单次事务先完成原 Clear/Block authority，再发布最终纹理和 cap，同调用返回前完成，没有额外首显帧。Whole 原子规则、Partial 精度、Unknown、F 覆盖、cap 与 teardown 语义不变。
+
+### Hitch 根因与修复
+
+真实主胶囊一次进入/退出各只有一次 Begin/End，F 路径也在同一 blackout core 卡住。基线细分计时：首次进入 transient exclusion 847.49 ms、historical ownership 782.87 ms；退出 ownership 532.68 ms。重复全量封存/历史交接、占用查询、纹理/cap 重建是热点，资源重建仅约 5 ms，不是主要 GPU fence/readback 问题。
+
+同姿态 Current 转移消除上述不必要历史；Clear+Block 合并显示发布，按目标样本限定 dirty/clear，修正 Partial transient 的重复失效条件，并复用精确 physical snapshot、AABB 轴成员缓存与纯 CPU 栅格工作。并行任务在本调用内 join，没有异步旧结果或跨帧状态窗口。未加入新性能系统；`DARKWELL_BLACKOUT_TIMING=1` 的计时只在非 Shipping 启用，三个纹理 enqueue 有独立 scope。
+
+同公司机器、同 VolumeDemo 路线首个 Begin：2522.99 → 25.10 ms；End：998.50 → 9.34 ms。原生 D3D12 20 次进入/20 次退出，3000 个完整帧的原始 CSV 和统计在证据目录；不把带 SceneCapture/Flush 的自动测试帧当性能数据，不跨机器毫秒 A/B。
+
+最终原生重跑 Begin 最大 24.38 ms、End 最大 11.77 ms；进入/离开窗口最大完整帧 45.40 / 25.53 ms，3000帧最大45.40 ms。20/20主胶囊 callback 与20/20事件严格对应，所有帧状态错误为0。两轮原生运行结束均为4 records，驻留 cells/masks 完全一致。
+
+### 回归与后续
+
+- 完整 `DarkwellEditor Win64 Development` Build 成功，最终计时 scope 构建 15.54 秒。
+- 冻结功能回归 156/156，通过并保留全部 142 个基线测试。
+- D3D12 BlackRegion 合同 23/23 + VolumeDemo 1/1，原 9/9 全部逐名覆盖；额外 repeated transition 1/1，20 次真实胶囊进出，0 warning。
+- seam 探针五阶段连续已知位置分别为 192188 / 165308 / 165308 / 165308 / 199233，缺失全部 0；37° Partial、Whole、四边/角点、重复 Clear/Block、停用后不复活与 reobserve 通过。历史-only 边界诊断不作为验收 gate。
+- 全 SightWeave 默认项目 D3D12 是 **312/314**；两个既有 M4P1 非抖动 CustomDepth 像素基线失败，原始夹具下独立 **2/2** 通过。保持断言和 TAA/TSR，不修改项目配置；这不是默认项目单进程全绿。既有失败见 `SIGHTWEAVE_DARKWELL_VISUAL_RESCUE_REPORT.md` §11.5–11.6，本次保留失败与隔离重跑报告。
+- 下一步仍是用户实际关卡人工复验两个 gameplay 缺陷；不继续开发新功能。
+
+---
+
+## 原始 Event Volume 基线交接
 
 起点 `aa201c20b3c68ca3fad748e2c034b51d2795c0ae`。公司仓库 D:\UE_projects\LastLight，UE 5.8.2。仅增加真实关卡 overlap 来源，不修改 Trigger、区域、知识、渲染、形状或优先级规则。
 

@@ -2,9 +2,12 @@
 param(
     [Parameter(Mandatory=$true)][string]$RunName,
     [string]$EngineRoot='D:\UE_5.8',
+    [ValidateRange(180,900)][int]$WorkloadTimeoutSeconds=180,
+    [switch]$LegacyM4P1Fixture,
     [string]$Tests='Darkwell.UnknownPartial+Darkwell.UnknownRegion+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap'
 )
 $ErrorActionPreference='Stop'
+if($LegacyM4P1Fixture -and @($Tests.Split('+') | Where-Object { $_ -notin @('SightWeave.M4P1.Visual.Camera34Observability','SightWeave.M4P1.Visual.ContinuousTransition') }).Count){throw 'Legacy CustomDepth fixture is restricted to the two frozen M4P1 pixel tests'}
 $repo=Split-Path -Parent $PSScriptRoot
 if($RunName -notmatch '^[A-Za-z0-9_-]+$'){throw 'Use a unique simple run name'}
 $output=Join-Path $repo "Saved/GrayObjectPolicy/$RunName"
@@ -16,9 +19,10 @@ $report=Join-Path $output "${RunName}_Report"
 $log=Join-Path $output "$RunName.log"
 $priorOutput=$env:DARKWELL_UNKNOWN_TEST_OUTPUT
 $priorSelector=$env:DARKWELL_UNKNOWN_TEST_SELECTOR
+$priorTimeout=$env:DARKWELL_UNKNOWN_TEST_TIMEOUT
 $process=$null; $guard=$null; $approved=$false; $attempts=0; $failure=$null; $code=-1
 $start=Get-Date
-[ordered]@{head=(& git -C $repo rev-parse HEAD); started=$start.ToString('o'); selector=$Tests} | ConvertTo-Json | Set-Content "$output/source.json"
+[ordered]@{head=(& git -C $repo rev-parse HEAD); started=$start.ToString('o'); selector=$Tests; legacy_m4p1_custom_depth_fixture=[bool]$LegacyM4P1Fixture; workload_timeout_seconds=$WorkloadTimeoutSeconds} | ConvertTo-Json | Set-Content "$output/source.json"
 & git -C $repo diff HEAD --binary | Set-Content "$output/source.patch"
 try {
     if(-not ('GrayBenchmarkSession' -as [type])){Add-Type -Path "$PSScriptRoot/GrayBenchmarkSession.cs"}
@@ -26,9 +30,14 @@ try {
     if(!$guard.ExecutionState){throw 'Cannot acquire unattended system/display guard'}
     $env:DARKWELL_UNKNOWN_TEST_OUTPUT=$output
     $env:DARKWELL_UNKNOWN_TEST_SELECTOR=$Tests
+    $env:DARKWELL_UNKNOWN_TEST_TIMEOUT=($WorkloadTimeoutSeconds+90).ToString()
     $arguments=@("`"$repo/Darkwell.uproject`"",'-d3d12','-sm6','-unattended','-nop4','-nosplash','-NoSound',
         "`"-ExecutePythonScript=$repo/Content/Python/run_unknown_partial_cut_tests.py`"",'-TestExit="Automation Test Queue Empty"',
         "`"-ReportExportPath=$report`"","`"-abslog=$log`"")
+    # Frozen plugin-Lab pixel tests predate the host's jittered CustomDepth integration.
+    # This opt-in restores only their original depth fixture, never disables TAA/TSR,
+    # never changes project configuration, and cannot be used for DARKWELL tests.
+    if($LegacyM4P1Fixture){$arguments+='-ExecCmds="r.CustomDepthTemporalAAJitter 0"'}
     # Visible window is required by the user's unattended foreground contract.
     $process=Start-Process "$EngineRoot/Engine/Binaries/Win64/UnrealEditor.exe" -ArgumentList $arguments -WindowStyle Normal -PassThru
     $process.Id | Set-Content "$output/pid.txt"
@@ -60,7 +69,7 @@ try {
         Start-Sleep -Milliseconds 100
     }
     if(!$approved){throw 'Editor exited before foreground approval'}
-    $deadline=(Get-Date).AddSeconds(180)
+    $deadline=(Get-Date).AddSeconds($WorkloadTimeoutSeconds)
     while(!$process.HasExited){
         if((Get-Date) -ge $deadline){throw 'Bounded functional run timeout'}
         if((Test-Path "$output/failed.txt") -or (Test-Path "$output/foreground-lost.json")){throw 'Driver or foreground validation failed'}
@@ -79,6 +88,7 @@ try {
     if($guard){$guard.Dispose(); [ordered]@{acquired=$guard.ExecutionState; restored=$guard.RestoreState} | ConvertTo-Json | Set-Content "$output/power-guard.json"}
     $env:DARKWELL_UNKNOWN_TEST_OUTPUT=$priorOutput
     $env:DARKWELL_UNKNOWN_TEST_SELECTOR=$priorSelector
+    $env:DARKWELL_UNKNOWN_TEST_TIMEOUT=$priorTimeout
 }
 $r=if(Test-Path "$report/index.json"){Get-Content "$report/index.json" -Raw | ConvertFrom-Json}else{$null}
 $severe=if(Test-Path $log){@(Select-String -LiteralPath $log -Pattern 'Fatal error:|Assertion failed:|Ensure condition failed:|GPU crashed|DXGI_ERROR_DEVICE_REMOVED|DXGI_ERROR_DEVICE_HUNG|EXCEPTION_ACCESS_VIOLATION|Traceback').Count}else{1}

@@ -1,0 +1,68 @@
+{
+  "BlackoutDirectTrial": {
+    "final_surface.csv": {
+      "low_alpha_rows": 0,
+      "proven_low_alpha_rows": 0
+    },
+    "frame_151_surface.csv": {
+      "low_alpha_rows": 984,
+      "proven_low_alpha_rows": 984
+    },
+    "frame_181_surface.csv": {
+      "low_alpha_rows": 984,
+      "proven_low_alpha_rows": 984
+    },
+    "frame_211_surface.csv": {
+      "low_alpha_rows": 602,
+      "proven_low_alpha_rows": 602
+    },
+    "frame_221_surface.csv": {
+      "low_alpha_rows": 602,
+      "proven_low_alpha_rows": 602
+    }
+  },
+  "BlackoutCurrentTransferTrial": {
+    "final_surface.csv": {
+      "low_alpha_rows": 0,
+      "proven_low_alpha_rows": 0
+    },
+    "frame_151_surface.csv": {
+      "low_alpha_rows": 0,
+      "proven_low_alpha_rows": 0
+    },
+    "frame_181_surface.csv": {
+      "low_alpha_rows": 0,
+      "proven_low_alpha_rows": 0
+    },
+    "frame_211_surface.csv": {
+      "low_alpha_rows": 0,
+      "proven_low_alpha_rows": 0
+    },
+    "frame_221_surface.csv": {
+      "low_alpha_rows": 0,
+      "proven_low_alpha_rows": 0
+    }
+  },
+  "BlackoutFinalContracts_Volume": {
+    "final_surface.csv": {
+      "low_alpha_rows": 0,
+      "proven_low_alpha_rows": 0
+    },
+    "frame_151_surface.csv": {
+      "low_alpha_rows": 0,
+      "proven_low_alpha_rows": 0
+    },
+    "frame_181_surface.csv": {
+      "low_alpha_rows": 0,
+      "proven_low_alpha_rows": 0
+    },
+    "frame_211_surface.csv": {
+      "low_alpha_rows": 0,
+      "proven_low_alpha_rows": 0
+    },
+    "frame_221_surface.csv": {
+      "low_alpha_rows": 0,
+      "proven_low_alpha_rows": 0
+    }
+  }
+}

@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellBlackoutEventVolume.h"
+#include "VisionPresentation/DarkwellBlackoutTiming.h"
 #include "VisionPresentation/DarkwellBlackRegionEventAdapter.h"
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
 #include "Player/DarkwellCharacter.h"
@@ -47,11 +48,13 @@ void ADarkwellBlackoutEventVolume::Reconcile()
 }
 void ADarkwellBlackoutEventVolume::Enter(UPrimitiveComponent*,AActor* Other,UPrimitiveComponent* Part,int32,bool,const FHitResult&)
 {
+ DW_BLACKOUT_ROOT(Enter);
  auto* Player=Cast<ADarkwellCharacter>(Other);
  if(Player && Part==Player->GetCapsuleComponent()) Reconcile();
 }
 void ADarkwellBlackoutEventVolume::Leave(UPrimitiveComponent*,AActor* Other,UPrimitiveComponent* Part,int32)
 {
+ DW_BLACKOUT_ROOT(Leave);
  auto* Player=Participant.Get();
  if(Player && Other==Player && Part==Player->GetCapsuleComponent()
   && !EventBounds->IsOverlappingComponent(Part)) Finish();

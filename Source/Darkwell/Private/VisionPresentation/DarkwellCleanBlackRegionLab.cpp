@@ -18,6 +18,11 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "HAL/PlatformApplicationMisc.h"
 
 ADarkwellCleanBlackRegionLab::ADarkwellCleanBlackRegionLab()
 {
@@ -112,10 +117,56 @@ void ADarkwellCleanBlackRegionLab::Tick(float Dt)
   bPlayerReady=true;
   if(GEngine) GEngine->AddOnScreenDebugMessage(0x424C4143,20,FColor::Cyan,TEXT("BLACK REGION | WASD + mouse | approach green console, face it + F (150 cm) | orange Whole, blue Partial 37 deg"));
  }
+#if !UE_BUILD_SHIPPING
+ AdvanceBlackoutProbe(*Player);
+#endif
  if(GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->IsActive()) MemoryScene->UpdateMemory(Dt,Player->GetActorLocation());
 }
+#if !UE_BUILD_SHIPPING
+void ADarkwellCleanBlackRegionLab::AdvanceBlackoutProbe(ADarkwellCharacter& Player)
+{
+ if(!FParse::Param(FCommandLine::Get(),TEXT("DarkwellBlackoutProbe"))) return;
+ const double Now=FPlatformTime::Seconds();
+ if(BlackoutProbeFrame==0) BlackoutProbeCSV=TEXT("frame,cycle,phase,wall_ms,active,started\n");
+ if(BlackoutProbePrevious)
+  BlackoutProbeCSV+=FString::Printf(TEXT("%d,%d,%d,%.6f,%d,%d\n"),BlackoutProbeFrame-1,(BlackoutProbeFrame-301)/150,(BlackoutProbeFrame-301)%150,(Now-BlackoutProbePrevious)*1000,Trigger->IsActive(),EventVolume->EventAdapter->IsEventStarted());
+ BlackoutProbePrevious=Now;
+ const int32 F=BlackoutProbeFrame++;
+ if(F>=300 && !FPlatformApplicationMisc::IsThisApplicationForeground())
+ { UE_LOG(LogTemp,Error,TEXT("BLACKOUT_GAME_PROBE_INVALID foreground lost frame=%d"),F); FPlatformMisc::RequestExit(false); return; }
+ // Warm up shaders, create genuine observation, then measure twenty complete
+ // collision-enabled transitions. No capture/readback/flush in measured frames.
+ const int32 Phase=F<300?-1:(F-300)%150,Cycle=F<300?-1:(F-300)/150;
+ if(F<300) Player.SetActorRotation(FRotator(0,F<180?45:-90,0));
+ if(Cycle>=20)
+ {
+  FString Output;
+  if(!FParse::Value(FCommandLine::Get(),TEXT("DarkwellBlackoutProbeOutput="),Output)) Output=FPaths::ProjectSavedDir()/TEXT("BlackoutProbe");
+  IFileManager::Get().MakeDirectory(*Output,true);
+  FFileHelper::SaveStringToFile(BlackoutProbeCSV,*(Output/TEXT("game_frames.csv")));
+  UE_LOG(LogTemp,Display,TEXT("BLACKOUT_GAME_PROBE_COMPLETE cycles=20 %s"),*MemoryScene->GetStorageTelemetry());
+  FPlatformMisc::RequestExit(false); return;
+ }
+ if(Phase==0 || Phase==60)
+ {
+  const double Start=FPlatformTime::Seconds();
+  Player.SetActorLocation(FVector(Phase==0?-80:-200,-130,92));
+  UE_LOG(LogTemp,Display,TEXT("BLACKOUT_GAME_EDGE cycle=%d phase=%d move_ms=%.6f active=%d started=%d"),Cycle,Phase,(FPlatformTime::Seconds()-Start)*1000,Trigger->IsActive(),EventVolume->EventAdapter->IsEventStarted());
+ }
+ if(Phase>=0) Player.SetActorRotation(FRotator(0,(Phase>=30 && Phase<50) || (Phase>=90 && Phase<120)?45:-90,0));
+}
+#endif
 void ADarkwellCleanBlackRegionLab::EndPlay(EEndPlayReason::Type Reason)
 {
+#if !UE_BUILD_SHIPPING
+ if(!BlackoutProbeCSV.IsEmpty())
+ {
+  FString Output;
+  if(!FParse::Value(FCommandLine::Get(),TEXT("DarkwellBlackoutProbeOutput="),Output)) Output=FPaths::ProjectSavedDir()/TEXT("BlackoutProbe");
+  IFileManager::Get().MakeDirectory(*Output,true);
+  FFileHelper::SaveStringToFile(BlackoutProbeCSV,*(Output/TEXT("game_frames.csv")));
+ }
+#endif
  if(IsValid(EventVolume)) EventVolume->Destroy();
  if(IsValid(DemoEvent)) DemoEvent->EndEvent();
  if(IsValid(Console)) Console->Destroy();

@@ -15,6 +15,7 @@ unreal.EditorPythonScripting.set_keep_python_script_alive(True)
 diagnostic = unreal.get_default_object(unreal.DarkwellSightWeaveGrayPolicyLabDirector)
 editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
 started = time.perf_counter()
+timeout_seconds = int(os.environ.get('DARKWELL_UNKNOWN_TEST_TIMEOUT', '180'))
 
 
 def environment():
@@ -36,7 +37,7 @@ sequence = run()
 
 def tick(_delta):
     try:
-        if time.perf_counter() - started > 180:
+        if time.perf_counter() - started > timeout_seconds:
             raise RuntimeError('Bounded Unknown functional test timeout')
         next(sequence)
     except Exception:

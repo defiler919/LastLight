@@ -1,0 +1,5230 @@
+{
+  "run": "BlackoutGameTransferTwenty",
+  "complete": true,
+  "invalid": false,
+  "lifecycle_warning": false,
+  "hard_long_frame_ceiling_ms": 100,
+  "edges": [
+    {
+      "cycle": 0,
+      "phase": 0,
+      "move_ms": 20.944603,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "301",
+      "stages": {
+        "ValidateObjectBoundaries": {
+          "calls": 3,
+          "inclusive_ms": 0.022404,
+          "exclusive_ms": 0.022404
+        },
+        "Publish": {
+          "calls": 3,
+          "inclusive_ms": 0.259001,
+          "exclusive_ms": 0.259001
+        },
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.241101,
+          "exclusive_ms": 0.073299
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.009499,
+          "exclusive_ms": 0.009499
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.014998,
+          "exclusive_ms": 0.014998
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000603,
+          "exclusive_ms": 0.000603
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.869401,
+          "exclusive_ms": 0.849098
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 0.942498,
+          "exclusive_ms": 0.015099
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.484402,
+          "exclusive_ms": 1.482103
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 1.5737,
+          "exclusive_ms": 0.033695
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.022199,
+          "exclusive_ms": 0.022199
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.840201,
+          "exclusive_ms": 3.840201
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.006001,
+          "exclusive_ms": 0.006001
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0012,
+          "exclusive_ms": 0.0012
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.476402,
+          "exclusive_ms": 4.201204
+        },
+        "RegionAppearance": {
+          "calls": 3,
+          "inclusive_ms": 1.047503,
+          "exclusive_ms": 1.047503
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 2,
+          "inclusive_ms": 5.471297,
+          "exclusive_ms": 3.387593
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.453696,
+          "exclusive_ms": 0.453696
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.935499,
+          "exclusive_ms": 0.935499
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.697803,
+          "exclusive_ms": 0.697803
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.642,
+          "exclusive_ms": 0.008699
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.336099,
+          "exclusive_ms": 0.336099
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 3,
+          "inclusive_ms": 4.359502,
+          "exclusive_ms": 1.662508
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.547702,
+          "exclusive_ms": 0.9895
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.2652,
+          "exclusive_ms": 0.2652
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000499,
+          "exclusive_ms": 0.000499
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 20.6444,
+          "exclusive_ms": 0.029199
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 20.645201,
+          "exclusive_ms": 0.000801
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 20.684101,
+          "exclusive_ms": 0.038899
+        }
+      }
+    },
+    {
+      "cycle": 0,
+      "phase": 60,
+      "move_ms": 11.367101,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "361",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.020701,
+          "exclusive_ms": 0.020701
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0185,
+          "exclusive_ms": 0.0185
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.046302,
+          "exclusive_ms": 0.046302
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.011098,
+          "exclusive_ms": 0.011098
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.002999,
+          "exclusive_ms": 0.002999
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.844801,
+          "exclusive_ms": 1.784403
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.482399,
+          "exclusive_ms": 0.482399
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 1.7973,
+          "exclusive_ms": 1.7973
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.761298,
+          "exclusive_ms": 4.481599
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.039302,
+          "exclusive_ms": 0.039302
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.098499,
+          "exclusive_ms": 1.059197
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000503,
+          "exclusive_ms": 0.000503
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 10.859799,
+          "exclusive_ms": 1.115497
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.144202,
+          "exclusive_ms": 0.144202
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 11.055801,
+          "exclusive_ms": 0.0518
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 11.057898,
+          "exclusive_ms": 0.002097
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 11.058703,
+          "exclusive_ms": 0.000805
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 11.105102,
+          "exclusive_ms": 0.046398
+        }
+      }
+    },
+    {
+      "cycle": 1,
+      "phase": 0,
+      "move_ms": 20.3964,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "451",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.003502,
+          "exclusive_ms": 0.003502
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.0173,
+          "exclusive_ms": 0.0173
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.025101,
+          "exclusive_ms": 0.025101
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0236,
+          "exclusive_ms": 0.0236
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.001099,
+          "exclusive_ms": 0.001099
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.945099,
+          "exclusive_ms": 0.902202
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.255495,
+          "exclusive_ms": 0.255495
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.145802,
+          "exclusive_ms": 0.024807
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.825999,
+          "exclusive_ms": 1.822699
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 1.963202,
+          "exclusive_ms": 0.040304
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.024799,
+          "exclusive_ms": 0.024799
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.459401,
+          "exclusive_ms": 3.459401
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.007298,
+          "exclusive_ms": 0.007298
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001401,
+          "exclusive_ms": 0.001401
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.073102,
+          "exclusive_ms": 3.933005
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 1.123201,
+          "exclusive_ms": 1.123201
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 4.3834,
+          "exclusive_ms": 2.663199
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.499595,
+          "exclusive_ms": 0.499595
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.902597,
+          "exclusive_ms": 0.902597
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.6692,
+          "exclusive_ms": 0.6692
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.582805,
+          "exclusive_ms": 0.011008
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.426102,
+          "exclusive_ms": 0.426102
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 4.313402,
+          "exclusive_ms": 1.433801
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 2.156202,
+          "exclusive_ms": 1.4004
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.371099,
+          "exclusive_ms": 0.371099
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.0006,
+          "exclusive_ms": 0.0006
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 20.096101,
+          "exclusive_ms": 0.053287
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 20.098303,
+          "exclusive_ms": 0.002202
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 20.147402,
+          "exclusive_ms": 0.049099
+        }
+      }
+    },
+    {
+      "cycle": 1,
+      "phase": 60,
+      "move_ms": 9.801701,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "511",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.019997,
+          "exclusive_ms": 0.019997
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.014901,
+          "exclusive_ms": 0.014901
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.025302,
+          "exclusive_ms": 0.025302
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.008501,
+          "exclusive_ms": 0.008501
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0032,
+          "exclusive_ms": 0.0032
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.647599,
+          "exclusive_ms": 1.610596
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.458501,
+          "exclusive_ms": 0.458501
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 1.956001,
+          "exclusive_ms": 1.956001
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 5.150698,
+          "exclusive_ms": 2.736196
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.0831,
+          "exclusive_ms": 0.0831
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.314498,
+          "exclusive_ms": 1.231398
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000503,
+          "exclusive_ms": 0.000503
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 9.159997,
+          "exclusive_ms": 1.0118
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.217602,
+          "exclusive_ms": 0.217602
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 9.430598,
+          "exclusive_ms": 0.053
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 9.431999,
+          "exclusive_ms": 0.001401
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 9.433702,
+          "exclusive_ms": 0.001702
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 9.486102,
+          "exclusive_ms": 0.0524
+        }
+      }
+    },
+    {
+      "cycle": 2,
+      "phase": 0,
+      "move_ms": 18.952698,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "601",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.001501,
+          "exclusive_ms": 0.001501
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.008103,
+          "exclusive_ms": 0.008103
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.011802,
+          "exclusive_ms": 0.011802
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.008803,
+          "exclusive_ms": 0.008803
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000399,
+          "exclusive_ms": 0.000399
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.8891,
+          "exclusive_ms": 0.873499
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.166297,
+          "exclusive_ms": 0.166297
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 0.982899,
+          "exclusive_ms": 0.010099
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.900602,
+          "exclusive_ms": 1.898803
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 2.026301,
+          "exclusive_ms": 0.034999
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.026401,
+          "exclusive_ms": 0.026401
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.448896,
+          "exclusive_ms": 3.448896
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.009697,
+          "exclusive_ms": 0.009697
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001099,
+          "exclusive_ms": 0.001099
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.3182,
+          "exclusive_ms": 4.220705
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 0.9421,
+          "exclusive_ms": 0.9421
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 3.987599,
+          "exclusive_ms": 2.228901
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.454802,
+          "exclusive_ms": 0.454802
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.8546,
+          "exclusive_ms": 0.8546
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.6117,
+          "exclusive_ms": 0.6117
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.473501,
+          "exclusive_ms": 0.007201
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.274803,
+          "exclusive_ms": 0.274803
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 3.741398,
+          "exclusive_ms": 1.271494
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.620498,
+          "exclusive_ms": 1.048498
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.266798,
+          "exclusive_ms": 0.266798
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000499,
+          "exclusive_ms": 0.000499
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 18.711399,
+          "exclusive_ms": 0.028901
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 18.713102,
+          "exclusive_ms": 0.001702
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 18.772099,
+          "exclusive_ms": 0.058997
+        }
+      }
+    },
+    {
+      "cycle": 2,
+      "phase": 60,
+      "move_ms": 10.467701,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "661",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.010099,
+          "exclusive_ms": 0.010099
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.008702,
+          "exclusive_ms": 0.008702
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.027001,
+          "exclusive_ms": 0.027001
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.006799,
+          "exclusive_ms": 0.006799
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.002801,
+          "exclusive_ms": 0.002801
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.2017,
+          "exclusive_ms": 1.165099
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.467099,
+          "exclusive_ms": 0.467099
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 1.538601,
+          "exclusive_ms": 1.538601
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.3494,
+          "exclusive_ms": 4.3437
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.106901,
+          "exclusive_ms": 0.106901
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.3115,
+          "exclusive_ms": 1.204599
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.001002,
+          "exclusive_ms": 0.001002
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 9.847999,
+          "exclusive_ms": 0.965595
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.333801,
+          "exclusive_ms": 0.333801
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 10.218203,
+          "exclusive_ms": 0.036404
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 10.2203,
+          "exclusive_ms": 0.002097
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 10.221399,
+          "exclusive_ms": 0.001099
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 10.248002,
+          "exclusive_ms": 0.026602
+        }
+      }
+    },
+    {
+      "cycle": 3,
+      "phase": 0,
+      "move_ms": 20.314299,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "751",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.004299,
+          "exclusive_ms": 0.004299
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.016399,
+          "exclusive_ms": 0.016399
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.016704,
+          "exclusive_ms": 0.016704
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.018898,
+          "exclusive_ms": 0.018898
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.0007,
+          "exclusive_ms": 0.0007
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.922699,
+          "exclusive_ms": 0.891998
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.275597,
+          "exclusive_ms": 0.275597
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.126103,
+          "exclusive_ms": 0.019208
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.7948,
+          "exclusive_ms": 1.792397
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 1.938801,
+          "exclusive_ms": 0.036202
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.03,
+          "exclusive_ms": 0.03
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.465697,
+          "exclusive_ms": 3.465697
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.006501,
+          "exclusive_ms": 0.006501
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001501,
+          "exclusive_ms": 0.001501
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.0075,
+          "exclusive_ms": 3.9136
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 1.070097,
+          "exclusive_ms": 1.070097
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 4.754499,
+          "exclusive_ms": 2.975803
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.536498,
+          "exclusive_ms": 0.536498
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.792395,
+          "exclusive_ms": 0.792395
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.6155,
+          "exclusive_ms": 0.6155
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.417004,
+          "exclusive_ms": 0.009108
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.400104,
+          "exclusive_ms": 0.400104
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 4.136302,
+          "exclusive_ms": 1.467098
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 2.040502,
+          "exclusive_ms": 1.339301
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.315599,
+          "exclusive_ms": 0.315599
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000697,
+          "exclusive_ms": 0.000697
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 20.055499,
+          "exclusive_ms": 0.043597
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 20.057101,
+          "exclusive_ms": 0.001602
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 20.0953,
+          "exclusive_ms": 0.038199
+        }
+      }
+    },
+    {
+      "cycle": 3,
+      "phase": 60,
+      "move_ms": 10.485198,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "811",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.0166,
+          "exclusive_ms": 0.0166
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0153,
+          "exclusive_ms": 0.0153
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.041001,
+          "exclusive_ms": 0.041001
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.009898,
+          "exclusive_ms": 0.009898
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.004102,
+          "exclusive_ms": 0.004102
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.366198,
+          "exclusive_ms": 1.311198
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.466097,
+          "exclusive_ms": 0.466097
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 1.836699,
+          "exclusive_ms": 1.836699
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.494202,
+          "exclusive_ms": 4.191406
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.094797,
+          "exclusive_ms": 0.094797
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.055699,
+          "exclusive_ms": 0.960901
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000499,
+          "exclusive_ms": 0.000499
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 9.9531,
+          "exclusive_ms": 1.004603
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.246897,
+          "exclusive_ms": 0.246897
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 10.239799,
+          "exclusive_ms": 0.039801
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 10.2414,
+          "exclusive_ms": 0.001602
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 10.242499,
+          "exclusive_ms": 0.001099
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 10.283299,
+          "exclusive_ms": 0.040799
+        }
+      }
+    },
+    {
+      "cycle": 4,
+      "phase": 0,
+      "move_ms": 19.251,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "901",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0013,
+          "exclusive_ms": 0.0013
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.0083,
+          "exclusive_ms": 0.0083
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.014197,
+          "exclusive_ms": 0.014197
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0083,
+          "exclusive_ms": 0.0083
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000503,
+          "exclusive_ms": 0.000503
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.8737,
+          "exclusive_ms": 0.858799
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.231501,
+          "exclusive_ms": 0.231501
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 0.971798,
+          "exclusive_ms": 0.010096
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.890898,
+          "exclusive_ms": 1.889098
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 2.077498,
+          "exclusive_ms": 0.034802
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.052098,
+          "exclusive_ms": 0.052098
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.692098,
+          "exclusive_ms": 3.692098
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.007302,
+          "exclusive_ms": 0.007302
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0019,
+          "exclusive_ms": 0.0019
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.472502,
+          "exclusive_ms": 4.081104
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 0.943001,
+          "exclusive_ms": 0.943001
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 4.088499,
+          "exclusive_ms": 2.365898
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.455502,
+          "exclusive_ms": 0.455502
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.792705,
+          "exclusive_ms": 0.792705
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.651598,
+          "exclusive_ms": 0.651598
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.453798,
+          "exclusive_ms": 0.009496
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.308897,
+          "exclusive_ms": 0.308897
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 3.694795,
+          "exclusive_ms": 1.216598
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.624499,
+          "exclusive_ms": 1.042098
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.259999,
+          "exclusive_ms": 0.259999
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000402,
+          "exclusive_ms": 0.000402
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 18.966801,
+          "exclusive_ms": 0.02921
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 18.968899,
+          "exclusive_ms": 0.002097
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 19.034799,
+          "exclusive_ms": 0.0659
+        }
+      }
+    },
+    {
+      "cycle": 4,
+      "phase": 60,
+      "move_ms": 11.753201,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "961",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.0121,
+          "exclusive_ms": 0.0121
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0109,
+          "exclusive_ms": 0.0109
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.040498,
+          "exclusive_ms": 0.040498
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.0204,
+          "exclusive_ms": 0.0204
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.002399,
+          "exclusive_ms": 0.002399
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.8357,
+          "exclusive_ms": 1.772404
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.654999,
+          "exclusive_ms": 0.654999
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 2.303198,
+          "exclusive_ms": 2.303198
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 7.539,
+          "exclusive_ms": 4.580803
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.047598,
+          "exclusive_ms": 0.047598
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.981499,
+          "exclusive_ms": 0.9339
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000197,
+          "exclusive_ms": 0.000197
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 11.387803,
+          "exclusive_ms": 1.008406
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.142802,
+          "exclusive_ms": 0.142802
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 11.5606,
+          "exclusive_ms": 0.029996
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 11.5618,
+          "exclusive_ms": 0.0012
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 11.562798,
+          "exclusive_ms": 0.000998
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 11.5944,
+          "exclusive_ms": 0.031602
+        }
+      }
+    },
+    {
+      "cycle": 5,
+      "phase": 0,
+      "move_ms": 20.669699,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "1051",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0057,
+          "exclusive_ms": 0.0057
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.017401,
+          "exclusive_ms": 0.017401
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.019901,
+          "exclusive_ms": 0.019901
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.022799,
+          "exclusive_ms": 0.022799
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.0006,
+          "exclusive_ms": 0.0006
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 1.195297,
+          "exclusive_ms": 1.1588
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.2282,
+          "exclusive_ms": 0.2282
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.364999,
+          "exclusive_ms": 0.020999
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 2.065901,
+          "exclusive_ms": 2.0625
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 2.2032,
+          "exclusive_ms": 0.040401
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.027001,
+          "exclusive_ms": 0.027001
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.7039,
+          "exclusive_ms": 3.7039
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.011802,
+          "exclusive_ms": 0.011802
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001401,
+          "exclusive_ms": 0.001401
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 7.1682,
+          "exclusive_ms": 4.941296
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 0.941999,
+          "exclusive_ms": 0.941999
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 4.358198,
+          "exclusive_ms": 2.477799
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.461403,
+          "exclusive_ms": 0.461403
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.741396,
+          "exclusive_ms": 0.741396
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.606399,
+          "exclusive_ms": 0.606399
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.3544,
+          "exclusive_ms": 0.006605
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.212699,
+          "exclusive_ms": 0.212699
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 3.5211,
+          "exclusive_ms": 1.237798
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.598299,
+          "exclusive_ms": 1.0195
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.254799,
+          "exclusive_ms": 0.254799
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000402,
+          "exclusive_ms": 0.000402
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 20.339303,
+          "exclusive_ms": 0.115804
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 20.340502,
+          "exclusive_ms": 0.0012
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 20.385303,
+          "exclusive_ms": 0.0448
+        }
+      }
+    },
+    {
+      "cycle": 5,
+      "phase": 60,
+      "move_ms": 11.028402,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "1111",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.0166,
+          "exclusive_ms": 0.0166
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0167,
+          "exclusive_ms": 0.0167
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.034198,
+          "exclusive_ms": 0.034198
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.011098,
+          "exclusive_ms": 0.011098
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0039,
+          "exclusive_ms": 0.0039
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.5314,
+          "exclusive_ms": 1.482204
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.449803,
+          "exclusive_ms": 0.449803
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 1.818199,
+          "exclusive_ms": 1.818199
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.764602,
+          "exclusive_ms": 4.4966
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.074197,
+          "exclusive_ms": 0.074197
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.1057,
+          "exclusive_ms": 1.031503
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000197,
+          "exclusive_ms": 0.000197
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 10.4804,
+          "exclusive_ms": 1.045201
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.233002,
+          "exclusive_ms": 0.233002
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 10.754798,
+          "exclusive_ms": 0.041395
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 10.756001,
+          "exclusive_ms": 0.001203
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 10.7571,
+          "exclusive_ms": 0.001099
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 10.797299,
+          "exclusive_ms": 0.0402
+        }
+      }
+    },
+    {
+      "cycle": 6,
+      "phase": 0,
+      "move_ms": 19.131601,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "1201",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.001501,
+          "exclusive_ms": 0.001501
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.0083,
+          "exclusive_ms": 0.0083
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.0108,
+          "exclusive_ms": 0.0108
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.009,
+          "exclusive_ms": 0.009
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000499,
+          "exclusive_ms": 0.000499
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.863999,
+          "exclusive_ms": 0.848699
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.169802,
+          "exclusive_ms": 0.169802
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 0.972901,
+          "exclusive_ms": 0.010099
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.774497,
+          "exclusive_ms": 1.772296
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 1.886301,
+          "exclusive_ms": 0.032503
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.0224,
+          "exclusive_ms": 0.0224
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 4.040603,
+          "exclusive_ms": 4.040603
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.009399,
+          "exclusive_ms": 0.009399
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001099,
+          "exclusive_ms": 0.001099
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 7.024597,
+          "exclusive_ms": 4.299097
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 0.941496,
+          "exclusive_ms": 0.941496
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 3.938101,
+          "exclusive_ms": 2.223503
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.459902,
+          "exclusive_ms": 0.459902
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.758998,
+          "exclusive_ms": 0.758998
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.615101,
+          "exclusive_ms": 0.615101
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.382399,
+          "exclusive_ms": 0.0083
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.213198,
+          "exclusive_ms": 0.213198
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 3.506199,
+          "exclusive_ms": 1.197297
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.584601,
+          "exclusive_ms": 1.009703
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.253402,
+          "exclusive_ms": 0.253402
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000499,
+          "exclusive_ms": 0.000499
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 18.9468,
+          "exclusive_ms": 0.029303
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 18.948,
+          "exclusive_ms": 0.0012
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 18.980399,
+          "exclusive_ms": 0.032399
+        }
+      }
+    },
+    {
+      "cycle": 6,
+      "phase": 60,
+      "move_ms": 10.8862,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "1261",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.018097,
+          "exclusive_ms": 0.018097
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.016503,
+          "exclusive_ms": 0.016503
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.033498,
+          "exclusive_ms": 0.033498
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.0147,
+          "exclusive_ms": 0.0147
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.003401,
+          "exclusive_ms": 0.003401
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.606502,
+          "exclusive_ms": 1.554903
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.500202,
+          "exclusive_ms": 0.500202
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 2.145201,
+          "exclusive_ms": 2.145201
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.7176,
+          "exclusive_ms": 4.072197
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.045799,
+          "exclusive_ms": 0.045799
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.011901,
+          "exclusive_ms": 0.966102
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000399,
+          "exclusive_ms": 0.000399
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 10.473397,
+          "exclusive_ms": 1.102395
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.156,
+          "exclusive_ms": 0.156
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 10.666903,
+          "exclusive_ms": 0.037506
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 10.667801,
+          "exclusive_ms": 0.000898
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 10.668602,
+          "exclusive_ms": 0.000801
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 10.7117,
+          "exclusive_ms": 0.043098
+        }
+      }
+    },
+    {
+      "cycle": 7,
+      "phase": 0,
+      "move_ms": 21.4017,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "1351",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.001598,
+          "exclusive_ms": 0.001598
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.013895,
+          "exclusive_ms": 0.013895
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.0185,
+          "exclusive_ms": 0.0185
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0089,
+          "exclusive_ms": 0.0089
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000797,
+          "exclusive_ms": 0.000797
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.906598,
+          "exclusive_ms": 0.890899
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.421796,
+          "exclusive_ms": 0.421796
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.1659,
+          "exclusive_ms": 0.014108
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 2.014101,
+          "exclusive_ms": 2.008803
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 2.256799,
+          "exclusive_ms": 0.052202
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.0294,
+          "exclusive_ms": 0.0294
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.419597,
+          "exclusive_ms": 3.419597
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.007801,
+          "exclusive_ms": 0.007801
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.002503,
+          "exclusive_ms": 0.002503
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.181799,
+          "exclusive_ms": 4.066397
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 1.482304,
+          "exclusive_ms": 1.482304
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 4.402798,
+          "exclusive_ms": 2.665997
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.925198,
+          "exclusive_ms": 0.925198
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.820104,
+          "exclusive_ms": 0.820104
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.641,
+          "exclusive_ms": 0.641
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.472402,
+          "exclusive_ms": 0.011299
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.286404,
+          "exclusive_ms": 0.286404
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 4.4939,
+          "exclusive_ms": 1.341298
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 2.5905,
+          "exclusive_ms": 1.501098
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.468597,
+          "exclusive_ms": 0.468597
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000902,
+          "exclusive_ms": 0.000902
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 21.140102,
+          "exclusive_ms": 0.038706
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 21.142598,
+          "exclusive_ms": 0.002496
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 21.191999,
+          "exclusive_ms": 0.049401
+        }
+      }
+    },
+    {
+      "cycle": 7,
+      "phase": 60,
+      "move_ms": 12.857199,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "1411",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.0147,
+          "exclusive_ms": 0.0147
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.013899,
+          "exclusive_ms": 0.013899
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.029001,
+          "exclusive_ms": 0.029001
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.007201,
+          "exclusive_ms": 0.007201
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001598,
+          "exclusive_ms": 0.001598
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.5231,
+          "exclusive_ms": 1.485299
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.484001,
+          "exclusive_ms": 0.484001
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 1.834899,
+          "exclusive_ms": 1.834899
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 7.113997,
+          "exclusive_ms": 4.795097
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.0492,
+          "exclusive_ms": 0.0492
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.043499,
+          "exclusive_ms": 0.994299
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.0007,
+          "exclusive_ms": 0.0007
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 11.076599,
+          "exclusive_ms": 1.366705
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.966799,
+          "exclusive_ms": 0.966799
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 12.120001,
+          "exclusive_ms": 0.076603
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 12.1262,
+          "exclusive_ms": 0.006199
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 12.129501,
+          "exclusive_ms": 0.003301
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 12.242097,
+          "exclusive_ms": 0.112597
+        }
+      }
+    },
+    {
+      "cycle": 8,
+      "phase": 0,
+      "move_ms": 23.706399,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "1501",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.001501,
+          "exclusive_ms": 0.001501
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.010803,
+          "exclusive_ms": 0.010803
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.014298,
+          "exclusive_ms": 0.014298
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0135,
+          "exclusive_ms": 0.0135
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000399,
+          "exclusive_ms": 0.000399
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.992898,
+          "exclusive_ms": 0.971697
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.312001,
+          "exclusive_ms": 0.312001
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.176,
+          "exclusive_ms": 0.018202
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 2.131898,
+          "exclusive_ms": 2.129801
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 2.334099,
+          "exclusive_ms": 0.044297
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.036199,
+          "exclusive_ms": 0.036199
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.892098,
+          "exclusive_ms": 3.892098
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.009101,
+          "exclusive_ms": 0.009101
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001498,
+          "exclusive_ms": 0.001498
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 7.1535,
+          "exclusive_ms": 4.792105
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 1.328703,
+          "exclusive_ms": 1.328703
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 4.700802,
+          "exclusive_ms": 2.6379
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.694897,
+          "exclusive_ms": 0.694897
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 1.005601,
+          "exclusive_ms": 1.005601
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.838798,
+          "exclusive_ms": 0.838798
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.857698,
+          "exclusive_ms": 0.013299
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.512797,
+          "exclusive_ms": 0.512797
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 5.135302,
+          "exclusive_ms": 1.54651
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 2.861701,
+          "exclusive_ms": 2.0184
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.5234,
+          "exclusive_ms": 0.5234
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.0007,
+          "exclusive_ms": 0.0007
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 23.413397,
+          "exclusive_ms": 0.044893
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 23.415502,
+          "exclusive_ms": 0.002105
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 23.4676,
+          "exclusive_ms": 0.052098
+        }
+      }
+    },
+    {
+      "cycle": 8,
+      "phase": 60,
+      "move_ms": 11.081301,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "1561",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.0211,
+          "exclusive_ms": 0.0211
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0186,
+          "exclusive_ms": 0.0186
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.033401,
+          "exclusive_ms": 0.033401
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.011701,
+          "exclusive_ms": 0.011701
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0032,
+          "exclusive_ms": 0.0032
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.611996,
+          "exclusive_ms": 1.563694
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.5964,
+          "exclusive_ms": 0.5964
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 1.672398,
+          "exclusive_ms": 1.672398
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.507199,
+          "exclusive_ms": 4.238401
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.0626,
+          "exclusive_ms": 0.0626
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.265801,
+          "exclusive_ms": 1.203202
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000399,
+          "exclusive_ms": 0.000399
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 10.565802,
+          "exclusive_ms": 1.140706
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.1943,
+          "exclusive_ms": 0.1943
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 10.8063,
+          "exclusive_ms": 0.046197
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 10.808602,
+          "exclusive_ms": 0.002302
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 10.809299,
+          "exclusive_ms": 0.000697
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 10.859601,
+          "exclusive_ms": 0.050303
+        }
+      }
+    },
+    {
+      "cycle": 9,
+      "phase": 0,
+      "move_ms": 25.292099,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "1651",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.002403,
+          "exclusive_ms": 0.002403
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.019599,
+          "exclusive_ms": 0.019599
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.024404,
+          "exclusive_ms": 0.024404
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.017401,
+          "exclusive_ms": 0.017401
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.0026,
+          "exclusive_ms": 0.0026
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 1.1127,
+          "exclusive_ms": 1.079597
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.487301,
+          "exclusive_ms": 0.487301
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.4534,
+          "exclusive_ms": 0.024699
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 2.8705,
+          "exclusive_ms": 2.864398
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 3.137399,
+          "exclusive_ms": 0.076
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.025801,
+          "exclusive_ms": 0.025801
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 4.278906,
+          "exclusive_ms": 4.278906
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.008501,
+          "exclusive_ms": 0.008501
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.002701,
+          "exclusive_ms": 0.002701
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 8.221503,
+          "exclusive_ms": 5.487498
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 1.115199,
+          "exclusive_ms": 1.115199
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 5.107298,
+          "exclusive_ms": 3.074095
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.788402,
+          "exclusive_ms": 0.788402
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.9799,
+          "exclusive_ms": 0.9799
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.775702,
+          "exclusive_ms": 0.775702
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.771599,
+          "exclusive_ms": 0.015996
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.361897,
+          "exclusive_ms": 0.361897
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 5.073499,
+          "exclusive_ms": 1.601201
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.952801,
+          "exclusive_ms": 1.288902
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.5504,
+          "exclusive_ms": 0.5504
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.001099,
+          "exclusive_ms": 0.001099
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 25.003601,
+          "exclusive_ms": 0.048999
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 25.005698,
+          "exclusive_ms": 0.002097
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 25.065597,
+          "exclusive_ms": 0.059899
+        }
+      }
+    },
+    {
+      "cycle": 9,
+      "phase": 60,
+      "move_ms": 12.448601,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "1711",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.016302,
+          "exclusive_ms": 0.016302
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.015099,
+          "exclusive_ms": 0.015099
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.034302,
+          "exclusive_ms": 0.034302
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.0167,
+          "exclusive_ms": 0.0167
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0064,
+          "exclusive_ms": 0.0064
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.729999,
+          "exclusive_ms": 1.672596
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.410099,
+          "exclusive_ms": 0.410099
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 1.6804,
+          "exclusive_ms": 1.6804
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 7.215697,
+          "exclusive_ms": 5.125199
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.1955,
+          "exclusive_ms": 0.1955
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.430199,
+          "exclusive_ms": 1.234699
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000503,
+          "exclusive_ms": 0.000503
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 11.500001,
+          "exclusive_ms": 1.092203
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.483401,
+          "exclusive_ms": 0.483401
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 12.1601,
+          "exclusive_ms": 0.176698
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 12.161598,
+          "exclusive_ms": 0.001498
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 12.163501,
+          "exclusive_ms": 0.001904
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 12.2004,
+          "exclusive_ms": 0.036899
+        }
+      }
+    },
+    {
+      "cycle": 10,
+      "phase": 0,
+      "move_ms": 24.322901,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "1801",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.001799,
+          "exclusive_ms": 0.001799
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.0153,
+          "exclusive_ms": 0.0153
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.017699,
+          "exclusive_ms": 0.017699
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.014,
+          "exclusive_ms": 0.014
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000499,
+          "exclusive_ms": 0.000499
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.982299,
+          "exclusive_ms": 0.958003
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.386201,
+          "exclusive_ms": 0.386201
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.257803,
+          "exclusive_ms": 0.019103
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.989901,
+          "exclusive_ms": 1.9866
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 2.179001,
+          "exclusive_ms": 0.043999
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.029899,
+          "exclusive_ms": 0.029899
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 4.098997,
+          "exclusive_ms": 4.098997
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.012498,
+          "exclusive_ms": 0.012498
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001401,
+          "exclusive_ms": 0.001401
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.966598,
+          "exclusive_ms": 4.486002
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 1.128998,
+          "exclusive_ms": 1.128998
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.4805,
+          "exclusive_ms": 4.402503
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.618599,
+          "exclusive_ms": 0.618599
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 1.0521,
+          "exclusive_ms": 1.0521
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.828203,
+          "exclusive_ms": 0.828203
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.893602,
+          "exclusive_ms": 0.013299
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.381902,
+          "exclusive_ms": 0.381902
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 5.082797,
+          "exclusive_ms": 1.792092
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 2.062201,
+          "exclusive_ms": 1.349002
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.396602,
+          "exclusive_ms": 0.396602
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000499,
+          "exclusive_ms": 0.000499
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 24.084702,
+          "exclusive_ms": 0.048902
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 24.085999,
+          "exclusive_ms": 0.001296
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 24.124201,
+          "exclusive_ms": 0.038203
+        }
+      }
+    },
+    {
+      "cycle": 10,
+      "phase": 60,
+      "move_ms": 14.027901,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "1861",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.018097,
+          "exclusive_ms": 0.018097
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.016,
+          "exclusive_ms": 0.016
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.043601,
+          "exclusive_ms": 0.043601
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.0153,
+          "exclusive_ms": 0.0153
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.003599,
+          "exclusive_ms": 0.003599
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.9935,
+          "exclusive_ms": 1.931001
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.465501,
+          "exclusive_ms": 0.465501
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 1.801301,
+          "exclusive_ms": 1.801301
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 7.638399,
+          "exclusive_ms": 5.371597
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.353802,
+          "exclusive_ms": 0.353802
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.904901,
+          "exclusive_ms": 1.551099
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.0006,
+          "exclusive_ms": 0.0006
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 12.984801,
+          "exclusive_ms": 1.413304
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.6487,
+          "exclusive_ms": 0.6487
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 13.698399,
+          "exclusive_ms": 0.064898
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 13.700899,
+          "exclusive_ms": 0.0025
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 13.703298,
+          "exclusive_ms": 0.002399
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 13.742499,
+          "exclusive_ms": 0.039201
+        }
+      }
+    },
+    {
+      "cycle": 11,
+      "phase": 0,
+      "move_ms": 24.436902,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "1951",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.001598,
+          "exclusive_ms": 0.001598
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.019401,
+          "exclusive_ms": 0.019401
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.019304,
+          "exclusive_ms": 0.019304
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.010699,
+          "exclusive_ms": 0.010699
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.001799,
+          "exclusive_ms": 0.001799
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 1.074802,
+          "exclusive_ms": 1.055304
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.709094,
+          "exclusive_ms": 0.709094
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.369398,
+          "exclusive_ms": 0.0141
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 2.171397,
+          "exclusive_ms": 2.166595
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 2.683099,
+          "exclusive_ms": 0.063702
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.0306,
+          "exclusive_ms": 0.0306
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.7806,
+          "exclusive_ms": 3.7806
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.0109,
+          "exclusive_ms": 0.0109
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001598,
+          "exclusive_ms": 0.001598
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.844003,
+          "exclusive_ms": 4.542105
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 1.254704,
+          "exclusive_ms": 1.254704
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 4.706301,
+          "exclusive_ms": 2.757899
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.872999,
+          "exclusive_ms": 0.872999
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 1.046102,
+          "exclusive_ms": 1.046102
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.864498,
+          "exclusive_ms": 0.864498
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.929898,
+          "exclusive_ms": 0.019297
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.545997,
+          "exclusive_ms": 0.545997
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 5.671598,
+          "exclusive_ms": 1.650203
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 2.524,
+          "exclusive_ms": 1.695897
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.672501,
+          "exclusive_ms": 0.672501
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.001203,
+          "exclusive_ms": 0.001203
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 23.866899,
+          "exclusive_ms": 0.058196
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 23.8695,
+          "exclusive_ms": 0.0026
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 23.936298,
+          "exclusive_ms": 0.066798
+        }
+      }
+    },
+    {
+      "cycle": 11,
+      "phase": 60,
+      "move_ms": 12.039702,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "2011",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.0249,
+          "exclusive_ms": 0.0249
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.020001,
+          "exclusive_ms": 0.020001
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.048101,
+          "exclusive_ms": 0.048101
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.009399,
+          "exclusive_ms": 0.009399
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.003099,
+          "exclusive_ms": 0.003099
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.795199,
+          "exclusive_ms": 1.734599
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.450999,
+          "exclusive_ms": 0.450999
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 2.377901,
+          "exclusive_ms": 2.377901
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 7.2903,
+          "exclusive_ms": 4.4614
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.072598,
+          "exclusive_ms": 0.072598
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.106299,
+          "exclusive_ms": 1.033701
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000399,
+          "exclusive_ms": 0.000399
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 11.495098,
+          "exclusive_ms": 1.258001
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.1669,
+          "exclusive_ms": 0.1669
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 11.716802,
+          "exclusive_ms": 0.054803
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 11.718899,
+          "exclusive_ms": 0.002097
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 11.719801,
+          "exclusive_ms": 0.000902
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 11.773601,
+          "exclusive_ms": 0.053801
+        }
+      }
+    },
+    {
+      "cycle": 12,
+      "phase": 0,
+      "move_ms": 20.776201,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "2101",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0025,
+          "exclusive_ms": 0.0025
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.011802,
+          "exclusive_ms": 0.011802
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.011399,
+          "exclusive_ms": 0.011399
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.009898,
+          "exclusive_ms": 0.009898
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000402,
+          "exclusive_ms": 0.000402
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.892401,
+          "exclusive_ms": 0.8757
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.238001,
+          "exclusive_ms": 0.238001
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.049198,
+          "exclusive_ms": 0.015095
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.809601,
+          "exclusive_ms": 1.8075
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 1.954801,
+          "exclusive_ms": 0.0371
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.023,
+          "exclusive_ms": 0.023
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.537498,
+          "exclusive_ms": 3.537498
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.010502,
+          "exclusive_ms": 0.010502
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0013,
+          "exclusive_ms": 0.0013
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.325502,
+          "exclusive_ms": 4.099902
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 0.9978,
+          "exclusive_ms": 0.9978
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 5.309898,
+          "exclusive_ms": 3.575098
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.546299,
+          "exclusive_ms": 0.546299
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.960898,
+          "exclusive_ms": 0.960898
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.670601,
+          "exclusive_ms": 0.670601
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.640201,
+          "exclusive_ms": 0.008702
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.259094,
+          "exclusive_ms": 0.259094
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 4.134201,
+          "exclusive_ms": 1.405805
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.764499,
+          "exclusive_ms": 1.154799
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.282802,
+          "exclusive_ms": 0.282802
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.0006,
+          "exclusive_ms": 0.0006
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 20.5811,
+          "exclusive_ms": 0.037003
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 20.582199,
+          "exclusive_ms": 0.001099
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 20.6175,
+          "exclusive_ms": 0.035301
+        }
+      }
+    },
+    {
+      "cycle": 12,
+      "phase": 60,
+      "move_ms": 11.026002,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "2161",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.021402,
+          "exclusive_ms": 0.021402
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.017703,
+          "exclusive_ms": 0.017703
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.031099,
+          "exclusive_ms": 0.031099
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.014801,
+          "exclusive_ms": 0.014801
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001602,
+          "exclusive_ms": 0.001602
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.397502,
+          "exclusive_ms": 1.350001
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.386499,
+          "exclusive_ms": 0.386499
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 2.044901,
+          "exclusive_ms": 2.044901
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.902799,
+          "exclusive_ms": 4.471399
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.062,
+          "exclusive_ms": 0.062
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.039401,
+          "exclusive_ms": 0.977401
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000402,
+          "exclusive_ms": 0.000402
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 10.4381,
+          "exclusive_ms": 1.058891
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.242598,
+          "exclusive_ms": 0.242598
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 10.726798,
+          "exclusive_ms": 0.0461
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 10.728702,
+          "exclusive_ms": 0.001904
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 10.729499,
+          "exclusive_ms": 0.000797
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 10.7872,
+          "exclusive_ms": 0.057701
+        }
+      }
+    },
+    {
+      "cycle": 13,
+      "phase": 0,
+      "move_ms": 26.068699,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "2251",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.004102,
+          "exclusive_ms": 0.004102
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.067398,
+          "exclusive_ms": 0.067398
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.030797,
+          "exclusive_ms": 0.030797
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.061702,
+          "exclusive_ms": 0.061702
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000801,
+          "exclusive_ms": 0.000801
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 1.195703,
+          "exclusive_ms": 1.124103
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.73,
+          "exclusive_ms": 0.73
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.606401,
+          "exclusive_ms": 0.018701
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 3.150102,
+          "exclusive_ms": 3.138002
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 3.825698,
+          "exclusive_ms": 0.270195
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.033099,
+          "exclusive_ms": 0.033099
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 4.840203,
+          "exclusive_ms": 4.840203
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.008401,
+          "exclusive_ms": 0.008401
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001203,
+          "exclusive_ms": 0.001203
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 7.741801,
+          "exclusive_ms": 4.695997
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 1.1985,
+          "exclusive_ms": 1.1985
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 5.464498,
+          "exclusive_ms": 3.112897
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.597499,
+          "exclusive_ms": 0.597499
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 1.2688,
+          "exclusive_ms": 1.2688
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.842199,
+          "exclusive_ms": 0.842199
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 2.1258,
+          "exclusive_ms": 0.014801
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.482,
+          "exclusive_ms": 0.482
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 5.023401,
+          "exclusive_ms": 1.510803
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.9597,
+          "exclusive_ms": 1.2757
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.307299,
+          "exclusive_ms": 0.307299
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.0007,
+          "exclusive_ms": 0.0007
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 25.701798,
+          "exclusive_ms": 0.065897
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 25.703602,
+          "exclusive_ms": 0.001803
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 25.7475,
+          "exclusive_ms": 0.043899
+        }
+      }
+    },
+    {
+      "cycle": 13,
+      "phase": 60,
+      "move_ms": 13.527103,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "2311",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.026099,
+          "exclusive_ms": 0.026099
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.023898,
+          "exclusive_ms": 0.023898
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.040501,
+          "exclusive_ms": 0.040501
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.0159,
+          "exclusive_ms": 0.0159
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0038,
+          "exclusive_ms": 0.0038
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 2.488397,
+          "exclusive_ms": 2.428196
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.543099,
+          "exclusive_ms": 0.543099
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 2.123501,
+          "exclusive_ms": 2.123501
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 7.800598,
+          "exclusive_ms": 5.133998
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.059497,
+          "exclusive_ms": 0.059497
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.953902,
+          "exclusive_ms": 0.894405
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000298,
+          "exclusive_ms": 0.000298
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 12.653299,
+          "exclusive_ms": 1.360107
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.325199,
+          "exclusive_ms": 0.325199
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 13.075903,
+          "exclusive_ms": 0.097405
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 13.079297,
+          "exclusive_ms": 0.003394
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 13.080701,
+          "exclusive_ms": 0.001404
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 13.1246,
+          "exclusive_ms": 0.043899
+        }
+      }
+    },
+    {
+      "cycle": 14,
+      "phase": 0,
+      "move_ms": 19.861903,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "2401",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.001397,
+          "exclusive_ms": 0.001397
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.019804,
+          "exclusive_ms": 0.019804
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.015497,
+          "exclusive_ms": 0.015497
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.008598,
+          "exclusive_ms": 0.008598
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.0006,
+          "exclusive_ms": 0.0006
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.983302,
+          "exclusive_ms": 0.968505
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.347696,
+          "exclusive_ms": 0.347696
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.187898,
+          "exclusive_ms": 0.011794
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.871698,
+          "exclusive_ms": 1.865599
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 2.101298,
+          "exclusive_ms": 0.054903
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.027902,
+          "exclusive_ms": 0.027902
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.449902,
+          "exclusive_ms": 3.449902
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.006501,
+          "exclusive_ms": 0.006501
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001498,
+          "exclusive_ms": 0.001498
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.165102,
+          "exclusive_ms": 4.021201
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 0.977602,
+          "exclusive_ms": 0.977602
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 4.259799,
+          "exclusive_ms": 2.544597
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.634801,
+          "exclusive_ms": 0.634801
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.767801,
+          "exclusive_ms": 0.767801
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.627294,
+          "exclusive_ms": 0.627294
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.4043,
+          "exclusive_ms": 0.009205
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.244103,
+          "exclusive_ms": 0.244103
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 3.966901,
+          "exclusive_ms": 1.262397
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.948401,
+          "exclusive_ms": 1.3441
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.421301,
+          "exclusive_ms": 0.421301
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000402,
+          "exclusive_ms": 0.000402
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 19.6671,
+          "exclusive_ms": 0.032101
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 19.668501,
+          "exclusive_ms": 0.001401
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 19.702703,
+          "exclusive_ms": 0.034202
+        }
+      }
+    },
+    {
+      "cycle": 14,
+      "phase": 60,
+      "move_ms": 12.1038,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "2461",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.0135,
+          "exclusive_ms": 0.0135
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.013601,
+          "exclusive_ms": 0.013601
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.0358,
+          "exclusive_ms": 0.0358
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.011802,
+          "exclusive_ms": 0.011802
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.002902,
+          "exclusive_ms": 0.002902
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.481298,
+          "exclusive_ms": 1.430795
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.564598,
+          "exclusive_ms": 0.564598
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 2.124999,
+          "exclusive_ms": 2.124999
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 7.640697,
+          "exclusive_ms": 4.951101
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.088099,
+          "exclusive_ms": 0.088099
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.228202,
+          "exclusive_ms": 1.140103
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000898,
+          "exclusive_ms": 0.000898
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 11.4646,
+          "exclusive_ms": 1.086403
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.297401,
+          "exclusive_ms": 0.297401
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 11.799999,
+          "exclusive_ms": 0.037998
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 11.8015,
+          "exclusive_ms": 0.001501
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 11.802297,
+          "exclusive_ms": 0.000797
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 11.839502,
+          "exclusive_ms": 0.037204
+        }
+      }
+    },
+    {
+      "cycle": 15,
+      "phase": 0,
+      "move_ms": 18.810097,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "2551",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.001099,
+          "exclusive_ms": 0.001099
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.009,
+          "exclusive_ms": 0.009
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.011001,
+          "exclusive_ms": 0.011001
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.008602,
+          "exclusive_ms": 0.008602
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000399,
+          "exclusive_ms": 0.000399
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.913598,
+          "exclusive_ms": 0.898797
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.2313,
+          "exclusive_ms": 0.2313
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.056902,
+          "exclusive_ms": 0.011005
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.8031,
+          "exclusive_ms": 1.8005
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 1.9449,
+          "exclusive_ms": 0.0338
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.0217,
+          "exclusive_ms": 0.0217
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.485102,
+          "exclusive_ms": 3.485102
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.007898,
+          "exclusive_ms": 0.007898
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001401,
+          "exclusive_ms": 0.001401
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.544102,
+          "exclusive_ms": 4.400901
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 0.9543,
+          "exclusive_ms": 0.9543
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 3.9749,
+          "exclusive_ms": 2.232298
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.457302,
+          "exclusive_ms": 0.457302
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.6679,
+          "exclusive_ms": 0.6679
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.609104,
+          "exclusive_ms": 0.609104
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.283899,
+          "exclusive_ms": 0.006896
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.203203,
+          "exclusive_ms": 0.203203
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 3.461801,
+          "exclusive_ms": 1.250599
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.613699,
+          "exclusive_ms": 1.0291
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.266798,
+          "exclusive_ms": 0.266798
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000503,
+          "exclusive_ms": 0.000503
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 18.629201,
+          "exclusive_ms": 0.028696
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 18.630199,
+          "exclusive_ms": 0.000998
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 18.658902,
+          "exclusive_ms": 0.028703
+        }
+      }
+    },
+    {
+      "cycle": 15,
+      "phase": 60,
+      "move_ms": 10.2478,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "2611",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.017099,
+          "exclusive_ms": 0.017099
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0115,
+          "exclusive_ms": 0.0115
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.049401,
+          "exclusive_ms": 0.049401
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.012901,
+          "exclusive_ms": 0.012901
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0032,
+          "exclusive_ms": 0.0032
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.5314,
+          "exclusive_ms": 1.465898
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.4404,
+          "exclusive_ms": 0.4404
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 1.984,
+          "exclusive_ms": 1.984
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.045498,
+          "exclusive_ms": 3.621098
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.052102,
+          "exclusive_ms": 0.052102
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.072001,
+          "exclusive_ms": 1.019899
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000499,
+          "exclusive_ms": 0.000499
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 9.780899,
+          "exclusive_ms": 1.102902
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.190601,
+          "exclusive_ms": 0.190601
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 10.008797,
+          "exclusive_ms": 0.037298
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 10.01,
+          "exclusive_ms": 0.001203
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 10.010701,
+          "exclusive_ms": 0.0007
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 10.056101,
+          "exclusive_ms": 0.0454
+        }
+      }
+    },
+    {
+      "cycle": 16,
+      "phase": 0,
+      "move_ms": 27.7954,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "2701",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0026,
+          "exclusive_ms": 0.0026
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.026301,
+          "exclusive_ms": 0.026301
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.040703,
+          "exclusive_ms": 0.040703
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0173,
+          "exclusive_ms": 0.0173
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.001099,
+          "exclusive_ms": 0.001099
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 1.040298,
+          "exclusive_ms": 1.004796
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.730902,
+          "exclusive_ms": 0.730902
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.3781,
+          "exclusive_ms": 0.022601
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 3.1689,
+          "exclusive_ms": 3.160801
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 3.719401,
+          "exclusive_ms": 0.108499
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.046901,
+          "exclusive_ms": 0.046901
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 4.3993,
+          "exclusive_ms": 4.3993
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.0224,
+          "exclusive_ms": 0.0224
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0038,
+          "exclusive_ms": 0.0038
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 9.147502,
+          "exclusive_ms": 6.523602
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 1.417704,
+          "exclusive_ms": 1.417704
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.653801,
+          "exclusive_ms": 4.1053
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.586305,
+          "exclusive_ms": 0.586305
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.882,
+          "exclusive_ms": 0.882
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.711899,
+          "exclusive_ms": 0.711899
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.6062,
+          "exclusive_ms": 0.012301
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.275999,
+          "exclusive_ms": 0.275999
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 4.632503,
+          "exclusive_ms": 1.758799
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.936998,
+          "exclusive_ms": 1.219295
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.4052,
+          "exclusive_ms": 0.4052
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.0007,
+          "exclusive_ms": 0.0007
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 27.5447,
+          "exclusive_ms": 0.057593
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 27.5467,
+          "exclusive_ms": 0.002
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 27.590401,
+          "exclusive_ms": 0.043701
+        }
+      }
+    },
+    {
+      "cycle": 16,
+      "phase": 60,
+      "move_ms": 11.145201,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "2761",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.0179,
+          "exclusive_ms": 0.0179
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.023399,
+          "exclusive_ms": 0.023399
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.0467,
+          "exclusive_ms": 0.0467
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.0077,
+          "exclusive_ms": 0.0077
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0025,
+          "exclusive_ms": 0.0025
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.690298,
+          "exclusive_ms": 1.633398
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.526801,
+          "exclusive_ms": 0.526801
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 2.165399,
+          "exclusive_ms": 2.165399
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.636702,
+          "exclusive_ms": 3.944501
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.06,
+          "exclusive_ms": 0.06
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.0336,
+          "exclusive_ms": 0.973601
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000399,
+          "exclusive_ms": 0.000399
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 10.584399,
+          "exclusive_ms": 1.182102
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.218701,
+          "exclusive_ms": 0.218701
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 10.8518,
+          "exclusive_ms": 0.048701
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 10.853201,
+          "exclusive_ms": 0.001401
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 10.8543,
+          "exclusive_ms": 0.001099
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 10.9022,
+          "exclusive_ms": 0.0479
+        }
+      }
+    },
+    {
+      "cycle": 17,
+      "phase": 0,
+      "move_ms": 20.950101,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "2851",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.003003,
+          "exclusive_ms": 0.003003
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.018802,
+          "exclusive_ms": 0.018802
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.016,
+          "exclusive_ms": 0.016
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.012897,
+          "exclusive_ms": 0.012897
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000801,
+          "exclusive_ms": 0.000801
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.942498,
+          "exclusive_ms": 0.919599
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.397097,
+          "exclusive_ms": 0.397097
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.218002,
+          "exclusive_ms": 0.017606
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.906902,
+          "exclusive_ms": 1.903202
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 2.112899,
+          "exclusive_ms": 0.047997
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.024099,
+          "exclusive_ms": 0.024099
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.719002,
+          "exclusive_ms": 3.719002
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.006501,
+          "exclusive_ms": 0.006501
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0025,
+          "exclusive_ms": 0.0025
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 6.268002,
+          "exclusive_ms": 3.905304
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 1.048502,
+          "exclusive_ms": 1.048502
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 4.314799,
+          "exclusive_ms": 2.544194
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.667099,
+          "exclusive_ms": 0.667099
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 1.040399,
+          "exclusive_ms": 1.040399
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.807099,
+          "exclusive_ms": 0.807099
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.864702,
+          "exclusive_ms": 0.017203
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.330701,
+          "exclusive_ms": 0.330701
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 4.776698,
+          "exclusive_ms": 1.560699
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.9168,
+          "exclusive_ms": 1.2495
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.353497,
+          "exclusive_ms": 0.353497
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000503,
+          "exclusive_ms": 0.000503
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 20.6571,
+          "exclusive_ms": 0.043295
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 20.658303,
+          "exclusive_ms": 0.001203
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 20.700902,
+          "exclusive_ms": 0.042599
+        }
+      }
+    },
+    {
+      "cycle": 17,
+      "phase": 60,
+      "move_ms": 11.737399,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "2911",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.009201,
+          "exclusive_ms": 0.009201
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.007801,
+          "exclusive_ms": 0.007801
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.032399,
+          "exclusive_ms": 0.032399
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.008099,
+          "exclusive_ms": 0.008099
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.003401,
+          "exclusive_ms": 0.003401
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.905601,
+          "exclusive_ms": 1.861703
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.6117,
+          "exclusive_ms": 0.6117
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 2.575397,
+          "exclusive_ms": 2.575397
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 7.354997,
+          "exclusive_ms": 4.167899
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.0441,
+          "exclusive_ms": 0.0441
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.959098,
+          "exclusive_ms": 0.914998
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000298,
+          "exclusive_ms": 0.000298
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 11.362601,
+          "exclusive_ms": 1.125604
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.181001,
+          "exclusive_ms": 0.181001
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 11.5688,
+          "exclusive_ms": 0.025198
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 11.569701,
+          "exclusive_ms": 0.000902
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 11.570401,
+          "exclusive_ms": 0.0007
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 11.595499,
+          "exclusive_ms": 0.025097
+        }
+      }
+    },
+    {
+      "cycle": 18,
+      "phase": 0,
+      "move_ms": 21.272402,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "3001",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.001401,
+          "exclusive_ms": 0.001401
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.009999,
+          "exclusive_ms": 0.009999
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.011604,
+          "exclusive_ms": 0.011604
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.008103,
+          "exclusive_ms": 0.008103
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000797,
+          "exclusive_ms": 0.000797
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.9638,
+          "exclusive_ms": 0.948898
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.2818,
+          "exclusive_ms": 0.2818
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.144398,
+          "exclusive_ms": 0.012498
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.857702,
+          "exclusive_ms": 1.855601
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 2.0165,
+          "exclusive_ms": 0.0351
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.021201,
+          "exclusive_ms": 0.021201
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.784601,
+          "exclusive_ms": 3.784601
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.026401,
+          "exclusive_ms": 0.026401
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.0032,
+          "exclusive_ms": 0.0032
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 7.366501,
+          "exclusive_ms": 5.029101
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 0.994004,
+          "exclusive_ms": 0.994004
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 4.6019,
+          "exclusive_ms": 2.714794
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.577297,
+          "exclusive_ms": 0.577297
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.939503,
+          "exclusive_ms": 0.939503
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.703599,
+          "exclusive_ms": 0.703599
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.6548,
+          "exclusive_ms": 0.011697
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.2262,
+          "exclusive_ms": 0.2262
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 4.176401,
+          "exclusive_ms": 1.449406
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.7219,
+          "exclusive_ms": 1.116998
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.268698,
+          "exclusive_ms": 0.268698
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000302,
+          "exclusive_ms": 0.000302
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 21.0706,
+          "exclusive_ms": 0.037797
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 21.071699,
+          "exclusive_ms": 0.001099
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 21.1032,
+          "exclusive_ms": 0.031501
+        }
+      }
+    },
+    {
+      "cycle": 18,
+      "phase": 60,
+      "move_ms": 11.985503,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "3061",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.010002,
+          "exclusive_ms": 0.010002
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.011202,
+          "exclusive_ms": 0.011202
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.047602,
+          "exclusive_ms": 0.047602
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.010502,
+          "exclusive_ms": 0.010502
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.001699,
+          "exclusive_ms": 0.001699
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.671303,
+          "exclusive_ms": 1.611501
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.4903,
+          "exclusive_ms": 0.4903
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 2.390899,
+          "exclusive_ms": 2.390899
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 7.496297,
+          "exclusive_ms": 4.615098
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.055898,
+          "exclusive_ms": 0.055898
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.167402,
+          "exclusive_ms": 1.111504
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.0007,
+          "exclusive_ms": 0.0007
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 11.450998,
+          "exclusive_ms": 1.094092
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.283502,
+          "exclusive_ms": 0.283502
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 11.766102,
+          "exclusive_ms": 0.031602
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 11.7677,
+          "exclusive_ms": 0.001598
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 11.768803,
+          "exclusive_ms": 0.001103
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 11.799101,
+          "exclusive_ms": 0.030298
+        }
+      }
+    },
+    {
+      "cycle": 19,
+      "phase": 0,
+      "move_ms": 20.620897,
+      "active": 1,
+      "started": 1,
+      "engine_frame": "3151",
+      "stages": {
+        "ConfigureRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.0019,
+          "exclusive_ms": 0.0019
+        },
+        "ValidateObjectBoundaries": {
+          "calls": 2,
+          "inclusive_ms": 0.011202,
+          "exclusive_ms": 0.011202
+        },
+        "PhysicalSnapshot": {
+          "calls": 3,
+          "inclusive_ms": 0.010598,
+          "exclusive_ms": 0.010598
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.009399,
+          "exclusive_ms": 0.009399
+        },
+        "Darkwell_Memory_SealCapture": {
+          "calls": 1,
+          "inclusive_ms": 0.000399,
+          "exclusive_ms": 0.000399
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 0.9121,
+          "exclusive_ms": 0.896502
+        },
+        "Publish": {
+          "calls": 2,
+          "inclusive_ms": 0.265401,
+          "exclusive_ms": 0.265401
+        },
+        "SetBlockMemoryWrites": {
+          "calls": 1,
+          "inclusive_ms": 1.075901,
+          "exclusive_ms": 0.012401
+        },
+        "ClearMemoryInRegion": {
+          "calls": 1,
+          "inclusive_ms": 1.815401,
+          "exclusive_ms": 1.813501
+        },
+        "ClearMemory": {
+          "calls": 1,
+          "inclusive_ms": 1.974501,
+          "exclusive_ms": 0.033896
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.022098,
+          "exclusive_ms": 0.022098
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 2,
+          "inclusive_ms": 3.728498,
+          "exclusive_ms": 3.728498
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.010103,
+          "exclusive_ms": 0.010103
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.002202,
+          "exclusive_ms": 0.002202
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 7.142201,
+          "exclusive_ms": 4.792601
+        },
+        "RegionAppearance": {
+          "calls": 2,
+          "inclusive_ms": 0.985898,
+          "exclusive_ms": 0.985898
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 4.723303,
+          "exclusive_ms": 2.927404
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 2,
+          "inclusive_ms": 0.491098,
+          "exclusive_ms": 0.491098
+        },
+        "Darkwell_GrayHistory_JoinedCapRows": {
+          "calls": 2,
+          "inclusive_ms": 0.729397,
+          "exclusive_ms": 0.729397
+        },
+        "Darkwell_GrayHistory_CapMergeCPU": {
+          "calls": 2,
+          "inclusive_ms": 0.651401,
+          "exclusive_ms": 0.651401
+        },
+        "Darkwell_GrayHistory_CapBuildCPU": {
+          "calls": 2,
+          "inclusive_ms": 1.3915,
+          "exclusive_ms": 0.010703
+        },
+        "Darkwell_GrayHistory_CapSubmitGT": {
+          "calls": 2,
+          "inclusive_ms": 0.310395,
+          "exclusive_ms": 0.310395
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 2,
+          "inclusive_ms": 3.722098,
+          "exclusive_ms": 1.255304
+        },
+        "Darkwell_GrayHistory_TextureSubmission": {
+          "calls": 1,
+          "inclusive_ms": 1.701899,
+          "exclusive_ms": 1.098599
+        },
+        "Darkwell_GrayHistory_CapCells": {
+          "calls": 1,
+          "inclusive_ms": 0.273801,
+          "exclusive_ms": 0.273801
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.001103,
+          "exclusive_ms": 0.001103
+        },
+        "Activate": {
+          "calls": 1,
+          "inclusive_ms": 20.387899,
+          "exclusive_ms": 0.042096
+        },
+        "BeginEvent": {
+          "calls": 1,
+          "inclusive_ms": 20.3894,
+          "exclusive_ms": 0.001501
+        },
+        "Enter": {
+          "calls": 1,
+          "inclusive_ms": 20.4367,
+          "exclusive_ms": 0.0473
+        }
+      }
+    },
+    {
+      "cycle": 19,
+      "phase": 60,
+      "move_ms": 11.2941,
+      "active": 0,
+      "started": 0,
+      "engine_frame": "3211",
+      "stages": {
+        "PhysicalSnapshot": {
+          "calls": 1,
+          "inclusive_ms": 0.011101,
+          "exclusive_ms": 0.011101
+        },
+        "RekeyCurrentRegion": {
+          "calls": 1,
+          "inclusive_ms": 0.013702,
+          "exclusive_ms": 0.013702
+        },
+        "Darkwell_GrayHistory_Coverage": {
+          "calls": 1,
+          "inclusive_ms": 0.041999,
+          "exclusive_ms": 0.041999
+        },
+        "Darkwell_Memory_EnsureResources": {
+          "calls": 1,
+          "inclusive_ms": 0.005301,
+          "exclusive_ms": 0.005301
+        },
+        "Darkwell_GrayHistory_HistoricalPath": {
+          "calls": 1,
+          "inclusive_ms": 0.004098,
+          "exclusive_ms": 0.004098
+        },
+        "Darkwell_GrayHistory_UpdateTracked": {
+          "calls": 1,
+          "inclusive_ms": 1.6433,
+          "exclusive_ms": 1.591902
+        },
+        "RegionAppearance": {
+          "calls": 1,
+          "inclusive_ms": 0.475399,
+          "exclusive_ms": 0.475399
+        },
+        "ConservativeAppearancePixels": {
+          "calls": 1,
+          "inclusive_ms": 2.431802,
+          "exclusive_ms": 2.431802
+        },
+        "Darkwell_Resources_CurrentTextures": {
+          "calls": 1,
+          "inclusive_ms": 6.394599,
+          "exclusive_ms": 3.487397
+        },
+        "Darkwell_GrayHistory_CapSignature": {
+          "calls": 1,
+          "inclusive_ms": 0.057399,
+          "exclusive_ms": 0.057399
+        },
+        "Darkwell_GrayHistory_CapPresentation": {
+          "calls": 1,
+          "inclusive_ms": 1.3122,
+          "exclusive_ms": 1.254801
+        },
+        "ApplyMemoryRegionPresentation": {
+          "calls": 1,
+          "inclusive_ms": 0.000302,
+          "exclusive_ms": 0.000302
+        },
+        "SetMemoryWriteBlock": {
+          "calls": 1,
+          "inclusive_ms": 10.449,
+          "exclusive_ms": 1.073796
+        },
+        "Publish": {
+          "calls": 1,
+          "inclusive_ms": 0.5363,
+          "exclusive_ms": 0.5363
+        },
+        "ReleaseBlockRegistration": {
+          "calls": 1,
+          "inclusive_ms": 11.016998,
+          "exclusive_ms": 0.031698
+        },
+        "Deactivate": {
+          "calls": 1,
+          "inclusive_ms": 11.019599,
+          "exclusive_ms": 0.0026
+        },
+        "EndEvent": {
+          "calls": 1,
+          "inclusive_ms": 11.021499,
+          "exclusive_ms": 0.0019
+        },
+        "Leave": {
+          "calls": 1,
+          "inclusive_ms": 11.055298,
+          "exclusive_ms": 0.0338
+        }
+      }
+    }
+  ],
+  "enter": {
+    "transitions": 20,
+    "cycles": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "callback_calls": 20,
+    "event_calls": 20,
+    "event_ms": {
+      "count": 20,
+      "min": 18.630199,
+      "p50": 20.645201,
+      "p95": 25.703602,
+      "p99": 27.5467,
+      "max": 27.5467
+    },
+    "move_ms": {
+      "count": 20,
+      "min": 18.810097,
+      "p50": 20.944603,
+      "p95": 26.068699,
+      "p99": 27.7954,
+      "max": 27.7954
+    },
+    "window_frame_ms": {
+      "count": 100,
+      "min": 18.1228,
+      "p50": 21.014798,
+      "p95": 43.069102,
+      "p99": 48.133001,
+      "max": 48.400499
+    }
+  },
+  "leave": {
+    "transitions": 20,
+    "cycles": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "callback_calls": 20,
+    "event_calls": 20,
+    "event_ms": {
+      "count": 20,
+      "min": 9.433702,
+      "p50": 11.058703,
+      "p95": 13.080701,
+      "p99": 13.703298,
+      "max": 13.703298
+    },
+    "move_ms": {
+      "count": 20,
+      "min": 9.801701,
+      "p50": 11.367101,
+      "p95": 13.527103,
+      "p99": 14.027901,
+      "max": 14.027901
+    },
+    "window_frame_ms": {
+      "count": 100,
+      "min": 15.978299,
+      "p50": 16.773302,
+      "p95": 24.348199,
+      "p99": 26.589599,
+      "max": 26.627898
+    }
+  },
+  "all_measured_frame_ms": {
+    "count": 3000,
+    "min": 14.966801,
+    "p50": 16.843602,
+    "p95": 25.943398,
+    "p99": 35.9286,
+    "max": 51.2788
+  },
+  "non_edge_frame_ms": {
+    "count": 2800,
+    "min": 14.966801,
+    "p50": 16.822997,
+    "p95": 25.549099,
+    "p99": 33.960801,
+    "max": 51.2788
+  },
+  "state_errors": 0,
+  "edge_state_errors": 0,
+  "passed": true
+}

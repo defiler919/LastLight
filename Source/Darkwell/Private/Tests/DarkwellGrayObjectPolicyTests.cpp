@@ -2090,6 +2090,44 @@ bool FDarkwellUnknownRegionContract::RunTest(const FString& ModeName)
 }
 
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellRegionAxisMembership,"Darkwell.UnknownPartial.AxisMembership",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellRegionAxisMembership::RunTest(const FString&)
+{
+ FDarkwellHistoryGridV2 Fine; FBox2D PreviousRegion(ForceInit);
+ int32 Compared=0,Mismatches=0;
+ for(const auto Bounds:{FBox2D(FVector2D(-17.3,-12.7),FVector2D(28.1,33.9)),FBox2D(FVector2D(-100,-70),FVector2D(90,120))})
+ {
+  FDarkwellSpatialPropMemory Memory; Memory.Initialize(TEXT("AxisOracle"),Bounds); Memory.BeginPresent(); Memory.BeginAbsent();
+  // Reinitialization while blocked must rebuild both axis caches for the new lattice.
+  Fine.Initialize(Memory);
+  const auto Size=Fine.GetSize(); const auto B=Fine.GetBounds();
+  for(int32 I=0;I<Fine.GetSamples().Num();++I)
+  {
+   ++Compared;
+   Mismatches+=Fine.IsMemoryBlocked(I)!=Darkwell::MemoryRegionSamples::Contains(PreviousRegion,Darkwell::MemoryRegionSamples::Center(B,Size,I));
+  }
+  const auto Corner=Darkwell::MemoryRegionSamples::Center(B,Size,Size.X+1);
+  const auto Opposite=Darkwell::MemoryRegionSamples::Center(B,Size,(Size.Y-2)*Size.X+Size.X-2);
+  for(const auto Region:{FBox2D(ForceInit),FBox2D(Corner,Opposite),FBox2D(Corner+FVector2D(.17,.13),Opposite-FVector2D(.21,.19)),B,FBox2D(Corner,Corner)})
+  {
+   Fine.SetMemoryWriteBlock(Region);
+   TBitArray<> Visited(false,Fine.GetSamples().Num());
+   Darkwell::MemoryRegionSamples::VisitInside(B,Size,Region,[&](int32 I) {Visited[I]=true;});
+   for(int32 I=0;I<Fine.GetSamples().Num();++I)
+   {
+    ++Compared;
+    const bool Expected=Darkwell::MemoryRegionSamples::Contains(Region,Darkwell::MemoryRegionSamples::Center(B,Size,I));
+    Mismatches+=(Fine.IsMemoryBlocked(I)!=Expected) || (Visited[I]!=Expected);
+   }
+  }
+  PreviousRegion=FBox2D(Corner,Opposite); Fine.SetMemoryWriteBlock(PreviousRegion);
+ }
+ TestTrue(TEXT("Non-vacuous half-open boundary and resize oracle"),Compared>1000);
+ TestEqual(TEXT("Factored AABB mask equals scalar center predicate"),Mismatches,0);
+ return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellUnknownPartialCut,"Darkwell.UnknownPartial.SampleCut",
  EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
 bool FDarkwellUnknownPartialCut::RunTest(const FString&)
@@ -2131,7 +2169,7 @@ bool FDarkwellUnknownPartialCut::RunTest(const FString&)
    TestEqual(TEXT("Every known outside AA envelope matches no-Block reference"),LostKnownAA,0);
   }
  }
- for(const TCHAR* Sequence:{TEXT("A"),TEXT("B"),TEXT("C")})
+ for(const TCHAR* Sequence:{TEXT("A"),TEXT("B"),TEXT("C"),TEXT("A_Rect"),TEXT("B_Rect"),TEXT("C_Rect")})
  {
   FRoom F; F.World->AddToRoot(); ON_SCOPE_EXIT {F.World->RemoveFromRoot();};
   auto& Scene=*F.Room;
@@ -2144,14 +2182,16 @@ bool FDarkwellUnknownPartialCut::RunTest(const FString&)
   const auto Old=P.History.GetRecords()[0]; const auto OB=Old.SpatialMemory.GetBounds();
   const FVector2D Center=OB.GetCenter();
   // Two interior cuts; deliberately not aligned to coarse or fine edges.
-  const FBox2D B(FVector2D(Center.X-19.83,OB.Min.Y-5),FVector2D(Center.X+20.17,OB.Max.Y+5));
+  const bool FourEdges=FCString::Strlen(Sequence)>1;
+  const FBox2D B=FourEdges ? FBox2D(Center-OB.GetExtent()*.4+FVector2D(.17,.13),Center+OB.GetExtent()*.4+FVector2D(.17,.13))
+   : FBox2D(FVector2D(Center.X-19.83,OB.Min.Y-5),FVector2D(Center.X+20.17,OB.Max.Y+5));
   auto* Region=F.World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
   if(!TestTrue(TEXT("Fixed AABB can straddle Partial"),Region->ConfigureRegion(B.Min,B.Max))) return false;
   TestTrue(TEXT("Min is inside"),Contains(B,B.Min)); TestFalse(TEXT("Max is outside"),Contains(B,B.Max));
   const auto S=Old.FineHistory.GetSize();
   auto Inside=[&](int32 I){return Contains(B,Darkwell::MemoryRegionSamples::Center(OB,S,I));};
-  const bool Clear=FCString::Strcmp(Sequence,TEXT("B"))!=0;
-  const bool Block=FCString::Strcmp(Sequence,TEXT("A"))!=0;
+  const bool Clear=Sequence[0]!=TEXT('B');
+  const bool Block=Sequence[0]!=TEXT('A');
   auto Stored=[&](bool In){int32 N=0;for(const auto& R:P.History.GetRecords()) if(!R.bCurrentObservedLocation)
    for(int32 I=0;I<R.FineHistory.GetSamples().Num();++I)
     if(Contains(B,Darkwell::MemoryRegionSamples::Center(R.FineHistory.GetBounds(),R.FineHistory.GetSize(),I))==In && R.FineHistory.GetSamples()[I].InitialRemembered>0) ++N;return N;};

@@ -38,7 +38,7 @@ struct DARKWELL_API FDarkwellHistoryGridV2
 	bool HasResidualSurface() const;
  void ClearMemorySamples(const FBox2D& Region);
  void InheritObservedEnvelope(TConstArrayView<float> Previous);
- void SetMemoryWriteBlock(const FBox2D& Region) { MemoryWriteBlock=Region; }
+ void SetMemoryWriteBlock(const FBox2D& Region);
  bool IsMemoryBlocked(int32 I) const { return BlockedSamplesAt(I); }
 
 	void BuildPresentation(TArray<FLinearColor>& OutPixels, const TBitArray<>* GeometryFootprint = nullptr) const;
@@ -61,5 +61,7 @@ private:
 	TBitArray<> ActiveFlags;
 	TBitArray<> MutableEvidence;
  FBox2D MemoryWriteBlock=FBox2D(ForceInit);
+ // Fixed AABB membership factors into exact per-axis center tests.
+ TArray<uint8> BlockedColumns,BlockedRows;
  bool BlockedSamplesAt(int32 I) const;
 };

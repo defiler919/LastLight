@@ -71,6 +71,8 @@ struct DARKWELL_API FDarkwellSpatialObservationHistory
 	/** Preserve actual new knowledge beyond the legacy 64-record admission limit. */
 	int32 BeginCurrentObservation(const FTransform& SnapshotTransform,
 		const FBox2D& WorldBounds, float CellSize = 2.5f);
+	/** Same-pose Current transaction boundary; transfers existing data, creates no capture. */
+	uint32 RekeyCurrentObservation();
 	bool CanSealCurrentObservation() const { return CurrentIndex != INDEX_NONE && (bIndependentCurrentAdmission || Records.Num() <= MaxResidentRecords); }
 	bool RebaseCurrentObservedLocation(
 		const FTransform& SnapshotTransform,

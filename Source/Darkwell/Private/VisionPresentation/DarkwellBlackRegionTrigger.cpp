@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
+#include "VisionPresentation/DarkwellBlackoutTiming.h"
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
@@ -42,6 +43,7 @@ bool ADarkwellBlackRegionTrigger::IsActive() const
 
 bool ADarkwellBlackRegionTrigger::Activate()
 {
+ DW_BLACKOUT_SCOPE(Activate);
  if(IsActive()) return true;
  LastFailure.Reset();
  if(!GetWorld() || !GetWorld()->IsGameWorld() || IsActorBeingDestroyed()
@@ -53,7 +55,7 @@ bool ADarkwellBlackRegionTrigger::Activate()
  { LastFailure=TEXT("Region unavailable: authority not ready, invalid/changed AABB, Whole straddle, or another owner/block."); return false; }
  // Block first prevents Clear's same-call legal Live requery from being sealed
  // as new memory by a subsequent block. No tick or knowledge logic lives here.
- if(!Region->SetBlockMemoryWrites(true) || !Region->ClearMemory())
+ if(!Region->ClearAndBlockMemory())
  {
   Region->ReleaseGameplayControl(this); State=TAG_BlackRegionInactive;
   LastFailure=TEXT("Clear+Block rejected by region authority; acquired block released."); return false;
@@ -64,6 +66,7 @@ bool ADarkwellBlackRegionTrigger::Activate()
 
 void ADarkwellBlackRegionTrigger::Deactivate()
 {
+ DW_BLACKOUT_SCOPE(Deactivate);
  if(auto* Region=GetWorld()?GetWorld()->GetSubsystem<UDarkwellMemoryRegionSubsystem>():nullptr)
   Region->ReleaseGameplayControl(this);
  State=TAG_BlackRegionInactive;

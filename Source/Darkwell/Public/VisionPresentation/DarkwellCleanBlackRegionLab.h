@@ -6,6 +6,7 @@ class ADarkwellObjectMemoryScene;
 class ADarkwellBlackRegionTrigger;
 class ADarkwellBlackRegionSwitch;
 class ADarkwellBlackoutEventVolume;
+class ADarkwellCharacter;
 class UDarkwellBlackRegionEventAdapter;
 
 /** Small manual fixture: static sources only; no scripted motion; manual F console. */
@@ -31,4 +32,10 @@ public:
  UPROPERTY(Transient) TArray<TObjectPtr<AActor>> Sources;
 private:
  bool bPlayerReady=false;
+#if !UE_BUILD_SHIPPING
+ void AdvanceBlackoutProbe(ADarkwellCharacter& Player);
+ int32 BlackoutProbeFrame=0;
+ double BlackoutProbePrevious=0;
+ FString BlackoutProbeCSV;
+#endif
 };

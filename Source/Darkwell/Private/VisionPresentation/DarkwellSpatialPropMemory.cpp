@@ -1,4 +1,6 @@
 #include "VisionPresentation/DarkwellSpatialPropMemory.h"
+#include "VisionPresentation/DarkwellBlackoutTiming.h"
+#include "Async/ParallelFor.h"
 #include "VisionPresentation/DarkwellMemoryRegionSamples.h"
 #include "NativeGameplayTags.h"
 
@@ -102,6 +104,7 @@ FLinearColor FDarkwellSpatialPropMemory::Presentation(int32 Index) const
 FIntPoint FDarkwellSpatialPropMemory::BuildConservativePresentation(int32 SamplesPerCell,TArray<FLinearColor>& OutPixels,
  bool bTransientLiveOnly) const
 {
+ DW_BLACKOUT_SCOPE(ConservativeAppearancePixels);
  OutPixels.Reset();
  if(SamplesPerCell<2 || Cells.IsEmpty()) return FIntPoint::ZeroValue;
  const FIntPoint ResultSize=Size*SamplesPerCell;
@@ -121,7 +124,9 @@ FIntPoint FDarkwellSpatialPropMemory::BuildConservativePresentation(int32 Sample
  auto Channel=[](const FLinearColor& P,int32 C) { return C==0?P.R:C==1?P.G:C==2?P.B:P.A; };
  auto Visible=[&](int32 X,int32 Y,int32 C)
  { return X>=0 && Y>=0 && X<Size.X && Y<Size.Y && Channel(Coarse[Y*Size.X+X],C)>0; };
- for(int32 Y=0;Y<Size.Y;++Y) for(int32 X=0;X<Size.X;++X)
+ auto BuildRow=[&](int32 Y)
+ {
+  for(int32 X=0;X<Size.X;++X)
   for(int32 SY=0;SY<SamplesPerCell;++SY) for(int32 SX=0;SX<SamplesPerCell;++SX)
   {
    const FLinearColor Base=Coarse[Y*Size.X+X]; FLinearColor Result=Base;
@@ -137,6 +142,11 @@ FIntPoint FDarkwellSpatialPropMemory::BuildConservativePresentation(int32 Sample
    }
    OutPixels[(Y*SamplesPerCell+SY)*ResultSize.X+X*SamplesPerCell+SX]=Result;
   }
+ };
+ // Only disjoint output rows are written; the exact scalar AA arithmetic is unchanged.
+ // All workers join before the same-call texture publication.
+ if(Cells.Num()>=16384) ParallelFor(TEXT("DarkwellAppearanceRows"),Size.Y,8,BuildRow,EParallelForFlags::Unbalanced);
+ else for(int32 Y=0;Y<Size.Y;++Y) BuildRow(Y);
  return ResultSize;
 }
 

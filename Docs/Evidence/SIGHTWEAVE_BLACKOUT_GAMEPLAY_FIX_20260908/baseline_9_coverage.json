@@ -1,0 +1,47 @@
+[
+  {
+    "name": "Darkwell.BlackRegion.Contract.SpatialPartial",
+    "found": true,
+    "state": "Success"
+  },
+  {
+    "name": "Darkwell.BlackRegion.Contract.Whole",
+    "found": true,
+    "state": "Success"
+  },
+  {
+    "name": "Darkwell.BlackRegion.CleanLab",
+    "found": true,
+    "state": "Success"
+  },
+  {
+    "name": "Darkwell.BlackRegion.CurrentPartialProbe",
+    "found": true,
+    "state": "Success"
+  },
+  {
+    "name": "Darkwell.BlackRegion.VolumeDemo",
+    "found": true,
+    "state": "Success"
+  },
+  {
+    "name": "Darkwell.UnknownPartial.SampleCut",
+    "found": true,
+    "state": "Success"
+  },
+  {
+    "name": "Darkwell.UnknownPartial.TemporalSurface",
+    "found": true,
+    "state": "Success"
+  },
+  {
+    "name": "Darkwell.UnknownRegion.SpatialPartial",
+    "found": true,
+    "state": "Success"
+  },
+  {
+    "name": "Darkwell.UnknownRegion.Whole",
+    "found": true,
+    "state": "Success"
+  }
+]

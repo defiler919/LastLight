@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellHistoryGridV2.h"
+#include "Async/ParallelFor.h"
 #include "VisionPresentation/DarkwellMemoryRegionSamples.h"
 #include "NativeGameplayTags.h"
 
@@ -20,10 +21,11 @@ void FDarkwellHistoryGridV2::InitializeStorage(const FDarkwellSpatialPropMemory&
 	Bounds = SealedMemory.GetBounds();
 	const FIntPoint Coarse = SealedMemory.GetSize();
 	Size = Coarse * SamplesPerCell;
-	Samples.SetNum(Size.X * Size.Y);
+	Samples.SetNumUninitialized(Size.X * Size.Y);
 	ActiveSamples.Reset();
 	ActiveFlags.Init(false, Samples.Num());
 	MutableEvidence.Init(true, Samples.Num());
+ SetMemoryWriteBlock(MemoryWriteBlock);
 }
 
 void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& SealedMemory)
@@ -32,7 +34,10 @@ void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& Sealed
 	const FIntPoint Coarse = SealedMemory.GetSize();
 	TArray<FLinearColor> FrozenPresentation;
 	SealedMemory.BuildConservativePresentation(SamplesPerCell, FrozenPresentation);
-	for (int32 Y = 0; Y < Size.Y; ++Y) for (int32 X = 0; X < Size.X; ++X)
+ const auto UnresolvedTag=Unresolved(), NeverTag=NeverObserved();
+ auto InitializeRow=[&](int32 Y)
+ {
+  for (int32 X = 0; X < Size.X; ++X)
 	{
 		const auto& Cell = SealedMemory.GetCells()[(Y / SamplesPerCell) * Coarse.X + X / SamplesPerCell];
 		FSample& Sample = Samples[Y * Size.X + X];
@@ -40,20 +45,26 @@ void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& Sealed
 		Sample.InitialRemembered = Cell.InitialRemembered;
 		Sample.Opacity = Cell.StaleOpacity;
 		Sample.FrozenAAEnvelope = Cell.StaleOpacity > 0 ? FrozenPresentation[Y * Size.X + X].B / Cell.StaleOpacity : 0;
-		Sample.State = Sample.InitialRemembered > 0 ? Unresolved() : NeverObserved();
+		Sample.State = Sample.InitialRemembered > 0 ? UnresolvedTag : NeverTag;
 	}
+ };
+ if(Samples.Num()>=65536) ParallelFor(TEXT("DarkwellFineCaptureRows"),Size.Y,8,InitializeRow,EParallelForFlags::Unbalanced);
+ else for(int32 Y=0;Y<Size.Y;++Y) InitializeRow(Y);
 }
 
 void FDarkwellHistoryGridV2::Initialize(const FDarkwellSpatialPropMemory& SealedMemory, const TBitArray<>& CaptureMask)
 {
  Initialize(SealedMemory);
  check(CaptureMask.Num()==Samples.Num());
- for(int32 I=0;I<Samples.Num();++I)
+ const auto UnresolvedTag=Unresolved(),NeverTag=NeverObserved();
+ auto StampRow=[&](int32 Y) { for(int32 I=Y*Size.X;I<(Y+1)*Size.X;++I)
  {
   auto& Sample=Samples[I];
   Sample.InitialRemembered=Sample.Opacity=CaptureMask[I]?1.f:0.f;
-  Sample.State=CaptureMask[I]?Unresolved():NeverObserved();
- }
+  Sample.State=CaptureMask[I]?UnresolvedTag:NeverTag;
+ }};
+ if(Samples.Num()>=65536) ParallelFor(TEXT("DarkwellCaptureMaskRows"),Size.Y,8,StampRow,EParallelForFlags::Unbalanced);
+ else for(int32 Y=0;Y<Size.Y;++Y) StampRow(Y);
 }
 
 void FDarkwellHistoryGridV2::RestrictToRecordedGeometry(const TBitArray<>& Footprint)
@@ -203,12 +214,15 @@ bool FDarkwellHistoryGridV2::HasResidualSurface() const
 void FDarkwellHistoryGridV2::BuildPresentation(TArray<FLinearColor>& OutPixels, const TBitArray<>* GeometryFootprint) const
 {
 	OutPixels.SetNumUninitialized(Samples.Num());
-	for (int32 I = 0; I < Samples.Num(); ++I)
+	const auto UnresolvedTag=Unresolved(), EmptyTag=VerifiedEmpty();
+	auto BuildRow = [&](int32 Y)
+	{
+	for (int32 I = Y*Size.X; I < (Y+1)*Size.X; ++I)
 	{
 		const FSample& S = Samples[I];
 		// Keep the frozen 4x4 envelope and bilinear RGB. Binary A is loaded
 		// unfiltered by M_MovingAccumulatedMemory at the FINAL shader output.
-		const bool Gate = S.State == Unresolved() || (S.State == VerifiedEmpty() && S.Opacity > 0);
+		const bool Gate = S.State == UnresolvedTag || (S.State == EmptyTag && S.Opacity > 0);
 		OutPixels[I] = FLinearColor(0, 0, S.Opacity * S.FrozenAAEnvelope, Gate && !BlockedSamplesAt(I) ? 1.f : 0.f);
 	}
 	if (GeometryFootprint && GeometryFootprint->Num() == Samples.Num())
@@ -217,7 +231,7 @@ void FDarkwellHistoryGridV2::BuildPresentation(TArray<FLinearColor>& OutPixels, 
 		// Bilinear filtering reaches half a texel beyond intersecting footprint cells.
 		// Extend B by one immutable-source ring there; never extend A, knowledge,
 		// or any hole INSIDE the geometry (Clear, Block, or an observation cut).
-		for (int32 I = 0; I < Samples.Num(); ++I) if (!(*GeometryFootprint)[I])
+		for (int32 I = Y*Size.X; I < (Y+1)*Size.X; ++I) if (!(*GeometryFootprint)[I])
 		{
 			float Sum = 0; int32 Count = 0, Distance = 3;
 			for (int32 DY = -1; DY <= 1; ++DY) for (int32 DX = -1; DX <= 1; ++DX)
@@ -233,6 +247,9 @@ void FDarkwellHistoryGridV2::BuildPresentation(TArray<FLinearColor>& OutPixels, 
 			if (Count) OutPixels[I].B = Sum / Count;
 		}
 	}
+	};
+	if(Samples.Num()>=65536) ParallelFor(TEXT("DarkwellHistoryPixels"),Size.Y,8,BuildRow,EParallelForFlags::Unbalanced);
+	else for(int32 Y=0;Y<Size.Y;++Y) BuildRow(Y);
 }
 bool FDarkwellHistoryGridV2::IsFullyVerifiedEmpty() const
 {
@@ -300,16 +317,26 @@ uint64 FDarkwellHistoryGridV2::StateHash() const
 
 bool FDarkwellHistoryGridV2::BlockedSamplesAt(int32 I) const
 {
- return MemoryWriteBlock.bIsValid && Samples.IsValidIndex(I) && Darkwell::MemoryRegionSamples::Contains(MemoryWriteBlock,Darkwell::MemoryRegionSamples::Center(Bounds,Size,I));
+ return MemoryWriteBlock.bIsValid && Samples.IsValidIndex(I) && BlockedColumns[I%Size.X] && BlockedRows[I/Size.X];
+}
+void FDarkwellHistoryGridV2::SetMemoryWriteBlock(const FBox2D& Region)
+{
+ MemoryWriteBlock=Region;
+ BlockedColumns.Reset(); BlockedRows.Reset();
+ if(!Region.bIsValid || Size.X<=0 || Size.Y<=0) return;
+ BlockedColumns.SetNumUninitialized(Size.X); BlockedRows.SetNumUninitialized(Size.Y);
+ for(int32 X=0;X<Size.X;++X)
+  BlockedColumns[X]=Darkwell::MemoryRegionSamples::Contains(Region,FVector2D(Darkwell::MemoryRegionSamples::Center(Bounds,Size,X).X,Region.Min.Y));
+ for(int32 Y=0;Y<Size.Y;++Y)
+  BlockedRows[Y]=Darkwell::MemoryRegionSamples::Contains(Region,FVector2D(Region.Min.X,Darkwell::MemoryRegionSamples::Center(Bounds,Size,Y*Size.X).Y));
 }
 void FDarkwellHistoryGridV2::ClearMemorySamples(const FBox2D& Region)
 {
- for(int32 I=0;I<Samples.Num();++I)
-  if(Darkwell::MemoryRegionSamples::Contains(Region,Darkwell::MemoryRegionSamples::Center(Bounds,Size,I)))
-  {
-   Samples[I]=FSample(); Samples[I].State=NeverObserved();
-   ActiveFlags[I]=false; MutableEvidence[I]=true;
-  }
+ if(Samples.IsEmpty() || !Region.bIsValid || !Bounds.Intersect(Region)) return;
+ Darkwell::MemoryRegionSamples::VisitInside(Bounds,Size,Region,[&](int32 I) {
+  Samples[I]=FSample(); Samples[I].State=NeverObserved();
+  ActiveFlags[I]=false; MutableEvidence[I]=true;
+ });
  ActiveSamples.RemoveAll([&](int32 I) { return !ActiveFlags[I]; });
 }
 

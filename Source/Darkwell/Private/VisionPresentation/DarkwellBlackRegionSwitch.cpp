@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellBlackRegionSwitch.h"
+#include "VisionPresentation/DarkwellBlackoutTiming.h"
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
 #include "Player/DarkwellCharacter.h"
 #include "Components/SceneComponent.h"
@@ -27,6 +28,7 @@ bool ADarkwellBlackRegionSwitch::CanInteract(const ADarkwellCharacter& Character
 
 void ADarkwellBlackRegionSwitch::Interact(ADarkwellCharacter& Character)
 {
+ DW_BLACKOUT_ROOT(Interact);
  if(!CanInteract(Character)) return;
  if(Target->IsActive()) Target->Deactivate();
  else if(!Target->Activate())

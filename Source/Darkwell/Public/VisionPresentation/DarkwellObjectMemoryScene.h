@@ -50,6 +50,8 @@ public:
  /** Whole keeps complete-record admission; SpatialPartial accepts sample-center cuts. */
  bool CanApplyMemoryRegion(const FBox2D& Bounds) const;
  void ClearMemoryInRegion(const FBox2D& Bounds);
+ void BeginMemoryRegionTransaction(bool bWillClear=false) { bMemoryRegionTransactionWillClear |= bWillClear; ++MemoryRegionTransactionDepth; }
+ void EndMemoryRegionTransaction();
  void SetMemoryWriteBlock(const FBox2D& Bounds, bool bEnabled);
  void ApplyMemoryRegionPresentation();
 	struct FHistoryRuntimeTelemetry
@@ -500,6 +502,10 @@ protected:
 		FResolvedSightWeaveObjectPolicy RegisteredPolicy;
 		bool bLastCaptureEligible = false;
 		bool bSampleMemoryRegion = false;
+		bool bRegionAppearanceDirty = true;
+		FBox2D RegionAppearanceBounds;
+		FIntPoint RegionAppearanceSize = FIntPoint::ZeroValue;
+		TBitArray<> RegionAppearanceInterior;
 		bool bMemoryWritesBlocked = false;
         bool bRequeryMemoryLive = false;
 		FName StableId;
@@ -591,7 +597,12 @@ protected:
 	bool IsCaptureEligible(const FTrackedProp& Prop) const;
  FBox2D MemoryBlockBounds;
  bool bMemoryBlockActive=false;
+ bool UsesTransientCurrentExclusion(const FTrackedProp& Prop) const;
+ bool BuildRegionOwnershipSamples(const FTrackedProp& Prop, const FDarkwellSpatialObservationRecord& Record, const FRecordVisual& Visual, TArray<uint8>& Out) const;
  bool bMemoryRegionRestorePending=false;
+ int32 MemoryRegionTransactionDepth=0;
+ bool bMemoryRegionTransactionWillClear=false;
+ bool RekeyCurrentForMemoryRegion(FTrackedProp& Prop,const FBox2D& Region);
  void RefreshMemoryWriteBlock(FTrackedProp& Prop);
  void ResetTransientObservation(FTrackedProp& Prop);
  bool BuildNewerOwnershipIndex(const FTrackedProp& Prop,
@@ -703,6 +714,7 @@ protected:
 	void CaptureObservedContent(const FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record) const;
 	void UpdateRecordTexture(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
 	void UpdateCurrentPartTextures(FTrackedProp& Prop);
+	void PrepareRegionAppearance(FTrackedProp& Prop);
 	void UpdateRecordCap(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record);
 	void StampConfirmedWholeCapture(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record,
 		const FCoverageSnapshot& CoverageSnapshot) const;
@@ -710,6 +722,7 @@ protected:
 	void BindProxyMaterial(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record, AActor* Proxy);
 	void RebuildHistoricalSpatialIndex();
 	void PrepareHistoricalCandidates(FVector ObserverLocation);
+	void PreparePhysicalSnapshot();
 	void QueryHistoricalSpatialIndex(const FBox2D& Bounds, bool bDirtyRegion);
 	bool IsHistoricalCandidate(
 		const FTrackedProp& Prop,

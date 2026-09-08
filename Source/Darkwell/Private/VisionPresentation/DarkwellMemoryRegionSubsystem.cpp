@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
+#include "VisionPresentation/DarkwellBlackoutTiming.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "Components/MeshComponent.h"
@@ -38,6 +39,7 @@ void UDarkwellMemoryRegionSubsystem::ReleaseGameplayControl(AActor* Owner)
 
 void UDarkwellMemoryRegionSubsystem::ReleaseBlockRegistration(bool bPublish)
 {
+ DW_BLACKOUT_SCOPE(ReleaseBlockRegistration);
  // Cleanup releases the saved token, even if the current floor scope changed.
  // An already removed token (e.g. runtime world teardown) is also released.
  if(RuntimeBlock.IsValid())
@@ -63,6 +65,7 @@ void UDarkwellMemoryRegionSubsystem::Deinitialize()
 
 bool UDarkwellMemoryRegionSubsystem::ValidateObjectBoundaries() const
 {
+ DW_BLACKOUT_SCOPE(ValidateObjectBoundaries);
  for(TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld());It;++It)
   if(!It->CanApplyMemoryRegion(Bounds)) return false;
  return true;
@@ -70,6 +73,7 @@ bool UDarkwellMemoryRegionSubsystem::ValidateObjectBoundaries() const
 
 bool UDarkwellMemoryRegionSubsystem::ConfigureRegion(FVector2D Min,FVector2D Max)
 {
+ DW_BLACKOUT_SCOPE(ConfigureRegion);
  if(Min.ContainsNaN() || Max.ContainsNaN() || Max.X<=Min.X || Max.Y<=Min.Y) return false;
  if(IsConfigured()) return Bounds.Min==Min && Bounds.Max==Max && ValidateRuntimeScope();
  // Region commands are legal only after the player's floor authority is ready.
@@ -97,8 +101,19 @@ bool UDarkwellMemoryRegionSubsystem::ConfigureRegion(FVector2D Min,FVector2D Max
  return true;
 }
 
+bool UDarkwellMemoryRegionSubsystem::ClearAndBlockMemory()
+{
+ TArray<ADarkwellObjectMemoryScene*> Scenes;
+ for(TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld());It;++It)
+ { Scenes.Add(*It); It->BeginMemoryRegionTransaction(true); }
+ const bool Applied=SetBlockMemoryWrites(true) && ClearMemory();
+ for(auto* Scene:Scenes) Scene->EndMemoryRegionTransaction();
+ return Applied;
+}
+
 bool UDarkwellMemoryRegionSubsystem::ClearMemory()
 {
+ DW_BLACKOUT_SCOPE(ClearMemory);
  if(!IsConfigured() || !ValidateObjectBoundaries() || !ValidateRuntimeScope()) return false;
  if(bHasRuntimeScope && !GetWorld()->GetSubsystem<USightWeaveWorldSubsystem>()->ClearExplorationMemory(RuntimeRegion)) return false;
  for(TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld());It;++It) It->ClearMemoryInRegion(Bounds);
@@ -109,6 +124,7 @@ bool UDarkwellMemoryRegionSubsystem::ClearMemory()
 
 bool UDarkwellMemoryRegionSubsystem::SetBlockMemoryWrites(bool bEnabled)
 {
+ DW_BLACKOUT_SCOPE(SetBlockMemoryWrites);
  if(!IsConfigured()) return false;
  if(!bEnabled) { ReleaseBlockRegistration(true); return true; }
  if(!ValidateRuntimeScope() || !ValidateObjectBoundaries()) return false;
@@ -173,11 +189,13 @@ void UDarkwellMemoryRegionSubsystem::BindMaterial(UMaterialInstanceDynamic* M) c
 
 void UDarkwellMemoryRegionSubsystem::Publish()
 {
+ DW_BLACKOUT_SCOPE(Publish);
  if(PresentationTexture && PresentationTexture->GetResource())
  {
   auto* Pixels=new FColor[RememberedBits.Num()];
   for(int32 I=0;I<RememberedBits.Num();++I) Pixels[I]=!bBlocked && RememberedBits[I] ? FColor::White : FColor::Black;
   auto* Region=new FUpdateTextureRegion2D(0,0,0,0,Size.X,Size.Y);
+  DW_BLACKOUT_SCOPE(RegionTextureEnqueue);
   PresentationTexture->UpdateTextureRegions(0,1,Region,Size.X*sizeof(FColor),sizeof(FColor),reinterpret_cast<uint8*>(Pixels),
    [](uint8* Data,const FUpdateTextureRegion2D* R){ delete[] reinterpret_cast<FColor*>(Data); delete R; });
  }

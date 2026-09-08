@@ -14,6 +14,50 @@ UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_RegionRemembered,"Darkwell.Knowledge.Remembere
 FGameplayTag UDarkwellMemoryRegionSubsystem::Unknown() { return TAG_RegionUnknown; }
 FGameplayTag UDarkwellMemoryRegionSubsystem::Remembered() { return TAG_RegionRemembered; }
 
+bool UDarkwellMemoryRegionSubsystem::IsGameplayControlledBy(const AActor* Owner) const
+{
+ return Owner && GameplayOwner == TWeakObjectPtr<AActor>(const_cast<AActor*>(Owner));
+}
+
+bool UDarkwellMemoryRegionSubsystem::AcquireGameplayControl(AActor* Owner,FVector2D Min,FVector2D Max)
+{
+ if(!IsValid(Owner) || Owner->GetWorld()!=GetWorld() || Owner->IsActorBeingDestroyed()) return false;
+ if(IsGameplayControlledBy(Owner)) return Bounds.Min==Min && Bounds.Max==Max && ValidateRuntimeScope();
+ // Do not take over another trigger or a block issued through the legacy API.
+ if(!GameplayOwner.IsExplicitlyNull() || bBlocked || !ConfigureRegion(Min,Max)) return false;
+ GameplayOwner=Owner;
+ return true;
+}
+
+void UDarkwellMemoryRegionSubsystem::ReleaseGameplayControl(AActor* Owner)
+{
+ if(!IsGameplayControlledBy(Owner)) return;
+ ReleaseBlockRegistration(true);
+ GameplayOwner.Reset();
+}
+
+void UDarkwellMemoryRegionSubsystem::ReleaseBlockRegistration(bool bPublish)
+{
+ // Cleanup releases the saved token, even if the current floor scope changed.
+ // An already removed token (e.g. runtime world teardown) is also released.
+ if(RuntimeBlock.IsValid())
+ {
+  if(auto* Runtime=GetWorld()->GetSubsystem<USightWeaveWorldSubsystem>()) Runtime->UnregisterMemoryModifier(RuntimeBlock);
+  RuntimeBlock={};
+ }
+ if(!bBlocked) return;
+ for(TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld());It;++It) It->SetMemoryWriteBlock(Bounds,false);
+ bBlocked=false; ++AuthorityRevision;
+ if(bPublish) Publish();
+}
+
+void UDarkwellMemoryRegionSubsystem::Deinitialize()
+{
+ ReleaseBlockRegistration(false);
+ GameplayOwner.Reset();
+ Super::Deinitialize();
+}
+
 bool UDarkwellMemoryRegionSubsystem::ValidateObjectBoundaries() const
 {
  for(TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld());It;++It)
@@ -62,18 +106,16 @@ bool UDarkwellMemoryRegionSubsystem::ClearMemory()
 
 bool UDarkwellMemoryRegionSubsystem::SetBlockMemoryWrites(bool bEnabled)
 {
- if(!IsConfigured() || !ValidateRuntimeScope() || (bEnabled && !ValidateObjectBoundaries())) return false;
+ if(!IsConfigured()) return false;
+ if(!bEnabled) { ReleaseBlockRegistration(true); return true; }
+ if(!ValidateRuntimeScope() || !ValidateObjectBoundaries()) return false;
  if(bBlocked==bEnabled) return true;
  if(bHasRuntimeScope)
  {
   auto* Runtime=GetWorld()->GetSubsystem<USightWeaveWorldSubsystem>();
-  if(bEnabled)
-  {
-   FSightWeaveMemoryModifierDescription D; D.Region=RuntimeRegion;
-   RuntimeBlock=Runtime->RegisterMemoryModifier(D);
-   if(!RuntimeBlock.IsValid()) return false;
-  }
-  else if(!Runtime->UnregisterMemoryModifier(RuntimeBlock)) return false;
+  FSightWeaveMemoryModifierDescription D; D.Region=RuntimeRegion;
+  RuntimeBlock=Runtime->RegisterMemoryModifier(D);
+  if(!RuntimeBlock.IsValid()) return false;
  }
  // The pre-block live observation may seal its existing eligible knowledge.
  for(TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld());It;++It) It->SetMemoryWriteBlock(Bounds,bEnabled);

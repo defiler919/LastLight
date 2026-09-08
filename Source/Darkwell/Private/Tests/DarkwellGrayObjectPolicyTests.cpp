@@ -6,6 +6,7 @@
 #include "SightWeaveObjectPolicy.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Player/DarkwellCharacter.h"
 #include "VisionPresentation/DarkwellMovingPropLabRoom.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
@@ -26,6 +27,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Misc/ScopeExit.h"
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
+#include "VisionPresentation/DarkwellBlackRegionTrigger.h"
 #include "VisionPresentation/DarkwellMemoryRegionSamples.h"
 #include "SightWeaveWorldSubsystem.h"
 #include "Components/SceneCaptureComponent2D.h"
@@ -35,6 +37,7 @@
 #include "ShaderCompiler.h"
 #include "Misc/FileHelper.h"
 #include "HAL/FileManager.h"
+#include "Misc/OutputDeviceNull.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 
 namespace Darkwell::GrayObjectPolicyTests
@@ -2439,7 +2442,7 @@ bool FDarkwellUnknownPartialCut::RunTest(const FString&)
 class FUnknownPartialTemporalCommand final : public IAutomationLatentCommand
 {
 public:
- explicit FUnknownPartialTemporalCommand(FAutomationTestBase* InTest):Test(InTest) {}
+ explicit FUnknownPartialTemporalCommand(FAutomationTestBase* InTest,bool UseTrigger=false):Test(InTest),bUseTrigger(UseTrigger) {}
  virtual ~FUnknownPartialTemporalCommand()
  {
   if(Room) { if(Owner) Owner->Destroy(); Room->World->RemoveFromRoot(); Room.Reset(); }
@@ -2471,6 +2474,7 @@ public:
    Target->UpdateResourceImmediate(); Capture->TextureTarget=Target;
    FString Report; FParse::Value(FCommandLine::Get(),TEXT("ReportExportPath="),Report);
    Dir=(Report.IsEmpty()?FPaths::ProjectSavedDir()/TEXT("UnknownRegion"):FPaths::GetPath(Report)/TEXT("Captures"))/TEXT("SpatialPartialTemporal");
+   if(bUseTrigger) Dir=FPaths::GetPath(Dir)/TEXT("BlackRegionTemporal");
    IFileManager::Get().MakeDirectory(*Dir,true);
    FAssetCompilingManager::Get().FinishAllCompilation();
    if(GShaderCompilingManager) GShaderCompilingManager->FinishAllCompilation();
@@ -2481,8 +2485,21 @@ public:
   {
    const auto B=P.History.GetRecords()[0].FineHistory.GetBounds();
    CutBounds=FBox2D(FVector2D(Center.X-19.83,B.Min.Y-5),FVector2D(Center.X+20.17,B.Max.Y+5));
-   Test->TestTrue(TEXT("Temporal fixed region"),Region->ConfigureRegion(CutBounds.Min,CutBounds.Max));
-   Test->TestTrue(TEXT("Temporal initial Clear"),Region->ClearMemory()); Room->Face(90);
+   if(bUseTrigger)
+   {
+    Trigger=Room->World->SpawnActor<ADarkwellBlackRegionTrigger>(FVector(CutBounds.GetCenter(),0),FRotator::ZeroRotator);
+    Trigger->HalfExtentXY=CutBounds.GetExtent();
+    if(!Trigger->IsActorInitialized()) Trigger->PostInitializeComponents();
+    Trigger->DispatchBeginPlay();
+    Test->TestFalse(TEXT("Placed trigger starts inactive"),Trigger->IsActive());
+    Test->TestTrue(TEXT("Temporal trigger initial activation"),Trigger->Activate()); Trigger->Deactivate();
+   }
+   else
+   {
+    Test->TestTrue(TEXT("Temporal fixed region"),Region->ConfigureRegion(CutBounds.Min,CutBounds.Max));
+    Test->TestTrue(TEXT("Temporal initial Clear"),Region->ClearMemory());
+   }
+   Room->Face(90);
   }
   if(Frame==81)
   {
@@ -2493,12 +2510,20 @@ public:
   if(Frame==136 || Frame==188) Room->Face(90);
   if(Frame==161)
   {
-   Test->TestTrue(TEXT("Temporal Block"),Region->SetBlockMemoryWrites(true));
-   Test->TestTrue(TEXT("Temporal Clear in Live"),Region->ClearMemory());
+   if(bUseTrigger) Test->TestTrue(TEXT("Temporal trigger activation in Live"),Trigger->Activate());
+   else
+   {
+    Test->TestTrue(TEXT("Temporal Block"),Region->SetBlockMemoryWrites(true));
+    Test->TestTrue(TEXT("Temporal Clear in Live"),Region->ClearMemory());
+   }
    Test->TestTrue(TEXT("Temporal transaction same-call Live"),Scene.IsCurrentSourceVisibleForTesting(Id));
    for(const auto& R:P.History.GetRecords()) ClearedEpoch=FMath::Max(ClearedEpoch,R.Epoch);
   }
-  if(Frame==177) Test->TestTrue(TEXT("Temporal unblock"),Region->SetBlockMemoryWrites(false));
+  if(Frame==177)
+  {
+   if(bUseTrigger) { Trigger->Deactivate(); Test->TestFalse(TEXT("Temporal trigger deactivation"),Region->IsBlocked()); }
+   else Test->TestTrue(TEXT("Temporal unblock"),Region->SetBlockMemoryWrites(false));
+  }
   Room->Step();
   Room->World->SendAllEndOfFrameUpdates(); Capture->CaptureScene(); FlushRenderingCommands();
   const TCHAR* Stage=Frame==40?TEXT("01_gray"):Frame==135?TEXT("07_rotated_resweep"):
@@ -2542,6 +2567,8 @@ private:
  FString Dir;
  int32 Frame=1;
  uint32 ClearedEpoch=0;
+ bool bUseTrigger=false;
+ ADarkwellBlackRegionTrigger* Trigger=nullptr;
 };
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellUnknownPartialTemporal,"Darkwell.UnknownPartial.TemporalSurface",
  EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
@@ -2549,6 +2576,159 @@ bool FDarkwellUnknownPartialTemporal::RunTest(const FString&)
 {
  if(GUsingNullRHI) { AddError(TEXT("TemporalSurface requires real D3D12 rendering")); return false; }
  ADD_LATENT_AUTOMATION_COMMAND(FUnknownPartialTemporalCommand(this));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellBlackRegionTemporal,"Darkwell.BlackRegion.TemporalSurface",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellBlackRegionTemporal::RunTest(const FString&)
+{
+ if(GUsingNullRHI) { AddError(TEXT("TemporalSurface requires real D3D12 rendering")); return false; }
+ ADD_LATENT_AUTOMATION_COMMAND(FUnknownPartialTemporalCommand(this,true));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellBlackRegionLabEntry,"Darkwell.BlackRegion.LabEntry",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellBlackRegionLabEntry::RunTest(const FString&)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ for(const TCHAR* Mode:{TEXT("partial"),TEXT("whole")})
+ {
+  FRoom F; FOutputDeviceNull Output;
+  auto Command=[&](const FString& C){return IConsoleManager::Get().ProcessUserConsoleInput(*C,Output,F.World);};
+  TestTrue(TEXT("Lab setup command exists"),Command(FString(TEXT("Darkwell.BlackRegionLab setup "))+Mode));
+  ADarkwellBlackRegionTrigger* Trigger=nullptr; int32 Count=0;
+  for(TActorIterator<ADarkwellBlackRegionTrigger> It(F.World);It;++It) { Trigger=*It; ++Count; }
+  if(!TestNotNull(TEXT("Lab spawns placeable native trigger"),Trigger)) return false;
+  if(!Trigger->IsActorInitialized()) Trigger->PostInitializeComponents();
+  Trigger->DispatchBeginPlay();
+  TestEqual(TEXT("One demo actor"),Count,1);
+  auto* Region=F.World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
+  TestFalse(TEXT("Setup does not configure or clear knowledge"),Region->IsConfigured());
+  TestFalse(TEXT("Demo starts inactive"),Trigger->IsActive());
+  F.Face(90);F.Step(25);F.Face(146);F.Step(15);F.Face(-90);F.Step(15);
+  Command(TEXT("Darkwell.BlackRegionLab activate")); TestTrue(TEXT("Lab command activates same actor API"),Trigger->IsActive());
+  const uint64 Revision=Region->GetAuthorityRevision();
+  Command(TEXT("Darkwell.BlackRegionLab activate")); Command(TEXT("Darkwell.BlackRegionLab setup partial"));
+  TestEqual(TEXT("Lab repeat does not clear/reset"),Region->GetAuthorityRevision(),Revision);
+  Command(TEXT("Darkwell.BlackRegionLab deactivate")); TestFalse(TEXT("Lab command releases block"),Region->IsBlocked());
+  TestEqual(TEXT("Lab deactivation leaves cleared ground Unknown"),Region->QueryKnowledge(Trigger->GetFixedBounds().GetCenter()),Region->Unknown());
+ }
+ return true;
+}
+
+IMPLEMENT_COMPLEX_AUTOMATION_TEST(FDarkwellBlackRegionContract,"Darkwell.BlackRegion.Contract",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+void FDarkwellBlackRegionContract::GetTests(TArray<FString>& Names,TArray<FString>& Commands) const
+{ for(const TCHAR* N:{TEXT("Whole"),TEXT("SpatialPartial")}) { Names.Add(N); Commands.Add(N); } }
+bool FDarkwellBlackRegionContract::RunTest(const FString& Mode)
+{
+ using namespace Darkwell::GrayObjectPolicyTests;
+ using namespace Darkwell::MemoryRegionSamples;
+ const bool Partial=Mode==TEXT("SpatialPartial");
+ FRoom F; F.World->AddToRoot(); ON_SCOPE_EXIT {F.World->RemoveFromRoot();};
+ auto& Scene=*F.Room;
+ Scene.ResetTrackedRevealPolicyForLab(Id,Partial?Reveal::SpatialPartial:Reveal::WholeObjectAfterSpan,100,History::StationaryOnly);
+ auto Pose=Scene.GetTrackedTransform(Id); Pose.SetRotation(FRotator(0,37,0).Quaternion());
+ Scene.SetTrackedTransformForTesting(Id,Pose);
+ auto Observe=[&](){F.Face(90);F.Step(25);F.Face(146);F.Step(15);};
+ auto Leave=[&](){F.Face(-90);F.Step(15);};
+ Observe();Leave();
+ auto& P=Scene.Tracked.FindChecked(Id);
+ if(!TestTrue(TEXT("Positive recorded gray before trigger"),!P.History.GetRecords().IsEmpty())) return false;
+ const auto Old=P.History.GetRecords().Last(); const auto OB=Old.SpatialMemory.GetBounds(); const auto C=OB.GetCenter();
+ const FBox2D B=Partial?FBox2D(FVector2D(C.X-19.83,OB.Min.Y-5),FVector2D(C.X+20.17,OB.Max.Y+5)):OB.ExpandBy(5);
+ auto* Region=F.World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
+ auto* Runtime=F.World->GetSubsystem<USightWeaveWorldSubsystem>();
+ auto Spawn=[&](const FBox2D& Box)
+ {
+  auto* A=F.World->SpawnActor<ADarkwellBlackRegionTrigger>(FVector(Box.GetCenter(),0),FRotator(0,53,0));
+  A->HalfExtentXY=Box.GetExtent();
+  if(!A->IsActorInitialized()) A->PostInitializeComponents();
+  A->DispatchBeginPlay();
+  TestTrue(TEXT("Lifecycle fixture routes initialized actor BeginPlay"),A->IsActorInitialized() && A->HasActorBegunPlay());
+  return A;
+ };
+ auto Stored=[&](bool Inside)
+ {
+  int32 N=0; for(const auto& R:P.History.GetRecords()) if(!R.bCurrentObservedLocation)
+   for(int32 I=0;I<R.FineHistory.GetSamples().Num();++I)
+    if(Contains(B,Darkwell::MemoryRegionSamples::Center(R.FineHistory.GetBounds(),R.FineHistory.GetSize(),I))==Inside)
+     N+=R.FineHistory.GetSamples()[I].InitialRemembered>0;
+  return N;
+ };
+ auto* Invalid=Spawn(FBox2D(C-FVector2D(321),C+FVector2D(321)));
+ TestFalse(TEXT("Oversized editor box rejected"),Invalid->Activate());
+ TestFalse(TEXT("Failure leaves region unconfigured"),Region->IsConfigured()); Invalid->Destroy();
+ if(!Partial)
+ {
+  auto* Straddle=Spawn(FBox2D(FVector2D(C.X-19.83,OB.Min.Y-5),FVector2D(C.X+20.17,OB.Max.Y+5)));
+  TestFalse(TEXT("Trigger cannot cut Whole atomically"),Straddle->Activate());
+  TestFalse(TEXT("Whole rejection leaves region unconfigured"),Region->IsConfigured());
+  TestEqual(TEXT("Rejected Whole activation preserves original facts"),P.History.GetRecords().Last().FineHistory.EvidenceHash(),Old.FineHistory.EvidenceHash());
+  Straddle->Destroy();
+ }
+ auto* Trigger=Spawn(B); Trigger->SetActorScale3D(FVector(2,3,1));
+ const auto AuthoredBounds=Trigger->GetFixedBounds(); // Editor authors center + half extent.
+ TestFalse(TEXT("Placed actor defaults inactive"),Trigger->IsActive());
+ Trigger->Deactivate(); TestEqual(TEXT("Inactive Deactivate has no authority writes"),Region->GetAuthorityRevision(),uint64(0));
+ TestTrue(TEXT("Initial inside gray positive"),Stored(true)>0);
+ TestTrue(TEXT("Trigger Activate succeeds"),Trigger->Activate());
+ TestEqual(TEXT("Actor rotation and scale do not rotate/scale world AABB"),Region->GetBounds().Min,AuthoredBounds.Min);
+ TestEqual(TEXT("World AABB Max is exact"),Region->GetBounds().Max,AuthoredBounds.Max);
+ TestTrue(TEXT("Native active state"),Trigger->IsActive());
+ TestTrue(TEXT("Runtime modifier registered"),Runtime->IsMemoryPresentationSuppressedAtLocation(FVector(C,0)));
+ TestEqual(TEXT("Activation erases inside old gray"),Stored(true),0);
+ if(Partial)
+ {
+  TestTrue(TEXT("Partial outside gray retained"),Stored(false)>0);
+  const auto* Remaining=P.History.FindRecord(Old.Epoch); int32 Changed=0;
+  if(!Remaining) ++Changed;
+  else for(int32 I=0;I<Old.FineHistory.GetSamples().Num();++I)
+   if(!Contains(B,Darkwell::MemoryRegionSamples::Center(Old.FineHistory.GetBounds(),Old.FineHistory.GetSize(),I)))
+   {
+    const auto& A=Old.FineHistory.GetSamples()[I]; const auto& N=Remaining->FineHistory.GetSamples()[I];
+    Changed+=A.State!=N.State || A.InitialRemembered!=N.InitialRemembered || A.Opacity!=N.Opacity || A.FrozenAAEnvelope!=N.FrozenAAEnvelope || A.bVerifiedEmpty!=N.bVerifiedEmpty;
+   }
+  TestEqual(TEXT("Outside Partial samples unchanged"),Changed,0);
+ }
+ uint64 Revision=Region->GetAuthorityRevision();
+ TestTrue(TEXT("Repeated Activate succeeds without clearing twice"),Trigger->Activate());
+ TestEqual(TEXT("Repeated Activate has no authority writes"),Region->GetAuthorityRevision(),Revision);
+ auto* Rival=Spawn(B); TestFalse(TEXT("Second trigger cannot steal active block"),Rival->Activate());
+ Rival->Deactivate(); Rival->Destroy(); TestTrue(TEXT("Non-owner cleanup cannot lift block"),Region->IsBlocked());
+ Observe(); TestTrue(TEXT("Live remains visible while blocked"),Scene.IsCurrentSourceVisibleForTesting(Id));
+ Revision=Region->GetAuthorityRevision(); Trigger->Activate(); TestEqual(TEXT("Live repeat is idempotent"),Region->GetAuthorityRevision(),Revision);
+ Leave(); TestEqual(TEXT("Blocked observations never seal inside memory"),Stored(true),0);
+ Trigger->Deactivate(); TestFalse(TEXT("Deactivate releases block"),Region->IsBlocked());
+ TestFalse(TEXT("Deactivate unregisters runtime modifier"),Runtime->IsMemoryPresentationSuppressedAtLocation(FVector(C,0)));
+ Revision=Region->GetAuthorityRevision(); Trigger->Deactivate(); TestEqual(TEXT("Repeated Deactivate is idempotent"),Region->GetAuthorityRevision(),Revision);
+ F.Step(10); TestEqual(TEXT("No old gray resurrected after deactivate"),Stored(true),0);
+ TestEqual(TEXT("Ground stays Unknown before observation"),Region->QueryKnowledge(C),Region->Unknown());
+ Observe();Leave(); TestTrue(TEXT("New legal observation rebuilds memory"),Stored(true)>0);
+ TestTrue(TEXT("Reactivation clears newly observed memory"),Trigger->Activate());
+ TestEqual(TEXT("Reactivation really clears"),Stored(true),0);
+ Trigger->SetActorLocation(FVector(C+FVector2D(400),0));
+ TestEqual(TEXT("Active world bounds remain fixed after actor movement"),Trigger->GetFixedBounds().Min,AuthoredBounds.Min);
+ Trigger->Destroy();
+ TestFalse(TEXT("Destroyed releases block"),Region->IsBlocked());
+ TestFalse(TEXT("Destroyed unregisters runtime modifier"),Runtime->IsMemoryPresentationSuppressedAtLocation(FVector(C,0)));
+ TestEqual(TEXT("Destroy does not restore cleared ground"),Region->QueryKnowledge(C),Region->Unknown());
+ auto* Ended=Spawn(B); TestTrue(TEXT("Destroyed owner slot can be reacquired"),Ended->Activate());
+ Ended->RouteEndPlay(EEndPlayReason::RemovedFromWorld);
+ TestFalse(TEXT("EndPlay releases block"),Region->IsBlocked());
+ TestFalse(TEXT("Ended actor cannot reacquire Block"),Ended->Activate()); Ended->Destroy();
+  auto* Teardown=Spawn(B); TestTrue(TEXT("EndPlay owner slot can be reacquired"),Teardown->Activate());
+ F.World->SetBegunPlay(true);
+ TestTrue(TEXT("Real world EndPlay executes"),F.World->EndPlay(EEndPlayReason::Quit));
+ TestFalse(TEXT("World EndPlay releases active block"),Region->IsBlocked());
+ TestFalse(TEXT("World-ended actor cannot reacquire Block"),Teardown->Activate());
+ Region->Deinitialize();
+ TestFalse(TEXT("Subsystem teardown releases block"),Region->IsBlocked());
+ TestFalse(TEXT("Subsystem teardown unregisters runtime token"),Runtime->IsMemoryPresentationSuppressedAtLocation(FVector(C,0)));
+ TestFalse(TEXT("Subsystem teardown releases trigger ownership"),Region->IsGameplayControlledBy(Teardown));
+ Teardown->Destroy();
  return true;
 }
 

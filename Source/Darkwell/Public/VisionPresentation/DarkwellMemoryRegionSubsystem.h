@@ -18,6 +18,12 @@ class DARKWELL_API UDarkwellMemoryRegionSubsystem : public UWorldSubsystem
 {
  GENERATED_BODY()
 public:
+ virtual void Deinitialize() override;
+ /** Exclusive gameplay control of this world's existing single fixed region.
+  * Releasing control never removes the configured box or its cleared knowledge. */
+ bool AcquireGameplayControl(AActor* Owner, FVector2D Min, FVector2D Max);
+ void ReleaseGameplayControl(AActor* Owner);
+ bool IsGameplayControlledBy(const AActor* Owner) const;
  /** Idempotent for the same box. A different box requires a new world in this slice.
   * Grid is 2.5 cm, maximum 256 x 256. Straddling Whole records are refused; Partial uses sample-center membership. */
  UFUNCTION(BlueprintCallable, Category="SightWeave|Memory")
@@ -38,6 +44,8 @@ public:
  static FGameplayTag Unknown();
  static FGameplayTag Remembered();
 private:
+ void ReleaseBlockRegistration(bool bPublish);
+ TWeakObjectPtr<AActor> GameplayOwner;
  bool ValidateObjectBoundaries() const;
  int32 IndexAt(FVector2D Point) const;
  void Publish();

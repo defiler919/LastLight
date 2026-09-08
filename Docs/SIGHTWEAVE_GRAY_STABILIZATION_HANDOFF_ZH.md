@@ -1,5 +1,11 @@
 # 灰色层功能检查点与稳定化施工
 
+## 固定 AABB 黑区玩法触发器完成（2026-09-08）
+
+最新继续点见 [黑区触发器交接](SIGHTWEAVE_BLACK_REGION_TRIGGER_ZH.md)。可放置的 `ADarkwellBlackRegionTrigger` 复用原区域 Configure / Clear / Block，提供幂等启停、独占控制权、Destroy / EndPlay / World teardown 清理；停用不恢复旧灰，新观察才重建。单世界固定 XY AABB 限制、Whole 原子规则和 Partial 样本边界保持不变。
+
+完整 Editor Build 成功；`BlackTriggerAccepted` 真实 D3D12 **12/12 通过，11 clean + 1 HTTP warning，0 failed / severe**，包含 Lab 命令入口、触发器时序视觉流程及原合同回归。`Scripts/LaunchBlackRegionLab.ps1` 提供人工入口。下一最小片建议接一处现有 F 键开关，不扩 shape/知识逻辑。checkpoint/stable/tag 与 INITIALIZATION FAIL 均不变。
+
 ## Unknown Partial Cut 视觉阻塞已关闭（2026-09-08）
 
 **当前切片完成。** 公司从 `81db0f1f96aa33fd7558a4d07f565962432e875d` 继续，已复现并修正 37° 灰表面条纹：几何外零 B 纹素被双线性过滤混入斜向实体轮廓。只补充几何外一圈 B 过滤支持，CPU knowledge、内部 FrozenAAEnvelope、硬 A、Whole、cap 与 0 额外首显合同不变。

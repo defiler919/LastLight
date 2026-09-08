@@ -4,8 +4,9 @@
 #include "DarkwellCleanBlackRegionLab.generated.h"
 class ADarkwellObjectMemoryScene;
 class ADarkwellBlackRegionTrigger;
+class ADarkwellBlackRegionSwitch;
 
-/** Small manual fixture: static sources only; no scripted motion or interaction. */
+/** Small manual fixture: static sources only; no scripted motion; manual F console. */
 UCLASS()
 class DARKWELL_API ADarkwellCleanBlackRegionLab : public ADarkwellVisionIntegrationFixture
 {
@@ -22,6 +23,7 @@ public:
  virtual void DisableDarkwellProjectFog() override {}
  UPROPERTY(Transient) TObjectPtr<ADarkwellObjectMemoryScene> MemoryScene;
  UPROPERTY(Transient) TObjectPtr<ADarkwellBlackRegionTrigger> Trigger;
+ UPROPERTY(Transient) TObjectPtr<ADarkwellBlackRegionSwitch> Console;
  UPROPERTY(Transient) TArray<TObjectPtr<AActor>> Sources;
 private:
  bool bPlayerReady=false;

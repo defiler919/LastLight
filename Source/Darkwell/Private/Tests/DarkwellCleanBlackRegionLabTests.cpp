@@ -8,6 +8,8 @@
 #include "VisionPresentation/DarkwellMovingPropLabRoom.h"
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
+#include "VisionPresentation/DarkwellBlackRegionSwitch.h"
+#include "Interaction/DarkwellInteractionComponent.h"
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 #include "Engine/SceneCapture2D.h"
@@ -148,9 +150,10 @@ public:
    Player=World->SpawnActor<ADarkwellCharacter>(FVector(-200,-130,92),FRotator(0,-90,0),P);
    Player->PostInitializeComponents(); Player->DispatchBeginPlay();
    Fixture=World->SpawnActor<ADarkwellCleanBlackRegionLab>(); Fixture->PostInitializeComponents(); Fixture->DispatchBeginPlay();
+   Fixture->Console->PostInitializeComponents(); Fixture->Console->DispatchBeginPlay();
    Scene=Fixture->MemoryScene; Trigger=Fixture->Trigger; Trigger->PostInitializeComponents(); Trigger->DispatchBeginPlay();
    Test->TestEqual(TEXT("No pre-observed records"),Scene->GetTotalSpatialRecordCount(),0);
-   Test->TestEqual(TEXT("Only ground, Whole and Partial sources"),Scene->GetTrackedIdentityCount(),3);
+   Test->TestEqual(TEXT("Ground, Whole, Partial and Unknown console"),Scene->GetTrackedIdentityCount(),4);
    Test->TestNull(TEXT("No Moving/Multi room"),ADarkwellMovingPropLabRoom::FindActive(World));
    Test->TestFalse(TEXT("Default inactive"),Trigger->IsActive());
    auto* Camera=World->SpawnActor<ASceneCapture2D>();
@@ -175,8 +178,26 @@ public:
   }
   if(Frame==61 || Frame==151 || Frame==241) Player->SetActorRotation(FRotator(0,45,0));
   if(Frame==91 || Frame==181 || Frame==271) Player->SetActorRotation(FRotator(0,-90,0));
-  if(Frame==121) Test->TestTrue(TEXT("Box fully contains Whole and cuts Partial"),Trigger->Activate());
-  if(Frame==211) Trigger->Deactivate();
+  if(Frame==121 || Frame==211)
+  {
+   auto* Interaction=Player->GetInteractionComponent();
+   const auto Location=Player->GetActorLocation(); const auto Rotation=Player->GetActorRotation();
+   Player->SetActorLocation(Fixture->Console->GetActorLocation()+FVector(0,-200,52));
+   Player->SetActorRotation(FRotator(0,90,0));
+   Test->TestFalse(TEXT("Outside console distance rejects F path"),Interaction->TryInteract());
+   Fixture->Console->Interact(*Player);
+   Test->TestEqual(TEXT("Direct out-of-range call also leaves state unchanged"),Trigger->IsActive(),Frame==211);
+   Player->SetActorLocation(Location); Player->SetActorRotation(FRotator(0,-90,0));
+   Test->TestFalse(TEXT("Facing away rejects F path"),Interaction->TryInteract());
+   Player->SetActorRotation((Fixture->Console->GetActorLocation()-Location).Rotation());
+   Interaction->UpdateFocusedActorFromWorld();
+   Test->TestEqual(TEXT("World query focuses console"),Interaction->GetFocusedActor(),static_cast<AActor*>(Fixture->Console));
+   Test->TestFalse(TEXT("Focused state/action prompt exists"),Interaction->GetFocusedPrompt().IsEmpty());
+   Test->TestTrue(TEXT("F handler interaction path toggles target"),Interaction->TryInteract());
+   Test->TestEqual(TEXT("Target state reflects toggle"),Trigger->IsActive(),Frame==121);
+   Test->TestTrue(TEXT("Prompt changes to actual target state"),Interaction->GetFocusedPrompt().ToString().Contains(Frame==121?TEXT("ACTIVE - Deactivate"):TEXT("INACTIVE - Activate")));
+   Player->SetActorRotation(Rotation);
+  }
   Adapter->Tick(1.f/60); Scene->UpdateMemory(1.f/60,Player->GetActorLocation());
   if(Frame==30) IdleRecords=Scene->GetTotalSpatialRecordCount();
   if(Frame==60)
@@ -206,6 +227,14 @@ public:
   Render(Name);
   if(Frame<300) return false;
   Test->TestFalse(TEXT("Deactivation releases block"),World->GetSubsystem<UDarkwellMemoryRegionSubsystem>()->IsBlocked());
+  Test->TestTrue(TEXT("Reactivation for switch destruction"),Trigger->Activate());
+  Fixture->Console->Destroy();
+  Test->TestFalse(TEXT("Destroy console releases target Block"),World->GetSubsystem<UDarkwellMemoryRegionSubsystem>()->IsBlocked());
+  Test->TestFalse(TEXT("Destroyed console cannot interact"),Fixture->Console->CanInteract(*Player));
+  Trigger->Deactivate(); Trigger->Deactivate();
+  Test->TestTrue(TEXT("Reactivation for target destruction"),Trigger->Activate());
+  Trigger->Destroy();
+  Test->TestFalse(TEXT("Destroy target releases Block"),World->GetSubsystem<UDarkwellMemoryRegionSubsystem>()->IsBlocked());
   return true;
  }
 };

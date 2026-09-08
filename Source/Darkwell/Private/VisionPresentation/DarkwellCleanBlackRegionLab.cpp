@@ -1,6 +1,7 @@
 #include "VisionPresentation/DarkwellCleanBlackRegionLab.h"
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
+#include "VisionPresentation/DarkwellBlackRegionSwitch.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "Player/DarkwellCharacter.h"
@@ -43,22 +44,24 @@ void ADarkwellCleanBlackRegionLab::BeginPlay()
  MemoryScene=GetWorld()->SpawnActor<ADarkwellObjectMemoryScene>();
  auto Spawn=[&](FName Id,FVector Location,FVector Size,float Yaw,FLinearColor Tint,bool Whole)
  {
-  auto* A=GetWorld()->SpawnActor<AActor>(); A->SetOwner(this);
-  auto* Root=NewObject<USceneComponent>(A); A->SetRootComponent(Root); A->AddInstanceComponent(Root); Root->RegisterComponent();
-  auto* Mesh=NewObject<UStaticMeshComponent>(A); Mesh->SetupAttachment(Root); A->AddInstanceComponent(Mesh);
+  AActor* A=Id==TEXT("BlackLab.Console") ? GetWorld()->SpawnActor<ADarkwellBlackRegionSwitch>() : GetWorld()->SpawnActor<AActor>(); A->SetOwner(this);
+  auto* Root=A->GetRootComponent();
+  if(!Root) { Root=NewObject<USceneComponent>(A); A->SetRootComponent(Root); A->AddInstanceComponent(Root); Root->RegisterComponent(); }
+  auto* Mesh=A->FindComponentByClass<UStaticMeshComponent>();
+  if(!Mesh) { Mesh=NewObject<UStaticMeshComponent>(A); Mesh->SetupAttachment(Root); A->AddInstanceComponent(Mesh); }
   Mesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Cube.Cube")));
   Mesh->SetMobility(EComponentMobility::Movable); Mesh->SetCollisionProfileName(TEXT("BlockAllDynamic"));
   // This fixed plane is below both props. Its translucent history must draw
   // behind their history, independently of proxy centers and camera distance.
   if(Id==TEXT("BlackLab.Ground")) Mesh->TranslucencySortPriority=-1;
-  Mesh->SetRelativeScale3D(Size/100); Mesh->RegisterComponent();
+  Mesh->SetRelativeScale3D(Size/100); if(!Mesh->IsRegistered()) Mesh->RegisterComponent();
   A->SetActorLocation(Location); A->SetActorRotation(FRotator(0,Yaw,0));
   auto* Memory=NewObject<UDarkwellRememberablePropComponent>(A); A->AddInstanceComponent(Memory);
   Memory->bUseSpatialMemory=true; Memory->bRememberFromStart=false;
   Memory->AddMemoryPrimitive(Mesh); Memory->ConfigureStableId(Id); Memory->SetMemoryAppearance(Tint,1); Memory->RegisterComponent();
   auto* Policy=NewObject<USightWeaveObjectPolicyComponent>(A); A->AddInstanceComponent(Policy);
   Policy->bOverrideRevealMode=true; Policy->RevealMode=Whole?ESightWeaveRevealMode::WholeObjectAfterSpan:ESightWeaveRevealMode::SpatialPartial;
-  Policy->bOverrideMinimumObservedSpan=true; Policy->MinimumObservedSpanCm=60;
+  Policy->bOverrideMinimumObservedSpan=true; Policy->MinimumObservedSpanCm=Id==TEXT("BlackLab.Console")?20:60;
   Policy->bOverrideHistoryMode=true; Policy->HistoryMode=ESightWeaveHistoryMode::StationaryOnly;
   Policy->RegisterComponent();
   if(!MemoryScene->RegisterRememberable(Memory,Policy))
@@ -71,7 +74,10 @@ void ADarkwellCleanBlackRegionLab::BeginPlay()
  FActorSpawnParameters P; P.Name=TEXT("BlackRegionLabTrigger");
  Trigger=GetWorld()->SpawnActor<ADarkwellBlackRegionTrigger>(FVector(-15,85,0),FRotator::ZeroRotator,P);
  Trigger->HalfExtentXY=FVector2D(145,55); Trigger->OnConstruction(Trigger->GetActorTransform());
- UE_LOG(LogTemp,Display,TEXT("CLEAN_BLACK_LAB initial=Unknown records=%d sources=3 (ground,Whole,Partial37) moving_room=0 trigger=Inactive"),MemoryScene->GetTotalSpatialRecordCount());
+ Spawn(TEXT("BlackLab.Console"),FVector(-230,-30,40),FVector(40,35,80),0,FLinearColor(.2,.65,.35),true);
+ Console=Sources.IsEmpty()?nullptr:Cast<ADarkwellBlackRegionSwitch>(Sources.Last());
+ if(Console) Console->Target=Trigger;
+ UE_LOG(LogTemp,Display,TEXT("CLEAN_BLACK_LAB initial=Unknown records=%d sources=4 (ground,Whole,Partial37,console) moving_room=0 trigger=Inactive"),MemoryScene->GetTotalSpatialRecordCount());
 }
 bool ADarkwellCleanBlackRegionLab::EnableDarkwellProjectFogP4(UTexture* Raw,FVector2D Min,FVector2D Inv)
 {
@@ -95,12 +101,13 @@ void ADarkwellCleanBlackRegionLab::Tick(float Dt)
   { Boom->SetRelativeRotation(FRotator(-65,90,0)); Boom->TargetArmLength=800; }
   Player->GetLoadoutComponent()->RestorePersistentState(2,100,0,100,DarkwellGameplayTags::Equipment_Left_Shotgun,DarkwellGameplayTags::Equipment_Right_Torch);
   bPlayerReady=true;
-  if(GEngine) GEngine->AddOnScreenDebugMessage(0x424C4143,20,FColor::Cyan,TEXT("BLACK REGION | WASD + mouse | console: Darkwell.BlackRegionLab activate / deactivate / status | orange Whole, blue Partial 37 deg"));
+  if(GEngine) GEngine->AddOnScreenDebugMessage(0x424C4143,20,FColor::Cyan,TEXT("BLACK REGION | WASD + mouse | approach green console, face it + F (150 cm) | orange Whole, blue Partial 37 deg"));
  }
  if(GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->IsActive()) MemoryScene->UpdateMemory(Dt,Player->GetActorLocation());
 }
 void ADarkwellCleanBlackRegionLab::EndPlay(EEndPlayReason::Type Reason)
 {
+ if(IsValid(Console)) Console->Destroy();
  if(Trigger) Trigger->Destroy();
  if(MemoryScene) MemoryScene->Destroy();
  for(AActor* A:Sources) if(IsValid(A)) A->Destroy();

@@ -1,5 +1,7 @@
 # SpatialPartial 部分显现栅栏（2026-09-08，完成）
 
+后续 F 键控制台交接见 [Black Region F 开关](SIGHTWEAVE_BLACK_REGION_F_SWITCH_ZH.md)。
+
 起点 `842c66c2948fbf1a73aa0074ec32ac069b99c880`。公司 `D:\UE_projects\LastLight`，UE 5.8.2 / RTX 4060 / D3D12 SM6。本轮只修视觉 blocker，没有 F 键施工。最终 SHA 为本文件所属提交。
 
 ## 复现与分类

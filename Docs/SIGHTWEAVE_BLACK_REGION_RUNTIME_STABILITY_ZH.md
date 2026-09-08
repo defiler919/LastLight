@@ -1,5 +1,7 @@
 # Black Region：运行时崩溃与干净人工入口（2026-09-08，完成）
 
+最新 F 键交互入口见 [Black Region F 开关](SIGHTWEAVE_BLACK_REGION_F_SWITCH_ZH.md)。
+
 后续人工发现的部分显现/封存栅栏已单独修正，最新视觉交接见 [Partial 栅栏修复](SIGHTWEAVE_PARTIAL_REVEAL_FENCE_ZH.md)。下文保留上一轮运行时稳定性验收，其截图未覆盖本次窄视角场景。
 
 起点 `f80d9d1f7802cd5c2e9f82a21bed4f8c7b3468f7`，公司仓库 `D:\UE_projects\LastLight`，实际引擎 `D:\UE_5.8` 5.8.2。暂停 F 键施工，本片仅关闭运行时故障并替换人工入口。最终验收结果见本文件末节；证据不作跨机器毫秒 A/B。

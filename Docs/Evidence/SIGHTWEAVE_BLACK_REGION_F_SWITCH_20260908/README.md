@@ -1,0 +1,11 @@
+# F switch validation — 2026-09-08
+
+Full `Scripts/BuildEditor.ps1`: DarkwellEditor Win64 Development Succeeded (UE 5.8.2, D:\UE_5.8). `Scripts/RunBlackRegionTriggerTests.ps1 -RunName BlackSwitchAccepted`: 21/21 passed, 20 clean, 1 external Google generate_204 HTTP timeout warning, zero failures/not-run, exit 0. First run BlackSwitchFirst was also 21/21 clean. Final source and DLL are covered by source.patch in diagnostics.zip and binary.json.
+
+D3D12/: real D3D12/SM6 SceneCapture frames in the clean Lab. CleanLab now toggles through the existing F handler's InteractionComponent::TryInteract, with world query, facing, distance, state prompt and destroy checks. Sequence: Unknown -> observed memory -> Clear -> blocked Live -> left blocked -> first-frame/idle deactivation -> new observation/memory. CurrentPartialProbe retains the 37-degree narrow-view physical-edge checks (46 proven edge samples, zero gaps). AA remains enabled. Original knowledge/presentation algorithms are unchanged.
+
+Manual/: actual game window launched via Scripts/LaunchBlackRegionLab.ps1; real keyboard F injected via computer-use (not console activation). 01: focused inactive prompt; 02: F activated, prompt/top status ACTIVE, Live remains; 03: turn away, region Unknown, facing-away F had no effect; 04: face console + F deactivated, no old gray restored. Torch naturally depleted during this window check; new-observation restoration is covered by the automated frame sequence, not claimed from this screenshot. Normal Alt-F4 exit and world cleanup are in manual-first-game.log. Mouse clicks used to aim also consumed the existing shotgun rounds; no gameplay rules were changed for capture.
+
+These captures do not claim millisecond latency measurement. Build/test runner logs and the manual log are preserved; no F-key gameplay, authority or rendering bypass was used. No map binary was rewritten: the existing clean-map C++ fixture spawns/registers the console at BeginPlay.
+
+Manual 05–07 repeat real F inactive/active/inactive on the accepted DLL, then activate once more and Alt-F4 while Active. manual-accepted-game.log reaches normal LogExit and D3D12 shutdown. It includes one non-fatal SpawnActor rejection during world teardown when the existing unblock path seals a current record; the world prevents spawning, and cleanup completes without assertion/crash.

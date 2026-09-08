@@ -390,7 +390,7 @@ void ADarkwellHUD::DrawHUD()
 	if (Font)
 	{
 		DrawText(
-			CleanBlackLab ? TEXT("WASD MOVE   MOUSE AIM   ~ CONSOLE: Darkwell.BlackRegionLab activate / deactivate / status")
+			CleanBlackLab ? TEXT("WASD MOVE   MOUSE AIM   APPROACH GREEN CONSOLE + FACE IT   F TOGGLE (150 cm)")
             : TEXT("WASD MOVE   SHIFT SPRINT   MOUSE AIM   LMB TAP FIRE / HOLD AIM   RMB TAP/HOLD TOOL   R RELOAD   Q/E WHEELS   F INTERACT   TAB BACKPACK   F5 SAVE   F9 LOAD"),
 			FLinearColor(0.55f, 0.58f, 0.62f),
 			35.0f,

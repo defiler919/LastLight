@@ -1,0 +1,7 @@
+{
+  "before_teardown_spawn_warnings": 2,
+  "after_teardown_spawn_warnings": 0,
+  "normal_exit": true,
+  "manual_dll_sha256": "8e52d6f70053dff5145823045c8bdacd3f0d4a0e4b6fcb11fe21a1467c90337f",
+  "final_dll_sha256": "19874d06ccaac173892fd717513b07da4ca4b320bd796d8033e506b1df4c1ee9"
+}

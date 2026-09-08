@@ -2,6 +2,7 @@
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
 #include "VisionPresentation/DarkwellBlackRegionSwitch.h"
+#include "VisionPresentation/DarkwellBlackRegionEventAdapter.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "Player/DarkwellCharacter.h"
@@ -19,6 +20,7 @@
 
 ADarkwellCleanBlackRegionLab::ADarkwellCleanBlackRegionLab()
 {
+ DemoEvent=CreateDefaultSubobject<UDarkwellBlackRegionEventAdapter>(TEXT("LabBlackoutEvent"));
  PrimaryActorTick.bCanEverTick=true; PrimaryActorTick.TickGroup=TG_PostUpdateWork;
  // Inherit only the adapter's floor interface, light and camera. None of the
  // integration stress geometry or its RememberedFromStart proof is admitted.
@@ -77,6 +79,7 @@ void ADarkwellCleanBlackRegionLab::BeginPlay()
  Spawn(TEXT("BlackLab.Console"),FVector(-230,-30,40),FVector(40,35,80),0,FLinearColor(.2,.65,.35),true);
  Console=Sources.IsEmpty()?nullptr:Cast<ADarkwellBlackRegionSwitch>(Sources.Last());
  if(Console) Console->Target=Trigger;
+ DemoEvent->Target=Trigger;
  UE_LOG(LogTemp,Display,TEXT("CLEAN_BLACK_LAB initial=Unknown records=%d sources=4 (ground,Whole,Partial37,console) moving_room=0 trigger=Inactive"),MemoryScene->GetTotalSpatialRecordCount());
 }
 bool ADarkwellCleanBlackRegionLab::EnableDarkwellProjectFogP4(UTexture* Raw,FVector2D Min,FVector2D Inv)
@@ -107,6 +110,7 @@ void ADarkwellCleanBlackRegionLab::Tick(float Dt)
 }
 void ADarkwellCleanBlackRegionLab::EndPlay(EEndPlayReason::Type Reason)
 {
+ if(IsValid(DemoEvent)) DemoEvent->EndEvent();
  if(IsValid(Console)) Console->Destroy();
  if(Trigger) Trigger->Destroy();
  if(MemoryScene) MemoryScene->Destroy();

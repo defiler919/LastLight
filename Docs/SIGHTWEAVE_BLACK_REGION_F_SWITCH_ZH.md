@@ -1,5 +1,7 @@
 # Black Region：真实 F 键控制台（2026-09-08，完成）
 
+后续通用事件适配器与 Active 退出 warning 修复见 [事件适配器交接](SIGHTWEAVE_BLACK_REGION_EVENT_ADAPTER_ZH.md)。
+
 起点 `b1b6ba3f570d3fe190762eea9b6fc579c1ada9fa`。本片仅接入固定 AABB Trigger 的 F 交互；不修改知识、栅格、渲染、cap、Whole/Partial 或区域算法。
 
 ## 接口与输入

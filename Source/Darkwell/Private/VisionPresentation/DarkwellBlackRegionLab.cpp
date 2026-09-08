@@ -1,4 +1,6 @@
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
+#include "VisionPresentation/DarkwellBlackRegionEventAdapter.h"
+#include "VisionPresentation/DarkwellCleanBlackRegionLab.h"
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
 #include "VisionPresentation/DarkwellMovingPropLabRoom.h"
@@ -27,7 +29,7 @@ namespace
   return nullptr;
  }
  FAutoConsoleCommandWithWorldAndArgs BlackRegionLab(TEXT("Darkwell.BlackRegionLab"),
-  TEXT("open | setup partial/whole | activate | deactivate | status. Single fixed AABB; reopen world to change mode."),
+  TEXT("open | event_begin | event_end | event_status | setup partial/whole | activate | deactivate | status. Single fixed AABB; reopen world to change mode."),
   FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args,UWorld* World)
   {
    if(!World || !World->IsGameWorld()) { Feedback(TEXT("Use a running game/PIE world.")); return; }
@@ -37,6 +39,22 @@ namespace
     UGameplayStatics::OpenLevel(World,TEXT("/Game/Maps/L_BlackRegionLab")); return;
    }
    if(!Darkwell::PropLab::IsLabWorld(World)) { Feedback(TEXT("Enter demo: Darkwell.BlackRegionLab open")); return; }
+   if(Command==TEXT("event_begin") || Command==TEXT("event_end") || Command==TEXT("event_status"))
+   {
+    for(TActorIterator<ADarkwellCleanBlackRegionLab> It(World);It;++It)
+    {
+     auto* Event=It->DemoEvent.Get();
+     if(!IsValid(Event) || !IsValid(It->Trigger))
+     { Feedback(TEXT("Lab event/target was removed; reopen the Lab to run another event.")); return; }
+     if(Command==TEXT("event_begin") && !Event->BeginEvent())
+     { Feedback(TEXT("Lab blackout event rejected: target/authority not ready.")); return; }
+     if(Command==TEXT("event_end")) Event->EndEvent();
+     Feedback(FString::Printf(TEXT("Lab blackout event=%s trigger=%s; repeated edges are idempotent; F remains manual override."),
+      Event->IsEventStarted()?TEXT("STARTED"):TEXT("IDLE"),It->Trigger->IsActive()?TEXT("ACTIVE"):TEXT("INACTIVE")));
+     return;
+    }
+    Feedback(TEXT("The blackout test event requires the clean Black Region Lab.")); return;
+   }
    auto* Demo=FindDemo(World);
    if(Command==TEXT("setup"))
    {
@@ -71,7 +89,7 @@ namespace
    if(Command==TEXT("deactivate")) Demo->Deactivate();
    if(Command==TEXT("status") || Command==TEXT("activate") || Command==TEXT("deactivate"))
    { Feedback(Demo->IsActive()?TEXT("ACTIVE: Clear+Block. Live stays normal; leaving Live is Unknown."):TEXT("INACTIVE: Block released. Cleared memory returns only after new legal observation.")); return; }
-   Feedback(TEXT("Darkwell.BlackRegionLab: open | setup partial/whole | activate | deactivate | status"));
+   Feedback(TEXT("Darkwell.BlackRegionLab: open | event_begin | event_end | event_status | setup partial/whole | activate | deactivate | status"));
   }));
 }
 #endif

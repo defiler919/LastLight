@@ -1,0 +1,1045 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "游戏策划1",
+			"instance": "EA3C619B4A5DF4CF16F5F2AB0FEA46F3",
+			"instanceName": "游戏策划1-14432",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 11 (25H2) [10.0.26200.9168] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 4060",
+			"cPUModel": "13th Gen Intel(R) Core(TM) i5-13500",
+			"rAMInGB": 32,
+			"renderMode": "D3D12_SM6",
+			"rHI": "D3D12 (SM6)",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.08-06.53.56",
+	"succeeded": 2,
+	"succeededWithWarnings": 0,
+	"failed": 0,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 112.69578552246094,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "CleanLab",
+			"fullTestPath": "Darkwell.BlackRegion.CleanLab",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"EA3C619B4A5DF4CF16F5F2AB0FEA46F3"
+			],
+			"duration": 39.747001647949219,
+			"dateTime": "2026.09.08-06.52.03",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 00_unknown engine_frame=877 identities=4 records=0 local_cells=0 local_mask_bits=0 fine_samples=0 uniform_parts=0 resets=0 episodes=0 record_cells=0 record_mask_bits=0 private_bytes=7238598656",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.03"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 01_live SpatialMemory_BlackLab.Ground_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.06"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 01_live SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.06"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 01_live SpatialMemory_BlackLab.Whole_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -100.000000 80.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-100.000 Y=80.000 Z=40.000 extent=X=40.000 Y=30.000 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.06"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 01_live SpatialMemory_BlackLab.Partial_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.06"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 01_live engine_frame=966 identities=4 records=4 local_cells=40736 local_mask_bits=79488 fine_samples=0 uniform_parts=2 resets=4 episodes=4 record_cells=42572 record_mask_bits=0 private_bytes=7359217664",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.06"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 02_memory SpatialMemory_BlackLab.Ground_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 02_memory SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 02_memory SpatialMemory_BlackLab.Whole_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -100.000000 80.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-100.000 Y=80.000 Z=40.000 extent=X=40.000 Y=30.000 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 02_memory SpatialMemory_BlackLab.Partial_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 02_memory engine_frame=996 identities=4 records=4 local_cells=40736 local_mask_bits=79488 fine_samples=63168 uniform_parts=2 resets=4 episodes=4 record_cells=42572 record_mask_bits=63168 private_bytes=7245123584",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 03_clear SpatialMemory_BlackLab.Ground_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 03_clear SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 03_clear SpatialMemory_BlackLab.Partial_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 03_clear SpatialMemory_BlackLab.Ground_Epoch2_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 03_clear SpatialMemory_BlackLab.Ground_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 03_clear engine_frame=1026 identities=4 records=5 local_cells=40736 local_mask_bits=81024 fine_samples=1279680 uniform_parts=1 resets=4 episodes=6 record_cells=118604 record_mask_bits=1894080 private_bytes=7328329728",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 04_blocked_live SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 04_blocked_live SpatialMemory_BlackLab.Partial_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 04_blocked_live SpatialMemory_BlackLab.Ground_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 04_blocked_live SpatialMemory_BlackLab.Partial_Epoch2_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 04_blocked_live engine_frame=1056 identities=4 records=5 local_cells=40736 local_mask_bits=79488 fine_samples=50880 uniform_parts=2 resets=5 episodes=8 record_cells=45752 record_mask_bits=716160 private_bytes=7342317568",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 05_left_blocked SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.29"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 05_left_blocked SpatialMemory_BlackLab.Ground_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.29"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 05_left_blocked SpatialMemory_BlackLab.Partial_Epoch2_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.29"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 05_left_blocked engine_frame=1086 identities=4 records=3 local_cells=40736 local_mask_bits=79488 fine_samples=50880 uniform_parts=2 resets=5 episodes=8 record_cells=41804 record_mask_bits=665280 private_bytes=7335895040",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.29"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_first_frame SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.30"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_first_frame SpatialMemory_BlackLab.Ground_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.30"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_first_frame SpatialMemory_BlackLab.Partial_Epoch2_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.30"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_first_frame SpatialMemory_BlackLab.Ground_Epoch4_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.30"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 06_deactivated_first_frame engine_frame=1087 identities=4 records=4 local_cells=40736 local_mask_bits=81024 fine_samples=665280 uniform_parts=1 resets=5 episodes=9 record_cells=80204 record_mask_bits=1279680 private_bytes=7373717504",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.30"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_idle SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.31"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_idle SpatialMemory_BlackLab.Ground_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.31"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_idle SpatialMemory_BlackLab.Partial_Epoch2_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.31"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_idle SpatialMemory_BlackLab.Ground_Epoch4_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.31"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 06_deactivated_idle engine_frame=1116 identities=4 records=4 local_cells=40736 local_mask_bits=81024 fine_samples=665280 uniform_parts=1 resets=5 episodes=9 record_cells=80204 record_mask_bits=1279680 private_bytes=7373258752",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.31"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 07_reobserved SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.33"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 07_reobserved SpatialMemory_BlackLab.Ground_Epoch4_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.33"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 07_reobserved SpatialMemory_BlackLab.Whole_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -100.000000 80.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-100.000 Y=80.000 Z=40.000 extent=X=40.000 Y=30.000 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.33"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 07_reobserved SpatialMemory_BlackLab.Partial_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.33"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 07_reobserved engine_frame=1176 identities=4 records=4 local_cells=40736 local_mask_bits=79488 fine_samples=63168 uniform_parts=2 resets=6 episodes=11 record_cells=42572 record_mask_bits=677568 private_bytes=7340818432",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.33"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "EventDemo",
+			"fullTestPath": "Darkwell.BlackRegion.EventDemo",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"EA3C619B4A5DF4CF16F5F2AB0FEA46F3"
+			],
+			"duration": 72.948783874511719,
+			"dateTime": "2026.09.08-06.52.43",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 00_unknown engine_frame=1180 identities=4 records=0 local_cells=0 local_mask_bits=0 fine_samples=0 uniform_parts=0 resets=0 episodes=0 record_cells=0 record_mask_bits=0 private_bytes=8718184448",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.43"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 01_live SpatialMemory_BlackLab.Ground_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 01_live SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 01_live SpatialMemory_BlackLab.Whole_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -100.000000 80.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-100.000 Y=80.000 Z=40.000 extent=X=40.000 Y=30.000 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 01_live SpatialMemory_BlackLab.Partial_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 01_live engine_frame=1269 identities=4 records=4 local_cells=40736 local_mask_bits=79488 fine_samples=0 uniform_parts=2 resets=4 episodes=4 record_cells=42572 record_mask_bits=0 private_bytes=8758837248",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 02_memory SpatialMemory_BlackLab.Ground_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.47"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 02_memory SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.47"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 02_memory SpatialMemory_BlackLab.Whole_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -100.000000 80.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-100.000 Y=80.000 Z=40.000 extent=X=40.000 Y=30.000 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.47"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 02_memory SpatialMemory_BlackLab.Partial_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.47"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 02_memory engine_frame=1299 identities=4 records=4 local_cells=40736 local_mask_bits=79488 fine_samples=63168 uniform_parts=2 resets=4 episodes=4 record_cells=42572 record_mask_bits=63168 private_bytes=8626470912",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.52.47"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 03_clear SpatialMemory_BlackLab.Ground_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.04"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 03_clear SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.04"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 03_clear SpatialMemory_BlackLab.Partial_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.04"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 03_clear SpatialMemory_BlackLab.Ground_Epoch2_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.04"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 03_clear SpatialMemory_BlackLab.Ground_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.04"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 03_clear engine_frame=1329 identities=4 records=5 local_cells=40736 local_mask_bits=81024 fine_samples=1279680 uniform_parts=1 resets=4 episodes=6 record_cells=118604 record_mask_bits=1894080 private_bytes=8572329984",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.04"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 04_blocked_live SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 04_blocked_live SpatialMemory_BlackLab.Partial_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 04_blocked_live SpatialMemory_BlackLab.Ground_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 04_blocked_live SpatialMemory_BlackLab.Partial_Epoch2_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 04_blocked_live engine_frame=1359 identities=4 records=5 local_cells=40736 local_mask_bits=79488 fine_samples=50880 uniform_parts=2 resets=5 episodes=8 record_cells=45752 record_mask_bits=716160 private_bytes=8527388672",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 05_left_blocked SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.09"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 05_left_blocked SpatialMemory_BlackLab.Ground_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.09"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 05_left_blocked SpatialMemory_BlackLab.Partial_Epoch2_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.09"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 05_left_blocked engine_frame=1389 identities=4 records=3 local_cells=40736 local_mask_bits=79488 fine_samples=50880 uniform_parts=2 resets=5 episodes=8 record_cells=41804 record_mask_bits=665280 private_bytes=8527781888",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.09"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_first_frame SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_first_frame SpatialMemory_BlackLab.Ground_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_first_frame SpatialMemory_BlackLab.Partial_Epoch2_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_first_frame SpatialMemory_BlackLab.Ground_Epoch4_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 06_deactivated_first_frame engine_frame=1390 identities=4 records=4 local_cells=40736 local_mask_bits=81024 fine_samples=665280 uniform_parts=1 resets=5 episodes=9 record_cells=80204 record_mask_bits=1279680 private_bytes=8565608448",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_idle SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_idle SpatialMemory_BlackLab.Ground_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_idle SpatialMemory_BlackLab.Partial_Epoch2_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 06_deactivated_idle SpatialMemory_BlackLab.Ground_Epoch4_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 06_deactivated_idle engine_frame=1419 identities=4 records=4 local_cells=40736 local_mask_bits=81024 fine_samples=665280 uniform_parts=1 resets=5 episodes=9 record_cells=80204 record_mask_bits=1279680 private_bytes=8565878784",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 07_reobserved SpatialMemory_BlackLab.Console_Epoch1_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -230.000000 -30.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-230.000 Y=-30.000 Z=40.000 extent=X=20.000 Y=17.500 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.13"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 07_reobserved SpatialMemory_BlackLab.Ground_Epoch4_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: 0.000000 0.000000 -5.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=0.000 Y=0.000 Z=-5.000 extent=X=300.000 Y=200.000 Z=5.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.13"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 07_reobserved SpatialMemory_BlackLab.Whole_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 0.000000 Roll -0.000000\r\nTranslation: -100.000000 80.000000 40.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=-100.000 Y=80.000 Z=40.000 extent=X=40.000 Y=30.000 Z=40.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.13"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_PROXY 07_reobserved SpatialMemory_BlackLab.Partial_Epoch3_0 pose=Rotation: Pitch 0.000000 Yaw 37.000000 Roll -0.000000\r\nTranslation: 130.000000 80.000000 55.000000\r\nScale3D: 1.000000 1.000000 1.000000\r\n center=X=130.000 Y=80.000 Z=55.000 extent=X=73.959 Y=66.086 Z=55.000 hidden=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.13"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "CLEAN_LAB_FRAME 07_reobserved engine_frame=1479 identities=4 records=4 local_cells=40736 local_mask_bits=79488 fine_samples=63168 uniform_parts=2 resets=6 episodes=11 record_cells=42572 record_mask_bits=677568 private_bytes=8533831680",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.08-06.53.13"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

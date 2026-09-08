@@ -3,6 +3,7 @@
 #include "UI/DarkwellHUD.h"
 #include "VisionPresentation/DarkwellCleanBlackRegionLab.h"
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
+#include "VisionPresentation/DarkwellBlackRegionEventAdapter.h"
 
 #include "AI/DarkwellStalkerCharacter.h"
 #include "AI/DarkwellStalkerController.h"
@@ -342,8 +343,9 @@ void ADarkwellHUD::DrawHUD()
 	if (Font && MissionGameState)
 	{
 		const FString Objective = CleanBlackLab
-            ? FString::Printf(TEXT("BLACK REGION  |  %s  |  WHOLE + PARTIAL 37 deg  |  Observe / activate / leave / deactivate / observe"),
-                CleanBlackLab->Trigger && CleanBlackLab->Trigger->IsActive()?TEXT("ACTIVE"):TEXT("INACTIVE"))
+            ? FString::Printf(TEXT("BLACK REGION  |  %s  |  WHOLE + PARTIAL 37 deg  |  TEST EVENT: %s"),
+                CleanBlackLab->Trigger && CleanBlackLab->Trigger->IsActive()?TEXT("ACTIVE"):TEXT("INACTIVE"),
+                IsValid(CleanBlackLab->DemoEvent) && CleanBlackLab->DemoEvent->IsEventStarted()?TEXT("STARTED"):TEXT("IDLE"))
             : Darkwell::GrayPolicyLab::IsWorld(GetWorld())
 			? TEXT("GRAY POLICY LAB V2  |  SIX ISOLATED ROOMS  |  PRESS F AT LAB CONSOLES")
 			: Darkwell::PropLab::IsLabWorld(GetWorld())

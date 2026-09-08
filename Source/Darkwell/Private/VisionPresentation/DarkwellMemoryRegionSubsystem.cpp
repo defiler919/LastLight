@@ -46,9 +46,12 @@ void UDarkwellMemoryRegionSubsystem::ReleaseBlockRegistration(bool bPublish)
   RuntimeBlock={};
  }
  if(!bBlocked) return;
- for(TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld());It;++It) It->SetMemoryWriteBlock(Bounds,false);
+ // A dying world must release the modifier, but must not seal/rebuild render actors.
+ const bool bWorldEnding=GetWorld()->bIsTearingDown;
+ if(!bWorldEnding)
+  for(TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld());It;++It) It->SetMemoryWriteBlock(Bounds,false);
  bBlocked=false; ++AuthorityRevision;
- if(bPublish) Publish();
+ if(bPublish && !bWorldEnding) Publish();
 }
 
 void UDarkwellMemoryRegionSubsystem::Deinitialize()

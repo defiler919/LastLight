@@ -1,0 +1,17 @@
+{
+  "run": "BlackEventAccepted",
+  "selector": "Darkwell.BlackRegion.EventDemo+Darkwell.BlackRegion.CleanLab",
+  "runner_failure": null,
+  "exit_code": 0,
+  "foreground_approved": true,
+  "foreground_attempts": 1,
+  "wall_seconds": 139.8303623,
+  "total": 2,
+  "clean": 2,
+  "warnings": 0,
+  "failed": 0,
+  "not_run": 0,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "passed": true
+}

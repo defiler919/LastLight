@@ -5,6 +5,7 @@
 class ADarkwellObjectMemoryScene;
 class ADarkwellBlackRegionTrigger;
 class ADarkwellBlackRegionSwitch;
+class UDarkwellBlackRegionEventAdapter;
 
 /** Small manual fixture: static sources only; no scripted motion; manual F console. */
 UCLASS()
@@ -24,6 +25,7 @@ public:
  UPROPERTY(Transient) TObjectPtr<ADarkwellObjectMemoryScene> MemoryScene;
  UPROPERTY(Transient) TObjectPtr<ADarkwellBlackRegionTrigger> Trigger;
  UPROPERTY(Transient) TObjectPtr<ADarkwellBlackRegionSwitch> Console;
+ UPROPERTY(VisibleAnywhere) TObjectPtr<UDarkwellBlackRegionEventAdapter> DemoEvent;
  UPROPERTY(Transient) TArray<TObjectPtr<AActor>> Sources;
 private:
  bool bPlayerReady=false;

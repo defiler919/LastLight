@@ -1,0 +1,17 @@
+{
+  "run": "BlackEventFirst",
+  "selector": "Darkwell.CurrentGrid+Darkwell.BlackRegion+Darkwell.UnknownRegion+Darkwell.UnknownPartial+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.ObjectMemory.PresentationResidency+Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory+Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap+Darkwell.PropLab.GrayObjectPolicy.ConfirmedWholeStopsSpanAndDenseObservationWork+Darkwell.PropLab.MovingLiveContinuity.RotationAcrossWorldBoundsDimensionSwap+Darkwell.PropLab.MovingLiveContinuity.TopologyChangeRequiresExplicitReset",
+  "runner_failure": null,
+  "exit_code": 0,
+  "foreground_approved": true,
+  "foreground_attempts": 1,
+  "wall_seconds": 187.4843062,
+  "total": 22,
+  "clean": 21,
+  "warnings": 1,
+  "failed": 0,
+  "not_run": 0,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "passed": true
+}

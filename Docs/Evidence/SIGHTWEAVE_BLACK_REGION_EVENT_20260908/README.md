@@ -1,0 +1,13 @@
+# Black Region event adapter — accepted 2026-09-08
+
+Full `Scripts/BuildEditor.ps1`: DarkwellEditor Win64 Development Succeeded (UE 5.8.2). `Scripts/RunBlackRegionTriggerTests.ps1 -RunName BlackEventFirst`: 22/22 passed, 21 clean, one external HTTP timeout warning, zero failed/not-run, exit 0. D3D12/SM6, normal AA enabled. Initial compile failed on auto* deduction from TObjectPtr; corrected with Get(), then full build succeeded. Failed build log remains in Saved.
+
+D3D12/: real SceneCapture frames from Darkwell.BlackRegion.EventDemo, in the current clean Lab. Remote event starts after memory exists (player temporarily 1000 cm away for the edge), duplicates do not change authority revision, Live stays valid, leaving is Unknown, end does not revive old gray, reobservation restores memory. Tests also verify F overrides between event edges, duplicate End cannot undo a later independent F activation, component destruction releases Block, and teardown releases modifier/owner without changing scene revision or creating records. Original CleanLab F test, Whole/Partial/Unknown/37-degree and CurrentPartialProbe remain in the same passing suite.
+
+Manual/: actual LaunchBlackRegionLab.ps1 game window. 01 default event Idle; 02 game console event_begin -> Started/Active and partial gray is cut; 03 real F -> Started/Inactive; F again -> Active, then event_end -> 04 Idle/Inactive; 05 F Active before normal Alt-F4. The manual sequence checks real command/HUD/input wiring; the controlled automated sequence is the evidence for out-of-range operation and full memory reconstruction. No claim of a complete human walking route.
+
+verification.json: previous accepted F-switch Active exit had 2 teardown SpawnActor warnings; current Active exit has 0 and reaches normal LogExit/D3D12 shutdown. This was our unblock-to-scene reconstruction callback after BeginTearingDown. The fix only skips scene callbacks/Publish in an ending world while retaining runtime modifier and owner release. No normal Deactivate path changed.
+
+Diagnostics zip contains exact before/after game logs, final full build log, test log, report source patch and foreground approval. Binary SHA256 is in verification.json. No binary map or material asset was edited.
+
+Final review added IsValid guards to the Lab HUD/commands/EndPlay for an explicitly removed event component. Full build succeeded again; BlackEventAccepted reran the two affected CleanLab/EventDemo D3D12 tests successfully. D3D12 frames are from this final run, and accepted source/build/report are archived. The earlier real-window check predates these three null guards; input/adapter/unblock behavior is identical. Both DLL hashes are recorded.

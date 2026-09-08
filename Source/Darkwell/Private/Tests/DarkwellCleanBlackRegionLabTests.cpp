@@ -9,6 +9,7 @@
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
 #include "VisionPresentation/DarkwellBlackRegionSwitch.h"
+#include "VisionPresentation/DarkwellBlackRegionEventAdapter.h"
 #include "Interaction/DarkwellInteractionComponent.h"
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
@@ -37,6 +38,7 @@ class FDarkwellCleanLabFrames : public IAutomationLatentCommand
  UTextureRenderTarget2D* Target=nullptr;
  int32 Frame=0,IdleRecords=0;
  bool bPartialProbe=false;
+ bool bEventDemo=false;
  float ProbeYaw=-15;
  void Render(const TCHAR* Name=nullptr)
  {
@@ -58,7 +60,7 @@ class FDarkwellCleanLabFrames : public IAutomationLatentCommand
   TArray<FColor> Pixels; Test->TestTrue(TEXT("D3D12 image readback"),Target->GameThread_GetRenderTargetResource()->ReadPixels(Pixels));
   Test->TestTrue(TEXT("Capture contains a rendered scene, not an empty frame"),Pixels.ContainsByPredicate([](FColor C){return C.R>80 || C.G>80 || C.B>80;}));
   const FString Root=FPlatformMisc::GetEnvironmentVariable(TEXT("DARKWELL_UNKNOWN_TEST_OUTPUT"));
-  const FString Dir=(Root.IsEmpty()?FPaths::ProjectSavedDir():Root)/TEXT("Captures/CleanBlackLab");
+  const FString Dir=(Root.IsEmpty()?FPaths::ProjectSavedDir():Root)/(bEventDemo?TEXT("Captures/EventBlackLab"):TEXT("Captures/CleanBlackLab"));
   IFileManager::Get().MakeDirectory(*Dir,true); TArray64<uint8> PNG; FImageUtils::PNGCompressImageArray(768,768,Pixels,PNG);
   Test->TestTrue(TEXT("Save real-frame Lab scene"),FFileHelper::SaveArrayToFile(PNG,*(Dir/(FString(Name)+TEXT(".png")))));
   Test->AddInfo(FString::Printf(TEXT("CLEAN_LAB_FRAME %s engine_frame=%llu %s"),Name,GFrameCounter,*Scene->GetStorageTelemetry()));
@@ -127,7 +129,7 @@ class FDarkwellCleanLabFrames : public IAutomationLatentCommand
 
  }
 public:
- explicit FDarkwellCleanLabFrames(FAutomationTestBase* InTest,bool Probe=false):Test(InTest),bPartialProbe(Probe)
+ explicit FDarkwellCleanLabFrames(FAutomationTestBase* InTest,bool Probe=false,bool EventDemo=false):Test(InTest),bPartialProbe(Probe),bEventDemo(EventDemo)
  {
   const auto Value=FPlatformMisc::GetEnvironmentVariable(TEXT("DARKWELL_PARTIAL_PROBE_YAW"));
   if(bPartialProbe && !Value.IsEmpty()) ProbeYaw=FCString::Atof(*Value);
@@ -178,7 +180,29 @@ public:
   }
   if(Frame==61 || Frame==151 || Frame==241) Player->SetActorRotation(FRotator(0,45,0));
   if(Frame==91 || Frame==181 || Frame==271) Player->SetActorRotation(FRotator(0,-90,0));
-  if(Frame==121 || Frame==211)
+  if(bEventDemo && (Frame==121 || Frame==211))
+  {
+   auto* Event=Fixture->DemoEvent.Get(); auto* Region=World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
+   const auto Location=Player->GetActorLocation();
+   Player->SetActorLocation(Location+FVector(1000,0,0));
+   Test->TestFalse(TEXT("Event does not require console proximity"),Fixture->Console->CanInteract(*Player));
+   if(Frame==121)
+   {
+    Test->TestTrue(TEXT("Event begins remotely"),Event->BeginEvent());
+    const auto Revision=Region->GetAuthorityRevision();
+    Test->TestTrue(TEXT("Duplicate start succeeds"),Event->BeginEvent());
+    Test->TestEqual(TEXT("Duplicate start never re-clears"),Region->GetAuthorityRevision(),Revision);
+   }
+   else
+   {
+    Event->EndEvent(); const auto Revision=Region->GetAuthorityRevision(); Event->EndEvent();
+    Test->TestEqual(TEXT("Duplicate end has no effect"),Region->GetAuthorityRevision(),Revision);
+   }
+   Test->TestEqual(TEXT("Event controls target on each edge"),Trigger->IsActive(),Frame==121);
+   Test->TestEqual(TEXT("Event edge state"),Event->IsEventStarted(),Frame==121);
+   Player->SetActorLocation(Location);
+  }
+  else if(Frame==121 || Frame==211)
   {
    auto* Interaction=Player->GetInteractionComponent();
    const auto Location=Player->GetActorLocation(); const auto Rotation=Player->GetActorRotation();
@@ -227,6 +251,38 @@ public:
   Render(Name);
   if(Frame<300) return false;
   Test->TestFalse(TEXT("Deactivation releases block"),World->GetSubsystem<UDarkwellMemoryRegionSubsystem>()->IsBlocked());
+  if(bEventDemo)
+  {
+   auto* Event=Fixture->DemoEvent.Get(); auto* Region=World->GetSubsystem<UDarkwellMemoryRegionSubsystem>();
+   auto* Interaction=Player->GetInteractionComponent();
+   Test->TestTrue(TEXT("Repeated event cycle"),Event->BeginEvent());
+   Player->SetActorRotation((Fixture->Console->GetActorLocation()-Player->GetActorLocation()).Rotation());
+   Test->TestTrue(TEXT("F can override a started event"),Interaction->TryInteract());
+   Test->TestFalse(TEXT("F turned trigger off"),Trigger->IsActive());
+   Test->TestTrue(TEXT("Duplicate start acknowledged after F"),Event->BeginEvent());
+   Test->TestFalse(TEXT("Duplicate start cannot undo F override"),Trigger->IsActive());
+   Test->TestTrue(TEXT("F can turn it on again"),Interaction->TryInteract());
+   Event->EndEvent(); Test->TestFalse(TEXT("End edge deactivates"),Trigger->IsActive());
+   Test->TestTrue(TEXT("F independent after event"),Interaction->TryInteract());
+   Event->EndEvent(); Test->TestTrue(TEXT("Duplicate end cannot cancel later F activation"),Trigger->IsActive());
+   Trigger->Deactivate();
+   Test->TestTrue(TEXT("Start before component destruction"),Event->BeginEvent());
+   Event->DestroyComponent(); Test->TestFalse(TEXT("Component destruction releases Block"),Region->IsBlocked());
+   Test->TestFalse(TEXT("Destroyed component cannot restart"),Event->BeginEvent());
+   auto* Replacement=NewObject<UDarkwellBlackRegionEventAdapter>(Fixture); Fixture->AddInstanceComponent(Replacement);
+   Replacement->Target=Trigger; Replacement->RegisterComponent();
+   if(!Replacement->HasBegunPlay()) Replacement->BeginPlay();
+   Test->TestTrue(TEXT("Start before world teardown"),Replacement->BeginEvent());
+   const auto Revision=Scene->GeometryRevision;
+   const auto Records=Scene->GetTotalSpatialRecordCount();
+   World->BeginTearingDown(); Replacement->EndEvent();
+   Test->TestFalse(TEXT("Teardown releases runtime Block"),Region->IsBlocked());
+   Test->TestFalse(TEXT("Teardown releases owner"),Region->IsGameplayControlledBy(Trigger));
+   Test->TestEqual(TEXT("Teardown does not dispatch scene rebuild"),Scene->GeometryRevision,Revision);
+   Test->TestEqual(TEXT("Teardown does not generate history"),Scene->GetTotalSpatialRecordCount(),Records);
+   Test->TestFalse(TEXT("No restart during teardown"),Replacement->BeginEvent());
+   return true;
+  }
   Test->TestTrue(TEXT("Reactivation for switch destruction"),Trigger->Activate());
   Fixture->Console->Destroy();
   Test->TestFalse(TEXT("Destroy console releases target Block"),World->GetSubsystem<UDarkwellMemoryRegionSubsystem>()->IsBlocked());
@@ -249,6 +305,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellCleanPartialProbe,"Darkwell.BlackRegio
 bool FDarkwellCleanPartialProbe::RunTest(const FString&)
 {
  ADD_LATENT_AUTOMATION_COMMAND(FDarkwellCleanLabFrames(this,true));
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellBlackEventDemo,"Darkwell.BlackRegion.EventDemo",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellBlackEventDemo::RunTest(const FString&)
+{
+ ADD_LATENT_AUTOMATION_COMMAND(FDarkwellCleanLabFrames(this,false,true));
  return true;
 }
 #endif

@@ -78,6 +78,8 @@ public:
 	ADarkwellVisionIntegrationFixture();
 
 	virtual FBox2D GetSightWeaveFloorBounds() const;
+	/** Opt-in for fixtures with animated, actual gameplay occluders. */
+	virtual bool HasDynamicSightWeaveOccluders() const { return false; }
 	virtual void BuildSightWeaveOccluderSegments(
 		TArray<FDarkwellVisionIntegrationSegment>& OutSegments) const;
 	virtual void BuildSightWeaveStaticSurfaces(

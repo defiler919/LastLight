@@ -637,7 +637,8 @@ bool UDarkwellSightWeaveWorldSubsystem::TryActivate()
 	ConeVisionHandle = RuntimeSubsystem->RegisterVisionSource(Cone, FoundPlayer);
 	TorchIlluminationHandle = RuntimeSubsystem->RegisterIlluminationSource(Torch, FoundPlayer);
 	OccluderHandle = RuntimeSubsystem->RegisterOccluder(
-		Segments, false, true, RequestedFixture.Get());
+		Segments, RequestedFixture->HasDynamicSightWeaveOccluders(), true, RequestedFixture.Get());
+	DynamicFixtureSegments=Segments;
 	if (!BodyVisionHandle.IsValid() || !ConeVisionHandle.IsValid()
 		|| !TorchIlluminationHandle.IsValid() || !OccluderHandle.IsValid())
 	{
@@ -859,8 +860,9 @@ bool UDarkwellSightWeaveWorldSubsystem::ValidateAndBuildDescriptions(
 
 	const bool bLab = Darkwell::PropLab::IsLabWorld(World);
 	const bool bCleanBlackLab=Fixture->IsA<ADarkwellCleanBlackRegionLab>();
+	const bool bDynamicFixture=Fixture->HasDynamicSightWeaveOccluders();
 	if (!OutFloor.IsValid() || !OutBody.IsValid() || !OutCone.IsValid()
-		|| !OutTorch.IsValid() || OutSegments.Num() != (bCleanBlackLab ? 4 : bLab ? 8 : 11) || OutStatic.Num() != (bCleanBlackLab ? 0 : bLab ? 1 : 4))
+		|| !OutTorch.IsValid() || (bDynamicFixture ? (OutSegments.IsEmpty() || OutSegments.Num()>16) : OutSegments.Num() != (bCleanBlackLab ? 4 : bLab ? 8 : 11)) || OutStatic.Num() != (bDynamicFixture || bCleanBlackLab ? 0 : bLab ? 1 : 4))
 	{
 		OutFailure = FString::Printf(
 			TEXT("One or more project-fog declarations are invalid (segments=%d static=%d)"),
@@ -890,6 +892,24 @@ bool UDarkwellSightWeaveWorldSubsystem::ValidateAndBuildDescriptions(
 void UDarkwellSightWeaveWorldSubsystem::UpdateDynamicAuthority()
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_SightWeave_SourceUpdate);
+	if(RequestedFixture.IsValid() && RequestedFixture->HasDynamicSightWeaveOccluders())
+	{
+	 TArray<FDarkwellVisionIntegrationSegment> Input; RequestedFixture->BuildSightWeaveOccluderSegments(Input);
+	 TArray<FSightWeaveSegment2D> Segments; TArray<FDarkwellFogVisualSegment> Visual;
+	 bool Changed=Input.Num()!=DynamicFixtureSegments.Num();
+	 for(int32 I=0;I<Input.Num();++I)
+	 {
+	  auto& S=Segments.AddDefaulted_GetRef();S.A=Input[I].A;S.B=Input[I].B;S.FloorId=FloorId;S.HeightRange.ZMin=Input[I].ZMin;S.HeightRange.ZMax=Input[I].ZMax;
+	  auto& V=Visual.AddDefaulted_GetRef();V.A=S.A;V.B=S.B;
+	  Changed|=!DynamicFixtureSegments.IsValidIndex(I) || S.A!=DynamicFixtureSegments[I].A || S.B!=DynamicFixtureSegments[I].B;
+	 }
+	 if(Changed)
+	 {
+	  if(!RuntimeSubsystem->UpdateOccluder(OccluderHandle,Segments,true,true) || !FogVisualSubsystem->UpdateDynamicOccluders(Visual))
+	  { UE_LOG(LogDarkwellSightWeave,Error,TEXT("Dynamic fixture occluder update rejected")); return; }
+	  DynamicFixtureSegments=MoveTemp(Segments);
+	 }
+	}
 	ADarkwellCharacter* Character = Player.Get();
 	if (!Character || !RuntimeSubsystem)
 	{

@@ -1,0 +1,17 @@
+{
+  "run": "ApartmentValidated",
+  "selector": "Darkwell.Apartment+Darkwell.BlackRegion.Contract+Darkwell.UnknownRegion+Darkwell.UnknownPartial+Darkwell.SightWeave.Closure.VisionIlluminationBoundary",
+  "runner_failure": null,
+  "exit_code": 0,
+  "foreground_approved": true,
+  "foreground_attempts": 2,
+  "wall_seconds": 58.6719295,
+  "total": 9,
+  "clean": 8,
+  "warnings": 1,
+  "failed": 0,
+  "not_run": 0,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "passed": true
+}

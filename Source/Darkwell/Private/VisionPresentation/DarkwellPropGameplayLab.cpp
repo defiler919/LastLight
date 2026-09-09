@@ -74,7 +74,8 @@ namespace Darkwell::PropLab
   if (!Prefix.IsEmpty()) Name.ReplaceInline(*Prefix, TEXT(""));
 	return Name == TEXT("/Game/Maps/L_ProjectFogPropGameplayLab")
 		|| Name == TEXT("/Game/Maps/L_SightWeaveGrayPolicyLab")
-        || Name == TEXT("/Game/Maps/L_BlackRegionLab");
+        || Name == TEXT("/Game/Maps/L_BlackRegionLab")
+        || Name == TEXT("/Game/Maps/L_SightWeaveApartmentLab");
 #else
   return false;
 #endif

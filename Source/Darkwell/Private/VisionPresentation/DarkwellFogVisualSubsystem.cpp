@@ -415,6 +415,15 @@ bool UDarkwellFogVisualSubsystem::ActivateForWorld(const FBox2D& WorldBounds,
 	return true;
 }
 
+bool UDarkwellFogVisualSubsystem::UpdateDynamicOccluders(TConstArrayView<FDarkwellFogVisualSegment> Segments)
+{
+ if(!Diagnostics.bActive || !UpdateOccluderParameters(Segments)) return false;
+ // A rotation sweep cannot use the preceding source against different geometry.
+ bSourceContinuityValid=false; PreviousSource={};
+ Diagnostics.CachedOccluderSegmentCount=Segments.Num();
+ return true;
+}
+
 bool UDarkwellFogVisualSubsystem::UpdateSource(
 	const FDarkwellFogVisualSourceSnapshot& Source)
 {

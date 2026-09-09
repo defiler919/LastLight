@@ -1,0 +1,1 @@
+D3D12 PIE lifecycle and captures completed. Scripted pawn placement and Trigger API; NOT manual F/walking/visual acceptance.

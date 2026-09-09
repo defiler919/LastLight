@@ -190,6 +190,8 @@ public:
 		const FDarkwellFogVisualSourceSnapshot& Source,
 		TConstArrayView<FDarkwellFogVisualSegment> OccluderSegments);
 	bool UpdateSource(const FDarkwellFogVisualSourceSnapshot& Source);
+	/** Update geometry before publishing its matching source revision; no resource recreation. */
+	bool UpdateDynamicOccluders(TConstArrayView<FDarkwellFogVisualSegment> Segments);
 	void Deactivate();
 	/** CPU query matching the formal analytic body/cone and segment occlusion path. */
 	float EvaluateLiveCoverageAtWorldPoint(const FVector2D& WorldPosition) const;

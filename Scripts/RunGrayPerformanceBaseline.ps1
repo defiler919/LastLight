@@ -6,6 +6,7 @@ param(
     [string]$Map='',
     [string]$EngineRoot='D:\UE_5.8',
     [switch]$NoAuthoringToolsets,
+    [switch]$AllowLegacyReference,
     [ValidateSet(0,1)][int]$HistoryResidencyMode=0,
     [switch]$A1Visual,
     [ValidateRange(0,2)][int]$B0Mode=0,
@@ -22,6 +23,7 @@ param(
     [ValidateRange(30,1800)][int]$RunTimeoutSeconds=1200
 )
 $ErrorActionPreference='Stop'
+if ($Protocol -eq 'Reference' -and !$AllowLegacyReference) { throw 'L_Prototype is Legacy Deprecated. Only frozen historical baseline replay may use -AllowLegacyReference. Use LaunchApartmentSightWeaveLab.ps1 for manual gameplay.' }
 $repo=Split-Path $PSScriptRoot -Parent
 if ($RunName -notmatch '^[A-Za-z0-9_-]+$') { throw 'Use a unique simple run name' }
 if ($A1Visual -and ($Protocol -ne 'A1' -or $Mode -ne 'PIE')) { throw 'A1 viewport readback requires the PIE visual protocol; use Standalone without screenshots for performance' }

@@ -1,3 +1,4 @@
+#include "VisionPresentation/DarkwellApartmentLab.h"
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "UI/DarkwellHUD.h"
@@ -336,6 +337,8 @@ void ADarkwellHUD::DrawHUD()
 		}
 	}
 
+	ADarkwellApartmentLab* ApartmentLab=nullptr;
+	for(TActorIterator<ADarkwellApartmentLab> It(GetWorld());It;++It) { ApartmentLab=*It; break; }
 	ADarkwellCleanBlackRegionLab* CleanBlackLab=nullptr;
 	for(TActorIterator<ADarkwellCleanBlackRegionLab> It(GetWorld());It;++It) { CleanBlackLab=*It; break; }
 	const ADarkwellGameState* MissionGameState = GetWorld()
@@ -343,7 +346,10 @@ void ADarkwellHUD::DrawHUD()
 		: nullptr;
 	if (Font && MissionGameState)
 	{
-		const FString Objective = CleanBlackLab
+		const FString Objective = ApartmentLab
+            ? FString::Printf(TEXT("APARTMENT  |  F: DOORS / GREEN CONSOLE  |  BEDROOM BLACKOUT: %s"),
+                ApartmentLab->Trigger && ApartmentLab->Trigger->IsActive()?TEXT("ACTIVE"):TEXT("INACTIVE"))
+            : CleanBlackLab
             ? FString::Printf(TEXT("BLACK REGION  |  %s  |  WHOLE + PARTIAL 37 deg  |  VOLUME EVENT: %s"),
                 CleanBlackLab->Trigger && CleanBlackLab->Trigger->IsActive()?TEXT("ACTIVE"):TEXT("INACTIVE"),
                 IsValid(CleanBlackLab->EventVolume) && IsValid(CleanBlackLab->EventVolume->EventAdapter) && CleanBlackLab->EventVolume->EventAdapter->IsEventStarted()?TEXT("STARTED"):TEXT("IDLE"))

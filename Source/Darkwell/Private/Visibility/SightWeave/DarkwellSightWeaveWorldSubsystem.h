@@ -100,6 +100,7 @@ private:
 	FSightWeaveVisionSourceHandle ConeVisionHandle;
 	FSightWeaveIlluminationSourceHandle TorchIlluminationHandle;
 	FSightWeaveOccluderHandle OccluderHandle;
+	TArray<FSightWeaveSegment2D> DynamicFixtureSegments;
 	TArray<FSightWeaveStaticEnvironmentHandle> StaticEnvironmentHandles;
 	FSightWeaveSubjectMemoryAuthority SubjectAuthority;
 	FSightWeaveSubjectHandle StalkerSubjectHandle;

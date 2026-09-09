@@ -23,11 +23,73 @@
 #include "Misc/FileHelper.h"
 #include "ProfilingDebugging/MiscTrace.h"
 
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+namespace
+{
+// Exact pose-paired diagnostic, separate from the real-input 30 second run.
+// Both processes build the same history before choosing the measured heading.
+bool TickPaired(UWorld* W,ADarkwellObjectMemoryScene* S,bool Gray)
+{
+ auto* PC=Cast<ADarkwellPlayerController>(UGameplayStatics::GetPlayerController(W,0));
+ auto* P=PC?Cast<ADarkwellCharacter>(PC->GetPawn()):nullptr;
+ if(!P || !GEngine->GameViewport || !GEngine->GameViewport->Viewport)return true;
+ static int Step=-1,ExitFrames=0;static FString Root,Lines;static double Prev=0;
+ if(Step<0)
+ {
+  if(!FPlatformApplicationMisc::IsThisApplicationForeground())return true;
+  FParse::Value(FCommandLine::Get(),TEXT("ApartmentBenchOutput="),Root);
+  PC->SetActorTickEnabled(false);
+  for(TActorIterator<ADarkwellDoor> It(W);It;++It)It->RestoreDoorState(DarkwellGameplayTags::State_World_Door_Open);
+  FFileHelper::SaveStringToFile(S->GetStorageTelemetry(),*(Root/TEXT("initial-storage.txt")));
+  Step=0;Prev=FPlatformTime::Seconds();Lines.Reserve(4*1024*1024);
+ }
+ if(Step>=600)
+ {
+  if(++ExitFrames==1)
+  {
+   FFileHelper::SaveStringToFile(Lines,*(Root/TEXT("frames.jsonl")));
+   FFileHelper::SaveStringToFile(S->GetStorageTelemetry(),*(Root/TEXT("end-storage.txt")));
+   FFileHelper::SaveStringToFile(TEXT("240 matched pose samples; scripted replay, not native WASD"),*(Root/TEXT("complete.txt")));
+   FScreenshotRequest::RequestScreenshot(Root/TEXT("viewport.png"),false,false);
+  }
+  if(ExitFrames>=12)FPlatformMisc::RequestExit(false);
+  return false;
+ }
+ if(!FPlatformApplicationMisc::IsThisApplicationForeground() || GEngine->GameViewport->Viewport->GetSizeXY()!=FIntPoint(1280,720))
+ {FFileHelper::SaveStringToFile(TEXT("Invalid foreground/viewport"),*(Root/TEXT("invalid.txt")));FPlatformMisc::RequestExit(false);return false;}
+ const double Now=FPlatformTime::Seconds();
+ if(Step==360)FFileHelper::SaveStringToFile(S->GetStorageTelemetry(),*(Root/TEXT("start-storage.txt")));
+ if(Step>=360)
+ {
+  const auto* Fog=W->GetSubsystem<UDarkwellFogVisualSubsystem>();const auto& Src=Fog->GetPublishedSource();
+  const auto* D=GetDefault<ADarkwellSightWeaveGrayPolicyLabDirector>();
+  const auto Pos=P->GetActorLocation();
+  Lines+=FString::Printf(TEXT("{\"step\":%d,\"wall_ms\":%.4f,\"x\":%.6f,\"y\":%.6f,\"yaw\":%.4f,\"source_x\":%.6f,\"source_y\":%.6f,\"engine\":%s,\"static\":%s,\"memory\":%s}\n"),Step-360,(Now-Prev)*1000,Pos.X,Pos.Y,P->GetActorRotation().Yaw,Src.BodyCenter.X,Src.BodyCenter.Y,*D->GetFrameEnvironmentForTesting(),*W->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->GetTelemetry(),*S->GetHistoryRuntimeTelemetry());
+ }
+ Prev=Now;
+ FVector Pos;float Yaw;
+ if(Step<240)
+ {
+  const FVector Poses[]={{-350,180,92},{0,180,92},{350,180,92},{350,300,92},{0,300,92},{-350,300,92}};
+  Pos=Poses[Step/40];Yaw=Step<120?90:270;
+ }
+ else if(Step<300){Pos={-330,150,92};Yaw=200;}
+ else
+ {
+  Pos={-330+25*FMath::Sin((Step-360)*PI/60.0),150,92};Yaw=Gray?20:200;
+ }
+ const FRotator R(0,Yaw,0);P->SetActorLocationAndRotation(Pos,R,false,nullptr,ETeleportType::TeleportPhysics);P->AimAtWorldPoint(Pos+R.Vector()*1000);
+ ++Step;return true;
+}
+}
+#endif
+
 bool Darkwell::ApartmentBenchmark::Tick(UWorld* W,ADarkwellObjectMemoryScene* S)
 {
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
  static FString Mode; static const bool Enabled=FParse::Value(FCommandLine::Get(),TEXT("ApartmentBench="),Mode);
  if(!Enabled) return true;
+ if(Mode==TEXT("PairGray") || Mode==TEXT("PairUnknown"))return TickPaired(W,S,Mode==TEXT("PairGray"));
  auto* PC=Cast<ADarkwellPlayerController>(UGameplayStatics::GetPlayerController(W,0));
  auto* P=PC?Cast<ADarkwellCharacter>(PC->GetPawn()):nullptr;
  if(!P || !GEngine->GameViewport || !GEngine->GameViewport->Viewport) return true;

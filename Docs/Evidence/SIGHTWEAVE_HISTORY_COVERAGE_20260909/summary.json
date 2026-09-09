@@ -1,0 +1,682 @@
+{
+  "HistBeforeGray": {
+    "frames": 240,
+    "completion": "240 matched pose samples; scripted replay, not native WASD",
+    "engine_ms": {
+      "game_ms": {
+        "mean": 125.92880833333338,
+        "p95": 143.0727,
+        "p99": 166.6502,
+        "maximum": 213.8713
+      },
+      "render_ms": {
+        "mean": 6.840771250000006,
+        "p95": 8.2553,
+        "p99": 9.7691,
+        "maximum": 12.2852
+      },
+      "rhi_ms": {
+        "mean": 3.5565195833333343,
+        "p95": 4.2522,
+        "p99": 5.0947,
+        "maximum": 5.5517
+      },
+      "gpu_ms": {
+        "mean": 26.870671666666663,
+        "p95": 41.7665,
+        "p99": 42.8613,
+        "maximum": 43.3949
+      }
+    },
+    "wall_ms": {
+      "mean": 125.93007000000003,
+      "p95": 143.196,
+      "p99": 166.2829,
+      "maximum": 216.5268
+    },
+    "object_memory": {
+      "game_thread_us": {
+        "mean": 115403.46458333338,
+        "p95": 131819.0,
+        "p99": 155170.2,
+        "maximum": 203017.7
+      },
+      "coverage_us": {
+        "mean": 109492.33250000002,
+        "p95": 125242.6,
+        "p99": 147363.8,
+        "maximum": 194050.9
+      },
+      "historical_us": {
+        "mean": 100559.97541666661,
+        "p95": 114711.4,
+        "p99": 135061.7,
+        "maximum": 177420.4
+      },
+      "current_reveal_us": {
+        "mean": 14696.915000000008,
+        "p95": 16980.9,
+        "p99": 19755.5,
+        "maximum": 25258.9
+      },
+      "coverage_queries": {
+        "mean": 830348.1666666666,
+        "p95": 830653,
+        "p99": 830677,
+        "maximum": 830677
+      },
+      "coverage_scans": {
+        "mean": 28.0,
+        "p95": 28,
+        "p99": 28,
+        "maximum": 28
+      },
+      "epochs": {
+        "mean": 7.0,
+        "p95": 7,
+        "p99": 7,
+        "maximum": 7
+      },
+      "candidates": {
+        "mean": 7.0,
+        "p95": 7,
+        "p99": 7,
+        "maximum": 7
+      },
+      "texture_uploads": {
+        "mean": 1.925,
+        "p95": 2,
+        "p99": 3,
+        "maximum": 3
+      },
+      "cap_rebuilds": {
+        "mean": 0.0,
+        "p95": 0,
+        "p99": 0,
+        "maximum": 0
+      },
+      "ownership_us": {
+        "mean": 5.688333333333334,
+        "p95": 9.0,
+        "p99": 12.4,
+        "maximum": 12.9
+      }
+    },
+    "static_update_us": {
+      "mean": 6834.974920833335,
+      "p95": 7722.4,
+      "p99": 8646.302,
+      "maximum": 11643.101
+    },
+    "historical_over_50ms": 240,
+    "end_storage": "identities=14 records=13 local_cells=16655 local_mask_bits=30622 fine_samples=272128 uniform_parts=2 resets=13 episodes=20 record_cells=18849 record_mask_bits=272128 private_bytes=5819330560"
+  },
+  "HistBeforeUnknown": {
+    "frames": 240,
+    "completion": "240 matched pose samples; scripted replay, not native WASD",
+    "engine_ms": {
+      "game_ms": {
+        "mean": 13.477432499999992,
+        "p95": 16.2352,
+        "p99": 17.1654,
+        "maximum": 18.0342
+      },
+      "render_ms": {
+        "mean": 6.313732499999999,
+        "p95": 7.8219,
+        "p99": 8.6498,
+        "maximum": 8.8509
+      },
+      "rhi_ms": {
+        "mean": 3.378287083333332,
+        "p95": 4.1042,
+        "p99": 4.5797,
+        "maximum": 4.7525
+      },
+      "gpu_ms": {
+        "mean": 4.899920416666666,
+        "p95": 5.4165,
+        "p99": 5.5322,
+        "maximum": 5.7225
+      }
+    },
+    "wall_ms": {
+      "mean": 13.480656249999997,
+      "p95": 15.9191,
+      "p99": 17.2949,
+      "maximum": 19.0447
+    },
+    "object_memory": {
+      "game_thread_us": {
+        "mean": 5412.823749999998,
+        "p95": 6051.8,
+        "p99": 6822.4,
+        "maximum": 9496.9
+      },
+      "coverage_us": {
+        "mean": 1436.9358333333344,
+        "p95": 1621.7,
+        "p99": 1823.0,
+        "maximum": 3989.4
+      },
+      "historical_us": {
+        "mean": 1017.1220833333333,
+        "p95": 1171.0,
+        "p99": 1315.6,
+        "maximum": 1567.0
+      },
+      "current_reveal_us": {
+        "mean": 4292.505833333332,
+        "p95": 4831.9,
+        "p99": 5543.3,
+        "maximum": 8491.9
+      },
+      "coverage_queries": {
+        "mean": 8964.833333333334,
+        "p95": 9721,
+        "p99": 9805,
+        "maximum": 9805
+      },
+      "coverage_scans": {
+        "mean": 26.0,
+        "p95": 26,
+        "p99": 26,
+        "maximum": 26
+      },
+      "epochs": {
+        "mean": 6.0,
+        "p95": 6,
+        "p99": 6,
+        "maximum": 6
+      },
+      "candidates": {
+        "mean": 6.0,
+        "p95": 6,
+        "p99": 6,
+        "maximum": 6
+      },
+      "texture_uploads": {
+        "mean": 2.8833333333333333,
+        "p95": 3,
+        "p99": 3,
+        "maximum": 3
+      },
+      "cap_rebuilds": {
+        "mean": 0.12083333333333333,
+        "p95": 1,
+        "p99": 1,
+        "maximum": 1
+      },
+      "ownership_us": {
+        "mean": 2.4541666666666657,
+        "p95": 4.7,
+        "p99": 6.3,
+        "maximum": 6.4
+      }
+    },
+    "static_update_us": {
+      "mean": 4671.989579166666,
+      "p95": 6418.4,
+      "p99": 6986.7,
+      "maximum": 7559.802
+    },
+    "historical_over_50ms": 0,
+    "end_storage": "identities=14 records=12 local_cells=16655 local_mask_bits=28878 fine_samples=260480 uniform_parts=3 resets=13 episodes=18 record_cells=18625 record_mask_bits=260480 private_bytes=5788274688"
+  },
+  "HistAfterGray": {
+    "frames": 240,
+    "completion": "240 matched pose samples; scripted replay, not native WASD",
+    "engine_ms": {
+      "game_ms": {
+        "mean": 15.385037916666672,
+        "p95": 16.8491,
+        "p99": 21.8268,
+        "maximum": 24.1636
+      },
+      "render_ms": {
+        "mean": 6.247059583333335,
+        "p95": 7.5661,
+        "p99": 9.2007,
+        "maximum": 10.6393
+      },
+      "rhi_ms": {
+        "mean": 3.3031620833333313,
+        "p95": 3.823,
+        "p99": 4.5624,
+        "maximum": 4.9334
+      },
+      "gpu_ms": {
+        "mean": 4.834413333333336,
+        "p95": 5.3008,
+        "p99": 5.3997,
+        "maximum": 5.437
+      }
+    },
+    "wall_ms": {
+      "mean": 15.387695416666666,
+      "p95": 17.0134,
+      "p99": 21.7466,
+      "maximum": 25.7931
+    },
+    "object_memory": {
+      "game_thread_us": {
+        "mean": 4980.822916666665,
+        "p95": 5749.9,
+        "p99": 7219.6,
+        "maximum": 7729.1
+      },
+      "coverage_us": {
+        "mean": 1232.7266666666662,
+        "p95": 1525.3,
+        "p99": 1816.0,
+        "maximum": 1837.1
+      },
+      "historical_us": {
+        "mean": 1083.1629166666667,
+        "p95": 1420.3,
+        "p99": 1733.5,
+        "maximum": 1809.0
+      },
+      "current_reveal_us": {
+        "mean": 3802.4495833333326,
+        "p95": 4348.9,
+        "p99": 5352.9,
+        "maximum": 5919.4
+      },
+      "coverage_queries": {
+        "mean": 5575.966666666666,
+        "p95": 6046,
+        "p99": 6061,
+        "maximum": 6061
+      },
+      "coverage_scans": {
+        "mean": 28.0,
+        "p95": 28,
+        "p99": 28,
+        "maximum": 28
+      },
+      "epochs": {
+        "mean": 7.0,
+        "p95": 7,
+        "p99": 7,
+        "maximum": 7
+      },
+      "candidates": {
+        "mean": 7.0,
+        "p95": 7,
+        "p99": 7,
+        "maximum": 7
+      },
+      "texture_uploads": {
+        "mean": 2.0083333333333333,
+        "p95": 2,
+        "p99": 3,
+        "maximum": 3
+      },
+      "cap_rebuilds": {
+        "mean": 0.0,
+        "p95": 0,
+        "p99": 0,
+        "maximum": 0
+      },
+      "ownership_us": {
+        "mean": 2.246666666666667,
+        "p95": 4.5,
+        "p99": 6.0,
+        "maximum": 57.4
+      }
+    },
+    "static_update_us": {
+      "mean": 6890.3276375000005,
+      "p95": 7862.601,
+      "p99": 9902.302,
+      "maximum": 11545.103
+    },
+    "historical_over_50ms": 0,
+    "end_storage": "identities=14 records=13 local_cells=16655 local_mask_bits=28430 fine_samples=272128 uniform_parts=4 resets=13 episodes=20 record_cells=18849 record_mask_bits=272128 private_bytes=5744525312"
+  },
+  "HistAfterUnknown": {
+    "frames": 240,
+    "completion": "240 matched pose samples; scripted replay, not native WASD",
+    "engine_ms": {
+      "game_ms": {
+        "mean": 15.78928958333333,
+        "p95": 18.1279,
+        "p99": 19.4926,
+        "maximum": 20.3123
+      },
+      "render_ms": {
+        "mean": 8.376520416666667,
+        "p95": 10.2579,
+        "p99": 11.1487,
+        "maximum": 11.5481
+      },
+      "rhi_ms": {
+        "mean": 4.431140416666666,
+        "p95": 5.1301,
+        "p99": 5.4158,
+        "maximum": 5.7258
+      },
+      "gpu_ms": {
+        "mean": 5.14998625,
+        "p95": 5.722,
+        "p99": 6.02,
+        "maximum": 6.1298
+      }
+    },
+    "wall_ms": {
+      "mean": 15.796596250000006,
+      "p95": 18.1431,
+      "p99": 18.83,
+      "maximum": 19.5177
+    },
+    "object_memory": {
+      "game_thread_us": {
+        "mean": 5919.275833333335,
+        "p95": 6980.9,
+        "p99": 7542.9,
+        "maximum": 8257.0
+      },
+      "coverage_us": {
+        "mean": 1309.4250000000004,
+        "p95": 1529.2,
+        "p99": 1727.4,
+        "maximum": 1786.7
+      },
+      "historical_us": {
+        "mean": 1260.270416666667,
+        "p95": 1525.7,
+        "p99": 1812.6,
+        "maximum": 1902.3
+      },
+      "current_reveal_us": {
+        "mean": 4496.005416666669,
+        "p95": 5412.3,
+        "p99": 5835.6,
+        "maximum": 6483.8
+      },
+      "coverage_queries": {
+        "mean": 5666.233333333334,
+        "p95": 6095,
+        "p99": 6177,
+        "maximum": 6177
+      },
+      "coverage_scans": {
+        "mean": 26.0,
+        "p95": 26,
+        "p99": 26,
+        "maximum": 26
+      },
+      "epochs": {
+        "mean": 6.0,
+        "p95": 6,
+        "p99": 6,
+        "maximum": 6
+      },
+      "candidates": {
+        "mean": 6.0,
+        "p95": 6,
+        "p99": 6,
+        "maximum": 6
+      },
+      "texture_uploads": {
+        "mean": 2.8625,
+        "p95": 3,
+        "p99": 3,
+        "maximum": 3
+      },
+      "cap_rebuilds": {
+        "mean": 0.12083333333333333,
+        "p95": 1,
+        "p99": 1,
+        "maximum": 1
+      },
+      "ownership_us": {
+        "mean": 3.9637500000000014,
+        "p95": 7.8,
+        "p99": 9.3,
+        "maximum": 10.5
+      }
+    },
+    "static_update_us": {
+      "mean": 5140.312916666666,
+      "p95": 7075.999,
+      "p99": 7461.0,
+      "maximum": 7839.601
+    },
+    "historical_over_50ms": 0,
+    "end_storage": "identities=14 records=12 local_cells=16655 local_mask_bits=28878 fine_samples=260480 uniform_parts=3 resets=13 episodes=18 record_cells=18625 record_mask_bits=260480 private_bytes=5828296704"
+  },
+  "HistNative1": {
+    "frames": 1793,
+    "completion": "frames=1794 moving_frames=1577 distance_cm=1146.77 yaw_travel_deg=2027.72 mode=A",
+    "engine_ms": {
+      "game_ms": {
+        "mean": 16.724328109313976,
+        "p95": 22.4305,
+        "p99": 26.2535,
+        "maximum": 29.9964
+      },
+      "render_ms": {
+        "mean": 9.096724428332411,
+        "p95": 12.0542,
+        "p99": 13.4788,
+        "maximum": 17.5573
+      },
+      "rhi_ms": {
+        "mean": 4.738921862799781,
+        "p95": 6.0444,
+        "p99": 6.6321,
+        "maximum": 7.1931
+      },
+      "gpu_ms": {
+        "mean": 5.235790351366411,
+        "p95": 5.9213,
+        "p99": 6.3272,
+        "maximum": 6.7373
+      }
+    },
+    "wall_ms": {
+      "mean": 16.729528499721138,
+      "p95": 22.7215,
+      "p99": 25.9571,
+      "maximum": 30.1252
+    },
+    "object_memory": {
+      "game_thread_us": {
+        "mean": 5077.939877300616,
+        "p95": 7129.0,
+        "p99": 9596.9,
+        "maximum": 15806.2
+      },
+      "coverage_us": {
+        "mean": 1164.5098717233695,
+        "p95": 1734.4,
+        "p99": 2098.9,
+        "maximum": 3818.8
+      },
+      "historical_us": {
+        "mean": 1115.7200780814278,
+        "p95": 1853.9,
+        "p99": 3646.0,
+        "maximum": 11049.3
+      },
+      "current_reveal_us": {
+        "mean": 3683.338315672059,
+        "p95": 5174.6,
+        "p99": 5891.7,
+        "maximum": 8297.5
+      },
+      "coverage_queries": {
+        "mean": 4980.252091466816,
+        "p95": 8578,
+        "p99": 9250,
+        "maximum": 12669
+      },
+      "coverage_scans": {
+        "mean": 25.389849414389293,
+        "p95": 28,
+        "p99": 28,
+        "maximum": 28
+      },
+      "epochs": {
+        "mean": 5.694924707194646,
+        "p95": 7,
+        "p99": 7,
+        "maximum": 7
+      },
+      "candidates": {
+        "mean": 5.694924707194646,
+        "p95": 7,
+        "p99": 7,
+        "maximum": 7
+      },
+      "texture_uploads": {
+        "mean": 1.8070273284997211,
+        "p95": 3,
+        "p99": 4,
+        "maximum": 6
+      },
+      "cap_rebuilds": {
+        "mean": 0.020078081427774678,
+        "p95": 0,
+        "p99": 1,
+        "maximum": 1
+      },
+      "ownership_us": {
+        "mean": 5.229280535415511,
+        "p95": 8.5,
+        "p99": 56.3,
+        "maximum": 307.4
+      }
+    },
+    "static_update_us": {
+      "mean": 5821.943095928611,
+      "p95": 10640.498,
+      "p99": 12123.499,
+      "maximum": 14452.1
+    },
+    "historical_over_50ms": 0,
+    "end_storage": "identities=14 records=11 local_cells=11315 local_mask_bits=20710 fine_samples=185472 uniform_parts=2 resets=12 episodes=98 record_cells=13209 record_mask_bits=185472 private_bytes=5698555904"
+  },
+  "HistNative2": {
+    "frames": 1797,
+    "completion": "frames=1798 moving_frames=1563 distance_cm=1076.80 yaw_travel_deg=2028.81 mode=A",
+    "engine_ms": {
+      "game_ms": {
+        "mean": 16.697589705064004,
+        "p95": 21.9399,
+        "p99": 25.6206,
+        "maximum": 35.0365
+      },
+      "render_ms": {
+        "mean": 9.193305954368372,
+        "p95": 11.6288,
+        "p99": 14.0311,
+        "maximum": 23.5961
+      },
+      "rhi_ms": {
+        "mean": 4.830715971062882,
+        "p95": 6.0115,
+        "p99": 6.9332,
+        "maximum": 9.5345
+      },
+      "gpu_ms": {
+        "mean": 5.22162520868114,
+        "p95": 5.8441,
+        "p99": 6.2734,
+        "maximum": 6.6976
+      }
+    },
+    "wall_ms": {
+      "mean": 16.698039232053432,
+      "p95": 21.9103,
+      "p99": 25.5877,
+      "maximum": 35.5909
+    },
+    "object_memory": {
+      "game_thread_us": {
+        "mean": 5056.428992765721,
+        "p95": 7116.5,
+        "p99": 9637.2,
+        "maximum": 13926.6
+      },
+      "coverage_us": {
+        "mean": 1182.4948803561495,
+        "p95": 2041.7,
+        "p99": 2478.2,
+        "maximum": 3225.4
+      },
+      "historical_us": {
+        "mean": 1145.1449081802991,
+        "p95": 1883.0,
+        "p99": 3553.2,
+        "maximum": 10536.3
+      },
+      "current_reveal_us": {
+        "mean": 3635.6570395102904,
+        "p95": 5130.5,
+        "p99": 6243.8,
+        "maximum": 10663.3
+      },
+      "coverage_queries": {
+        "mean": 4666.127991096271,
+        "p95": 8248,
+        "p99": 8768,
+        "maximum": 14240
+      },
+      "coverage_scans": {
+        "mean": 25.29883138564274,
+        "p95": 27,
+        "p99": 28,
+        "maximum": 29
+      },
+      "epochs": {
+        "mean": 5.790762381747356,
+        "p95": 7,
+        "p99": 7,
+        "maximum": 8
+      },
+      "candidates": {
+        "mean": 5.790762381747356,
+        "p95": 7,
+        "p99": 7,
+        "maximum": 8
+      },
+      "texture_uploads": {
+        "mean": 1.7006121313299944,
+        "p95": 3,
+        "p99": 3,
+        "maximum": 5
+      },
+      "cap_rebuilds": {
+        "mean": 0.022815804117974403,
+        "p95": 0,
+        "p99": 1,
+        "maximum": 2
+      },
+      "ownership_us": {
+        "mean": 6.3603784084585415,
+        "p95": 8.4,
+        "p99": 70.4,
+        "maximum": 688.1
+      }
+    },
+    "static_update_us": {
+      "mean": 5767.690775180839,
+      "p95": 10067.601,
+      "p99": 11313.099,
+      "maximum": 13906.3
+    },
+    "historical_over_50ms": 0,
+    "end_storage": "identities=14 records=12 local_cells=11315 local_mask_bits=18470 fine_samples=233728 uniform_parts=3 resets=13 episodes=88 record_cells=16225 record_mask_bits=233728 private_bytes=5704859648"
+  },
+  "paired_pose_equality": {
+    "HistBeforeGray vs HistBeforeUnknown": true,
+    "HistBeforeGray vs HistAfterGray": true,
+    "HistBeforeGray vs HistAfterUnknown": true,
+    "HistBeforeUnknown vs HistAfterGray": true,
+    "HistBeforeUnknown vs HistAfterUnknown": true,
+    "HistAfterGray vs HistAfterUnknown": true
+  }
+}

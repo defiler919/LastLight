@@ -1,0 +1,17 @@
+{
+  "run": "HistoryProofFinal",
+  "selector": "Darkwell.FogVisual.CanonicalCoverage+Darkwell.PropLab.GrayObjectPolicy.CanonicalRasterMatchesOriginalSamples+Darkwell.SightWeave.StaticKnowledge+Darkwell.BlackRegion.VolumeDemo+Darkwell.BlackRegion.CleanLab+Darkwell.BlackRegion.Contract+Darkwell.BlackRegion.CurrentPartialProbe+Darkwell.UnknownRegion+Darkwell.UnknownPartial+Darkwell.SightWeave.Closure.VisionIlluminationBoundary",
+  "runner_failure": null,
+  "exit_code": 0,
+  "foreground_approved": true,
+  "foreground_attempts": 0,
+  "wall_seconds": 73.6161389,
+  "total": 19,
+  "clean": 18,
+  "warnings": 1,
+  "failed": 0,
+  "not_run": 0,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "passed": true
+}

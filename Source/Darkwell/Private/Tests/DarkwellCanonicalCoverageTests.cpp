@@ -72,4 +72,37 @@ bool FDarkwellCurrentTileCoverageTest::RunTest(const FString&)
  AddInfo(FString::Printf(TEXT("current point queries=%llu tiled=%llu"),ReferenceQueries,TileQueries));
  return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellCommonShadowProofTest,"Darkwell.FogVisual.CanonicalCoverage.CommonShadowExact",
+ EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDarkwellCommonShadowProofTest::RunTest(const FString&)
+{
+ FDarkwellFogVisualSourceSnapshot S;S.BodyCenter=S.ConeOrigin=FVector2D(0);S.BodyRadiusCentimeters=50;
+ S.ConeForward={1,0};S.ConeRangeCentimeters=1000;S.ConeHalfAngleDegrees=45;S.bConeLegallyLive=true;S.AuthorityRevision=1;
+ const FBox2D Behind({300,-30},{400,30});float V=-1;
+ TArray<FDarkwellFogVisualSegment> Walls{{{200,-100},{200,100}}};
+ TestTrue(TEXT("Large fully occluded tile has exact zero proof"),FDarkwellContinuousVisibilityBuilder::TryUniformCoverage(S,Behind,Walls,V) && V==0);
+ Walls={{{200,-100},{200,-1}},{{200,1},{200,100}}};
+ TestFalse(TEXT("Four blocked corners from different walls must not close narrow aperture"),FDarkwellContinuousVisibilityBuilder::TryUniformCoverage(S,Behind,Walls,V));
+ TestTrue(TEXT("Aperture center remains legally visible"),FDarkwellContinuousVisibilityBuilder::QuerySourceCoverage(S,{350,0},Walls).Coverage==1);
+ Walls={{{200,-100},{200,100}}};S.BodyCenter={350,0};
+ TestFalse(TEXT("Unblocked body prevents cone-only shadow proof"),FDarkwellContinuousVisibilityBuilder::TryUniformCoverage(S,Behind,Walls,V));
+ S.BodyCenter={0,0};int Proven=0;
+ FRandomStream Random(370625);
+ for(float Angle:{0.f,37.f,90.f,179.f})
+ {
+  auto Rotate=[&](FVector2D P){const double A=FMath::DegreesToRadians(Angle);return FVector2D(P.X*FMath::Cos(A)-P.Y*FMath::Sin(A),P.X*FMath::Sin(A)+P.Y*FMath::Cos(A));};
+  Walls={ {Rotate({200,-100}),Rotate({200,100})}, {Rotate({400,180}),Rotate({550,180})} };
+  S.ConeForward=Rotate({1,0});
+  for(int I=0;I<1000;++I)
+  {
+   const auto C=Rotate({Random.FRandRange(150,650),Random.FRandRange(-200,200)});
+   const double H=Random.FRandRange(.3125f,40.f);const FBox2D B(C-FVector2D(H),C+FVector2D(H));
+   if(!FDarkwellContinuousVisibilityBuilder::TryUniformCoverage(S,B,Walls,V))continue;
+   ++Proven;
+   for(int Y=0;Y<=8;++Y)for(int X=0;X<=8;++X)
+    if(!TestEqual(TEXT("Every accepted proof matches unchanged point oracle"),V,FDarkwellContinuousVisibilityBuilder::QuerySourceCoverage(S,B.Min+B.GetSize()*FVector2D(X/8.,Y/8.),Walls).Coverage))return false;
+  }
+ }
+ TestTrue(TEXT("Rotated shadow cases exercised"),Proven>1000);return true;
+}
 #endif

@@ -1,5 +1,7 @@
 # SightWeave Apartment Lab
 
+当前 Historical Coverage 遮挡退化已修复，配对与真实移动性能见 [性能交接](SIGHTWEAVE_HISTORICAL_COVERAGE_PERF_ZH.md)。严重历史长帧消失于已测场景，但整帧稳定 60 fps 尚未验收。
+
 正式人工入口：`/Game/Maps/L_SightWeaveApartmentLab`。基于 `87f9a96e5c99f3ffe1c6fa274c41b853dfe56112`，不移动既有 stable tag。
 
 ## 布局与玩法

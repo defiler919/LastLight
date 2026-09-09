@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$RunName,[switch]$Reference,[switch]$Still,[switch]$Trace)
+param([Parameter(Mandatory=$true)][string]$RunName,[switch]$Reference,[switch]$Still,[switch]$Trace,[ValidateSet('','PairGray','PairUnknown')][string]$Pair='')
 $ErrorActionPreference='Stop'
 if($RunName -notmatch '^[A-Za-z0-9_-]+$'){throw 'Use a simple unique run name'}
 $repo=Split-Path $PSScriptRoot -Parent
@@ -10,6 +10,7 @@ New-Item -ItemType Directory $out | Out-Null
 if(-not ('GrayBenchmarkSession' -as [type])){Add-Type -Path "$PSScriptRoot/GrayBenchmarkSession.cs"}
 $guard=[GrayBenchmarkSession]::new()
 $mode=if($Still){'Still'}else{'A'}
+if($Pair){$mode=$Pair}
 $args=@("`"$repo/Darkwell.uproject`"",'/Game/Maps/L_SightWeaveApartmentLab','-game','-d3d12','-sm6','-windowed','-ForceRes','-ResX=1280','-ResY=720','-NoSound','-NoSplash','-NoVSync',"-ApartmentBench=$mode","-ApartmentBenchOutput=$out","-abslog=$out/game.log",'-ExecCmds="r.ScreenPercentage 100,r.DynamicRes.OperationMode 0,r.VSync 0,t.MaxFPS 0"')
 if($Reference){$args+='-ApartmentObjectArchitectureReference'}
 if($Trace){$args+=@('-trace=cpu,gpu,frame,bookmark,region',"-tracefile=$out/capture.utrace")}

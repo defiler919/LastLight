@@ -28,6 +28,21 @@ namespace
  { C[0]=B.Min; C[1]=FVector2D(B.Max.X,B.Min.Y); C[2]=B.Max; C[3]=FVector2D(B.Min.X,B.Max.Y); }
  double MinimumDistance(FVector2D O,const FBox2D& B)
  { return FVector2D::Distance(O,FVector2D(FMath::Clamp(O.X,B.Min.X,B.Max.X),FMath::Clamp(O.Y,B.Min.Y,B.Max.Y))); }
+ bool InCommonShadow(FVector2D Origin,const FVector2D* C,TConstArrayView<FDarkwellFogVisualSegment> Walls)
+ {
+  // The shadow beyond ONE segment is convex (three half planes). A rectangle
+  // whose four corners are strictly behind that same segment is wholly blocked.
+  // Different blockers at different corners do not prove its interior.
+  for(const auto& Wall:Walls)
+  {
+   if(!Wall.IsValid())continue;
+   bool All=true;
+   for(int I=0;I<4;++I)
+    if(!FDarkwellContinuousVisibilityBuilder::IsBlockedBySegments(Origin,C[I],MakeArrayView(&Wall,1))){All=false;break;}
+   if(All)return true;
+  }
+  return false;
+ }
 }
 
 bool FDarkwellContinuousVisibilityBuilder::IsOcclusionFree(const FVector2D& Origin,const FBox2D& Bounds,
@@ -85,6 +100,10 @@ bool FDarkwellContinuousVisibilityBuilder::TryUniformCoverage(const FDarkwellFog
  const bool NoCone=!Source.bConeLegallyLive || MaxLeft<=-Margin || MaxRight<=-Margin ||
   MinimumDistance(Source.ConeOrigin,Bounds)>=Source.ConeRangeCentimeters+Margin;
  if(NoBody && NoCone) { Value=0; return true; }
+ // Occlusion removes both legal body and cone coverage. Lights cannot override
+ // a blocked vision ray. Use the original intersection predicate, no expansion.
+ if((NoBody || InCommonShadow(Source.BodyCenter,C,Occluders)) &&
+    (NoCone || InCommonShadow(Source.ConeOrigin,C,Occluders))) { Value=0; return true; }
  return false;
 }
 
@@ -141,7 +160,10 @@ FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryCanonicalCover
   {
    float V=1;
    for(auto O:{FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)})
+   {
     V=FMath::Min(V,Sample(Bounds.Min+Step*(FVector2D(X,Y)+O)));
+    if(V==0)break; // Exact minimum over nonnegative coverage; no evidence deferred.
+   }
    Values[Y*Size.X+X]=V;
   }
  };

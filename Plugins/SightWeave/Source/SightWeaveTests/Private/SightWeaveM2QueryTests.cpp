@@ -7,6 +7,7 @@
 #include "RHIGlobals.h"
 #include "RenderingThread.h"
 #include "SightWeaveWorldSubsystem.h"
+#include "SightWeaveHardCoverage.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -604,6 +605,58 @@ bool FSightWeaveM2InvalidQueryTest::RunTest(const FString& Parameters)
 			Subsystem->QueryVisionSourceHardLiveAtLocation(Handle, Local, Ground, FVector::ZeroVector).Status == ESightWeaveQueryStatus::InvalidHandle);
 	}
 	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSightWeavePreparedHardCoverageTest,
+ "SightWeave.M2.Query.PreparedHardCoverage",SightWeave::M2::QueryTests::TestFlags)
+bool FSightWeavePreparedHardCoverageTest::RunTest(const FString&)
+{
+ using namespace SightWeave::M2::QueryTests;
+ TSharedPtr<FSightWeaveHardCoverageSet> Retained;
+ {
+  FTestWorld World(TEXT("PreparedHardCoverage"));auto* Runtime=World.GetSubsystem();
+  if(!SetupGround(*this,Runtime))return false;
+  auto Cone=Vision(ESightWeaveIlluminationPolicy::RequiresLegalIllumination,{FName(TEXT("Visible"))});
+  Cone.Shape=ESightWeaveSourceShape::DirectionalCone;Cone.HalfAngleDegrees=52;
+  Runtime->RegisterVisionSource(Cone,nullptr);
+  Runtime->RegisterVisionSource(Vision(ESightWeaveIlluminationPolicy::BypassLegalIllumination,{},FVector(-100,0,100),70),nullptr);
+  auto Lamp=Light({FName(TEXT("Visible"))},FVector(160,20,100),210);Lamp.HeightRange={100.f,200.f};
+  const auto LightHandle=Runtime->RegisterIlluminationSource(Lamp,nullptr);
+  Runtime->RegisterIlluminationSource(Light({FName(TEXT("Infrared"))},FVector(0,0,100),500),nullptr);
+  Runtime->RegisterOccluder({Wall(70,25,160)},false,true,nullptr);
+  FSightWeaveHardSuppressionDescription Suppression;
+  Suppression.FloorId=Ground;Suppression.HeightRange={120.f,180.f};Suppression.Center=FVector2D(100,0);Suppression.Radius=22;
+  const auto SuppressionHandle=Runtime->RegisterHardLiveSuppression(Suppression,nullptr);
+  int Proofs=0;
+  for(int Revision=0;Revision<3;++Revision)
+  {
+   if(Revision==1){Lamp.bActive=false;Runtime->UpdateIlluminationSource(LightHandle,Lamp);}
+   if(Revision==2){Lamp.bActive=true;Runtime->UpdateIlluminationSource(LightHandle,Lamp);Runtime->UnregisterHardLiveSuppression(SuppressionHandle);}
+   Runtime->PublishSnapshot();
+   Retained=MakeShared<FSightWeaveHardCoverageSet>(*Runtime,Runtime->AcquirePublishedSnapshot(),Local,Ground);
+   TArray<double> Heights{50,100,150,200,250};Heights.Append(Retained->HeightCuts());
+   for(double Height:Heights)
+   {
+    const auto Plane=Retained->AtHeight(Height);
+    for(int Y=-5;Y<=5;++Y)for(int X=-5;X<=5;++X)
+    {
+     const FVector2D P=FVector2D(X,Y)*47.3;const FBox2D Box(P,P+FVector2D(23.7));bool Value=false;
+     TestEqual(TEXT("Prepared point equals public hard query"),Plane->Contains(P),Runtime->QueryEffectiveLiveAtLocation(Local,Ground,FVector(P,Height)).bVisible);
+     if(Plane->TryUniform(Box,Value))
+     {
+      ++Proofs;
+      for(int PY=0;PY<=4;++PY)for(int PX=0;PX<=4;++PX)
+       TestEqual(TEXT("Composed region proof equals Runtime"),Value,Runtime->QueryEffectiveLiveAtLocation(Local,Ground,FVector(P+FVector2D(PX,PY)*(23.7/4),Height)).bVisible);
+     }
+    }
+   }
+  }
+  TestTrue(TEXT("Nontrivial region proofs exercised"),Proofs>100);
+ }
+ TestFalse(TEXT("Prepared set invalid after world teardown"),Retained->IsReady());
+ TestFalse(TEXT("Cached height fails closed after teardown"),Retained->AtHeight(150)->Contains(FVector2D(0)));
+ TestFalse(TEXT("Previously unrequested height fails closed after teardown"),Retained->AtHeight(999)->Contains(FVector2D(0)));
+ return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(

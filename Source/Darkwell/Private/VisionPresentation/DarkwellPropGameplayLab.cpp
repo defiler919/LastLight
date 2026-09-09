@@ -223,6 +223,7 @@ void ADarkwellPropLabFurniture::BindPresentation(UTexture* Raw, UTexture* Soft, 
  for (UMaterialInstanceDynamic* Material : Materials)
  {
   Material->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"), Raw);
+  GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->BindHardPresentation(Material);
   Material->SetTextureParameterValue(TEXT("LabSoftCoverageTexture"), Soft ? Soft : Raw);
   Material->SetVectorParameterValue(TEXT("FogWorldMin"), FLinearColor(Min.X,Min.Y,0,0));
   Material->SetVectorParameterValue(TEXT("FogWorldInvExtent"), FLinearColor(Inv.X,Inv.Y,0,0));
@@ -303,6 +304,7 @@ bool ADarkwellPropGameplayLab::EnableDarkwellProjectFogP4(UTexture* Raw, FVector
  {
   auto* Mat=UMaterialInstanceDynamic::Create(Parent,this);
   Mat->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"),Raw);
+  GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->BindHardPresentation(Mat);
   Mat->SetVectorParameterValue(TEXT("FogWorldMin"),FLinearColor(Min.X,Min.Y,0,0));
   Mat->SetVectorParameterValue(TEXT("FogWorldInvExtent"),FLinearColor(Inv.X,Inv.Y,0,0));
   Mat->SetScalarParameterValue(TEXT("OriginalUVScale"),I==0 ? 18 : 3);

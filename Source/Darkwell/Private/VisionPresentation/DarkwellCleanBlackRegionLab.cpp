@@ -99,6 +99,7 @@ bool ADarkwellCleanBlackRegionLab::EnableDarkwellProjectFogP4(UTexture* Raw,FVec
   if(auto* MID=Cast<UMaterialInstanceDynamic>(Part->GetMaterial(0)))
   {
    MID->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"),Raw);
+  GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->BindHardPresentation(MID);
    MID->SetVectorParameterValue(TEXT("FogWorldMin"),FLinearColor(Min.X,Min.Y,0,0));
    MID->SetVectorParameterValue(TEXT("FogWorldInvExtent"),FLinearColor(Inv.X,Inv.Y,0,0));
   }

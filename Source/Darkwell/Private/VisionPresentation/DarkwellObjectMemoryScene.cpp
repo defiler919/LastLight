@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
+#include "SightWeaveHardCoverage.h"
 #include "VisionPresentation/DarkwellBlackoutTiming.h"
 #include "VisionPresentation/DarkwellMemoryRegionSamples.h"
 #include "DarkwellB0Probe.h"
@@ -1189,11 +1190,42 @@ TArray<float> ADarkwellObjectMemoryScene::ConservativeCoverage(
 	return SampleConservativeCoverage(Bounds, 0, 0).Values;
 }
 
+static double RecordObservationHeight(const FDarkwellSpatialObservationRecord& Record)
+{
+ if(Record.Primitives.IsEmpty())return Record.SnapshotTransform.GetLocation().Z;
+ const auto& P=Record.Primitives[0];
+ return (P.RelativeTransform*Record.SnapshotTransform).TransformPosition(P.LocalBounds.GetCenter()).Z;
+}
+
+ADarkwellObjectMemoryScene::FCoverageSnapshot ADarkwellObjectMemoryScene::SampleRecordCoverage(
+ const FBox2D& Bounds,const FDarkwellSpatialObservationRecord& Record,int32 Subdivision) const
+{
+ auto Result=SampleConservativeCoverage(Bounds,Record.Epoch,Record.SpatialMemory.GetGeneration(),Subdivision,RecordObservationHeight(Record));
+ if(!Result.bValid || Record.Primitives.Num()<=1)return Result;
+ const auto* Fog=GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
+ const auto Hard=Fog->GetPublishedSource().HardAuthority;
+ if(!Hard)return Result;
+ TSet<const FSightWeaveHardCoverage*> Planes;Planes.Add(&Hard->AtHeight(RecordObservationHeight(Record)).Get());
+ for(const auto& P:Record.Primitives)
+ {
+  const double Height=(P.RelativeTransform*Record.SnapshotTransform).TransformPosition(P.LocalBounds.GetCenter()).Z;
+  if(Planes.Contains(&Hard->AtHeight(Height).Get()))continue;
+  Planes.Add(&Hard->AtHeight(Height).Get());
+  const auto Coverage=SampleConservativeCoverage(Bounds,Record.Epoch,Record.SpatialMemory.GetGeneration(),Subdivision,Height);
+  if(!Coverage.bValid)return Coverage;
+  // A projected record may combine multiple primitive planes. Empty evidence
+  // must prove every contributing plane; a lit low part cannot erase a dark high part.
+  for(int I=0;I<Result.Values.Num();++I)Result.Values[I]=FMath::Min(Result.Values[I],Coverage.Values[I]);
+ }
+ if(!Result.Values.ContainsByPredicate([](float V){return V>0;}))Result.ZeroReason=TEXT("OUTSIDE_LEGAL_SOURCE");
+ return Result;
+}
+
 ADarkwellObjectMemoryScene::FCoverageSnapshot
 ADarkwellObjectMemoryScene::SampleConservativeCoverage(
 	const FBox2D& Bounds,
 	const uint64 TransformRevision,
-	const uint64 GridRevision, const int32 Subdivision) const
+	const uint64 GridRevision, const int32 Subdivision,double Height) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_GrayHistory_Coverage); DW_BLACKOUT_SCOPE(Darkwell_GrayHistory_Coverage);
 	FScopedObjectMemoryTimer CoverageTimer(RuntimeFrame.CoverageUs);
@@ -1218,7 +1250,7 @@ ADarkwellObjectMemoryScene::SampleConservativeCoverage(
 		Result.ZeroReason = TEXT("GRID_INVALID");
 		return Result;
 	}
- const auto Query=Fog->QueryCanonicalCoverageRaster(Bounds,Size,Result.Values,RuntimeFrame.CoverageQueries);
+ const auto Query=Fog->QueryCanonicalCoverageRaster(Bounds,Size,Result.Values,RuntimeFrame.CoverageQueries,Height);
  Result.bValid=Query.bValid; Result.AuthorityRevision=Query.AuthorityRevision; Result.CoverageRevision=Query.CoverageDrawRevision;
  const bool Any=Result.Values.ContainsByPredicate([](float V){return V>=FDarkwellSpatialPropMemory::LegalCoverage;});
  const bool Positive=Result.Values.ContainsByPredicate([](float V){return V>0;});
@@ -1242,13 +1274,13 @@ bool ADarkwellObjectMemoryScene::AdvanceFineHistory(
 	if (bCoverageDirty)
 	{
   const bool Existing=Visual->CachedFineCoverage.Num()==SampleCount;
-  bool Reuse=bUseFrameOccupancy && Prop.History.GetRecords().Num()-(Prop.History.GetCurrentIndex()!=INDEX_NONE?1:0)>1;
+  bool Reuse=Record.Primitives.Num()<=1 && bUseFrameOccupancy && Prop.History.GetRecords().Num()-(Prop.History.GetCurrentIndex()!=INDEX_NONE?1:0)>1;
 #if WITH_DEV_AUTOMATION_TESTS
   Reuse &= !bForceFullHistoryEvidenceForTesting;
 #endif
   const FHistoryCoverageReuse* Cached=nullptr;
   if(Reuse) for(const auto& Entry:FrameHistoryCoverage)
-   if(Entry.Size==Size && Entry.Bounds.Min==Bounds.Min && Entry.Bounds.Max==Bounds.Max
+   if(Entry.Height==RecordObservationHeight(Record) && Entry.Size==Size && Entry.Bounds.Min==Bounds.Min && Entry.Bounds.Max==Bounds.Max
     && Entry.bPreviousValid==Existing && (!Existing || (Entry.PreviousAuthority==Visual->CachedFineAuthorityRevision && Entry.PreviousDraw==Visual->CachedFineDrawRevision)))
    { Cached=&Entry; break; }
   if(Cached)
@@ -1259,14 +1291,13 @@ bool ADarkwellObjectMemoryScene::AdvanceFineHistory(
   }
   else
   {
-   const FCoverageSnapshot Coverage=SampleConservativeCoverage(Bounds,Record.Epoch,
-    Record.SpatialMemory.GetGeneration(),FDarkwellHistoryGridV2::SamplesPerCell);
+   const FCoverageSnapshot Coverage=SampleRecordCoverage(Bounds,Record,FDarkwellHistoryGridV2::SamplesPerCell);
    if(!Coverage.bValid) return false;
    for(int32 I=0;I<SampleCount;++I)
     if(!Existing || (Coverage.Values[I]>=FDarkwellSpatialPropMemory::LegalCoverage)!=(Visual->CachedFineCoverage[I]>=FDarkwellSpatialPropMemory::LegalCoverage)) DirtyMask[I]=true;
    if(Reuse && FrameHistoryCoverage.Num()<64)
    {
-    auto& Entry=FrameHistoryCoverage.AddDefaulted_GetRef(); Entry.Bounds=Bounds; Entry.Size=Size; Entry.bPreviousValid=Existing;
+    auto& Entry=FrameHistoryCoverage.AddDefaulted_GetRef(); Entry.Bounds=Bounds; Entry.Size=Size; Entry.bPreviousValid=Existing; Entry.Height=RecordObservationHeight(Record);
     Entry.PreviousAuthority=Visual->CachedFineAuthorityRevision; Entry.PreviousDraw=Visual->CachedFineDrawRevision;
     Entry.Authority=Coverage.AuthorityRevision; Entry.Draw=Coverage.CoverageRevision;
     Entry.Values=Coverage.Values; Entry.Crossings=DirtyMask;
@@ -1301,12 +1332,13 @@ bool ADarkwellObjectMemoryScene::AdvanceFineHistory(
 	TConstArrayView<FDarkwellFogVisualSegment> Occluders;
 	const bool bSupportedSweep = bCoverageDirty && Fog && Fog->GetHistoricalRotationSweep(
 		SweepPreviousDrawRevision,PreviousSource,CurrentSource,Occluders);
+ PreviousSource.HardHeight=CurrentSource.HardHeight=RecordObservationHeight(Record);
 	// Count conservative refusals (invalid/non-adjacent source, geometry motion,
 	// translated origin or ambiguous turn); never retry with newer world data.
 	if (bCoverageDirty && !bSupportedSweep) ++RuntimeFrame.SweepUnsupportedEvents;
- bool bSweepMayAdd=bSupportedSweep && FDarkwellHistoricalVisibilitySweep::MayAddIntermediateSamples(PreviousSource,CurrentSource,Bounds);
+ bool bSweepMayAdd=bSupportedSweep && Record.Primitives.Num()<=1 && FDarkwellHistoricalVisibilitySweep::MayAddIntermediateSamples(PreviousSource,CurrentSource,Bounds);
 #if WITH_DEV_AUTOMATION_TESTS
- if(bForceFullHistoryEvidenceForTesting) bSweepMayAdd=bSupportedSweep && FDarkwellHistoricalVisibilitySweep::MayAffectBounds(PreviousSource,CurrentSource,Bounds);
+ if(bForceFullHistoryEvidenceForTesting) bSweepMayAdd=bSupportedSweep && Record.Primitives.Num()<=1 && FDarkwellHistoricalVisibilitySweep::MayAffectBounds(PreviousSource,CurrentSource,Bounds);
 #endif
 	if (bSweepMayAdd)
 	{
@@ -1472,9 +1504,7 @@ FString ADarkwellObjectMemoryScene::GetMultiEpochCompositeDiagnosis(
 		{
 			continue;
 		}
-		const FCoverageSnapshot Coverage = SampleConservativeCoverage(
-			Record.FineHistory.GetBounds(), Record.Epoch,
-			Record.SpatialMemory.GetGeneration(), FDarkwellHistoryGridV2::SamplesPerCell);
+		const FCoverageSnapshot Coverage = SampleRecordCoverage(Record.FineHistory.GetBounds(),Record,FDarkwellHistoryGridV2::SamplesPerCell);
 		const FIntPoint Size = Record.FineHistory.GetSize();
 		const FBox2D& Bounds = Record.FineHistory.GetBounds();
 		const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
@@ -1873,7 +1903,7 @@ void ADarkwellObjectMemoryScene::BuildGeometryDirtyIndices(
 	const FIntPoint Size = Record.FineHistory.GetSize();
 	const FBox2D& Bounds = Record.FineHistory.GetBounds();
 	const FVector2D Step = Bounds.GetSize() / FVector2D(Size.X, Size.Y);
- bool Reuse=bUseFrameOccupancy && Prop.History.GetRecords().Num()-(Prop.History.GetCurrentIndex()!=INDEX_NONE?1:0)>1;
+ bool Reuse=Record.Primitives.Num()<=1 && bUseFrameOccupancy && Prop.History.GetRecords().Num()-(Prop.History.GetCurrentIndex()!=INDEX_NONE?1:0)>1;
 #if WITH_DEV_AUTOMATION_TESTS
  Reuse &= !bForceFullHistoryEvidenceForTesting;
 #endif
@@ -2128,7 +2158,7 @@ bool ADarkwellObjectMemoryScene::UpdateHistoricalContributionExclusion(
    && A.RelativeTransform.Equals(B.RelativeTransform,1.e-6);
  }
  FHistoryOwnershipReuse* Cached=nullptr;
- bool Reuse=bUseFrameOccupancy && Prop.History.GetRecords().Num()>2 && bUseNewerCandidates && NewerCandidateId==Prop.StableId;
+ bool Reuse=Record.Primitives.Num()<=1 && bUseFrameOccupancy && Prop.History.GetRecords().Num()>2 && bUseNewerCandidates && NewerCandidateId==Prop.StableId;
 #if WITH_DEV_AUTOMATION_TESTS
  Reuse &= !bForceFullHistoryEvidenceForTesting;
 #endif
@@ -2884,7 +2914,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 		if (bCoverageDirty)
 		{
 			CoverageSnapshot = SampleConservativeCoverage(
-				Bounds, Prop.TransformRevision, Prop.GridRevision);
+				Bounds, Prop.TransformRevision, Prop.GridRevision,1,Transform.GetLocation().Z);
 			if (CoverageSnapshot.bValid)
 			{
 				Prop.CachedCurrentCoverage = CoverageSnapshot.Values;
@@ -2925,6 +2955,28 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			{
 				return Value >= FDarkwellSpatialPropMemory::LegalCoverage;
 			});
+  if(!bWhole && CoverageSnapshot.bValid && Fog->GetPublishedSource().HardAuthority)
+  {
+   const auto Hard=Fog->GetPublishedSource().HardAuthority;
+   const auto PivotPlane=Hard->AtHeight(Transform.GetLocation().Z);
+   const auto& Parts=Actual->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives();
+   bool DifferentPlane=false;
+   for(const UStaticMeshComponent* Part:Parts)if(Part && Part->GetStaticMesh())
+    DifferentPlane|=&Hard->AtHeight((UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part)*Transform).TransformPosition(Part->GetStaticMesh()->GetBoundingBox().GetCenter()).Z).Get()!=&PivotPlane.Get();
+   if(DifferentPlane)
+   {
+    // Coarse Actor-pivot coverage is only an admission accelerator. It must
+    // not reject a primitive whose existing local observation plane is legal.
+    TArray<FDarkwellCurrentLiveGrid::FDescriptor> Descriptors;
+    for(const UStaticMeshComponent* Part:Parts)if(Part && Part->GetStaticMesh())Descriptors.Add({Part->GetUniqueID(),Part->GetStaticMesh()->GetUniqueID(),Part->GetStaticMesh()->GetBoundingBox(),UDarkwellRememberablePropComponent::GetPrimitiveTransform(*Part)});
+    FDarkwellCurrentLiveGrid Scratch;
+    auto* Grid=&Prop.CurrentLive;
+    if(!Grid->MatchesGeometry(Descriptors,Transform)){Scratch.ResetGeometry(Prop.StableId,Descriptors,Transform);Grid=&Scratch;}
+    Grid->HardAuthority=Hard;
+    bAnyLegal=Grid->HasAnyLegalObservation(Transform,[](FVector2D){return 0.f;},[](const FBox2D&,float&){return false;});
+    RuntimeFrame.CoverageQueries+=Grid->Queries;RuntimeFrame.CurrentSamplesTouched+=Grid->SamplesTouched;
+   }
+  }
 		if(bWhole && CoverageSnapshot.bValid)
 		{
 			FScopedObjectMemoryTimer GeometryTimer(RuntimeFrame.CurrentGeometryUs);
@@ -2948,7 +3000,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
     Prop.CurrentLegalObservationMask.Empty();
     if(bCoverageDirty || bTransformChanged)
     {
-     Prop.bCachedWholeLegalContact=Prop.CurrentLive.HasAnyLegalObservation(Transform,Query,Uniform);
+     Prop.CurrentLive.HardAuthority=Fog->GetPublishedSource().HardAuthority; Prop.bCachedWholeLegalContact=Prop.CurrentLive.HasAnyLegalObservation(Transform,Query,Uniform);
      RuntimeFrame.CoverageQueries+=Prop.CurrentLive.Queries;
      RuntimeFrame.CurrentSamplesTouched+=Prop.CurrentLive.SamplesTouched;
     }
@@ -2959,10 +3011,10 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
     if(bCoverageDirty || bTransformChanged || Prop.CurrentPresentationActiveSeconds>0)
     {
      float Value;
-     if(Uniform(Bounds,Value) && Value==0) Prop.CurrentLegalObservationMask.Init(false,Prop.CurrentLive.ObservationFootprint.Num());
+     if(!Fog->GetPublishedSource().HardAuthority && Uniform(Bounds,Value) && Value==0) Prop.CurrentLegalObservationMask.Init(false,Prop.CurrentLive.ObservationFootprint.Num());
      else
      {
-      Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query,Uniform);
+      Prop.CurrentLive.HardAuthority=Fog->GetPublishedSource().HardAuthority; Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query,Uniform);
       RuntimeFrame.CoverageQueries+=Prop.CurrentLive.Queries;
       RuntimeFrame.CurrentSamplesTouched+=Prop.CurrentLive.SamplesTouched;
       Prop.CurrentLive.BuildCurrentLegalObservationMask(Prop.CurrentLegalObservationMask);
@@ -3162,7 +3214,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
                     else
                     {
                      if(!bWhole)
-                     { Prop.CurrentLive.MemoryWriteBlock=bMemoryBlockActive?MemoryBlockBounds:FBox2D(ForceInit); Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query,Uniform); }
+                     { Prop.CurrentLive.MemoryWriteBlock=bMemoryBlockActive?MemoryBlockBounds:FBox2D(ForceInit); Prop.CurrentLive.HardAuthority=Fog->GetPublishedSource().HardAuthority; Prop.CurrentLive.Advance(DeltaSeconds,Transform,Query,Uniform); }
                      else Prop.CurrentLive.Queries=0;
                      Prop.CurrentLive.WriteWorldSnapshot(Current.SpatialMemory,Bounds);
                      if(!bWhole && Prop.bSampleMemoryRegion && bMemoryBlockActive)
@@ -3309,9 +3361,7 @@ void ADarkwellObjectMemoryScene::UpdateTracked(
 			? Visual->CachedCoverageDrawRevision : MAX_uint64;
 		if (bCoverageDirty)
 		{
-			const FCoverageSnapshot HistoricalCoverage = SampleConservativeCoverage(
-				Record->SpatialMemory.GetBounds(), Record->Epoch,
-				Record->SpatialMemory.GetGeneration());
+			const FCoverageSnapshot HistoricalCoverage = SampleRecordCoverage(Record->SpatialMemory.GetBounds(),*Record);
 			if (HistoricalCoverage.bValid)
 			{
 				Visual->CachedCoverageAuthorityRevision = HistoricalCoverage.AuthorityRevision;
@@ -5669,7 +5719,7 @@ FString ADarkwellObjectMemoryScene::GetFalseOccupiedHistoryTelemetryForTesting(F
 		if (Record.bCurrentObservedLocation) continue;
 		const FRecordVisual* Visual = Prop->Visuals.Find(Record.Epoch);
 		if (!Visual || Visual->bPresentationRetired) continue;
-		const auto Coverage = SampleConservativeCoverage(Record.SpatialMemory.GetBounds(), Record.Epoch, Record.SpatialMemory.GetGeneration());
+		const auto Coverage = SampleRecordCoverage(Record.SpatialMemory.GetBounds(),Record);
 		if (!Coverage.bValid) continue;
 		const FIntPoint Size = Record.SpatialMemory.GetSize();
 		const FBox2D& Bounds = Record.SpatialMemory.GetBounds();
@@ -5762,7 +5812,7 @@ FString ADarkwellObjectMemoryScene::GetResidualFragmentTelemetryForTesting(
 		const int32 Samples = Darkwell::ObjectMemory::PresentationSamples;
 		const FIntPoint Fine = Coarse * Samples;
 		const FBox2D& Bounds = Record->SpatialMemory.GetBounds();
-		const FCoverageSnapshot Coverage = SampleConservativeCoverage(Bounds, Record->Epoch, Record->SpatialMemory.GetGeneration());
+		const FCoverageSnapshot Coverage = SampleRecordCoverage(Bounds,*Record);
 		int32 Reported = 0;
 		for (int32 I = 0; I < Visual.SubmittedPresentation.Num() && Reported < 32; ++I)
 		{

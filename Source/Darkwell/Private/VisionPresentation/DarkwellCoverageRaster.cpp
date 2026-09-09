@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
+#include "SightWeaveHardCoverage.h"
 
 namespace
 {
@@ -65,6 +66,8 @@ bool FDarkwellContinuousVisibilityBuilder::TryUniformCoverage(const FDarkwellFog
  const FBox2D& Bounds,TConstArrayView<FDarkwellFogVisualSegment> Occluders,float& Value)
 {
  if(!Source.IsValid() || !Bounds.bIsValid || Bounds.GetSize().GetMin()<=0) return false;
+ if(Source.HardAuthority)
+ {bool Hard=false;const bool Proven=Source.HardAuthority->AtHeight(Source.HardHeight)->TryUniform(Bounds,Hard);Value=Hard?1.f:0.f;return Proven;}
  // 1.25 cm is half of the unchanged 2.5 cm transition. A small proof margin
  // keeps float rounding at the analytic boundary on the original sample path.
  constexpr double Margin=1.251;
@@ -126,26 +129,28 @@ bool UDarkwellFogVisualSubsystem::IsObjectOcclusionFree(const FBox2D& Bounds) co
   (LastSource.bConeLegallyLive && FDarkwellContinuousVisibilityBuilder::IsOcclusionFree(LastSource.ConeOrigin,Bounds,CachedOccluderSegments));
 }
 FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryCanonicalCoverageRaster(
- const FBox2D& Bounds,FIntPoint Size,TArray<float>& Values,uint64& QueryRequests) const
+ const FBox2D& Bounds,FIntPoint Size,TArray<float>& Values,uint64& QueryRequests,double Height) const
 {
  RefreshCanonicalCoverageCache();
- const FCoverageRasterKey Key{Bounds.Min,Bounds.Max,Size};
+ if(Height==DBL_MAX)Height=LastSource.HardHeight;
+ const FCoverageRasterKey Key{Bounds.Min,Bounds.Max,Size,Height};
  if(const auto* Cached=CanonicalRasters.Find(Key)) { Values=Cached->Values; ++CanonicalCacheHits; return Cached->Result; }
  Values.Reset();
  if(!Bounds.bIsValid || Size.X<=0 || Size.Y<=0) return {};
  ++QueryRequests;
- auto Result=QueryLiveCoverageAtWorldPoint(Bounds.GetCenter());
+ auto Result=QueryHardCoverageAtHeight(FVector(Bounds.GetCenter(),Height));
  if(!Result.bValid) return Result;
  Values.SetNumUninitialized(Size.X*Size.Y);
  const auto Step=Bounds.GetSize()/FVector2D(Size);
- auto Sample=[&](FVector2D P) { ++QueryRequests; return QueryLiveCoverageAtWorldPoint(P).Coverage; };
+ auto Sample=[&](FVector2D P) { ++QueryRequests; return QueryHardCoverageAtHeight(FVector(P,Height)).Coverage; };
+ auto Source=LastSource;Source.HardHeight=Height;
  // Recursive tiles retain the exact existing corner/center coordinates. Only
  // mathematically uniform 0/1 tiles bypass evaluation; no resolution is changed.
  auto Fill=[&](auto&& Self,int32 X0,int32 Y0,int32 X1,int32 Y1)->void
  {
   float Uniform;
   const FBox2D Tile(Bounds.Min+Step*FVector2D(X0,Y0),Bounds.Min+Step*FVector2D(X1,Y1));
-  if(TryUniformCoverage(Tile,Uniform))
+  if(FDarkwellContinuousVisibilityBuilder::TryUniformCoverage(Source,Tile,CachedOccluderSegments,Uniform))
   {
    for(int32 Y=Y0;Y<Y1;++Y) for(int32 X=X0;X<X1;++X) Values[Y*Size.X+X]=Uniform;
    return;
@@ -170,5 +175,16 @@ FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryCanonicalCover
  Fill(Fill,0,0,Size.X,Size.Y);
  if(Values.ContainsByPredicate([](float V){return V>0;})) Result.ZeroReason=EDarkwellFogCoverageZeroReason::None;
  FCachedCoverageRaster Cached; Cached.Values=Values; Cached.Result=Result; CanonicalRasters.Add(Key,MoveTemp(Cached));
+ return Result;
+}
+
+FDarkwellFogVisualCoverageQuery UDarkwellFogVisualSubsystem::QueryHardCoverageAtHeight(FVector Point) const
+{
+ if(!LastSource.HardAuthority)return QueryLiveCoverageAtWorldPoint(FVector2D(Point));
+ FDarkwellFogVisualCoverageQuery Result;
+ Result.AuthorityRevision=Diagnostics.LastAuthorityRevision;Result.CoverageDrawRevision=Diagnostics.CoverageDrawCount;
+ if(!Diagnostics.bActive || Point.ContainsNaN() || !LastSource.HardAuthority->IsReady())return Result;
+ Result.bValid=true;Result.Coverage=LastSource.HardAuthority->AtHeight(Point.Z)->Contains(FVector2D(Point))?1.f:0.f;
+ Result.ZeroReason=Result.Coverage>0?EDarkwellFogCoverageZeroReason::None:EDarkwellFogCoverageZeroReason::OutsideLegalSource;
  return Result;
 }

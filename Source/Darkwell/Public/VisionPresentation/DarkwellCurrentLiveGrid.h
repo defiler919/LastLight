@@ -12,6 +12,7 @@ struct FDarkwellFogVisualSegment;
  */
 struct DARKWELL_API FDarkwellCurrentLiveGrid
 {
+ TSharedPtr<class FSightWeaveHardCoverageSet> HardAuthority;
  enum class EDividerSource : uint8
  {
   ViewEdge,

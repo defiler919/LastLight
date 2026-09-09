@@ -361,6 +361,7 @@ void ADarkwellMovingPropLabRoom::BindRoomPresentation(
 		UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Parent, this);
 		++RuntimeFrame.MidCreations;
 		Material->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"), Raw);
+  GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->BindHardPresentation(Material);
 		Material->SetVectorParameterValue(TEXT("FogWorldMin"), FLinearColor(Min.X, Min.Y, 0, 0));
 		Material->SetVectorParameterValue(TEXT("FogWorldInvExtent"), FLinearColor(Inv.X, Inv.Y, 0, 0));
 		Material->SetVectorParameterValue(TEXT("OriginalBaseColorTint"),

@@ -310,6 +310,14 @@ public:
 
 	/** Renderer-neutral immutable acquisition; callers cannot mutate the CPU authority snapshot. */
 	FSightWeaveImmutableSnapshotPtr AcquirePublishedSnapshot() const { return PublishedSnapshot; }
+	/** Same hard evaluator, explicit immutable revision; reusable result avoids per-point allocations. */
+	void QueryCapturedEffectiveLive(const FSightWeaveFrameSnapshot& Frame,
+		FSightWeaveKnowledgeOwnerId Owner, FSightWeaveFloorId Floor, FVector Point,
+		FSightWeaveVisibilityQueryResult& Result) const;
+ bool IsHardCoverageReady() const {return bSightWeaveInitialized;}
+ /** Geometry predicates for the Runtime-owned conservative region proof only.
+  * These are not EffectiveLive and must never be consumed as knowledge. */
+ bool ContainsCapturedGeometry(const FSightWeaveFrameSnapshot& Frame,bool Vision,int32 Index,FVector2D Point) const;
 	FSightWeaveSnapshotPublishedDelegate& OnSnapshotPublished() { return SnapshotPublishedDelegate; }
 
 	/**

@@ -108,6 +108,7 @@ private:
 	FSightWeaveVisionSourceDescription BodyDescription;
 	FSightWeaveVisionSourceDescription ConeDescription;
 	FSightWeaveIlluminationSourceDescription TorchDescription;
+ mutable TSharedPtr<class FSightWeaveHardCoverageSet> CachedHardAuthority;
 	TMap<FName, FDarkwellVisibilitySubjectSnapshot> SubjectSnapshots;
 	FDarkwellVisibilityAuthorityDiagnostics Diagnostics;
 	double RequestAgeSeconds = 0.0;

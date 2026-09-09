@@ -21,7 +21,10 @@ class UDarkwellRememberablePropComponent;
 UCLASS()
 class DARKWELL_API ADarkwellObjectMemoryScene : public AActor
 {
- GENERATED_BODY()
+	GENERATED_BODY()
+#if WITH_DEV_AUTOMATION_TESTS
+ friend class FDarkwellVisionLightDifferential;
+#endif
 public:
  ADarkwellObjectMemoryScene();
  virtual ~ADarkwellObjectMemoryScene() override;
@@ -473,6 +476,7 @@ protected:
 	TArray<FHistoryOwnershipReuse> FrameHistoryOwnership;
 	struct FHistoryCoverageReuse
 	{
+  double Height=0;
 		FBox2D Bounds;
 		FIntPoint Size;
 		bool bPreviousValid = false;
@@ -680,7 +684,8 @@ protected:
 	FCoverageSnapshot SampleConservativeCoverage(
 		const FBox2D& Bounds,
 		uint64 TransformRevision,
-		uint64 GridRevision, int32 Subdivision = 1) const;
+		uint64 GridRevision, int32 Subdivision = 1,double Height=DBL_MAX) const;
+ FCoverageSnapshot SampleRecordCoverage(const FBox2D& Bounds,const FDarkwellSpatialObservationRecord& Record,int32 Subdivision=1) const;
 	bool AdvanceFineHistory(FTrackedProp& Prop, FDarkwellSpatialObservationRecord& Record,
 		float DeltaSeconds, bool bCoverageDirty, TConstArrayView<int32> GeometryDirtyIndices,
 		uint64 SweepPreviousDrawRevision);

@@ -1,5 +1,6 @@
 #include "VisionPresentation/DarkwellStaticKnowledge.h"
 #include "VisionPresentation/DarkwellMemoryRegionSamples.h"
+#include "SightWeaveHardCoverage.h"
 
 FIntPoint FDarkwellStaticKnowledge::Key(FVector2D P)
 {return {int32(FMath::FloorToInt(P.X/TileCm)),int32(FMath::FloorToInt(P.Y/TileCm))};}
@@ -23,6 +24,7 @@ bool FDarkwellStaticKnowledge::HasMemory(FVector2D P) const
 }
 bool FDarkwellStaticKnowledge::FullyOccluded(const FDarkwellFogVisualSourceSnapshot& S,const FBox2D& B,TConstArrayView<FDarkwellFogVisualSegment> Segments)
 {
+ if(S.HardAuthority)return false; // Only Runtime region proof may classify a production region.
  auto Shadow=[&](FVector2D O)
  {
   const FVector2D C[]{B.Min,FVector2D(B.Max.X,B.Min.Y),B.Max,FVector2D(B.Min.X,B.Max.Y)};
@@ -90,4 +92,60 @@ void FDarkwellStaticKnowledge::Clear(const FBox2D& Region)
   Darkwell::MemoryRegionSamples::VisitInside(Bounds(K),{Side,Side},Region,[&](int I){if(T->Known[I]){T->Known[I]=false;--T->Count;Changed=true;}});
   if(Changed)Dirty.Add(K);
  }
+}
+
+void FDarkwellLayeredStaticKnowledge::Split(double Z)
+{
+ for(int I=0;I<Layers.Num();++I)
+ {
+  const auto& L=Layers[I];if(L.Min==Z || L.Max==Z)return;
+  if(Z>L.Min && Z<L.Max)
+  {
+   FLayer Low=L,Exact=L,High=L;Low.Max=Z;Exact.Min=Exact.Max=Z;High.Min=Z;
+   Layers[I]=MoveTemp(Low);Layers.Insert(MoveTemp(Exact),I+1);Layers.Insert(MoveTemp(High),I+2);
+   ++LayoutRevision;return;
+  }
+ }
+}
+void FDarkwellLayeredStaticKnowledge::Observe(const FDarkwellFogVisualSourceSnapshot& Source,
+ TConstArrayView<FDarkwellFogVisualSegment> Segments,const FBox2D& Area)
+{
+ Stats={};
+ if(Source.HardAuthority)for(double Z:Source.HardAuthority->HeightCuts())Split(Z);
+ // Equal old knowledge and equal hard predicates share one mutation and one
+ // GPU page set. Diverging predicates detach BEFORE either group is observed.
+ struct FGroup {TSharedRef<FDarkwellStaticKnowledge> Original; TSharedPtr<FSightWeaveHardCoverage> Plane; TArray<int32> Members; double Height=0;};
+ TArray<FGroup> Groups;
+ for(int I=0;I<Layers.Num();++I)
+ {
+  const auto& L=Layers[I];
+  const double Z=L.Min==L.Max?L.Min:L.Min==-DBL_MAX?L.Max-1:L.Max==DBL_MAX?L.Min+1:(L.Min+L.Max)*.5;
+  TSharedPtr<FSightWeaveHardCoverage> Plane;if(Source.HardAuthority)Plane=Source.HardAuthority->AtHeight(Z);
+  const int G=Groups.IndexOfByPredicate([&](const FGroup& V){return &V.Original.Get()==&L.Store.Get() && V.Plane==Plane;});
+  if(G==INDEX_NONE)Groups.Add({L.Store,Plane,{I},Z});else Groups[G].Members.Add(I);
+ }
+ for(int I=0;I<Groups.Num();++I)
+ {
+  auto& G=Groups[I];
+  const bool Shared=Groups.ContainsByPredicate([&](const FGroup& Other){return &Other!=&G && &Other.Original.Get()==&G.Original.Get();});
+  auto Store=Shared?MakeShared<FDarkwellStaticKnowledge>(G.Original.Get()):G.Original;
+  if(Shared)++LayoutRevision;
+  for(int Member:G.Members)Layers[Member].Store=Store;
+ }
+ for(const auto& G:Groups)
+ {
+  auto S=Source;S.HardHeight=G.Height;
+  auto& Store=Layers[G.Members[0]].Store.Get();
+  Store.Observe(S,Segments,Area);
+  const auto& A=Store.Stats;
+  Stats.Candidates+=A.Candidates;Stats.TouchedTiles+=A.TouchedTiles;Stats.TestedSamples+=A.TestedSamples;
+  Stats.Queries+=A.Queries;Stats.WrittenSamples+=A.WrittenSamples;Stats.UniformProofs+=A.UniformProofs;Stats.UpdateUs+=A.UpdateUs;
+ }
+}
+bool FDarkwellLayeredStaticKnowledge::HasMemory(FVector P) const
+{
+ // Endpoint planes precede open-interval lookup, preserving inclusive Runtime bands.
+ for(const auto& L:Layers)if(L.Min==L.Max && P.Z==L.Min)return L.Store->HasMemory(FVector2D(P));
+ for(const auto& L:Layers)if(P.Z>L.Min && P.Z<L.Max)return L.Store->HasMemory(FVector2D(P));
+ return false;
 }

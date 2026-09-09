@@ -1426,6 +1426,31 @@ void USightWeaveWorldSubsystem::QueryEffectiveLiveInternalInto(
 		Result);
 }
 
+bool USightWeaveWorldSubsystem::ContainsCapturedGeometry(const FSightWeaveFrameSnapshot& Frame,bool Vision,int32 Index,FVector2D Point) const
+{
+ const auto& T=GetDefault<USightWeaveSettings>()->GeometryTolerances;
+ if(Vision)
+ {
+  if(!Frame.VisionSources.IsValidIndex(Index))return false;
+  const auto& V=Frame.VisionSources[Index];
+  return (V.Description.Shape==ESightWeaveSourceShape::Radial || IsPointInNominalShape(FVector(Point,0),V.PolarOrigin,V.NominalForward,V.Description.Shape,V.Description.Range,V.NominalMinimumCosine,V.Description.NearAwarenessRadius,T.PointOnEdgeEpsilon))
+   && V.Polygon.IsValid() && IsPointInVisionSnapshotEntry(Point,V,T);
+ }
+ return Frame.IlluminationSources.IsValidIndex(Index) && Frame.IlluminationSources[Index].Polygon.IsValid()
+  && IsPointInIlluminationSnapshotEntry(Point,Frame.IlluminationSources[Index],T);
+}
+
+void USightWeaveWorldSubsystem::QueryCapturedEffectiveLive(const FSightWeaveFrameSnapshot& Frame,
+ FSightWeaveKnowledgeOwnerId Owner,FSightWeaveFloorId FloorId,FVector Point,
+ FSightWeaveVisibilityQueryResult& Result) const
+{
+ const auto* Floor=Frame.Floors.FindByPredicate([&](const auto& F){return F.FloorId==FloorId;});
+ if(!bSightWeaveInitialized || !Floor || !Frame.bPublished || Point.ContainsNaN())
+ {InitializeQueryResult(Result,ESightWeaveQueryStatus::NotReady,Owner,FloorId,&Frame.Revision);return;}
+ QueryEffectiveLiveValidated(Owner,FloorId,Point,nullptr,false,Frame,*Floor,
+  GetDefault<USightWeaveSettings>()->GeometryTolerances,Result);
+}
+
 void USightWeaveWorldSubsystem::QueryEffectiveLiveValidated(
 	const FSightWeaveKnowledgeOwnerId KnowledgeOwnerId,
 	const FSightWeaveFloorId FloorId,

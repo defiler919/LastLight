@@ -307,6 +307,7 @@ bool ADarkwellSightWeaveGrayPolicyLabDirector::EnableDarkwellProjectFogP4(
 	{
 		UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Parent, this);
 		Material->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"), LiveCoverageTexture);
+  GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->BindHardPresentation(Material);
 		Material->SetVectorParameterValue(TEXT("FogWorldMin"), FLinearColor(WorldMin.X, WorldMin.Y, 0, 0));
 		Material->SetVectorParameterValue(TEXT("FogWorldInvExtent"), FLinearColor(InvWorldExtent.X, InvWorldExtent.Y, 0, 0));
 		Material->SetVectorParameterValue(TEXT("OriginalBaseColorTint"),

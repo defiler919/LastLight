@@ -1,0 +1,618 @@
+{
+  "HistNative2": {
+    "frames": 1798,
+    "source": {
+      "head": "501a18c5ea6f838f9a352058971c7afa622a87b7",
+      "reference": false,
+      "still": false,
+      "started": "2026-09-09T14:29:54.6315493+08:00",
+      "binary_sha256": "DC3EE8C23B592AEF102868E3A7886A6AE31D97FF513C1967DB00B337D84F5736"
+    },
+    "completion": "frames=1798 moving_frames=1563 distance_cm=1076.80 yaw_travel_deg=2028.81 mode=A",
+    "valid": true,
+    "game_ms": {
+      "mean": 16.698675083426036,
+      "p95": 21.9399,
+      "p99": 25.6206,
+      "max": 35.0365
+    },
+    "render_ms": {
+      "mean": 9.195776751946587,
+      "p95": 11.6528,
+      "p99": 14.0311,
+      "max": 23.5961
+    },
+    "rhi_ms": {
+      "mean": 4.831887819799777,
+      "p95": 6.0138,
+      "p99": 6.9362,
+      "max": 9.5345
+    },
+    "gpu_ms": {
+      "mean": 5.221812736373753,
+      "p95": 5.8441,
+      "p99": 6.2734,
+      "max": 6.6976
+    },
+    "object_ms": {
+      "mean": 5.053616740823147,
+      "p95": 7.1165,
+      "p99": 9.6372,
+      "max": 13.9266
+    },
+    "historical_ms": {
+      "mean": 1.1445080088987767,
+      "p95": 1.883,
+      "p99": 3.5532,
+      "max": 10.536299999999999
+    },
+    "static_ms": {
+      "mean": 5.75367232925473,
+      "p95": 10.054602999999998,
+      "p99": 11.302002,
+      "max": 13.889503000000001
+    },
+    "hard_build_last_us": null,
+    "hard_prepare_us": null,
+    "hard_raster_us": null,
+    "hard_upload_us": null,
+    "rhi_texture_bytes": {
+      "mean": 1590020225.8509455,
+      "p95": 1590288384,
+      "p99": 1590288384,
+      "max": 1590288384
+    },
+    "conditions": [
+      "1280x720,AA=4,screen=100,foreground=1"
+    ]
+  },
+  "HardUnifiedNative_r1": {
+    "frames": 416,
+    "source": {
+      "head": "190e67985bdc038a1256228a0baa3829dacb1a84",
+      "reference": false,
+      "still": false,
+      "started": "2026-09-09T17:29:41.6584976+08:00",
+      "binary_sha256": "C62FCCA76822A2C4F7703E8C5FD3AF72BD4599710B293C6EE14030686B8346B1"
+    },
+    "completion": "frames=416 moving_frames=414 distance_cm=5330.36 yaw_travel_deg=2080.46 mode=A",
+    "valid": true,
+    "game_ms": {
+      "mean": 72.32088605769233,
+      "p95": 89.546,
+      "p99": 96.418,
+      "max": 121.8759
+    },
+    "render_ms": {
+      "mean": 7.831833894230774,
+      "p95": 9.4324,
+      "p99": 10.1285,
+      "max": 10.8588
+    },
+    "rhi_ms": {
+      "mean": 3.8729598557692335,
+      "p95": 4.6718,
+      "p99": 5.147,
+      "max": 5.6936
+    },
+    "gpu_ms": {
+      "mean": 20.40979038461538,
+      "p95": 22.3118,
+      "p99": 23.1102,
+      "max": 25.7039
+    },
+    "object_ms": {
+      "mean": 6.737190144230765,
+      "p95": 10.6595,
+      "p99": 14.797600000000001,
+      "max": 19.6045
+    },
+    "historical_ms": {
+      "mean": 1.7616353365384616,
+      "p95": 4.1579,
+      "p99": 7.6565,
+      "max": 12.5808
+    },
+    "static_ms": {
+      "mean": 11.184897572115384,
+      "p95": 20.408797999999997,
+      "p99": 22.816893,
+      "max": 26.671599999999998
+    },
+    "hard_build_last_us": {
+      "mean": 49444.034144230725,
+      "p95": 57813.6,
+      "p99": 61445.802,
+      "max": 85496.299
+    },
+    "hard_prepare_us": null,
+    "hard_raster_us": null,
+    "hard_upload_us": null,
+    "rhi_texture_bytes": {
+      "mean": 1645015040.0,
+      "p95": 1645015040,
+      "p99": 1645015040,
+      "max": 1645015040
+    },
+    "conditions": [
+      "1280x720,AA=4,screen=100,foreground=1"
+    ]
+  },
+  "HardUnifiedNative_r2": {
+    "frames": 917,
+    "source": {
+      "head": "190e67985bdc038a1256228a0baa3829dacb1a84",
+      "reference": false,
+      "still": false,
+      "started": "2026-09-09T17:38:53.1609612+08:00",
+      "binary_sha256": "BF280EA916512AB8FF64CD2AEAC44E4FA35960B26DEA51BF963A352D8CF3BD05"
+    },
+    "completion": "frames=917 moving_frames=885 distance_cm=3064.44 yaw_travel_deg=2078.31 mode=A",
+    "valid": true,
+    "game_ms": {
+      "mean": 32.7439972737187,
+      "p95": 43.3378,
+      "p99": 49.2543,
+      "max": 64.1877
+    },
+    "render_ms": {
+      "mean": 7.626158015267162,
+      "p95": 9.448,
+      "p99": 10.2801,
+      "max": 12.571
+    },
+    "rhi_ms": {
+      "mean": 3.784626499454747,
+      "p95": 4.5807,
+      "p99": 4.9564,
+      "max": 5.9256
+    },
+    "gpu_ms": {
+      "mean": 8.905416902944376,
+      "p95": 10.875,
+      "p99": 16.426,
+      "max": 17.7563
+    },
+    "object_ms": {
+      "mean": 5.893239258451474,
+      "p95": 9.8235,
+      "p99": 13.357899999999999,
+      "max": 25.949
+    },
+    "historical_ms": {
+      "mean": 1.9922426390403516,
+      "p95": 4.0167,
+      "p99": 9.1386,
+      "max": 13.6821
+    },
+    "static_ms": {
+      "mean": 8.719401681570336,
+      "p95": 15.993901,
+      "p99": 18.416699,
+      "max": 23.802400000000002
+    },
+    "hard_build_last_us": {
+      "mean": 13461.117670665213,
+      "p95": 16954.299,
+      "p99": 19808.698,
+      "max": 22785.101
+    },
+    "hard_prepare_us": null,
+    "hard_raster_us": null,
+    "hard_upload_us": null,
+    "rhi_texture_bytes": {
+      "mean": 1593012447.3369684,
+      "p95": 1595142144,
+      "p99": 1595142144,
+      "max": 1595142144
+    },
+    "conditions": [
+      "1280x720,AA=4,screen=100,foreground=1"
+    ]
+  },
+  "HardUnifiedNative_r3": {
+    "frames": 1178,
+    "source": {
+      "head": "190e67985bdc038a1256228a0baa3829dacb1a84",
+      "reference": false,
+      "still": false,
+      "started": "2026-09-09T17:42:10.982816+08:00",
+      "binary_sha256": "369A3B031B0421710C7D2B239B974BCF172DFF6E30CC44D40D9CB0BC3B9A3FFA"
+    },
+    "completion": "frames=1178 moving_frames=1111 distance_cm=1462.17 yaw_travel_deg=2022.45 mode=A",
+    "valid": true,
+    "game_ms": {
+      "mean": 25.492808743633283,
+      "p95": 37.5163,
+      "p99": 42.5329,
+      "max": 50.5186
+    },
+    "render_ms": {
+      "mean": 7.244899915110353,
+      "p95": 9.0978,
+      "p99": 10.1812,
+      "max": 11.8082
+    },
+    "rhi_ms": {
+      "mean": 3.5706949915110346,
+      "p95": 4.2712,
+      "p99": 4.7136,
+      "max": 5.0276
+    },
+    "gpu_ms": {
+      "mean": 7.379725042444813,
+      "p95": 8.5577,
+      "p99": 8.9538,
+      "max": 9.8183
+    },
+    "object_ms": {
+      "mean": 5.4447665534804734,
+      "p95": 9.59,
+      "p99": 15.7799,
+      "max": 21.5679
+    },
+    "historical_ms": {
+      "mean": 1.8189776740237695,
+      "p95": 3.2268000000000003,
+      "p99": 9.0035,
+      "max": 12.046
+    },
+    "static_ms": {
+      "mean": 7.662893775891343,
+      "p95": 15.930597,
+      "p99": 17.612502,
+      "max": 19.915598999999997
+    },
+    "hard_build_last_us": {
+      "mean": 7863.042573853973,
+      "p95": 10169.499,
+      "p99": 11372.399,
+      "max": 12386.899
+    },
+    "hard_prepare_us": null,
+    "hard_raster_us": null,
+    "hard_upload_us": null,
+    "rhi_texture_bytes": {
+      "mean": 1592974595.0424447,
+      "p95": 1592983552,
+      "p99": 1592983552,
+      "max": 1592983552
+    },
+    "conditions": [
+      "1280x720,AA=4,screen=100,foreground=1"
+    ]
+  },
+  "HardUnifiedNative_r4": {
+    "frames": 1504,
+    "source": {
+      "head": "190e67985bdc038a1256228a0baa3829dacb1a84",
+      "reference": false,
+      "still": false,
+      "started": "2026-09-09T17:45:08.6097741+08:00",
+      "binary_sha256": "79CADAF36B2A46756388B2B435B91BC08B0F97C00C0678BFB27A9AEB1277EA65"
+    },
+    "completion": "frames=1504 moving_frames=1372 distance_cm=1213.06 yaw_travel_deg=2025.21 mode=A",
+    "valid": true,
+    "game_ms": {
+      "mean": 19.942015026595733,
+      "p95": 29.2412,
+      "p99": 31.9035,
+      "max": 40.0145
+    },
+    "render_ms": {
+      "mean": 7.166601529255328,
+      "p95": 8.7918,
+      "p99": 9.6041,
+      "max": 11.5776
+    },
+    "rhi_ms": {
+      "mean": 3.5484461436170207,
+      "p95": 4.206,
+      "p99": 4.6646,
+      "max": 5.8643
+    },
+    "gpu_ms": {
+      "mean": 5.758696077127661,
+      "p95": 6.6753,
+      "p99": 7.1114,
+      "max": 7.642
+    },
+    "object_ms": {
+      "mean": 4.66146436170214,
+      "p95": 9.6724,
+      "p99": 11.5735,
+      "max": 19.309099999999997
+    },
+    "historical_ms": {
+      "mean": 1.2141744680851076,
+      "p95": 2.8818,
+      "p99": 4.0196,
+      "max": 11.6195
+    },
+    "static_ms": {
+      "mean": 3.455300258643614,
+      "p95": 6.354004,
+      "p99": 7.283196,
+      "max": 9.116601000000001
+    },
+    "hard_build_last_us": {
+      "mean": 7370.4616037234055,
+      "p95": 9686.001,
+      "p99": 10806.501,
+      "max": 12853.701
+    },
+    "hard_prepare_us": null,
+    "hard_raster_us": null,
+    "hard_upload_us": null,
+    "rhi_texture_bytes": {
+      "mean": 1592516564.4255319,
+      "p95": 1592524800,
+      "p99": 1592524800,
+      "max": 1592524800
+    },
+    "conditions": [
+      "1280x720,AA=4,screen=100,foreground=1"
+    ]
+  },
+  "HardUnifiedNative_r5": {
+    "frames": 1751,
+    "source": {
+      "head": "190e67985bdc038a1256228a0baa3829dacb1a84",
+      "reference": false,
+      "still": false,
+      "started": "2026-09-09T17:50:42.4039394+08:00",
+      "binary_sha256": "DEAA276A3049416C5AB8C9D7289873466ADC2D1BFD67FECBECB690A6A303834C"
+    },
+    "completion": "frames=1751 moving_frames=1569 distance_cm=1084.38 yaw_travel_deg=2031.23 mode=A",
+    "valid": true,
+    "game_ms": {
+      "mean": 17.133409480296944,
+      "p95": 24.2218,
+      "p99": 30.0816,
+      "max": 36.6494
+    },
+    "render_ms": {
+      "mean": 7.506536836093669,
+      "p95": 9.1901,
+      "p99": 10.0477,
+      "max": 12.7173
+    },
+    "rhi_ms": {
+      "mean": 3.8195811536264963,
+      "p95": 4.5217,
+      "p99": 5.0297,
+      "max": 5.985
+    },
+    "gpu_ms": {
+      "mean": 5.270858595088521,
+      "p95": 6.163,
+      "p99": 6.5917,
+      "max": 7.1244
+    },
+    "object_ms": {
+      "mean": 4.6018885208452325,
+      "p95": 9.1914,
+      "p99": 14.8421,
+      "max": 18.4123
+    },
+    "historical_ms": {
+      "mean": 1.2006463735008568,
+      "p95": 2.7401,
+      "p99": 8.022,
+      "max": 10.8115
+    },
+    "static_ms": {
+      "mean": 3.0652736259280364,
+      "p95": 5.002595,
+      "p99": 5.8073999999999995,
+      "max": 7.671498
+    },
+    "hard_build_last_us": {
+      "mean": 4761.836412906912,
+      "p95": 6398.901,
+      "p99": 7164.601,
+      "max": 8420.601
+    },
+    "hard_prepare_us": {
+      "mean": 152.2382021701886,
+      "p95": 232.499,
+      "p99": 301.402,
+      "max": 576.504
+    },
+    "hard_raster_us": {
+      "mean": 2658.359110222729,
+      "p95": 4292.898,
+      "p99": 4831.899,
+      "max": 6143.298
+    },
+    "hard_upload_us": {
+      "mean": 437.1045208452319,
+      "p95": 619.501,
+      "p99": 712.302,
+      "max": 1110.9
+    },
+    "rhi_texture_bytes": {
+      "mean": 1598947328.0,
+      "p95": 1598947328,
+      "p99": 1598947328,
+      "max": 1598947328
+    },
+    "conditions": [
+      "1280x720,AA=4,screen=100,foreground=1"
+    ]
+  },
+  "HardUnifiedNativeFinal": {
+    "frames": 1788,
+    "source": {
+      "head": "190e67985bdc038a1256228a0baa3829dacb1a84",
+      "reference": false,
+      "still": false,
+      "started": "2026-09-09T17:59:47.8556701+08:00",
+      "binary_sha256": "4ADB149EEA66F08CB322F688A7BF27ECD9929D5B9B3550F9CA3B365DBB86F28F"
+    },
+    "completion": "frames=1788 moving_frames=1523 distance_cm=1052.09 yaw_travel_deg=2029.97 mode=A",
+    "valid": true,
+    "game_ms": {
+      "mean": 16.780159172259477,
+      "p95": 24.5516,
+      "p99": 30.5855,
+      "max": 33.6337
+    },
+    "render_ms": {
+      "mean": 7.426250838926171,
+      "p95": 9.0309,
+      "p99": 10.0689,
+      "max": 12.0986
+    },
+    "rhi_ms": {
+      "mean": 3.7333564317673367,
+      "p95": 4.4608,
+      "p99": 4.937,
+      "max": 5.9208
+    },
+    "gpu_ms": {
+      "mean": 5.196444463087251,
+      "p95": 5.8671,
+      "p99": 6.3632,
+      "max": 6.733
+    },
+    "object_ms": {
+      "mean": 4.480134060402683,
+      "p95": 10.2274,
+      "p99": 16.457099999999997,
+      "max": 18.361900000000002
+    },
+    "historical_ms": {
+      "mean": 1.3641866890380316,
+      "p95": 6.5168,
+      "p99": 9.7041,
+      "max": 10.8365
+    },
+    "static_ms": {
+      "mean": 2.9057296280760663,
+      "p95": 4.430402,
+      "p99": 5.196600999999999,
+      "max": 6.648798
+    },
+    "hard_build_last_us": {
+      "mean": 4753.037477628627,
+      "p95": 6445.803,
+      "p99": 7319.398,
+      "max": 10226.399
+    },
+    "hard_prepare_us": {
+      "mean": 148.14667953020134,
+      "p95": 231.601,
+      "p99": 277.098,
+      "max": 379.898
+    },
+    "hard_raster_us": {
+      "mean": 2681.843981543622,
+      "p95": 4338.901,
+      "p99": 4983.898,
+      "max": 6578.598
+    },
+    "hard_upload_us": {
+      "mean": 444.1044502237141,
+      "p95": 643.399,
+      "p99": 732.802,
+      "max": 1106.702
+    },
+    "rhi_texture_bytes": {
+      "mean": 1593711961.9149888,
+      "p95": 1594818560,
+      "p99": 1594818560,
+      "max": 1594818560
+    },
+    "conditions": [
+      "1280x720,AA=4,screen=100,foreground=1"
+    ]
+  },
+  "HardUnifiedReleaseNative": {
+    "frames": 1806,
+    "source": {
+      "head": "190e67985bdc038a1256228a0baa3829dacb1a84",
+      "reference": false,
+      "still": false,
+      "started": "2026-09-09T18:10:31.9090404+08:00",
+      "binary_sha256": "F7D5ADB2C5595C25AF1C1545F7CC0C1AC22B21C735CE5367848D8728DF15C4D5"
+    },
+    "completion": "frames=1806 moving_frames=1586 distance_cm=1044.68 yaw_travel_deg=2025.28 mode=A",
+    "valid": true,
+    "game_ms": {
+      "mean": 16.611333333333324,
+      "p95": 22.7166,
+      "p99": 29.8387,
+      "max": 33.3327
+    },
+    "render_ms": {
+      "mean": 7.290596179401995,
+      "p95": 8.7755,
+      "p99": 9.4524,
+      "max": 10.7557
+    },
+    "rhi_ms": {
+      "mean": 3.7024435215946876,
+      "p95": 4.329,
+      "p99": 4.569,
+      "max": 5.0798
+    },
+    "gpu_ms": {
+      "mean": 5.1693385935769705,
+      "p95": 5.7521,
+      "p99": 6.1989,
+      "max": 6.8262
+    },
+    "object_ms": {
+      "mean": 4.247578460686599,
+      "p95": 7.4456999999999995,
+      "p99": 14.8605,
+      "max": 17.5169
+    },
+    "historical_ms": {
+      "mean": 1.162028571428572,
+      "p95": 2.0576,
+      "p99": 8.4148,
+      "max": 10.5715
+    },
+    "static_ms": {
+      "mean": 3.068663582502774,
+      "p95": 5.012497000000001,
+      "p99": 5.689599,
+      "max": 6.886102
+    },
+    "hard_build_last_us": {
+      "mean": 4718.110980066443,
+      "p95": 6329.402,
+      "p99": 7042.598,
+      "max": 7891.2
+    },
+    "hard_prepare_us": {
+      "mean": 146.70871207087495,
+      "p95": 223.201,
+      "p99": 273.898,
+      "max": 402.901
+    },
+    "hard_raster_us": {
+      "mean": 2660.704516611296,
+      "p95": 4220.698,
+      "p99": 4815.802,
+      "max": 5360.0
+    },
+    "hard_upload_us": {
+      "mean": 445.06515614618036,
+      "p95": 670.999,
+      "p99": 761.3,
+      "max": 1328.2
+    },
+    "rhi_texture_bytes": {
+      "mean": 1592524800.0,
+      "p95": 1592524800,
+      "p99": 1592524800,
+      "max": 1592524800
+    },
+    "conditions": [
+      "1280x720,AA=4,screen=100,foreground=1"
+    ]
+  }
+}

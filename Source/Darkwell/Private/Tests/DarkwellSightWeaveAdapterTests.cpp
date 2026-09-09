@@ -24,6 +24,8 @@
 #include "SightWeaveRenderWorldSubsystem.h"
 #include "SightWeaveStaticEnvironment.h"
 #include "SightWeaveWorldSubsystem.h"
+#include "SightWeaveHardCoverage.h"
+#include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "UObject/Package.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/UObjectGlobals.h"
@@ -122,8 +124,8 @@ namespace Darkwell::SightWeaveAdapterTests
 	}
 }
 
-// Characterization, not product acceptance: differences are exported, never
-// converted into expected product behavior. Uses real P4 and production stores.
+// Cross-path acceptance of existing Runtime semantics, with exported point,
+// conservative-support and presentation results kept distinct.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellVisionLightDifferential,
  "Darkwell.SightWeave.Differential.VisionIllumination",Darkwell::SightWeaveAdapterTests::TestFlags)
 bool FDarkwellVisionLightDifferential::RunTest(const FString&)
@@ -157,8 +159,33 @@ bool FDarkwellVisionLightDifferential::RunTest(const FString&)
  {
   Adapter->Tick(0);
   const auto Hard=Runtime->QueryEffectiveLiveAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,Point);
+  FSightWeaveHardCoverage Prepared(Runtime,Runtime->AcquirePublishedSnapshot(),Cone.KnowledgeOwnerId,Cone.FloorId,Point.Z);
+  TestEqual(TEXT("Captured hard evaluator matches public authority"),Prepared.Contains(FVector2D(Point)),Hard.bVisible);
+  {
+   const FBox2D Region(FVector2D(Point)-FVector2D(15),FVector2D(Point)+FVector2D(15));
+   const FIntPoint Size(12,12);TArray<float> Area;
+   Prepared.RasterizeArea(Region,Size,Area);
+   for(int I=0;I<Area.Num();++I)
+   {
+    int Legal=0;
+    for(int Y=0;Y<4;++Y)for(int X=0;X<4;++X)
+    {
+     const auto P=Region.Min+(FVector2D(I%12,I/12)+FVector2D((X+.5)/4.,(Y+.5)/4.))*2.5;
+     Legal+=Runtime->QueryEffectiveLiveAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,FVector(P,Point.Z)).bVisible;
+    }
+    TestEqual(TEXT("Every area-raster subpixel matches independent Runtime samples"),Area[I],float(Legal)/16.f);
+   }
+  }
+  for(int Y=-2;Y<=2;++Y)for(int X=-2;X<=2;++X)
+  {
+   const FVector2D A=FVector2D(Point)+FVector2D(X,Y)*20;
+   const FBox2D Box(A,A+FVector2D(20));bool Uniform=false;
+   if(Prepared.TryUniform(Box,Uniform))
+    for(int SY=0;SY<=4;++SY)for(int SX=0;SX<=4;++SX)
+     TestEqual(TEXT("Uniform proof agrees with exact dense oracle"),Runtime->QueryEffectiveLiveAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,FVector(A+FVector2D(SX,SY)*5,Point.Z)).bVisible,Uniform);
+  }
   const FVector2D XY(Point);
-  const auto CPU=Fog->QueryLiveCoverageAtWorldPoint(XY);
+  const auto CPU=Fog->QueryHardCoverageAtHeight(Point);
   TestTrue(TEXT("Valid current analytic snapshot"),CPU.bValid);
   TestEqual(TEXT("Published CPU revision equals hard query revision"),int64(CPU.AuthorityRevision),Hard.SnapshotRevision.GetValue());
   // Match static fine-cell five-point support separately from the point oracle.
@@ -167,7 +194,7 @@ bool FDarkwellVisionLightDifferential::RunTest(const FString&)
   bool Support=true;
   for(auto O:{FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)})
    Support &= Runtime->QueryEffectiveLiveAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,FVector(Min+O*Step,Point.Z)).bVisible;
-  FDarkwellStaticKnowledge Static;
+  FDarkwellLayeredStaticKnowledge Static;
   const FBox2D Area(XY-FVector2D(2),XY+FVector2D(2));
   Static.Declare(Area);Static.Observe(Fog->GetPublishedSource(),Fog->GetPublishedSegments(),Area);
   FDarkwellCurrentLiveGrid Grid;
@@ -175,6 +202,7 @@ bool FDarkwellVisionLightDifferential::RunTest(const FString&)
   Part.LocalBounds=FBox(FVector(-5,-5,-1),FVector(5,5,1));
   const FTransform Pose(Point);
   Grid.ResetGeometry(TEXT("Differential.Partial"),MakeArrayView(&Part,1),Pose);
+  Grid.HardAuthority=Fog->GetPublishedSource().HardAuthority;
   auto Query=[&](FVector2D P){return Fog->QueryLiveCoverageAtWorldPoint(P).Coverage;};
   Grid.Advance(1.f,Pose,Query);
   const auto& Local=Grid.Parts[0].Local;
@@ -187,17 +215,21 @@ bool FDarkwellVisionLightDifferential::RunTest(const FString&)
   const int32 ObjectIndex=FMath::FloorToInt(LocalUV.Y*Local.GetSize().Y)*Local.GetSize().X+FMath::FloorToInt(LocalUV.X*Local.GetSize().X);
   const float ObjectMinimum=Grid.Parts[0].Coverage[ObjectIndex];
   const bool ObjectStored=Grid.HasObservedContributionAt(XY);
-  const bool StaticStored=Static.HasMemory(XY);
+  const bool StaticStored=Static.HasMemory(Point);
+  TestEqual(TEXT("Static writes exactly the hard fine support"),StaticStored,Support);
+  TestEqual(TEXT("Object writes exactly the hard local support"),ObjectStored,ObjectSupport);
+  TestEqual(TEXT("CPU coverage is binary Runtime authority"),CPU.Coverage,Hard.bVisible?1.f:0.f);
   // These are persistent stores, not inferred eligibility flags.
   Grid.ResumeStationaryKnowledge();
   TestEqual(TEXT("Resume does not synthesize/remove stored knowledge"),Grid.HasObservedContributionAt(XY),ObjectStored);
   auto* Texture=Fog->GetLiveCoverageTexture();
   TArray<FLinearColor> Pixels;FlushRenderingCommands();
-  if(!TestTrue(TEXT("Actual P4 readback"),Texture && Texture->GameThread_GetRenderTargetResource()->ReadLinearColorPixels(Pixels,FReadSurfaceDataFlags(RCM_MinMax))))return;
+  if(!TestTrue(TEXT("Actual P4 height-layer readback"),Texture && Fog->ReadHardPresentationForTesting(Point.Z,Pixels)))return;
   const auto UV=Fog->GetMapping().WorldToUV(XY);const auto Size=Fog->GetMapping().TextureExtent;
   const int32 X=FMath::FloorToInt(UV.X*Size.X),Y=FMath::FloorToInt(UV.Y*Size.Y);
   if(!TestTrue(TEXT("Probe inside texture; never clamp evidence"),X>=0 && Y>=0 && X<Size.X && Y<Size.Y))return;
   const float GPU=Pixels[Y*Size.X+X].R;
+  if(FString(Name)==TEXT("light_height_mismatch"))TestTrue(TEXT("P4 rejects height-mismatched interior"),GPU<.01f);
   CSV+=FString::Printf(TEXT("%s,%.4f,%.4f,%.4f,%lld,%d,%d,%d,%.6f,%d,%d,%.6f,%.6f,%s\n"),Name,Point.X,Point.Y,Point.Z,Hard.SnapshotRevision.GetValue(),Hard.bVisible,Support,ObjectSupport,ObjectMinimum,ObjectStored,StaticStored,CPU.Coverage,GPU,Note);
   const FString Case(Name);
   if(Case==TEXT("bypass_dark") || Case==TEXT("lit_interior") || Case==TEXT("reactivated"))
@@ -217,6 +249,45 @@ bool FDarkwellVisionLightDifferential::RunTest(const FString&)
  Light.HeightRange={200.f,290.f};Runtime->UpdateIlluminationSource(Handle,Light);
  Probe(TEXT("light_height_mismatch"),FVector(550,0,92),TEXT("hard rejects target outside light height band"));
  Probe(TEXT("light_height_match"),FVector(550,0,240),TEXT("hard accepts height band; top visibility still unspecified"));
+ {
+  // Keep the same store through a band split, Clear, Block, and release. Fresh
+  // per-probe stores alone cannot detect resurrected knowledge after repartition.
+  FDarkwellLayeredStaticKnowledge Persistent;
+  const FBox2D Area(FVector2D(549, -1),FVector2D(551,1));
+  Persistent.Declare(Area);
+  auto Observe=[&](){Adapter->Tick(0);Persistent.Observe(Fog->GetPublishedSource(),Fog->GetPublishedSegments(),Area);};
+  Observe();
+  TestTrue(TEXT("High layer learns"),Persistent.HasMemory(FVector(550,0,240)));
+  TestFalse(TEXT("Same XY low layer remains unknown"),Persistent.HasMemory(FVector(550,0,92)));
+  {
+   const FTransform ActorPose(FVector(550,0,92));
+   FDarkwellCurrentLiveGrid Offset;
+   FDarkwellCurrentLiveGrid::FDescriptor Part;Part.PrimitiveKey=1;Part.MeshKey=1;
+   Part.LocalBounds=FBox(FVector(-5,-5,-1),FVector(5,5,1));Part.RelativeTransform.SetLocation(FVector(0,0,148));
+   Offset.ResetGeometry(TEXT("Differential.Offset"),MakeArrayView(&Part,1),ActorPose);Offset.HardAuthority=Fog->GetPublishedSource().HardAuthority;
+   Offset.Advance(1,ActorPose,[](FVector2D){return 0.f;});
+   TestTrue(TEXT("Primitive height, not Actor pivot, learns current knowledge"),Offset.HasObservedContributionAt(FVector2D(550,0)));
+   auto* Scene=Spawn<ADarkwellObjectMemoryScene>(*W,FVector::ZeroVector);
+   FDarkwellSpatialObservationRecord Record;Record.Epoch=1;Record.SnapshotTransform=ActorPose;
+   FDarkwellObservedPrimitive Primitive;Primitive.LocalBounds=Part.LocalBounds;Primitive.RelativeTransform=Part.RelativeTransform;Record.Primitives.Add(Primitive);
+   Record.SpatialMemory.Initialize(TEXT("Differential.Offset"),Area,2.5);
+   const auto Coverage=Scene->SampleRecordCoverage(Area,Record);
+   TestTrue(TEXT("Historical proof uses the same offset primitive height"),Coverage.bValid && Coverage.Values.Num()>0 && Coverage.Values.ContainsByPredicate([](float V){return V==1.f;}));
+   Record.Primitives.AddDefaulted();Record.Primitives.Last().LocalBounds=Part.LocalBounds;
+   const auto MultiPlane=Scene->SampleRecordCoverage(Area,Record);
+   TestTrue(TEXT("Projected history cannot erase an unobserved height using a different lit height"),MultiPlane.bValid && !MultiPlane.Values.ContainsByPredicate([](float V){return V>0;}));
+   Scene->Destroy();
+  }
+  Persistent.Clear(Area);Persistent.SetBlock(Area,true);
+  Light.HeightRange={50.f,290.f};Runtime->UpdateIlluminationSource(Handle,Light);Observe();
+  TestFalse(TEXT("New height partition cannot restore cleared high memory"),Persistent.HasMemory(FVector(550,0,240)));
+  TestFalse(TEXT("New height partition inherits block"),Persistent.HasMemory(FVector(550,0,92)));
+  Persistent.SetBlock(Area,false);
+  TestFalse(TEXT("Release alone never restores memory"),Persistent.HasMemory(FVector(550,0,240)));
+  Observe();
+  TestTrue(TEXT("New legal observation learns low layer"),Persistent.HasMemory(FVector(550,0,92)));
+  TestTrue(TEXT("New legal observation relearns high layer"),Persistent.HasMemory(FVector(550,0,240)));
+ }
  Light.HeightRange=Cone.HeightRange;Light.Transform=FTransform(FVector(750,0,280));Runtime->UpdateIlluminationSource(Handle,Light);
  Probe(TEXT("elevated_light"),FVector(550,0,92),TEXT("source Z changed; no slab propagation model"));
  FSightWeaveFloorDefinition OtherFloor;OtherFloor.FloorId=FSightWeaveFloorId(FName(TEXT("Differential.Upper")));
@@ -241,7 +312,8 @@ bool FDarkwellVisionLightDifferential::RunTest(const FString&)
  TestTrue(TEXT("Evidence exported"),FFileHelper::SaveStringToFile(CSV,*Path));
  Runtime->UnregisterFloor(OtherFloor.FloorId);
  TestEqual(TEXT("All planned probes executed"),Rows,26);
- AddInfo(FString::Printf(TEXT("CHARACTERIZATION ONLY: rows=%d hard-rejected/store-positive=%d; %s. Passing means measurement completed, NOT product equivalence."),Rows,InteriorDifferences,*Path));
+ TestEqual(TEXT("No hard-rejected interior writes knowledge"),InteriorDifferences,0);
+ AddInfo(FString::Printf(TEXT("Cross-path existing-semantics acceptance: rows=%d hard-rejected/store-positive=%d; %s. No top-face or slab-propagation product claim."),Rows,InteriorDifferences,*Path));
  return true;
 }
 
@@ -308,8 +380,8 @@ bool FDarkwellVisionLightBoundary::RunTest(const FString&)
    Runtime->QueryPureVisionAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,Points[2]).bVisible);
   if(Read && FString(Name)==TEXT("01_TorchOn_Dark"))
   {
-   // A colocated radial torch must retain the original coverage at every pixel,
-   // including antialiased occluder edges (do not multiply their visibility twice).
+   // Preserve the historical analytic image as a comparison, while the formal
+   // acceptance oracle is now Runtime hard coverage with presentation-only AA.
    FDarkwellFogVisualSourceSnapshot Legacy;
    Legacy.BodyCenter=Legacy.ConeOrigin=FVector2D(-650,0);Legacy.ConeForward=FVector2D(1,0);
    Legacy.BodyRadiusCentimeters=120;Legacy.ConeRangeCentimeters=1250;
@@ -321,8 +393,26 @@ bool FDarkwellVisionLightBoundary::RunTest(const FString&)
    float MaxError=0;
    if(Valid && Oracle.Num()==Pixels.Num())
     for(int32 I=0;I<Oracle.Num();++I) MaxError=FMath::Max(MaxError,FMath::Abs(Oracle[I].R-Pixels[I].R));
-   TestTrue(TEXT("Independent gate preserves every legacy torch edge pixel"),MaxError<=.002f);
    AddInfo(FString::Printf(TEXT("Legacy torch full-texture max error=%.6f"),MaxError));
+   // The old analytic shader is no longer the authority oracle. Retain its
+   // complete comparison as evidence, and check changed pixels against public
+   // Runtime queries at the exact presentation area-sample coordinates.
+   float HardError=0;int32 Checked=0;
+   const auto& Mapping=Fog->GetMapping();const auto Size=Mapping.TextureExtent;
+   if(Valid && Oracle.Num()==Pixels.Num())for(int32 I=0;I<Pixels.Num();++I)
+    if(FMath::Abs(Oracle[I].R-Pixels[I].R)>.002f || I%997==0)
+    {
+     int32 Legal=0;
+     for(int SY=0;SY<4;++SY)for(int SX=0;SX<4;++SX)
+     {
+      const auto P=Mapping.WorldMin+(FVector2D(I%Size.X,I/Size.X)+FVector2D((SX+.5)/4.,(SY+.5)/4.))*Mapping.CentimetersPerTexel;
+      Legal+=Runtime->QueryEffectiveLiveAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,FVector(P,Player->GetActorLocation().Z)).bVisible;
+     }
+     HardError=FMath::Max(HardError,FMath::Abs(Pixels[I].R-float(Legal)/16.f));++Checked;
+    }
+   TestTrue(TEXT("Runtime area oracle covers changed and unchanged pixels"),Checked>0);
+   TestTrue(TEXT("P4 area AA matches Runtime hard authority"),HardError<=.002f);
+   AddInfo(FString::Printf(TEXT("Runtime area oracle pixels=%d max error=%.6f"),Checked,HardError));
    Adapter->Tick(0);
   }
   if(Read)

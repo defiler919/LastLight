@@ -33,3 +33,25 @@ private:
  TMap<FIntPoint,FTile> Tiles;
  FBox2D Block=FBox2D(ForceInit);
 };
+
+/** Persistent height partition of shared XY knowledge. New Runtime boundaries
+ * split existing knowledge by copying it, never by reobserving or clearing it. */
+class DARKWELL_API FDarkwellLayeredStaticKnowledge
+{
+public:
+ struct FLayer {double Min=-DBL_MAX,Max=DBL_MAX; TSharedRef<FDarkwellStaticKnowledge> Store=MakeShared<FDarkwellStaticKnowledge>();};
+ TArray<FLayer> Layers;
+ uint64 LayoutRevision=0;
+ FDarkwellStaticKnowledge::FStats Stats;
+ FDarkwellLayeredStaticKnowledge(){Layers.AddDefaulted();}
+ void Declare(const FBox2D& B){for(int I=0;I<Layers.Num();++I)if(StorageLayer(I)==I)Layers[I].Store->Declare(B);}
+ void Observe(const FDarkwellFogVisualSourceSnapshot& Source,TConstArrayView<FDarkwellFogVisualSegment> Segments,const FBox2D& Area);
+ void Clear(const FBox2D& B){for(int I=0;I<Layers.Num();++I)if(StorageLayer(I)==I)Layers[I].Store->Clear(B);}
+ void SetBlock(const FBox2D& B,bool Enabled){for(int I=0;I<Layers.Num();++I)if(StorageLayer(I)==I)Layers[I].Store->SetBlock(B,Enabled);}
+ bool HasMemory(FVector P) const;
+ int32 DeclaredTiles() const {return Layers.IsEmpty()?0:Layers[0].Store->DeclaredTiles();}
+ int32 StorageLayer(int32 I) const {for(int J=0;J<I;++J)if(&Layers[J].Store.Get()==&Layers[I].Store.Get())return J;return I;}
+ int32 ResidentTiles() const {int32 N=0;for(int I=0;I<Layers.Num();++I)if(StorageLayer(I)==I)N+=Layers[I].Store->GetTiles().Num();return N;}
+private:
+ void Split(double Z);
+};

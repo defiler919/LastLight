@@ -1,0 +1,17 @@
+{
+  "run": "HardCoverageUnified_r2",
+  "selector": "Darkwell.SightWeave.Differential.VisionIllumination+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.SightWeave.StaticKnowledge+Darkwell.CurrentGrid+Darkwell.UnknownPartial+Darkwell.UnknownRegion",
+  "runner_failure": null,
+  "exit_code": 0,
+  "foreground_approved": true,
+  "foreground_attempts": 0,
+  "wall_seconds": 236.7438828,
+  "total": 14,
+  "clean": 10,
+  "warnings": 2,
+  "failed": 2,
+  "not_run": 0,
+  "severe_lines": 2,
+  "requested_rhi": "D3D12/SM6",
+  "passed": false
+}

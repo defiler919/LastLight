@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellCurrentLiveGrid.h"
+#include "SightWeaveHardCoverage.h"
 #include "Async/ParallelFor.h"
 #include "VisionPresentation/DarkwellMemoryRegionSamples.h"
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
@@ -232,7 +233,9 @@ bool FDarkwellCurrentLiveGrid::HasAnyLegalObservation(const FTransform& ActorPos
  {
   const auto Pose=P.Geometry.RelativeTransform*ActorPose;
   float V;
-  if(Uniform(XY(P.Geometry.LocalBounds.TransformBy(Pose)),V)) { if(V>=FDarkwellSpatialPropMemory::LegalCoverage) return true; continue; }
+  bool HardValue=false;
+  TSharedPtr<FSightWeaveHardCoverage> Hard;if(HardAuthority)Hard=HardAuthority->AtHeight(Pose.TransformPosition(P.Geometry.LocalBounds.GetCenter()).Z);
+  if(Hard?Hard->TryUniform(XY(P.Geometry.LocalBounds.TransformBy(Pose)),HardValue):Uniform(XY(P.Geometry.LocalBounds.TransformBy(Pose)),V)) { if(Hard?HardValue:V>=FDarkwellSpatialPropMemory::LegalCoverage) return true; continue; }
   const auto B=P.Local.GetBounds(); const auto S=P.Local.GetSize(); const auto Step=B.GetSize()/FVector2D(S);
   for(int32 Y=0;Y<S.Y;++Y) for(int32 X=0;X<S.X;++X)
   {
@@ -242,7 +245,8 @@ bool FDarkwellCurrentLiveGrid::HasAnyLegalObservation(const FTransform& ActorPos
    for(auto O:{FVector2D(.5),FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1)})
    {
     const auto L=B.Min+Step*(FVector2D(X,Y)+O); ++Queries;
-    if(Query(FVector2D(Pose.TransformPosition(FVector(L,P.Geometry.LocalBounds.GetCenter().Z))))<FDarkwellSpatialPropMemory::LegalCoverage) { Legal=false; break; }
+    const auto Point=Pose.TransformPosition(FVector(L,P.Geometry.LocalBounds.GetCenter().Z));
+    if(Hard?!Hard->Contains(FVector2D(Point)):Query(FVector2D(Point))<FDarkwellSpatialPropMemory::LegalCoverage) { Legal=false; break; }
    }
    if(Legal) return true;
   }
@@ -321,7 +325,10 @@ bool FDarkwellCurrentLiveGrid::Advance(float Dt,const FTransform& ActorPose,TFun
     WorldBounds+=FVector2D(Pose.TransformPosition(FVector(Local,P.Geometry.LocalBounds.GetCenter().Z)));
    OwnershipDirtyRegions.Add(WorldBounds);
   };
-  auto Legal=[&](FVector2D Local) { ++Queries; const float V=Query(FVector2D(Pose.TransformPosition(FVector(Local,P.Geometry.LocalBounds.GetCenter().Z)))); return FMath::IsFinite(V)?FMath::Clamp(V,0.f,1.f):0.f; };
+  TSharedPtr<FSightWeaveHardCoverage> Hard;if(HardAuthority)Hard=HardAuthority->AtHeight(Pose.TransformPosition(P.Geometry.LocalBounds.GetCenter()).Z);
+  auto Legal=[&](FVector2D Local) { ++Queries;const auto Point=Pose.TransformPosition(FVector(Local,P.Geometry.LocalBounds.GetCenter().Z));
+   if(Hard)return Hard->Contains(FVector2D(Point))?1.f:0.f;
+   const float V=Query(FVector2D(Point)); return FMath::IsFinite(V)?FMath::Clamp(V,0.f,1.f):0.f; };
   // Prove uniform tiles in world space, then retain the exact original five
   // local sample positions at every unresolved boundary. No density change.
   auto Fill=[&](auto&& Self,int32 X0,int32 Y0,int32 X1,int32 Y1)->void
@@ -331,9 +338,12 @@ bool FDarkwellCurrentLiveGrid::Advance(float Dt,const FTransform& ActorPose,TFun
    for(auto L:{Min,FVector2D(Max.X,Min.Y),Max,FVector2D(Min.X,Max.Y)})
     Tile+=FVector2D(Pose.TransformPosition(FVector(L,P.Geometry.LocalBounds.GetCenter().Z)));
    float Constant;
-   if(Uniform && Uniform(Tile,Constant))
+   bool HardValue=false;
+   const bool Proven=Hard?Hard->TryUniform(Tile,HardValue):(Uniform && Uniform(Tile,Constant));
+   if(Hard)Constant=HardValue?1.f:0.f;
+   if(Proven)
    { for(int32 Y=Y0;Y<Y1;++Y) for(int32 X=X0;X<X1;++X) P.Coverage[Y*S.X+X]=Constant; return; }
-   if(Uniform && (X1-X0>4 || Y1-Y0>4))
+   if((Hard || Uniform) && (X1-X0>4 || Y1-Y0>4))
    {
     if(X1-X0>=Y1-Y0) { const int32 M=(X0+X1)/2; Self(Self,X0,Y0,M,Y1); Self(Self,M,Y0,X1,Y1); }
     else { const int32 M=(Y0+Y1)/2; Self(Self,X0,Y0,X1,M); Self(Self,X0,M,X1,Y1); }
@@ -476,8 +486,12 @@ void FDarkwellCurrentLiveGrid::WritePartRasters(TFunctionRef<float(FVector2D)> Q
  {
   const auto B=XY(P.Geometry.LocalBounds.TransformBy(P.Pose)); const auto S=GridSize(B);
   auto Cells=P.Raster.PrepareCurrentRaster(B,S,P.AtlasCells.X*P.AtlasCells.Y); const auto Step=B.GetSize()/FVector2D(S);
-  float Constant=0; const bool ConstantRegion=Uniform && Uniform(B,Constant);
-  const bool CachedRaster=!ConstantRegion && CanonicalRaster && CanonicalRaster(B,S,P.RasterCoverage) && P.RasterCoverage.Num()==S.X*S.Y;
+  TSharedPtr<FSightWeaveHardCoverage> Hard;if(HardAuthority)Hard=HardAuthority->AtHeight(P.Pose.TransformPosition(P.Geometry.LocalBounds.GetCenter()).Z);
+  float Constant=0;bool HardValue=false;
+  const bool ConstantRegion=Hard?Hard->TryUniform(B,HardValue):(Uniform && Uniform(B,Constant));
+  if(Hard)Constant=HardValue?1.f:0.f;
+  if(Hard && !ConstantRegion)Hard->RasterizeConservative(B,S,P.RasterCoverage);
+  const bool CachedRaster=!ConstantRegion && (Hard || (CanonicalRaster && CanonicalRaster(B,S,P.RasterCoverage))) && P.RasterCoverage.Num()==S.X*S.Y;
   auto WriteRow=[&](int32 Y) { for(int32 X=0;X<S.X;++X)
   {
    const auto Min=B.Min+Step*FVector2D(X,Y); auto C=Sample(P,Min+Step*.5,true,MemoryWriteBlock.bIsValid);
@@ -572,6 +586,8 @@ bool FDarkwellCurrentLiveGrid::BuildSweptObservationMask(const FTransform& Actor
  for(int32 PartIndex=0;PartIndex<Parts.Num();++PartIndex)
  {
   const auto& P=Parts[PartIndex]; const auto Pose=P.Geometry.RelativeTransform*ActorPose;
+  auto PreviousAtHeight=Previous,CurrentAtHeight=Current;
+  PreviousAtHeight.HardHeight=CurrentAtHeight.HardHeight=Pose.TransformPosition(P.Geometry.LocalBounds.GetCenter()).Z;
   const auto B=P.Local.GetBounds(); const auto S=P.Local.GetSize(); const auto Step=B.GetSize()/FVector2D(S);
   TBitArray<> Swept(false,S.X*S.Y);
   for(int32 Y=0;Y<S.Y;++Y) for(int32 X=0;X<S.X;++X)
@@ -580,7 +596,7 @@ bool FDarkwellCurrentLiveGrid::BuildSweptObservationMask(const FTransform& Actor
    for(auto O:{FVector2D(0),FVector2D(1,0),FVector2D(1),FVector2D(0,1),FVector2D(.5)})
    { const auto L=B.Min+Step*(FVector2D(X,Y)+O); Points[K++]=FVector2D(Pose.TransformPosition(FVector(L,P.Geometry.LocalBounds.GetCenter().Z))); }
    ++SamplesTouched;
-   if(FDarkwellHistoricalVisibilitySweep::ProvePointSetCoverage(Previous,Current,Occluders,Points,Queries))
+   if(FDarkwellHistoricalVisibilitySweep::ProvePointSetCoverage(PreviousAtHeight,CurrentAtHeight,Occluders,Points,Queries))
    { Contact=true; if(bContactOnly) return true; Swept[Y*S.X+X]=true; }
   }
   if(!bContactOnly) for(int32 I=0;I<Out.Num();++I)

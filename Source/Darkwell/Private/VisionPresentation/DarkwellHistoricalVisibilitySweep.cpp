@@ -1,5 +1,6 @@
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 #include "VisionPresentation/DarkwellSpatialPropMemory.h"
+#include "SightWeaveHardCoverage.h"
 
 namespace
 {
@@ -69,6 +70,21 @@ bool FDarkwellHistoricalVisibilitySweep::ProvePointSetCoverage(const FDarkwellFo
  TConstArrayView<FVector2D> Points,uint64& OutCoverageQueries)
 {
  if(!IsSupported(A,B) || Points.IsEmpty()) return false;
+ if(A.HardAuthority || B.HardAuthority)
+ {
+  // An interpolated adapter cone is not a published Runtime observation.
+  // Only simultaneous support in one of the real snapshots can establish a
+  // fact. Continuous-time observation requires Runtime trajectory publication.
+  for(const auto* Source:{&A,&B})
+  {
+   if(!Source->HardAuthority)continue;
+   const auto Plane=Source->HardAuthority->AtHeight(Source->HardHeight);
+   bool All=true;
+   for(auto Point:Points){++OutCoverageQueries;if(!Plane->Contains(Point)){All=false;break;}}
+   if(All)return true;
+  }
+  return false;
+ }
  const double Turn=Delta(A,B),Start=Yaw(A.ConeForward);
  double Low=FMath::Min(0.,Turn),High=FMath::Max(0.,Turn);
 	// Same 2.5cm signed-distance transition and .99 legal threshold as FogVisual.

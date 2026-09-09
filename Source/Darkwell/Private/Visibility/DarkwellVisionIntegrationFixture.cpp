@@ -1,3 +1,4 @@
+#include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Visibility/DarkwellVisionIntegrationFixture.h"
@@ -580,6 +581,7 @@ bool ADarkwellVisionIntegrationFixture::EnableDarkwellProjectFog(
 		Material->SetTextureParameterValue(
 			TEXT("DarkwellLiveCoverageTexture"),
 			LiveCoverageTexture);
+  GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->BindHardPresentation(Material);
 		Material->SetVectorParameterValue(
 			TEXT("FogWorldMin"),
 			FLinearColor(

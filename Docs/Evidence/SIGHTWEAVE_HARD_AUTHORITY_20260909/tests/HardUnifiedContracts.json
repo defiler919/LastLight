@@ -1,0 +1,17 @@
+{
+  "run": "HardUnifiedContracts",
+  "selector": "Darkwell.BlackRegion.VolumeDemo+Darkwell.BlackRegion.CleanLab+Darkwell.BlackRegion.Contract+Darkwell.BlackRegion.CurrentPartialProbe+Darkwell.UnknownRegion+Darkwell.UnknownPartial",
+  "runner_failure": null,
+  "exit_code": 0,
+  "foreground_approved": true,
+  "foreground_attempts": 2,
+  "wall_seconds": 84.1337711,
+  "total": 10,
+  "clean": 9,
+  "warnings": 1,
+  "failed": 0,
+  "not_run": 0,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "passed": true
+}

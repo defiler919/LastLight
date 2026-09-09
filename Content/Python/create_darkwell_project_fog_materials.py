@@ -129,6 +129,41 @@ def make_asset(asset_tools, name):
     return material, path
 
 
+def hard_coverage(material, xy, z, origin, inv, fallback, copy_texels=False):
+    textures = []
+    for name in ('HardCoverageAtlas', 'HardHeightBands'):
+        n = expr(material, unreal.MaterialExpressionTextureObjectParameter, -2500, 3200)
+        n.set_editor_property('parameter_name', name)
+        n.set_editor_property('texture', unreal.load_asset('/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture'))
+        n.set_editor_property('sampler_type', unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR)
+        textures.append(n)
+    count = scalar_parameter(material, 'HardLayerCount', 0, -2500, 3400)
+    code = r'''
+if(Count<0.5) return Fallback;
+int Layer=-1;
+[loop] for(int I=0;I<int(Count);I++) {
+ float4 B=Bands.Load(int3(I,0,0));
+ if((B.z>0.5 && Z==B.x) || (B.z<0.5 && Z>B.x && Z<B.y)){Layer=I;break;}
+}
+float2 UV=(XY-Origin.xy)*Inv.xy;
+if(Layer<0 || any(UV<0) || any(UV>1)) return 0;
+uint W,H;Atlas.GetDimensions(W,H);
+float Slice=float(H)/Count;
+COPY_TEXELS
+UV.y=(Layer*Slice+1+UV.y*(Slice-2))/H;
+return saturate(Texture2DSampleLevel(Atlas,AtlasSampler,UV,0).r);
+'''
+    # The compatibility XY target copies already area-filtered pixels. Sampling
+    # the tall atlas again introduces hardware subtexel-rounding at slice edges.
+    copy = 'return Atlas.Load(int3(min(int(UV.x*W),int(W)-1),int(Layer*Slice)+1+min(int(UV.y*(Slice-2)),int(Slice)-3),0)).r;'
+    code = code.replace('COPY_TEXELS', copy if copy_texels else '')
+    result = custom_expression(material, code, [('Atlas', textures[0]), ('Bands', textures[1]), ('Count', count),
+      ('XY', xy), ('Z', z), ('Origin', origin), ('Inv', inv), ('Fallback', fallback)],
+      2500, 3200, 'Runtime hard authority height layer; area AA only')
+    result.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT1)
+    return result
+
+
 def create_coverage(asset_tools):
     material, path = make_asset(asset_tools, COVERAGE_NAME)
     material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
@@ -369,6 +404,10 @@ return Legal;
     live_coverage = binary(
         material, unreal.MaterialExpressionMax, visible_body, visible_cone, 2300, -150
     )
+    hard_z = scalar_parameter(material, 'HardQueryHeight', 0, 2400, 3100)
+    hard_inv = custom_expression(material, 'return 1.0/Extent;', [('Extent', world_extent)], 2400, 3000, 'World mapping')
+    hard_inv.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT2)
+    live_coverage = hard_coverage(material, world, hard_z, world_min, hard_inv, live_coverage, copy_texels=True)
     if not unreal.MaterialEditingLibrary.connect_material_property(
         live_coverage, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR
     ):
@@ -616,6 +655,7 @@ def create_surface(asset_tools, lab=False):
         1650,
         140,
     )
+    surface_coverage = hard_coverage(material, world_float, mask(material, world_position, 'b', 2400, 3000), world_min_param, world_inv_param, surface_coverage)
     force_remembered = scalar_parameter(
         material, "ForceRemembered", 0.0, 1200, 320
     )

@@ -108,6 +108,7 @@ void ADarkwellManualStaleRoom::BindRoomPresentation(UTexture* Raw,FVector2D Min,
  {
   auto* Mat=UMaterialInstanceDynamic::Create(Parent,this);
   Mat->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"),Raw);
+  GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->BindHardPresentation(Mat);
   Mat->SetVectorParameterValue(TEXT("FogWorldMin"),FLinearColor(Min.X,Min.Y,0,0));
   Mat->SetVectorParameterValue(TEXT("FogWorldInvExtent"),FLinearColor(Inv.X,Inv.Y,0,0));
   Mat->SetVectorParameterValue(TEXT("OriginalBaseColorTint"),Part==PressureDisc?FLinearColor(.8f,.16f,.06f):FLinearColor(.28f,.32f,.35f));

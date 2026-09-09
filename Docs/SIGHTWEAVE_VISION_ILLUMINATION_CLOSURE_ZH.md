@@ -1,5 +1,8 @@
 # Vision / Legal Illumination 职责收尾（2026-09-07，家里）
 
+2026-09-09 公司后续：见 [Hard EffectiveLive 下游收口](SIGHTWEAVE_HARD_EFFECTIVE_LIVE_UNIFICATION_ZH.md)。
+本旧报告的 Closure 不代表全部正式产品语义已经完成。
+
 本轮完成职责边界修正及定向验证，可创建 `checkpoint/sightweave-gray-performance-closure-20260907`，指向包含本报告的最终提交。性能专项维持结束，不开始黑色层；A1/P1/B0默认仍0，INITIALIZATION仍FAIL，未移动既有stable/tag。
 
 ## 起点与原因

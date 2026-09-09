@@ -1,0 +1,17 @@
+{
+  "run": "HardUnifiedAuthorityFinal",
+  "selector": "SightWeave.M2.Query+Darkwell.SightWeave.Differential.VisionIllumination+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.SightWeave.StaticKnowledge+Darkwell.CurrentGrid",
+  "runner_failure": null,
+  "exit_code": 0,
+  "foreground_approved": true,
+  "foreground_attempts": 2,
+  "wall_seconds": 31.1538438,
+  "total": 24,
+  "clean": 24,
+  "warnings": 0,
+  "failed": 0,
+  "not_run": 0,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "passed": true
+}

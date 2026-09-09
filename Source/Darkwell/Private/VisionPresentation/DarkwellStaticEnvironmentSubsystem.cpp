@@ -10,7 +10,7 @@
 namespace
 {
  constexpr int Slots=4096,TableWidth=2048;
- uint32 Slot(FIntPoint K){return (uint32(K.X)*73856093u ^ uint32(K.Y)*19349663u)&(Slots-1);}
+ uint32 Slot(FIntVector K){return (uint32(K.X)*73856093u ^ uint32(K.Y)*19349663u ^ uint32(K.Z)*83492791u)&(Slots-1);}
  UTexture2D* Texture(int X,int Y,EPixelFormat Format)
  {
   auto* T=UTexture2D::CreateTransient(X,Y,Format);check(T);T->SRGB=false;T->Filter=TF_Nearest;T->NeverStream=true;
@@ -43,11 +43,14 @@ bool UDarkwellStaticEnvironmentSubsystem::RegisterImmutable(UMeshComponent* M,FL
 }
 void UDarkwellStaticEnvironmentSubsystem::Bind()
 {
- const auto* Fog=GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
+ auto* Fog=GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
  const auto& Map=Fog->GetMapping();
  for(auto M:Materials)
  {
   M->SetTextureParameterValue(TEXT("StaticAtlas"),Atlas);M->SetTextureParameterValue(TEXT("StaticPages"),PageTable);
+  if(HeightBands)M->SetTextureParameterValue(TEXT("StaticHeightBands"),HeightBands);
+  M->SetScalarParameterValue(TEXT("StaticLayerCount"),Knowledge.Layers.Num());
+  Fog->BindHardPresentation(M);
   M->SetScalarParameterValue(TEXT("StaticPageSide"),PageSide);
   M->SetScalarParameterValue(TEXT("StaticLookupProbes"),LookupProbes);
   M->SetScalarParameterValue(TEXT("StaticBlocked"),Block.bIsValid?1:0);
@@ -67,7 +70,27 @@ void UDarkwellStaticEnvironmentSubsystem::Publish()
 {
  TRACE_CPUPROFILER_EVENT_SCOPE(Darkwell_StaticKnowledge_Publish);
  const double Start=FPlatformTime::Seconds();Uploads=0;
- auto Dirty=Knowledge.TakeDirty();if(Dirty.IsEmpty())return;EnsureResources();
+ TSet<FIntVector> Dirty;
+ const bool LayoutChanged=BoundLayout!=Knowledge.LayoutRevision;
+ if(LayoutChanged)
+ {
+  BoundLayout=Knowledge.LayoutRevision;Pages.Reset();PageEntries.Init(FVector4f(0,0,0,0),Slots);PageTableDirty=true;
+  if(HeightBands)HeightBands->ReleaseResource();
+  HeightBands=Texture(Knowledge.Layers.Num(),1,PF_A32B32G32R32F);
+  TArray<FVector4f> Meta;
+  for(int I=0;I<Knowledge.Layers.Num();++I)
+  {const auto& L=Knowledge.Layers[I];Meta.Add(FVector4f(FMath::Max(L.Min,-double(FLT_MAX)),FMath::Min(L.Max,double(FLT_MAX)),L.Min==L.Max?1:0,Knowledge.StorageLayer(I)));}
+  Upload(HeightBands,0,0,Meta.Num(),1,sizeof(FVector4f),Meta.GetData());
+ }
+ for(int I=0;I<Knowledge.Layers.Num();++I)
+ {
+  if(Knowledge.StorageLayer(I)!=I)continue;
+  auto& Store=Knowledge.Layers[I].Store.Get();
+  for(auto K:Store.TakeDirty())Dirty.Add(FIntVector(K.X,K.Y,I));
+  if(LayoutChanged)for(const auto& P:Store.GetTiles())Dirty.Add(FIntVector(P.Key.X,P.Key.Y,I));
+ }
+ if(LayoutChanged)Bind();
+ if(Dirty.IsEmpty())return;EnsureResources();
  if(!bPresentationCapacityValid)return;
  int Required=Pages.Num();for(auto K:Dirty)Required+=!Pages.Contains(K);
  if(Required>Slots)
@@ -84,13 +107,14 @@ void UDarkwellStaticEnvironmentSubsystem::Publish()
   const int Page=Pages.Num();Pages.Add(K,Page);uint32 H=Slot(K);int Probe=0;
   for(;Probe<Slots;++Probe,H=(H+1)&(Slots-1))if(PageEntries[H].Z==0)break;
   if(Probe+1>LookupProbes){LookupProbes=Probe+1;LookupChanged=true;}
-  PageEntries[H]=FVector4f(K.X,K.Y,Page+1,0);PageTableDirty=true;
+  PageEntries[H]=FVector4f(K.X,K.Y,Page+1,K.Z);PageTableDirty=true;
  }
  bool Resized=false;
  while(Pages.Num()>PageSide*PageSide){PageSide*=2;Resized=true;}
  if(Resized)
  {
   checkf(PageSide*FDarkwellStaticKnowledge::Side<=8192,TEXT("Static knowledge GPU residency capacity exceeded"));
+  if(Atlas)Atlas->ReleaseResource();
   Atlas=Texture(PageSide*FDarkwellStaticKnowledge::Side,PageSide*FDarkwellStaticKnowledge::Side,PF_B8G8R8A8);
   for(const auto& P:Pages)Dirty.Add(P.Key);Bind();
  }
@@ -99,7 +123,7 @@ void UDarkwellStaticEnvironmentSubsystem::Publish()
  TArray<FColor> Pixels;Pixels.SetNumUninitialized(FDarkwellStaticKnowledge::Side*FDarkwellStaticKnowledge::Side);
  for(auto K:Dirty)
  {
-  const auto& T=Knowledge.GetTiles().FindChecked(K);for(int I=0;I<Pixels.Num();++I)Pixels[I]=T.Known[I]?FColor::White:FColor::Black;
+  const auto& T=Knowledge.Layers[K.Z].Store->GetTiles().FindChecked(FIntPoint(K.X,K.Y));for(int I=0;I<Pixels.Num();++I)Pixels[I]=T.Known[I]?FColor::White:FColor::Black;
   const int Page=Pages.FindChecked(K);Upload(Atlas,(Page%PageSide)*FDarkwellStaticKnowledge::Side,(Page/PageSide)*FDarkwellStaticKnowledge::Side,FDarkwellStaticKnowledge::Side,FDarkwellStaticKnowledge::Side,sizeof(FColor),Pixels.GetData());++Uploads;
  }
  PublishUs=(FPlatformTime::Seconds()-Start)*1e6;
@@ -120,7 +144,7 @@ void UDarkwellStaticEnvironmentSubsystem::UpdateKnowledge()
  const auto Revision=Fog->GetDiagnostics().CoverageDrawCount;
  if(LastDraw!=Revision)
  {
-  LastDraw=Revision;const auto& Map=Fog->GetMapping();
+  LastDraw=Revision;const auto& Map=Fog->GetMapping();ReferenceHeight=Fog->GetPublishedSource().HardHeight;
   const auto R=FDarkwellContinuousVisibilityBuilder::GetCoverageDrawRect(Fog->GetPublishedSource(),Map,2.5f);
   if(R.Width()>0 && R.Height()>0)Knowledge.Observe(Fog->GetPublishedSource(),Fog->GetPublishedSegments(),FBox2D(Map.WorldMin+FVector2D(R.Min)*Map.CentimetersPerTexel,Map.WorldMin+FVector2D(R.Max)*Map.CentimetersPerTexel));
   Publish();
@@ -134,9 +158,9 @@ void UDarkwellStaticEnvironmentSubsystem::SetMemoryWriteBlock(const FBox2D& Regi
 FString UDarkwellStaticEnvironmentSubsystem::GetTelemetry() const
 {
  const auto& S=Knowledge.Stats;
- return FString::Printf(TEXT("{\"objects\":%d,\"declared_tiles\":%d,\"resident_tiles\":%d,\"candidate_tiles\":%llu,\"touched_tiles\":%llu,\"tested_samples\":%llu,\"queries\":%llu,\"written_samples\":%llu,\"uniform_proofs\":%llu,\"uploads\":%d,\"update_us\":%.3f,\"observe_us\":%.3f,\"publish_us\":%.3f,\"knowledge_bytes\":%d,\"atlas_bytes\":%d}"),Meshes.Num(),Knowledge.DeclaredTiles(),Knowledge.GetTiles().Num(),S.Candidates,S.TouchedTiles,S.TestedSamples,S.Queries,S.WrittenSamples,S.UniformProofs,Uploads,UpdateUs,S.UpdateUs,PublishUs,Knowledge.GetTiles().Num()*FDarkwellStaticKnowledge::Side*FDarkwellStaticKnowledge::Side/8,Atlas?Atlas->GetSizeX()*Atlas->GetSizeY()*4:0);
+ return FString::Printf(TEXT("{\"objects\":%d,\"declared_tiles\":%d,\"resident_tiles\":%d,\"candidate_tiles\":%llu,\"touched_tiles\":%llu,\"tested_samples\":%llu,\"queries\":%llu,\"written_samples\":%llu,\"uniform_proofs\":%llu,\"uploads\":%d,\"update_us\":%.3f,\"observe_us\":%.3f,\"publish_us\":%.3f,\"knowledge_bytes\":%d,\"atlas_bytes\":%d}"),Meshes.Num(),Knowledge.DeclaredTiles(),Knowledge.ResidentTiles(),S.Candidates,S.TouchedTiles,S.TestedSamples,S.Queries,S.WrittenSamples,S.UniformProofs,Uploads,UpdateUs,S.UpdateUs,PublishUs,Knowledge.ResidentTiles()*FDarkwellStaticKnowledge::Side*FDarkwellStaticKnowledge::Side/8,Atlas?Atlas->GetSizeX()*Atlas->GetSizeY()*4:0);
 }
 float UDarkwellStaticEnvironmentSubsystem::GetLegalCoverage(FVector2D Point) const
 {return bScopeValid?GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->QueryLiveCoverageAtWorldPoint(Point).Coverage:0;}
 void UDarkwellStaticEnvironmentSubsystem::Deinitialize()
-{Materials.Reset();Meshes.Reset();Atlas=nullptr;PageTable=nullptr;Knowledge={};Pages.Reset();PageEntries.Reset();Super::Deinitialize();}
+{Materials.Reset();Meshes.Reset();if(Atlas)Atlas->ReleaseResource();if(PageTable)PageTable->ReleaseResource();if(HeightBands)HeightBands->ReleaseResource();Atlas=nullptr;PageTable=nullptr;HeightBands=nullptr;Knowledge={};Pages.Reset();PageEntries.Reset();Super::Deinitialize();}

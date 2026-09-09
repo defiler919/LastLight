@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
+#include "SightWeaveHardCoverage.h"
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
 
@@ -81,6 +82,8 @@ bool FDarkwellFogVisualSourceSnapshot::IsEquivalentTo(
 		&& FMath::IsNearlyEqual(ConeRangeCentimeters, Other.ConeRangeCentimeters, 1.0e-4f)
 		&& FMath::IsNearlyEqual(ConeHalfAngleDegrees, Other.ConeHalfAngleDegrees, 1.0e-4f)
 		&& AuthorityRevision == Other.AuthorityRevision
+        && HardAuthority.IsValid() == Other.HardAuthority.IsValid()
+        && HardHeight == Other.HardHeight
 		&& bConeLegallyLive == Other.bConeLegallyLive
         && bUseLegalLightGate==Other.bUseLegalLightGate && LegalLights==Other.LegalLights;
 }
@@ -127,6 +130,8 @@ FIntRect FDarkwellContinuousVisibilityBuilder::GetCoverageDrawRect(
 		const FVector2D ConeRadius(Source.ConeRangeCentimeters + Padding);
 		Bounds += FBox2D(Source.ConeOrigin - ConeRadius, Source.ConeOrigin + ConeRadius);
 	}
+ if(Source.HardAuthority)
+ {Bounds=Source.HardAuthority->CoverageBounds();if(!Bounds.bIsValid)return FIntRect();}
 	const FVector2D Step = Mapping.WorldExtent / FVector2D(Mapping.TextureExtent);
 	FIntPoint Min, Max;
 	for (int32 Axis = 0; Axis < 2; ++Axis)
@@ -507,6 +512,13 @@ FDarkwellFogVisualCoverageQuery FDarkwellContinuousVisibilityBuilder::QuerySourc
 	}
 	Result.bValid = true;
 
+	if(Source.HardAuthority)
+	{
+	 if(!Source.HardAuthority->IsReady()){Result.bValid=false;return Result;}
+	 Result.Coverage=Source.HardAuthority->AtHeight(Source.HardHeight)->Contains(WorldPosition)?1.f:0.f;
+	 Result.ZeroReason=Result.Coverage>0?EDarkwellFogCoverageZeroReason::None:EDarkwellFogCoverageZeroReason::OutsideLegalSource;
+	 return Result;
+	}
 	const float BodySignedDistance = Source.BodyRadiusCentimeters
 		- FVector2D::Distance(WorldPosition, Source.BodyCenter);
 	float BodyCoverage = Darkwell::FogVisual::SignedLinearCoverage(
@@ -583,6 +595,10 @@ bool UDarkwellFogVisualSubsystem::GetHistoricalRotationSweep(const uint64 Previo
 
 void UDarkwellFogVisualSubsystem::Deactivate()
 {
+ for(auto M:HardMaterials)if(M.IsValid())M->SetScalarParameterValue(TEXT("HardLayerCount"),0);
+ if(HardCoverageAtlas)HardCoverageAtlas->ReleaseResource();
+ if(HardHeightBands)HardHeightBands->ReleaseResource();
+ HardMaterials.Reset();HardCoverageAtlas=nullptr;HardHeightBands=nullptr;HardLayerCount=0;
 	if (ADarkwellVisionIntegrationFixture* Fixture = ActiveFixture.Get())
 	{
 		Fixture->DisableDarkwellProjectFog();
@@ -751,13 +767,14 @@ bool UDarkwellFogVisualSubsystem::DrawCoverage(
 		return false;
 	}
 	UpdateMaterialParameters(Source);
+ if(!UpdateHardPresentation(Source))return false;
 	bool bFullDraw = false;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	bFullDraw = Darkwell::FogVisual::CVarFullCoverageDraw.GetValueOnGameThread() != 0;
 	if (Darkwell::FogVisual::CVarDiagnosticSkipCoverageDraw.GetValueOnGameThread() == 0)
 #endif
 	{
-		if (bFullDraw)
+		if (bFullDraw || Source.HardAuthority)
 		{
 			UKismetRenderingLibrary::DrawMaterialToRenderTarget(GetWorld(), LiveCoverageTexture, CoverageMaterial);
 		}

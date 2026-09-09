@@ -1,5 +1,8 @@
 # Vision × Legal Illumination 跨路径差分（2026-09-09）
 
+后续现有语义收口与高度分层见 [Hard EffectiveLive 下游收口](SIGHTWEAVE_HARD_EFFECTIVE_LIVE_UNIFICATION_ZH.md)。
+本文件及其 Evidence 保留原始差分阶段的事实，不回写为当时已经通过正式验收。
+
 基线：04b01b02cf180ae340795fa369b9c1a367c8ce12；稳定 tag
 `stable/sightweave-pre-formal-vision-illumination-20260909` 未移动。
 本切片只新增 Development automation 和证据，不修改业务规则、材质或地图。

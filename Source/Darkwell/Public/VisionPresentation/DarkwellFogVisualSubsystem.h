@@ -40,6 +40,10 @@ struct DARKWELL_API FDarkwellLegalLight
 /** Immutable project-facing source data copied from the SightWeave authority adapter. */
 struct DARKWELL_API FDarkwellFogVisualSourceSnapshot
 {
+ // Present only on the real Runtime path. Analytic fields below are presentation
+ // inputs and fixture compatibility, never an alternative hard authority.
+ TSharedPtr<class FSightWeaveHardCoverageSet> HardAuthority;
+ double HardHeight=0;
 	FVector2D BodyCenter = FVector2D::ZeroVector;
 	FVector2D ConeOrigin = FVector2D::ZeroVector;
 	FVector2D ConeForward = FVector2D(1.0, 0.0);
@@ -209,7 +213,8 @@ public:
 	/** Optional forensic audit; disabled during timing runs. Exact positions, one revision/frame. */
 	bool TryUniformCoverage(const FBox2D& Bounds,float& Value) const;
  bool IsObjectOcclusionFree(const FBox2D& Bounds) const;
- FDarkwellFogVisualCoverageQuery QueryCanonicalCoverageRaster(const FBox2D& Bounds,FIntPoint Size,TArray<float>& Values,uint64& QueryRequests) const;
+ FDarkwellFogVisualCoverageQuery QueryCanonicalCoverageRaster(const FBox2D& Bounds,FIntPoint Size,TArray<float>& Values,uint64& QueryRequests,double Height=DBL_MAX) const;
+ FDarkwellFogVisualCoverageQuery QueryHardCoverageAtHeight(FVector Point) const;
  uint64 GetCoverageComputationsForTesting() const { return CanonicalComputations; }
  uint64 GetCoverageCacheHitsForTesting() const { return CanonicalCacheHits; }
  void BeginCoverageAuditForTesting() { bCoverageAudit = true; AuditPoints.Reset(); AuditQueries = AuditDuplicates = 0; }
@@ -219,13 +224,31 @@ public:
 	const FDarkwellFogVisualDiagnostics& GetDiagnostics() const { return Diagnostics; }
  const FDarkwellFogVisualSourceSnapshot& GetPublishedSource() const {return LastSource;}
  TConstArrayView<FDarkwellFogVisualSegment> GetPublishedSegments() const {return CachedOccluderSegments;}
+ void BindHardPresentation(UMaterialInstanceDynamic* Material);
+ UTexture2D* GetHardCoverageAtlas() const {return HardCoverageAtlas;}
+ UTexture2D* GetHardHeightBands() const {return HardHeightBands;}
+ int32 GetHardLayerCount() const {return HardLayerCount;}
+ double GetHardPresentationMicroseconds() const {return HardPresentationUs;}
+ uint64 GetHardPresentationQueries() const {return HardPresentationQueries;}
+ FVector GetHardPresentationPhases() const {return HardPresentationPhases;}
+#if WITH_DEV_AUTOMATION_TESTS
+ bool ReadHardPresentationForTesting(double Height,TArray<FLinearColor>& Pixels);
+#endif
 
 private:
+ bool UpdateHardPresentation(const FDarkwellFogVisualSourceSnapshot& Source);
+ UPROPERTY(Transient) TObjectPtr<UTexture2D> HardCoverageAtlas;
+ UPROPERTY(Transient) TObjectPtr<UTexture2D> HardHeightBands;
+ TArray<TWeakObjectPtr<UMaterialInstanceDynamic>> HardMaterials;
+ int32 HardLayerCount=0;
+ double HardPresentationUs=0;
+ FVector HardPresentationPhases=FVector::ZeroVector;
+ uint64 HardPresentationQueries=0;
 	struct FCoverageRasterKey
  {
-  FVector2D Min,Max; FIntPoint Size;
-  bool operator==(const FCoverageRasterKey& O) const { return Min==O.Min && Max==O.Max && Size==O.Size; }
-  friend uint32 GetTypeHash(const FCoverageRasterKey& K) { return HashCombine(HashCombine(GetTypeHash(K.Min),GetTypeHash(K.Max)),GetTypeHash(K.Size)); }
+  FVector2D Min,Max; FIntPoint Size;double Height=0;
+  bool operator==(const FCoverageRasterKey& O) const { return Min==O.Min && Max==O.Max && Size==O.Size && Height==O.Height; }
+  friend uint32 GetTypeHash(const FCoverageRasterKey& K) { return HashCombine(HashCombine(HashCombine(GetTypeHash(K.Min),GetTypeHash(K.Max)),GetTypeHash(K.Size)),GetTypeHash(K.Height)); }
  };
  struct FCachedCoverageRaster { TArray<float> Values; FDarkwellFogVisualCoverageQuery Result; };
  void RefreshCanonicalCoverageCache() const;

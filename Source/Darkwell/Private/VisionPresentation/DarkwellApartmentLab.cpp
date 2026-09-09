@@ -133,7 +133,8 @@ bool ADarkwellApartmentLab::EnableDarkwellProjectFogP4(UTexture* Raw,FVector2D M
 {
  for(AActor* A:Sources) if(auto* Rememberable=A->FindComponentByClass<UDarkwellRememberablePropComponent>()) for(UPrimitiveComponent* M:Rememberable->GetMemoryPrimitives())
   if(auto* MID=Cast<UMaterialInstanceDynamic>(M->GetMaterial(0)))
-  { MID->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"),Raw);MID->SetVectorParameterValue(TEXT("FogWorldMin"),FLinearColor(Min.X,Min.Y,0,0));MID->SetVectorParameterValue(TEXT("FogWorldInvExtent"),FLinearColor(Inv.X,Inv.Y,0,0)); }
+  { MID->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"),Raw);
+  GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->BindHardPresentation(MID);MID->SetVectorParameterValue(TEXT("FogWorldMin"),FLinearColor(Min.X,Min.Y,0,0));MID->SetVectorParameterValue(TEXT("FogWorldInvExtent"),FLinearColor(Inv.X,Inv.Y,0,0)); }
  return true;
 }
 void ADarkwellApartmentLab::Tick(float Dt)

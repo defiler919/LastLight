@@ -28,6 +28,7 @@
 #include "UnrealClient.h"
 #include "SightWeavePresentation.h"
 #include "SightWeaveRenderWorldSubsystem.h"
+#include "SightWeaveHardCoverage.h"
 #endif
 
 DEFINE_LOG_CATEGORY_STATIC(LogDarkwellSightWeave, Log, All);
@@ -1031,6 +1032,11 @@ UDarkwellSightWeaveWorldSubsystem::BuildFogVisualSourceSnapshot() const
  {
   RuntimeSubsystem->PublishSnapshot();
   if(const auto Snapshot=RuntimeSubsystem->AcquirePublishedSnapshot())
+  {
+   if(!CachedHardAuthority || CachedHardAuthority->Revision()!=Snapshot->Revision.GetValue())
+    CachedHardAuthority=MakeShared<FSightWeaveHardCoverageSet>(*RuntimeSubsystem,Snapshot,KnowledgeOwnerId,FloorId);
+   Result.HardAuthority=CachedHardAuthority;
+   Result.HardHeight=BodyLocation.Z-52.0; // Existing XY observation reference; 3D consumers choose their own height.
    for(const auto& Vision:Snapshot->VisionSources) if(Vision.Handle==ConeVisionHandle)
     for(const int32 Index:Vision.CompatibleIlluminationSourceIndices)
      if(Snapshot->IlluminationSources.IsValidIndex(Index))
@@ -1042,6 +1048,7 @@ UDarkwellSightWeaveWorldSubsystem::BuildFogVisualSourceSnapshot() const
       Light.Forward=FVector2D(D.Transform.GetUnitAxis(EAxis::X)).GetSafeNormal();
       Light.Range=D.Range;Light.HalfAngle=D.Shape==ESightWeaveSourceShape::Radial?180.f:D.HalfAngleDegrees;
      }
+  }
  }
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	const FVector2D DiagnosticOffset = FVector2D(
@@ -1176,6 +1183,7 @@ void UDarkwellSightWeaveWorldSubsystem::RollbackToLegacy(
 	TorchIlluminationHandle = FSightWeaveIlluminationSourceHandle();
 	OccluderHandle = FSightWeaveOccluderHandle();
 	FloorId = FSightWeaveFloorId();
+ CachedHardAuthority.Reset();
 	KnowledgeOwnerId = FSightWeaveKnowledgeOwnerId();
 	SubjectSnapshots.Reset();
 	Player.Reset();

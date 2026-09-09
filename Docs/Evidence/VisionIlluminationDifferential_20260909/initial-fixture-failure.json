@@ -1,0 +1,17 @@
+{
+  "run": "VisionDifferential_20260909",
+  "selector": "Darkwell.SightWeave.Differential.VisionIllumination+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+SightWeave.M2.Query.EffectiveLive",
+  "runner_failure": null,
+  "exit_code": 0,
+  "foreground_approved": true,
+  "foreground_attempts": 2,
+  "wall_seconds": 30.0485797,
+  "total": 7,
+  "clean": 6,
+  "warnings": 0,
+  "failed": 1,
+  "not_run": 0,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "passed": false
+}

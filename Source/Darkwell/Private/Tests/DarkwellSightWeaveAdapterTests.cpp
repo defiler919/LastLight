@@ -31,6 +31,8 @@
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellHistoricalVisibilitySweep.h"
+#include "VisionPresentation/DarkwellStaticKnowledge.h"
+#include "VisionPresentation/DarkwellCurrentLiveGrid.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellRememberedPropSubsystem.h"
 #include "VisionPresentation/DarkwellPropGameplayLab.h"
@@ -118,6 +120,129 @@ namespace Darkwell::SightWeaveAdapterTests
 		}
 		return Actor;
 	}
+}
+
+// Characterization, not product acceptance: differences are exported, never
+// converted into expected product behavior. Uses real P4 and production stores.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellVisionLightDifferential,
+ "Darkwell.SightWeave.Differential.VisionIllumination",Darkwell::SightWeaveAdapterTests::TestFlags)
+bool FDarkwellVisionLightDifferential::RunTest(const FString&)
+{
+ using namespace Darkwell::SightWeaveAdapterTests;
+ FTestWorld TestWorld(TEXT("VisionLightDifferential"),GetTransientPackage(),true);
+ auto* W=TestWorld.Get();if(!W)return false;
+ auto* Fixture=Spawn<ADarkwellVisionIntegrationFixture>(*W,FVector::ZeroVector);
+ auto* Player=Spawn<ADarkwellCharacter>(*W,FVector(-650,0,92));
+ auto* Enemy=Spawn<ADarkwellStalkerCharacter>(*W,FVector(550,0,92));
+ Enemy->ConfigurePersistentId(TEXT("Enemy.Differential"));
+ auto* Adapter=W->GetSubsystem<UDarkwellSightWeaveWorldSubsystem>();
+ auto* Runtime=W->GetSubsystem<USightWeaveWorldSubsystem>();
+ auto* Fog=W->GetSubsystem<UDarkwellFogVisualSubsystem>();
+ if(!TestTrue(TEXT("Real adapter starts"),Adapter->RequestSightWeaveAuthority(Fixture)))return false;
+ if(!TestTrue(TEXT("D3D12 required; no synthetic GPU substitute"),GDynamicRHI && FString(GDynamicRHI->GetName()).Contains(TEXT("D3D12"))))return false;
+ Player->GetLoadoutComponent()->RestorePersistentState(2,0,0,0,DarkwellGameplayTags::Equipment_Left_Shotgun,DarkwellGameplayTags::Equipment_Right_Torch);
+ Adapter->Tick(0);
+ FSightWeaveVisionSourceDescription Cone;
+ for(const auto& V:Runtime->AcquirePublishedSnapshot()->VisionSources)
+  if(V.Description.Shape==ESightWeaveSourceShape::DirectionalCone)Cone=V.Description;
+ FSightWeaveIlluminationSourceDescription Light;
+ Light.KnowledgeOwnerId=Cone.KnowledgeOwnerId;Light.FloorId=Cone.FloorId;
+ Light.HeightRange=Cone.HeightRange;Light.Transform=FTransform(FVector(750,0,140));
+ Light.Range=300;Light.Shape=ESightWeaveSourceShape::Radial;
+ Light.EmittedCapabilities={FName(TEXT("Darkwell.Visible.Environment"))};
+ auto Handle=Runtime->RegisterIlluminationSource(Light,Fixture);
+ FString CSV=TEXT("case,x,y,z,revision,hard_point,hard_static_support,hard_object_support,object_min_coverage,object_stored,static_stored,cpu_coverage,gpu_texel,product_note\n");
+ int32 Rows=0,InteriorDifferences=0;
+ auto Probe=[&](const TCHAR* Name,FVector Point,const TCHAR* Note)
+ {
+  Adapter->Tick(0);
+  const auto Hard=Runtime->QueryEffectiveLiveAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,Point);
+  const FVector2D XY(Point);
+  const auto CPU=Fog->QueryLiveCoverageAtWorldPoint(XY);
+  TestTrue(TEXT("Valid current analytic snapshot"),CPU.bValid);
+  TestEqual(TEXT("Published CPU revision equals hard query revision"),int64(CPU.AuthorityRevision),Hard.SnapshotRevision.GetValue());
+  // Match static fine-cell five-point support separately from the point oracle.
+  const double Step=FDarkwellStaticKnowledge::SampleCm;
+  const FVector2D Min(FMath::FloorToDouble(XY.X/Step)*Step,FMath::FloorToDouble(XY.Y/Step)*Step);
+  bool Support=true;
+  for(auto O:{FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)})
+   Support &= Runtime->QueryEffectiveLiveAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,FVector(Min+O*Step,Point.Z)).bVisible;
+  FDarkwellStaticKnowledge Static;
+  const FBox2D Area(XY-FVector2D(2),XY+FVector2D(2));
+  Static.Declare(Area);Static.Observe(Fog->GetPublishedSource(),Fog->GetPublishedSegments(),Area);
+  FDarkwellCurrentLiveGrid Grid;
+  FDarkwellCurrentLiveGrid::FDescriptor Part;Part.PrimitiveKey=1;Part.MeshKey=1;
+  Part.LocalBounds=FBox(FVector(-5,-5,-1),FVector(5,5,1));
+  const FTransform Pose(Point);
+  Grid.ResetGeometry(TEXT("Differential.Partial"),MakeArrayView(&Part,1),Pose);
+  auto Query=[&](FVector2D P){return Fog->QueryLiveCoverageAtWorldPoint(P).Coverage;};
+  Grid.Advance(1.f,Pose,Query);
+  const auto& Local=Grid.Parts[0].Local;
+  const auto LocalStep=Local.GetBounds().GetSize()/FVector2D(Local.GetSize());
+  const auto LocalUV=(FVector2D(0)-Local.GetBounds().Min)/Local.GetBounds().GetSize();
+  const FVector2D LocalMin=Local.GetBounds().Min+LocalStep*FVector2D(FMath::FloorToInt(LocalUV.X*Local.GetSize().X),FMath::FloorToInt(LocalUV.Y*Local.GetSize().Y));
+  bool ObjectSupport=true;
+  for(auto O:{FVector2D(0),FVector2D(1,0),FVector2D(0,1),FVector2D(1),FVector2D(.5)})
+   ObjectSupport &= Runtime->QueryEffectiveLiveAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,Pose.TransformPosition(FVector(LocalMin+O*LocalStep,0))).bVisible;
+  const int32 ObjectIndex=FMath::FloorToInt(LocalUV.Y*Local.GetSize().Y)*Local.GetSize().X+FMath::FloorToInt(LocalUV.X*Local.GetSize().X);
+  const float ObjectMinimum=Grid.Parts[0].Coverage[ObjectIndex];
+  const bool ObjectStored=Grid.HasObservedContributionAt(XY);
+  const bool StaticStored=Static.HasMemory(XY);
+  // These are persistent stores, not inferred eligibility flags.
+  Grid.ResumeStationaryKnowledge();
+  TestEqual(TEXT("Resume does not synthesize/remove stored knowledge"),Grid.HasObservedContributionAt(XY),ObjectStored);
+  auto* Texture=Fog->GetLiveCoverageTexture();
+  TArray<FLinearColor> Pixels;FlushRenderingCommands();
+  if(!TestTrue(TEXT("Actual P4 readback"),Texture && Texture->GameThread_GetRenderTargetResource()->ReadLinearColorPixels(Pixels,FReadSurfaceDataFlags(RCM_MinMax))))return;
+  const auto UV=Fog->GetMapping().WorldToUV(XY);const auto Size=Fog->GetMapping().TextureExtent;
+  const int32 X=FMath::FloorToInt(UV.X*Size.X),Y=FMath::FloorToInt(UV.Y*Size.Y);
+  if(!TestTrue(TEXT("Probe inside texture; never clamp evidence"),X>=0 && Y>=0 && X<Size.X && Y<Size.Y))return;
+  const float GPU=Pixels[Y*Size.X+X].R;
+  CSV+=FString::Printf(TEXT("%s,%.4f,%.4f,%.4f,%lld,%d,%d,%d,%.6f,%d,%d,%.6f,%.6f,%s\n"),Name,Point.X,Point.Y,Point.Z,Hard.SnapshotRevision.GetValue(),Hard.bVisible,Support,ObjectSupport,ObjectMinimum,ObjectStored,StaticStored,CPU.Coverage,GPU,Note);
+  const FString Case(Name);
+  if(Case==TEXT("bypass_dark") || Case==TEXT("lit_interior") || Case==TEXT("reactivated"))
+   TestTrue(TEXT("Established legal interiors agree and really store"),Hard.bVisible && ObjectStored && StaticStored && GPU>.99f);
+  if(Case==TEXT("vision_dark") || Case==TEXT("illumination_without_vision") || Case==TEXT("disabled") || Case==TEXT("destroyed"))
+   TestTrue(TEXT("Established dark interiors never store"),!Hard.bVisible && !ObjectStored && !StaticStored && GPU<.01f);
+  if(Case==TEXT("illumination_without_vision"))TestTrue(TEXT("Light-only fixture actually has legal illumination"),Runtime->QueryLegalIlluminationAtLocation(Cone.KnowledgeOwnerId,Cone.FloorId,Point).bLegallyIlluminated);
+  ++Rows;if(!Hard.bVisible && (ObjectStored || StaticStored))++InteriorDifferences;
+ };
+ Light.bActive=false;Runtime->UpdateIlluminationSource(Handle,Light);
+ Probe(TEXT("bypass_dark"),FVector(-590,0,92),TEXT("legal body observation may remember"));
+ Probe(TEXT("vision_dark"),FVector(550,0,92),TEXT("no light must not remember"));
+ Light.bActive=true;Runtime->UpdateIlluminationSource(Handle,Light);
+ Probe(TEXT("lit_interior"),FVector(550,0,92),TEXT("matching scope interior"));
+ for(float Z:{75.f,140.f,240.f,290.f})Probe(TEXT("surface_height"),FVector(550,0,Z),TEXT("no top-face normal or observer-height test in XY consumers"));
+ for(float X:{449.f,450.f,450.25f,451.f,452.5f,455.f})Probe(TEXT("light_edge"),FVector(X,0,92),TEXT("point versus conservative support and texel footprint"));
+ Light.HeightRange={200.f,290.f};Runtime->UpdateIlluminationSource(Handle,Light);
+ Probe(TEXT("light_height_mismatch"),FVector(550,0,92),TEXT("hard rejects target outside light height band"));
+ Probe(TEXT("light_height_match"),FVector(550,0,240),TEXT("hard accepts height band; top visibility still unspecified"));
+ Light.HeightRange=Cone.HeightRange;Light.Transform=FTransform(FVector(750,0,280));Runtime->UpdateIlluminationSource(Handle,Light);
+ Probe(TEXT("elevated_light"),FVector(550,0,92),TEXT("source Z changed; no slab propagation model"));
+ FSightWeaveFloorDefinition OtherFloor;OtherFloor.FloorId=FSightWeaveFloorId(FName(TEXT("Differential.Upper")));
+ OtherFloor.HeightRange={-100.f,500.f};OtherFloor.bActiveForQueries=false; // Runtime permits only one query-active floor.
+ TestTrue(TEXT("Independent light floor registers"),Runtime->RegisterFloor(OtherFloor,Fixture));
+ Light.FloorId=OtherFloor.FloorId;Runtime->UpdateIlluminationSource(Handle,Light);
+ Probe(TEXT("different_floor_no_slab"),FVector(550,0,92),TEXT("product allows propagation; runtime floor equality excludes light even without slab"));
+ Light.FloorId=Cone.FloorId;Light.Range=1200;Runtime->UpdateIlluminationSource(Handle,Light);
+ for(float Y:{100.f,200.f,400.f})Probe(TEXT("occlusion_route"),FVector(550,Y,92),TEXT("existing fixture wall and door segments; not a horizontal slab"));
+ Light.Transform=FTransform(FVector(-900,0,140));Light.Range=150;Runtime->UpdateIlluminationSource(Handle,Light);
+ Probe(TEXT("illumination_without_vision"),FVector(-900,0,92),TEXT("behind cone and outside body; light alone must not remember"));
+ Light.Transform=FTransform(FVector(-350,380,140));Light.Range=300;Runtime->UpdateIlluminationSource(Handle,Light);
+ for(float Y:{380.f,390.f})Probe(TEXT("vision_edge"),FVector(-350,Y,92),TEXT("fixed cone angular boundary"));
+ Light.Transform=FTransform(FVector(750,0,140));Light.Range=300;Runtime->UpdateIlluminationSource(Handle,Light);
+ Light.bActive=false;Runtime->UpdateIlluminationSource(Handle,Light);
+ Probe(TEXT("disabled"),FVector(550,0,92),TEXT("fresh stores avoid prior Gray ambiguity"));
+ Light.bActive=true;Runtime->UpdateIlluminationSource(Handle,Light);
+ Probe(TEXT("reactivated"),FVector(550,0,92),TEXT("new observation may remember"));
+ Runtime->UnregisterIlluminationSource(Handle);
+ Probe(TEXT("destroyed"),FVector(550,0,92),TEXT("no stale light"));
+ const FString Path=FPaths::ProjectSavedDir()/TEXT("VisionIlluminationDifferential.csv");
+ TestTrue(TEXT("Evidence exported"),FFileHelper::SaveStringToFile(CSV,*Path));
+ Runtime->UnregisterFloor(OtherFloor.FloorId);
+ TestEqual(TEXT("All planned probes executed"),Rows,26);
+ AddInfo(FString::Printf(TEXT("CHARACTERIZATION ONLY: rows=%d hard-rejected/store-positive=%d; %s. Passing means measurement completed, NOT product equivalence."),Rows,InteriorDifferences,*Path));
+ return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDarkwellVisionLightBoundary,

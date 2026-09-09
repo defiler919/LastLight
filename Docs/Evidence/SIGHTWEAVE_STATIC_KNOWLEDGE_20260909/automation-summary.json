@@ -1,0 +1,17 @@
+{
+  "run": "StaticKnowledgeVerified",
+  "selector": "Darkwell.SightWeave.StaticKnowledge+Darkwell.BlackRegion.VolumeDemo+Darkwell.BlackRegion.CleanLab+Darkwell.BlackRegion.Contract+Darkwell.BlackRegion.CurrentPartialProbe+Darkwell.UnknownRegion+Darkwell.UnknownPartial+Darkwell.SightWeave.Closure.VisionIlluminationBoundary",
+  "runner_failure": null,
+  "exit_code": 0,
+  "foreground_approved": true,
+  "foreground_attempts": 2,
+  "wall_seconds": 77.5585937,
+  "total": 14,
+  "clean": 13,
+  "warnings": 1,
+  "failed": 0,
+  "not_run": 0,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "passed": true
+}

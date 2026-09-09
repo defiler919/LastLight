@@ -217,6 +217,8 @@ public:
 	UTextureRenderTarget2D* GetLiveCoverageTexture() const { return LiveCoverageTexture; }
 	const FDarkwellFogVisualMapping& GetMapping() const { return Mapping; }
 	const FDarkwellFogVisualDiagnostics& GetDiagnostics() const { return Diagnostics; }
+ const FDarkwellFogVisualSourceSnapshot& GetPublishedSource() const {return LastSource;}
+ TConstArrayView<FDarkwellFogVisualSegment> GetPublishedSegments() const {return CachedOccluderSegments;}
 
 private:
 	struct FCoverageRasterKey

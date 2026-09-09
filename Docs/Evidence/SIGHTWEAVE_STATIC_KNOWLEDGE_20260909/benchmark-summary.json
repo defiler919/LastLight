@@ -1,0 +1,957 @@
+{
+  "ReferenceFinal": {
+    "completion": "frames=114 moving_frames=113 distance_cm=6539.25 yaw_travel_deg=1916.86 mode=A",
+    "frames": 114,
+    "engine_ms": {
+      "game_ms": {
+        "mean": 264.00711754385964,
+        "p95": 778.8923,
+        "maximum": 1120.5193
+      },
+      "render_ms": {
+        "mean": 9.073012280701755,
+        "p95": 11.5064,
+        "maximum": 13.1889
+      },
+      "rhi_ms": {
+        "mean": 4.14927543859649,
+        "p95": 5.0301,
+        "maximum": 5.6452
+      },
+      "gpu_ms": {
+        "mean": 22.924316666666666,
+        "p95": 60.3892,
+        "maximum": 75.3628
+      },
+      "game_wait_ms": {
+        "mean": 1.038914035087719,
+        "p95": 4.1201,
+        "maximum": 6.1181
+      }
+    },
+    "wall_ms": {
+      "mean": 265.03137807017544,
+      "p95": 782.3268,
+      "maximum": 1123.286
+    },
+    "object_memory_us": {
+      "game_thread_us": {
+        "mean": 259792.70088495573,
+        "p95": 777613.9,
+        "maximum": 1117161.0
+      },
+      "tracked_us": {
+        "mean": 224763.90442477877,
+        "p95": 748747.1,
+        "maximum": 1081956.3
+      },
+      "coverage_us": {
+        "mean": 151937.86017699115,
+        "p95": 648653.4,
+        "maximum": 977369.5
+      },
+      "current_reveal_us": {
+        "mean": 88358.50973451328,
+        "p95": 175506.9,
+        "maximum": 219883.1
+      },
+      "ownership_us": {
+        "mean": 43.415929203539825,
+        "p95": 147.7,
+        "maximum": 1562.9
+      },
+      "texture_us": {
+        "mean": 2981.2592920353977,
+        "p95": 10441.9,
+        "maximum": 20902.3
+      },
+      "cap_us": {
+        "mean": 15788.37433628319,
+        "p95": 40131.3,
+        "maximum": 73301.3
+      },
+      "historical_us": {
+        "mean": 136182.54247787612,
+        "p95": 569135.5,
+        "maximum": 871685.4
+      }
+    },
+    "static": {
+      "objects": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "declared_tiles": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "resident_tiles": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "candidate_tiles": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "touched_tiles": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "tested_samples": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "queries": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "written_samples": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "uniform_proofs": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "uploads": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "update_us": {
+        "mean": 0.0,
+        "p95": 0.0,
+        "maximum": 0.0
+      },
+      "observe_us": {
+        "mean": 0.0,
+        "p95": 0.0,
+        "maximum": 0.0
+      },
+      "publish_us": {
+        "mean": 0.0,
+        "p95": 0.0,
+        "maximum": 0.0
+      },
+      "knowledge_bytes": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "atlas_bytes": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      }
+    },
+    "final_static": {
+      "objects": 0,
+      "declared_tiles": 0,
+      "resident_tiles": 0,
+      "candidate_tiles": 0,
+      "touched_tiles": 0,
+      "tested_samples": 0,
+      "queries": 0,
+      "written_samples": 0,
+      "uniform_proofs": 0,
+      "uploads": 0,
+      "update_us": 0.0,
+      "observe_us": 0.0,
+      "publish_us": 0.0,
+      "knowledge_bytes": 0,
+      "atlas_bytes": 0
+    },
+    "end_storage": "identities=43 records=43 local_cells=231751 local_mask_bits=458622 fine_samples=3744960 uniform_parts=4 resets=43 episodes=494 record_cells=235677 record_mask_bits=3744960 private_bytes=6647037952",
+    "render_contract": {
+      "viewport": [
+        1280,
+        720
+      ],
+      "screen_percentage": 100.0,
+      "aa": 4,
+      "dynamic_resolution": 0,
+      "vsync": 0,
+      "max_fps": 0.0,
+      "fog_extent": [
+        488,
+        408
+      ]
+    },
+    "segments": [
+      16
+    ]
+  },
+  "StaticFinal": {
+    "completion": "frames=953 moving_frames=936 distance_cm=7003.85 yaw_travel_deg=2001.66 mode=A",
+    "frames": 953,
+    "engine_ms": {
+      "game_ms": {
+        "mean": 31.498885939139583,
+        "p95": 84.7507,
+        "maximum": 136.1752
+      },
+      "render_ms": {
+        "mean": 6.760775236096542,
+        "p95": 8.2491,
+        "maximum": 19.9901
+      },
+      "rhi_ms": {
+        "mean": 3.602571353620153,
+        "p95": 4.285,
+        "maximum": 16.1975
+      },
+      "gpu_ms": {
+        "mean": 6.867945645330532,
+        "p95": 9.7571,
+        "maximum": 22.5851
+      },
+      "game_wait_ms": {
+        "mean": 0.017811542497376705,
+        "p95": 0.0824,
+        "maximum": 1.7389
+      }
+    },
+    "wall_ms": {
+      "mean": 31.51582434417627,
+      "p95": 84.6663,
+      "maximum": 136.8494
+    },
+    "object_memory_us": {
+      "game_thread_us": {
+        "mean": 23257.43897058823,
+        "p95": 74775.1,
+        "maximum": 125572.2
+      },
+      "tracked_us": {
+        "mean": 22800.57394957983,
+        "p95": 74278.8,
+        "maximum": 122616.4
+      },
+      "coverage_us": {
+        "mean": 16283.918802521006,
+        "p95": 67934.2,
+        "maximum": 117262.5
+      },
+      "current_reveal_us": {
+        "mean": 8675.769852941174,
+        "p95": 15451.7,
+        "maximum": 19256.1
+      },
+      "ownership_us": {
+        "mean": 16.138760504201684,
+        "p95": 79.4,
+        "maximum": 1013.1
+      },
+      "texture_us": {
+        "mean": 54.933193277310934,
+        "p95": 233.2,
+        "maximum": 1986.4
+      },
+      "cap_us": {
+        "mean": 562.5139705882351,
+        "p95": 1268.5,
+        "maximum": 4535.1
+      },
+      "historical_us": {
+        "mean": 14061.392331932775,
+        "p95": 61758.8,
+        "maximum": 110107.0
+      }
+    },
+    "static": {
+      "objects": {
+        "mean": 29.0,
+        "p95": 29,
+        "maximum": 29
+      },
+      "declared_tiles": {
+        "mean": 224.0,
+        "p95": 224,
+        "maximum": 224
+      },
+      "resident_tiles": {
+        "mean": 211.26232948583421,
+        "p95": 215,
+        "maximum": 215
+      },
+      "candidate_tiles": {
+        "mean": 224.0,
+        "p95": 224,
+        "maximum": 224
+      },
+      "touched_tiles": {
+        "mean": 10.228751311647429,
+        "p95": 15,
+        "maximum": 22
+      },
+      "tested_samples": {
+        "mean": 3904.813221406086,
+        "p95": 6498,
+        "maximum": 72326
+      },
+      "queries": {
+        "mean": 4254.753410283316,
+        "p95": 7969,
+        "maximum": 27689
+      },
+      "written_samples": {
+        "mean": 412.3693599160546,
+        "p95": 4,
+        "maximum": 63807
+      },
+      "uniform_proofs": {
+        "mean": 968.2644281217209,
+        "p95": 1551,
+        "maximum": 2282
+      },
+      "uploads": {
+        "mean": 0.22245540398740818,
+        "p95": 1,
+        "maximum": 15
+      },
+      "update_us": {
+        "mean": 4093.1249779643213,
+        "p95": 6470.2,
+        "maximum": 14872.801
+      },
+      "observe_us": {
+        "mean": 4078.428792235043,
+        "p95": 6460.898,
+        "maximum": 14482.8
+      },
+      "publish_us": {
+        "mean": 7.854153200419729,
+        "p95": 37.801,
+        "maximum": 424.802
+      },
+      "knowledge_bytes": {
+        "mean": 432665.2507869885,
+        "p95": 440320,
+        "maximum": 440320
+      },
+      "atlas_bytes": {
+        "mean": 16777216.0,
+        "p95": 16777216,
+        "maximum": 16777216
+      }
+    },
+    "final_static": {
+      "objects": 29,
+      "declared_tiles": 224,
+      "resident_tiles": 215,
+      "candidate_tiles": 224,
+      "touched_tiles": 14,
+      "tested_samples": 3782,
+      "queries": 4139,
+      "written_samples": 0,
+      "uniform_proofs": 1079,
+      "uploads": 0,
+      "update_us": 5237.401,
+      "observe_us": 5230.9,
+      "publish_us": 0.0,
+      "knowledge_bytes": 440320,
+      "atlas_bytes": 16777216
+    },
+    "end_storage": "identities=14 records=14 local_cells=17735 local_mask_bits=32782 fine_samples=292992 uniform_parts=2 resets=14 episodes=160 record_cells=19929 record_mask_bits=292992 private_bytes=5874044928",
+    "render_contract": {
+      "viewport": [
+        1280,
+        720
+      ],
+      "screen_percentage": 100.0,
+      "aa": 4,
+      "dynamic_resolution": 0,
+      "vsync": 0,
+      "max_fps": 0.0,
+      "fog_extent": [
+        488,
+        408
+      ]
+    },
+    "segments": [
+      16
+    ]
+  },
+  "StaticRepeat": {
+    "completion": "frames=1129 moving_frames=1013 distance_cm=2708.59 yaw_travel_deg=1999.35 mode=A",
+    "frames": 1129,
+    "engine_ms": {
+      "game_ms": {
+        "mean": 26.6929384410983,
+        "p95": 121.1232,
+        "maximum": 181.8253
+      },
+      "render_ms": {
+        "mean": 8.88437891939769,
+        "p95": 11.4704,
+        "maximum": 22.994
+      },
+      "rhi_ms": {
+        "mean": 4.704500088573958,
+        "p95": 5.8808,
+        "maximum": 9.4144
+      },
+      "gpu_ms": {
+        "mean": 5.939838706820203,
+        "p95": 10.3581,
+        "maximum": 18.5426
+      },
+      "game_wait_ms": {
+        "mean": 0.021282993799822833,
+        "p95": 0.0039,
+        "maximum": 5.2402
+      }
+    },
+    "wall_ms": {
+      "mean": 26.71448565101862,
+      "p95": 121.7498,
+      "maximum": 181.4866
+    },
+    "object_memory_us": {
+      "game_thread_us": {
+        "mean": 16707.37943262412,
+        "p95": 108429.4,
+        "maximum": 169716.8
+      },
+      "tracked_us": {
+        "mean": 16450.460904255317,
+        "p95": 107729.9,
+        "maximum": 166771.9
+      },
+      "coverage_us": {
+        "mean": 12110.515780141846,
+        "p95": 99401.4,
+        "maximum": 159750.3
+      },
+      "current_reveal_us": {
+        "mean": 5529.47907801418,
+        "p95": 12493.0,
+        "maximum": 18731.6
+      },
+      "ownership_us": {
+        "mean": 5.656914893617024,
+        "p95": 9.8,
+        "maximum": 197.8
+      },
+      "texture_us": {
+        "mean": 21.50141843971631,
+        "p95": 0.0,
+        "maximum": 2488.4
+      },
+      "cap_us": {
+        "mean": 209.95310283687957,
+        "p95": 446.1,
+        "maximum": 3791.2
+      },
+      "historical_us": {
+        "mean": 10825.197783687947,
+        "p95": 94598.5,
+        "maximum": 149855.0
+      }
+    },
+    "static": {
+      "objects": {
+        "mean": 29.0,
+        "p95": 29,
+        "maximum": 29
+      },
+      "declared_tiles": {
+        "mean": 224.0,
+        "p95": 224,
+        "maximum": 224
+      },
+      "resident_tiles": {
+        "mean": 146.0,
+        "p95": 146,
+        "maximum": 146
+      },
+      "candidate_tiles": {
+        "mean": 224.0,
+        "p95": 224,
+        "maximum": 224
+      },
+      "touched_tiles": {
+        "mean": 11.191319751992914,
+        "p95": 19,
+        "maximum": 29
+      },
+      "tested_samples": {
+        "mean": 4582.846767050487,
+        "p95": 7037,
+        "maximum": 11034
+      },
+      "queries": {
+        "mean": 5003.62976085031,
+        "p95": 7130,
+        "maximum": 15630
+      },
+      "written_samples": {
+        "mean": 0.899911426040744,
+        "p95": 0,
+        "maximum": 1016
+      },
+      "uniform_proofs": {
+        "mean": 1105.6182462356066,
+        "p95": 1802,
+        "maximum": 2443
+      },
+      "uploads": {
+        "mean": 0.005314437555358724,
+        "p95": 0,
+        "maximum": 6
+      },
+      "update_us": {
+        "mean": 4416.779682905222,
+        "p95": 8513.0,
+        "maximum": 13554.201
+      },
+      "observe_us": {
+        "mean": 4405.07826040744,
+        "p95": 8499.6,
+        "maximum": 13342.999
+      },
+      "publish_us": {
+        "mean": 0.18104782993799823,
+        "p95": 0.0,
+        "maximum": 204.403
+      },
+      "knowledge_bytes": {
+        "mean": 299008.0,
+        "p95": 299008,
+        "maximum": 299008
+      },
+      "atlas_bytes": {
+        "mean": 16777216.0,
+        "p95": 16777216,
+        "maximum": 16777216
+      }
+    },
+    "final_static": {
+      "objects": 29,
+      "declared_tiles": 224,
+      "resident_tiles": 146,
+      "candidate_tiles": 224,
+      "touched_tiles": 22,
+      "tested_samples": 7984,
+      "queries": 8720,
+      "written_samples": 0,
+      "uniform_proofs": 2016,
+      "uploads": 0,
+      "update_us": 9397.097,
+      "observe_us": 9388.603,
+      "publish_us": 0.0,
+      "knowledge_bytes": 299008,
+      "atlas_bytes": 16777216
+    },
+    "end_storage": "identities=14 records=13 local_cells=16655 local_mask_bits=29150 fine_samples=318208 uniform_parts=3 resets=14 episodes=93 record_cells=21505 record_mask_bits=318208 private_bytes=5822689280",
+    "render_contract": {
+      "viewport": [
+        1280,
+        720
+      ],
+      "screen_percentage": 100.0,
+      "aa": 4,
+      "dynamic_resolution": 0,
+      "vsync": 0,
+      "max_fps": 0.0,
+      "fog_extent": [
+        488,
+        408
+      ]
+    },
+    "segments": [
+      16
+    ]
+  },
+  "ReferenceVerified": {
+    "completion": "frames=125 moving_frames=124 distance_cm=6481.59 yaw_travel_deg=1965.82 mode=A",
+    "frames": 125,
+    "engine_ms": {
+      "game_ms": {
+        "mean": 241.95006320000005,
+        "p95": 583.6718,
+        "maximum": 1360.3395
+      },
+      "render_ms": {
+        "mean": 9.015567199999996,
+        "p95": 11.5325,
+        "maximum": 15.3159
+      },
+      "rhi_ms": {
+        "mean": 4.082091200000001,
+        "p95": 5.0207,
+        "maximum": 7.4207
+      },
+      "gpu_ms": {
+        "mean": 28.39668,
+        "p95": 60.0636,
+        "maximum": 70.5564
+      },
+      "game_wait_ms": {
+        "mean": 1.2256760000000002,
+        "p95": 6.068,
+        "maximum": 10.1231
+      }
+    },
+    "wall_ms": {
+      "mean": 243.17707919999995,
+      "p95": 586.2511,
+      "maximum": 1360.7718
+    },
+    "object_memory_us": {
+      "game_thread_us": {
+        "mean": 235310.9717741936,
+        "p95": 578789.9,
+        "maximum": 1355617.2
+      },
+      "tracked_us": {
+        "mean": 205308.90564516134,
+        "p95": 547301.3,
+        "maximum": 1314982.5
+      },
+      "coverage_us": {
+        "mean": 137671.45080645158,
+        "p95": 447511.9,
+        "maximum": 1234496.5
+      },
+      "current_reveal_us": {
+        "mean": 82182.6758064516,
+        "p95": 164124.1,
+        "maximum": 180208.2
+      },
+      "ownership_us": {
+        "mean": 47.803225806451614,
+        "p95": 182.3,
+        "maximum": 1443.1
+      },
+      "texture_us": {
+        "mean": 2650.997580645161,
+        "p95": 11457.4,
+        "maximum": 16799.2
+      },
+      "cap_us": {
+        "mean": 14698.25887096774,
+        "p95": 42495.8,
+        "maximum": 63411.7
+      },
+      "historical_us": {
+        "mean": 122918.69274193549,
+        "p95": 397754.6,
+        "maximum": 1156982.2
+      }
+    },
+    "static": {
+      "objects": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "declared_tiles": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "resident_tiles": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "candidate_tiles": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "touched_tiles": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "tested_samples": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "queries": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "written_samples": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "uniform_proofs": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "uploads": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "update_us": {
+        "mean": 0.0,
+        "p95": 0.0,
+        "maximum": 0.0
+      },
+      "observe_us": {
+        "mean": 0.0,
+        "p95": 0.0,
+        "maximum": 0.0
+      },
+      "publish_us": {
+        "mean": 0.0,
+        "p95": 0.0,
+        "maximum": 0.0
+      },
+      "knowledge_bytes": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      },
+      "atlas_bytes": {
+        "mean": 0.0,
+        "p95": 0,
+        "maximum": 0
+      }
+    },
+    "final_static": {
+      "objects": 0,
+      "declared_tiles": 0,
+      "resident_tiles": 0,
+      "candidate_tiles": 0,
+      "touched_tiles": 0,
+      "tested_samples": 0,
+      "queries": 0,
+      "written_samples": 0,
+      "uniform_proofs": 0,
+      "uploads": 0,
+      "update_us": 0.0,
+      "observe_us": 0.0,
+      "publish_us": 0.0,
+      "knowledge_bytes": 0,
+      "atlas_bytes": 0
+    },
+    "end_storage": "identities=43 records=43 local_cells=231751 local_mask_bits=459342 fine_samples=3744960 uniform_parts=3 resets=43 episodes=431 record_cells=235677 record_mask_bits=3744960 private_bytes=6955589632",
+    "render_contract": {
+      "viewport": [
+        1280,
+        720
+      ],
+      "screen_percentage": 100.0,
+      "aa": 4,
+      "dynamic_resolution": 0,
+      "vsync": 0,
+      "max_fps": 0.0,
+      "fog_extent": [
+        488,
+        408
+      ]
+    },
+    "segments": [
+      16
+    ]
+  },
+  "StaticVerified": {
+    "completion": "frames=1329 moving_frames=1178 distance_cm=3902.50 yaw_travel_deg=2109.02 mode=A",
+    "frames": 1329,
+    "engine_ms": {
+      "game_ms": {
+        "mean": 22.5649460496614,
+        "p95": 56.8174,
+        "maximum": 136.5036
+      },
+      "render_ms": {
+        "mean": 6.254760496613995,
+        "p95": 7.4546,
+        "maximum": 20.8225
+      },
+      "rhi_ms": {
+        "mean": 3.362076824680212,
+        "p95": 3.9022,
+        "maximum": 12.0313
+      },
+      "gpu_ms": {
+        "mean": 5.607119036869826,
+        "p95": 8.987,
+        "maximum": 20.7979
+      },
+      "game_wait_ms": {
+        "mean": 0.014553348382242285,
+        "p95": 0.0043,
+        "maximum": 7.9782
+      }
+    },
+    "wall_ms": {
+      "mean": 22.579889315274617,
+      "p95": 57.3622,
+      "maximum": 136.3922
+    },
+    "object_memory_us": {
+      "game_thread_us": {
+        "mean": 14884.32914156626,
+        "p95": 48673.6,
+        "maximum": 125135.1
+      },
+      "tracked_us": {
+        "mean": 14623.269352409625,
+        "p95": 47690.1,
+        "maximum": 125091.9
+      },
+      "coverage_us": {
+        "mean": 10601.363253012052,
+        "p95": 41156.2,
+        "maximum": 119063.0
+      },
+      "current_reveal_us": {
+        "mean": 4935.200075301208,
+        "p95": 11921.1,
+        "maximum": 18643.8
+      },
+      "ownership_us": {
+        "mean": 6.098117469879519,
+        "p95": 6.5,
+        "maximum": 405.7
+      },
+      "texture_us": {
+        "mean": 23.00978915662651,
+        "p95": 45.5,
+        "maximum": 2340.2
+      },
+      "cap_us": {
+        "mean": 181.57040662650607,
+        "p95": 427.0,
+        "maximum": 3322.0
+      },
+      "historical_us": {
+        "mean": 9631.806777108432,
+        "p95": 38889.0,
+        "maximum": 110514.7
+      }
+    },
+    "static": {
+      "objects": {
+        "mean": 29.0,
+        "p95": 29,
+        "maximum": 29
+      },
+      "declared_tiles": {
+        "mean": 224.0,
+        "p95": 224,
+        "maximum": 224
+      },
+      "resident_tiles": {
+        "mean": 198.96463506395787,
+        "p95": 199,
+        "maximum": 199
+      },
+      "candidate_tiles": {
+        "mean": 224.0,
+        "p95": 224,
+        "maximum": 224
+      },
+      "touched_tiles": {
+        "mean": 10.212942061700527,
+        "p95": 16,
+        "maximum": 25
+      },
+      "tested_samples": {
+        "mean": 4293.0827689992475,
+        "p95": 6548,
+        "maximum": 11617
+      },
+      "queries": {
+        "mean": 4886.167795334838,
+        "p95": 7886,
+        "maximum": 15211
+      },
+      "written_samples": {
+        "mean": 73.39352896914974,
+        "p95": 383,
+        "maximum": 6871
+      },
+      "uniform_proofs": {
+        "mean": 920.0225733634312,
+        "p95": 1287,
+        "maximum": 1809
+      },
+      "uploads": {
+        "mean": 0.21519939804364183,
+        "p95": 2,
+        "maximum": 8
+      },
+      "update_us": {
+        "mean": 3823.506582392781,
+        "p95": 6392.997,
+        "maximum": 10717.098
+      },
+      "observe_us": {
+        "mean": 3810.098822422873,
+        "p95": 6353.199,
+        "maximum": 10504.398
+      },
+      "publish_us": {
+        "mean": 6.901051166290442,
+        "p95": 65.9,
+        "maximum": 400.402
+      },
+      "knowledge_bytes": {
+        "mean": 407479.5726109857,
+        "p95": 407552,
+        "maximum": 407552
+      },
+      "atlas_bytes": {
+        "mean": 16777216.0,
+        "p95": 16777216,
+        "maximum": 16777216
+      }
+    },
+    "final_static": {
+      "objects": 29,
+      "declared_tiles": 224,
+      "resident_tiles": 199,
+      "candidate_tiles": 224,
+      "touched_tiles": 18,
+      "tested_samples": 6430,
+      "queries": 6778,
+      "written_samples": 0,
+      "uniform_proofs": 1303,
+      "uploads": 0,
+      "update_us": 6843.001,
+      "observe_us": 6839.0,
+      "publish_us": 0.0,
+      "knowledge_bytes": 407552,
+      "atlas_bytes": 16777216
+    },
+    "end_storage": "identities=14 records=14 local_cells=17735 local_mask_bits=32782 fine_samples=292992 uniform_parts=2 resets=14 episodes=119 record_cells=19929 record_mask_bits=292992 private_bytes=5796671488",
+    "render_contract": {
+      "viewport": [
+        1280,
+        720
+      ],
+      "screen_percentage": 100.0,
+      "aa": 4,
+      "dynamic_resolution": 0,
+      "vsync": 0,
+      "max_fps": 0.0,
+      "fog_extent": [
+        488,
+        408
+      ]
+    },
+    "segments": [
+      16
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "note": "Measured/tested module is recorded in binary-material-sha256.json. This rebuild only removes whitespace on an empty benchmark source line; no executable logic changes.",
+  "module_sha256": "2F06F88DE4D0BFCB4EB0C591ADE004D5B4D07C09998E076219A56FA9DC69161F"
+}

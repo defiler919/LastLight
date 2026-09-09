@@ -1,4 +1,8 @@
 #include "VisionPresentation/DarkwellApartmentLab.h"
+#include "VisionPresentation/DarkwellStaticEnvironmentSubsystem.h"
+#include "VisionPresentation/DarkwellApartmentBenchmark.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "VisionPresentation/DarkwellRememberablePropComponent.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
@@ -45,8 +49,12 @@ void ADarkwellApartmentLab::RegisterSource(AActor* A,FName Id,FLinearColor Tint,
  ensureAlwaysMsgf(MemoryScene->RegisterRememberable(Memory,Policy),TEXT("Apartment registration failed: %s"),*Id.ToString());
  Sources.Add(A);
 }
-AActor* ADarkwellApartmentLab::Box(FName Id,FVector Location,FVector Size,FLinearColor Tint,bool Whole,float Yaw)
+AActor* ADarkwellApartmentLab::Box(FName Id,FVector Location,FVector Size,FLinearColor Tint,bool Whole,float Yaw,bool Immutable)
 {
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+ // Bounded architecture reference only; never the normal gameplay path.
+ if(FParse::Param(FCommandLine::Get(),TEXT("ApartmentObjectArchitectureReference")))Immutable=false;
+#endif
  auto* A=GetWorld()->SpawnActor<AActor>(); A->SetOwner(this);
  auto* M=NewObject<UStaticMeshComponent>(A); A->SetRootComponent(M); A->AddInstanceComponent(M);
  M->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Cube.Cube")));
@@ -54,7 +62,8 @@ AActor* ADarkwellApartmentLab::Box(FName Id,FVector Location,FVector Size,FLinea
  M->SetRelativeScale3D(Size/100); M->RegisterComponent();
  A->SetActorLocationAndRotation(Location,FRotator(0,Yaw,0));
  if(Id.ToString().Contains(TEXT("Floor"))) M->TranslucencySortPriority=-1;
- RegisterSource(A,Id,Tint,Whole); return A;
+ if(Immutable){ensureAlways(GetWorld()->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->RegisterImmutable(M,Tint));Sources.Add(A);}
+ else RegisterSource(A,Id,Tint,Whole); return A;
 }
 void ADarkwellApartmentLab::BeginPlay()
 {
@@ -62,14 +71,14 @@ void ADarkwellApartmentLab::BeginPlay()
  MemoryScene=GetWorld()->SpawnActor<ADarkwellObjectMemoryScene>();
  const FLinearColor Floor(0.18f,0.19f,0.20f),Wall(0.42f,0.43f,0.4f),Wood(0.34f,0.22f,0.13f),Blue(0.13f,0.34f,0.5f);
  // 12 x 10 m: south entry, central living room, west kitchen, east bedroom.
- // Modest floor pieces retain identical authority precision while bounding each object's grid.
+ // Immutable geometry shares sparse world-space knowledge; mesh divisions are not memory identities.
  for(int X=0;X<4;++X) for(int Y=0;Y<4;++Y)
-  Box(*FString::Printf(TEXT("Apartment.Floor.%d.%d"),X,Y),FVector(-450+300*X,-375+250*Y,-5),FVector(300,250,10),Floor);
+  Box(*FString::Printf(TEXT("Apartment.Floor.%d.%d"),X,Y),FVector(-450+300*X,-375+250*Y,-5),FVector(300,250,10),Floor,false,0,true);
  auto WallLine=[&](FVector2D A,FVector2D B)
  {
   const FVector2D D=B-A,C=(A+B)*0.5f;
   const float Yaw=FMath::RadiansToDegrees(FMath::Atan2(D.Y,D.X));
-  Box(*FString::Printf(TEXT("Apartment.Wall.%d"),FixedSegments.Num()),FVector(C.X,C.Y,120),FVector(D.Size(),20,240),Wall,false,Yaw);
+  Box(*FString::Printf(TEXT("Apartment.Wall.%d"),FixedSegments.Num()),FVector(C.X,C.Y,120),FVector(D.Size(),20,240),Wall,false,Yaw,true);
   auto& S=FixedSegments.AddDefaulted_GetRef(); S.A=A;S.B=B;S.ZMin=0;S.ZMax=240;
  };
  WallLine({-600,-500},{600,-500}); WallLine({600,-500},{600,500});
@@ -85,7 +94,7 @@ void ADarkwellApartmentLab::BeginPlay()
   for(auto* L:Lights) L->SetIntensity(0); // decorative passage indicator is not legal light
   Doors.Add(D); RegisterSource(D,*FString::Printf(TEXT("Apartment.Door.%d"),I),Wood,false,true);
   // Lintel preserves a complete wall above each opening without closing its XY aperture.
-  Box(*FString::Printf(TEXT("Apartment.Lintel.%d"),I),Locations[I]+FVector(0,0,230),I==0?FVector(120,20,20):FVector(20,120,20),Wall);
+  Box(*FString::Printf(TEXT("Apartment.Lintel.%d"),I),Locations[I]+FVector(0,0,230),I==0?FVector(120,20,20):FVector(20,120,20),Wall,false,0,true);
  }
  Box(TEXT("Apartment.Sofa.Seat"),{0,370,30},{200,75,60},Blue);
  Box(TEXT("Apartment.Sofa.Back"),{0,410,65},{200,20,100},Blue);
@@ -122,7 +131,7 @@ void ADarkwellApartmentLab::BuildSightWeaveOccluderSegments(TArray<FDarkwellVisi
 }
 bool ADarkwellApartmentLab::EnableDarkwellProjectFogP4(UTexture* Raw,FVector2D Min,FVector2D Inv)
 {
- for(AActor* A:Sources) for(UPrimitiveComponent* M:A->FindComponentByClass<UDarkwellRememberablePropComponent>()->GetMemoryPrimitives())
+ for(AActor* A:Sources) if(auto* Rememberable=A->FindComponentByClass<UDarkwellRememberablePropComponent>()) for(UPrimitiveComponent* M:Rememberable->GetMemoryPrimitives())
   if(auto* MID=Cast<UMaterialInstanceDynamic>(M->GetMaterial(0)))
   { MID->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"),Raw);MID->SetVectorParameterValue(TEXT("FogWorldMin"),FLinearColor(Min.X,Min.Y,0,0));MID->SetVectorParameterValue(TEXT("FogWorldInvExtent"),FLinearColor(Inv.X,Inv.Y,0,0)); }
  return true;
@@ -146,7 +155,20 @@ void ADarkwellApartmentLab::Tick(float Dt)
   ensureAlways(EnvironmentLight.IsValid()); bPlayerReady=true;
   if(GEngine) GEngine->AddOnScreenDebugMessage(0x415054,30,FColor::Cyan,TEXT("APARTMENT | WASD + mouse | F: doors / green bedroom blackout console | west kitchen, east bedroom"));
  }
- MemoryScene->UpdateMemory(Dt,P->GetActorLocation());
+ if(Darkwell::ApartmentBenchmark::Tick(GetWorld(),MemoryScene))
+ {
+  GetWorld()->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->UpdateKnowledge();
+  MemoryScene->UpdateMemory(Dt,P->GetActorLocation());
+ }
+}
+void ADarkwellApartmentLab::SetDoorsOpenForTesting(bool Open)
+{for(ADarkwellDoor* D:Doors)if(IsValid(D))D->RestoreDoorState(Open?DarkwellGameplayTags::State_World_Door_Open:DarkwellGameplayTags::State_World_Door_Closed);}
+UDarkwellStaticEnvironmentSubsystem* ADarkwellApartmentLab::GetStaticKnowledge() const
+{return GetWorld()->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>();}
+void ADarkwellApartmentLab::SetObserverPoseForTesting(FVector Location,float Yaw)
+{
+ if(auto* P=Cast<ADarkwellCharacter>(UGameplayStatics::GetPlayerPawn(this,0)))
+ {const FRotator R(0,Yaw,0);P->SetActorLocationAndRotation(Location,R,false,nullptr,ETeleportType::TeleportPhysics);P->AimAtWorldPoint(Location+R.Vector()*1000);}
 }
 void ADarkwellApartmentLab::EndPlay(EEndPlayReason::Type Reason)
 {

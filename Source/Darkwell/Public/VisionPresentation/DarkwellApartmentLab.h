@@ -7,6 +7,7 @@ class ADarkwellDoor;
 class ADarkwellObjectMemoryScene;
 class ADarkwellBlackRegionTrigger;
 class UStaticMeshComponent;
+class UDarkwellStaticEnvironmentSubsystem;
 
 /** Product-scale manual fixture; uses the existing adapter, object memory and F actors. */
 UCLASS()
@@ -24,13 +25,16 @@ public:
  virtual bool HasDynamicSightWeaveOccluders() const override { return true; }
  virtual bool EnableDarkwellProjectFogP4(UTexture* Raw,FVector2D Min,FVector2D Inv) override;
  virtual void DisableDarkwellProjectFog() override {}
+ UFUNCTION(BlueprintCallable,Category="Lab|Testing") void SetDoorsOpenForTesting(bool Open);
+ UFUNCTION(BlueprintPure,Category="Lab|Testing") UDarkwellStaticEnvironmentSubsystem* GetStaticKnowledge() const;
+ UFUNCTION(BlueprintCallable,Category="Lab|Testing") void SetObserverPoseForTesting(FVector Location,float Yaw);
  UPROPERTY(Transient) TObjectPtr<ADarkwellObjectMemoryScene> MemoryScene;
  UPROPERTY(Transient) TObjectPtr<ADarkwellBlackRegionTrigger> Trigger;
  UPROPERTY(Transient) TArray<TObjectPtr<ADarkwellDoor>> Doors;
  UPROPERTY(Transient) TArray<TObjectPtr<AActor>> Sources;
 private:
  void RegisterSource(AActor* Actor,FName Id,FLinearColor Tint,bool Whole,bool Moving=false);
- AActor* Box(FName Id,FVector Location,FVector Size,FLinearColor Tint,bool Whole=false,float Yaw=0);
+ AActor* Box(FName Id,FVector Location,FVector Size,FLinearColor Tint,bool Whole=false,float Yaw=0,bool Immutable=false);
  TArray<FDarkwellVisionIntegrationSegment> FixedSegments;
  FSightWeaveIlluminationSourceHandle EnvironmentLight;
  bool bPlayerReady=false;

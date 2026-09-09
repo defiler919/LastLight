@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellMemoryRegionSubsystem.h"
+#include "VisionPresentation/DarkwellStaticEnvironmentSubsystem.h"
 #include "VisionPresentation/DarkwellBlackoutTiming.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
@@ -52,6 +53,7 @@ void UDarkwellMemoryRegionSubsystem::ReleaseBlockRegistration(bool bPublish)
  const bool bWorldEnding=GetWorld()->bIsTearingDown;
  if(!bWorldEnding)
   for(TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld());It;++It) It->SetMemoryWriteBlock(Bounds,false);
+ if(!bWorldEnding)GetWorld()->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->SetMemoryWriteBlock(Bounds,false);
  bBlocked=false; ++AuthorityRevision;
  if(bPublish && !bWorldEnding) Publish();
 }
@@ -117,6 +119,7 @@ bool UDarkwellMemoryRegionSubsystem::ClearMemory()
  if(!IsConfigured() || !ValidateObjectBoundaries() || !ValidateRuntimeScope()) return false;
  if(bHasRuntimeScope && !GetWorld()->GetSubsystem<USightWeaveWorldSubsystem>()->ClearExplorationMemory(RuntimeRegion)) return false;
  for(TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld());It;++It) It->ClearMemoryInRegion(Bounds);
+ GetWorld()->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->ClearMemory(Bounds);
  RememberedBits.Init(false,RememberedBits.Num());
  ++AuthorityRevision; Publish();
  return true;
@@ -138,6 +141,7 @@ bool UDarkwellMemoryRegionSubsystem::SetBlockMemoryWrites(bool bEnabled)
  }
  // The pre-block live observation may seal its existing eligible knowledge.
  for(TActorIterator<ADarkwellObjectMemoryScene> It(GetWorld());It;++It) It->SetMemoryWriteBlock(Bounds,bEnabled);
+ GetWorld()->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->SetMemoryWriteBlock(Bounds,bEnabled);
  bBlocked=bEnabled; ++AuthorityRevision; Publish();
  return true;
 }

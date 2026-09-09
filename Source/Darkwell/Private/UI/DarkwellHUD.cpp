@@ -1,7 +1,7 @@
-#include "VisionPresentation/DarkwellApartmentLab.h"
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "UI/DarkwellHUD.h"
+#include "VisionPresentation/DarkwellApartmentLab.h"
 #include "VisionPresentation/DarkwellCleanBlackRegionLab.h"
 #include "VisionPresentation/DarkwellBlackRegionTrigger.h"
 #include "VisionPresentation/DarkwellBlackRegionEventAdapter.h"

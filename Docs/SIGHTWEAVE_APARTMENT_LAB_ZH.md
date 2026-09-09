@@ -21,7 +21,7 @@
 
 三扇门复用 `ADarkwellDoor`、原生 Door Open/Closed Gameplay Tags 和现有 F 交互组件；宽 1.2 m、高 2.2 m，门楣补足墙高。三扇门的实际门板姿态都参与当前遮挡，不把逻辑 Open 状态直接当作整扇门消失。
 
-家具采用 UE Cube：沙发座/靠背、茶几、厨房操作台和餐桌、冰箱、床和床头柜、37° 衣柜、玄关高柜。茶几、餐桌、床头柜、绿色开关为 Whole，其余主要为 SpatialPartial；门复用已有移动历史策略，其余静态物体 StationaryOnly。全部 `bRememberFromStart=false`。
+家具采用 UE Cube：沙发座/靠背、茶几、厨房操作台和餐桌、冰箱、床和床头柜、37° 衣柜、玄关高柜。茶几、餐桌、床头柜、绿色开关为 Whole，其余家具主要为 SpatialPartial；门复用已有移动历史策略，其余家具 StationaryOnly。全部 `bRememberFromStart=false`。当前 16 地板＋10 墙＋3 过梁已退出 ObjectMemory，使用共享 Static Environment Knowledge；门和家具合计 14 个 ObjectMemory 对象。见 [静态架构交接](SIGHTWEAVE_STATIC_ENVIRONMENT_KNOWLEDGE_ZH.md)。
 
 卧室固定 BlackRegion AABB：XY `[200,600] × [-140,500]`，400×640 cm，完整沿房间分隔线定义。现有绿色 `ADarkwellBlackRegionSwitch` 位于客厅 `(100,-55)`，指向现有 Trigger；靠近 150 cm 内并面向它按 F。这里只调用现有 Activate/Deactivate，没有复制 Clear/Block/Knowledge。
 
@@ -29,7 +29,7 @@
 
 ## 当前运行路径与遮挡
 
-`ADarkwellVisionIntegrationGameMode → UDarkwellSightWeaveWorldSubsystem → SightWeave Runtime + UDarkwellFogVisualSubsystem P4 → ADarkwellObjectMemoryScene`。
+`ADarkwellVisionIntegrationGameMode → UDarkwellSightWeaveWorldSubsystem → SightWeave Runtime + UDarkwellFogVisualSubsystem P4 → StaticEnvironmentSubsystem（不可变建筑） / ObjectMemoryScene（门和家具）`。
 
 P4 raw coverage：488×408 R16F、2.5 cm/texel；对象局部 cell 2.5 cm、原细样本精度不变。旧 HUD `FogTexture/FogCompositeMID=None`，Legacy Visibility tick 关闭；旧插件 renderer 被抑制。旧组件类型可能由共有角色/HUD构造，但不执行 Legacy Fog 路径。
 
@@ -53,7 +53,7 @@ P4 raw coverage：488×408 R16F、2.5 cm/texel；对象局部 cell 2.5 cm、原�
 
 1. 出生于南侧玄关，初始无预写 Memory；近身/合法视野随正常首帧显现。
 2. 靠近正前方门，面向门按 F；进入客厅。重复开关，观察门后 Live 是否随实际开口变化。
-3. 分别进入西侧厨房、东侧卧室；贴墙角、门洞观察，再转开形成 Gray。检查茶几/餐桌等 Whole 与衣柜/墙面等 Partial。
+3. 分别进入西侧厨房、东侧卧室；贴墙角、门洞观察，再转开形成 Gray。检查茶几/餐桌等 Whole、衣柜等 Partial，以及共享空间知识的静态墙面/地板。
 4. 观察 37° 衣柜后返回客厅，靠近绿色控制台按 F。HUD 显示 BEDROOM BLACKOUT ACTIVE，卧室旧灰被 Clear+Block。
 5. 再进卧室，Live 正常；离开合法视野后保持 Unknown。回开关按 F 停用；旧灰不能自动恢复，重新观察才重建。
 6. 观察客厅暖光与卧室较暗的区别；原随身光仍可能合法照亮卧室，不应把“房间暗”理解成强制禁止 Live。

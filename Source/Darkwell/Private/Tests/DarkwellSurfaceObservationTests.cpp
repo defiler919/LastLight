@@ -9,6 +9,30 @@
 #include "UObject/Package.h"
 #include "Player/DarkwellCharacter.h"
 #include "Player/DarkwellObserverComponent.h"
+#include "VisionPresentation/DarkwellSurfaceKnowledge.h"
+#include "VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h"
+#include "VisionPresentation/DarkwellStaticEnvironmentSubsystem.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/SceneCaptureComponent2D.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "Engine/Texture2D.h"
+#include "RHICommandList.h"
+#include "RenderingThread.h"
+#include "AssetCompilingManager.h"
+#include "ShaderCompiler.h"
+#include "ImageUtils.h"
+#include "Misc/FileHelper.h"
+#include "Components/PointLightComponent.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialExpressionConstant3Vector.h"
+#include "VisionPresentation/DarkwellObjectMemoryScene.h"
+#include "VisionPresentation/DarkwellRememberablePropComponent.h"
+#include "SightWeaveObjectPolicy.h"
+#include "SightWeaveRenderWorldSubsystem.h"
+#include "VisionPresentation/DarkwellApartmentLab.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+#include "HAL/FileManager.h"
 
 using namespace Darkwell::SurfaceObservationTests;
 namespace
@@ -375,5 +399,193 @@ bool FSurfaceV1Performance::RunTest(const FString&)
  TestTrue(TEXT("Moving observer never rebuilds surface BVH"),Scene==W.Runtime->AcquirePublishedSnapshot()->SurfaceScene);
  AddInfo(FString::Printf(TEXT("SURFACE_V1_DIRTY samples=400 query_p95_us=%.3f query_p99_us=%.3f source_publish_p95_us=%.3f source_publish_p99_us=%.3f"),DirtyTimes[94],DirtyTimes[98],PublishTimes[94],PublishTimes[98]));
  return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgeV1Facts,"Darkwell.SightWeave.SurfaceKnowledge.FactsAndArchive",SurfaceTestFlags)
+bool FSurfaceKnowledgeV1Facts::RunTest(const FString&)
+{
+ FRuntimeWorld W;auto B=Receiver(W);W.Runtime->RegisterSurfaceBox(B);
+ auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);
+ FDarkwellSurfaceKnowledge K;TestTrue(TEXT("Initialize durable domain"),K.Initialize(B,W.Owner));K.Observe(*W.Runtime);
+ auto Known=[&](ESightWeaveBoxFace F){return K.IsKnown(F,{0,0});};
+ TestTrue(TEXT("Front learned"),Known(ESightWeaveBoxFace::NegativeX));
+ TestFalse(TEXT("Top not learned from Whole/front"),Known(ESightWeaveBoxFace::Top));
+ TestFalse(TEXT("Back not learned"),Known(ESightWeaveBoxFace::PositiveX));
+ TestEqual(TEXT("Unoccluded large front uses four authority corner queries"),K.ExactSamples,uint64(4));
+ K.Observe(*W.Runtime);TestEqual(TEXT("Unchanged revision performs zero proof work"),K.Proofs,uint64(0));
+ TArray<uint8> Archive;K.Save(Archive);FDarkwellSurfaceKnowledge Restored;Restored.Initialize(B,W.Owner);
+ TestTrue(TEXT("Archive accepts same stable identity/domain"),Restored.Load(Archive));
+ TestTrue(TEXT("Archived front known"),Restored.IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
+ TestFalse(TEXT("Live never persisted"),Restored.IsLive(ESightWeaveBoxFace::NegativeX,{0,0}));
+ auto Other=B;Other.Id=TEXT("Other");Restored.Initialize(Other,W.Owner);TestFalse(TEXT("Wrong domain refused"),Restored.Load(Archive));
+ Restored.Initialize(B,W.Owner,2);TestFalse(TEXT("Content version mismatch refused"),Restored.Load(Archive));
+ Restored.Initialize(B,W.Owner);auto Truncated=Archive;Truncated.SetNum(Archive.Num()-1);TestFalse(TEXT("Truncation refused transactionally"),Restored.Load(Truncated));
+ V.Transform.SetLocation({0,200,162});W.Runtime->UpdateVisionSource(H,V);K.Observe(*W.Runtime);
+ TestTrue(TEXT("New side learned independently"),Known(ESightWeaveBoxFace::PositiveY));
+ TestTrue(TEXT("Old front retained"),Known(ESightWeaveBoxFace::NegativeX));
+ TestFalse(TEXT("Old front no longer live"),K.IsLive(ESightWeaveBoxFace::NegativeX,{0,0}));
+ V.Transform.SetLocation({0,200,260});W.Runtime->UpdateVisionSource(H,V);K.Observe(*W.Runtime);
+ TestTrue(TEXT("Raised observer learns top"),Known(ESightWeaveBoxFace::Top));
+ TestFalse(TEXT("Same XY bottom independent"),Known(ESightWeaveBoxFace::Bottom));
+ const FBox2D All({-100,-100},{100,100});K.SetBlock(All,true);K.Clear(All);K.Observe(*W.Runtime);
+ TestFalse(TEXT("Clear plus block prevents surface rewrite"),Known(ESightWeaveBoxFace::Top));
+ TestTrue(TEXT("Memory block does not block Live"),K.IsLive(ESightWeaveBoxFace::Top,{0,0}));
+ K.SetBlock(All,false);K.Observe(*W.Runtime);TestTrue(TEXT("Fresh legal observation relearns"),Known(ESightWeaveBoxFace::Top));
+ V.bActive=false;W.Runtime->UpdateVisionSource(H,V);K.Observe(*W.Runtime);K.Clear(All);K.Observe(*W.Runtime);
+ TestFalse(TEXT("Clear without observation stays unknown"),Known(ESightWeaveBoxFace::Top));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceRegionProof,"Darkwell.SightWeave.SurfaceKnowledge.RegionProof",SurfaceTestFlags)
+bool FSurfaceRegionProof::RunTest(const FString&)
+{
+ FRuntimeWorld W;W.Runtime->RegisterSurfaceBox(Receiver(W));auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);
+ const FBox2D Whole({-1,-1},{1,1});bool Value=false;
+ TestTrue(TEXT("Clear face region certified"),W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Whole,Value)&&Value);
+ auto Obstacle=Receiver(W);Obstacle.Id=TEXT("Thin");Obstacle.Pose=FTransform(FVector(-120,8,130));Obstacle.HalfExtent={1,.05,70};W.Runtime->RegisterSurfaceBox(Obstacle);
+ TestFalse(TEXT("Thin blocker invalidates corner-only proof"),W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Whole,Value));
+ int Certified=0;
+ for(int Y=0;Y<8;++Y)for(int X=0;X<8;++X)
+ {
+  FBox2D Region(FVector2D(X,Y)/4-FVector2D(1),FVector2D(X+1,Y+1)/4-FVector2D(1));
+  if(!W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Region,Value))continue;
+  ++Certified;for(int B=0;B<=8;++B)for(int A=0;A<=8;++A)
+   TestEqual(TEXT("Every certified region agrees with dense exact Hard oracle"),W.Runtime->QuerySurfaceSample(W.Owner,Sample(ESightWeaveBoxFace::NegativeX,Region.Min+Region.GetSize()*FVector2D(A,B)/8)).Hard.bEligibleForMemoryWrite,Value);
+ }
+ TestTrue(TEXT("Some unobstructed subregions certified"),Certified>0);
+ W.Runtime->UnregisterSurfaceBox(Obstacle.Id);V.IlluminationPolicy=ESightWeaveIlluminationPolicy::RequiresLegalIllumination;W.Runtime->UpdateVisionSource(H,V);
+ TestTrue(TEXT("No legal light certifies false"),W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Whole,Value)&&!Value);
+ W.Runtime->UpdateSurfaceBox(Receiver(W,75));V.IlluminationPolicy=ESightWeaveIlluminationPolicy::BypassLegalIllumination;W.Runtime->UpdateVisionSource(H,V);
+ Obstacle.Pose=FTransform(FVector(-100,0,200));Obstacle.HalfExtent={35,150,200};W.Runtime->RegisterSurfaceBox(Obstacle);
+ TestTrue(TEXT("Convex shadow covers receiver even across eye/target planes"),W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::Top,Whole,Value)&&!Value);
+ for(int Y=0;Y<=20;++Y)for(int X=0;X<=20;++X)TestFalse(TEXT("Clipped convex shadow matches dense exact authority"),W.Runtime->QuerySurfaceSample(W.Owner,Sample(ESightWeaveBoxFace::Top,FVector2D(X,Y)/10-FVector2D(1))).Hard.bVisible);
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgeV1P4,"Darkwell.SightWeave.SurfaceKnowledge.ObjectStaticP4",SurfaceTestFlags)
+bool FSurfaceKnowledgeV1P4::RunTest(const FString&)
+{
+ FRuntimeWorld W(true);W.Runtime->ConfigureExplorationMemory(W.Owner,W.Floor,ESightWeaveRenderPrecisionTier::Ultra);
+ // Match the production P4 Adapter: the old full-screen composite must not
+ // own the view alongside the project-owned surface presenter.
+ W.World->GetSubsystem<USightWeaveRenderWorldSubsystem>()->SetPresentationSuppressed(true);
+ auto* S=W.World->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>();auto* Static=W.World->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>();
+ auto* Actor=W.World->SpawnActor<AActor>();auto* Mesh=NewObject<UStaticMeshComponent>(Actor);Actor->AddInstanceComponent(Mesh);Actor->SetRootComponent(Mesh);
+ Mesh->SetMobility(EComponentMobility::Movable);Mesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Cube.Cube")));Mesh->SetRelativeScale3D({.8,.6,2});Mesh->RegisterComponent();Actor->SetActorLocation({0,0,100});Actor->SetActorHiddenInGame(false);Actor->DispatchBeginPlay();
+ TestTrue(TEXT("Static surface admission"),Static->RegisterImmutableSurfaceBox(Mesh,TEXT("Cabinet"),FLinearColor(.6f,.2f,.05f)));
+ TestFalse(TEXT("Duplicate identity rejected"),S->RegisterFixedBox(Mesh,TEXT("Cabinet"),FLinearColor::White,false));
+ auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);S->Tick(0);
+ const auto* K=S->Find(TEXT("Cabinet"));if(!TestNotNull(TEXT("Static CPU surface domain"),K))return false;
+ TestTrue(TEXT("Static front known"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));TestFalse(TEXT("Static top unknown"),K->IsKnown(ESightWeaveBoxFace::Top,{0,0}));
+ UTextureRenderTarget2D* Target=nullptr;USceneCaptureComponent2D* Capture=nullptr;
+ if(!GUsingNullRHI)
+ {
+  auto* CaptureActor=W.World->SpawnActor<AActor>();Capture=NewObject<USceneCaptureComponent2D>(CaptureActor);CaptureActor->AddInstanceComponent(Capture);CaptureActor->SetRootComponent(Capture);CaptureActor->SetActorHiddenInGame(false);Capture->RegisterComponent();
+  Capture->bCaptureEveryFrame=false;Capture->bCaptureOnMovement=false;Capture->ProjectionType=ECameraProjectionMode::Perspective;Capture->FOVAngle=60;
+  Capture->CaptureSource=ESceneCaptureSource::SCS_FinalColorLDR;Capture->ShowFlags.SetTemporalAA(false);Capture->ShowFlags.SetMotionBlur(false);
+  auto* Light=NewObject<UPointLightComponent>(CaptureActor);CaptureActor->AddInstanceComponent(Light);Light->SetIntensity(1000000);Light->SetAttenuationRadius(1000);Light->RegisterComponent();Light->SetWorldLocation({-200,0,300});
+  Target=NewObject<UTextureRenderTarget2D>(CaptureActor);Target->InitCustomFormat(64,64,PF_B8G8R8A8,false);Target->UpdateResourceImmediate();Capture->TextureTarget=Target;
+ }
+ int CaptureNumber=0;FString ReportPath;FParse::Value(FCommandLine::Get(),TEXT("ReportExportPath="),ReportPath);
+ const FString CaptureRoot=ReportPath.IsEmpty()?FPaths::ProjectSavedDir()/TEXT("SurfaceKnowledgeCaptures"):FPaths::GetPath(ReportPath)/TEXT("Captures");IFileManager::Get().MakeDirectory(*CaptureRoot,true);
+ auto Pixel=[&](bool Top)
+ {
+  if(!Capture)return FColor::Black;
+  Capture->SetWorldLocation(Top?FVector(0,0,500):FVector(-400,0,100));Capture->SetWorldRotation(Top?FRotator(-90,0,0):FRotator::ZeroRotator);
+  FAssetCompilingManager::Get().FinishAllCompilation();if(GShaderCompilingManager)GShaderCompilingManager->FinishAllCompilation();
+  W.World->UpdateWorldComponents(false,false);W.World->SendAllEndOfFrameUpdates();Capture->CaptureScene();FlushRenderingCommands();
+  if(GShaderCompilingManager)GShaderCompilingManager->FinishAllCompilation();
+  W.World->SendAllEndOfFrameUpdates();Capture->CaptureScene();FlushRenderingCommands();
+  TArray<FColor> Pixels;Target->GameThread_GetRenderTargetResource()->ReadPixels(Pixels);
+  TArray64<uint8> PNG;FImageUtils::PNGCompressImageArray(64,64,MakeArrayView(Pixels),PNG);FFileHelper::SaveArrayToFile(PNG,*(CaptureRoot/FString::Printf(TEXT("SurfaceP4_%d.png"),CaptureNumber++)));
+  const auto C=Pixels.IsValidIndex(32*64+32)?Pixels[32*64+32]:FColor::Magenta;AddInfo(FString::Printf(TEXT("Surface P4 camera top=%d center=%s"),Top,*C.ToString()));return C;
+ };
+ auto Mirror=[&]()
+ {
+  if(GUsingNullRHI)return;
+  auto* Atlas=S->GetAtlas(TEXT("Cabinet"));FlushRenderingCommands();const auto Texture=Atlas->GetResource()->TextureRHI;const auto Size=K->AtlasSize;TArray<FColor> GPU,CPU;
+  ENQUEUE_RENDER_COMMAND(SurfaceKnowledgeMirror)([&GPU,Texture,Size](FRHICommandListImmediate& Cmd){Cmd.ReadSurfaceData(Texture,FIntRect(0,0,Size.X,Size.Y),GPU,FReadSurfaceDataFlags(RCM_UNorm));});FlushRenderingCommands();K->Pixels(CPU);
+  TestTrue(TEXT("Every GPU texel exactly mirrors CPU Live/Known/Suppressed"),GPU==CPU);
+ };
+ if(Capture)
+ {
+  auto* Original=Mesh->GetMaterial(0);auto* Control=NewObject<UMaterial>();Control->SetShadingModel(MSM_Unlit);
+  auto* E=NewObject<UMaterialExpressionConstant3Vector>(Control);E->Constant=FLinearColor(.5,0,0);Control->GetExpressionCollection().AddExpression(E);Control->GetEditorOnlyData()->EmissiveColor.Expression=E;Control->PostEditChange();Mesh->SetMaterial(0,Control);
+  TestTrue(TEXT("Positive control: capture renders actual mesh"),Pixel(false).R>20);Mesh->SetMaterial(0,Original);
+  AddInfo(FString::Printf(TEXT("Surface mesh visible=%d hidden=%d renderstate=%d position=%s"),Mesh->IsVisible(),Actor->IsHidden(),Mesh->IsRenderStateCreated(),*Mesh->GetComponentLocation().ToString()));
+ }
+ Mirror();if(Capture){TestTrue(TEXT("Real front mesh shows Live tint"),Pixel(false).R>40);TestTrue(TEXT("Top-view camera cannot reveal unknown top"),Pixel(true).R<5);}
+ V.bActive=false;W.Runtime->UpdateVisionSource(H,V);S->Tick(0);Mirror();
+ if(Capture){const auto C=Pixel(false);TestTrue(TEXT("Observed front renders gray after losing Live"),C.R>15 && FMath::Abs(int(C.R)-int(C.G))<4);TestTrue(TEXT("Unknown top stays black in memory"),Pixel(true).R<5);}
+ Static->SetMemoryWriteBlock(FBox2D({-100,-100},{100,100}),true);S->Tick(0);Mirror();if(Capture)TestTrue(TEXT("Block hides stored gray without erasing fact"),Pixel(false).R<5);
+ TestTrue(TEXT("Block retained CPU fact"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
+ Static->ClearMemory(FBox2D({-100,-100},{100,100}));TestFalse(TEXT("Static Clear reaches Surface"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
+ Static->SetMemoryWriteBlock(FBox2D({-100,-100},{100,100}),false);V.bActive=true;V.Transform.SetLocation({-200,0,260});W.Runtime->UpdateVisionSource(H,V);S->Tick(0);
+ TestTrue(TEXT("Static elevated observer learns top"),K->IsKnown(ESightWeaveBoxFace::Top,{0,0}));V.bActive=false;W.Runtime->UpdateVisionSource(H,V);S->Tick(0);Mirror();
+ TestTrue(TEXT("Static consumer API addresses the explicit surface"),Static->HasSurfaceKnowledge(TEXT("Cabinet"),ESightWeaveBoxFace::Top,{0,0}));
+ if(Capture)TestTrue(TEXT("New known top now renders gray"),Pixel(true).R>15);
+ const auto InitialBytes=S->UploadBytes;S->Tick(0);TestEqual(TEXT("Stable revision zero uploads"),S->UploadBytes,uint64(0));TestEqual(TEXT("Stable revision zero exact queries"),S->ExactSamples,uint64(0));
+ AddInfo(FString::Printf(TEXT("SURFACE_KNOWLEDGE_P4 atlas=%dx%d changed_upload_bytes=%llu stable_update_us=%.3f"),K->AtlasSize.X,K->AtlasSize.Y,InitialBytes,S->UpdateUs));
+ W.Runtime->DisableExplorationMemory();S->Tick(0);TestNull(TEXT("Inactive scope cannot expose stored Surface facts"),S->Find(TEXT("Cabinet")));if(Capture)TestTrue(TEXT("Inactive scope presentation fails closed"),Pixel(true).R<5);
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgeObject,"Darkwell.SightWeave.SurfaceKnowledge.ObjectWholeAndModifiers",SurfaceTestFlags)
+bool FSurfaceKnowledgeObject::RunTest(const FString&)
+{
+ FRuntimeWorld W(true);W.Runtime->ConfigureExplorationMemory(W.Owner,W.Floor,ESightWeaveRenderPrecisionTier::Ultra);
+ auto* S=W.World->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>();auto* Scene=W.World->SpawnActor<ADarkwellObjectMemoryScene>();
+ auto* A=W.World->SpawnActor<AActor>();auto* M=NewObject<UStaticMeshComponent>(A);A->AddInstanceComponent(M);A->SetRootComponent(M);M->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Cube.Cube")));M->SetRelativeScale3D({.8,.6,2});M->RegisterComponent();A->SetActorLocation({0,0,100});
+ auto* Original=M->GetMaterial(0);auto* Memory=NewObject<UDarkwellRememberablePropComponent>(A);A->AddInstanceComponent(Memory);Memory->bUseSpatialMemory=true;Memory->bUseFixedSurfaceKnowledge=true;Memory->bRememberFromStart=false;Memory->ConfigureStableId(TEXT("Object"));Memory->AddMemoryPrimitive(M);Memory->RegisterComponent();
+ auto* Policy=NewObject<USightWeaveObjectPolicyComponent>(A);A->AddInstanceComponent(Policy);Policy->bOverrideRevealMode=true;Policy->RevealMode=ESightWeaveRevealMode::WholeObjectAfterSpan;Policy->bOverrideMinimumObservedSpan=true;Policy->MinimumObservedSpanCm=40;Policy->bOverrideHistoryMode=true;Policy->HistoryMode=ESightWeaveHistoryMode::StationaryOnly;Policy->RegisterComponent();
+ TestTrue(TEXT("Real ObjectMemory registration routes explicit surface"),Scene->RegisterRememberable(Memory,Policy));
+ auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);S->Tick(0);
+ TestTrue(TEXT("Whole recognition from legal front span"),S->IsWholeRecognized(TEXT("Object")));
+ TestTrue(TEXT("Object consumer exposes Whole separately"),Scene->IsSurfaceObjectRecognized(TEXT("Object")));TestTrue(TEXT("Object consumer addresses front surface"),Scene->HasSurfaceKnowledge(TEXT("Object"),ESightWeaveBoxFace::NegativeX,{0,0}));
+ TestFalse(TEXT("Whole never fills top"),S->Find(TEXT("Object"))->IsKnown(ESightWeaveBoxFace::Top,{0,0}));
+ TArray<uint8> Saved;TestTrue(TEXT("Consumer archive exported"),S->SaveDomain(TEXT("Object"),Saved));
+ V.bActive=false;W.Runtime->UpdateVisionSource(H,V);S->Tick(0);
+ FSightWeaveMemoryScopeKey Scope;W.Runtime->GetExplorationMemoryScope(Scope);FSightWeaveMemoryModifierDescription Modifier;Modifier.Region.Scope=Scope;Modifier.Region.HeightRange={-100,500};Modifier.Region.Radius=300;Modifier.Operation=ESightWeaveMemoryModifierOperation::SuppressMemoryPresentation;
+ const auto Mod=W.Runtime->RegisterMemoryModifier(Modifier);TestTrue(TEXT("Real Runtime suppression modifier"),Mod.IsValid());S->Tick(0);
+ auto* K=S->Find(TEXT("Object"));TestTrue(TEXT("Presentation suppression retains surface fact"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
+ TestTrue(TEXT("Published modifier suppresses front"),K->Faces[0].Hidden[K->Faces[0].Known.Num()/2]);
+ W.Runtime->UnregisterMemoryModifier(Mod);S->Tick(0);TestFalse(TEXT("Modifier-only revision removes presentation suppression"),K->Faces[0].Hidden[K->Faces[0].Known.Num()/2]);
+ const FBox2D All({-100,-100},{100,100});Scene->ClearMemoryInRegion(All);TestFalse(TEXT("Clear resets Object recognition"),S->IsWholeRecognized(TEXT("Object")));TestFalse(TEXT("Clear reaches Surface facts"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
+ TestTrue(TEXT("Restore facts/recognition independently"),S->RestoreDomain(TEXT("Object"),Saved));TestTrue(TEXT("Whole restored"),S->IsWholeRecognized(TEXT("Object")));TestFalse(TEXT("Restore still does not fill top"),K->IsKnown(ESightWeaveBoxFace::Top,{0,0}));
+ Scene->SetMemoryWriteBlock(All,true);Scene->ClearMemoryInRegion(All);V.bActive=true;W.Runtime->UpdateVisionSource(H,V);S->Tick(0);TestFalse(TEXT("Object block stops re-observation"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
+ Scene->SetMemoryWriteBlock(All,false);S->Tick(0);TestTrue(TEXT("Unblocked legal front relearned"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
+ Scene->ResetMemory();TestNull(TEXT("Reset releases surface domain"),S->Find(TEXT("Object")));TestTrue(TEXT("Reset restores source material ownership"),M->GetMaterial(0)==Original);
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgePerf,"Darkwell.SightWeave.SurfaceKnowledge.BoundedPerformance",SurfaceTestFlags)
+bool FSurfaceKnowledgePerf::RunTest(const FString&)
+{
+ FRuntimeWorld W;auto B=Receiver(W);W.Runtime->RegisterSurfaceBox(B);auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);
+ FDarkwellSurfaceKnowledge K;K.Initialize(B,W.Owner);TArray<double> Times;uint64 Queries=0,Unresolved=0;
+ for(int I=0;I<100;++I){V.Transform.SetLocation({-200,double(I%20),162.+I*.01});W.Runtime->UpdateVisionSource(H,V);const double T=FPlatformTime::Seconds();K.Observe(*W.Runtime);Times.Add((FPlatformTime::Seconds()-T)*1e6);Queries+=K.ExactSamples;Unresolved+=K.UnresolvedCells;}
+ Times.Sort();AddInfo(FString::Printf(TEXT("SURFACE_KNOWLEDGE_DIRTY p95_us=%.3f p99_us=%.3f authority_corner_queries=%llu unresolved=%llu cells=%d"),Times[94],Times[98],Queries,Unresolved,K.Faces[0].Known.Num()*2+K.Faces[2].Known.Num()*2+K.Faces[4].Known.Num()*2));
+ TestEqual(TEXT("Clear moving-view front needs four queries per revision"),Queries,uint64(400));TestEqual(TEXT("Clear front completely certified"),Unresolved,uint64(0));
+ auto Block=B;Block.Id=TEXT("Opaque");Block.Pose=FTransform(FVector(-100,0,100));Block.HalfExtent={10,100,150};W.Runtime->RegisterSurfaceBox(Block);
+ const double Start=FPlatformTime::Seconds();K.Observe(*W.Runtime);const double Us=(FPlatformTime::Seconds()-Start)*1e6;
+ TestFalse(TEXT("Opaque solid removes Live front"),K.IsLive(ESightWeaveBoxFace::NegativeX,{0,0}));TestTrue(TEXT("Opaque solid preserves Known front"),K.IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));TestEqual(TEXT("Convex shadow denial avoids per-cell query explosion"),K.ExactSamples,uint64(0));
+ AddInfo(FString::Printf(TEXT("SURFACE_KNOWLEDGE_OCCLUDED us=%.3f certified_regions=%llu queries=%llu"),Us,K.Proofs,K.ExactSamples));return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgeApartment,"Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale",SurfaceTestFlags)
+bool FSurfaceKnowledgeApartment::RunTest(const FString&)
+{
+ FRuntimeWorld W(true);W.World->GetSubsystem<USightWeaveRenderWorldSubsystem>()->SetPresentationSuppressed(true);
+ W.Runtime->ConfigureExplorationMemory(W.Owner,W.Floor,ESightWeaveRenderPrecisionTier::Ultra);
+ auto* Apartment=W.World->SpawnActor<ADarkwellApartmentLab>();Apartment->DispatchBeginPlay();
+ TArray<FDarkwellVisionIntegrationSegment> Segments;Apartment->BuildSightWeaveOccluderSegments(Segments);TArray<FSightWeaveSegment2D> Walls;
+ for(const auto& P:Segments){FSightWeaveSegment2D D;D.A=P.A;D.B=P.B;D.FloorId=W.Floor;D.HeightRange={P.ZMin,P.ZMax};Walls.Add(D);}W.Runtime->RegisterOccluder(Walls,true,true,nullptr);
+ auto* S=W.World->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>();auto V=W.Vision({-160,-260,162});V.Shape=ESightWeaveSourceShape::DirectionalCone;V.HalfAngleDegrees=45;auto H=W.Runtime->RegisterVisionSource(V,nullptr);
+ S->Tick(0);AddInfo(TEXT("SURFACE_APARTMENT_COLD ")+S->GetTelemetry());
+ TestNull(TEXT("Flat floors retain the explicit legacy compatibility path"),S->Find(TEXT("Apartment.Floor.0.0")));
+ TestNotNull(TEXT("Apartment Whole furniture uses surface domain"),S->Find(TEXT("Apartment.CoffeeTable.Whole")));
+ TestNotNull(TEXT("Rotated wardrobe uses surface domain"),S->Find(TEXT("Apartment.Wardrobe.Partial37")));
+ TArray<double> Times;uint64 MaxQueries=0,MaxUpload=0;
+ for(int I=0;I<20;++I)
+ {V.Transform=FTransform(FRotator(0,I*4.,0),FVector(-160+I*2.,-260,162));W.Runtime->UpdateVisionSource(H,V);S->Tick(0);Times.Add(S->UpdateUs);MaxQueries=FMath::Max(MaxQueries,S->ExactSamples);MaxUpload=FMath::Max(MaxUpload,S->UploadBytes);}
+ Times.Sort();AddInfo(FString::Printf(TEXT("SURFACE_APARTMENT_DIRTY p95_us=%.3f max_us=%.3f max_authority_queries=%llu max_upload_bytes=%llu"),Times[18],Times[19],MaxQueries,MaxUpload));
+ S->Tick(0);TestEqual(TEXT("Stationary apartment has no Surface query work"),S->ExactSamples,uint64(0));TestEqual(TEXT("Stationary apartment has no Surface upload work"),S->UploadBytes,uint64(0));AddInfo(TEXT("SURFACE_APARTMENT_STABLE ")+S->GetTelemetry());
+ Apartment->Destroy();return true;
 }
 #endif

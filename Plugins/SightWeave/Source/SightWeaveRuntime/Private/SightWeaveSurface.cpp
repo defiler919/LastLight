@@ -98,6 +98,178 @@ bool USightWeaveWorldSubsystem::RegisterSurfaceBox(const FSightWeaveSurfaceBox& 
  SurfaceBoxes.Add(Box.Id,{Box,++SurfaceSerial});if(Owner)SurfaceOwners.Add(Box.Id,Owner);
  bSurfaceSceneDirty=true;AdvanceRevision();PublishSnapshot();return true;
 }
+
+bool FSightWeaveSurfaceScene::BeamClear(FSightWeaveFloorId Floor,FName Receiver,FVector Origin,TConstArrayView<FVector> Corners) const
+{
+ FBox Beam(ForceInit);Beam+=Origin;for(auto P:Corners)Beam+=P;
+ FVector PlaneNormal=Corners.Num()>=3?FVector::CrossProduct(Corners[1]-Corners[0],Corners[2]-Corners[0]).GetSafeNormal():FVector::ZeroVector;
+ if(!Corners.IsEmpty() && FVector::DotProduct(PlaneNormal,Origin-Corners[0])<0)PlaneNormal=-PlaneNormal;
+ // SAT over a five-vertex beam and a convex proxy. A separating plane proves
+ // no ray through the receiver rectangle can hit that proxy. Bounds alone are
+ // only the BVH broad phase, not a reason to reject a visible surface.
+ auto Disjoint=[&](TConstArrayView<FVector> Vertices,TConstArrayView<FVector> Edges,TConstArrayView<FVector> Normals)
+ {
+  TArray<FVector,TInlineAllocator<8>> BeamEdges;
+  for(int I=0;I<Corners.Num();++I){BeamEdges.Add(Corners[I]-Origin);BeamEdges.Add(Corners[(I+1)%Corners.Num()]-Corners[I]);}
+  auto Separated=[&](FVector Axis)
+  {
+   if(!Axis.Normalize())return false;
+   double MinA=FVector::DotProduct(Axis,Origin),MaxA=MinA,MinB=DBL_MAX,MaxB=-DBL_MAX;
+   for(auto P:Corners){const double D=FVector::DotProduct(Axis,P);MinA=FMath::Min(MinA,D);MaxA=FMath::Max(MaxA,D);}
+   for(auto P:Vertices){const double D=FVector::DotProduct(Axis,P);MinB=FMath::Min(MinB,D);MaxB=FMath::Max(MaxB,D);}
+   return MaxA<MinB-Contact || MaxB<MinA-Contact;
+  };
+  for(auto N:Normals)if(Separated(N))return true;
+  if(Corners.Num()>=3 && Separated(FVector::CrossProduct(Corners[1]-Corners[0],Corners[2]-Corners[0])))return true;
+  for(int I=0;I<Corners.Num();++I)if(Separated(FVector::CrossProduct(Corners[I]-Origin,Corners[(I+1)%Corners.Num()]-Origin)))return true;
+  for(auto A:BeamEdges)for(auto B:Edges)if(Separated(FVector::CrossProduct(A,B)))return true;
+  return false;
+ };
+ TArray<int32,TInlineAllocator<64>> Stack;if(!Nodes.IsEmpty())Stack.Add(0);
+ while(!Stack.IsEmpty())
+ {
+  const auto& N=Nodes[Stack.Pop(EAllowShrinking::No)];if(!Beam.Intersect(N.Bounds))continue;
+  if(N.Primitive==INDEX_NONE){Stack.Add(N.Left);Stack.Add(N.Right);continue;}
+  const auto& P=Primitives[N.Primitive];
+  if(!PlaneNormal.IsNearlyZero())
+  {
+   const double Center=FVector::DotProduct(PlaneNormal,P.Bounds.GetCenter()),Radius=FVector::DotProduct(PlaneNormal.GetAbs(),P.Bounds.GetExtent());
+   // Contact at a terminal plane cannot intersect the open observation beam.
+   if(Center+Radius<=FVector::DotProduct(PlaneNormal,Corners[0]) || Center-Radius>=FVector::DotProduct(PlaneNormal,Origin))continue;
+  }
+  if(P.BoxIndex!=INDEX_NONE)
+  {
+   const auto& B=Boxes[P.BoxIndex].Box;if(B.Floor!=Floor || B.Id==Receiver)continue;
+   TArray<FVector,TInlineAllocator<8>> Vertices;for(int I=0;I<8;++I)Vertices.Add(B.Pose.TransformPosition(B.HalfExtent*FVector(I&1?1:-1,I&2?1:-1,I&4?1:-1)));
+   const FVector Axes[]{B.Pose.GetUnitAxis(EAxis::X),B.Pose.GetUnitAxis(EAxis::Y),B.Pose.GetUnitAxis(EAxis::Z)};
+   if(!Disjoint(Vertices,Axes,Axes))return false;
+  }
+  else if(P.Wall.FloorId==Floor)
+  {
+   const auto& W=P.Wall;const FVector Vertices[]{FVector(W.A,W.HeightRange.ZMin),FVector(W.B,W.HeightRange.ZMin),FVector(W.B,W.HeightRange.ZMax),FVector(W.A,W.HeightRange.ZMax)};
+   const FVector Edges[]{FVector(W.B-W.A,0),FVector::UpVector};const FVector Normals[]{FVector::CrossProduct(Edges[0],Edges[1])};
+   if(!Disjoint(Vertices,Edges,Normals))return false;
+  }
+ }
+ return true;
+}
+bool FSightWeaveSurfaceScene::BeamBlocked(FSightWeaveFloorId Floor,FVector Origin,FVector Normal,TConstArrayView<FVector> Corners) const
+{
+ if(Corners.IsEmpty())return false;
+ const double Plane=FVector::DotProduct(Normal,Corners[0]),Eye=FVector::DotProduct(Normal,Origin);
+ if(Eye<=Plane+Contact)return false;
+ FBox Beam(ForceInit);Beam+=Origin;for(auto P:Corners)Beam+=P;
+ TArray<int32,TInlineAllocator<64>> Stack;if(!Nodes.IsEmpty())Stack.Add(0);
+ while(!Stack.IsEmpty())
+ {
+  const auto& N=Nodes[Stack.Pop(EAllowShrinking::No)];if(!Beam.Intersect(N.Bounds))continue;
+  if(N.Primitive==INDEX_NONE){Stack.Add(N.Left);Stack.Add(N.Right);continue;}
+  const auto& P=Primitives[N.Primitive];
+  if((P.BoxIndex!=INDEX_NONE?Boxes[P.BoxIndex].Box.Floor:P.Wall.FloorId)!=Floor)continue;
+  // Clip the convex blocker conceptually to the open eye/target slab. Its
+  // conic hull from the eye, intersected with the receiver plane, is convex.
+  // All four blocked vertices therefore prove the whole receiver rectangle,
+  // even when the furniture touches the floor or extends above the eye.
+  // Walls additionally need a uniform endpoint-contact margin; unlike box
+  // slab tests their exact predicate shortens each ray by a world distance.
+  if(P.BoxIndex==INDEX_NONE)
+  {
+   FVector NWall=FVector::CrossProduct(FVector(P.Wall.B-P.Wall.A,0),FVector::UpVector).GetSafeNormal();
+   const double From=FVector::DotProduct(NWall,Origin-FVector(P.Wall.A,0));if(FMath::Abs(From)<=Contact)continue;
+   bool Opposite=true;for(auto C:Corners){const double To=FVector::DotProduct(NWall,C-FVector(P.Wall.A,0));Opposite&=From>0?To<-Contact:To>Contact;}if(!Opposite)continue;
+  }
+  bool All=true;
+  for(auto C:Corners)
+  {
+   if(P.BoxIndex==INDEX_NONE){if(!WallBlocks(P.Wall,Origin,C)){All=false;break;}}
+   else
+   {
+    const auto& B=Boxes[P.BoxIndex].Box;double Lo,Hi;const FVector E=B.HalfExtent-FVector(Contact);
+    if(!Interval(B.Pose.InverseTransformPosition(Origin),B.Pose.InverseTransformPosition(C),FBox(-E,E),Lo,Hi) || Lo>=Hi || Hi<=0 || Lo>=1){All=false;break;}
+   }
+  }
+  if(All)return true;
+ }
+ return false;
+}
+bool USightWeaveWorldSubsystem::TrySurfaceRegion(FSightWeaveKnowledgeOwnerId Owner,FName Id,ESightWeaveBoxFace Face,const FBox2D& UV,bool& Value,FSightWeaveSurfaceQueryStats* Stats) const
+{
+ check(IsInGameThread());
+ const auto Frame=AcquirePublishedSnapshot();if(!Owner.IsValid() || !Frame || !Frame->SurfaceScene || !UV.bIsValid)return false;
+ if(SurfaceRegionFrame!=Frame || SurfaceRegionOwner!=Owner){SurfaceRegionCorners.Reset();SurfaceRegionFrame=Frame;SurfaceRegionOwner=Owner;}
+ const auto* R=Frame->SurfaceScene->Find(Id);if(!R)return false;
+ const auto* Floor=Frame->Floors.FindByPredicate([&](const auto& F){return F.FloorId==R->Box.Floor;});if(!Floor)return false;
+ const FVector2D Points[]{UV.Min,{UV.Max.X,UV.Min.Y},UV.Max,{UV.Min.X,UV.Max.Y}};TArray<FVector> World;FVector Normal;
+ for(auto P:Points){FVector Q;if(!R->Box.Resolve(Face,P,Q,Normal))return false;World.Add(Q);}
+ bool AnyFacing=false;for(const auto& V:Frame->VisionSources)
+  AnyFacing|=V.Description.bActive && V.Description.KnowledgeOwnerId==Owner && V.Description.FloorId==Floor->FloorId
+   && FVector::DotProduct(Normal,V.Description.Transform.GetLocation()-World[0])>1.e-4;
+ if(!AnyFacing){Value=false;return true;}
+ FBox2D XY(ForceInit);for(auto P:World)XY+=FVector2D(P);
+ for(const auto& S:Frame->HardSuppressions)if(S.Description.bEnabled && S.Description.FloorId==Floor->FloorId)
+ {
+  const auto& D=S.Description;bool All=true;for(auto P:World)All&=(FVector2D(P)-D.Center).SizeSquared()<=FMath::Square(D.Radius) && P.Z>=D.HeightRange.ZMin && P.Z<=D.HeightRange.ZMax;
+  if(All){Value=false;return true;}
+  if(XY.Intersect(FBox2D(D.Center-FVector2D(D.Radius),D.Center+FVector2D(D.Radius))))return false;
+ }
+ const auto& T=GetDefault<USightWeaveSettings>()->GeometryTolerances;
+ // These are rejection bounds of the same nominal predicates. They can only
+ // reject a region wholly outside; ambiguous geometry still uses exact Hard.
+ auto Possible=[&](const auto& E)
+ {
+  const auto& D=E.Description;const FVector Eye=D.Transform.GetLocation();
+  if(!D.bActive || D.FloorId!=Floor->FloorId || FVector::DotProduct(Normal,Eye-World[0])<=1.e-4)return false;
+  FBox Bounds(ForceInit);for(auto P:World)Bounds+=P;
+  if(Bounds.Max.Z<D.HeightRange.ZMin-T.HeightOverlapEpsilon || Bounds.Min.Z>D.HeightRange.ZMax+T.HeightOverlapEpsilon)return false;
+  const double Near=[&](){if constexpr(requires{D.NearAwarenessRadius;})return double(D.NearAwarenessRadius);else return 0.;}();
+  if(D.Shape!=ESightWeaveSourceShape::Radial && D.HalfAngleDegrees<=90 && XY.ComputeSquaredDistanceToPoint(FVector2D(Eye))>FMath::Square(Near+T.PointOnEdgeEpsilon))
+  {
+   const double C=E.NominalMinimumCosine,S=FMath::Sqrt(FMath::Max(0.,1-C*C));const FVector2D F=E.NominalForward,Side(-F.Y,F.X);
+   for(auto N:{F*S+Side*C,F*S-Side*C})
+   {double Maximum=-DBL_MAX;for(auto P:World)Maximum=FMath::Max(Maximum,FVector2D::DotProduct(N,FVector2D(P)-E.PolarOrigin));if(Maximum<0)return false;}
+  }
+  return XY.ComputeSquaredDistanceToPoint(FVector2D(Eye))<=FMath::Square(D.Range+T.PointOnEdgeEpsilon)
+   && !Frame->SurfaceScene->BeamBlocked(Floor->FloorId,Eye,Normal,World);
+ };
+ bool PossiblePair=false;
+ for(const auto& V:Frame->VisionSources)if(V.Description.KnowledgeOwnerId==Owner && Possible(V))
+ {
+  if(V.Description.IlluminationPolicy==ESightWeaveIlluminationPolicy::BypassLegalIllumination){PossiblePair=true;break;}
+  for(int I:V.CompatibleIlluminationSourceIndices)if(Frame->IlluminationSources.IsValidIndex(I) && Possible(Frame->IlluminationSources[I])){PossiblePair=true;break;}
+ }
+ if(!PossiblePair){Value=false;return true;}
+ auto Convex=[&](const auto& D)
+ {
+  if(D.Shape==ESightWeaveSourceShape::Radial)return true;
+  if(D.HalfAngleDegrees>90)return false;
+  // The tiny origin-awareness disc is a union with the cone, not convex.
+  return XY.ComputeSquaredDistanceToPoint(FVector2D(D.Transform.GetLocation()))>FMath::Square(T.PointOnEdgeEpsilon);
+ };
+ for(const auto& V:Frame->VisionSources)
+ {
+  if(!Convex(V.Description) || V.Description.NearAwarenessRadius>0)continue;
+  TArray<FSightWeaveIlluminationSourceHandle> Common;bool All=true;
+  FSightWeaveSurfaceContext Context{Frame->SurfaceScene.Get(),Normal,Stats};
+  for(int I=0;I<World.Num();++I)
+  {
+   FSightWeaveVisibilityQueryResult Q;const FSightWeaveSurfaceRegionCorner Key{{Id,Face,Points[I]},V.Handle};
+   if(const auto* Hit=SurfaceRegionCorners.Find(Key)){Q=*Hit;if(Stats)++Stats->CacheHits;}
+   else
+   {
+    if(Stats)++Stats->ExactSamples;
+    QueryEffectiveLiveValidated(Owner,Floor->FloorId,World[I],&V.Handle,false,*Frame,*Floor,T,Q,nullptr,0,0,false,false,&Context);
+    if(SurfaceRegionCorners.Num()>=4096)SurfaceRegionCorners.Reset();SurfaceRegionCorners.Add(Key,Q);
+   }
+   if(!Q.bVisible){All=false;break;}
+   if(I==0)Common=Q.ContributingIlluminationSources;else Common.RemoveAll([&](auto H){return !Q.ContributingIlluminationSources.Contains(H);});
+  }
+  if(!All || !Frame->SurfaceScene->BeamClear(Floor->FloorId,Id,V.Description.Transform.GetLocation(),World))continue;
+  if(V.Description.IlluminationPolicy==ESightWeaveIlluminationPolicy::BypassLegalIllumination){Value=true;return true;}
+  for(const auto& L:Frame->IlluminationSources)if(Common.Contains(L.Handle) && Convex(L.Description)
+   && Frame->SurfaceScene->BeamClear(Floor->FloorId,Id,L.Description.Transform.GetLocation(),World)){Value=true;return true;}
+ }
+ return false;
+}
 bool USightWeaveWorldSubsystem::UpdateSurfaceBox(const FSightWeaveSurfaceBox& Box)
 {
  auto* Existing=SurfaceBoxes.Find(Box.Id);if(!bSightWeaveInitialized || !Existing || !Box.IsValid() || !Floors.Contains(Box.Floor))return false;

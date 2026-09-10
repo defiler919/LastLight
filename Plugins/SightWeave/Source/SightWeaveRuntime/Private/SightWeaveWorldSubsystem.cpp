@@ -3498,6 +3498,7 @@ void USightWeaveWorldSubsystem::AdvanceRevision()
 void USightWeaveWorldSubsystem::ResetState()
 {
  SurfaceBoxes.Reset();SurfaceOwners.Reset();SurfaceScene.Reset();bSurfaceSceneDirty=true;SurfaceOccluderRevision={};
+ SurfaceRegionCorners.Reset();SurfaceRegionFrame.Reset();SurfaceRegionOwner={};
 	if (MemoryAuthority.IsConfigured())
 	{
 		MemoryAuthority.Reset();

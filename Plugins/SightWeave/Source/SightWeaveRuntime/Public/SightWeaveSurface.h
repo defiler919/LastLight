@@ -34,6 +34,14 @@ struct FSightWeaveSurfaceResult
  uint64 ReceiverRevision=0; // geometry AND registration lifetime, never reused
  FVector WorldPoint=FVector::ZeroVector;
 };
+/** Source-restricted corner evidence; cannot borrow a different source's policy. */
+struct FSightWeaveSurfaceRegionCorner
+{
+ FSightWeaveSurfaceSample Sample;
+ FSightWeaveVisionSourceHandle Source;
+ bool operator==(const FSightWeaveSurfaceRegionCorner& B) const {return Sample==B.Sample && Source==B.Source;}
+ friend uint32 GetTypeHash(const FSightWeaveSurfaceRegionCorner& K){return HashCombine(GetTypeHash(K.Sample),GetTypeHash(K.Source));}
+};
 
 struct FSightWeaveSurfaceQueryStats
 {
@@ -58,6 +66,10 @@ public:
  FSightWeaveSurfaceScene(TArray<FReceiver> Receivers,TConstArrayView<FSightWeaveSegment2D> Walls);
  const FReceiver* Find(FName Id) const;
  bool Unoccluded(FSightWeaveFloorId Floor,FVector Origin,FVector Target,FSightWeaveSurfaceQueryStats* Stats) const;
+ /** Conservative beam AABB proof. False means ambiguous, never occluded. */
+ bool BeamClear(FSightWeaveFloorId Floor,FName Receiver,FVector Origin,TConstArrayView<FVector> Corners) const;
+ /** A single convex blocker whose shadow contains the entire target rectangle. */
+ bool BeamBlocked(FSightWeaveFloorId Floor,FVector Origin,FVector Normal,TConstArrayView<FVector> Corners) const;
 private:
  struct FPrimitive {FBox Bounds; int32 BoxIndex=INDEX_NONE; FSightWeaveSegment2D Wall;};
  struct FNode {FBox Bounds; int32 Left=INDEX_NONE,Right=INDEX_NONE,Primitive=INDEX_NONE;};

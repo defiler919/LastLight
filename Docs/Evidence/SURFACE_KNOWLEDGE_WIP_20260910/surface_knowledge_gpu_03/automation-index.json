@@ -1,0 +1,219 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "游戏策划1",
+			"instance": "6916EC5342C565CB0CC579BC31DE4D8B",
+			"instanceName": "游戏策划1-4392",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 11 (25H2) [10.0.26200.9445] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 4060",
+			"cPUModel": "13th Gen Intel(R) Core(TM) i5-13500",
+			"rAMInGB": 32,
+			"renderMode": "D3D12_SM6",
+			"rHI": "D3D12 (SM6)",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.10-03.37.01",
+	"succeeded": 2,
+	"succeededWithWarnings": 0,
+	"failed": 1,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 0.36887860298156738,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "FactsAndArchive",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.FactsAndArchive",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"6916EC5342C565CB0CC579BC31DE4D8B"
+			],
+			"duration": 0.035079102963209152,
+			"dateTime": "2026.09.10-03.37.00",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ObjectStaticP4",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.ObjectStaticP4",
+			"tags": [],
+			"state": "Fail",
+			"deviceInstance": [
+				"6916EC5342C565CB0CC579BC31DE4D8B"
+			],
+			"duration": 0.31613379716873169,
+			"dateTime": "2026.09.10-03.37.00",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogStreaming: FlushAsyncLoading(363): 1 QueuedPackages, 0 AsyncPackages",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.37.00"
+				},
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogSightWeaveRender: Presentation composite state=fail-binding bindingFailure=13 featherWidth=50.000 applied=6 resourceGeneration=2 residencyGeneration=2 scopeApplied=0 pageTableEntries=0 residentTiles=0",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.37.00"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.37.00"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Real front mesh shows Live tint' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_projects\\LastLight\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 489,
+					"timestamp": "2026.09.10-03.37.00"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.37.00"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.37.00"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Observed front renders gray after losing Live' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_projects\\LastLight\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 491,
+					"timestamp": "2026.09.10-03.37.00"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.37.00"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.37.00"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.37.01"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'New known top now renders gray' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_projects\\LastLight\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 498,
+					"timestamp": "2026.09.10-03.37.01"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_KNOWLEDGE_P4 atlas=320x1088 changed_upload_bytes=1392640 stable_update_us=19.401",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.37.01"
+				}
+			],
+			"warnings": 1,
+			"errors": 3,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RegionProof",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.RegionProof",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"6916EC5342C565CB0CC579BC31DE4D8B"
+			],
+			"duration": 0.017665699124336243,
+			"dateTime": "2026.09.10-03.37.01",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

@@ -1,0 +1,96 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "游戏策划1",
+			"instance": "645D7E0F41ECD8A636D02AB449FE0840",
+			"instanceName": "游戏策划1-3940",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 11 (25H2) [10.0.26200.9445] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 4060",
+			"cPUModel": "13th Gen Intel(R) Core(TM) i5-13500",
+			"rAMInGB": 32,
+			"renderMode": "D3D12_SM6",
+			"rHI": "D3D12 (SM6)",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.10-04.00.32",
+	"succeeded": 2,
+	"succeededWithWarnings": 0,
+	"failed": 0,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 1.3531627655029297,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "ApartmentScale",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"645D7E0F41ECD8A636D02AB449FE0840"
+			],
+			"duration": 1.2527207136154175,
+			"dateTime": "2026.09.10-04.00.30",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_COLD {\"domains\":39,\"ready\":39,\"cells\":17219076,\"atlas_bytes\":71773984,\"authority_queries\":139752,\"certified_regions\":14897,\"unresolved_cells\":14617,\"upload_bytes\":5975404,\"update_us\":118952.200}",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.00.31"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_DIRTY p95_us=83051.100 max_us=87059.997 max_authority_queries=141015 max_upload_bytes=1243040",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.00.32"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STABLE {\"domains\":39,\"ready\":39,\"cells\":17219076,\"atlas_bytes\":71773984,\"authority_queries\":0,\"certified_regions\":0,\"unresolved_cells\":0,\"upload_bytes\":0,\"update_us\":297.800}",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.00.32"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RegionProof",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.RegionProof",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"645D7E0F41ECD8A636D02AB449FE0840"
+			],
+			"duration": 0.10044209659099579,
+			"dateTime": "2026.09.10-04.00.32",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

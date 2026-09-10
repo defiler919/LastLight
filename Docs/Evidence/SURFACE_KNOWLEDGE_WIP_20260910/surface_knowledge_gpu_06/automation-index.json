@@ -1,0 +1,322 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "游戏策划1",
+			"instance": "DDC0ED7048696AE4AB57A8B1FF8521F4",
+			"instanceName": "游戏策划1-1568",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 11 (25H2) [10.0.26200.9445] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 4060",
+			"cPUModel": "13th Gen Intel(R) Core(TM) i5-13500",
+			"rAMInGB": 32,
+			"renderMode": "D3D12_SM6",
+			"rHI": "D3D12 (SM6)",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.10-03.47.14",
+	"succeeded": 5,
+	"succeededWithWarnings": 0,
+	"failed": 0,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 0.31666970252990723,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "BoundedPerformance",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.BoundedPerformance",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"DDC0ED7048696AE4AB57A8B1FF8521F4"
+			],
+			"duration": 0.030240498483181,
+			"dateTime": "2026.09.10-03.47.14",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_KNOWLEDGE_DIRTY p95_us=50.500 p99_us=51.800 authority_corner_queries=400 unresolved=0 cells=167936",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_KNOWLEDGE_OCCLUDED us=26.200 certified_regions=6 queries=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "FactsAndArchive",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.FactsAndArchive",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"DDC0ED7048696AE4AB57A8B1FF8521F4"
+			],
+			"duration": 0.023625999689102173,
+			"dateTime": "2026.09.10-03.47.14",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ObjectStaticP4",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.ObjectStaticP4",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"DDC0ED7048696AE4AB57A8B1FF8521F4"
+			],
+			"duration": 0.2056306004524231,
+			"dateTime": "2026.09.10-03.47.14",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Capture visible=1 pos=X=-400.000 Y=0.000 Z=100.000 rot=P=0.000000 Y=0.000000 R=0.000000 scene=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=236,G=0,B=34,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface mesh visible=1 hidden=0 renderstate=1 position=X=0.000 Y=0.000 Z=100.000",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Capture visible=1 pos=X=-400.000 Y=0.000 Z=100.000 rot=P=0.000000 Y=0.000000 R=0.000000 scene=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=255,G=254,B=247,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Capture visible=1 pos=X=0.000 Y=0.000 Z=500.000 rot=P=-90.000000 Y=0.000000 R=0.000000 scene=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Capture visible=1 pos=X=-400.000 Y=0.000 Z=100.000 rot=P=0.000000 Y=0.000000 R=-0.000000 scene=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=193,G=193,B=193,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Capture visible=1 pos=X=0.000 Y=0.000 Z=500.000 rot=P=-90.000000 Y=0.000000 R=0.000000 scene=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Capture visible=1 pos=X=-400.000 Y=0.000 Z=100.000 rot=P=0.000000 Y=0.000000 R=-0.000000 scene=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Capture visible=1 pos=X=0.000 Y=0.000 Z=500.000 rot=P=-90.000000 Y=0.000000 R=0.000000 scene=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=196,G=196,B=196,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_KNOWLEDGE_P4 atlas=320x640 changed_upload_bytes=819200 stable_update_us=22.400",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.47.14"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ObjectWholeAndModifiers",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.ObjectWholeAndModifiers",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"DDC0ED7048696AE4AB57A8B1FF8521F4"
+			],
+			"duration": 0.042542301118373871,
+			"dateTime": "2026.09.10-03.47.14",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RegionProof",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.RegionProof",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"DDC0ED7048696AE4AB57A8B1FF8521F4"
+			],
+			"duration": 0.014630299061536789,
+			"dateTime": "2026.09.10-03.47.14",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

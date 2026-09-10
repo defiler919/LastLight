@@ -1,0 +1,232 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "游戏策划1",
+			"instance": "788A4EEC48E7A9AA5F8BF1A0A81B1BFA",
+			"instanceName": "游戏策划1-23528",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 11 (25H2) [10.0.26200.9445] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 4060",
+			"cPUModel": "13th Gen Intel(R) Core(TM) i5-13500",
+			"rAMInGB": 32,
+			"renderMode": "SM6",
+			"rHI": "",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.10-03.25.26",
+	"succeeded": 11,
+	"succeededWithWarnings": 0,
+	"failed": 0,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 0.15090891718864441,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "FactsAndArchive",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.FactsAndArchive",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"788A4EEC48E7A9AA5F8BF1A0A81B1BFA"
+			],
+			"duration": 0.02493010088801384,
+			"dateTime": "2026.09.10-03.25.25",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RegionProof",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.RegionProof",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"788A4EEC48E7A9AA5F8BF1A0A81B1BFA"
+			],
+			"duration": 0.0057733990252017975,
+			"dateTime": "2026.09.10-03.25.25",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PolicyAndMemory",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.CurrentModel.PolicyAndMemory",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"788A4EEC48E7A9AA5F8BF1A0A81B1BFA"
+			],
+			"duration": 0.0060197971761226654,
+			"dateTime": "2026.09.10-03.25.25",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "KnownGaps",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.LegacyConsumers.KnownGaps",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"788A4EEC48E7A9AA5F8BF1A0A81B1BFA"
+			],
+			"duration": 0.0062909983098506927,
+			"dateTime": "2026.09.10-03.25.25",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Legacy XY consumer gaps reproduced. RuntimeV1 tests cover the new receiver API; Object/Static/P4 surface migration remains separate.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.25.25"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BatchLifecycle",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.BatchLifecycle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"788A4EEC48E7A9AA5F8BF1A0A81B1BFA"
+			],
+			"duration": 0.0059917978942394257,
+			"dateTime": "2026.09.10-03.25.25",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BoundedPerformance",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.BoundedPerformance",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"788A4EEC48E7A9AA5F8BF1A0A81B1BFA"
+			],
+			"duration": 0.06505119800567627,
+			"dateTime": "2026.09.10-03.25.25",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_V1_PERF boxes=257 samples=400 cold_us=151.303 warm_p95_us=20.400 warm_p99_us=21.700 nodes=6800 primitives=400 cache_hits=40000",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.25.25"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_V1_DIRTY samples=400 query_p95_us=200.801 query_p99_us=244.301 source_publish_p95_us=190.098 source_publish_p99_us=206.001",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.25.26"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Geometry",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.Geometry",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"788A4EEC48E7A9AA5F8BF1A0A81B1BFA"
+			],
+			"duration": 0.0084278993308544159,
+			"dateTime": "2026.09.10-03.25.26",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ObserverPose",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.ObserverPose",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"788A4EEC48E7A9AA5F8BF1A0A81B1BFA"
+			],
+			"duration": 0.0098313018679618835,
+			"dateTime": "2026.09.10-03.25.26",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Policy",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.Policy",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"788A4EEC48E7A9AA5F8BF1A0A81B1BFA"
+			],
+			"duration": 0.0060865990817546844,
+			"dateTime": "2026.09.10-03.25.26",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Geometry",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.Spec.Geometry",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"788A4EEC48E7A9AA5F8BF1A0A81B1BFA"
+			],
+			"duration": 0.0039362981915473938,
+			"dateTime": "2026.09.10-03.25.26",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Knowledge",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.Spec.Knowledge",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"788A4EEC48E7A9AA5F8BF1A0A81B1BFA"
+			],
+			"duration": 0.0085695013403892517,
+			"dateTime": "2026.09.10-03.25.26",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

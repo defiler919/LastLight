@@ -1,4 +1,5 @@
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
+#include "VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h"
 #include "SightWeaveHardCoverage.h"
 #include "VisionPresentation/DarkwellBlackoutTiming.h"
 #include "VisionPresentation/DarkwellMemoryRegionSamples.h"
@@ -108,13 +109,29 @@ FString ADarkwellObjectMemoryScene::GetHistoryParentTelemetry() const
 		FindObject<UMaterialInterface>(nullptr, HistoryParentPath) ? 1 : 0);
 }
 
+bool ADarkwellObjectMemoryScene::HasSurfaceKnowledge(FName Id,ESightWeaveBoxFace Face,FVector2D UV) const
+{const auto* K=FixedSurfaceIds.Contains(Id)?GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->Find(Id):nullptr;return K && K->IsKnown(Face,UV);}
+bool ADarkwellObjectMemoryScene::IsSurfaceObjectRecognized(FName Id) const
+{return FixedSurfaceIds.Contains(Id) && GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->IsWholeRecognized(Id);}
 bool ADarkwellObjectMemoryScene::RegisterRememberable(
 	UDarkwellRememberablePropComponent* Memory, USightWeaveObjectPolicyComponent* Policy)
 {
 	if (!Memory || !Policy || !Memory->bUseSpatialMemory || Memory->GetWorld()!=GetWorld()
 		|| Memory->GetOwner()!=Policy->GetOwner() || Memory->GetStableId().IsNone()
 		|| Memory->GetMemoryPrimitives().IsEmpty()) return false;
+ if(Memory->bUseFixedSurfaceKnowledge)
+ {
+  if(Memory->GetMemoryPrimitives().Num()!=1 || Memory->SurfaceContentVersion<=0 || Tracked.Contains(Memory->GetStableId()))return false;
+  const auto Resolved=Policy->GetResolvedPolicy();
+  if(Resolved.HistoryMode!=ESightWeaveHistoryMode::StationaryOnly)return false;
+  const bool Registered=GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->RegisterFixedBox(
+   Memory->GetMemoryPrimitives()[0],Memory->GetStableId(),Memory->GetRememberedTint(),false,
+   Resolved.RevealMode==ESightWeaveRevealMode::WholeObjectAfterSpan?Resolved.MinimumObservedSpanCm:0,uint32(Memory->SurfaceContentVersion));
+  if(Registered)FixedSurfaceIds.Add(Memory->GetStableId());return Registered;
+ }
 	FTrackedProp* Existing=Tracked.Find(Memory->GetStableId());
+ if(FixedSurfaceIds.Contains(Memory->GetStableId()))return false;
+ for(auto M:Memory->GetMemoryPrimitives())if(GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->OwnsMesh(M.Get()))return false;
 	if(Existing && Existing->Actual.IsValid() && !Existing->Actual->IsActorBeingDestroyed()) return false;
 	// A valid source admits the Scene's immutable presentation dependency once.
 	// No CDO/BeginPlay load, record, knowledge, MID or proxy is created here.
@@ -179,6 +196,7 @@ void ADarkwellObjectMemoryScene::ReleaseSourcePresentation(FTrackedProp& Prop)
 
 void ADarkwellObjectMemoryScene::ResetMemory()
 {
+ if(auto* S=GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>())for(auto Id:FixedSurfaceIds)S->UnregisterDomain(Id);FixedSurfaceIds.Reset();
  InvalidateWholePreparation();
 	for(auto& Pair:Tracked)
 	{
@@ -6716,6 +6734,7 @@ bool ADarkwellObjectMemoryScene::RekeyCurrentForMemoryRegion(FTrackedProp& P,con
 
 void ADarkwellObjectMemoryScene::ClearMemoryInRegion(const FBox2D& Bounds)
 {
+ GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->Clear(Bounds,false);
  DW_BLACKOUT_SCOPE(ClearMemoryInRegion);
  BeginMemoryRegionTransaction();
  for(auto& Pair:Tracked) Pair.Value.bRegionAppearanceDirty=true;
@@ -6828,6 +6847,7 @@ void ADarkwellObjectMemoryScene::RefreshMemoryWriteBlock(FTrackedProp& P)
 
 void ADarkwellObjectMemoryScene::SetMemoryWriteBlock(const FBox2D& Bounds,bool bEnabled)
 {
+ GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->SetBlock(Bounds,bEnabled,false);
  DW_BLACKOUT_SCOPE(SetMemoryWriteBlock);
  BeginMemoryRegionTransaction();
  for(auto& Pair:Tracked) Pair.Value.bRegionAppearanceDirty=true;

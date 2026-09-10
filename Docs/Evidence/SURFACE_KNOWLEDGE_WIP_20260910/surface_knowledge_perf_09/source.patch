@@ -1,0 +1,661 @@
+diff --git a/Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveSurface.cpp b/Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveSurface.cpp
+index 5e36986..ffdd5bf 100644
+--- a/Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveSurface.cpp
++++ b/Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveSurface.cpp
+@@ -98,6 +98,178 @@ bool USightWeaveWorldSubsystem::RegisterSurfaceBox(const FSightWeaveSurfaceBox&
+  SurfaceBoxes.Add(Box.Id,{Box,++SurfaceSerial});if(Owner)SurfaceOwners.Add(Box.Id,Owner);
+  bSurfaceSceneDirty=true;AdvanceRevision();PublishSnapshot();return true;
+ }
++
++bool FSightWeaveSurfaceScene::BeamClear(FSightWeaveFloorId Floor,FName Receiver,FVector Origin,TConstArrayView<FVector> Corners) const
++{
++ FBox Beam(ForceInit);Beam+=Origin;for(auto P:Corners)Beam+=P;
++ FVector PlaneNormal=Corners.Num()>=3?FVector::CrossProduct(Corners[1]-Corners[0],Corners[2]-Corners[0]).GetSafeNormal():FVector::ZeroVector;
++ if(!Corners.IsEmpty() && FVector::DotProduct(PlaneNormal,Origin-Corners[0])<0)PlaneNormal=-PlaneNormal;
++ // SAT over a five-vertex beam and a convex proxy. A separating plane proves
++ // no ray through the receiver rectangle can hit that proxy. Bounds alone are
++ // only the BVH broad phase, not a reason to reject a visible surface.
++ auto Disjoint=[&](TConstArrayView<FVector> Vertices,TConstArrayView<FVector> Edges,TConstArrayView<FVector> Normals)
++ {
++  TArray<FVector,TInlineAllocator<8>> BeamEdges;
++  for(int I=0;I<Corners.Num();++I){BeamEdges.Add(Corners[I]-Origin);BeamEdges.Add(Corners[(I+1)%Corners.Num()]-Corners[I]);}
++  auto Separated=[&](FVector Axis)
++  {
++   if(!Axis.Normalize())return false;
++   double MinA=FVector::DotProduct(Axis,Origin),MaxA=MinA,MinB=DBL_MAX,MaxB=-DBL_MAX;
++   for(auto P:Corners){const double D=FVector::DotProduct(Axis,P);MinA=FMath::Min(MinA,D);MaxA=FMath::Max(MaxA,D);}
++   for(auto P:Vertices){const double D=FVector::DotProduct(Axis,P);MinB=FMath::Min(MinB,D);MaxB=FMath::Max(MaxB,D);}
++   return MaxA<MinB-Contact || MaxB<MinA-Contact;
++  };
++  for(auto N:Normals)if(Separated(N))return true;
++  if(Corners.Num()>=3 && Separated(FVector::CrossProduct(Corners[1]-Corners[0],Corners[2]-Corners[0])))return true;
++  for(int I=0;I<Corners.Num();++I)if(Separated(FVector::CrossProduct(Corners[I]-Origin,Corners[(I+1)%Corners.Num()]-Origin)))return true;
++  for(auto A:BeamEdges)for(auto B:Edges)if(Separated(FVector::CrossProduct(A,B)))return true;
++  return false;
++ };
++ TArray<int32,TInlineAllocator<64>> Stack;if(!Nodes.IsEmpty())Stack.Add(0);
++ while(!Stack.IsEmpty())
++ {
++  const auto& N=Nodes[Stack.Pop(EAllowShrinking::No)];if(!Beam.Intersect(N.Bounds))continue;
++  if(N.Primitive==INDEX_NONE){Stack.Add(N.Left);Stack.Add(N.Right);continue;}
++  const auto& P=Primitives[N.Primitive];
++  if(!PlaneNormal.IsNearlyZero())
++  {
++   const double Center=FVector::DotProduct(PlaneNormal,P.Bounds.GetCenter()),Radius=FVector::DotProduct(PlaneNormal.GetAbs(),P.Bounds.GetExtent());
++   // Contact at a terminal plane cannot intersect the open observation beam.
++   if(Center+Radius<=FVector::DotProduct(PlaneNormal,Corners[0]) || Center-Radius>=FVector::DotProduct(PlaneNormal,Origin))continue;
++  }
++  if(P.BoxIndex!=INDEX_NONE)
++  {
++   const auto& B=Boxes[P.BoxIndex].Box;if(B.Floor!=Floor || B.Id==Receiver)continue;
++   TArray<FVector,TInlineAllocator<8>> Vertices;for(int I=0;I<8;++I)Vertices.Add(B.Pose.TransformPosition(B.HalfExtent*FVector(I&1?1:-1,I&2?1:-1,I&4?1:-1)));
++   const FVector Axes[]{B.Pose.GetUnitAxis(EAxis::X),B.Pose.GetUnitAxis(EAxis::Y),B.Pose.GetUnitAxis(EAxis::Z)};
++   if(!Disjoint(Vertices,Axes,Axes))return false;
++  }
++  else if(P.Wall.FloorId==Floor)
++  {
++   const auto& W=P.Wall;const FVector Vertices[]{FVector(W.A,W.HeightRange.ZMin),FVector(W.B,W.HeightRange.ZMin),FVector(W.B,W.HeightRange.ZMax),FVector(W.A,W.HeightRange.ZMax)};
++   const FVector Edges[]{FVector(W.B-W.A,0),FVector::UpVector};const FVector Normals[]{FVector::CrossProduct(Edges[0],Edges[1])};
++   if(!Disjoint(Vertices,Edges,Normals))return false;
++  }
++ }
++ return true;
++}
++bool FSightWeaveSurfaceScene::BeamBlocked(FSightWeaveFloorId Floor,FVector Origin,FVector Normal,TConstArrayView<FVector> Corners) const
++{
++ if(Corners.IsEmpty())return false;
++ const double Plane=FVector::DotProduct(Normal,Corners[0]),Eye=FVector::DotProduct(Normal,Origin);
++ if(Eye<=Plane+Contact)return false;
++ FBox Beam(ForceInit);Beam+=Origin;for(auto P:Corners)Beam+=P;
++ TArray<int32,TInlineAllocator<64>> Stack;if(!Nodes.IsEmpty())Stack.Add(0);
++ while(!Stack.IsEmpty())
++ {
++  const auto& N=Nodes[Stack.Pop(EAllowShrinking::No)];if(!Beam.Intersect(N.Bounds))continue;
++  if(N.Primitive==INDEX_NONE){Stack.Add(N.Left);Stack.Add(N.Right);continue;}
++  const auto& P=Primitives[N.Primitive];
++  if((P.BoxIndex!=INDEX_NONE?Boxes[P.BoxIndex].Box.Floor:P.Wall.FloorId)!=Floor)continue;
++  // Clip the convex blocker conceptually to the open eye/target slab. Its
++  // conic hull from the eye, intersected with the receiver plane, is convex.
++  // All four blocked vertices therefore prove the whole receiver rectangle,
++  // even when the furniture touches the floor or extends above the eye.
++  // Walls additionally need a uniform endpoint-contact margin; unlike box
++  // slab tests their exact predicate shortens each ray by a world distance.
++  if(P.BoxIndex==INDEX_NONE)
++  {
++   FVector NWall=FVector::CrossProduct(FVector(P.Wall.B-P.Wall.A,0),FVector::UpVector).GetSafeNormal();
++   const double From=FVector::DotProduct(NWall,Origin-FVector(P.Wall.A,0));if(FMath::Abs(From)<=Contact)continue;
++   bool Opposite=true;for(auto C:Corners){const double To=FVector::DotProduct(NWall,C-FVector(P.Wall.A,0));Opposite&=From>0?To<-Contact:To>Contact;}if(!Opposite)continue;
++  }
++  bool All=true;
++  for(auto C:Corners)
++  {
++   if(P.BoxIndex==INDEX_NONE){if(!WallBlocks(P.Wall,Origin,C)){All=false;break;}}
++   else
++   {
++    const auto& B=Boxes[P.BoxIndex].Box;double Lo,Hi;const FVector E=B.HalfExtent-FVector(Contact);
++    if(!Interval(B.Pose.InverseTransformPosition(Origin),B.Pose.InverseTransformPosition(C),FBox(-E,E),Lo,Hi) || Lo>=Hi || Hi<=0 || Lo>=1){All=false;break;}
++   }
++  }
++  if(All)return true;
++ }
++ return false;
++}
++bool USightWeaveWorldSubsystem::TrySurfaceRegion(FSightWeaveKnowledgeOwnerId Owner,FName Id,ESightWeaveBoxFace Face,const FBox2D& UV,bool& Value,FSightWeaveSurfaceQueryStats* Stats) const
++{
++ check(IsInGameThread());
++ const auto Frame=AcquirePublishedSnapshot();if(!Owner.IsValid() || !Frame || !Frame->SurfaceScene || !UV.bIsValid)return false;
++ if(SurfaceRegionFrame!=Frame || SurfaceRegionOwner!=Owner){SurfaceRegionCorners.Reset();SurfaceRegionFrame=Frame;SurfaceRegionOwner=Owner;}
++ const auto* R=Frame->SurfaceScene->Find(Id);if(!R)return false;
++ const auto* Floor=Frame->Floors.FindByPredicate([&](const auto& F){return F.FloorId==R->Box.Floor;});if(!Floor)return false;
++ const FVector2D Points[]{UV.Min,{UV.Max.X,UV.Min.Y},UV.Max,{UV.Min.X,UV.Max.Y}};TArray<FVector> World;FVector Normal;
++ for(auto P:Points){FVector Q;if(!R->Box.Resolve(Face,P,Q,Normal))return false;World.Add(Q);}
++ bool AnyFacing=false;for(const auto& V:Frame->VisionSources)
++  AnyFacing|=V.Description.bActive && V.Description.KnowledgeOwnerId==Owner && V.Description.FloorId==Floor->FloorId
++   && FVector::DotProduct(Normal,V.Description.Transform.GetLocation()-World[0])>1.e-4;
++ if(!AnyFacing){Value=false;return true;}
++ FBox2D XY(ForceInit);for(auto P:World)XY+=FVector2D(P);
++ for(const auto& S:Frame->HardSuppressions)if(S.Description.bEnabled && S.Description.FloorId==Floor->FloorId)
++ {
++  const auto& D=S.Description;bool All=true;for(auto P:World)All&=(FVector2D(P)-D.Center).SizeSquared()<=FMath::Square(D.Radius) && P.Z>=D.HeightRange.ZMin && P.Z<=D.HeightRange.ZMax;
++  if(All){Value=false;return true;}
++  if(XY.Intersect(FBox2D(D.Center-FVector2D(D.Radius),D.Center+FVector2D(D.Radius))))return false;
++ }
++ const auto& T=GetDefault<USightWeaveSettings>()->GeometryTolerances;
++ // These are rejection bounds of the same nominal predicates. They can only
++ // reject a region wholly outside; ambiguous geometry still uses exact Hard.
++ auto Possible=[&](const auto& E)
++ {
++  const auto& D=E.Description;const FVector Eye=D.Transform.GetLocation();
++  if(!D.bActive || D.FloorId!=Floor->FloorId || FVector::DotProduct(Normal,Eye-World[0])<=1.e-4)return false;
++  FBox Bounds(ForceInit);for(auto P:World)Bounds+=P;
++  if(Bounds.Max.Z<D.HeightRange.ZMin-T.HeightOverlapEpsilon || Bounds.Min.Z>D.HeightRange.ZMax+T.HeightOverlapEpsilon)return false;
++  const double Near=[&](){if constexpr(requires{D.NearAwarenessRadius;})return double(D.NearAwarenessRadius);else return 0.;}();
++  if(D.Shape!=ESightWeaveSourceShape::Radial && D.HalfAngleDegrees<=90 && XY.ComputeSquaredDistanceToPoint(FVector2D(Eye))>FMath::Square(Near+T.PointOnEdgeEpsilon))
++  {
++   const double C=E.NominalMinimumCosine,S=FMath::Sqrt(FMath::Max(0.,1-C*C));const FVector2D F=E.NominalForward,Side(-F.Y,F.X);
++   for(auto N:{F*S+Side*C,F*S-Side*C})
++   {double Maximum=-DBL_MAX;for(auto P:World)Maximum=FMath::Max(Maximum,FVector2D::DotProduct(N,FVector2D(P)-E.PolarOrigin));if(Maximum<0)return false;}
++  }
++  return XY.ComputeSquaredDistanceToPoint(FVector2D(Eye))<=FMath::Square(D.Range+T.PointOnEdgeEpsilon)
++   && !Frame->SurfaceScene->BeamBlocked(Floor->FloorId,Eye,Normal,World);
++ };
++ bool PossiblePair=false;
++ for(const auto& V:Frame->VisionSources)if(V.Description.KnowledgeOwnerId==Owner && Possible(V))
++ {
++  if(V.Description.IlluminationPolicy==ESightWeaveIlluminationPolicy::BypassLegalIllumination){PossiblePair=true;break;}
++  for(int I:V.CompatibleIlluminationSourceIndices)if(Frame->IlluminationSources.IsValidIndex(I) && Possible(Frame->IlluminationSources[I])){PossiblePair=true;break;}
++ }
++ if(!PossiblePair){Value=false;return true;}
++ auto Convex=[&](const auto& D)
++ {
++  if(D.Shape==ESightWeaveSourceShape::Radial)return true;
++  if(D.HalfAngleDegrees>90)return false;
++  // The tiny origin-awareness disc is a union with the cone, not convex.
++  return XY.ComputeSquaredDistanceToPoint(FVector2D(D.Transform.GetLocation()))>FMath::Square(T.PointOnEdgeEpsilon);
++ };
++ for(const auto& V:Frame->VisionSources)
++ {
++  if(!Convex(V.Description) || V.Description.NearAwarenessRadius>0)continue;
++  TArray<FSightWeaveIlluminationSourceHandle> Common;bool All=true;
++  FSightWeaveSurfaceContext Context{Frame->SurfaceScene.Get(),Normal,Stats};
++  for(int I=0;I<World.Num();++I)
++  {
++   FSightWeaveVisibilityQueryResult Q;const FSightWeaveSurfaceRegionCorner Key{{Id,Face,Points[I]},V.Handle};
++   if(const auto* Hit=SurfaceRegionCorners.Find(Key)){Q=*Hit;if(Stats)++Stats->CacheHits;}
++   else
++   {
++    if(Stats)++Stats->ExactSamples;
++    QueryEffectiveLiveValidated(Owner,Floor->FloorId,World[I],&V.Handle,false,*Frame,*Floor,T,Q,nullptr,0,0,false,false,&Context);
++    if(SurfaceRegionCorners.Num()>=4096)SurfaceRegionCorners.Reset();SurfaceRegionCorners.Add(Key,Q);
++   }
++   if(!Q.bVisible){All=false;break;}
++   if(I==0)Common=Q.ContributingIlluminationSources;else Common.RemoveAll([&](auto H){return !Q.ContributingIlluminationSources.Contains(H);});
++  }
++  if(!All || !Frame->SurfaceScene->BeamClear(Floor->FloorId,Id,V.Description.Transform.GetLocation(),World))continue;
++  if(V.Description.IlluminationPolicy==ESightWeaveIlluminationPolicy::BypassLegalIllumination){Value=true;return true;}
++  for(const auto& L:Frame->IlluminationSources)if(Common.Contains(L.Handle) && Convex(L.Description)
++   && Frame->SurfaceScene->BeamClear(Floor->FloorId,Id,L.Description.Transform.GetLocation(),World)){Value=true;return true;}
++ }
++ return false;
++}
+ bool USightWeaveWorldSubsystem::UpdateSurfaceBox(const FSightWeaveSurfaceBox& Box)
+ {
+  auto* Existing=SurfaceBoxes.Find(Box.Id);if(!bSightWeaveInitialized || !Existing || !Box.IsValid() || !Floors.Contains(Box.Floor))return false;
+diff --git a/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveSurface.h b/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveSurface.h
+index d026bc8..c0bee17 100644
+--- a/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveSurface.h
++++ b/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveSurface.h
+@@ -34,6 +34,14 @@ struct FSightWeaveSurfaceResult
+  uint64 ReceiverRevision=0; // geometry AND registration lifetime, never reused
+  FVector WorldPoint=FVector::ZeroVector;
+ };
++/** Source-restricted corner evidence; cannot borrow a different source's policy. */
++struct FSightWeaveSurfaceRegionCorner
++{
++ FSightWeaveSurfaceSample Sample;
++ FSightWeaveVisionSourceHandle Source;
++ bool operator==(const FSightWeaveSurfaceRegionCorner& B) const {return Sample==B.Sample && Source==B.Source;}
++ friend uint32 GetTypeHash(const FSightWeaveSurfaceRegionCorner& K){return HashCombine(GetTypeHash(K.Sample),GetTypeHash(K.Source));}
++};
+ 
+ struct FSightWeaveSurfaceQueryStats
+ {
+@@ -58,6 +66,10 @@ public:
+  FSightWeaveSurfaceScene(TArray<FReceiver> Receivers,TConstArrayView<FSightWeaveSegment2D> Walls);
+  const FReceiver* Find(FName Id) const;
+  bool Unoccluded(FSightWeaveFloorId Floor,FVector Origin,FVector Target,FSightWeaveSurfaceQueryStats* Stats) const;
++ /** Conservative beam AABB proof. False means ambiguous, never occluded. */
++ bool BeamClear(FSightWeaveFloorId Floor,FName Receiver,FVector Origin,TConstArrayView<FVector> Corners) const;
++ /** A single convex blocker whose shadow contains the entire target rectangle. */
++ bool BeamBlocked(FSightWeaveFloorId Floor,FVector Origin,FVector Normal,TConstArrayView<FVector> Corners) const;
+ private:
+  struct FPrimitive {FBox Bounds; int32 BoxIndex=INDEX_NONE; FSightWeaveSegment2D Wall;};
+  struct FNode {FBox Bounds; int32 Left=INDEX_NONE,Right=INDEX_NONE,Primitive=INDEX_NONE;};
+diff --git a/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveWorldSubsystem.h b/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveWorldSubsystem.h
+index 5c75c4c..8d316df 100644
+--- a/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveWorldSubsystem.h
++++ b/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveWorldSubsystem.h
+@@ -483,6 +483,8 @@ public:
+  bool UpdateSurfaceBox(const FSightWeaveSurfaceBox& Box);
+  bool UnregisterSurfaceBox(FName Id);
+  FSightWeaveSurfaceResult QuerySurfaceSample(FSightWeaveKnowledgeOwnerId Owner,const FSightWeaveSurfaceSample& Sample) const;
++ /** Proven uniform rectangle only; false return requires subdivision/exact samples. */
++ bool TrySurfaceRegion(FSightWeaveKnowledgeOwnerId Owner,FName Receiver,ESightWeaveBoxFace Face,const FBox2D& UV,bool& Value,FSightWeaveSurfaceQueryStats* Stats=nullptr) const;
+  /** Exact point batch; no whole-face/region inference or memory mutation. */
+  void QuerySurfaceSamples(FSightWeaveKnowledgeOwnerId Owner,TConstArrayView<FSightWeaveSurfaceSample> Samples,
+   TArray<FSightWeaveSurfaceResult>& Results,FSightWeaveSurfaceQueryCache* Cache=nullptr,FSightWeaveSurfaceQueryStats* Stats=nullptr) const;
+@@ -490,6 +492,10 @@ private:
+  TMap<FName,FSightWeaveSurfaceScene::FReceiver> SurfaceBoxes;
+  TMap<FName,TWeakObjectPtr<UObject>> SurfaceOwners;
+  uint64 SurfaceSerial=0;
++ // Game-thread shared region evidence: at most 4096 exact corners, never stale.
++ mutable FSightWeaveImmutableSnapshotPtr SurfaceRegionFrame;
++ mutable FSightWeaveKnowledgeOwnerId SurfaceRegionOwner;
++ mutable TMap<FSightWeaveSurfaceRegionCorner,FSightWeaveVisibilityQueryResult> SurfaceRegionCorners;
+  bool bSurfaceSceneDirty=true;
+  FSightWeaveRevision SurfaceOccluderRevision;
+  TSharedPtr<const FSightWeaveSurfaceScene,ESPMode::ThreadSafe> SurfaceScene;
+@@ -678,3 +684,4 @@ private:
+ 	TMap<int64, TWeakObjectPtr<UObject>> HardSuppressionOwners;
+ 	TMap<int64, TWeakObjectPtr<UObject>> StaticEnvironmentOwners;
+ };
++
+diff --git a/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp b/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp
+index f39ec64..161d318 100644
+--- a/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp
++++ b/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp
+@@ -9,6 +9,27 @@
+ #include "UObject/Package.h"
+ #include "Player/DarkwellCharacter.h"
+ #include "Player/DarkwellObserverComponent.h"
++#include "VisionPresentation/DarkwellSurfaceKnowledge.h"
++#include "VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h"
++#include "VisionPresentation/DarkwellStaticEnvironmentSubsystem.h"
++#include "Components/StaticMeshComponent.h"
++#include "Components/SceneCaptureComponent2D.h"
++#include "Engine/TextureRenderTarget2D.h"
++#include "Engine/Texture2D.h"
++#include "RHICommandList.h"
++#include "RenderingThread.h"
++#include "AssetCompilingManager.h"
++#include "ShaderCompiler.h"
++#include "ImageUtils.h"
++#include "Misc/FileHelper.h"
++#include "Components/PointLightComponent.h"
++#include "Materials/Material.h"
++#include "Materials/MaterialExpressionConstant3Vector.h"
++#include "VisionPresentation/DarkwellObjectMemoryScene.h"
++#include "VisionPresentation/DarkwellRememberablePropComponent.h"
++#include "SightWeaveObjectPolicy.h"
++#include "SightWeaveRenderWorldSubsystem.h"
++#include "VisionPresentation/DarkwellApartmentLab.h"
+ 
+ using namespace Darkwell::SurfaceObservationTests;
+ namespace
+@@ -376,4 +397,184 @@ bool FSurfaceV1Performance::RunTest(const FString&)
+  AddInfo(FString::Printf(TEXT("SURFACE_V1_DIRTY samples=400 query_p95_us=%.3f query_p99_us=%.3f source_publish_p95_us=%.3f source_publish_p99_us=%.3f"),DirtyTimes[94],DirtyTimes[98],PublishTimes[94],PublishTimes[98]));
+  return true;
+ }
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgeV1Facts,"Darkwell.SightWeave.SurfaceKnowledge.FactsAndArchive",SurfaceTestFlags)
++bool FSurfaceKnowledgeV1Facts::RunTest(const FString&)
++{
++ FRuntimeWorld W;auto B=Receiver(W);W.Runtime->RegisterSurfaceBox(B);
++ auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);
++ FDarkwellSurfaceKnowledge K;TestTrue(TEXT("Initialize durable domain"),K.Initialize(B,W.Owner));K.Observe(*W.Runtime);
++ auto Known=[&](ESightWeaveBoxFace F){return K.IsKnown(F,{0,0});};
++ TestTrue(TEXT("Front learned"),Known(ESightWeaveBoxFace::NegativeX));
++ TestFalse(TEXT("Top not learned from Whole/front"),Known(ESightWeaveBoxFace::Top));
++ TestFalse(TEXT("Back not learned"),Known(ESightWeaveBoxFace::PositiveX));
++ TestEqual(TEXT("Unoccluded large front uses four authority corner queries"),K.ExactSamples,uint64(4));
++ K.Observe(*W.Runtime);TestEqual(TEXT("Unchanged revision performs zero proof work"),K.Proofs,uint64(0));
++ TArray<uint8> Archive;K.Save(Archive);FDarkwellSurfaceKnowledge Restored;Restored.Initialize(B,W.Owner);
++ TestTrue(TEXT("Archive accepts same stable identity/domain"),Restored.Load(Archive));
++ TestTrue(TEXT("Archived front known"),Restored.IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
++ TestFalse(TEXT("Live never persisted"),Restored.IsLive(ESightWeaveBoxFace::NegativeX,{0,0}));
++ auto Other=B;Other.Id=TEXT("Other");Restored.Initialize(Other,W.Owner);TestFalse(TEXT("Wrong domain refused"),Restored.Load(Archive));
++ Restored.Initialize(B,W.Owner,2);TestFalse(TEXT("Content version mismatch refused"),Restored.Load(Archive));
++ Restored.Initialize(B,W.Owner);auto Truncated=Archive;Truncated.SetNum(Archive.Num()-1);TestFalse(TEXT("Truncation refused transactionally"),Restored.Load(Truncated));
++ V.Transform.SetLocation({0,200,162});W.Runtime->UpdateVisionSource(H,V);K.Observe(*W.Runtime);
++ TestTrue(TEXT("New side learned independently"),Known(ESightWeaveBoxFace::PositiveY));
++ TestTrue(TEXT("Old front retained"),Known(ESightWeaveBoxFace::NegativeX));
++ TestFalse(TEXT("Old front no longer live"),K.IsLive(ESightWeaveBoxFace::NegativeX,{0,0}));
++ V.Transform.SetLocation({0,200,260});W.Runtime->UpdateVisionSource(H,V);K.Observe(*W.Runtime);
++ TestTrue(TEXT("Raised observer learns top"),Known(ESightWeaveBoxFace::Top));
++ TestFalse(TEXT("Same XY bottom independent"),Known(ESightWeaveBoxFace::Bottom));
++ const FBox2D All({-100,-100},{100,100});K.SetBlock(All,true);K.Clear(All);K.Observe(*W.Runtime);
++ TestFalse(TEXT("Clear plus block prevents surface rewrite"),Known(ESightWeaveBoxFace::Top));
++ TestTrue(TEXT("Memory block does not block Live"),K.IsLive(ESightWeaveBoxFace::Top,{0,0}));
++ K.SetBlock(All,false);K.Observe(*W.Runtime);TestTrue(TEXT("Fresh legal observation relearns"),Known(ESightWeaveBoxFace::Top));
++ V.bActive=false;W.Runtime->UpdateVisionSource(H,V);K.Observe(*W.Runtime);K.Clear(All);K.Observe(*W.Runtime);
++ TestFalse(TEXT("Clear without observation stays unknown"),Known(ESightWeaveBoxFace::Top));
++ return true;
++}
++
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceRegionProof,"Darkwell.SightWeave.SurfaceKnowledge.RegionProof",SurfaceTestFlags)
++bool FSurfaceRegionProof::RunTest(const FString&)
++{
++ FRuntimeWorld W;W.Runtime->RegisterSurfaceBox(Receiver(W));auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);
++ const FBox2D Whole({-1,-1},{1,1});bool Value=false;
++ TestTrue(TEXT("Clear face region certified"),W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Whole,Value)&&Value);
++ auto Obstacle=Receiver(W);Obstacle.Id=TEXT("Thin");Obstacle.Pose=FTransform(FVector(-120,8,130));Obstacle.HalfExtent={1,.05,70};W.Runtime->RegisterSurfaceBox(Obstacle);
++ TestFalse(TEXT("Thin blocker invalidates corner-only proof"),W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Whole,Value));
++ int Certified=0;
++ for(int Y=0;Y<8;++Y)for(int X=0;X<8;++X)
++ {
++  FBox2D Region(FVector2D(X,Y)/4-FVector2D(1),FVector2D(X+1,Y+1)/4-FVector2D(1));
++  if(!W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Region,Value))continue;
++  ++Certified;for(int B=0;B<=8;++B)for(int A=0;A<=8;++A)
++   TestEqual(TEXT("Every certified region agrees with dense exact Hard oracle"),W.Runtime->QuerySurfaceSample(W.Owner,Sample(ESightWeaveBoxFace::NegativeX,Region.Min+Region.GetSize()*FVector2D(A,B)/8)).Hard.bEligibleForMemoryWrite,Value);
++ }
++ TestTrue(TEXT("Some unobstructed subregions certified"),Certified>0);
++ W.Runtime->UnregisterSurfaceBox(Obstacle.Id);V.IlluminationPolicy=ESightWeaveIlluminationPolicy::RequiresLegalIllumination;W.Runtime->UpdateVisionSource(H,V);
++ TestTrue(TEXT("No legal light certifies false"),W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Whole,Value)&&!Value);
++ return true;
++}
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgeV1P4,"Darkwell.SightWeave.SurfaceKnowledge.ObjectStaticP4",SurfaceTestFlags)
++bool FSurfaceKnowledgeV1P4::RunTest(const FString&)
++{
++ FRuntimeWorld W(true);W.Runtime->ConfigureExplorationMemory(W.Owner,W.Floor,ESightWeaveRenderPrecisionTier::Ultra);
++ // Match the production P4 Adapter: the old full-screen composite must not
++ // own the view alongside the project-owned surface presenter.
++ W.World->GetSubsystem<USightWeaveRenderWorldSubsystem>()->SetPresentationSuppressed(true);
++ auto* S=W.World->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>();auto* Static=W.World->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>();
++ auto* Actor=W.World->SpawnActor<AActor>();auto* Mesh=NewObject<UStaticMeshComponent>(Actor);Actor->AddInstanceComponent(Mesh);Actor->SetRootComponent(Mesh);
++ Mesh->SetMobility(EComponentMobility::Movable);Mesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Cube.Cube")));Mesh->SetRelativeScale3D({.8,.6,2});Mesh->RegisterComponent();Actor->SetActorLocation({0,0,100});Actor->SetActorHiddenInGame(false);Actor->DispatchBeginPlay();
++ TestTrue(TEXT("Static surface admission"),Static->RegisterImmutableSurfaceBox(Mesh,TEXT("Cabinet"),FLinearColor(.6,.2,.05)));
++ TestFalse(TEXT("Duplicate identity rejected"),S->RegisterFixedBox(Mesh,TEXT("Cabinet"),FLinearColor::White,false));
++ auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);S->Tick(0);
++ const auto* K=S->Find(TEXT("Cabinet"));if(!TestNotNull(TEXT("Static CPU surface domain"),K))return false;
++ TestTrue(TEXT("Static front known"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));TestFalse(TEXT("Static top unknown"),K->IsKnown(ESightWeaveBoxFace::Top,{0,0}));
++ UTextureRenderTarget2D* Target=nullptr;USceneCaptureComponent2D* Capture=nullptr;
++ if(!GUsingNullRHI)
++ {
++  auto* CaptureActor=W.World->SpawnActor<AActor>();Capture=NewObject<USceneCaptureComponent2D>(CaptureActor);CaptureActor->AddInstanceComponent(Capture);CaptureActor->SetRootComponent(Capture);CaptureActor->SetActorHiddenInGame(false);Capture->RegisterComponent();
++  Capture->bCaptureEveryFrame=false;Capture->bCaptureOnMovement=false;Capture->ProjectionType=ECameraProjectionMode::Perspective;Capture->FOVAngle=60;
++  Capture->CaptureSource=ESceneCaptureSource::SCS_FinalColorLDR;Capture->ShowFlags.SetTemporalAA(false);Capture->ShowFlags.SetMotionBlur(false);
++  auto* Light=NewObject<UPointLightComponent>(CaptureActor);CaptureActor->AddInstanceComponent(Light);Light->SetIntensity(1000000);Light->SetAttenuationRadius(1000);Light->RegisterComponent();Light->SetWorldLocation({-200,0,300});
++  Target=NewObject<UTextureRenderTarget2D>(CaptureActor);Target->InitCustomFormat(64,64,PF_B8G8R8A8,false);Target->UpdateResourceImmediate();Capture->TextureTarget=Target;
++ }
++ auto Pixel=[&](bool Top)
++ {
++  if(!Capture)return FColor::Black;
++  Capture->SetWorldLocation(Top?FVector(0,0,500):FVector(-400,0,100));Capture->SetWorldRotation(Top?FRotator(-90,0,0):FRotator::ZeroRotator);
++  AddInfo(FString::Printf(TEXT("Capture visible=%d pos=%s rot=%s scene=%d"),Capture->IsVisible(),*Capture->GetComponentLocation().ToString(),*Capture->GetComponentRotation().ToString(),W.World->Scene!=nullptr));
++  FAssetCompilingManager::Get().FinishAllCompilation();if(GShaderCompilingManager)GShaderCompilingManager->FinishAllCompilation();
++  W.World->UpdateWorldComponents(false,false);W.World->SendAllEndOfFrameUpdates();Capture->CaptureScene();FlushRenderingCommands();
++  if(GShaderCompilingManager)GShaderCompilingManager->FinishAllCompilation();
++  W.World->SendAllEndOfFrameUpdates();Capture->CaptureScene();FlushRenderingCommands();
++  TArray<FColor> Pixels;Target->GameThread_GetRenderTargetResource()->ReadPixels(Pixels);
++  static int CaptureNumber=0;TArray<uint8> PNG;FImageUtils::CompressImageArray(64,64,Pixels,PNG);FFileHelper::SaveArrayToFile(PNG,*(FPaths::ProjectSavedDir()/FString::Printf(TEXT("SurfaceP4_%d.png"),CaptureNumber++)));
++  const auto C=Pixels.IsValidIndex(32*64+32)?Pixels[32*64+32]:FColor::Magenta;AddInfo(FString::Printf(TEXT("Surface P4 camera top=%d center=%s"),Top,*C.ToString()));return C;
++ };
++ auto Mirror=[&]()
++ {
++  if(GUsingNullRHI)return;
++  auto* Atlas=S->GetAtlas(TEXT("Cabinet"));FlushRenderingCommands();const auto Texture=Atlas->GetResource()->TextureRHI;const auto Size=K->AtlasSize;TArray<FColor> GPU,CPU;
++  ENQUEUE_RENDER_COMMAND(SurfaceKnowledgeMirror)([&GPU,Texture,Size](FRHICommandListImmediate& Cmd){Cmd.ReadSurfaceData(Texture,FIntRect(0,0,Size.X,Size.Y),GPU,FReadSurfaceDataFlags(RCM_UNorm));});FlushRenderingCommands();K->Pixels(CPU);
++  TestTrue(TEXT("Every GPU texel exactly mirrors CPU Live/Known/Suppressed"),GPU==CPU);
++ };
++ if(Capture)
++ {
++  auto* Original=Mesh->GetMaterial(0);auto* Control=NewObject<UMaterial>();Control->SetShadingModel(MSM_Unlit);
++  auto* E=NewObject<UMaterialExpressionConstant3Vector>(Control);E->Constant=FLinearColor(.5,0,0);Control->GetExpressionCollection().AddExpression(E);Control->GetEditorOnlyData()->EmissiveColor.Expression=E;Control->PostEditChange();Mesh->SetMaterial(0,Control);
++  TestTrue(TEXT("Positive control: capture renders actual mesh"),Pixel(false).R>20);Mesh->SetMaterial(0,Original);
++  AddInfo(FString::Printf(TEXT("Surface mesh visible=%d hidden=%d renderstate=%d position=%s"),Mesh->IsVisible(),Actor->IsHidden(),Mesh->IsRenderStateCreated(),*Mesh->GetComponentLocation().ToString()));
++ }
++ Mirror();if(Capture){TestTrue(TEXT("Real front mesh shows Live tint"),Pixel(false).R>40);TestTrue(TEXT("Top-view camera cannot reveal unknown top"),Pixel(true).R<5);}
++ V.bActive=false;W.Runtime->UpdateVisionSource(H,V);S->Tick(0);Mirror();
++ if(Capture){const auto C=Pixel(false);TestTrue(TEXT("Observed front renders gray after losing Live"),C.R>15 && FMath::Abs(int(C.R)-int(C.G))<4);TestTrue(TEXT("Unknown top stays black in memory"),Pixel(true).R<5);}
++ Static->SetMemoryWriteBlock(FBox2D({-100,-100},{100,100}),true);S->Tick(0);Mirror();if(Capture)TestTrue(TEXT("Block hides stored gray without erasing fact"),Pixel(false).R<5);
++ TestTrue(TEXT("Block retained CPU fact"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
++ Static->ClearMemory(FBox2D({-100,-100},{100,100}));TestFalse(TEXT("Static Clear reaches Surface"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
++ Static->SetMemoryWriteBlock(FBox2D({-100,-100},{100,100}),false);V.bActive=true;V.Transform.SetLocation({-200,0,260});W.Runtime->UpdateVisionSource(H,V);S->Tick(0);
++ TestTrue(TEXT("Static elevated observer learns top"),K->IsKnown(ESightWeaveBoxFace::Top,{0,0}));V.bActive=false;W.Runtime->UpdateVisionSource(H,V);S->Tick(0);Mirror();
++ if(Capture)TestTrue(TEXT("New known top now renders gray"),Pixel(true).R>15);
++ const auto InitialBytes=S->UploadBytes;S->Tick(0);TestEqual(TEXT("Stable revision zero uploads"),S->UploadBytes,uint64(0));TestEqual(TEXT("Stable revision zero exact queries"),S->ExactSamples,uint64(0));
++ AddInfo(FString::Printf(TEXT("SURFACE_KNOWLEDGE_P4 atlas=%dx%d changed_upload_bytes=%llu stable_update_us=%.3f"),K->AtlasSize.X,K->AtlasSize.Y,InitialBytes,S->UpdateUs));
++ return true;
++}
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgeObject,"Darkwell.SightWeave.SurfaceKnowledge.ObjectWholeAndModifiers",SurfaceTestFlags)
++bool FSurfaceKnowledgeObject::RunTest(const FString&)
++{
++ FRuntimeWorld W(true);W.Runtime->ConfigureExplorationMemory(W.Owner,W.Floor,ESightWeaveRenderPrecisionTier::Ultra);
++ auto* S=W.World->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>();auto* Scene=W.World->SpawnActor<ADarkwellObjectMemoryScene>();
++ auto* A=W.World->SpawnActor<AActor>();auto* M=NewObject<UStaticMeshComponent>(A);A->AddInstanceComponent(M);A->SetRootComponent(M);M->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Cube.Cube")));M->SetRelativeScale3D({.8,.6,2});M->RegisterComponent();A->SetActorLocation({0,0,100});
++ auto* Original=M->GetMaterial(0);auto* Memory=NewObject<UDarkwellRememberablePropComponent>(A);A->AddInstanceComponent(Memory);Memory->bUseSpatialMemory=true;Memory->bUseFixedSurfaceKnowledge=true;Memory->bRememberFromStart=false;Memory->ConfigureStableId(TEXT("Object"));Memory->AddMemoryPrimitive(M);Memory->RegisterComponent();
++ auto* Policy=NewObject<USightWeaveObjectPolicyComponent>(A);A->AddInstanceComponent(Policy);Policy->bOverrideRevealMode=true;Policy->RevealMode=ESightWeaveRevealMode::WholeObjectAfterSpan;Policy->bOverrideMinimumObservedSpan=true;Policy->MinimumObservedSpanCm=40;Policy->bOverrideHistoryMode=true;Policy->HistoryMode=ESightWeaveHistoryMode::StationaryOnly;Policy->RegisterComponent();
++ TestTrue(TEXT("Real ObjectMemory registration routes explicit surface"),Scene->RegisterRememberable(Memory,Policy));
++ auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);S->Tick(0);
++ TestTrue(TEXT("Whole recognition from legal front span"),S->IsWholeRecognized(TEXT("Object")));
++ TestFalse(TEXT("Whole never fills top"),S->Find(TEXT("Object"))->IsKnown(ESightWeaveBoxFace::Top,{0,0}));
++ TArray<uint8> Saved;TestTrue(TEXT("Consumer archive exported"),S->SaveDomain(TEXT("Object"),Saved));
++ V.bActive=false;W.Runtime->UpdateVisionSource(H,V);S->Tick(0);
++ FSightWeaveMemoryScopeKey Scope;W.Runtime->GetExplorationMemoryScope(Scope);FSightWeaveMemoryModifierDescription Modifier;Modifier.Region.Scope=Scope;Modifier.Region.HeightRange={-100,500};Modifier.Region.Radius=300;Modifier.Operation=ESightWeaveMemoryModifierOperation::SuppressMemoryPresentation;
++ const auto Mod=W.Runtime->RegisterMemoryModifier(Modifier);TestTrue(TEXT("Real Runtime suppression modifier"),Mod.IsValid());S->Tick(0);
++ auto* K=S->Find(TEXT("Object"));TestTrue(TEXT("Presentation suppression retains surface fact"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
++ TestTrue(TEXT("Published modifier suppresses front"),K->Faces[0].Hidden[K->Faces[0].Known.Num()/2]);
++ W.Runtime->UnregisterMemoryModifier(Mod);S->Tick(0);TestFalse(TEXT("Modifier-only revision removes presentation suppression"),K->Faces[0].Hidden[K->Faces[0].Known.Num()/2]);
++ const FBox2D All({-100,-100},{100,100});Scene->ClearMemoryInRegion(All);TestFalse(TEXT("Clear resets Object recognition"),S->IsWholeRecognized(TEXT("Object")));TestFalse(TEXT("Clear reaches Surface facts"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
++ TestTrue(TEXT("Restore facts/recognition independently"),S->RestoreDomain(TEXT("Object"),Saved));TestTrue(TEXT("Whole restored"),S->IsWholeRecognized(TEXT("Object")));TestFalse(TEXT("Restore still does not fill top"),K->IsKnown(ESightWeaveBoxFace::Top,{0,0}));
++ Scene->SetMemoryWriteBlock(All,true);Scene->ClearMemoryInRegion(All);V.bActive=true;W.Runtime->UpdateVisionSource(H,V);S->Tick(0);TestFalse(TEXT("Object block stops re-observation"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
++ Scene->SetMemoryWriteBlock(All,false);S->Tick(0);TestTrue(TEXT("Unblocked legal front relearned"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
++ Scene->ResetMemory();TestNull(TEXT("Reset releases surface domain"),S->Find(TEXT("Object")));TestTrue(TEXT("Reset restores source material ownership"),M->GetMaterial(0)==Original);
++ return true;
++}
++
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgePerf,"Darkwell.SightWeave.SurfaceKnowledge.BoundedPerformance",SurfaceTestFlags)
++bool FSurfaceKnowledgePerf::RunTest(const FString&)
++{
++ FRuntimeWorld W;auto B=Receiver(W);W.Runtime->RegisterSurfaceBox(B);auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);
++ FDarkwellSurfaceKnowledge K;K.Initialize(B,W.Owner);TArray<double> Times;uint64 Queries=0,Unresolved=0;
++ for(int I=0;I<100;++I){V.Transform.SetLocation({-200,double(I%20),162.+I*.01});W.Runtime->UpdateVisionSource(H,V);const double T=FPlatformTime::Seconds();K.Observe(*W.Runtime);Times.Add((FPlatformTime::Seconds()-T)*1e6);Queries+=K.ExactSamples;Unresolved+=K.UnresolvedCells;}
++ Times.Sort();AddInfo(FString::Printf(TEXT("SURFACE_KNOWLEDGE_DIRTY p95_us=%.3f p99_us=%.3f authority_corner_queries=%llu unresolved=%llu cells=%d"),Times[94],Times[98],Queries,Unresolved,K.Faces[0].Known.Num()*2+K.Faces[2].Known.Num()*2+K.Faces[4].Known.Num()*2));
++ TestEqual(TEXT("Clear moving-view front needs four queries per revision"),Queries,uint64(400));TestEqual(TEXT("Clear front completely certified"),Unresolved,uint64(0));
++ auto Block=B;Block.Id=TEXT("Opaque");Block.Pose=FTransform(FVector(-100,0,100));Block.HalfExtent={10,100,150};W.Runtime->RegisterSurfaceBox(Block);
++ const double Start=FPlatformTime::Seconds();K.Observe(*W.Runtime);const double Us=(FPlatformTime::Seconds()-Start)*1e6;
++ TestFalse(TEXT("Opaque solid removes Live front"),K.IsLive(ESightWeaveBoxFace::NegativeX,{0,0}));TestTrue(TEXT("Opaque solid preserves Known front"),K.IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));TestEqual(TEXT("Convex shadow denial avoids per-cell query explosion"),K.ExactSamples,uint64(0));
++ AddInfo(FString::Printf(TEXT("SURFACE_KNOWLEDGE_OCCLUDED us=%.3f certified_regions=%llu queries=%llu"),Us,K.Proofs,K.ExactSamples));return true;
++}
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgeApartment,"Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale",SurfaceTestFlags)
++bool FSurfaceKnowledgeApartment::RunTest(const FString&)
++{
++ FRuntimeWorld W(true);W.World->GetSubsystem<USightWeaveRenderWorldSubsystem>()->SetPresentationSuppressed(true);
++ W.Runtime->ConfigureExplorationMemory(W.Owner,W.Floor,ESightWeaveRenderPrecisionTier::Ultra);
++ auto* Apartment=W.World->SpawnActor<ADarkwellApartmentLab>();Apartment->DispatchBeginPlay();
++ TArray<FDarkwellVisionIntegrationSegment> Segments;Apartment->BuildSightWeaveOccluderSegments(Segments);TArray<FSightWeaveSegment2D> Walls;
++ for(const auto& P:Segments){FSightWeaveSegment2D D;D.A=P.A;D.B=P.B;D.FloorId=W.Floor;D.HeightRange={P.ZMin,P.ZMax};Walls.Add(D);}W.Runtime->RegisterOccluder(Walls,true,true,nullptr);
++ auto* S=W.World->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>();auto V=W.Vision({-160,-260,162});V.Shape=ESightWeaveSourceShape::DirectionalCone;V.HalfAngleDegrees=45;auto H=W.Runtime->RegisterVisionSource(V,nullptr);
++ S->Tick(0);AddInfo(TEXT("SURFACE_APARTMENT_COLD ")+S->GetTelemetry());
++ TestNotNull(TEXT("Apartment static floor uses surface domain"),S->Find(TEXT("Apartment.Floor.0.0")));
++ TestNotNull(TEXT("Apartment Whole furniture uses surface domain"),S->Find(TEXT("Apartment.CoffeeTable.Whole")));
++ TestNotNull(TEXT("Rotated wardrobe uses surface domain"),S->Find(TEXT("Apartment.Wardrobe.Partial37")));
++ TArray<double> Times;uint64 MaxQueries=0,MaxUpload=0;
++ for(int I=0;I<20;++I)
++ {V.Transform=FTransform(FRotator(0,I*4.,0),FVector(-160+I*2.,-260,162));W.Runtime->UpdateVisionSource(H,V);S->Tick(0);Times.Add(S->UpdateUs);MaxQueries=FMath::Max(MaxQueries,S->ExactSamples);MaxUpload=FMath::Max(MaxUpload,S->UploadBytes);}
++ Times.Sort();AddInfo(FString::Printf(TEXT("SURFACE_APARTMENT_DIRTY p95_us=%.3f max_us=%.3f max_authority_queries=%llu max_upload_bytes=%llu"),Times[18],Times[19],MaxQueries,MaxUpload));
++ S->Tick(0);TestEqual(TEXT("Stationary apartment has no Surface query work"),S->ExactSamples,uint64(0));TestEqual(TEXT("Stationary apartment has no Surface upload work"),S->UploadBytes,uint64(0));AddInfo(TEXT("SURFACE_APARTMENT_STABLE ")+S->GetTelemetry());
++ Apartment->Destroy();return true;
++}
+ #endif
+diff --git a/Source/Darkwell/Private/VisionPresentation/DarkwellApartmentLab.cpp b/Source/Darkwell/Private/VisionPresentation/DarkwellApartmentLab.cpp
+index d962505..15390e3 100644
+--- a/Source/Darkwell/Private/VisionPresentation/DarkwellApartmentLab.cpp
++++ b/Source/Darkwell/Private/VisionPresentation/DarkwellApartmentLab.cpp
+@@ -34,10 +34,11 @@ ADarkwellApartmentLab::ADarkwellApartmentLab()
+ FBox2D ADarkwellApartmentLab::GetSightWeaveFloorBounds() const
+ { return FBox2D(FVector2D(-610,-510),FVector2D(610,510)); }
+ 
+-void ADarkwellApartmentLab::RegisterSource(AActor* A,FName Id,FLinearColor Tint,bool Whole,bool Moving)
++void ADarkwellApartmentLab::RegisterSource(AActor* A,FName Id,FLinearColor Tint,bool Whole,bool Moving,bool Surface)
+ {
+  auto* Memory=NewObject<UDarkwellRememberablePropComponent>(A); A->AddInstanceComponent(Memory);
+  Memory->bUseSpatialMemory=true; Memory->bRememberFromStart=false;
++ Memory->bUseFixedSurfaceKnowledge=Surface;
+  TArray<UStaticMeshComponent*> Parts; A->GetComponents(Parts);
+  for(auto* Part:Parts) Memory->AddMemoryPrimitive(Part);
+  Memory->ConfigureStableId(Id); Memory->SetMemoryAppearance(Tint,1); Memory->RegisterComponent();
+@@ -51,9 +52,10 @@ void ADarkwellApartmentLab::RegisterSource(AActor* A,FName Id,FLinearColor Tint,
+ }
+ AActor* ADarkwellApartmentLab::Box(FName Id,FVector Location,FVector Size,FLinearColor Tint,bool Whole,float Yaw,bool Immutable)
+ {
++ bool Surface=true;
+ #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+  // Bounded architecture reference only; never the normal gameplay path.
+- if(FParse::Param(FCommandLine::Get(),TEXT("ApartmentObjectArchitectureReference")))Immutable=false;
++ if(FParse::Param(FCommandLine::Get(),TEXT("ApartmentObjectArchitectureReference"))){Immutable=false;Surface=false;}
+ #endif
+  auto* A=GetWorld()->SpawnActor<AActor>(); A->SetOwner(this);
+  auto* M=NewObject<UStaticMeshComponent>(A); A->SetRootComponent(M); A->AddInstanceComponent(M);
+@@ -62,8 +64,8 @@ AActor* ADarkwellApartmentLab::Box(FName Id,FVector Location,FVector Size,FLinea
+  M->SetRelativeScale3D(Size/100); M->RegisterComponent();
+  A->SetActorLocationAndRotation(Location,FRotator(0,Yaw,0));
+  if(Id.ToString().Contains(TEXT("Floor"))) M->TranslucencySortPriority=-1;
+- if(Immutable){ensureAlways(GetWorld()->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->RegisterImmutable(M,Tint));Sources.Add(A);}
+- else RegisterSource(A,Id,Tint,Whole); return A;
++ if(Immutable){ensureAlways(GetWorld()->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->RegisterImmutableSurfaceBox(M,Id,Tint));Sources.Add(A);}
++ else RegisterSource(A,Id,Tint,Whole,false,Surface); return A;
+ }
+ void ADarkwellApartmentLab::BeginPlay()
+ {
+@@ -107,11 +109,11 @@ void ADarkwellApartmentLab::BeginPlay()
+  Box(TEXT("Apartment.Wardrobe.Partial37"),{445,-55,100},{140,55,200},Blue,false,37);
+  Box(TEXT("Apartment.Entry.Cabinet"),{-410,-410,95},{150,45,190},Wood);
+  // Three tall furniture planes are explicit 2D occluders, like the wall declarations.
+- auto Plane=[&](FVector2D A,FVector2D B){auto& S=FixedSegments.AddDefaulted_GetRef();S.A=A;S.B=B;S.ZMin=0;S.ZMax=200;};
+- Plane({-510,-82.5},{-510,-17.5});
++ auto Plane=[&](FVector2D A,FVector2D B,float Height){auto& S=FixedSegments.AddDefaulted_GetRef();S.A=A;S.B=B;S.ZMin=0;S.ZMax=Height;};
++ Plane({-510,-82.5},{-510,-17.5},190);
+  const FVector2D Dir(FMath::Cos(FMath::DegreesToRadians(37.f)),FMath::Sin(FMath::DegreesToRadians(37.f)));
+- Plane(FVector2D(445,-55)-Dir*70,FVector2D(445,-55)+Dir*70);
+- Plane({-485,-410},{-335,-410});
++ Plane(FVector2D(445,-55)-Dir*70,FVector2D(445,-55)+Dir*70,200);
++ Plane({-485,-410},{-335,-410},190);
+  Trigger=GetWorld()->SpawnActor<ADarkwellBlackRegionTrigger>(FVector(400,180,0),FRotator::ZeroRotator);
+  Trigger->SetOwner(this); Trigger->HalfExtentXY=FVector2D(200,320); Trigger->OnConstruction(Trigger->GetActorTransform());
+  auto* Console=GetWorld()->SpawnActor<ADarkwellBlackRegionSwitch>(FVector(100,-55,40),FRotator::ZeroRotator);
+@@ -131,7 +133,7 @@ void ADarkwellApartmentLab::BuildSightWeaveOccluderSegments(TArray<FDarkwellVisi
+ }
+ bool ADarkwellApartmentLab::EnableDarkwellProjectFogP4(UTexture* Raw,FVector2D Min,FVector2D Inv)
+ {
+- for(AActor* A:Sources) if(auto* Rememberable=A->FindComponentByClass<UDarkwellRememberablePropComponent>()) for(UPrimitiveComponent* M:Rememberable->GetMemoryPrimitives())
++ for(AActor* A:Sources) if(auto* Rememberable=A->FindComponentByClass<UDarkwellRememberablePropComponent>();Rememberable && !Rememberable->bUseFixedSurfaceKnowledge) for(UPrimitiveComponent* M:Rememberable->GetMemoryPrimitives())
+   if(auto* MID=Cast<UMaterialInstanceDynamic>(M->GetMaterial(0)))
+   { MID->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"),Raw);
+   GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->BindHardPresentation(MID);MID->SetVectorParameterValue(TEXT("FogWorldMin"),FLinearColor(Min.X,Min.Y,0,0));MID->SetVectorParameterValue(TEXT("FogWorldInvExtent"),FLinearColor(Inv.X,Inv.Y,0,0)); }
+diff --git a/Source/Darkwell/Private/VisionPresentation/DarkwellObjectMemoryScene.cpp b/Source/Darkwell/Private/VisionPresentation/DarkwellObjectMemoryScene.cpp
+index e809325..8e9ee8d 100644
+--- a/Source/Darkwell/Private/VisionPresentation/DarkwellObjectMemoryScene.cpp
++++ b/Source/Darkwell/Private/VisionPresentation/DarkwellObjectMemoryScene.cpp
+@@ -1,4 +1,5 @@
+ #include "VisionPresentation/DarkwellObjectMemoryScene.h"
++#include "VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h"
+ #include "SightWeaveHardCoverage.h"
+ #include "VisionPresentation/DarkwellBlackoutTiming.h"
+ #include "VisionPresentation/DarkwellMemoryRegionSamples.h"
+@@ -114,7 +115,18 @@ bool ADarkwellObjectMemoryScene::RegisterRememberable(
+ 	if (!Memory || !Policy || !Memory->bUseSpatialMemory || Memory->GetWorld()!=GetWorld()
+ 		|| Memory->GetOwner()!=Policy->GetOwner() || Memory->GetStableId().IsNone()
+ 		|| Memory->GetMemoryPrimitives().IsEmpty()) return false;
++ if(Memory->bUseFixedSurfaceKnowledge)
++ {
++  if(Memory->GetMemoryPrimitives().Num()!=1 || Memory->SurfaceContentVersion<=0 || Tracked.Contains(Memory->GetStableId()))return false;
++  const auto Resolved=Policy->GetResolvedPolicy();
++  if(Resolved.HistoryMode!=ESightWeaveHistoryMode::StationaryOnly)return false;
++  const bool Registered=GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->RegisterFixedBox(
++   Memory->GetMemoryPrimitives()[0],Memory->GetStableId(),Memory->GetRememberedTint(),false,
++   Resolved.RevealMode==ESightWeaveRevealMode::WholeObjectAfterSpan?Resolved.MinimumObservedSpanCm:0,uint32(Memory->SurfaceContentVersion));
++  if(Registered)FixedSurfaceIds.Add(Memory->GetStableId());return Registered;
++ }
+ 	FTrackedProp* Existing=Tracked.Find(Memory->GetStableId());
++ if(FixedSurfaceIds.Contains(Memory->GetStableId()))return false;
+ 	if(Existing && Existing->Actual.IsValid() && !Existing->Actual->IsActorBeingDestroyed()) return false;
+ 	// A valid source admits the Scene's immutable presentation dependency once.
+ 	// No CDO/BeginPlay load, record, knowledge, MID or proxy is created here.
+@@ -179,6 +191,7 @@ void ADarkwellObjectMemoryScene::ReleaseSourcePresentation(FTrackedProp& Prop)
+ 
+ void ADarkwellObjectMemoryScene::ResetMemory()
+ {
++ if(auto* S=GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>())for(auto Id:FixedSurfaceIds)S->UnregisterDomain(Id);FixedSurfaceIds.Reset();
+  InvalidateWholePreparation();
+ 	for(auto& Pair:Tracked)
+ 	{
+@@ -6716,6 +6729,7 @@ bool ADarkwellObjectMemoryScene::RekeyCurrentForMemoryRegion(FTrackedProp& P,con
+ 
+ void ADarkwellObjectMemoryScene::ClearMemoryInRegion(const FBox2D& Bounds)
+ {
++ GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->Clear(Bounds,false);
+  DW_BLACKOUT_SCOPE(ClearMemoryInRegion);
+  BeginMemoryRegionTransaction();
+  for(auto& Pair:Tracked) Pair.Value.bRegionAppearanceDirty=true;
+@@ -6828,6 +6842,7 @@ void ADarkwellObjectMemoryScene::RefreshMemoryWriteBlock(FTrackedProp& P)
+ 
+ void ADarkwellObjectMemoryScene::SetMemoryWriteBlock(const FBox2D& Bounds,bool bEnabled)
+ {
++ GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->SetBlock(Bounds,bEnabled,false);
+  DW_BLACKOUT_SCOPE(SetMemoryWriteBlock);
+  BeginMemoryRegionTransaction();
+  for(auto& Pair:Tracked) Pair.Value.bRegionAppearanceDirty=true;
+diff --git a/Source/Darkwell/Private/VisionPresentation/DarkwellStaticEnvironmentSubsystem.cpp b/Source/Darkwell/Private/VisionPresentation/DarkwellStaticEnvironmentSubsystem.cpp
+index 097a435..018b604 100644
+--- a/Source/Darkwell/Private/VisionPresentation/DarkwellStaticEnvironmentSubsystem.cpp
++++ b/Source/Darkwell/Private/VisionPresentation/DarkwellStaticEnvironmentSubsystem.cpp
+@@ -1,4 +1,5 @@
+ #include "VisionPresentation/DarkwellStaticEnvironmentSubsystem.h"
++#include "VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h"
+ #include "Components/MeshComponent.h"
+ #include "Engine/Texture2D.h"
+ #include "Engine/TextureRenderTarget2D.h"
+@@ -41,6 +42,8 @@ bool UDarkwellStaticEnvironmentSubsystem::RegisterImmutable(UMeshComponent* M,FL
+  M->UpdateBounds();const auto B=M->Bounds.GetBox();Knowledge.Declare(FBox2D(FVector2D(B.Min),FVector2D(B.Max)));
+  Materials.Add(MID);Meshes.Add(M);Bind();return true;
+ }
++bool UDarkwellStaticEnvironmentSubsystem::RegisterImmutableSurfaceBox(UStaticMeshComponent* Mesh,FName Id,FLinearColor Tint)
++{return GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->RegisterFixedBox(Mesh,Id,Tint,true);}
+ void UDarkwellStaticEnvironmentSubsystem::Bind()
+ {
+  auto* Fog=GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
+@@ -152,9 +155,9 @@ void UDarkwellStaticEnvironmentSubsystem::UpdateKnowledge()
+  UpdateUs=(FPlatformTime::Seconds()-Start)*1e6;
+ }
+ void UDarkwellStaticEnvironmentSubsystem::ClearMemory(const FBox2D& Region)
+-{Knowledge.Clear(Region);LastDraw=MAX_uint64;Publish();}
++{GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->Clear(Region,true);Knowledge.Clear(Region);LastDraw=MAX_uint64;Publish();}
+ void UDarkwellStaticEnvironmentSubsystem::SetMemoryWriteBlock(const FBox2D& Region,bool Enabled)
+-{Block=Enabled?Region:FBox2D(ForceInit);Knowledge.SetBlock(Region,Enabled);LastDraw=MAX_uint64;if(!Materials.IsEmpty())Bind();}
++{GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->SetBlock(Region,Enabled,true);Block=Enabled?Region:FBox2D(ForceInit);Knowledge.SetBlock(Region,Enabled);LastDraw=MAX_uint64;if(!Materials.IsEmpty())Bind();}
+ FString UDarkwellStaticEnvironmentSubsystem::GetTelemetry() const
+ {
+  const auto& S=Knowledge.Stats;
+diff --git a/Source/Darkwell/Public/VisionPresentation/DarkwellApartmentLab.h b/Source/Darkwell/Public/VisionPresentation/DarkwellApartmentLab.h
+index 427c56e..98f36c9 100644
+--- a/Source/Darkwell/Public/VisionPresentation/DarkwellApartmentLab.h
++++ b/Source/Darkwell/Public/VisionPresentation/DarkwellApartmentLab.h
+@@ -33,7 +33,7 @@ public:
+  UPROPERTY(Transient) TArray<TObjectPtr<ADarkwellDoor>> Doors;
+  UPROPERTY(Transient) TArray<TObjectPtr<AActor>> Sources;
+ private:
+- void RegisterSource(AActor* Actor,FName Id,FLinearColor Tint,bool Whole,bool Moving=false);
++ void RegisterSource(AActor* Actor,FName Id,FLinearColor Tint,bool Whole,bool Moving=false,bool Surface=false);
+  AActor* Box(FName Id,FVector Location,FVector Size,FLinearColor Tint,bool Whole=false,float Yaw=0,bool Immutable=false);
+  TArray<FDarkwellVisionIntegrationSegment> FixedSegments;
+  FSightWeaveIlluminationSourceHandle EnvironmentLight;
+diff --git a/Source/Darkwell/Public/VisionPresentation/DarkwellObjectMemoryScene.h b/Source/Darkwell/Public/VisionPresentation/DarkwellObjectMemoryScene.h
+index d17e1a9..6059147 100644
+--- a/Source/Darkwell/Public/VisionPresentation/DarkwellObjectMemoryScene.h
++++ b/Source/Darkwell/Public/VisionPresentation/DarkwellObjectMemoryScene.h
+@@ -745,6 +745,7 @@ protected:
+ 	UPROPERTY(Transient) TArray<TObjectPtr<UTexture2D>> OwnedTextures;
+ 	UPROPERTY(Transient) TArray<TObjectPtr<UDynamicMeshComponent>> OwnedCaps;
+ 	TMap<FName, FTrackedProp> Tracked;
++ TArray<FName> FixedSurfaceIds;
+ 	TMap<FIntPoint, TArray<FHistorySpatialKey>> HistoricalSpatialIndex;
+ 	TSet<FHistorySpatialKey> FrameHistoricalCandidates;
+ 	TSet<FIntPoint> FrameHistoryDirtyTiles;
+diff --git a/Source/Darkwell/Public/VisionPresentation/DarkwellRememberablePropComponent.h b/Source/Darkwell/Public/VisionPresentation/DarkwellRememberablePropComponent.h
+index 3c52713..8853146 100644
+--- a/Source/Darkwell/Public/VisionPresentation/DarkwellRememberablePropComponent.h
++++ b/Source/Darkwell/Public/VisionPresentation/DarkwellRememberablePropComponent.h
+@@ -25,6 +25,11 @@ public:
+ 	/** Explicit opt-in to the observation scene; prevents two presenters owning this source. */
+ 	UPROPERTY(EditAnywhere, Category="Fog Memory")
+ 	bool bUseSpatialMemory = false;
++ /** Explicit stationary Box contract; mutable/history actors keep legacy epochs. */
++ UPROPERTY(EditAnywhere,Category="Fog Memory")
++ bool bUseFixedSurfaceKnowledge=false;
++ UPROPERTY(EditAnywhere,Category="Fog Memory",meta=(ClampMin="1"))
++ int32 SurfaceContentVersion=1;
+ 	void SetMemoryAppearance(FLinearColor Tint, float UVScale)
+ 	{
+ 		if (RememberedTint != Tint || RememberedUVScale != UVScale) ++MemoryContentRevision;
+diff --git a/Source/Darkwell/Public/VisionPresentation/DarkwellStaticEnvironmentSubsystem.h b/Source/Darkwell/Public/VisionPresentation/DarkwellStaticEnvironmentSubsystem.h
+index 7425258..e2e72f7 100644
+--- a/Source/Darkwell/Public/VisionPresentation/DarkwellStaticEnvironmentSubsystem.h
++++ b/Source/Darkwell/Public/VisionPresentation/DarkwellStaticEnvironmentSubsystem.h
+@@ -16,6 +16,7 @@ class DARKWELL_API UDarkwellStaticEnvironmentSubsystem : public UWorldSubsystem
+  GENERATED_BODY()
+ public:
+  bool RegisterImmutable(UMeshComponent* Mesh,FLinearColor Tint);
++ bool RegisterImmutableSurfaceBox(class UStaticMeshComponent* Mesh,FName StableDomain,FLinearColor Tint);
+  void UpdateKnowledge();
+  void ClearMemory(const FBox2D& Region);
+  void SetMemoryWriteBlock(const FBox2D& Region,bool Enabled);

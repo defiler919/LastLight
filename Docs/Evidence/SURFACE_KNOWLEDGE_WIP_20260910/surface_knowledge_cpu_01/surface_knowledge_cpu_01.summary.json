@@ -1,0 +1,19 @@
+{
+  "run": "surface_knowledge_cpu_01",
+  "selector": "Darkwell.SightWeave.SurfaceKnowledge+Darkwell.SightWeave.SurfaceObservation",
+  "exit_code": 0,
+  "wall_seconds": 17.0021652,
+  "total": 11,
+  "clean": 11,
+  "warnings": 0,
+  "failed": 0,
+  "not_run": 0,
+  "duration": 0.1509089171886444,
+  "severe_lines": 0,
+  "requested_rhi": "NullRHI",
+  "rhi_evidence": [
+    "LogCsvProfiler: Display: Metadata set : commandline=\"\" D:\\UE_projects\\LastLight/Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.SightWeave.SurfaceKnowledge+Darkwell.SightWeave.SurfaceObservation\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_projects\\LastLight\\Saved\\GrayObjectPolicy\\surface_knowledge_cpu_01\\surface_knowledge_cpu_01_Report -abslog=D:\\UE_projects\\LastLight\\Saved\\GrayObjectPolicy\\surface_knowledge_cpu_01\\surface_knowledge_cpu_01.log\"\"",
+    "LogInit: Command Line: -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests Darkwell.SightWeave.SurfaceKnowledge+Darkwell.SightWeave.SurfaceObservation\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_projects\\LastLight\\Saved\\GrayObjectPolicy\\surface_knowledge_cpu_01\\surface_knowledge_cpu_01_Report -abslog=D:\\UE_projects\\LastLight\\Saved\\GrayObjectPolicy\\surface_knowledge_cpu_01\\surface_knowledge_cpu_01.log"
+  ],
+  "passed": true
+}

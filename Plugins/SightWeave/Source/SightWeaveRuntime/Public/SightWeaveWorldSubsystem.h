@@ -483,6 +483,8 @@ public:
  bool UpdateSurfaceBox(const FSightWeaveSurfaceBox& Box);
  bool UnregisterSurfaceBox(FName Id);
  FSightWeaveSurfaceResult QuerySurfaceSample(FSightWeaveKnowledgeOwnerId Owner,const FSightWeaveSurfaceSample& Sample) const;
+ /** Proven uniform rectangle only; false return requires subdivision/exact samples. */
+ bool TrySurfaceRegion(FSightWeaveKnowledgeOwnerId Owner,FName Receiver,ESightWeaveBoxFace Face,const FBox2D& UV,bool& Value,FSightWeaveSurfaceQueryStats* Stats=nullptr) const;
  /** Exact point batch; no whole-face/region inference or memory mutation. */
  void QuerySurfaceSamples(FSightWeaveKnowledgeOwnerId Owner,TConstArrayView<FSightWeaveSurfaceSample> Samples,
   TArray<FSightWeaveSurfaceResult>& Results,FSightWeaveSurfaceQueryCache* Cache=nullptr,FSightWeaveSurfaceQueryStats* Stats=nullptr) const;
@@ -490,6 +492,10 @@ private:
  TMap<FName,FSightWeaveSurfaceScene::FReceiver> SurfaceBoxes;
  TMap<FName,TWeakObjectPtr<UObject>> SurfaceOwners;
  uint64 SurfaceSerial=0;
+ // Game-thread shared region evidence: at most 4096 exact corners, never stale.
+ mutable FSightWeaveImmutableSnapshotPtr SurfaceRegionFrame;
+ mutable FSightWeaveKnowledgeOwnerId SurfaceRegionOwner;
+ mutable TMap<FSightWeaveSurfaceRegionCorner,FSightWeaveVisibilityQueryResult> SurfaceRegionCorners;
  bool bSurfaceSceneDirty=true;
  FSightWeaveRevision SurfaceOccluderRevision;
  TSharedPtr<const FSightWeaveSurfaceScene,ESPMode::ThreadSafe> SurfaceScene;

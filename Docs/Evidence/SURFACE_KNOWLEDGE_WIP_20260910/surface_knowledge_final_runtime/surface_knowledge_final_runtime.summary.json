@@ -1,0 +1,18 @@
+{
+  "run": "surface_knowledge_final_runtime",
+  "selector": "Darkwell.SightWeave.SurfaceKnowledge+Darkwell.SightWeave.SurfaceObservation+Darkwell.SightWeave.StaticKnowledge+SightWeave.M2.Query+Darkwell.SightWeave.Differential.VisionIllumination+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.SightWeave.M6P1",
+  "exit_code": 0,
+  "wall_seconds": 30.9856471,
+  "total": 39,
+  "clean": 38,
+  "warnings": 1,
+  "failed": 0,
+  "not_run": 0,
+  "duration": 3.9370040893554688,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.SightWeave.SurfaceKnowledge+Darkwell.SightWeave.SurfaceObservation+Darkwell.SightWeave.StaticKnowledge+SightWeave.M2.Query+Darkwell.SightWeave.Differential.VisionIllumination+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+Darkwell.SightWeave.M6P1\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_projects\\LastLight\\Saved\\GrayObjectPolicy\\surface_knowledge_final_runtime\\surface_knowledge_final_runtime_Report -abslog=D:\\UE_projects\\LastLight\\Saved\\GrayObjectPolicy\\surface_knowledge_final_runtime\\surface_knowledge_final_runtime.log"
+  ],
+  "passed": true
+}

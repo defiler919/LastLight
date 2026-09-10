@@ -1,5 +1,7 @@
 #include "VisionPresentation/DarkwellStaticEnvironmentSubsystem.h"
+#include "VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h"
 #include "Components/MeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/Texture2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -32,6 +34,7 @@ void UDarkwellStaticEnvironmentSubsystem::EnsureResources()
 bool UDarkwellStaticEnvironmentSubsystem::RegisterImmutable(UMeshComponent* M,FLinearColor Tint)
 {
  if(!M || M->GetWorld()!=GetWorld() || Meshes.Contains(M))return false;
+ if(auto* Box=Cast<UStaticMeshComponent>(M);Box && GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->OwnsMesh(Box))return false;
  auto* Parent=LoadObject<UMaterial>(nullptr,TEXT("/Game/Darkwell/Vision/ProjectFog/M_DarkwellStaticKnowledge.M_DarkwellStaticKnowledge"));
  if(!ensureAlwaysMsgf(Parent,TEXT("Static Knowledge material is missing")))return false;
  EnsureResources();
@@ -41,6 +44,10 @@ bool UDarkwellStaticEnvironmentSubsystem::RegisterImmutable(UMeshComponent* M,FL
  M->UpdateBounds();const auto B=M->Bounds.GetBox();Knowledge.Declare(FBox2D(FVector2D(B.Min),FVector2D(B.Max)));
  Materials.Add(MID);Meshes.Add(M);Bind();return true;
 }
+bool UDarkwellStaticEnvironmentSubsystem::RegisterImmutableSurfaceBox(UStaticMeshComponent* Mesh,FName Id,FLinearColor Tint,uint32 Version)
+{if(Meshes.Contains(Mesh))return false;const bool OK=GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->RegisterFixedBox(Mesh,Id,Tint,true,0,Version);if(OK)SurfaceDomains.Add(Id);return OK;}
+bool UDarkwellStaticEnvironmentSubsystem::HasSurfaceKnowledge(FName Id,ESightWeaveBoxFace Face,FVector2D UV) const
+{const auto* K=SurfaceDomains.Contains(Id)?GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->Find(Id):nullptr;return K && K->IsKnown(Face,UV);}
 void UDarkwellStaticEnvironmentSubsystem::Bind()
 {
  auto* Fog=GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
@@ -152,9 +159,9 @@ void UDarkwellStaticEnvironmentSubsystem::UpdateKnowledge()
  UpdateUs=(FPlatformTime::Seconds()-Start)*1e6;
 }
 void UDarkwellStaticEnvironmentSubsystem::ClearMemory(const FBox2D& Region)
-{Knowledge.Clear(Region);LastDraw=MAX_uint64;Publish();}
+{GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->Clear(Region,true);Knowledge.Clear(Region);LastDraw=MAX_uint64;Publish();}
 void UDarkwellStaticEnvironmentSubsystem::SetMemoryWriteBlock(const FBox2D& Region,bool Enabled)
-{Block=Enabled?Region:FBox2D(ForceInit);Knowledge.SetBlock(Region,Enabled);LastDraw=MAX_uint64;if(!Materials.IsEmpty())Bind();}
+{GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->SetBlock(Region,Enabled,true);Block=Enabled?Region:FBox2D(ForceInit);Knowledge.SetBlock(Region,Enabled);LastDraw=MAX_uint64;if(!Materials.IsEmpty())Bind();}
 FString UDarkwellStaticEnvironmentSubsystem::GetTelemetry() const
 {
  const auto& S=Knowledge.Stats;

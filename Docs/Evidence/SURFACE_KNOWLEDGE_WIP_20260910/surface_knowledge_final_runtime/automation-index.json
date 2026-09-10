@@ -1,0 +1,934 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "游戏策划1",
+			"instance": "621D92C54E68496AFE734586A5613E77",
+			"instanceName": "游戏策划1-27048",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 11 (25H2) [10.0.26200.9445] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 4060",
+			"cPUModel": "13th Gen Intel(R) Core(TM) i5-13500",
+			"rAMInGB": 32,
+			"renderMode": "D3D12_SM6",
+			"rHI": "D3D12 (SM6)",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.10-04.13.28",
+	"succeeded": 38,
+	"succeededWithWarnings": 1,
+	"failed": 0,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 3.9370040893554688,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "VisionIlluminationBoundary",
+			"fullTestPath": "Darkwell.SightWeave.Closure.VisionIlluminationBoundary",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.52313750982284546,
+			"dateTime": "2026.09.10-04.13.23",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Legacy torch full-texture max error=1.000000",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.23"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Runtime area oracle pixels=10182 max error=0.000000",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.23"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "01_TorchOn_Dark: cone=2200/52 active; body bypass; target=1 far=0; GPU=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.23"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "02_TorchEmpty_Environment: cone=2200/52 active; body bypass; target=1 far=1; GPU=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "03_TorchEmpty_NoLight: cone=2200/52 active; body bypass; target=0 far=0; GPU=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "04_TorchRestored: cone=2200/52 active; body bypass; target=1 far=0; GPU=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.24"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "VisionIllumination",
+			"fullTestPath": "Darkwell.SightWeave.Differential.VisionIllumination",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.97020912170410156,
+			"dateTime": "2026.09.10-04.13.24",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Cross-path existing-semantics acceptance: rows=26 hard-rejected/store-positive=0; ../../../../UE_projects/LastLight/Saved/VisionIlluminationDifferential.csv. No top-face or slab-propagation product claim.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.25"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "DefaultLegacy",
+			"fullTestPath": "Darkwell.SightWeave.M6P1.Authority.DefaultLegacy",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.018420498818159103,
+			"dateTime": "2026.09.10-04.13.25",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "VerticalSliceAuthority",
+			"fullTestPath": "Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.21091350913047791,
+			"dateTime": "2026.09.10-04.13.25",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "DuplicateFixtureRollback",
+			"fullTestPath": "Darkwell.SightWeave.M6P1.Lifecycle.DuplicateFixtureRollback",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.087443903088569641,
+			"dateTime": "2026.09.10-04.13.25",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogDarkwellRememberedProp: Duplicate RememberableProp stable id rejected: Fixture.RememberableProp.Cabinet",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.25"
+				}
+			],
+			"warnings": 1,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "MultiWorldIsolation",
+			"fullTestPath": "Darkwell.SightWeave.M6P1.Lifecycle.MultiWorldIsolation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.01584940031170845,
+			"dateTime": "2026.09.10-04.13.25",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RotatedOcclusionOracle",
+			"fullTestPath": "Darkwell.SightWeave.StaticKnowledge.RotatedOcclusionOracle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.015637900680303574,
+			"dateTime": "2026.09.10-04.13.25",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "TileEdgesSparseAndDirty",
+			"fullTestPath": "Darkwell.SightWeave.StaticKnowledge.TileEdgesSparseAndDirty",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.010123297572135925,
+			"dateTime": "2026.09.10-04.13.25",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "UnknownClearBlock",
+			"fullTestPath": "Darkwell.SightWeave.StaticKnowledge.UnknownClearBlock",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.024734601378440857,
+			"dateTime": "2026.09.10-04.13.25",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ApartmentScale",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.40263840556144714,
+			"dateTime": "2026.09.10-04.13.25",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_COLD {\"domains\":23,\"ready\":23,\"cells\":10624516,\"atlas_bytes\":45231904,\"authority_queries\":11262,\"certified_regions\":4963,\"unresolved_cells\":4241,\"upload_bytes\":3465484,\"update_us\":51907.703}",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.25"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_DIRTY p95_us=18979.400 max_us=20886.499 max_authority_queries=13158 max_upload_bytes=442836",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.26"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STABLE {\"domains\":23,\"ready\":23,\"cells\":10624516,\"atlas_bytes\":45231904,\"authority_queries\":0,\"certified_regions\":0,\"unresolved_cells\":0,\"upload_bytes\":0,\"update_us\":215.899}",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.26"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BoundedPerformance",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.BoundedPerformance",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.029147300869226456,
+			"dateTime": "2026.09.10-04.13.26",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_KNOWLEDGE_DIRTY p95_us=39.201 p99_us=45.400 authority_corner_queries=400 unresolved=0 cells=167936",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.26"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_KNOWLEDGE_OCCLUDED us=24.602 certified_regions=6 queries=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.26"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "FactsAndArchive",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.FactsAndArchive",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.021872099488973618,
+			"dateTime": "2026.09.10-04.13.26",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ObjectStaticP4",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.ObjectStaticP4",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 1.0595135688781738,
+			"dateTime": "2026.09.10-04.13.26",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=236,G=0,B=34,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface mesh visible=1 hidden=0 renderstate=1 position=X=0.000 Y=0.000 Z=100.000",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=255,G=254,B=247,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=193,G=193,B=193,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=196,G=196,B=196,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_KNOWLEDGE_P4 atlas=320x640 changed_upload_bytes=172032 stable_update_us=31.400",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ObjectWholeAndModifiers",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.ObjectWholeAndModifiers",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.045044198632240295,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RegionProof",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.RegionProof",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.020530398935079575,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PolicyAndMemory",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.CurrentModel.PolicyAndMemory",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.017319601029157639,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "KnownGaps",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.LegacyConsumers.KnownGaps",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.016943898051977158,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Legacy XY consumer gaps reproduced. RuntimeV1 tests cover the new receiver API; Object/Static/P4 surface migration remains separate.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BatchLifecycle",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.BatchLifecycle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.016770899295806885,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BoundedPerformance",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.BoundedPerformance",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.076335802674293518,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_V1_PERF boxes=257 samples=400 cold_us=180.900 warm_p95_us=20.500 warm_p99_us=22.601 nodes=6800 primitives=400 cache_hits=40000",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_V1_DIRTY samples=400 query_p95_us=147.901 query_p99_us=181.600 source_publish_p95_us=122.901 source_publish_p99_us=152.301",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-04.13.27"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Geometry",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.Geometry",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.021700900048017502,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ObserverPose",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.ObserverPose",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.018786497414112091,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Policy",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.Policy",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.018932901322841644,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Geometry",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.Spec.Geometry",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.014706302434206009,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Knowledge",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.Spec.Knowledge",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.0098682008683681488,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ChannelOwnerAndFloorIsolation",
+			"fullTestPath": "SightWeave.M2.Query.Compatibility.ChannelOwnerAndFloorIsolation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.018900301307439804,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "GatedExtentAndProfileRevision",
+			"fullTestPath": "SightWeave.M2.Query.Compatibility.GatedExtentAndProfileRevision",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.019398201256990433,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "InfraredAndMultiChannel",
+			"fullTestPath": "SightWeave.M2.Query.Compatibility.InfraredAndMultiChannel",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.020730998367071152,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "VisibleVisible",
+			"fullTestPath": "SightWeave.M2.Query.Compatibility.VisibleVisible",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.018187697976827621,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "OpenCloseDeterminism",
+			"fullTestPath": "SightWeave.M2.Query.DynamicDoor.OpenCloseDeterminism",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.019947800785303116,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BypassWithoutCompatibility",
+			"fullTestPath": "SightWeave.M2.Query.EffectiveLive.BypassWithoutCompatibility",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.016667298972606659,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "HardSuppressionLifecycle",
+			"fullTestPath": "SightWeave.M2.Query.EffectiveLive.HardSuppressionLifecycle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.016161799430847168,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "IlluminationAlone",
+			"fullTestPath": "SightWeave.M2.Query.EffectiveLive.IlluminationAlone",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.01321759819984436,
+			"dateTime": "2026.09.10-04.13.27",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "OcclusionHeightAndFloor",
+			"fullTestPath": "SightWeave.M2.Query.EffectiveLive.OcclusionHeightAndFloor",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.013818699866533279,
+			"dateTime": "2026.09.10-04.13.28",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "UnionEightRemoteAndSourceSpecific",
+			"fullTestPath": "SightWeave.M2.Query.EffectiveLive.UnionEightRemoteAndSourceSpecific",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.021088801324367523,
+			"dateTime": "2026.09.10-04.13.28",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "AnchorAnyAllRequired",
+			"fullTestPath": "SightWeave.M2.Query.Samples.AnchorAnyAllRequired",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.015641298145055771,
+			"dateTime": "2026.09.10-04.13.28",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BoundsBatchBoundaryAndAttribution",
+			"fullTestPath": "SightWeave.M2.Query.BoundsBatchBoundaryAndAttribution",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.015327699482440948,
+			"dateTime": "2026.09.10-04.13.28",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ImmutableSnapshotRevisionAndDirtyRebuild",
+			"fullTestPath": "SightWeave.M2.Query.ImmutableSnapshotRevisionAndDirtyRebuild",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.017453301697969437,
+			"dateTime": "2026.09.10-04.13.28",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "InvalidInputAndStaleHandle",
+			"fullTestPath": "SightWeave.M2.Query.InvalidInputAndStaleHandle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.014054499566555023,
+			"dateTime": "2026.09.10-04.13.28",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PreparedHardCoverage",
+			"fullTestPath": "SightWeave.M2.Query.PreparedHardCoverage",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"621D92C54E68496AFE734586A5613E77"
+			],
+			"duration": 0.029827002435922623,
+			"dateTime": "2026.09.10-04.13.28",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

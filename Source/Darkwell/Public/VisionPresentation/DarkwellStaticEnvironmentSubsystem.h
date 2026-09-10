@@ -3,6 +3,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "VisionPresentation/DarkwellStaticKnowledge.h"
 #include "SightWeaveMemory.h"
+#include "SightWeaveSurface.h"
 #include "DarkwellStaticEnvironmentSubsystem.generated.h"
 class UMeshComponent;
 class UMaterialInstanceDynamic;
@@ -16,6 +17,8 @@ class DARKWELL_API UDarkwellStaticEnvironmentSubsystem : public UWorldSubsystem
  GENERATED_BODY()
 public:
  bool RegisterImmutable(UMeshComponent* Mesh,FLinearColor Tint);
+ bool RegisterImmutableSurfaceBox(class UStaticMeshComponent* Mesh,FName StableDomain,FLinearColor Tint,uint32 ContentVersion=1);
+ bool HasSurfaceKnowledge(FName StableDomain,ESightWeaveBoxFace Face,FVector2D UV) const;
  void UpdateKnowledge();
  void ClearMemory(const FBox2D& Region);
  void SetMemoryWriteBlock(const FBox2D& Region,bool Enabled);
@@ -36,6 +39,7 @@ private:
  UPROPERTY(Transient) TObjectPtr<UTexture2D> HeightBands;
  UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> Materials;
  TArray<TWeakObjectPtr<UMeshComponent>> Meshes;
+ TSet<FName> SurfaceDomains;
  FBox2D Block=FBox2D(ForceInit);
  uint64 LastDraw=MAX_uint64;
  int32 PageSide=16,Uploads=0,LookupProbes=1;

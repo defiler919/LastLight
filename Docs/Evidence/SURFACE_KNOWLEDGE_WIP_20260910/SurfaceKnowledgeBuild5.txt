@@ -1,0 +1,272 @@
+Using bundled DotNet SDK version: 10.0 win-x64
+Running UnrealBuildTool: dotnet "..\..\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.dll" DarkwellEditor Win64 Development D:\UE_projects\LastLight\Darkwell.uproject -WaitMutex -FromMsBuild
+Log file: C:\Users\defiler919\AppData\Local\UnrealBuildTool\Log.txt
+Determining max actions to execute in parallel (6 physical cores, 12 logical cores)
+  Executing up to 6 processes, one per physical core
+Using 'git status' to determine working set for adaptive non-unity build (D:\UE_projects\LastLight).
+UbaServer - Listening on 0.0.0.0:1345
+Invalidating makefile for DarkwellEditor (working set of source files changed)
+Available x64 toolchains (1):
+ * D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231
+    (Family=14.51.36231, FamilyRank=2, Version=14.51.36256, HostArchitecture=x64, ReleaseChannel=Latest, Architecture=x64)
+Visual Studio compiler version 14.51.36256 is newer than latest preferred version 14.50.35717. Please use caution as this compiler has not been heavily tested
+UHT compiled-in object format Default
+D:\UE_projects\LastLight\Source\Darkwell\Private\Visibility\DarkwellVisionIntegrationFixture.cpp(1): error: Expected DarkwellVisionIntegrationFixture.h to be first header included.
+Building DarkwellEditor...
+===== Toolchain Information =====
+Using ISPC compiler (D:\UE_5.8\Engine\Source\ThirdParty\Intel\ISPC\bin\Windows\ispc.exe)
+  Intel(r) Implicit SPMD Program Compiler (Intel(r) ISPC), 1.24.0 (build commit  @ 20250404, LLVM 18.1.2) 
+Using Visual Studio 14.51.36256 toolchain (D:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231) and Windows 10.0.26100.0 SDK (C:\Program Files (x86)\Windows Kits\10).
+Warning: Visual Studio compiler 14.51.36256 is not a preferred version
+[Adaptive Build] Excluded from SightWeaveRuntime unity file: SightWeaveSurface.cpp, SightWeaveWorldSubsystem.cpp
+[Adaptive Build] Excluded from Darkwell unity file: DarkwellSurfaceObservationTests.cpp, DarkwellApartmentLab.cpp, DarkwellObjectMemoryScene.cpp, DarkwellRememberablePropComponent.cpp, DarkwellStaticEnvironmentSubsystem.cpp, DarkwellSurfaceKnowledge.cpp, DarkwellSurfaceKnowledgeSubsystem.cpp
+=================================
+Using Unreal Build Accelerator local executor to run 13 action(s)
+  CPU 6 physical cores, 12 logical cores
+  Memory 31.69 GB physical, 23.31 GB/47.69 GB committed
+  UBA Storage capacity 40 GB
+[1/13] Compile [x64] DarkwellSurfaceKnowledge.cpp
+[2/13] Compile [x64] SightWeaveSurface.cpp
+[3/13] Link [x64] UnrealEditor-SightWeaveRuntime.lib
+  正在创建库 D:/UE_projects/LastLight/Plugins/SightWeave/Intermediate/Build/Win64/x64/UnrealEditor/Development/SightWeaveRuntime/UnrealEditor-SightWeaveRuntime.lib 和对象 D:/UE_projects/LastLight/Plugins/SightWeave/Intermediate/Build/Win64/x64/UnrealEditor/Development/SightWeaveRuntime/UnrealEditor-SightWeaveRuntime.exp
+[4/13] Compile [x64] DarkwellApartmentLab.cpp
+D:\UE_5.8\Engine\Source\Runtime\Engine\Classes\GameFramework\Character.h(798,31): warning C4996: 'APawn::GetMovementBase': GetMovementBase is deprecated. Use GetMovementBaseObject or GetMovementBaseInterfaceData instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual UPrimitiveComponent* GetMovementBase() const override final { return Cast<UPrimitiveComponent>(GetMovementBaseObject()); }
+	                             ^
+[5/13] Compile [x64] DarkwellSurfaceObservationTests.cpp
+D:\UE_5.8\Engine\Source\Runtime\Engine\Classes\GameFramework\Character.h(798,31): warning C4996: 'APawn::GetMovementBase': GetMovementBase is deprecated. Use GetMovementBaseObject or GetMovementBaseInterfaceData instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual UPrimitiveComponent* GetMovementBase() const override final { return Cast<UPrimitiveComponent>(GetMovementBaseObject()); }
+	                             ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellSurfaceObservationTests.cpp(456,120): warning C4305: “参数”: 从“double”到“float”截断
+ TestTrue(TEXT("Static surface admission"),Static->RegisterImmutableSurfaceBox(Mesh,TEXT("Cabinet"),FLinearColor(.6,.2,.05)));
+                                                                                                                       ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellSurfaceObservationTests.cpp(456,117): warning C4305: “参数”: 从“double”到“float”截断
+ TestTrue(TEXT("Static surface admission"),Static->RegisterImmutableSurfaceBox(Mesh,TEXT("Cabinet"),FLinearColor(.6,.2,.05)));
+                                                                                                                    ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellSurfaceObservationTests.cpp(456,114): warning C4305: “参数”: 从“double”到“float”截断
+ TestTrue(TEXT("Static surface admission"),Static->RegisterImmutableSurfaceBox(Mesh,TEXT("Cabinet"),FLinearColor(.6,.2,.05)));
+                                                                                                                 ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellSurfaceObservationTests.cpp(479,61): warning C4996: 'FImageUtils::CompressImageArray': Please use PNGCompressImageArray or ThumbnailCompressImageArray - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+  static int CaptureNumber=0;TArray<uint8> PNG;FImageUtils::CompressImageArray(64,64,Pixels,PNG);FFileHelper::SaveArrayToFile(PNG,*(FPaths::ProjectSavedDir()/FString::Printf(TEXT("SurfaceP4_%d.png"),CaptureNumber++)));
+                                                            ^
+[6/13] Link [x64] UnrealEditor-SightWeaveRuntime.dll
+[7/13] Compile [x64] Module.Darkwell.1.cpp
+D:\UE_5.8\Engine\Source\Runtime\Engine\Classes\GameFramework\Character.h(798,31): warning C4996: 'APawn::GetMovementBase': GetMovementBase is deprecated. Use GetMovementBaseObject or GetMovementBaseInterfaceData instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual UPrimitiveComponent* GetMovementBase() const override final { return Cast<UPrimitiveComponent>(GetMovementBaseObject()); }
+	                             ^
+D:\UE_5.8\Engine\Source\Runtime\AIModule\Classes\AISystem.h(151,28): warning C4996: 'UAISystemBase::CleanupWorld': NewWorld was unused and not always calculated correctly and we expect it is not needed; let us know on UDN if it is necessary. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	AIMODULE_API virtual void CleanupWorld(bool bSessionEnded, bool bCleanupResources, UWorld* NewWorld) override;
+	                          ^
+[8/13] Compile [x64] Module.Darkwell.3.cpp
+D:\UE_5.8\Engine\Source\Runtime\Engine\Classes\GameFramework\Character.h(798,31): warning C4996: 'APawn::GetMovementBase': GetMovementBase is deprecated. Use GetMovementBaseObject or GetMovementBaseInterfaceData instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual UPrimitiveComponent* GetMovementBase() const override final { return Cast<UPrimitiveComponent>(GetMovementBaseObject()); }
+	                             ^
+D:\UE_5.8\Engine\Source\Runtime\GeometryFramework\Public\Components\BaseDynamicMeshComponent.h(678,51): warning C4996: 'UMeshComponent::GetMaterialRelevance': Please use GetMaterialRelevance with EShaderPlatform argument and not ERHIFeatureLevel::Type - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	GEOMETRYFRAMEWORK_API virtual FMaterialRelevance GetMaterialRelevance(ERHIFeatureLevel::Type InFeatureLevel) const override;
+	                                                 ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(74,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(74,17): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(27,8): note: 在编译类模板“Chaos::TSphere”时
+	class TSphere final : public FImplicitObject
+	      ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(337,41): note: 查看对正在编译的 类 模板 实例化“Chaos::TSphere<Chaos::FReal,3>”的引用
+			return Chaos::FImplicitObjectPtr(new FSphere(Center, GetRadiusf()));
+			                                     ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(207,17): warning C4996: 'Chaos::FImplicitObject::GetMargin': Please use GetMarginf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetMargin() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(212,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Plane.h(42,16): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual FReal GetRadius() const override
+	              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Plane.h(42,16): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(926,5): note: 查看对正在编译的 类 模板 实例化“Chaos::TPlane<Chaos::FConvex::FRealType,3>”的引用
+				Ar << TmpPlanes;
+				^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Box.h(104,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Box.h(104,17): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(966,23): note: 查看对正在编译的 类 模板 实例化“Chaos::TBox<Chaos::FConvex::FRealType,3>”的引用
+			TBox<FRealType,3>::SerializeAsAABB(Ar, LocalBoundingBox);
+			                   ^
+D:\UE_5.8\Engine\Source\Runtime\Engine\Public\Materials\MaterialExpressionCustom.h(120,40): warning C4996: 'UMaterialExpression::GetInputsView': Use FExpressionInputIterator instead or GetInput() directly. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual TArrayView<FExpressionInput*> GetInputsView() override;
+	                                      ^
+D:\UE_5.8\Engine\Source\Runtime\Engine\Public\Materials\MaterialExpressionTextureSample.h(120,51): warning C4996: 'UMaterialExpression::GetInputsView': Use FExpressionInputIterator instead or GetInput() directly. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	ENGINE_API virtual TArrayView<FExpressionInput*> GetInputsView() override;
+	                                                 ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellSightWeaveAdapterTests.cpp(437,35): warning C4996: 'FImageUtils::CompressImageArray': Please use PNGCompressImageArray or ThumbnailCompressImageArray - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+   TArray<uint8> PNG;FImageUtils::CompressImageArray(Texture->SizeX,Texture->SizeY,Colors,PNG);
+                                  ^
+[9/13] Compile [x64] Module.Darkwell.2.cpp
+D:\UE_5.8\Engine\Source\Runtime\Engine\Classes\GameFramework\Character.h(798,31): warning C4996: 'APawn::GetMovementBase': GetMovementBase is deprecated. Use GetMovementBaseObject or GetMovementBaseInterfaceData instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual UPrimitiveComponent* GetMovementBase() const override final { return Cast<UPrimitiveComponent>(GetMovementBaseObject()); }
+	                             ^
+D:\UE_5.8\Engine\Source\Runtime\GeometryFramework\Public\Components\BaseDynamicMeshComponent.h(678,51): warning C4996: 'UMeshComponent::GetMaterialRelevance': Please use GetMaterialRelevance with EShaderPlatform argument and not ERHIFeatureLevel::Type - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	GEOMETRYFRAMEWORK_API virtual FMaterialRelevance GetMaterialRelevance(ERHIFeatureLevel::Type InFeatureLevel) const override;
+	                                                 ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(74,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(74,17): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(27,8): note: 在编译类模板“Chaos::TSphere”时
+	class TSphere final : public FImplicitObject
+	      ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(337,41): note: 查看对正在编译的 类 模板 实例化“Chaos::TSphere<Chaos::FReal,3>”的引用
+			return Chaos::FImplicitObjectPtr(new FSphere(Center, GetRadiusf()));
+			                                     ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(207,17): warning C4996: 'Chaos::FImplicitObject::GetMargin': Please use GetMarginf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetMargin() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(212,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Plane.h(42,16): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual FReal GetRadius() const override
+	              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Plane.h(42,16): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(926,5): note: 查看对正在编译的 类 模板 实例化“Chaos::TPlane<Chaos::FConvex::FRealType,3>”的引用
+				Ar << TmpPlanes;
+				^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Box.h(104,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Box.h(104,17): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(966,23): note: 查看对正在编译的 类 模板 实例化“Chaos::TBox<Chaos::FConvex::FRealType,3>”的引用
+			TBox<FRealType,3>::SerializeAsAABB(Ar, LocalBoundingBox);
+			                   ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(823,70): warning C4305: “参数”: 从“double”到“float”截断
+  F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                                     ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(823,66): warning C4305: “参数”: 从“double”到“float”截断
+  F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                                 ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(823,62): warning C4305: “参数”: 从“double”到“float”截断
+  F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                             ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(1581,69): warning C4305: “参数”: 从“double”到“float”截断
+ F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                                    ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(1581,65): warning C4305: “参数”: 从“double”到“float”截断
+ F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                                ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(1581,61): warning C4305: “参数”: 从“double”到“float”截断
+ F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                            ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(1990,36): warning C4996: 'FImageUtils::CompressImageArray': Please use PNGCompressImageArray or ThumbnailCompressImageArray - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+   {TArray<uint8> PNG;FImageUtils::CompressImageArray(W,H,Data,PNG);FFileHelper::SaveArrayToFile(PNG,*Path);};
+                                   ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(2255,36): warning C4996: 'FImageUtils::CompressImageArray': Please use PNGCompressImageArray or ThumbnailCompressImageArray - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+   {TArray<uint8> PNG;FImageUtils::CompressImageArray(W,H,Data,PNG);FFileHelper::SaveArrayToFile(PNG,*Path);};
+                                   ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(2590,36): warning C4996: 'FImageUtils::CompressImageArray': Please use PNGCompressImageArray or ThumbnailCompressImageArray - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+   TArray<uint8> PNG; FImageUtils::CompressImageArray(768,768,View,PNG); FFileHelper::SaveArrayToFile(PNG,*(Dir/(FString(Stage)+TEXT(".png"))));
+                                   ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\Tests\DarkwellGrayUploadAttributionTests.cpp(134,103): warning C4996: 'FRHICommandListImmediate::BlockUntilGPUIdle': BlockUntilGPUIdle() is deprecated. Call SubmitAndBlockUntilGPUIdle() instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+            ENQUEUE_RENDER_COMMAND(GrayGPUIdle)([](FRHICommandListImmediate& RHICmdList) { RHICmdList.BlockUntilGPUIdle(); });
+                                                                                                      ^
+[10/13] Compile [x64] Module.Darkwell.4.cpp
+D:\UE_5.8\Engine\Source\Runtime\Engine\Classes\GameFramework\Character.h(798,31): warning C4996: 'APawn::GetMovementBase': GetMovementBase is deprecated. Use GetMovementBaseObject or GetMovementBaseInterfaceData instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual UPrimitiveComponent* GetMovementBase() const override final { return Cast<UPrimitiveComponent>(GetMovementBaseObject()); }
+	                             ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(79,91): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Ground"),FVector(0,0,-5),FVector(600,400,10),0,FLinearColor(.13,.16,.19),false);
+                                                                                          ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(79,87): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Ground"),FVector(0,0,-5),FVector(600,400,10),0,FLinearColor(.13,.16,.19),false);
+                                                                                      ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(79,83): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Ground"),FVector(0,0,-5),FVector(600,400,10),0,FLinearColor(.13,.16,.19),false);
+                                                                                  ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(80,91): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Whole"),FVector(-100,80,40),FVector(80,60,80),0,FLinearColor(.6,.35,.15),true);
+                                                                                          ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(80,87): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Whole"),FVector(-100,80,40),FVector(80,60,80),0,FLinearColor(.6,.35,.15),true);
+                                                                                      ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(80,84): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Whole"),FVector(-100,80,40),FVector(80,60,80),0,FLinearColor(.6,.35,.15),true);
+                                                                                   ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(81,96): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Partial"),FVector(130,80,55),FVector(140,60,110),37,FLinearColor(.15,.42,.6),false);
+                                                                                               ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(81,92): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Partial"),FVector(130,80,55),FVector(140,60,110),37,FLinearColor(.15,.42,.6),false);
+                                                                                           ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(81,88): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Partial"),FVector(130,80,55),FVector(140,60,110),37,FLinearColor(.15,.42,.6),false);
+                                                                                       ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(85,94): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Console"),FVector(-230,-30,40),FVector(40,35,80),0,FLinearColor(.2,.65,.35),true);
+                                                                                             ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(85,90): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Console"),FVector(-230,-30,40),FVector(40,35,80),0,FLinearColor(.2,.65,.35),true);
+                                                                                         ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCleanBlackRegionLab.cpp(85,87): warning C4305: “参数”: 从“double”到“float”截断
+ Spawn(TEXT("BlackLab.Console"),FVector(-230,-30,40),FVector(40,35,80),0,FLinearColor(.2,.65,.35),true);
+                                                                                      ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellGrayPolicyLab.cpp(58,24): warning C4996: 'FSlateFontInfo::FSlateFontInfo': Use constructor with FCompositeFont instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		return FSlateFontInfo(FontPath(), Size);
+		                     ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellGrayPolicyLab.cpp(606,15): warning C4996: 'FImageUtils::CompressImageArray': Please use PNGCompressImageArray or ThumbnailCompressImageArray - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	FImageUtils::CompressImageArray(Size.X,Size.Y,Pixels,PNG);
+	             ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellHistoryGridV2.cpp(239,38): warning C4457: “Y”的声明隐藏了函数参数
+				const int32 X = I % Size.X + DX, Y = I / Size.X + DY;
+				                                 ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellHistoryGridV2.cpp(218,28): note: 参见“Y”的声明
+	auto BuildRow = [&](int32 Y)
+	                          ^
+D:\UE_5.8\Engine\Source\Runtime\GeometryFramework\Public\Components\BaseDynamicMeshComponent.h(678,51): warning C4996: 'UMeshComponent::GetMaterialRelevance': Please use GetMaterialRelevance with EShaderPlatform argument and not ERHIFeatureLevel::Type - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	GEOMETRYFRAMEWORK_API virtual FMaterialRelevance GetMaterialRelevance(ERHIFeatureLevel::Type InFeatureLevel) const override;
+	                                                 ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(74,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(74,17): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(27,8): note: 在编译类模板“Chaos::TSphere”时
+	class TSphere final : public FImplicitObject
+	      ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(337,41): note: 查看对正在编译的 类 模板 实例化“Chaos::TSphere<Chaos::FReal,3>”的引用
+			return Chaos::FImplicitObjectPtr(new FSphere(Center, GetRadiusf()));
+			                                     ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(207,17): warning C4996: 'Chaos::FImplicitObject::GetMargin': Please use GetMarginf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetMargin() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(212,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Plane.h(42,16): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual FReal GetRadius() const override
+	              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Plane.h(42,16): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(926,5): note: 查看对正在编译的 类 模板 实例化“Chaos::TPlane<Chaos::FConvex::FRealType,3>”的引用
+				Ar << TmpPlanes;
+				^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Box.h(104,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Box.h(104,17): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(966,23): note: 查看对正在编译的 类 模板 实例化“Chaos::TBox<Chaos::FConvex::FRealType,3>”的引用
+			TBox<FRealType,3>::SerializeAsAABB(Ar, LocalBoundingBox);
+			                   ^
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCurrentLiveGrid.cpp(345) : warning C4701: 使用了可能未初始化的局部变量“Constant”
+   while compiling `FDarkwellCurrentLiveGrid::Advance'::`8'::<lambda_3>::operator()<`FDarkwellCurrentLiveGrid::Advance'::`8'::<lambda_3> &>
+D:\UE_projects\LastLight\Source\Darkwell\Private\VisionPresentation\DarkwellCurrentLiveGrid.cpp(238) : warning C4701: 使用了可能未初始化的局部变量“V”
+   while compiling FDarkwellCurrentLiveGrid::HasAnyLegalObservation
+[11/13] Link [x64] UnrealEditor-Darkwell.lib
+  正在创建库 D:/UE_projects/LastLight/Intermediate/Build/Win64/x64/UnrealEditor/Development/Darkwell/UnrealEditor-Darkwell.lib 和对象 D:/UE_projects/LastLight/Intermediate/Build/Win64/x64/UnrealEditor/Development/Darkwell/UnrealEditor-Darkwell.exp
+[12/13] Link [x64] UnrealEditor-Darkwell.dll
+[13/13] WriteMetadata DarkwellEditor.target [NoUba]
+
+Total time in Unreal Build Accelerator local executor: 30.66 seconds
+Output binary: D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe
+
+Result: Succeeded
+Total execution time: 34.30 seconds
+Trace written to file C:\Users\defiler919\AppData\Local\UnrealBuildTool\Trace.uba with size 10.6kb

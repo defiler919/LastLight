@@ -34,10 +34,11 @@ ADarkwellApartmentLab::ADarkwellApartmentLab()
 FBox2D ADarkwellApartmentLab::GetSightWeaveFloorBounds() const
 { return FBox2D(FVector2D(-610,-510),FVector2D(610,510)); }
 
-void ADarkwellApartmentLab::RegisterSource(AActor* A,FName Id,FLinearColor Tint,bool Whole,bool Moving)
+void ADarkwellApartmentLab::RegisterSource(AActor* A,FName Id,FLinearColor Tint,bool Whole,bool Moving,bool Surface)
 {
  auto* Memory=NewObject<UDarkwellRememberablePropComponent>(A); A->AddInstanceComponent(Memory);
  Memory->bUseSpatialMemory=true; Memory->bRememberFromStart=false;
+ Memory->bUseFixedSurfaceKnowledge=Surface;
  TArray<UStaticMeshComponent*> Parts; A->GetComponents(Parts);
  for(auto* Part:Parts) Memory->AddMemoryPrimitive(Part);
  Memory->ConfigureStableId(Id); Memory->SetMemoryAppearance(Tint,1); Memory->RegisterComponent();
@@ -49,11 +50,11 @@ void ADarkwellApartmentLab::RegisterSource(AActor* A,FName Id,FLinearColor Tint,
  ensureAlwaysMsgf(MemoryScene->RegisterRememberable(Memory,Policy),TEXT("Apartment registration failed: %s"),*Id.ToString());
  Sources.Add(A);
 }
-AActor* ADarkwellApartmentLab::Box(FName Id,FVector Location,FVector Size,FLinearColor Tint,bool Whole,float Yaw,bool Immutable)
+AActor* ADarkwellApartmentLab::Box(FName Id,FVector Location,FVector Size,FLinearColor Tint,bool Whole,float Yaw,bool Immutable,bool Surface)
 {
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
  // Bounded architecture reference only; never the normal gameplay path.
- if(FParse::Param(FCommandLine::Get(),TEXT("ApartmentObjectArchitectureReference")))Immutable=false;
+ if(FParse::Param(FCommandLine::Get(),TEXT("ApartmentObjectArchitectureReference"))){Immutable=false;Surface=false;}
 #endif
  auto* A=GetWorld()->SpawnActor<AActor>(); A->SetOwner(this);
  auto* M=NewObject<UStaticMeshComponent>(A); A->SetRootComponent(M); A->AddInstanceComponent(M);
@@ -62,8 +63,8 @@ AActor* ADarkwellApartmentLab::Box(FName Id,FVector Location,FVector Size,FLinea
  M->SetRelativeScale3D(Size/100); M->RegisterComponent();
  A->SetActorLocationAndRotation(Location,FRotator(0,Yaw,0));
  if(Id.ToString().Contains(TEXT("Floor"))) M->TranslucencySortPriority=-1;
- if(Immutable){ensureAlways(GetWorld()->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->RegisterImmutable(M,Tint));Sources.Add(A);}
- else RegisterSource(A,Id,Tint,Whole); return A;
+ if(Immutable){auto* Static=GetWorld()->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>();ensureAlways(Surface?Static->RegisterImmutableSurfaceBox(M,Id,Tint):Static->RegisterImmutable(M,Tint));Sources.Add(A);}
+ else RegisterSource(A,Id,Tint,Whole,false,Surface); return A;
 }
 void ADarkwellApartmentLab::BeginPlay()
 {
@@ -71,9 +72,10 @@ void ADarkwellApartmentLab::BeginPlay()
  MemoryScene=GetWorld()->SpawnActor<ADarkwellObjectMemoryScene>();
  const FLinearColor Floor(0.18f,0.19f,0.20f),Wall(0.42f,0.43f,0.4f),Wood(0.34f,0.22f,0.13f),Blue(0.13f,0.34f,0.5f);
  // 12 x 10 m: south entry, central living room, west kitchen, east bedroom.
- // Immutable geometry shares sparse world-space knowledge; mesh divisions are not memory identities.
+ // Flat floors retain legacy XY knowledge; walls/furniture declare independent
+ // face domains. Full floor migration is an explicit large-area stress option.
  for(int X=0;X<4;++X) for(int Y=0;Y<4;++Y)
-  Box(*FString::Printf(TEXT("Apartment.Floor.%d.%d"),X,Y),FVector(-450+300*X,-375+250*Y,-5),FVector(300,250,10),Floor,false,0,true);
+  Box(*FString::Printf(TEXT("Apartment.Floor.%d.%d"),X,Y),FVector(-450+300*X,-375+250*Y,-5),FVector(300,250,10),Floor,false,0,true,bObserveFloorSurfaces);
  auto WallLine=[&](FVector2D A,FVector2D B)
  {
   const FVector2D D=B-A,C=(A+B)*0.5f;
@@ -107,11 +109,11 @@ void ADarkwellApartmentLab::BeginPlay()
  Box(TEXT("Apartment.Wardrobe.Partial37"),{445,-55,100},{140,55,200},Blue,false,37);
  Box(TEXT("Apartment.Entry.Cabinet"),{-410,-410,95},{150,45,190},Wood);
  // Three tall furniture planes are explicit 2D occluders, like the wall declarations.
- auto Plane=[&](FVector2D A,FVector2D B){auto& S=FixedSegments.AddDefaulted_GetRef();S.A=A;S.B=B;S.ZMin=0;S.ZMax=200;};
- Plane({-510,-82.5},{-510,-17.5});
+ auto Plane=[&](FVector2D A,FVector2D B,float Height){auto& S=FixedSegments.AddDefaulted_GetRef();S.A=A;S.B=B;S.ZMin=0;S.ZMax=Height;};
+ Plane({-510,-82.5},{-510,-17.5},190);
  const FVector2D Dir(FMath::Cos(FMath::DegreesToRadians(37.f)),FMath::Sin(FMath::DegreesToRadians(37.f)));
- Plane(FVector2D(445,-55)-Dir*70,FVector2D(445,-55)+Dir*70);
- Plane({-485,-410},{-335,-410});
+ Plane(FVector2D(445,-55)-Dir*70,FVector2D(445,-55)+Dir*70,200);
+ Plane({-485,-410},{-335,-410},190);
  Trigger=GetWorld()->SpawnActor<ADarkwellBlackRegionTrigger>(FVector(400,180,0),FRotator::ZeroRotator);
  Trigger->SetOwner(this); Trigger->HalfExtentXY=FVector2D(200,320); Trigger->OnConstruction(Trigger->GetActorTransform());
  auto* Console=GetWorld()->SpawnActor<ADarkwellBlackRegionSwitch>(FVector(100,-55,40),FRotator::ZeroRotator);
@@ -131,7 +133,7 @@ void ADarkwellApartmentLab::BuildSightWeaveOccluderSegments(TArray<FDarkwellVisi
 }
 bool ADarkwellApartmentLab::EnableDarkwellProjectFogP4(UTexture* Raw,FVector2D Min,FVector2D Inv)
 {
- for(AActor* A:Sources) if(auto* Rememberable=A->FindComponentByClass<UDarkwellRememberablePropComponent>()) for(UPrimitiveComponent* M:Rememberable->GetMemoryPrimitives())
+ for(AActor* A:Sources) if(auto* Rememberable=A->FindComponentByClass<UDarkwellRememberablePropComponent>();Rememberable && !Rememberable->bUseFixedSurfaceKnowledge) for(UPrimitiveComponent* M:Rememberable->GetMemoryPrimitives())
   if(auto* MID=Cast<UMaterialInstanceDynamic>(M->GetMaterial(0)))
   { MID->SetTextureParameterValue(TEXT("DarkwellLiveCoverageTexture"),Raw);
   GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>()->BindHardPresentation(MID);MID->SetVectorParameterValue(TEXT("FogWorldMin"),FLinearColor(Min.X,Min.Y,0,0));MID->SetVectorParameterValue(TEXT("FogWorldInvExtent"),FLinearColor(Inv.X,Inv.Y,0,0)); }

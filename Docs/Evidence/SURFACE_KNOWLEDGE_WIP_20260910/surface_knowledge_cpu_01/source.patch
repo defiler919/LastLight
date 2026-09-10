@@ -1,0 +1,290 @@
+diff --git a/Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveSurface.cpp b/Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveSurface.cpp
+index 5e36986..960a6b0 100644
+--- a/Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveSurface.cpp
++++ b/Plugins/SightWeave/Source/SightWeaveRuntime/Private/SightWeaveSurface.cpp
+@@ -98,6 +98,78 @@ bool USightWeaveWorldSubsystem::RegisterSurfaceBox(const FSightWeaveSurfaceBox&
+  SurfaceBoxes.Add(Box.Id,{Box,++SurfaceSerial});if(Owner)SurfaceOwners.Add(Box.Id,Owner);
+  bSurfaceSceneDirty=true;AdvanceRevision();PublishSnapshot();return true;
+ }
++
++bool FSightWeaveSurfaceScene::BeamClear(FSightWeaveFloorId Floor,FName Receiver,FVector Origin,TConstArrayView<FVector> Corners) const
++{
++ FBox Beam(ForceInit);Beam+=Origin;for(auto P:Corners)Beam+=P;
++ TArray<int32,TInlineAllocator<64>> Stack;if(!Nodes.IsEmpty())Stack.Add(0);
++ while(!Stack.IsEmpty())
++ {
++  const auto& N=Nodes[Stack.Pop(EAllowShrinking::No)];if(!Beam.Intersect(N.Bounds))continue;
++  if(N.Primitive==INDEX_NONE){Stack.Add(N.Left);Stack.Add(N.Right);continue;}
++  const auto& P=Primitives[N.Primitive];
++  if(P.BoxIndex!=INDEX_NONE){const auto& B=Boxes[P.BoxIndex].Box;if(B.Floor==Floor && B.Id!=Receiver)return false;}
++  else if(P.Wall.FloorId==Floor)return false;
++ }
++ return true;
++}
++bool USightWeaveWorldSubsystem::TrySurfaceRegion(FSightWeaveKnowledgeOwnerId Owner,FName Id,ESightWeaveBoxFace Face,const FBox2D& UV,bool& Value) const
++{
++ const auto Frame=AcquirePublishedSnapshot();if(!Owner.IsValid() || !Frame || !Frame->SurfaceScene || !UV.bIsValid)return false;
++ const auto* R=Frame->SurfaceScene->Find(Id);if(!R)return false;
++ const auto* Floor=Frame->Floors.FindByPredicate([&](const auto& F){return F.FloorId==R->Box.Floor;});if(!Floor)return false;
++ const FVector2D Points[]{UV.Min,{UV.Max.X,UV.Min.Y},UV.Max,{UV.Min.X,UV.Max.Y}};TArray<FVector> World;FVector Normal;
++ for(auto P:Points){FVector Q;if(!R->Box.Resolve(Face,P,Q,Normal))return false;World.Add(Q);}
++ bool AnyFacing=false;for(const auto& V:Frame->VisionSources)
++  AnyFacing|=V.Description.bActive && V.Description.KnowledgeOwnerId==Owner && V.Description.FloorId==Floor->FloorId
++   && FVector::DotProduct(Normal,V.Description.Transform.GetLocation()-World[0])>1.e-4;
++ if(!AnyFacing){Value=false;return true;}
++ FBox2D XY(ForceInit);for(auto P:World)XY+=FVector2D(P);
++ for(const auto& S:Frame->HardSuppressions)if(S.Description.bEnabled && S.Description.FloorId==Floor->FloorId)
++  if(XY.Intersect(FBox2D(S.Description.Center-FVector2D(S.Description.Radius),S.Description.Center+FVector2D(S.Description.Radius))))return false;
++ const auto& T=GetDefault<USightWeaveSettings>()->GeometryTolerances;
++ // These are rejection bounds of the same nominal predicates. They can only
++ // reject a region wholly outside; ambiguous geometry still uses exact Hard.
++ auto Possible=[&](const auto& E)
++ {
++  const auto& D=E.Description;const FVector Eye=D.Transform.GetLocation();
++  if(!D.bActive || D.FloorId!=Floor->FloorId || FVector::DotProduct(Normal,Eye-World[0])<=1.e-4)return false;
++  FBox Bounds(ForceInit);for(auto P:World)Bounds+=P;
++  if(Bounds.Max.Z<D.HeightRange.ZMin-T.HeightOverlapEpsilon || Bounds.Min.Z>D.HeightRange.ZMax+T.HeightOverlapEpsilon)return false;
++  return XY.ComputeSquaredDistanceToPoint(FVector2D(Eye))<=FMath::Square(D.Range+T.PointOnEdgeEpsilon);
++ };
++ bool PossiblePair=false;
++ for(const auto& V:Frame->VisionSources)if(V.Description.KnowledgeOwnerId==Owner && Possible(V))
++ {
++  if(V.Description.IlluminationPolicy==ESightWeaveIlluminationPolicy::BypassLegalIllumination){PossiblePair=true;break;}
++  for(int I:V.CompatibleIlluminationSourceIndices)if(Frame->IlluminationSources.IsValidIndex(I) && Possible(Frame->IlluminationSources[I])){PossiblePair=true;break;}
++ }
++ if(!PossiblePair){Value=false;return true;}
++ auto Convex=[&](const auto& D)
++ {
++  if(D.Shape==ESightWeaveSourceShape::Radial)return true;
++  if(D.HalfAngleDegrees>90)return false;
++  // The tiny origin-awareness disc is a union with the cone, not convex.
++  return XY.ComputeSquaredDistanceToPoint(FVector2D(D.Transform.GetLocation()))>FMath::Square(T.PointOnEdgeEpsilon);
++ };
++ for(const auto& V:Frame->VisionSources)
++ {
++  if(!Convex(V.Description) || V.Description.NearAwarenessRadius>0)continue;
++  TArray<FSightWeaveIlluminationSourceHandle> Common;bool All=true;
++  FSightWeaveSurfaceContext Context{Frame->SurfaceScene.Get(),Normal,nullptr};
++  for(int I=0;I<World.Num();++I)
++  {
++   FSightWeaveVisibilityQueryResult Q;QueryEffectiveLiveValidated(Owner,Floor->FloorId,World[I],&V.Handle,false,*Frame,*Floor,T,Q,nullptr,0,0,false,false,&Context);
++   if(!Q.bVisible){All=false;break;}
++   if(I==0)Common=Q.ContributingIlluminationSources;else Common.RemoveAll([&](auto H){return !Q.ContributingIlluminationSources.Contains(H);});
++  }
++  if(!All || !Frame->SurfaceScene->BeamClear(Floor->FloorId,Id,V.Description.Transform.GetLocation(),World))continue;
++  if(V.Description.IlluminationPolicy==ESightWeaveIlluminationPolicy::BypassLegalIllumination){Value=true;return true;}
++  for(const auto& L:Frame->IlluminationSources)if(Common.Contains(L.Handle) && Convex(L.Description)
++   && Frame->SurfaceScene->BeamClear(Floor->FloorId,Id,L.Description.Transform.GetLocation(),World)){Value=true;return true;}
++ }
++ return false;
++}
+ bool USightWeaveWorldSubsystem::UpdateSurfaceBox(const FSightWeaveSurfaceBox& Box)
+ {
+  auto* Existing=SurfaceBoxes.Find(Box.Id);if(!bSightWeaveInitialized || !Existing || !Box.IsValid() || !Floors.Contains(Box.Floor))return false;
+diff --git a/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveSurface.h b/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveSurface.h
+index d026bc8..15408ce 100644
+--- a/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveSurface.h
++++ b/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveSurface.h
+@@ -58,6 +58,8 @@ public:
+  FSightWeaveSurfaceScene(TArray<FReceiver> Receivers,TConstArrayView<FSightWeaveSegment2D> Walls);
+  const FReceiver* Find(FName Id) const;
+  bool Unoccluded(FSightWeaveFloorId Floor,FVector Origin,FVector Target,FSightWeaveSurfaceQueryStats* Stats) const;
++ /** Conservative beam AABB proof. False means ambiguous, never occluded. */
++ bool BeamClear(FSightWeaveFloorId Floor,FName Receiver,FVector Origin,TConstArrayView<FVector> Corners) const;
+ private:
+  struct FPrimitive {FBox Bounds; int32 BoxIndex=INDEX_NONE; FSightWeaveSegment2D Wall;};
+  struct FNode {FBox Bounds; int32 Left=INDEX_NONE,Right=INDEX_NONE,Primitive=INDEX_NONE;};
+diff --git a/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveWorldSubsystem.h b/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveWorldSubsystem.h
+index 5c75c4c..9abcc6e 100644
+--- a/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveWorldSubsystem.h
++++ b/Plugins/SightWeave/Source/SightWeaveRuntime/Public/SightWeaveWorldSubsystem.h
+@@ -483,6 +483,8 @@ public:
+  bool UpdateSurfaceBox(const FSightWeaveSurfaceBox& Box);
+  bool UnregisterSurfaceBox(FName Id);
+  FSightWeaveSurfaceResult QuerySurfaceSample(FSightWeaveKnowledgeOwnerId Owner,const FSightWeaveSurfaceSample& Sample) const;
++ /** Proven uniform rectangle only; false return requires subdivision/exact samples. */
++ bool TrySurfaceRegion(FSightWeaveKnowledgeOwnerId Owner,FName Receiver,ESightWeaveBoxFace Face,const FBox2D& UV,bool& Value) const;
+  /** Exact point batch; no whole-face/region inference or memory mutation. */
+  void QuerySurfaceSamples(FSightWeaveKnowledgeOwnerId Owner,TConstArrayView<FSightWeaveSurfaceSample> Samples,
+   TArray<FSightWeaveSurfaceResult>& Results,FSightWeaveSurfaceQueryCache* Cache=nullptr,FSightWeaveSurfaceQueryStats* Stats=nullptr) const;
+diff --git a/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp b/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp
+index f39ec64..6b932b3 100644
+--- a/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp
++++ b/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp
+@@ -9,6 +9,17 @@
+ #include "UObject/Package.h"
+ #include "Player/DarkwellCharacter.h"
+ #include "Player/DarkwellObserverComponent.h"
++#include "VisionPresentation/DarkwellSurfaceKnowledge.h"
++#include "VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h"
++#include "VisionPresentation/DarkwellStaticEnvironmentSubsystem.h"
++#include "Components/StaticMeshComponent.h"
++#include "Components/SceneCaptureComponent2D.h"
++#include "Engine/TextureRenderTarget2D.h"
++#include "Engine/Texture2D.h"
++#include "RHICommandList.h"
++#include "RenderingThread.h"
++#include "AssetCompilingManager.h"
++#include "ShaderCompiler.h"
+ 
+ using namespace Darkwell::SurfaceObservationTests;
+ namespace
+@@ -376,4 +387,60 @@ bool FSurfaceV1Performance::RunTest(const FString&)
+  AddInfo(FString::Printf(TEXT("SURFACE_V1_DIRTY samples=400 query_p95_us=%.3f query_p99_us=%.3f source_publish_p95_us=%.3f source_publish_p99_us=%.3f"),DirtyTimes[94],DirtyTimes[98],PublishTimes[94],PublishTimes[98]));
+  return true;
+ }
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgeV1Facts,"Darkwell.SightWeave.SurfaceKnowledge.FactsAndArchive",SurfaceTestFlags)
++bool FSurfaceKnowledgeV1Facts::RunTest(const FString&)
++{
++ FRuntimeWorld W;auto B=Receiver(W);W.Runtime->RegisterSurfaceBox(B);
++ auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);
++ FDarkwellSurfaceKnowledge K;TestTrue(TEXT("Initialize durable domain"),K.Initialize(B,W.Owner));K.Observe(*W.Runtime);
++ auto Known=[&](ESightWeaveBoxFace F){return K.IsKnown(F,{0,0});};
++ TestTrue(TEXT("Front learned"),Known(ESightWeaveBoxFace::NegativeX));
++ TestFalse(TEXT("Top not learned from Whole/front"),Known(ESightWeaveBoxFace::Top));
++ TestFalse(TEXT("Back not learned"),Known(ESightWeaveBoxFace::PositiveX));
++ TestEqual(TEXT("Unoccluded large front uses proof, zero fine queries"),K.ExactSamples,uint64(0));
++ K.Observe(*W.Runtime);TestEqual(TEXT("Unchanged revision performs zero proof work"),K.Proofs,uint64(0));
++ TArray<uint8> Archive;K.Save(Archive);FDarkwellSurfaceKnowledge Restored;Restored.Initialize(B,W.Owner);
++ TestTrue(TEXT("Archive accepts same stable identity/domain"),Restored.Load(Archive));
++ TestTrue(TEXT("Archived front known"),Restored.IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
++ TestFalse(TEXT("Live never persisted"),Restored.IsLive(ESightWeaveBoxFace::NegativeX,{0,0}));
++ auto Other=B;Other.Id=TEXT("Other");Restored.Initialize(Other,W.Owner);TestFalse(TEXT("Wrong domain refused"),Restored.Load(Archive));
++ Restored.Initialize(B,W.Owner,2);TestFalse(TEXT("Content version mismatch refused"),Restored.Load(Archive));
++ Restored.Initialize(B,W.Owner);auto Truncated=Archive;Truncated.SetNum(Archive.Num()-1);TestFalse(TEXT("Truncation refused transactionally"),Restored.Load(Truncated));
++ V.Transform.SetLocation({0,200,162});W.Runtime->UpdateVisionSource(H,V);K.Observe(*W.Runtime);
++ TestTrue(TEXT("New side learned independently"),Known(ESightWeaveBoxFace::PositiveY));
++ TestTrue(TEXT("Old front retained"),Known(ESightWeaveBoxFace::NegativeX));
++ TestFalse(TEXT("Old front no longer live"),K.IsLive(ESightWeaveBoxFace::NegativeX,{0,0}));
++ V.Transform.SetLocation({0,200,260});W.Runtime->UpdateVisionSource(H,V);K.Observe(*W.Runtime);
++ TestTrue(TEXT("Raised observer learns top"),Known(ESightWeaveBoxFace::Top));
++ TestFalse(TEXT("Same XY bottom independent"),Known(ESightWeaveBoxFace::Bottom));
++ const FBox2D All({-100,-100},{100,100});K.SetBlock(All,true);K.Clear(All);K.Observe(*W.Runtime);
++ TestFalse(TEXT("Clear plus block prevents surface rewrite"),Known(ESightWeaveBoxFace::Top));
++ TestTrue(TEXT("Memory block does not block Live"),K.IsLive(ESightWeaveBoxFace::Top,{0,0}));
++ K.SetBlock(All,false);K.Observe(*W.Runtime);TestTrue(TEXT("Fresh legal observation relearns"),Known(ESightWeaveBoxFace::Top));
++ V.bActive=false;W.Runtime->UpdateVisionSource(H,V);K.Observe(*W.Runtime);K.Clear(All);K.Observe(*W.Runtime);
++ TestFalse(TEXT("Clear without observation stays unknown"),Known(ESightWeaveBoxFace::Top));
++ return true;
++}
++
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceRegionProof,"Darkwell.SightWeave.SurfaceKnowledge.RegionProof",SurfaceTestFlags)
++bool FSurfaceRegionProof::RunTest(const FString&)
++{
++ FRuntimeWorld W;W.Runtime->RegisterSurfaceBox(Receiver(W));auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);
++ const FBox2D Whole({-1,-1},{1,1});bool Value=false;
++ TestTrue(TEXT("Clear face region certified"),W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Whole,Value)&&Value);
++ auto Obstacle=Receiver(W);Obstacle.Id=TEXT("Thin");Obstacle.Pose=FTransform(FVector(-120,8,130));Obstacle.HalfExtent={1,.05,70};W.Runtime->RegisterSurfaceBox(Obstacle);
++ TestFalse(TEXT("Thin blocker invalidates corner-only proof"),W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Whole,Value));
++ int Certified=0;
++ for(int Y=0;Y<8;++Y)for(int X=0;X<8;++X)
++ {
++  FBox2D Region(FVector2D(X,Y)/4-FVector2D(1),FVector2D(X+1,Y+1)/4-FVector2D(1));
++  if(!W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Region,Value))continue;
++  ++Certified;for(int B=0;B<=8;++B)for(int A=0;A<=8;++A)
++   TestEqual(TEXT("Every certified region agrees with dense exact Hard oracle"),W.Runtime->QuerySurfaceSample(W.Owner,Sample(ESightWeaveBoxFace::NegativeX,Region.Min+Region.GetSize()*FVector2D(A,B)/8)).Hard.bEligibleForMemoryWrite,Value);
++ }
++ TestTrue(TEXT("Some unobstructed subregions certified"),Certified>0);
++ W.Runtime->UnregisterSurfaceBox(Obstacle.Id);V.IlluminationPolicy=ESightWeaveIlluminationPolicy::RequiresLegalIllumination;W.Runtime->UpdateVisionSource(H,V);
++ TestTrue(TEXT("No legal light certifies false"),W.Runtime->TrySurfaceRegion(W.Owner,TEXT("Cabinet"),ESightWeaveBoxFace::NegativeX,Whole,Value)&&!Value);
++ return true;
++}
+ #endif
+diff --git a/Source/Darkwell/Private/VisionPresentation/DarkwellObjectMemoryScene.cpp b/Source/Darkwell/Private/VisionPresentation/DarkwellObjectMemoryScene.cpp
+index e809325..76ec94b 100644
+--- a/Source/Darkwell/Private/VisionPresentation/DarkwellObjectMemoryScene.cpp
++++ b/Source/Darkwell/Private/VisionPresentation/DarkwellObjectMemoryScene.cpp
+@@ -1,4 +1,5 @@
+ #include "VisionPresentation/DarkwellObjectMemoryScene.h"
++#include "VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h"
+ #include "SightWeaveHardCoverage.h"
+ #include "VisionPresentation/DarkwellBlackoutTiming.h"
+ #include "VisionPresentation/DarkwellMemoryRegionSamples.h"
+@@ -114,6 +115,14 @@ bool ADarkwellObjectMemoryScene::RegisterRememberable(
+ 	if (!Memory || !Policy || !Memory->bUseSpatialMemory || Memory->GetWorld()!=GetWorld()
+ 		|| Memory->GetOwner()!=Policy->GetOwner() || Memory->GetStableId().IsNone()
+ 		|| Memory->GetMemoryPrimitives().IsEmpty()) return false;
++ if(Memory->bUseFixedSurfaceKnowledge)
++ {
++  if(Memory->GetMemoryPrimitives().Num()!=1)return false;
++  const auto Resolved=Policy->GetResolvedPolicy();
++  return GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->RegisterFixedBox(
++   Memory->GetMemoryPrimitives()[0],Memory->GetStableId(),Memory->GetRememberedTint(),false,
++   Resolved.RevealMode==ESightWeaveRevealMode::WholeObjectAfterSpan?Resolved.MinimumObservedSpanCm:0);
++ }
+ 	FTrackedProp* Existing=Tracked.Find(Memory->GetStableId());
+ 	if(Existing && Existing->Actual.IsValid() && !Existing->Actual->IsActorBeingDestroyed()) return false;
+ 	// A valid source admits the Scene's immutable presentation dependency once.
+@@ -6716,6 +6725,7 @@ bool ADarkwellObjectMemoryScene::RekeyCurrentForMemoryRegion(FTrackedProp& P,con
+ 
+ void ADarkwellObjectMemoryScene::ClearMemoryInRegion(const FBox2D& Bounds)
+ {
++ GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->Clear(Bounds,false);
+  DW_BLACKOUT_SCOPE(ClearMemoryInRegion);
+  BeginMemoryRegionTransaction();
+  for(auto& Pair:Tracked) Pair.Value.bRegionAppearanceDirty=true;
+@@ -6828,6 +6838,7 @@ void ADarkwellObjectMemoryScene::RefreshMemoryWriteBlock(FTrackedProp& P)
+ 
+ void ADarkwellObjectMemoryScene::SetMemoryWriteBlock(const FBox2D& Bounds,bool bEnabled)
+ {
++ GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->SetBlock(Bounds,bEnabled,false);
+  DW_BLACKOUT_SCOPE(SetMemoryWriteBlock);
+  BeginMemoryRegionTransaction();
+  for(auto& Pair:Tracked) Pair.Value.bRegionAppearanceDirty=true;
+diff --git a/Source/Darkwell/Private/VisionPresentation/DarkwellStaticEnvironmentSubsystem.cpp b/Source/Darkwell/Private/VisionPresentation/DarkwellStaticEnvironmentSubsystem.cpp
+index 097a435..018b604 100644
+--- a/Source/Darkwell/Private/VisionPresentation/DarkwellStaticEnvironmentSubsystem.cpp
++++ b/Source/Darkwell/Private/VisionPresentation/DarkwellStaticEnvironmentSubsystem.cpp
+@@ -1,4 +1,5 @@
+ #include "VisionPresentation/DarkwellStaticEnvironmentSubsystem.h"
++#include "VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h"
+ #include "Components/MeshComponent.h"
+ #include "Engine/Texture2D.h"
+ #include "Engine/TextureRenderTarget2D.h"
+@@ -41,6 +42,8 @@ bool UDarkwellStaticEnvironmentSubsystem::RegisterImmutable(UMeshComponent* M,FL
+  M->UpdateBounds();const auto B=M->Bounds.GetBox();Knowledge.Declare(FBox2D(FVector2D(B.Min),FVector2D(B.Max)));
+  Materials.Add(MID);Meshes.Add(M);Bind();return true;
+ }
++bool UDarkwellStaticEnvironmentSubsystem::RegisterImmutableSurfaceBox(UStaticMeshComponent* Mesh,FName Id,FLinearColor Tint)
++{return GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->RegisterFixedBox(Mesh,Id,Tint,true);}
+ void UDarkwellStaticEnvironmentSubsystem::Bind()
+ {
+  auto* Fog=GetWorld()->GetSubsystem<UDarkwellFogVisualSubsystem>();
+@@ -152,9 +155,9 @@ void UDarkwellStaticEnvironmentSubsystem::UpdateKnowledge()
+  UpdateUs=(FPlatformTime::Seconds()-Start)*1e6;
+ }
+ void UDarkwellStaticEnvironmentSubsystem::ClearMemory(const FBox2D& Region)
+-{Knowledge.Clear(Region);LastDraw=MAX_uint64;Publish();}
++{GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->Clear(Region,true);Knowledge.Clear(Region);LastDraw=MAX_uint64;Publish();}
+ void UDarkwellStaticEnvironmentSubsystem::SetMemoryWriteBlock(const FBox2D& Region,bool Enabled)
+-{Block=Enabled?Region:FBox2D(ForceInit);Knowledge.SetBlock(Region,Enabled);LastDraw=MAX_uint64;if(!Materials.IsEmpty())Bind();}
++{GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->SetBlock(Region,Enabled,true);Block=Enabled?Region:FBox2D(ForceInit);Knowledge.SetBlock(Region,Enabled);LastDraw=MAX_uint64;if(!Materials.IsEmpty())Bind();}
+ FString UDarkwellStaticEnvironmentSubsystem::GetTelemetry() const
+ {
+  const auto& S=Knowledge.Stats;
+diff --git a/Source/Darkwell/Public/VisionPresentation/DarkwellRememberablePropComponent.h b/Source/Darkwell/Public/VisionPresentation/DarkwellRememberablePropComponent.h
+index 3c52713..d5a36a1 100644
+--- a/Source/Darkwell/Public/VisionPresentation/DarkwellRememberablePropComponent.h
++++ b/Source/Darkwell/Public/VisionPresentation/DarkwellRememberablePropComponent.h
+@@ -25,6 +25,9 @@ public:
+ 	/** Explicit opt-in to the observation scene; prevents two presenters owning this source. */
+ 	UPROPERTY(EditAnywhere, Category="Fog Memory")
+ 	bool bUseSpatialMemory = false;
++ /** Explicit stationary Box contract; mutable/history actors keep legacy epochs. */
++ UPROPERTY(EditAnywhere,Category="Fog Memory")
++ bool bUseFixedSurfaceKnowledge=false;
+ 	void SetMemoryAppearance(FLinearColor Tint, float UVScale)
+ 	{
+ 		if (RememberedTint != Tint || RememberedUVScale != UVScale) ++MemoryContentRevision;
+diff --git a/Source/Darkwell/Public/VisionPresentation/DarkwellStaticEnvironmentSubsystem.h b/Source/Darkwell/Public/VisionPresentation/DarkwellStaticEnvironmentSubsystem.h
+index 7425258..e2e72f7 100644
+--- a/Source/Darkwell/Public/VisionPresentation/DarkwellStaticEnvironmentSubsystem.h
++++ b/Source/Darkwell/Public/VisionPresentation/DarkwellStaticEnvironmentSubsystem.h
+@@ -16,6 +16,7 @@ class DARKWELL_API UDarkwellStaticEnvironmentSubsystem : public UWorldSubsystem
+  GENERATED_BODY()
+ public:
+  bool RegisterImmutable(UMeshComponent* Mesh,FLinearColor Tint);
++ bool RegisterImmutableSurfaceBox(class UStaticMeshComponent* Mesh,FName StableDomain,FLinearColor Tint);
+  void UpdateKnowledge();
+  void ClearMemory(const FBox2D& Region);
+  void SetMemoryWriteBlock(const FBox2D& Region,bool Enabled);

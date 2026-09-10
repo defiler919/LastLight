@@ -1,0 +1,18 @@
+{
+  "run": "surface_knowledge_perf_08",
+  "selector": "Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale+Darkwell.SightWeave.SurfaceKnowledge.RegionProof",
+  "exit_code": 0,
+  "wall_seconds": 27.2285137,
+  "total": 2,
+  "clean": 2,
+  "warnings": 0,
+  "failed": 0,
+  "not_run": 0,
+  "duration": 1.3531627655029297,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale+Darkwell.SightWeave.SurfaceKnowledge.RegionProof\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_projects\\LastLight\\Saved\\GrayObjectPolicy\\surface_knowledge_perf_08\\surface_knowledge_perf_08_Report -abslog=D:\\UE_projects\\LastLight\\Saved\\GrayObjectPolicy\\surface_knowledge_perf_08\\surface_knowledge_perf_08.log"
+  ],
+  "passed": true
+}

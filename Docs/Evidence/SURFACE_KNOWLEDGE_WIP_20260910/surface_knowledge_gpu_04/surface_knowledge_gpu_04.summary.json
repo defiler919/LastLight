@@ -1,0 +1,18 @@
+{
+  "run": "surface_knowledge_gpu_04",
+  "selector": "Darkwell.SightWeave.SurfaceKnowledge.ObjectStaticP4",
+  "exit_code": 0,
+  "wall_seconds": 25.5385677,
+  "total": 1,
+  "clean": 0,
+  "warnings": 0,
+  "failed": 1,
+  "not_run": 0,
+  "duration": 1.042453408241272,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.SightWeave.SurfaceKnowledge.ObjectStaticP4\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_projects\\LastLight\\Saved\\GrayObjectPolicy\\surface_knowledge_gpu_04\\surface_knowledge_gpu_04_Report -abslog=D:\\UE_projects\\LastLight\\Saved\\GrayObjectPolicy\\surface_knowledge_gpu_04\\surface_knowledge_gpu_04.log"
+  ],
+  "passed": false
+}

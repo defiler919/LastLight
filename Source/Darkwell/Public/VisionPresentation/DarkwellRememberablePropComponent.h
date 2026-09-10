@@ -25,6 +25,11 @@ public:
 	/** Explicit opt-in to the observation scene; prevents two presenters owning this source. */
 	UPROPERTY(EditAnywhere, Category="Fog Memory")
 	bool bUseSpatialMemory = false;
+ /** Explicit stationary Box contract; mutable/history actors keep legacy epochs. */
+ UPROPERTY(EditAnywhere,Category="Fog Memory")
+ bool bUseFixedSurfaceKnowledge=false;
+ UPROPERTY(EditAnywhere,Category="Fog Memory",meta=(ClampMin="1"))
+ int32 SurfaceContentVersion=1;
 	void SetMemoryAppearance(FLinearColor Tint, float UVScale)
 	{
 		if (RememberedTint != Tint || RememberedUVScale != UVScale) ++MemoryContentRevision;

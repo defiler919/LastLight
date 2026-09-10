@@ -16,6 +16,9 @@ class DARKWELL_API ADarkwellApartmentLab : public ADarkwellVisionIntegrationFixt
  GENERATED_BODY()
 public:
  ADarkwellApartmentLab();
+ /** Explicit stress/migration option. Flat floors retain the existing 2D store
+  * until large-area surface boundary preparation meets the frame budget. */
+ UPROPERTY(EditAnywhere,Category="Lab|Surface Knowledge") bool bObserveFloorSurfaces=false;
  virtual void BeginPlay() override;
  virtual void Tick(float Dt) override;
  virtual void EndPlay(EEndPlayReason::Type Reason) override;
@@ -33,8 +36,8 @@ public:
  UPROPERTY(Transient) TArray<TObjectPtr<ADarkwellDoor>> Doors;
  UPROPERTY(Transient) TArray<TObjectPtr<AActor>> Sources;
 private:
- void RegisterSource(AActor* Actor,FName Id,FLinearColor Tint,bool Whole,bool Moving=false);
- AActor* Box(FName Id,FVector Location,FVector Size,FLinearColor Tint,bool Whole=false,float Yaw=0,bool Immutable=false);
+ void RegisterSource(AActor* Actor,FName Id,FLinearColor Tint,bool Whole,bool Moving=false,bool Surface=false);
+ AActor* Box(FName Id,FVector Location,FVector Size,FLinearColor Tint,bool Whole=false,float Yaw=0,bool Immutable=false,bool Surface=true);
  TArray<FDarkwellVisionIntegrationSegment> FixedSegments;
  FSightWeaveIlluminationSourceHandle EnvironmentLight;
  bool bPlayerReady=false;

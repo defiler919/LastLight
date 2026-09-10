@@ -6,6 +6,7 @@
 #include "VisionPresentation/DarkwellCurrentLiveGrid.h"
 #include "SightWeaveObjectPolicy.h"
 #include "SightWeaveRevealObservation.h"
+#include "SightWeaveSurface.h"
 #include "DarkwellObjectMemoryScene.generated.h"
 
 struct FDarkwellWholePreparationState;
@@ -27,6 +28,8 @@ class DARKWELL_API ADarkwellObjectMemoryScene : public AActor
 #endif
 public:
  ADarkwellObjectMemoryScene();
+ bool HasSurfaceKnowledge(FName StableId,ESightWeaveBoxFace Face,FVector2D UV) const;
+ bool IsSurfaceObjectRecognized(FName StableId) const;
  virtual ~ADarkwellObjectMemoryScene() override;
  UFUNCTION(BlueprintPure, Category="SightWeave|Diagnostics")
  FString GetWholePreparationTelemetry() const;
@@ -745,6 +748,7 @@ protected:
 	UPROPERTY(Transient) TArray<TObjectPtr<UTexture2D>> OwnedTextures;
 	UPROPERTY(Transient) TArray<TObjectPtr<UDynamicMeshComponent>> OwnedCaps;
 	TMap<FName, FTrackedProp> Tracked;
+ TArray<FName> FixedSurfaceIds;
 	TMap<FIntPoint, TArray<FHistorySpatialKey>> HistoricalSpatialIndex;
 	TSet<FHistorySpatialKey> FrameHistoricalCandidates;
 	TSet<FIntPoint> FrameHistoryDirtyTiles;

@@ -1,0 +1,127 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "游戏策划1",
+			"instance": "0A8F58934966AA7422881AB60640FE42",
+			"instanceName": "游戏策划1-26000",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 11 (25H2) [10.0.26200.9445] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 4060",
+			"cPUModel": "13th Gen Intel(R) Core(TM) i5-13500",
+			"rAMInGB": 32,
+			"renderMode": "SM6",
+			"rHI": "",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.10-02.21.46",
+	"succeeded": 3,
+	"succeededWithWarnings": 0,
+	"failed": 1,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 0.14598730206489563,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "KnownGaps",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.CurrentModel.KnownGaps",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"0A8F58934966AA7422881AB60640FE42"
+			],
+			"duration": 0.015751399099826813,
+			"dateTime": "2026.09.10-02.21.46",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Known gaps reproduced; no production Surface Receiver exists. Spec tests are a reference, not integration acceptance.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-02.21.46"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PolicyAndMemory",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.CurrentModel.PolicyAndMemory",
+			"tags": [],
+			"state": "Fail",
+			"deviceInstance": [
+				"0A8F58934966AA7422881AB60640FE42"
+			],
+			"duration": 0.11200439929962158,
+			"dateTime": "2026.09.10-02.21.46",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Real store writes same Hard support' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_projects\\LastLight\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 169,
+					"timestamp": "2026.09.10-02.21.46"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Real store reobservation restores' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_projects\\LastLight\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 174,
+					"timestamp": "2026.09.10-02.21.46"
+				}
+			],
+			"warnings": 0,
+			"errors": 2,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Geometry",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.Spec.Geometry",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"0A8F58934966AA7422881AB60640FE42"
+			],
+			"duration": 0.0093255005776882172,
+			"dateTime": "2026.09.10-02.21.46",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Knowledge",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.Spec.Knowledge",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"0A8F58934966AA7422881AB60640FE42"
+			],
+			"duration": 0.0089059993624687195,
+			"dateTime": "2026.09.10-02.21.46",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

@@ -7,25 +7,27 @@
 #include "SightWeaveHardCoverage.h"
 #include "VisionPresentation/DarkwellStaticKnowledge.h"
 #include "UObject/Package.h"
+#include "Player/DarkwellCharacter.h"
+#include "Player/DarkwellObserverComponent.h"
 
 using namespace Darkwell::SurfaceObservationTests;
 namespace
 {
-constexpr auto Flags=EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter;
+constexpr auto SurfaceTestFlags=EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter;
 struct FRuntimeWorld
 {
  UWorld* World=nullptr;
  USightWeaveWorldSubsystem* Runtime=nullptr;
  FSightWeaveFloorId Floor{FName(TEXT("SurfaceFixture"))};
  FSightWeaveKnowledgeOwnerId Owner{FName(TEXT("Observer"))};
- FRuntimeWorld()
+ FRuntimeWorld(bool Physics=false)
  {
   if(!GEngine) return;
   World=NewObject<UWorld>(GetTransientPackage(),MakeUniqueObjectName(GetTransientPackage(),UWorld::StaticClass(),TEXT("SurfaceContract")),RF_Transient);
   World->WorldType=EWorldType::Game;
   GEngine->CreateNewWorldContext(World->WorldType).SetCurrentWorld(World);
-  World->InitializeNewWorld(UWorld::InitializationValues().InitializeScenes(false).AllowAudioPlayback(false)
-   .CreatePhysicsScene(false).RequiresHitProxies(false).CreateNavigation(false).CreateAISystem(false)
+  World->InitializeNewWorld(UWorld::InitializationValues().InitializeScenes(Physics).AllowAudioPlayback(false)
+   .CreatePhysicsScene(Physics).RequiresHitProxies(false).CreateNavigation(false).CreateAISystem(false)
    .ShouldSimulatePhysics(false).SetTransactional(false));
   Runtime=World->GetSubsystem<USightWeaveWorldSubsystem>();
   if(Runtime)
@@ -46,7 +48,7 @@ struct FRuntimeWorld
 };
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceGeometryContract,"Darkwell.SightWeave.SurfaceObservation.Spec.Geometry",Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceGeometryContract,"Darkwell.SightWeave.SurfaceObservation.Spec.Geometry",SurfaceTestFlags)
 bool FSurfaceGeometryContract::RunTest(const FString&)
 {
  const FVector Eye(-200,0,140);
@@ -87,7 +89,7 @@ bool FSurfaceGeometryContract::RunTest(const FString&)
  return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgeContract,"Darkwell.SightWeave.SurfaceObservation.Spec.Knowledge",Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceKnowledgeContract,"Darkwell.SightWeave.SurfaceObservation.Spec.Knowledge",SurfaceTestFlags)
 bool FSurfaceKnowledgeContract::RunTest(const FString&)
 {
  FReferenceLedger K; const TArray<FSolid> Solids{Cabinet()};
@@ -111,7 +113,7 @@ bool FSurfaceKnowledgeContract::RunTest(const FString&)
 
 // Characterization is intentionally GREEN while the documented product gap
 // exists. It does NOT assert surface acceptance. Replace it during receiver work.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceCurrentGaps,"Darkwell.SightWeave.SurfaceObservation.CurrentModel.KnownGaps",Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceCurrentGaps,"Darkwell.SightWeave.SurfaceObservation.LegacyConsumers.KnownGaps",SurfaceTestFlags)
 bool FSurfaceCurrentGaps::RunTest(const FString&)
 {
  FRuntimeWorld W; if(!TestNotNull(TEXT("Runtime"),W.Runtime)) return false;
@@ -141,11 +143,11 @@ bool FSurfaceCurrentGaps::RunTest(const FString&)
  TestFalse(TEXT("GAP: old height-overlap XY wall rejects view over low blocker"),W.Query(Top(75).Center).bVisible);
  const TArray<FSolid> LowBlocker{{FBox(FVector(-120,-50,0),FVector(-100,50,80))}};
  TestTrue(TEXT("Product sloped ray clears finite low blocker"),GeometricSupport({-200,0,140},Top(75),LowBlocker));
- AddInfo(TEXT("Known gaps reproduced; no production Surface Receiver exists. Spec tests are a reference, not integration acceptance."));
+ AddInfo(TEXT("Legacy XY consumer gaps reproduced. RuntimeV1 tests cover the new receiver API; Object/Static/P4 surface migration remains separate."));
  return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceRuntimePolicies,"Darkwell.SightWeave.SurfaceObservation.CurrentModel.PolicyAndMemory",Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceRuntimePolicies,"Darkwell.SightWeave.SurfaceObservation.CurrentModel.PolicyAndMemory",SurfaceTestFlags)
 bool FSurfaceRuntimePolicies::RunTest(const FString&)
 {
  FRuntimeWorld W; if(!TestNotNull(TEXT("Runtime"),W.Runtime)) return false;
@@ -185,6 +187,193 @@ bool FSurfaceRuntimePolicies::RunTest(const FString&)
  FSightWeaveHardSuppressionDescription Suppression; Suppression.FloorId=W.Floor; Suppression.Center={0,0}; Suppression.Radius=30; Suppression.HeightRange={-100,500};
  W.Runtime->RegisterHardLiveSuppression(Suppression,nullptr);
  TestTrue(TEXT("Suppression still defeats body bypass"),W.Query(P).bRejectedBySuppression && !W.Query(P).bEligibleForMemoryWrite);
+ return true;
+}
+
+namespace
+{
+FSightWeaveSurfaceBox Receiver(FRuntimeWorld& W,double Height=200)
+{
+ FSightWeaveSurfaceBox B;B.Id=TEXT("Cabinet");B.Floor=W.Floor;B.Pose=FTransform(FVector(0,0,Height/2));B.HalfExtent={40,30,Height/2};return B;
+}
+FSightWeaveSurfaceSample Sample(ESightWeaveBoxFace Face,FVector2D UV=FVector2D::ZeroVector)
+{return {TEXT("Cabinet"),Face,UV};}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceV1Geometry,"Darkwell.SightWeave.SurfaceObservation.RuntimeV1.Geometry",SurfaceTestFlags)
+bool FSurfaceV1Geometry::RunTest(const FString&)
+{
+ FRuntimeWorld W;if(!TestNotNull(TEXT("Runtime"),W.Runtime))return false;
+ auto Box=Receiver(W);TestTrue(TEXT("Register receiver"),W.Runtime->RegisterSurfaceBox(Box));
+ auto V=W.Vision({-200,0,140});auto H=W.Runtime->RegisterVisionSource(V,nullptr);
+ auto Visible=[&](ESightWeaveBoxFace Face){return W.Runtime->QuerySurfaceSample(W.Owner,Sample(Face)).Hard.bEligibleForMemoryWrite;};
+ TestTrue(TEXT("Real receiver front"),Visible(ESightWeaveBoxFace::NegativeX));
+ TestFalse(TEXT("Real receiver rejects high top"),Visible(ESightWeaveBoxFace::Top));
+ TestFalse(TEXT("Real receiver rejects unseen side"),Visible(ESightWeaveBoxFace::PositiveY));
+ const auto Before=W.Runtime->AcquirePublishedSnapshot();
+ V.Transform.SetLocation({-200,0,260});W.Runtime->UpdateVisionSource(H,V);
+ TestTrue(TEXT("Raised real observer sees same top"),Visible(ESightWeaveBoxFace::Top));
+ TestTrue(TEXT("Observer change reuses immutable geometry acceleration"),Before->SurfaceScene==W.Runtime->AcquirePublishedSnapshot()->SurfaceScene);
+ V.Transform.SetLocation({0,200,140});W.Runtime->UpdateVisionSource(H,V);
+ TestTrue(TEXT("New side becomes eligible"),Visible(ESightWeaveBoxFace::PositiveY));
+ TestFalse(TEXT("Old front no longer live"),Visible(ESightWeaveBoxFace::NegativeX));
+ Box=Receiver(W,75);W.Runtime->UpdateSurfaceBox(Box);V.Transform.SetLocation({-200,0,140});W.Runtime->UpdateVisionSource(H,V);
+ TestTrue(TEXT("Low top real receiver"),Visible(ESightWeaveBoxFace::Top));
+ FSightWeaveSegment2D Wall;Wall.A={-110,-50};Wall.B={-110,50};Wall.FloorId=W.Floor;Wall.HeightRange={0,80};
+ const auto WallHandle=W.Runtime->RegisterOccluder({Wall},true,true,nullptr);
+ TestFalse(TEXT("Legacy XY still blocked, cannot be surface broad-phase rejection"),W.Query({0,0,75}).bVisible);
+ TestTrue(TEXT("Finite wall: surface ray clears low obstacle"),Visible(ESightWeaveBoxFace::Top));
+ Wall.HeightRange.ZMax=180;W.Runtime->UpdateOccluder(WallHandle,{Wall},true,true);
+ TestFalse(TEXT("Finite wall raised now blocks"),Visible(ESightWeaveBoxFace::Top));
+ W.Runtime->UnregisterOccluder(WallHandle);
+ auto Block=Box;Block.Id=TEXT("External");Block.Pose=FTransform(FVector(-110,0,90));Block.HalfExtent={10,50,90};W.Runtime->RegisterSurfaceBox(Block);
+ TestFalse(TEXT("External finite solid blocks"),Visible(ESightWeaveBoxFace::Top));
+ Block.HalfExtent.Z=40;Block.Pose.SetLocation({-110,0,40});W.Runtime->UpdateSurfaceBox(Block);
+ TestTrue(TEXT("External low solid can be seen over"),Visible(ESightWeaveBoxFace::Top));
+ W.Runtime->UnregisterSurfaceBox(Block.Id);
+ Box=Receiver(W);W.Runtime->UpdateSurfaceBox(Box);
+ // Independent oracle: manually specify each local face; do not use production Resolve.
+ const FVector Centers[]={{-40,0,100},{40,0,100},{0,-30,100},{0,30,100},{0,0,0},{0,0,200}};
+ const FVector Normals[]={{-1,0,0},{1,0,0},{0,-1,0},{0,1,0},{0,0,-1},{0,0,1}};
+ int Checks=0;
+ for(double Yaw:{0.,37.,90.})
+ {
+  const FRotator Rotation(Yaw==37?20:0,Yaw,0);
+  const FTransform Pose(Rotation,FVector(0,0,0));Box.Pose=FTransform(Rotation,Pose.TransformPosition(FVector(0,0,100)));W.Runtime->UpdateSurfaceBox(Box);
+  auto Solid=Cabinet();Solid.Pose=Pose;const TArray<FSolid> Solids{Solid};
+  for(FVector Eye:{FVector(-200,0,140),FVector(0,200,140),FVector(200,0,260),FVector(0,0,100),FVector(-200,0,200)})
+  {
+   V.Transform.SetLocation(Pose.TransformPosition(Eye));W.Runtime->UpdateVisionSource(H,V);
+   for(int Face=0;Face<6;++Face)
+   {
+    const FPatch P{TEXT("Oracle"),Pose.TransformPosition(Centers[Face]),Pose.TransformVector(Normals[Face]),FVector::ZeroVector,FVector::ZeroVector};
+    const auto Q=W.Runtime->QuerySurfaceSample(W.Owner,Sample(ESightWeaveBoxFace(Face)));
+    TestTrue(TEXT("Independent world receiver coordinates"),Q.WorldPoint.Equals(P.Center,1.e-6));
+    TestEqual(TEXT("Real surface matches independent solid oracle"),Q.Hard.bVisible,GeometricSupport(Pose.TransformPosition(Eye),P,Solids));++Checks;
+   }
+  }
+ }
+ TestEqual(TEXT("All independent oracle cases executed"),Checks,90);
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceV1Policy,"Darkwell.SightWeave.SurfaceObservation.RuntimeV1.Policy",SurfaceTestFlags)
+bool FSurfaceV1Policy::RunTest(const FString&)
+{
+ FRuntimeWorld W;if(!TestNotNull(TEXT("Runtime"),W.Runtime))return false;
+ W.Runtime->RegisterSurfaceBox(Receiver(W));auto V=W.Vision({-200,0,140},false);V.Shape=ESightWeaveSourceShape::DirectionalCone;V.HalfAngleDegrees=45;
+ auto H=W.Runtime->RegisterVisionSource(V,nullptr);const auto FrontSample=Sample(ESightWeaveBoxFace::NegativeX);
+ auto Q=[&](){return W.Runtime->QuerySurfaceSample(W.Owner,FrontSample).Hard;};
+ TestFalse(TEXT("Surface vision requires legal light"),Q().bEligibleForMemoryWrite);
+ FSightWeaveIlluminationSourceDescription L;L.KnowledgeOwnerId=W.Owner;L.FloorId=W.Floor;L.Transform=FTransform(FVector(-200,0,140));L.HeightRange={-100,500};L.Range=800;L.EmittedCapabilities={FName(TEXT("Other"))};
+ auto Light=W.Runtime->RegisterIlluminationSource(L,nullptr);
+ TestFalse(TEXT("Incompatible surface light"),Q().bVisible);
+ L.EmittedCapabilities={FName(TEXT("Visible"))};W.Runtime->UpdateIlluminationSource(Light,L);
+ TestTrue(TEXT("Same Runtime light attribution"),Q().bVisible && Q().ContributingIlluminationSources.Contains(Light));
+ L.Transform.SetLocation({200,0,140});W.Runtime->UpdateIlluminationSource(Light,L);
+ TestFalse(TEXT("Lamp behind self solid cannot illuminate front"),Q().bVisible);
+ L.Transform.SetLocation({-200,200,140});W.Runtime->UpdateIlluminationSource(Light,L);
+ auto Block=Receiver(W);Block.Id=TEXT("LightBlocker");Block.Pose=FTransform(FVector(-120,100,100));Block.HalfExtent={20,20,100};W.Runtime->RegisterSurfaceBox(Block);
+ TestFalse(TEXT("Light-only external occlusion rejects observer-visible surface"),Q().bVisible);
+ W.Runtime->UnregisterSurfaceBox(Block.Id);TestTrue(TEXT("Removing light blocker restores surface"),Q().bVisible);
+ L.HeightRange={200,300};W.Runtime->UpdateIlluminationSource(Light,L);TestFalse(TEXT("Surface light height remains legal predicate"),Q().bVisible);
+ L.HeightRange={-100,500};W.Runtime->UpdateIlluminationSource(Light,L);
+ V.Transform.SetRotation(FRotator(0,180,0).Quaternion());W.Runtime->UpdateVisionSource(H,V);TestFalse(TEXT("Direction away refuses surface"),Q().bVisible);
+ // Multiple sources may not borrow the bypass policy of a backfacing observer.
+ auto Behind=W.Vision({200,0,140});auto BehindH=W.Runtime->RegisterVisionSource(Behind,nullptr);
+ TestFalse(TEXT("No cross-source pose/policy borrowing"),Q().bVisible);W.Runtime->UnregisterVisionSource(BehindH);
+ auto Body=W.Vision({-80,0,140});Body.Range=120;auto BodyH=W.Runtime->RegisterVisionSource(Body,nullptr);
+ L.bActive=false;W.Runtime->UpdateIlluminationSource(Light,L);
+ TestTrue(TEXT("Near body retains dark bypass for actual front"),Q().bUsedBypass && Q().bVisible);
+ TestFalse(TEXT("Near body never grants unseen top"),W.Runtime->QuerySurfaceSample(W.Owner,Sample(ESightWeaveBoxFace::Top)).Hard.bVisible);
+ FSightWeaveHardSuppressionDescription S;S.FloorId=W.Floor;S.Center={-40,0};S.Radius=20;S.HeightRange={-100,500};
+ auto Supp=W.Runtime->RegisterHardLiveSuppression(S,nullptr);TestTrue(TEXT("Surface suppression wins over bypass"),Q().bRejectedBySuppression && !Q().bEligibleForMemoryWrite);
+ W.Runtime->UnregisterHardLiveSuppression(Supp);W.Runtime->UnregisterVisionSource(BodyH);
+ TestFalse(TEXT("Removing only legal source removes surface live"),Q().bVisible);
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceV1Cache,"Darkwell.SightWeave.SurfaceObservation.RuntimeV1.BatchLifecycle",SurfaceTestFlags)
+bool FSurfaceV1Cache::RunTest(const FString&)
+{
+ FRuntimeWorld W;if(!TestNotNull(TEXT("Runtime"),W.Runtime))return false;
+ auto Box=Receiver(W);W.Runtime->RegisterSurfaceBox(Box);auto V=W.Vision({-200,0,140});auto H=W.Runtime->RegisterVisionSource(V,nullptr);
+ TArray<FSightWeaveSurfaceSample> Samples{Sample(ESightWeaveBoxFace::NegativeX),Sample(ESightWeaveBoxFace::Top)};
+ TArray<FSightWeaveSurfaceResult> Results;FSightWeaveSurfaceQueryCache Cache;FSightWeaveSurfaceQueryStats Stats;
+ W.Runtime->QuerySurfaceSamples(W.Owner,Samples,Results,&Cache,&Stats);
+ TestTrue(TEXT("Same box has distinct surface results"),Results[0].Hard.bVisible && !Results[1].Hard.bVisible);
+ const auto OldFrame=Cache.Frame;const uint64 OldRevision=Results[0].ReceiverRevision;
+ W.Runtime->QuerySurfaceSamples(W.Owner,Samples,Results,&Cache,&Stats);TestEqual(TEXT("Exact repeated batch cached"),Stats.CacheHits,uint64(2));
+ V.Transform.SetLocation({-200,0,260});W.Runtime->UpdateVisionSource(H,V);W.Runtime->QuerySurfaceSamples(W.Owner,Samples,Results,&Cache,&Stats);
+ TestTrue(TEXT("Eye update invalidates result cache"),Results[1].Hard.bVisible && Cache.Frame!=OldFrame);
+ TestTrue(TEXT("Old scene immutable"),OldFrame->SurfaceScene->Find(Box.Id)->Box.HalfExtent.Z==100);
+ Box.HalfExtent.Z=150;W.Runtime->UpdateSurfaceBox(Box);W.Runtime->QuerySurfaceSamples(W.Owner,Samples,Results,&Cache,&Stats);
+ TestTrue(TEXT("Geometry revision invalidates cached surface"),Results[0].ReceiverRevision!=OldRevision);
+ TestTrue(TEXT("Old geometry remains unchanged"),OldFrame->SurfaceScene->Find(Box.Id)->Box.HalfExtent.Z==100);
+ TestFalse(TEXT("Duplicate identity rejected"),W.Runtime->RegisterSurfaceBox(Box));
+ auto Invalid=Box;Invalid.Pose.SetScale3D({2,1,1});TestFalse(TEXT("Unsupported scale rejected explicitly"),W.Runtime->UpdateSurfaceBox(Invalid));
+ TestFalse(TEXT("Out of domain sample rejected"),W.Runtime->QuerySurfaceSample(W.Owner,Sample(ESightWeaveBoxFace::Top,{1.01,0})).Hard.bAuthoritative);
+ W.Runtime->UnregisterSurfaceBox(Box.Id);W.Runtime->QuerySurfaceSamples(W.Owner,Samples,Results,&Cache,&Stats);TestEqual(TEXT("Removed receiver rejected"),Results[0].Hard.Status,ESightWeaveQueryStatus::InvalidHandle);
+ W.Runtime->RegisterSurfaceBox(Box);TestTrue(TEXT("Re-registration has new lifetime revision"),W.Runtime->QuerySurfaceSample(W.Owner,Samples[0]).ReceiverRevision>OldRevision);
+ auto* LifetimeOwner=NewObject<UDarkwellObserverComponent>(W.World);auto Owned=Box;Owned.Id=TEXT("Owned");W.Runtime->RegisterSurfaceBox(Owned,LifetimeOwner);
+ W.Runtime->UnregisterAllForOwner(LifetimeOwner);TestEqual(TEXT("Explicit owner teardown removes surface"),W.Runtime->QuerySurfaceSample(W.Owner,{Owned.Id,ESightWeaveBoxFace::Top,{0,0}}).Hard.Status,ESightWeaveQueryStatus::InvalidHandle);
+ W.Runtime->QuerySurfaceSamples(FSightWeaveKnowledgeOwnerId(FName(TEXT("Other"))),Samples,Results,&Cache,&Stats);TestFalse(TEXT("Owner isolation invalidates cache"),Results[0].Hard.bVisible);
+ FSightWeaveIlluminationSourceDescription Lamp;Lamp.FloorId=W.Floor;Lamp.KnowledgeOwnerId=W.Owner;Lamp.Transform=FTransform(FVector(-200,0,140));
+ auto LampH=W.Runtime->RegisterIlluminationSource(Lamp,nullptr);
+ const auto Revision=W.Runtime->AcquirePublishedSnapshot()->Revision.GetValue();
+ const FSightWeaveVisionSourceHandle Eyes[]={H};const FSightWeaveIlluminationSourceHandle Lamps[]={LampH};
+ TestTrue(TEXT("Atomic separate observer/lamp update"),W.Runtime->UpdateSourceGroupPoses(Eyes,Lamps,FTransform(FVector(-200,0,300)),FTransform(FVector(-200,0,120))));
+ TestEqual(TEXT("Exactly one revision for both poses"),W.Runtime->AcquirePublishedSnapshot()->Revision.GetValue(),Revision+1);
+ const auto Stable=W.Runtime->AcquirePublishedSnapshot();const FSightWeaveIlluminationSourceHandle Bad[]={FSightWeaveIlluminationSourceHandle(999999)};
+ TestFalse(TEXT("Invalid handle rejects entire pose transaction"),W.Runtime->UpdateSourceGroupPoses(Eyes,Bad,FTransform(FVector(0,0,100)),FTransform::Identity));
+ TestTrue(TEXT("Rejected transaction publishes nothing"),Stable==W.Runtime->AcquirePublishedSnapshot());
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceV1Observer,"Darkwell.SightWeave.SurfaceObservation.RuntimeV1.ObserverPose",SurfaceTestFlags)
+bool FSurfaceV1Observer::RunTest(const FString&)
+{
+ FRuntimeWorld W(true);if(!TestNotNull(TEXT("Runtime"),W.Runtime))return false;
+ FActorSpawnParameters Params;Params.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+ auto* Character=W.World->SpawnActor<ADarkwellCharacter>(FVector(0,0,88),FRotator::ZeroRotator,Params);
+ if(!TestNotNull(TEXT("Character"),Character))return false;
+ auto* Observer=Character->GetObserverComponent();TestEqual(TEXT("Standing eye from capsule feet"),Observer->GetObserverPose().GetLocation().Z,162.);
+ Observer->SetObserverWorldDirection(FRotator(0,90,0));Character->SetActorRotation(FRotator(0,180,0));
+ TestTrue(TEXT("Observer yaw independent of body"),Observer->GetObserverPose().GetRotation().GetForwardVector().Equals(FVector(0,1,0),1.e-6));
+ Observer->SetObserverWorldPose(FTransform(FVector(100,200,260)));TestTrue(TEXT("Dynamic position exact"),Observer->GetObserverPose().GetLocation()==FVector(100,200,260));
+ Observer->ClearObserverWorldPose();Observer->StandingHeightCm=95;TestEqual(TEXT("Dynamic stance configuration"),Observer->GetObserverPose().GetLocation().Z,95.);
+ Character->AddActorWorldOffset({0,0,100});TestEqual(TEXT("Standing on elevated geometry follows world feet"),Observer->GetObserverPose().GetLocation().Z,195.);
+ Observer->ClearObserverWorldDirection();TestTrue(TEXT("Default body driver restored"),Observer->GetObserverPose().GetRotation().Equals(Character->GetActorQuat()));
+ return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceV1Performance,"Darkwell.SightWeave.SurfaceObservation.RuntimeV1.BoundedPerformance",SurfaceTestFlags)
+bool FSurfaceV1Performance::RunTest(const FString&)
+{
+ FRuntimeWorld W;if(!TestNotNull(TEXT("Runtime"),W.Runtime))return false;
+ W.Runtime->RegisterSurfaceBox(Receiver(W));auto MovingVision=W.Vision({-200,0,140});const auto MovingHandle=W.Runtime->RegisterVisionSource(MovingVision,nullptr);
+ // Off-ray geometry remains registered to measure acceleration, not removed.
+ for(int I=0;I<256;++I){auto B=Receiver(W);B.Id=FName(*FString::Printf(TEXT("Far%d"),I));B.Pose.SetLocation({double(I%16)*100,2000.+double(I/16)*100,100});W.Runtime->RegisterSurfaceBox(B);}
+ TArray<FSightWeaveSurfaceSample> Samples;for(int Y=0;Y<20;++Y)for(int X=0;X<20;++X)Samples.Add(Sample(ESightWeaveBoxFace::NegativeX,{-.9+X*.09,-.9+Y*.09}));
+ TArray<FSightWeaveSurfaceResult> Results;FSightWeaveSurfaceQueryCache Cache;FSightWeaveSurfaceQueryStats Stats;
+ const double Start=FPlatformTime::Seconds();W.Runtime->QuerySurfaceSamples(W.Owner,Samples,Results,&Cache,&Stats);const double Cold=(FPlatformTime::Seconds()-Start)*1.e6;
+ TestEqual(TEXT("Exact batch count"),Stats.ExactSamples,uint64(400));
+ TestTrue(TEXT("BVH avoids all-solid scan"),Stats.PrimitiveTests<400*8);
+ for(const auto& R:Results)TestTrue(TEXT("Bounded workload still fully legal"),R.Hard.bVisible);
+ TArray<double> Times;for(int I=0;I<100;++I){const double T=FPlatformTime::Seconds();W.Runtime->QuerySurfaceSamples(W.Owner,Samples,Results,&Cache,&Stats);Times.Add((FPlatformTime::Seconds()-T)*1.e6);}
+ Times.Sort();TestEqual(TEXT("Warm batches do not add exact geometry work"),Stats.ExactSamples,uint64(400));
+ TestEqual(TEXT("All warm requests served by exact cache"),Stats.CacheHits,uint64(40000));
+ AddInfo(FString::Printf(TEXT("SURFACE_V1_PERF boxes=257 samples=400 cold_us=%.3f warm_p95_us=%.3f warm_p99_us=%.3f nodes=%llu primitives=%llu cache_hits=%llu"),Cold,Times[94],Times[98],Stats.NodeVisits,Stats.PrimitiveTests,Stats.CacheHits));
+ TArray<double> DirtyTimes,PublishTimes;const auto Scene=W.Runtime->AcquirePublishedSnapshot()->SurfaceScene;
+ for(int I=0;I<100;++I)
+ {
+  MovingVision.Transform.SetLocation({-200,0,140.+I*.1});const double P=FPlatformTime::Seconds();W.Runtime->UpdateVisionSource(MovingHandle,MovingVision);
+  PublishTimes.Add((FPlatformTime::Seconds()-P)*1.e6);const double T=FPlatformTime::Seconds();
+  W.Runtime->QuerySurfaceSamples(W.Owner,Samples,Results,&Cache,&Stats);DirtyTimes.Add((FPlatformTime::Seconds()-T)*1.e6);
+ }
+ DirtyTimes.Sort();PublishTimes.Sort();
+ TestTrue(TEXT("Moving observer never rebuilds surface BVH"),Scene==W.Runtime->AcquirePublishedSnapshot()->SurfaceScene);
+ AddInfo(FString::Printf(TEXT("SURFACE_V1_DIRTY samples=400 query_p95_us=%.3f query_p99_us=%.3f source_publish_p95_us=%.3f source_publish_p99_us=%.3f"),DirtyTimes[94],DirtyTimes[98],PublishTimes[94],PublishTimes[98]));
  return true;
 }
 #endif

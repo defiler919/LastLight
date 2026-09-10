@@ -9,6 +9,7 @@
 #include "DarkwellCharacter.generated.h"
 
 class UCameraComponent;
+class UDarkwellObserverComponent;
 class UDarkwellInteractionComponent;
 class UDarkwellInventoryComponent;
 class UDarkwellLoadoutComponent;
@@ -51,6 +52,7 @@ public:
 	UDarkwellInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
 	UDarkwellVisibilityComponent* GetVisibilityComponent() const { return VisibilityComponent; }
 	UCameraComponent* GetTopDownCamera() const { return TopDownCamera; }
+ UDarkwellObserverComponent* GetObserverComponent() const {return ObserverComponent;}
 	float GetHealth() const { return Health; }
 	float GetMaxHealth() const { return MaxHealth; }
 	float GetDamageFeedbackAlpha() const;
@@ -78,6 +80,8 @@ protected:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 private:
+ UPROPERTY(VisibleAnywhere,Category="Observation")
+ TObjectPtr<UDarkwellObserverComponent> ObserverComponent;
 	void AddDefaultInputMapping();
 	void MoveForward(const FInputActionValue& Value);
 	void MoveBackward(const FInputActionValue& Value);

@@ -12,6 +12,7 @@
 #include "SightWeavePreparedEventIndexStats.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "SightWeaveTypes.h"
+#include "SightWeaveSurface.h"
 
 #include "SightWeaveWorldSubsystem.generated.h"
 
@@ -166,7 +167,10 @@ public:
  /** Atomically move attached source groups. Validate all handles before any change;
   * publish the final coherent pose once, preserving non-transform metadata. */
  bool UpdateSourceGroupTransform(TConstArrayView<FSightWeaveVisionSourceHandle> VisionHandles,
-  TConstArrayView<FSightWeaveIlluminationSourceHandle> IlluminationHandles,const FTransform& Transform);
+ TConstArrayView<FSightWeaveIlluminationSourceHandle> IlluminationHandles,const FTransform& Transform);
+ /** Separate eye and lamp poses, still one coherent publication. */
+ bool UpdateSourceGroupPoses(TConstArrayView<FSightWeaveVisionSourceHandle> VisionHandles,
+  TConstArrayView<FSightWeaveIlluminationSourceHandle> IlluminationHandles,const FTransform& Observer,const FTransform& Lamp);
 
 	UFUNCTION(BlueprintCallable, Category = "SightWeave|Vision")
 	bool UnregisterVisionSource(FSightWeaveVisionSourceHandle Handle);
@@ -474,7 +478,21 @@ public:
 		DirtyIlluminationSources.Reset();
 	}
 
+public:
+ bool RegisterSurfaceBox(const FSightWeaveSurfaceBox& Box,UObject* Owner=nullptr);
+ bool UpdateSurfaceBox(const FSightWeaveSurfaceBox& Box);
+ bool UnregisterSurfaceBox(FName Id);
+ FSightWeaveSurfaceResult QuerySurfaceSample(FSightWeaveKnowledgeOwnerId Owner,const FSightWeaveSurfaceSample& Sample) const;
+ /** Exact point batch; no whole-face/region inference or memory mutation. */
+ void QuerySurfaceSamples(FSightWeaveKnowledgeOwnerId Owner,TConstArrayView<FSightWeaveSurfaceSample> Samples,
+  TArray<FSightWeaveSurfaceResult>& Results,FSightWeaveSurfaceQueryCache* Cache=nullptr,FSightWeaveSurfaceQueryStats* Stats=nullptr) const;
 private:
+ TMap<FName,FSightWeaveSurfaceScene::FReceiver> SurfaceBoxes;
+ TMap<FName,TWeakObjectPtr<UObject>> SurfaceOwners;
+ uint64 SurfaceSerial=0;
+ bool bSurfaceSceneDirty=true;
+ FSightWeaveRevision SurfaceOccluderRevision;
+ TSharedPtr<const FSightWeaveSurfaceScene,ESPMode::ThreadSafe> SurfaceScene;
 	void PublishMemoryAuthorityPacket(bool bForceFullRebuild = false);
 	void PublishStaticEnvironmentPacket();
 	void AdvanceRevision();
@@ -514,7 +532,8 @@ private:
 		int32 PrefilteredVisionEntryCount = 0,
 		uint64 PrefilteredIlluminationEligibilityMask = 0,
 		bool bPrefilteredHeightMismatch = false,
-		bool bUsePrefilteredBatchState = false) const;
+		bool bUsePrefilteredBatchState = false,
+  const FSightWeaveSurfaceContext* Surface = nullptr) const;
 	void InitializeQueryResult(
 		FSightWeaveVisibilityQueryResult& Result,
 		ESightWeaveQueryStatus Status,

@@ -267,6 +267,8 @@ struct SIGHTWEAVERUNTIME_API FSightWeaveFrameSnapshot
 {
 	GENERATED_BODY()
 
+ TSharedPtr<const class FSightWeaveSurfaceScene,ESPMode::ThreadSafe> SurfaceScene;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SightWeave|Snapshot")
 	FSightWeaveRevision Revision;
 

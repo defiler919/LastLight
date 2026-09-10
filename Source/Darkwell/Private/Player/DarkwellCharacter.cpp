@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Player/DarkwellCharacter.h"
+#include "Player/DarkwellObserverComponent.h"
 
 #include "Camera/CameraComponent.h"
 #include "Combat/DarkwellLoadoutComponent.h"
@@ -31,6 +32,7 @@ ADarkwellCharacter::ADarkwellCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	GetCapsuleComponent()->InitCapsuleSize(42.0f, 88.0f);
+ ObserverComponent=CreateDefaultSubobject<UDarkwellObserverComponent>(TEXT("ObserverPose"));
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;

@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Visibility/SightWeave/DarkwellSightWeaveWorldSubsystem.h"
+#include "Player/DarkwellObserverComponent.h"
 
 #include "AI/DarkwellStalkerCharacter.h"
 #include "Camera/CameraComponent.h"
@@ -100,8 +101,7 @@ namespace Darkwell::SightWeaveAdapter
 
 	FTransform BuildSourceTransform(const ADarkwellCharacter& Character)
 	{
-		return FTransform(Character.GetActorRotation(),
-			Character.GetActorLocation() + FVector(0.0, 0.0, 52.0));
+		return Character.GetObserverComponent()->GetObserverPose();
 	}
 }
 
@@ -818,7 +818,7 @@ bool UDarkwellSightWeaveWorldSubsystem::ValidateAndBuildDescriptions(
 	OutCone.Compatibility.Normalize();
 
 	const UDarkwellLoadoutComponent* Loadout = OutPlayer->GetLoadoutComponent();
-	OutTorch.Transform = SourceTransform;
+	OutTorch.Transform = FTransform(OutPlayer->GetActorRotation(),OutPlayer->GetActorLocation()+FVector(0,0,52));
 	OutTorch.KnowledgeOwnerId = Owner;
 	OutTorch.FloorId = OutFloor.FloorId;
 	OutTorch.HeightRange = HeightRange;
@@ -917,15 +917,16 @@ void UDarkwellSightWeaveWorldSubsystem::UpdateDynamicAuthority()
 		return;
 	}
 	const FTransform Transform = Darkwell::SightWeaveAdapter::BuildSourceTransform(*Character);
-	if (!BodyDescription.Transform.Equals(Transform))
+ const FTransform LightTransform(Character->GetActorRotation(),Character->GetActorLocation()+FVector(0,0,52));
+	if (!BodyDescription.Transform.Equals(Transform) || !TorchDescription.Transform.Equals(LightTransform))
 	{
 		BodyDescription.Transform = Transform;
 		ConeDescription.Transform = Transform;
-		TorchDescription.Transform = Transform;
   const FSightWeaveVisionSourceHandle VisionHandles[]={BodyVisionHandle,ConeVisionHandle};
-  const FSightWeaveIlluminationSourceHandle IlluminationHandles[]={TorchIlluminationHandle};
-  RuntimeSubsystem->UpdateSourceGroupTransform(VisionHandles,IlluminationHandles,Transform);
-	}
+  TorchDescription.Transform=LightTransform;
+  const FSightWeaveIlluminationSourceHandle Lights[]={TorchIlluminationHandle};
+  RuntimeSubsystem->UpdateSourceGroupPoses(VisionHandles,Lights,Transform,LightTransform);
+ }
 	const UDarkwellLoadoutComponent* Loadout = Character->GetLoadoutComponent();
 	const bool bTorchActive = Loadout && Character->IsAlive()
 		&& ((Loadout->IsTorchOn() && Loadout->GetTorchCharge() > 0.0f) || Loadout->IsLanternOn());

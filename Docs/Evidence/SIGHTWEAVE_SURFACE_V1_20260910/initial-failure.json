@@ -1,0 +1,5 @@
+{
+  "succeeded": 26,
+  "failed": 1,
+  "failure": "BatchLifecycle fixture instantiated abstract UObject; replaced with concrete UDarkwellObserverComponent. Runtime geometry/policy/observer/performance and prior contracts passed."
+}

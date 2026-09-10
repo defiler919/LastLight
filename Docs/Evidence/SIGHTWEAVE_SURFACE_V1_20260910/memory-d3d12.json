@@ -1,0 +1,558 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "游戏策划1",
+			"instance": "00661FBB4A8370B1E169A6B6965BF740",
+			"instanceName": "游戏策划1-24844",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 11 (25H2) [10.0.26200.9445] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 4060",
+			"cPUModel": "13th Gen Intel(R) Core(TM) i5-13500",
+			"rAMInGB": 32,
+			"renderMode": "D3D12_SM6",
+			"rHI": "D3D12 (SM6)",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.10-03.02.26",
+	"succeeded": 5,
+	"succeededWithWarnings": 2,
+	"failed": 0,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 30.085012435913086,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "SpatialPartialStaticKeepsLegalCap",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"00661FBB4A8370B1E169A6B6965BF740"
+			],
+			"duration": 0.253684401512146,
+			"dateTime": "2026.09.10-03.01.56",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WholeObjectConfirmedStaticHistory",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"00661FBB4A8370B1E169A6B6965BF740"
+			],
+			"duration": 0.19253969192504883,
+			"dateTime": "2026.09.10-03.01.56",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "AxisMembership",
+			"fullTestPath": "Darkwell.UnknownPartial.AxisMembership",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"00661FBB4A8370B1E169A6B6965BF740"
+			],
+			"duration": 0.010598503053188324,
+			"dateTime": "2026.09.10-03.01.57",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SampleCut",
+			"fullTestPath": "Darkwell.UnknownPartial.SampleCut",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"00661FBB4A8370B1E169A6B6965BF740"
+			],
+			"duration": 15.786550521850586,
+			"dateTime": "2026.09.10-03.01.57",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "OUTSIDE_FINE_REFERENCE facts=0 known_aa=0 unknown_unused_aa=1396",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.01.57"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.01.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=1986 unpadded_dips=1974 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.01.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_CAP_DIAGNOSTIC quads=440 axis_x=357 axis_y=177",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.01.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=A fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.00"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.01"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=1986 unpadded_dips=1974 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.02"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=B fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.02"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.04"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=1986 unpadded_dips=1974 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.04"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=C fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.04"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.06"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=A_Rect fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.07"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.09"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.09"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=B_Rect fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.12"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.12"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=C_Rect fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.12"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "TemporalSurface",
+			"fullTestPath": "Darkwell.UnknownPartial.TemporalSurface",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"00661FBB4A8370B1E169A6B6965BF740"
+			],
+			"duration": 5.5799956321716309,
+			"dateTime": "2026.09.10-03.02.13",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogConsoleManager: Console variable 'r.MotionVectorSimulation' used in the render thread. Rendering artifacts could happen. Use ECVF_RenderThreadSafe or don't use in render thread.",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.13"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=01_gray engine_frame=1254 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.14"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=07_rotated_resweep engine_frame=1349 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.16"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=08_live_transaction engine_frame=1375 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.17"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=08b_left_blocked engine_frame=1390 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.17"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=08c_unblock_first_frame engine_frame=1391 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.17"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=09_no_resurrection engine_frame=1401 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.17"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=12_rotated_reobserved engine_frame=1441 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.18"
+				}
+			],
+			"warnings": 1,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SpatialPartial",
+			"fullTestPath": "Darkwell.UnknownRegion.SpatialPartial",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"00661FBB4A8370B1E169A6B6965BF740"
+			],
+			"duration": 3.8730869293212891,
+			"dateTime": "2026.09.10-03.02.18",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=SpatialPartial sequence=A passed_old_resurrection=0 revision=6",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.19"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=SpatialPartial sequence=B passed_old_resurrection=0 revision=6",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=SpatialPartial sequence=C passed_old_resurrection=0 revision=8",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.22"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Whole",
+			"fullTestPath": "Darkwell.UnknownRegion.Whole",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"00661FBB4A8370B1E169A6B6965BF740"
+			],
+			"duration": 4.3885560035705566,
+			"dateTime": "2026.09.10-03.02.22",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=Whole sequence=A passed_old_resurrection=0 revision=6",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.23"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=Whole sequence=B passed_old_resurrection=0 revision=6",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.25"
+				},
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogHttp: HTTP request timed out after 3.00 seconds URL=https://www.google.com/generate_204",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.25"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=Whole sequence=C passed_old_resurrection=0 revision=8",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.10-03.02.26"
+				}
+			],
+			"warnings": 1,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

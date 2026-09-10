@@ -25,6 +25,7 @@
 #include "SightWeaveStaticEnvironment.h"
 #include "SightWeaveWorldSubsystem.h"
 #include "SightWeaveHardCoverage.h"
+#include "Player/DarkwellObserverComponent.h"
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "UObject/Package.h"
 #include "UObject/GarbageCollection.h"
@@ -144,6 +145,20 @@ bool FDarkwellVisionLightDifferential::RunTest(const FString&)
  if(!TestTrue(TEXT("D3D12 required; no synthetic GPU substitute"),GDynamicRHI && FString(GDynamicRHI->GetName()).Contains(TEXT("D3D12"))))return false;
  Player->GetLoadoutComponent()->RestorePersistentState(2,0,0,0,DarkwellGameplayTags::Equipment_Left_Shotgun,DarkwellGameplayTags::Equipment_Right_Torch);
  Adapter->Tick(0);
+ // Real adapter consumes independent observer pose; lamp stays with its own driver.
+ const FTransform BodyPose=Player->GetActorTransform();
+ const FVector ObserverOverride=BodyPose.GetLocation()+FVector(0,0,170);
+ Player->GetObserverComponent()->SetObserverWorldPose(FTransform(ObserverOverride));
+ Player->GetObserverComponent()->SetObserverWorldDirection(FRotator(0,37,0));Adapter->Tick(0);
+ for(const auto& Entry:Runtime->AcquirePublishedSnapshot()->VisionSources)
+ {
+  TestTrue(TEXT("Adapter publishes dynamic eye position"),Entry.Description.Transform.GetLocation().Equals(ObserverOverride));
+  TestTrue(TEXT("Adapter publishes direction independently of body"),Entry.Description.Transform.GetRotation().Equals(FRotator(0,37,0).Quaternion()));
+ }
+ for(const auto& Entry:Runtime->AcquirePublishedSnapshot()->IlluminationSources)
+  TestTrue(TEXT("Eye override does not move attached lamp"),Entry.Description.Transform.GetLocation().Equals(BodyPose.GetLocation()+FVector(0,0,52)));
+ Player->GetObserverComponent()->ClearObserverWorldPose();Player->GetObserverComponent()->ClearObserverWorldDirection();Adapter->Tick(0);
+ TestEqual(TEXT("Default character height is configuration from feet"),Player->GetObserverComponent()->GetObserverPose().GetLocation().Z,166.);
  FSightWeaveVisionSourceDescription Cone;
  for(const auto& V:Runtime->AcquirePublishedSnapshot()->VisionSources)
   if(V.Description.Shape==ESightWeaveSourceShape::DirectionalCone)Cone=V.Description;

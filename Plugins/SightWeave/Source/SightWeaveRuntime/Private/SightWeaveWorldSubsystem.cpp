@@ -562,22 +562,28 @@ bool USightWeaveWorldSubsystem::UpdateVisionSourceTransform(
 bool USightWeaveWorldSubsystem::UpdateSourceGroupTransform(
  TConstArrayView<FSightWeaveVisionSourceHandle> VisionHandles,
  TConstArrayView<FSightWeaveIlluminationSourceHandle> IlluminationHandles,const FTransform& Transform)
+{return UpdateSourceGroupPoses(VisionHandles,IlluminationHandles,Transform,Transform);}
+
+bool USightWeaveWorldSubsystem::UpdateSourceGroupPoses(
+ TConstArrayView<FSightWeaveVisionSourceHandle> VisionHandles,
+ TConstArrayView<FSightWeaveIlluminationSourceHandle> IlluminationHandles,const FTransform& Transform,const FTransform& Lamp)
 {
  check(IsInGameThread());
- if(!bSightWeaveInitialized || Transform.ContainsNaN()) return false;
+ if(!bSightWeaveInitialized || Transform.ContainsNaN() || Lamp.ContainsNaN()
+  || !Transform.GetRotation().IsNormalized() || !Lamp.GetRotation().IsNormalized()) return false;
  bool bChanged=false;
  for(const auto H:VisionHandles)
  { const auto* D=VisionSources.Find(H.GetValue()); if(!D) return false; bChanged|=!D->Transform.Equals(Transform,0.0); }
  for(const auto H:IlluminationHandles)
- { const auto* D=IlluminationSources.Find(H.GetValue()); if(!D) return false; bChanged|=!D->Transform.Equals(Transform,0.0); }
+ { const auto* D=IlluminationSources.Find(H.GetValue()); if(!D) return false; bChanged|=!D->Transform.Equals(Lamp,0.0); }
  if(!bChanged) return true;
  AdvanceRevision();
  for(const auto H:VisionHandles)
  { auto& D=VisionSources.FindChecked(H.GetValue()); if(D.Transform.Equals(Transform,0.0)) continue;
    D.Transform=Transform; DirtyVisionSources.Add(H.GetValue()); PendingVisionSnapshotRebuilds.Add(H.GetValue()); VisionSourceRevisions.FindChecked(H.GetValue())=Revision; }
  for(const auto H:IlluminationHandles)
- { auto& D=IlluminationSources.FindChecked(H.GetValue()); if(D.Transform.Equals(Transform,0.0)) continue;
-   D.Transform=Transform; DirtyIlluminationSources.Add(H.GetValue()); PendingIlluminationSnapshotRebuilds.Add(H.GetValue()); IlluminationSourceRevisions.FindChecked(H.GetValue())=Revision; }
+ { auto& D=IlluminationSources.FindChecked(H.GetValue()); if(D.Transform.Equals(Lamp,0.0)) continue;
+   D.Transform=Lamp; DirtyIlluminationSources.Add(H.GetValue()); PendingIlluminationSnapshotRebuilds.Add(H.GetValue()); IlluminationSourceRevisions.FindChecked(H.GetValue())=Revision; }
  PublishSnapshot();
  return true;
 }
@@ -1286,6 +1292,9 @@ int32 USightWeaveWorldSubsystem::UnregisterAllForOwner(UObject* Owner)
 	{
 		RemovedCount += UnregisterStaticEnvironment(Handle) ? 1 : 0;
 	}
+ TArray<FName> OwnedSurfaces;
+ for(const auto& Pair:SurfaceOwners)if(Pair.Value.Get()==Owner)OwnedSurfaces.Add(Pair.Key);
+ for(FName Id:OwnedSurfaces)RemovedCount+=UnregisterSurfaceBox(Id)?1:0;
 	return RemovedCount;
 }
 
@@ -1465,7 +1474,8 @@ void USightWeaveWorldSubsystem::QueryEffectiveLiveValidated(
 	const int32 PrefilteredVisionEntryCount,
 	const uint64 PrefilteredIlluminationEligibilityMask,
 	const bool bPrefilteredHeightMismatch,
-	const bool bUsePrefilteredBatchState) const
+	const bool bUsePrefilteredBatchState,
+ const FSightWeaveSurfaceContext* Surface) const
 {
 	InitializeQueryResult(
 		Result,
@@ -1534,8 +1544,12 @@ void USightWeaveWorldSubsystem::QueryEffectiveLiveValidated(
 					WorldLocation.Z,
 					Illumination.Description.HeightRange,
 					Tolerances.HeightOverlapEpsilon)
-				&& Illumination.Polygon.IsValid()
-				&& IsPointInIlluminationSnapshotEntry(Point2D, Illumination, Tolerances);
+				&& (Surface
+     ? IsPointInNominalShape(WorldLocation,Illumination.PolarOrigin,Illumination.NominalForward,
+       Illumination.Description.Shape,Illumination.Description.Range,Illumination.NominalMinimumCosine,0,Tolerances.PointOnEdgeEpsilon)
+       && FVector::DotProduct(Surface->Normal,Illumination.Description.Transform.GetLocation()-WorldLocation)>1.e-4
+       && Surface->Scene->Unoccluded(FloorId,Illumination.Description.Transform.GetLocation(),WorldLocation,Surface->Stats)
+     : Illumination.Polygon.IsValid() && IsPointInIlluminationSnapshotEntry(Point2D, Illumination, Tolerances));
 		}
 		if (Bit != 0)
 		{
@@ -1565,8 +1579,12 @@ void USightWeaveWorldSubsystem::QueryEffectiveLiveValidated(
 			}
 		}
 		const bool bPolygonValid = Entry.Polygon.IsValid();
-		const bool bContained = bPolygonValid
-			&& IsPointInVisionSnapshotEntry(Point2D, Entry, Tolerances);
+		const bool bContained = Surface
+   ? IsPointInNominalShape(WorldLocation,Entry.PolarOrigin,Entry.NominalForward,Entry.Description.Shape,
+     Entry.Description.Range,Entry.NominalMinimumCosine,Entry.Description.NearAwarenessRadius,Tolerances.PointOnEdgeEpsilon)
+     && FVector::DotProduct(Surface->Normal,Entry.Description.Transform.GetLocation()-WorldLocation)>1.e-4
+     && Surface->Scene->Unoccluded(FloorId,Entry.Description.Transform.GetLocation(),WorldLocation,Surface->Stats)
+   : bPolygonValid && IsPointInVisionSnapshotEntry(Point2D, Entry, Tolerances);
 		if (bUsePrefilteredBatchState && bPolygonValid)
 		{
 			const int32 SnapshotVisionIndex = static_cast<int32>(&Entry - Snapshot.VisionSources.GetData());
@@ -2230,6 +2248,15 @@ FSightWeaveRevision USightWeaveWorldSubsystem::PublishSnapshot()
 	{
 		return A.StableId < B.StableId;
 	});
+ // No scene allocation at all until the explicit Surface API is used.
+ if(bSurfaceSceneDirty || SurfaceOccluderRevision!=LastOccluderRevision)
+ {
+  if(SurfaceBoxes.IsEmpty())SurfaceScene.Reset();
+  else {TArray<FSightWeaveSurfaceScene::FReceiver> Boxes;SurfaceBoxes.GenerateValueArray(Boxes);
+   SurfaceScene=MakeShared<FSightWeaveSurfaceScene,ESPMode::ThreadSafe>(MoveTemp(Boxes),NewSnapshot.OccluderSegments);}
+  bSurfaceSceneDirty=false;SurfaceOccluderRevision=LastOccluderRevision;
+ }
+ NewSnapshot.SurfaceScene=SurfaceScene;
 
 	TArray<int64>& SuppressionIds = PublicationSuppressionIds;
 	HardSuppressions.GenerateKeyArray(SuppressionIds);
@@ -3470,6 +3497,7 @@ void USightWeaveWorldSubsystem::AdvanceRevision()
 
 void USightWeaveWorldSubsystem::ResetState()
 {
+ SurfaceBoxes.Reset();SurfaceOwners.Reset();SurfaceScene.Reset();bSurfaceSceneDirty=true;SurfaceOccluderRevision={};
 	if (MemoryAuthority.IsConfigured())
 	{
 		MemoryAuthority.Reset();

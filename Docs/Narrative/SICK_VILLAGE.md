@@ -15,51 +15,124 @@ Current locked facts:
 - the exact mineral/resource being mined is TBD;
 - the exact era, technology level, ownership structure, and size of the mine are TBD.
 
-## 2. The catastrophe: plague
+## 2. The first contact begins in the mine
+
+The first concrete contact with the unnamed god begins when **miners uncover a clue / trace connected to the god underground**.
+
+Current locked sequence:
+
+1. miners excavate something that should not have been found;
+2. one or more miners are directly altered / mutated after contact with the discovery;
+3. the abnormal miner(s) are brought for treatment;
+4. the village doctor encounters the god's existence through examining or treating the mutation.
+
+The exact object, structure, remains, symbol, substance, voice, or phenomenon discovered by the miners is still TBD.
+
+The miners' mutation is **not** currently defined as a deliberate god-given blessing. It is an abnormal consequence of contact with the discovered trace. This distinction is important because controlled "blessings" are reserved for the collected otherworld after the village is taken.
+
+## 3. The catastrophe: plague
 
 病村's extinction-level disaster is a **plague / epidemic**.
 
-The plague is the crisis that drives the village toward the unnamed god and the protection ritual.
+Public history inside the early game says that the plague threatened to destroy the village and that the god later saved the village from it.
 
-Current locked facts:
+The hidden canon truth is darker:
 
-- the plague becomes severe enough that the village believes ordinary survival is no longer possible;
-- the village eventually seeks supernatural protection rather than solving the crisis through normal means;
-- the exact symptoms, transmission route, origin, mortality pattern, and whether the god caused or accelerated the plague are TBD;
-- the story must preserve the wider project ambiguity about whether knowledge of the god causes catastrophe, attracts catastrophe, or merely appears when catastrophe is already underway.
+> The doctor, after coming into contact with the god through the mutated miner(s), is influenced / tempted by the god and **poisons the village well**, deliberately causing the epidemic event that later makes the village beg the god for salvation.
 
-## 3. The doctor finds the god
+The god therefore creates the conditions for its own apparent miracle through human action.
 
-The **doctor** is the person who first discovers the existence of the god, the relevant forbidden knowledge, or the path that allows the village to contact it.
+Important reveal rule:
 
-This does **not** mean the doctor personally leads the summoning ritual.
+- **The fact that the doctor poisoned the well must be a late 病村 revelation.**
+- Early and mid-map narrative should support the belief that the plague was an external disaster from which the god saved the village.
+- The player should only learn near the end of the relevant story arc that the plague was initiated through the doctor's act under the god's influence.
 
-The exact discovery mechanism is TBD. Possible mechanisms must remain proposals until approved, including old medical records, mine findings, a patient, a buried object, local folklore, an earlier failed settlement, or something found underground.
+Still TBD:
 
-The important causal responsibility is locked:
+- the plague's exact symptoms;
+- transmission beyond the poisoned water source;
+- mortality pattern;
+- what exactly the god tells or shows the doctor;
+- how fully the doctor understands the consequences when poisoning the well;
+- whether the doctor rationalizes the act as treatment, experiment, revelation, necessity, sacrifice, or something else.
 
-> The doctor is the one who brings knowledge of the god into the village's crisis.
+Do not soften the locked causal fact: the doctor poisons the well under the god's influence, and this act causes the disaster that the god later appears to solve.
 
-Whether the doctor understands what is being found at that time is TBD.
+## 4. The doctor finds the god
 
-## 4. The pastor performs the summoning
+The **doctor** is the first major NPC to become aware of the god's existence through the medical treatment of the mutated miner(s).
+
+This does **not** mean the doctor leads the communal summoning ritual.
+
+Current locked responsibility:
+
+- Miners: uncover the first trace and suffer the first mutation.
+- Doctor: discovers / becomes aware of the god while treating the mutation, is then influenced by it, and ultimately poisons the village well.
+- Pastor: later performs or leads the communal protection / summoning ritual after the plague becomes catastrophic.
+
+The doctor's discovery is therefore both medical and corruptive: the attempt to understand an impossible patient becomes the route through which the god gains a human agent in the normal world.
+
+## 5. The pastor performs the summoning
 
 The village's **pastor / cleric (牧师)**, not the doctor, presides over the actual summoning/protection ritual.
 
-Current locked division of responsibility:
+The pastor takes the knowledge or method that has entered the village and turns it into a communal act of salvation.
 
-- Doctor: discovers the god / the means or knowledge required to reach it.
-- Pastor: turns that discovery into a communal religious act and performs or leads the summoning ritual.
+The exact relationship between this pastor and the currently planned **voiceless high priest** is not yet explicitly locked. Do not assume they are necessarily the same person unless later confirmed.
 
-The exact relationship between this pastor and the currently planned **voiceless high priest** is not yet explicitly locked in this document. Do not assume they are necessarily the same person unless later confirmed.
+The pastor's original denomination, prior beliefs, reason for accepting the rite, and exact ritual procedure remain TBD.
 
-The pastor's original denomination, local religion, prior beliefs, reason for accepting the rite, and exact ritual procedure are TBD.
+## 6. Power boundary: reality versus the collected otherworld
 
-## 5. The first sacrifices are other people
+A key rule for 病村 and the wider setting is now locked:
+
+### In ordinary reality
+
+The god **cannot freely grant controlled supernatural blessings**.
+
+Its primary influence is temptation, suggestion, corruption, persuasion, dreams, visions, compulsions, or other forms of psychological / spiritual manipulation through exposed human beings.
+
+This is why the god needs the doctor to poison the well rather than simply creating the epidemic directly through an overt miracle.
+
+The mutation caused by the miners' discovery is treated as abnormal contact with a trace connected to the god, not as the same kind of deliberate blessing available later.
+
+### In the collected otherworld
+
+Once the village has been removed from ordinary reality and entered the god's collection, the rules change.
+
+The god can directly:
+
+- take parts of people as prices / offerings;
+- alter bodies, minds, memories, emotions, identities, or relationships;
+- grant abnormal abilities / "blessings";
+- sustain and distort the sacrificial cycle.
+
+This boundary should help preserve the god's indirect, manipulative quality before collection and its overwhelming authority after collection.
+
+## 7. The salvation ritual is the trap
+
+When the plague reaches the point where the village believes it cannot survive, the pastor leads the protection / summoning ritual.
+
+The ritual appears to succeed:
+
+- the plague crisis is stopped, neutralized, or no longer proceeds in the expected way;
+- the village survives the immediate extinction event;
+- the participants interpret this as divine rescue.
+
+The hidden reality is that the settlement has been **removed from ordinary reality and added to the god's collected worlds**.
+
+The god has therefore engineered a closed causal trap:
+
+> contact -> influence -> human-caused catastrophe -> desperate summoning -> apparent rescue -> collection.
+
+The village initially understands only the "rescue" portion of that chain.
+
+## 8. The first communal sacrifices are other people
 
 The core six major NPCs are **not** to be framed as heroic founders who willingly sacrificed themselves in order to save everyone else.
 
-When the village begins using sacrifice, the people offered to the god are **other people**.
+The protection / summoning system uses **other people as communal sacrificial victims**.
 
 This is an important moral direction for 病村:
 
@@ -67,19 +140,26 @@ This is an important moral direction for 病村:
 - the village's apparent salvation is built on victims who are not the main cast;
 - the core cast should not be retroactively purified by revealing that their mutilations were selfless sacrifices for the community.
 
-The identities, selection rules, consent/coercion, social status, and exact number of the early victims are TBD.
+The identities, selection rules, consent/coercion, social status, and exact number of the initial victims remain TBD.
 
-## 6. The core NPCs' own sacrifices are selfish bargains
+## 9. The ritual participants are immediately priced and blessed after collection
 
-Several of the core NPCs have themselves undergone sacrifice / offering / "molting," but their reasons are fundamentally different from sacrificing themselves to protect other people.
+A new rule is locked for the NPCs who actively participate in the salvation ritual:
 
-Their personal sacrifices are made to satisfy **their own desires** and obtain abnormal fulfillment from the god.
+> **Upon entering the collected otherworld, the god immediately takes the personal price associated with their desire and grants the corresponding blessing.**
 
-This is a locked character rule for the first settlement:
+This happens only after collection, consistent with the rule that the god cannot grant full blessings while the village remains in ordinary reality.
 
-> When a core NPC gives up something essential to receive a god-given ability, the motive is personally self-serving rather than altruistic self-sacrifice.
+This personal price is distinct from the communal victims used by the ritual itself.
 
-This applies to the existing malicious-fulfillment character pattern:
+The ritual can therefore involve two layers of exploitation:
+
+1. **Other people are offered as the communal sacrifice used to obtain salvation.**
+2. **The participating major NPCs are personally altered after entering the otherworld, losing something essential and receiving a maliciously fulfilled ability.**
+
+Their personal bargains remain fundamentally selfish. Their losses should not be reframed as heroic self-sacrifice for the village.
+
+Existing character direction remains:
 
 - the hunter loses the eyes most important to hunting in order to become a superior hunter;
 - the doctor loses the arms most important to normal medicine in pursuit of greater medical power;
@@ -87,9 +167,9 @@ This applies to the existing malicious-fulfillment character pattern:
 - the village head loses the legs required to physically lead while gaining abnormal control over followers;
 - the mother loses the memories that made her missing child meaningful to her in exchange for the child's return.
 
-Their desires can still be psychologically understandable, tragic, desperate, vain, obsessive, possessive, fearful, or contradictory. However, the narrative should not turn these bargains into "they gave up themselves to save everyone." They chose the bargain because they wanted something for themselves.
+Exactly which of the six major NPCs were direct participants in the original salvation ritual is still TBD unless separately confirmed later.
 
-## 7. Relationship to the first-map faith stage
+## 10. Relationship to the first-map faith stage
 
 病村 is the first major map and belongs to the **salvation / fanatic gratitude** stage defined in `WORLD_PROGRESSION.md`.
 
@@ -106,37 +186,65 @@ The village therefore provides the player's first misleading model of the system
 - important believers can point to their abnormal powers as evidence that the god answers requests;
 - the true cost and inevitable decay of collected worlds are not yet fully understood by the player.
 
-This public gratitude should coexist with the darker fact that the community survived by offering other people and that the main cast later pursued selfish bargains of their own.
+The late reveal that the doctor poisoned the well must reinterpret this gratitude:
 
-## 8. Story-design direction
+> The god did not simply answer a disaster. It first gained influence through what the miners uncovered, corrupted the doctor into creating the crisis, and then presented itself as the only power capable of ending the crisis it had helped create.
 
-病村 should not be written all at once as a complete plot before its strongest ideas are found.
+This should be one of the major revelations that changes how the player interprets both the doctor and the god.
 
-Approved workflow for this settlement:
+## 11. Reveal-order guardrail
 
-- record individual ideas as they are decided;
-- distinguish canon facts from proposals;
-- let the Writer / Narrative Designer connect approved fragments into causality, chronology, environmental storytelling, dialogue, and reveal order;
-- do not fill gaps merely for completeness;
-- preserve TBDs until a later idea is strong enough to justify locking them.
+Because the doctor/well truth is intended as a major late reveal, story implementation must preserve information asymmetry.
 
-This is especially important for the origin of the plague, the doctor's discovery, the first victims, the pastor's role, the sixth core NPC, and the exact chronology of the village's collapse.
+Early evidence can establish:
 
-## 9. Current TBD list
+- miners found something strange;
+- miners mutated;
+- the doctor treated them;
+- a plague followed;
+- the pastor summoned the god;
+- the plague stopped;
+- the village was "saved."
+
+Later evidence can create suspicion about the doctor.
+
+Only late in the 病村 arc should the player obtain sufficiently strong evidence that:
+
+- the doctor knowingly performed the physical act of poisoning the well;
+- the god had been influencing the doctor before the plague;
+- the apparent rescue was built on a catastrophe the god had already helped set in motion.
+
+Do not expose this twist casually in early NPC dialogue, item descriptions, UI summaries, or tutorial text.
+
+## 12. Story-design workflow
+
+病村 should continue to be designed fragment by fragment rather than filled in for completeness.
+
+Approved workflow:
+
+- record strong ideas as canon when explicitly approved;
+- distinguish approved facts from proposals;
+- let the Writer / Narrative Designer connect approved fragments into chronology, causality, environmental storytelling, dialogue, and reveal order;
+- preserve TBDs instead of inventing connective lore prematurely.
+
+## 13. Current TBD list
 
 - What the mine extracts.
 - Why and when the village developed around the mine.
 - The mine's ownership and social structure.
-- Plague symptoms and transmission.
-- Whether the plague is natural, god-caused, god-accelerated, or ambiguous.
-- How the doctor first discovers the god.
-- What the doctor initially believes the discovery to be.
+- What exactly the miners uncover.
+- The exact form and progression of the miners' mutation.
+- Plague symptoms and secondary transmission rules.
+- What the god says / shows to the doctor.
+- How fully the doctor understands what poisoning the well will do.
+- Why the doctor chooses to obey the god's influence.
 - The pastor's original faith and personal motivation.
 - Whether the pastor later becomes the voiceless high priest.
-- The exact first summoning ritual.
-- Who the first sacrificial victims are.
+- The exact first summoning / protection ritual.
+- Who the first communal sacrificial victims are.
 - How victims are selected and whether they consent.
+- Which major NPCs directly participate in the original salvation ritual.
+- Exact chronology and staging of each participant's immediate personal price / blessing after collection.
 - How quickly villagers realize they have been removed from ordinary reality.
 - When daily sacrifice, Sunday major sacrifice, "蛹," and "蜕" terminology become institutionalized.
 - The sixth major NPC.
-- Exact chronology of each core NPC's selfish bargain with the god.

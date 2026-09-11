@@ -35,7 +35,7 @@ The player should learn only a few reliable facts:
 - Its protection is deceptive.
 - Instead of restoring normal life, it removes the settlement from ordinary reality and makes it part of an extradimensional collection.
 - The collected settlement then decays over time.
-- Weekly sacrifice can delay that decay but cannot prevent the final collapse.
+- Recurring sacrifice can delay that decay but cannot prevent the final collapse; ordinary days can demand sacrifice, while Sunday remains the major weekly rite.
 - Some followers can trade away essential parts of themselves for abnormal abilities.
 - The god is not a conventional boss target and is not meaningfully threatened by the player's actions.
 
@@ -54,7 +54,7 @@ The recurring process is:
 5. The immediate disaster is stopped, diverted, or rendered irrelevant.
 6. The settlement discovers that it has been removed from normal reality.
 7. The settlement becomes one of the god's collected small worlds.
-8. The inhabitants learn that the world is decaying and that sacrifice only delays the collapse.
+8. The inhabitants learn that recurring sacrifice only delays the collapse. Sacrifice becomes part of ordinary settlement life, while Sunday develops into the major weekly sacrificial rite.
 9. Society fragments: faith, denial, resistance, fatalism, opportunism, pleasure seeking, and ritual authority emerge.
 
 The god therefore "saves" the settlement only in the narrowest possible sense. People avoid one immediate extinction event, but enter a closed system whose destruction is merely postponed.
@@ -141,9 +141,29 @@ Night is the pursuit/survival phase:
 
 The working reset time is 06:00.
 
-From Monday through Saturday, losing the night does not end the run. The player awakens the next morning and suffers a penalty such as partial item loss. Exact loss rules remain TBD.
+### 6.1 Daily sacrificial substitution
 
-NPCs involved in capturing, sacrificing, or killing the player can change the next day. Examples include guilt, compensation, gratitude, increased fanaticism, hostility, avoidance, or altered dialogue. This aftermath should be authored per important NPC rather than generated as generic morality simulation.
+A recurring daily sacrifice is now part of the settlement loop.
+
+The core motivation for a night's designated NPC hunter is personal: that NPC is themselves due to be sacrificed. They pursue the player because the marked failed sacrifice can be used as a substitute.
+
+Current locked direction:
+
+- a night's designated NPC tries to incapacitate or capture the player so the player can take that NPC's place in the sacrifice;
+- if the NPC fails to bring down the player before the ritual resolves, that NPC is sacrificed instead;
+- being sacrificed does not permanently remove the NPC from the game;
+- when the cycle restores the NPC, they return more damaged, incomplete, degraded, or corrupted than before;
+- the exact physical, psychological, emotional, and metaphysical form of this progressive degradation is intentionally TBD;
+- if the player is successfully substituted and sacrificed during Monday-Saturday, the player also returns at 06:00 but suffers a penalty;
+- the exact player penalty is intentionally TBD and may include item/resource loss or another form of lasting cost, but no specific rule is canon yet.
+
+This makes ordinary pursuit more than simple fanatic aggression. The hunter is trying to avoid becoming that night's offering. A player who survives the night has also, by consequence, allowed the designated NPC to be taken instead.
+
+The exact weekday assignment/rotation scheme among the settlement's six major NPCs is not yet locked unless separately specified by a later gameplay decision.
+
+From Monday through Saturday, losing the night does not end the run. The player awakens the next morning and suffers the still-TBD penalty.
+
+NPCs involved in capturing or sacrificing the player can change the next day. Examples include guilt, compensation, gratitude, increased fanaticism, hostility, avoidance, or altered dialogue. Conversely, an NPC who failed to capture the player and was sacrificed instead should visibly or behaviorally reflect further degradation on the following day. These aftermaths should be authored per important NPC rather than generated as generic morality simulation.
 
 ## 7. Weekly big loop
 
@@ -158,6 +178,7 @@ Current locked direction:
 - Sunday has higher pressure than ordinary nights.
 - At least two major settlement NPCs attack or participate simultaneously; more may join.
 - The exact group can depend on random selection, prior player actions, relationships, corruption state, and story conditions.
+- The participating NPCs are still acting under the sacrificial-substitution logic: failure to capture the player means the ritual takes its local victims instead. The exact multi-NPC Sunday sacrifice resolution is TBD.
 - Death during Sunday defense ends the game/run rather than waking the player on Monday.
 - Surviving Sunday advances into a new weekly cycle.
 
@@ -171,7 +192,7 @@ The small cast is intentional:
 
 - each NPC must represent a distinct human response to entrapment and sacrifice;
 - each NPC needs a recognizable daytime personality and nighttime gameplay role;
-- each NPC should have an authored relationship to the local disaster, the god, and the weekly sacrifice;
+- each NPC should have an authored relationship to the local disaster, the god, and the recurring sacrifices;
 - only a few supporting/background people should exist when needed for staging.
 
 The limited cast is also part of the fiction: older collected worlds can lose, merge, forget, or distort inhabitants as corruption advances.
@@ -187,6 +208,7 @@ This is essential to the game's conflict:
 - the god is effectively untouchable;
 - the player fights, avoids, manipulates, or reasons with humans who have built a social order around sacrifice;
 - followers may sincerely believe that sacrificing one person is the only way to keep everyone else alive another week;
+- on ordinary nights, even a conflicted NPC has an immediate personal incentive to capture the player because otherwise that NPC may become the offering;
 - resistance exists but has repeatedly failed to affect the god itself;
 - the horror should come from what people choose to do under an unwinnable cosmic pressure.
 
@@ -301,6 +323,7 @@ Current design rule:
 - after the player experiences a night led or strongly defined by a specific NPC, regardless of success or failure, a new fragment of that NPC's past becomes discoverable the next day;
 - the fragment usually appears in the NPC's home, workplace, ritual space, or another strongly associated location;
 - successive fragments reconstruct the person's life before the god's gift, the catastrophe, the wish, the price, and the final transformation;
+- if that NPC failed to capture the player and was sacrificed during the night, the next day's fragment can be paired with a newly visible sign of the NPC's further degradation;
 - fragments should often be environmental objects, altered rooms, photographs, tools, records, letters, missing objects, or recovered memories rather than only readable diaries.
 
 The narrative effect should be that the more often the player survives a person's night, the more fully the player understands the human being inside the monster/follower.
@@ -332,11 +355,12 @@ Primary themes currently supported by the setting:
 - the human cost of choosing survival at any price;
 - sacrifice justified as social arithmetic;
 - malicious fulfillment of desperate wishes;
-- identity reduced by repeated compromise;
+- identity reduced by repeated compromise and repeated sacrifice;
 - faith used as comfort, control, excuse, and genuine belief;
 - the difference between postponing death and actually living;
 - curiosity and exploration inside a doomed structure;
-- human relationships retaining meaning even when the cosmic situation is unwinnable.
+- human relationships retaining meaning even when the cosmic situation is unwinnable;
+- the cruelty of making the player's survival directly cause another familiar person to be offered in their place.
 
 The story should not become a conventional "kill the god and save reality" power fantasy.
 
@@ -350,7 +374,10 @@ The following are not yet canon and must stay open until explicitly decided:
 - the exact metaphysical mechanism behind the sacrificial mark;
 - the exact lore relationship between the god, collected worlds, and SightWeave;
 - the sixth NPC in the first settlement;
-- exact Monday-Saturday death penalties;
+- the exact weekday assignment/rotation of the six major NPCs as ordinary-night sacrifices;
+- the exact physical, psychological, emotional, and metaphysical degradation suffered by an NPC after being sacrificed and restored;
+- exact Monday-Saturday player penalties after being captured/sacrificed;
+- the exact multi-NPC sacrifice resolution on Sunday if the player survives;
 - exact weekly reset/persistence rules after a successful Sunday;
 - whether the player can permanently rescue, free, or only escape collected settlements;
 - the final ending and whether the god ever appears directly.

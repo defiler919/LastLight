@@ -18,6 +18,15 @@
 - Build enemy sensing on Unreal AI Perception and navigation. The first enemy brain should remain C++-driven; reconsider StateTree only when behavior complexity justifies an asset graph.
 - Keep editor-only automation out of runtime modules. Place repeatable editor automation in a future editor module or `Content/Python`.
 
+## Narrative governance
+
+- `Docs/Narrative/NARRATIVE_FOUNDATION.md` is the current high-level narrative canon and unresolved-question register.
+- `Docs/Narrative/WRITER_ROLE.md` defines the Writer / Narrative Designer function and its boundary with the Project Advisor.
+- Before changing story premise, settlement history, NPC identity/motivation, day/night narrative behavior, weekly-sacrifice meaning, god lore, or story-linked traversal, read both narrative documents.
+- Keep approved canon separate from brainstorming. Label unresolved ideas as `PROPOSAL` or `TBD`; do not silently promote them into settled facts.
+- Major canon changes require explicit user approval.
+- Narrative requirements may describe player-facing behavior, triggers, persistence, and meaning, but must not silently override C++ architecture, SightWeave rules, save semantics, or established gameplay decisions.
+
 ## Asset safety
 
 - Never move, rename, delete, or rewrite `.uasset` and `.umap` files with ordinary filesystem commands.

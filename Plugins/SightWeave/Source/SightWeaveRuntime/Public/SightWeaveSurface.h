@@ -48,7 +48,37 @@ struct FSightWeaveSurfaceQueryStats
  uint64 ExactSamples=0, CacheHits=0, NodeVisits=0, PrimitiveTests=0;
 };
 
+/** Compact source-restricted evidence; point queries retain full attribution. */
+struct FSightWeaveSurfaceCornerEvidence
+{
+ bool bVisible=false;
+ TArray<FSightWeaveIlluminationSourceHandle,TInlineAllocator<2>> ContributingIlluminationSources;
+};
+struct FSightWeaveSurfaceCellSpan
+{
+ FIntRect Cells;
+ bool bLive=false;
+ bool bUnresolved=false;
+};
 struct FSightWeaveFrameSnapshot;
+/** A face-local convex shadow, prepared from Runtime geometry, never persisted.
+ * Clear shadows overestimate occlusion; blocked shadows underestimate it. */
+struct SIGHTWEAVERUNTIME_API FSightWeaveSurfaceShadow
+{
+ TArray<FVector2D,TInlineAllocator<8>> Polygon;
+ FBox2D Bounds=FBox2D(ForceInit);
+ bool Intersects(const FBox2D& Region) const;
+ bool Contains(const FBox2D& Region) const;
+ bool CrossesCellStrip(const FBox2D& Region,int32 SingleCellAxis) const;
+};
+struct SIGHTWEAVERUNTIME_API FSightWeaveSurfaceBeamProof
+{
+ FVector Origin;
+ TArray<FSightWeaveSurfaceShadow> ClearShadows,BlockedShadows;
+ bool bComplete=true;
+ bool IsClear(const FBox2D& Region) const;
+ bool IsBlocked(const FBox2D& Region) const;
+};
 /** Caller-owned, bounded exact sample memo. Reset on ANY frame/owner change.
  * Game thread only. Never use cached results to prove an unsampled region. */
 struct FSightWeaveSurfaceQueryCache
@@ -70,6 +100,7 @@ public:
  bool BeamClear(FSightWeaveFloorId Floor,FName Receiver,FVector Origin,TConstArrayView<FVector> Corners) const;
  /** A single convex blocker whose shadow contains the entire target rectangle. */
  bool BeamBlocked(FSightWeaveFloorId Floor,FVector Origin,FVector Normal,TConstArrayView<FVector> Corners) const;
+ FSightWeaveSurfaceBeamProof PrepareFaceBeam(const FSightWeaveSurfaceBox& Receiver,ESightWeaveBoxFace Face,FVector Origin) const;
 private:
  struct FPrimitive {FBox Bounds; int32 BoxIndex=INDEX_NONE; FSightWeaveSegment2D Wall;};
  struct FNode {FBox Bounds; int32 Left=INDEX_NONE,Right=INDEX_NONE,Primitive=INDEX_NONE;};
@@ -86,4 +117,9 @@ struct FSightWeaveSurfaceContext
  const FSightWeaveSurfaceScene* Scene=nullptr;
  FVector Normal=FVector::ZeroVector;
  FSightWeaveSurfaceQueryStats* Stats=nullptr;
+ // Runtime-owned synchronous override, used only while evaluating corners of
+ // the prepared face. The normal point API always keeps the exact BVH path.
+ const TFunctionRef<bool(FVector,FVector)>* PreparedOcclusion=nullptr;
+ bool Unoccluded(FSightWeaveFloorId Floor,FVector Eye,FVector Point) const
+ {return PreparedOcclusion?(*PreparedOcclusion)(Eye,Point):Scene->Unoccluded(Floor,Eye,Point,Stats);}
 };

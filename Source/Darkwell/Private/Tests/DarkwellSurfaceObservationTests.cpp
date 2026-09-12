@@ -33,6 +33,7 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
 
 using namespace Darkwell::SurfaceObservationTests;
 namespace
@@ -536,7 +537,10 @@ bool FSurfaceKnowledgeObject::RunTest(const FString&)
  auto* Original=M->GetMaterial(0);auto* Memory=NewObject<UDarkwellRememberablePropComponent>(A);A->AddInstanceComponent(Memory);Memory->bUseSpatialMemory=true;Memory->bUseFixedSurfaceKnowledge=true;Memory->bRememberFromStart=false;Memory->ConfigureStableId(TEXT("Object"));Memory->AddMemoryPrimitive(M);Memory->RegisterComponent();
  auto* Policy=NewObject<USightWeaveObjectPolicyComponent>(A);A->AddInstanceComponent(Policy);Policy->bOverrideRevealMode=true;Policy->RevealMode=ESightWeaveRevealMode::WholeObjectAfterSpan;Policy->bOverrideMinimumObservedSpan=true;Policy->MinimumObservedSpanCm=40;Policy->bOverrideHistoryMode=true;Policy->HistoryMode=ESightWeaveHistoryMode::StationaryOnly;Policy->RegisterComponent();
  TestTrue(TEXT("Real ObjectMemory registration routes explicit surface"),Scene->RegisterRememberable(Memory,Policy));
- auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);S->Tick(0);
+ auto V=W.Vision({-200,0,162});auto H=W.Runtime->RegisterVisionSource(V,nullptr);
+ auto Divider=Receiver(W);Divider.Id=TEXT("WholeSpanDivider");Divider.Pose=FTransform(FVector(-120,0,100));Divider.HalfExtent={1,10,150};W.Runtime->RegisterSurfaceBox(Divider);S->Tick(0);
+ TestFalse(TEXT("Disconnected front fragments cannot bridge a Whole span"),S->IsWholeRecognized(TEXT("Object")));
+ W.Runtime->UnregisterSurfaceBox(Divider.Id);S->Tick(0);
  TestTrue(TEXT("Whole recognition from legal front span"),S->IsWholeRecognized(TEXT("Object")));
  TestTrue(TEXT("Object consumer exposes Whole separately"),Scene->IsSurfaceObjectRecognized(TEXT("Object")));TestTrue(TEXT("Object consumer addresses front surface"),Scene->HasSurfaceKnowledge(TEXT("Object"),ESightWeaveBoxFace::NegativeX,{0,0}));
  TestFalse(TEXT("Whole never fills top"),S->Find(TEXT("Object"))->IsKnown(ESightWeaveBoxFace::Top,{0,0}));
@@ -552,6 +556,15 @@ bool FSurfaceKnowledgeObject::RunTest(const FString&)
  Scene->SetMemoryWriteBlock(All,true);Scene->ClearMemoryInRegion(All);V.bActive=true;W.Runtime->UpdateVisionSource(H,V);S->Tick(0);TestFalse(TEXT("Object block stops re-observation"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
  Scene->SetMemoryWriteBlock(All,false);S->Tick(0);TestTrue(TEXT("Unblocked legal front relearned"),K->IsKnown(ESightWeaveBoxFace::NegativeX,{0,0}));
  Scene->ResetMemory();TestNull(TEXT("Reset releases surface domain"),S->Find(TEXT("Object")));TestTrue(TEXT("Reset restores source material ownership"),M->GetMaterial(0)==Original);
+ V.bActive=false;W.Runtime->UpdateVisionSource(H,V);
+ TestTrue(TEXT("Zero Whole span is an explicit policy"),S->RegisterFixedBox(M,TEXT("FirstContact"),FLinearColor::White,false,0));S->Tick(0);
+ TestFalse(TEXT("Zero span never grants unconditional recognition"),S->IsWholeRecognized(TEXT("FirstContact")));
+ V.bActive=true;W.Runtime->UpdateVisionSource(H,V);S->Tick(0);
+ TestTrue(TEXT("Zero span recognizes the first legal contact"),S->IsWholeRecognized(TEXT("FirstContact")));
+ TestFalse(TEXT("Zero span still does not grant unknown top"),S->Find(TEXT("FirstContact"))->IsKnown(ESightWeaveBoxFace::Top,{0,0}));S->UnregisterDomain(TEXT("FirstContact"));
+ M->SetWorldScale3D(FVector(.02));
+ TestTrue(TEXT("Small Whole domain registered"),S->RegisterFixedBox(M,TEXT("Small"),FLinearColor::White,false,100));S->Tick(0);
+ TestTrue(TEXT("Whole threshold clamps to the domain's attainable span"),S->IsWholeRecognized(TEXT("Small")));S->UnregisterDomain(TEXT("Small"));
  return true;
 }
 
@@ -578,14 +591,140 @@ bool FSurfaceKnowledgeApartment::RunTest(const FString&)
  for(const auto& P:Segments){FSightWeaveSegment2D D;D.A=P.A;D.B=P.B;D.FloorId=W.Floor;D.HeightRange={P.ZMin,P.ZMax};Walls.Add(D);}W.Runtime->RegisterOccluder(Walls,true,true,nullptr);
  auto* S=W.World->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>();auto V=W.Vision({-160,-260,162});V.Shape=ESightWeaveSourceShape::DirectionalCone;V.HalfAngleDegrees=45;auto H=W.Runtime->RegisterVisionSource(V,nullptr);
  S->Tick(0);AddInfo(TEXT("SURFACE_APARTMENT_COLD ")+S->GetTelemetry());
+ const bool CompareReference=FParse::Param(FCommandLine::Get(),TEXT("SurfaceApartmentParity"));
+ TArray<FDarkwellSurfaceKnowledge> ReferenceDomains;uint64 ComparedCells=0;
+ auto* ProofMode=IConsoleManager::Get().FindConsoleVariable(TEXT("SightWeave.Surface.PreparedProofs"));
+ const int SavedMode=ProofMode->GetInt();
+ if(CompareReference)for(auto Id:S->GetDomainIdsForTesting())
+ {const auto* K=S->Find(Id);if(!K)continue;auto& Ref=ReferenceDomains.AddDefaulted_GetRef();Ref.Initialize(K->Box,K->Owner,K->ContentVersion);}
+ auto Compare=[&]()
+ {
+  if(!CompareReference)return;
+  ProofMode->Set(0,ECVF_SetByCode);
+  for(auto& Ref:ReferenceDomains)
+  {
+   Ref.Observe(*W.Runtime);const auto* Actual=S->Find(Ref.Box.Id);
+   for(int F=0;F<6;++F)
+   {ComparedCells+=Ref.Faces[F].Known.Num();TestTrue(*FString::Printf(TEXT("Apartment reference Live parity %s face %d"),*Ref.Box.Id.ToString(),F),Actual->Faces[F].Live==Ref.Faces[F].Live);TestTrue(*FString::Printf(TEXT("Apartment reference Known parity %s face %d"),*Ref.Box.Id.ToString(),F),Actual->Faces[F].Known==Ref.Faces[F].Known);}
+  }
+  ProofMode->Set(SavedMode,ECVF_SetByCode);
+ };
+ Compare();
  TestNull(TEXT("Flat floors retain the explicit legacy compatibility path"),S->Find(TEXT("Apartment.Floor.0.0")));
  TestNotNull(TEXT("Apartment Whole furniture uses surface domain"),S->Find(TEXT("Apartment.CoffeeTable.Whole")));
  TestNotNull(TEXT("Rotated wardrobe uses surface domain"),S->Find(TEXT("Apartment.Wardrobe.Partial37")));
  TArray<double> Times;uint64 MaxQueries=0,MaxUpload=0;
  for(int I=0;I<20;++I)
- {V.Transform=FTransform(FRotator(0,I*4.,0),FVector(-160+I*2.,-260,162));W.Runtime->UpdateVisionSource(H,V);S->Tick(0);Times.Add(S->UpdateUs);MaxQueries=FMath::Max(MaxQueries,S->ExactSamples);MaxUpload=FMath::Max(MaxUpload,S->UploadBytes);}
+ {V.Transform=FTransform(FRotator(0,I*4.,0),FVector(-160+I*2.,-260,162));W.Runtime->UpdateVisionSource(H,V);S->Tick(0);Times.Add(S->UpdateUs);MaxQueries=FMath::Max(MaxQueries,S->ExactSamples);MaxUpload=FMath::Max(MaxUpload,S->UploadBytes);
+  AddInfo(FString::Printf(TEXT("SURFACE_APARTMENT_STAGE frame=%d observe_us=%.3f recognition_us=%.3f publish_us=%.3f"),I,S->ObserveUs,S->RecognitionUs,S->PublishUs));Compare();}
  Times.Sort();AddInfo(FString::Printf(TEXT("SURFACE_APARTMENT_DIRTY p95_us=%.3f max_us=%.3f max_authority_queries=%llu max_upload_bytes=%llu"),Times[18],Times[19],MaxQueries,MaxUpload));
  S->Tick(0);TestEqual(TEXT("Stationary apartment has no Surface query work"),S->ExactSamples,uint64(0));TestEqual(TEXT("Stationary apartment has no Surface upload work"),S->UploadBytes,uint64(0));AddInfo(TEXT("SURFACE_APARTMENT_STABLE ")+S->GetTelemetry());
+ if(CompareReference)AddInfo(FString::Printf(TEXT("SURFACE_APARTMENT_PARITY domains=%d compared_cells=%llu; timings include diagnostic cache interference, not a performance acceptance run"),ReferenceDomains.Num(),ComparedCells));
  Apartment->Destroy();return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfaceDomainLifecycle,"Darkwell.SightWeave.SurfaceKnowledge.DomainLifecycle",SurfaceTestFlags)
+bool FSurfaceDomainLifecycle::RunTest(const FString&)
+{
+ FRuntimeWorld W(true);W.Runtime->ConfigureExplorationMemory(W.Owner,W.Floor,ESightWeaveRenderPrecisionTier::Ultra);
+ auto* S=W.World->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>();
+ // More lifetimes than the simultaneous capacity, using the same authored id.
+ for(int I=0;I<132;++I)
+ {
+  auto* A=W.World->SpawnActor<AActor>();auto* M=NewObject<UStaticMeshComponent>(A);A->AddInstanceComponent(M);A->SetRootComponent(M);
+  M->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Cube.Cube")));M->SetRelativeScale3D(FVector(.02));M->RegisterComponent();
+  auto* Original=M->GetMaterial(0);
+  if(!TestTrue(TEXT("Expired domains do not exhaust simultaneous capacity"),S->RegisterFixedBox(M,TEXT("Reused"),FLinearColor::White,true)))return false;
+  S->Tick(0);TestNotNull(TEXT("Fresh lifetime ready"),S->Find(TEXT("Reused")));
+  if(I%2==0){S->UnregisterDomain(TEXT("Reused"));TestTrue(TEXT("Unregister restores material"),M->GetMaterial(0)==Original);}
+  A->Destroy();S->Tick(0);
+  TestNull(TEXT("Dead mesh has no accessible Surface facts"),S->Find(TEXT("Reused")));
+  TestFalse(TEXT("Dead mesh receiver removed from Runtime"),W.Runtime->QuerySurfaceSample(W.Owner,{TEXT("Reused"),ESightWeaveBoxFace::Top,{0,0}}).Hard.bAuthoritative);
+ }
+ TestTrue(TEXT("All domain resources retired"),S->GetTelemetry().Contains(TEXT("\"domains\":0,\"ready\":0,\"cells\":0,\"atlas_bytes\":0")));return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfacePreparedProofOracle,"Darkwell.SightWeave.SurfaceKnowledge.PreparedShadowOracle",SurfaceTestFlags)
+bool FSurfacePreparedProofOracle::RunTest(const FString&)
+{
+ FRuntimeWorld W;auto Box=Receiver(W);W.Runtime->RegisterSurfaceBox(Box);
+ auto Obstacle=Box;Obstacle.Id=TEXT("OracleBlocker");W.Runtime->RegisterSurfaceBox(Obstacle);
+ FRandomStream Random(20260912);uint64 ClearChecks=0,BlockedChecks=0;
+ for(int Case=0;Case<40;++Case)
+ {
+  Box.Pose=FTransform(FRotator(Case%3?0:17,Case*13.,Case%4?0:11),FVector(0,0,100));W.Runtime->UpdateSurfaceBox(Box);
+  FVector Eye(-220+Random.FRand()*440,-220+Random.FRand()*440,20+Random.FRand()*310);
+  Obstacle.Pose=FTransform(FRotator(Case*7.,Case*19.,Case*3.),FMath::Lerp(Eye,Box.Pose.GetLocation(),.55));
+  Obstacle.HalfExtent={Case%5==0?.001:8.+Random.FRand()*45,8.+Random.FRand()*75,15.+Random.FRand()*170};W.Runtime->UpdateSurfaceBox(Obstacle);
+  if(Case%4==0)Eye=Obstacle.Pose.TransformPosition(FVector(Obstacle.HalfExtent.X+(Case%8?1.e-7:0),-300,25));
+  FSightWeaveSegment2D Wall;Wall.FloorId=W.Floor;Wall.A={-100,-80};Wall.B={70,120};Wall.HeightRange={25,210};
+  const auto WallHandle=W.Runtime->RegisterOccluder({Wall},true,true,nullptr);
+  const auto Frame=W.Runtime->AcquirePublishedSnapshot();
+  for(int F=0;F<6;++F)
+  {
+   const auto Face=ESightWeaveBoxFace(F);FVector Center,Normal;Box.Resolve(Face,{0,0},Center,Normal);
+   if(FVector::DotProduct(Normal,Eye-Center)<=1.e-4)continue;
+   const auto Prepared=Frame->SurfaceScene->PrepareFaceBeam(Box,Face,Eye);
+   for(int Y=0;Y<8;++Y)for(int X=0;X<8;++X)
+   {
+    const FBox2D Region(FVector2D(X,Y)/4-FVector2D(1),FVector2D(X+1,Y+1)/4-FVector2D(1));
+    const bool Clear=Prepared.IsClear(Region),Blocked=Prepared.IsBlocked(Region);
+    if(!Clear && !Blocked)continue;
+    if(Clear)
+    {
+     TArray<FVector,TInlineAllocator<4>> Corners;for(auto UV:{Region.Min,FVector2D(Region.Max.X,Region.Min.Y),Region.Max,FVector2D(Region.Min.X,Region.Max.Y)})
+     {FVector P;Box.Resolve(Face,UV,P,Normal);Corners.Add(P);}
+     if(!Frame->SurfaceScene->BeamClear(W.Floor,Box.Id,Eye,Corners)){AddError(TEXT("Prepared clear must retain the reference SAT world-space contact margin"));return false;}
+    }
+    for(int J=0;J<=4;++J)for(int I=0;I<=4;++I)
+    {
+     FVector Point;Box.Resolve(Face,Region.Min+Region.GetSize()*FVector2D(I,J)/4,Point,Normal);
+     const bool Exact=Frame->SurfaceScene->Unoccluded(W.Floor,Eye,Point,nullptr);
+     if(Clear){++ClearChecks;if(!Exact){AddError(FString::Printf(TEXT("Unsafe clear shadow case=%d face=%d x=%d y=%d"),Case,F,X,Y));return false;}}
+     if(Blocked){++BlockedChecks;if(Exact){AddError(FString::Printf(TEXT("Unsafe blocked shadow case=%d face=%d x=%d y=%d"),Case,F,X,Y));return false;}}
+    }
+   }
+  }
+  W.Runtime->UnregisterOccluder(WallHandle);
+ }
+ TestTrue(TEXT("Clear certificate oracle exercised"),ClearChecks>1000);TestTrue(TEXT("Blocked certificate oracle exercised"),BlockedChecks>1000);
+ AddInfo(FString::Printf(TEXT("SURFACE_SHADOW_ORACLE clear_checks=%llu blocked_checks=%llu"),ClearChecks,BlockedChecks));return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurfacePreparedKnowledgeParity,"Darkwell.SightWeave.SurfaceKnowledge.PreparedKnowledgeParity",SurfaceTestFlags)
+bool FSurfacePreparedKnowledgeParity::RunTest(const FString&)
+{
+ FRuntimeWorld W;auto Box=Receiver(W);Box.HalfExtent={8,6,10};W.Runtime->RegisterSurfaceBox(Box);
+ auto V=W.Vision({-100,0,110});V.Shape=ESightWeaveSourceShape::DirectionalCone;V.HalfAngleDegrees=45;
+ const auto H=W.Runtime->RegisterVisionSource(V,nullptr);
+ FSightWeaveIlluminationSourceDescription Light;Light.KnowledgeOwnerId=W.Owner;Light.FloorId=W.Floor;Light.Transform=FTransform(FVector(-70,15,110));Light.HeightRange={-100,500};Light.Range=800;Light.EmittedCapabilities={FName(TEXT("Visible"))};
+ const auto LightHandle=W.Runtime->RegisterIlluminationSource(Light,nullptr);
+ auto OtherLight=Light;OtherLight.Transform.SetLocation({80,0,110});const auto OtherLightHandle=W.Runtime->RegisterIlluminationSource(OtherLight,nullptr);
+ FSightWeaveHardSuppressionHandle Suppression;
+ auto Body=W.Vision({-100,0,110});Body.Range=20;const auto BodyHandle=W.Runtime->RegisterVisionSource(Body,nullptr);
+ auto Obstacle=Box;Obstacle.Id=TEXT("ParityBlocker");Obstacle.Pose=FTransform(FVector(-50,0,100));Obstacle.HalfExtent={1,2,20};W.Runtime->RegisterSurfaceBox(Obstacle);
+ FDarkwellSurfaceKnowledge Reference,Prepared;Reference.Initialize(Box,W.Owner);Prepared.Initialize(Box,W.Owner);
+ auto* Mode=IConsoleManager::Get().FindConsoleVariable(TEXT("SightWeave.Surface.PreparedProofs"));const int SavedMode=Mode->GetInt();
+ uint64 Cells=0;
+ for(int I=0;I<24;++I)
+ {
+  V.Transform=FTransform(FRotator(0,(I-12)*2.,0),FVector(-100,I-12.,110+I*.2));
+  V.IlluminationPolicy=I>=16?ESightWeaveIlluminationPolicy::RequiresLegalIllumination:ESightWeaveIlluminationPolicy::BypassLegalIllumination;W.Runtime->UpdateVisionSource(H,V);
+  Light.Transform.SetLocation({-70,(I-12)*1.2,110});W.Runtime->UpdateIlluminationSource(LightHandle,Light);
+  OtherLight.bActive=I%3!=0;W.Runtime->UpdateIlluminationSource(OtherLightHandle,OtherLight);
+  Body.Transform=V.Transform;Body.Range=I%4==0?120:20;Body.bActive=I<12;W.Runtime->UpdateVisionSource(BodyHandle,Body);
+  if(I==18){FSightWeaveHardSuppressionDescription D;D.FloorId=W.Floor;D.Center={-8,0};D.Radius=4;D.HeightRange={-100,500};Suppression=W.Runtime->RegisterHardLiveSuppression(D,nullptr);}
+  if(I==20)W.Runtime->UnregisterHardLiveSuppression(Suppression);
+  if(I==8){Reference.Clear(FBox2D({-20,-20},{20,20}));Prepared.Clear(FBox2D({-20,-20},{20,20}));}
+  if(I==12 || I==16){Reference.SetBlock(FBox2D({-20,-20},{20,20}),I==12);Prepared.SetBlock(FBox2D({-20,-20},{20,20}),I==12);}
+  Mode->Set(0,ECVF_SetByCode);Reference.Observe(*W.Runtime);Mode->Set(1,ECVF_SetByCode);Prepared.Observe(*W.Runtime);
+  for(int F=0;F<6;++F)
+  {
+   const auto& A=Reference.Faces[F];const auto& B=Prepared.Faces[F];Cells+=A.Known.Num();
+   TestTrue(TEXT("Prepared proof preserves every reference Live cell"),A.Live==B.Live);
+   TestTrue(TEXT("Prepared proof preserves Known at full support precision"),A.Known==B.Known);
+   TestTrue(TEXT("Prepared proof preserves Block/suppression presentation"),A.Hidden==B.Hidden);
+  }
+ }
+ Mode->Set(SavedMode,ECVF_SetByCode);AddInfo(FString::Printf(TEXT("SURFACE_KNOWLEDGE_PARITY compared_cells=%llu"),Cells));return true;
 }
 #endif

@@ -1,0 +1,1 @@
+frames=555 moving_frames=552 distance_cm=5320.38 yaw_travel_deg=1970.67 mode=A

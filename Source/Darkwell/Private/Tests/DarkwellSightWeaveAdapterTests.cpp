@@ -1113,6 +1113,9 @@ bool FDarkwellPropLabRuntimeMatrixTest::RunTest(const FString& Parameters)
 		Memory->TryGetRecordForTesting(Id,Live,Valid,Location,Proxy);
 		TestFalse(TEXT("Observed empty B removes destroyed furniture memory"),Valid);
 		// Presentation never influences enemy or HUD authority, including the legal-light cycle.
+		// Keep this range discriminator outside the 900cm lantern and near
+		// bypass, inside the 1250cm torch. The old 150cm placement tested neither.
+		Stalker->SetActorLocation(FVector(0,450,92));
 		for(const auto Tool : {DarkwellGameplayTags::Equipment_Right_Torch.GetTag(),DarkwellGameplayTags::Equipment_Right_Lantern.GetTag(),DarkwellGameplayTags::Equipment_Right_Torch.GetTag()})
 		{
 			Player->GetLoadoutComponent()->EquipRightHandItem(Tool);

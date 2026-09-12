@@ -1,0 +1,18 @@
+{
+  "run": "surface_closure_unknown_final01",
+  "selector": "Darkwell.UnknownPartial+Darkwell.UnknownRegion",
+  "exit_code": 0,
+  "wall_seconds": 66.5128766,
+  "total": 5,
+  "clean": 4,
+  "warnings": 1,
+  "failed": 0,
+  "not_run": 0,
+  "duration": 37.091583251953125,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.UnknownPartial+Darkwell.UnknownRegion\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_unknown_final01\\surface_closure_unknown_final01_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_unknown_final01\\surface_closure_unknown_final01.log"
+  ],
+  "passed": true
+}

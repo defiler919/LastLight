@@ -1,0 +1,18 @@
+{
+  "run": "surface_closure_manual_isolated",
+  "selector": "Darkwell.PropLab.ManualSwitch+Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation",
+  "exit_code": 0,
+  "wall_seconds": 255.3051673,
+  "total": 8,
+  "clean": 4,
+  "warnings": 3,
+  "failed": 1,
+  "not_run": 0,
+  "duration": 112.36872863769531,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.PropLab.ManualSwitch+Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_manual_isolated\\surface_closure_manual_isolated_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_manual_isolated\\surface_closure_manual_isolated.log"
+  ],
+  "passed": false
+}

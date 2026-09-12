@@ -10,6 +10,7 @@
 #include "SightWeaveOptimizedSolveCache.h"
 #include "SightWeavePreparedEventIndex.h"
 #include "SightWeaveSettings.h"
+#include "SightWeaveNominalShape.h"
 
 namespace
 {
@@ -54,30 +55,7 @@ namespace
 		}
 	}
 
-	bool IsPointInNominalShape(
-		const FVector& WorldLocation,
-		const FVector2D& Origin,
-		const FVector2D& Forward,
-		const ESightWeaveSourceShape Shape,
-		const double Range,
-		const double MinimumCosine,
-		const double NearAwarenessRadius,
-		const double Epsilon)
-	{
-		const FVector2D Offset(WorldLocation.X - Origin.X, WorldLocation.Y - Origin.Y);
-		const double DistanceSquared = Offset.SizeSquared();
-		if (DistanceSquared > FMath::Square(Range + Epsilon))
-		{
-			return false;
-		}
-		if (DistanceSquared <= FMath::Square(NearAwarenessRadius + Epsilon)
-			|| Shape == ESightWeaveSourceShape::Radial)
-		{
-			return true;
-		}
-		const double Distance = FMath::Sqrt(DistanceSquared);
-		return FVector2D::DotProduct(Forward, Offset) >= MinimumCosine * Distance;
-	}
+	using SightWeave::IsPointInNominalShape;
 
 	bool AreCapabilitiesCompatible(
 		const FSightWeaveIlluminationCompatibilityProfile& Profile,
@@ -1545,10 +1523,7 @@ void USightWeaveWorldSubsystem::QueryEffectiveLiveValidated(
 					Illumination.Description.HeightRange,
 					Tolerances.HeightOverlapEpsilon)
 				&& (Surface
-     ? IsPointInNominalShape(WorldLocation,Illumination.PolarOrigin,Illumination.NominalForward,
-       Illumination.Description.Shape,Illumination.Description.Range,Illumination.NominalMinimumCosine,0,Tolerances.PointOnEdgeEpsilon)
-       && FVector::DotProduct(Surface->Normal,Illumination.Description.Transform.GetLocation()-WorldLocation)>1.e-4
-       && Surface->Scene->Unoccluded(FloorId,Illumination.Description.Transform.GetLocation(),WorldLocation,Surface->Stats)
+     ? SightWeave::IsSurfaceSourcePointContained(Illumination,FloorId,WorldLocation,Tolerances,*Surface)
      : Illumination.Polygon.IsValid() && IsPointInIlluminationSnapshotEntry(Point2D, Illumination, Tolerances));
 		}
 		if (Bit != 0)
@@ -1580,10 +1555,7 @@ void USightWeaveWorldSubsystem::QueryEffectiveLiveValidated(
 		}
 		const bool bPolygonValid = Entry.Polygon.IsValid();
 		const bool bContained = Surface
-   ? IsPointInNominalShape(WorldLocation,Entry.PolarOrigin,Entry.NominalForward,Entry.Description.Shape,
-     Entry.Description.Range,Entry.NominalMinimumCosine,Entry.Description.NearAwarenessRadius,Tolerances.PointOnEdgeEpsilon)
-     && FVector::DotProduct(Surface->Normal,Entry.Description.Transform.GetLocation()-WorldLocation)>1.e-4
-     && Surface->Scene->Unoccluded(FloorId,Entry.Description.Transform.GetLocation(),WorldLocation,Surface->Stats)
+   ? SightWeave::IsSurfaceSourcePointContained(Entry,FloorId,WorldLocation,Tolerances,*Surface)
    : bPolygonValid && IsPointInVisionSnapshotEntry(Point2D, Entry, Tolerances);
 		if (bUsePrefilteredBatchState && bPolygonValid)
 		{
@@ -3499,6 +3471,7 @@ void USightWeaveWorldSubsystem::ResetState()
 {
  SurfaceBoxes.Reset();SurfaceOwners.Reset();SurfaceScene.Reset();bSurfaceSceneDirty=true;SurfaceOccluderRevision={};
  SurfaceRegionCorners.Reset();SurfaceRegionFrame.Reset();SurfaceRegionOwner={};
+ SurfaceBeamProofs.Reset();SurfaceProofReceiver=NAME_None;
 	if (MemoryAuthority.IsConfigured())
 	{
 		MemoryAuthority.Reset();

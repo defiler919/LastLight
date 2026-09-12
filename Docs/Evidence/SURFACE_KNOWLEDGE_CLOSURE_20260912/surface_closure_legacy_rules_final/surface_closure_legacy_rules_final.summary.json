@@ -1,0 +1,18 @@
+{
+  "run": "surface_closure_legacy_rules_final",
+  "selector": "Darkwell.PropLab.GrayObjectPolicy+Darkwell.PropLab.HistoryPolicy+Darkwell.PropLab.SpatialMemory+Darkwell.PropLab.Stale+Darkwell.PropLab.Scope+Darkwell.PropLab.Runtime+Darkwell.UnknownPartial+Darkwell.UnknownRegion",
+  "exit_code": 0,
+  "wall_seconds": 139.1104298,
+  "total": 64,
+  "clean": 59,
+  "warnings": 2,
+  "failed": 3,
+  "not_run": 0,
+  "duration": 102.29586029052734,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.PropLab.GrayObjectPolicy+Darkwell.PropLab.HistoryPolicy+Darkwell.PropLab.SpatialMemory+Darkwell.PropLab.Stale+Darkwell.PropLab.Scope+Darkwell.PropLab.Runtime+Darkwell.UnknownPartial+Darkwell.UnknownRegion\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_legacy_rules_final\\surface_closure_legacy_rules_final_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_legacy_rules_final\\surface_closure_legacy_rules_final.log"
+  ],
+  "passed": false
+}

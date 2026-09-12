@@ -1,11 +1,22 @@
 #include "SightWeaveSurface.h"
 #include "SightWeaveWorldSubsystem.h"
 #include "SightWeaveSettings.h"
+#include "SightWeaveNominalShape.h"
 #include "Algo/Sort.h"
+#include "HAL/IConsoleManager.h"
+#include "Misc/ScopeExit.h"
 
 namespace
 {
 constexpr double Contact=1.e-4; // cm; endpoint contact, not a coverage expansion
+TAutoConsoleVariable<int32> CVarSurfacePreparedProofs(TEXT("SightWeave.Surface.PreparedProofs"),1,TEXT("Reuse per-snapshot convex face shadows. 0 runs the reference beam proof for differential diagnostics."));
+TAutoConsoleVariable<int32> CVarSurfaceProofProfile(TEXT("SightWeave.Surface.Profile"),0,TEXT("Log region proof phase timings per published snapshot (diagnostic only)."));
+struct FProofProfile {uint64 Total=0,Blocked=0,Clear=0,Corner=0,Prepare=0,Calls=0,ClearHits=0,BlockedHits=0;} ProofProfile;
+template<typename F> auto ProfileProof(F&& Function,uint64& Cycles)
+{
+ if(!CVarSurfaceProofProfile.GetValueOnGameThread())return Function();
+ const uint64 Start=FPlatformTime::Cycles64();auto Result=Function();Cycles+=FPlatformTime::Cycles64()-Start;return Result;
+}
 bool Interval(FVector A,FVector B,const FBox& Box,double& Lo,double& Hi)
 {
  const FVector D=B-A; Lo=0; Hi=1;
@@ -196,10 +207,20 @@ bool USightWeaveWorldSubsystem::TrySurfaceRegion(FSightWeaveKnowledgeOwnerId Own
 {
  check(IsInGameThread());
  const auto Frame=AcquirePublishedSnapshot();if(!Owner.IsValid() || !Frame || !Frame->SurfaceScene || !UV.bIsValid)return false;
- if(SurfaceRegionFrame!=Frame || SurfaceRegionOwner!=Owner){SurfaceRegionCorners.Reset();SurfaceRegionFrame=Frame;SurfaceRegionOwner=Owner;}
+ const bool UsePrepared=CVarSurfacePreparedProofs.GetValueOnGameThread()!=0;
+ if(SurfaceRegionFrame!=Frame || SurfaceRegionOwner!=Owner || bSurfaceRegionPrepared!=UsePrepared)
+ {
+  if(CVarSurfaceProofProfile.GetValueOnGameThread() && ProofProfile.Calls)
+   UE_LOG(LogTemp,Display,TEXT("SURFACE_PROOF_PHASE calls=%llu total_us=%.3f blocked_us=%.3f clear_us=%.3f corner_us=%.3f prepare_us=%.3f clear_hits=%llu blocked_hits=%llu"),ProofProfile.Calls,FPlatformTime::ToSeconds64(ProofProfile.Total)*1.e6,FPlatformTime::ToSeconds64(ProofProfile.Blocked)*1.e6,FPlatformTime::ToSeconds64(ProofProfile.Clear)*1.e6,FPlatformTime::ToSeconds64(ProofProfile.Corner)*1.e6,FPlatformTime::ToSeconds64(ProofProfile.Prepare)*1.e6,ProofProfile.ClearHits,ProofProfile.BlockedHits);
+  ProofProfile={};SurfaceRegionCorners.Reset();SurfaceBeamProofs.Reset();SurfaceRegionFrame=Frame;SurfaceRegionOwner=Owner;bSurfaceRegionPrepared=UsePrepared;
+ }
+ const bool Profiling=CVarSurfaceProofProfile.GetValueOnGameThread()!=0;const uint64 ProfileStart=Profiling?FPlatformTime::Cycles64():0;
+ ON_SCOPE_EXIT {if(Profiling){ProofProfile.Total+=FPlatformTime::Cycles64()-ProfileStart;++ProofProfile.Calls;}};
+ if(SurfaceProofReceiver!=Id || SurfaceProofFace!=Face)
+ {SurfaceBeamProofs.Reset();if(UsePrepared)SurfaceRegionCorners.Reset();SurfaceProofReceiver=Id;SurfaceProofFace=Face;}
  const auto* R=Frame->SurfaceScene->Find(Id);if(!R)return false;
  const auto* Floor=Frame->Floors.FindByPredicate([&](const auto& F){return F.FloorId==R->Box.Floor;});if(!Floor)return false;
- const FVector2D Points[]{UV.Min,{UV.Max.X,UV.Min.Y},UV.Max,{UV.Min.X,UV.Max.Y}};TArray<FVector> World;FVector Normal;
+ const FVector2D Points[]{UV.Min,{UV.Max.X,UV.Min.Y},UV.Max,{UV.Min.X,UV.Max.Y}};TArray<FVector,TInlineAllocator<4>> World;FVector Normal;
  for(auto P:Points){FVector Q;if(!R->Box.Resolve(Face,P,Q,Normal))return false;World.Add(Q);}
  bool AnyFacing=false;for(const auto& V:Frame->VisionSources)
   AnyFacing|=V.Description.bActive && V.Description.KnowledgeOwnerId==Owner && V.Description.FloorId==Floor->FloorId
@@ -213,6 +234,23 @@ bool USightWeaveWorldSubsystem::TrySurfaceRegion(FSightWeaveKnowledgeOwnerId Own
   if(XY.Intersect(FBox2D(D.Center-FVector2D(D.Radius),D.Center+FVector2D(D.Radius))))return false;
  }
  const auto& T=GetDefault<USightWeaveSettings>()->GeometryTolerances;
+ auto Prepared=[&](FVector Eye)->const FSightWeaveSurfaceBeamProof&
+ {
+  if(const auto* Found=SurfaceBeamProofs.FindByPredicate([&](const auto& P){return P.Origin==Eye;}))return *Found;
+  auto& New=SurfaceBeamProofs.Add_GetRef(ProfileProof([&](){return Frame->SurfaceScene->PrepareFaceBeam(R->Box,Face,Eye);},ProofProfile.Prepare));
+  return New;
+ };
+ auto ClearBeam=[&](FVector Eye)
+ {
+  if(UsePrepared)
+  {
+   const auto& P=Prepared(Eye);if(P.IsClear(UV))return true;
+   // An inner shadow intersects at least one ray, so an all-ray clear proof
+   // is impossible. Keep the original SAT only for the contact/degenerate gap.
+   if(P.BlockedShadows.ContainsByPredicate([&](const auto& S){return S.Intersects(UV);}))return false;
+  }
+  return ProfileProof([&](){return Frame->SurfaceScene->BeamClear(Floor->FloorId,Id,Eye,World);},ProofProfile.Clear);
+ };
  // These are rejection bounds of the same nominal predicates. They can only
  // reject a region wholly outside; ambiguous geometry still uses exact Hard.
  auto Possible=[&](const auto& E)
@@ -228,8 +266,17 @@ bool USightWeaveWorldSubsystem::TrySurfaceRegion(FSightWeaveKnowledgeOwnerId Own
    for(auto N:{F*S+Side*C,F*S-Side*C})
    {double Maximum=-DBL_MAX;for(auto P:World)Maximum=FMath::Max(Maximum,FVector2D::DotProduct(N,FVector2D(P)-E.PolarOrigin));if(Maximum<0)return false;}
   }
-  return XY.ComputeSquaredDistanceToPoint(FVector2D(Eye))<=FMath::Square(D.Range+T.PointOnEdgeEpsilon)
-   && !Frame->SurfaceScene->BeamBlocked(Floor->FloorId,Eye,Normal,World);
+  if(XY.ComputeSquaredDistanceToPoint(FVector2D(Eye))>FMath::Square(D.Range+T.PointOnEdgeEpsilon))return false;
+  if(UsePrepared)
+  {
+   const auto& Proof=Prepared(Eye);
+   if(Proof.IsClear(UV)){if(Profiling)++ProofProfile.ClearHits;return true;}
+   if(Proof.IsBlocked(UV)){if(Profiling)++ProofProfile.BlockedHits;return false;}
+   // BeamBlocked requires ONE convex blocker to contain the full rectangle.
+   // If no outer shadow contains it, the exact denial test cannot succeed.
+   if(Proof.bComplete && !Proof.ClearShadows.ContainsByPredicate([&](const auto& S){return S.Contains(UV);}))return true;
+  }
+  return !ProfileProof([&](){return Frame->SurfaceScene->BeamBlocked(Floor->FloorId,Eye,Normal,World);},ProofProfile.Blocked);
  };
  bool PossiblePair=false;
  for(const auto& V:Frame->VisionSources)if(V.Description.KnowledgeOwnerId==Owner && Possible(V))
@@ -248,28 +295,113 @@ bool USightWeaveWorldSubsystem::TrySurfaceRegion(FSightWeaveKnowledgeOwnerId Own
  for(const auto& V:Frame->VisionSources)
  {
   if(!Convex(V.Description) || V.Description.NearAwarenessRadius>0)continue;
-  TArray<FSightWeaveIlluminationSourceHandle> Common;bool All=true;
+  if(!V.Description.bActive || V.Description.KnowledgeOwnerId!=Owner || V.Description.FloorId!=Floor->FloorId)continue;
+  // A different source may have made PossiblePair true. Do not send distant
+  // cells through the short-range body source's corner cache/evaluator.
+  if(UsePrepared && (FVector::DotProduct(Normal,V.Description.Transform.GetLocation()-World[0])<=Contact
+   || XY.ComputeSquaredDistanceToPoint(FVector2D(V.Description.Transform.GetLocation()))>FMath::Square(V.Description.Range+T.PointOnEdgeEpsilon)))continue;
+  TArray<FSightWeaveIlluminationSourceHandle,TInlineAllocator<4>> Common;bool All=true;
   FSightWeaveSurfaceContext Context{Frame->SurfaceScene.Get(),Normal,Stats};
+  FVector2D CornerUV;
+  auto CornerOcclusion=[&](FVector Eye,FVector Point)
+  {
+   const auto& P=Prepared(Eye);const FBox2D At(CornerUV,CornerUV);
+   if(P.IsClear(At))return true;if(P.IsBlocked(At))return false;
+   return Frame->SurfaceScene->Unoccluded(Floor->FloorId,Eye,Point,Stats);
+  };
+  TFunctionRef<bool(FVector,FVector)> OcclusionRef(CornerOcclusion);
+  if(UsePrepared)Context.PreparedOcclusion=&OcclusionRef;
   for(int I=0;I<World.Num();++I)
   {
-   FSightWeaveVisibilityQueryResult Q;const FSightWeaveSurfaceRegionCorner Key{{Id,Face,Points[I]},V.Handle};
-   if(const auto* Hit=SurfaceRegionCorners.Find(Key)){Q=*Hit;if(Stats)++Stats->CacheHits;}
+   CornerUV=Points[I];
+   const FSightWeaveSurfaceRegionCorner Key{{Id,Face,Points[I]},V.Handle};
+   const auto* Evidence=SurfaceRegionCorners.Find(Key);
+   if(Evidence){if(Stats)++Stats->CacheHits;}
    else
    {
+    FSightWeaveSurfaceCornerEvidence Q;
     if(Stats)++Stats->ExactSamples;
-    QueryEffectiveLiveValidated(Owner,Floor->FloorId,World[I],&V.Handle,false,*Frame,*Floor,T,Q,nullptr,0,0,false,false,&Context);
-    if(SurfaceRegionCorners.Num()>=4096)SurfaceRegionCorners.Reset();SurfaceRegionCorners.Add(Key,Q);
+    ProfileProof([&]()
+    {
+     if(!UsePrepared)
+     {
+      FSightWeaveVisibilityQueryResult Full;
+      QueryEffectiveLiveValidated(Owner,Floor->FloorId,World[I],&V.Handle,false,*Frame,*Floor,T,Full,nullptr,0,0,false,false,&Context);
+      Q.bVisible=Full.bVisible;Q.ContributingIlluminationSources.Append(Full.ContributingIlluminationSources);
+     }
+     else
+     {
+      // Compact source-restricted evidence uses the SAME surface predicate as
+      // Hard EffectiveLive. Owner/source policy and floor are fixed here;
+      // hard suppression was already conservatively excluded for the region.
+      const FVector P=World[I];
+      if(Floor->bEnabled && Floor->bActiveForQueries && P.X>=Floor->BoundsMin.X-T.PointOnEdgeEpsilon && P.X<=Floor->BoundsMax.X+T.PointOnEdgeEpsilon
+       && P.Y>=Floor->BoundsMin.Y-T.PointOnEdgeEpsilon && P.Y<=Floor->BoundsMax.Y+T.PointOnEdgeEpsilon
+       && P.Z>=Floor->HeightRange.ZMin-T.HeightOverlapEpsilon && P.Z<=Floor->HeightRange.ZMax+T.HeightOverlapEpsilon
+       && SightWeave::IsSurfaceSourcePointContained(V,Floor->FloorId,P,T,Context))
+      {
+       Q.bVisible=V.Description.IlluminationPolicy==ESightWeaveIlluminationPolicy::BypassLegalIllumination;
+       if(!Q.bVisible)for(int L:V.CompatibleIlluminationSourceIndices)
+        if(Frame->IlluminationSources.IsValidIndex(L) && SightWeave::IsSurfaceSourcePointContained(Frame->IlluminationSources[L],Floor->FloorId,P,T,Context))
+        {Q.bVisible=true;Q.ContributingIlluminationSources.Add(Frame->IlluminationSources[L].Handle);}
+      }
+     }
+     return true;
+    },ProofProfile.Corner);
+    if(SurfaceRegionCorners.Num()>=4096)SurfaceRegionCorners.Reset();Evidence=&SurfaceRegionCorners.Add(Key,MoveTemp(Q));
    }
-   if(!Q.bVisible){All=false;break;}
-   if(I==0)Common=Q.ContributingIlluminationSources;else Common.RemoveAll([&](auto H){return !Q.ContributingIlluminationSources.Contains(H);});
+   if(!Evidence->bVisible){All=false;break;}
+   if(I==0)Common.Append(Evidence->ContributingIlluminationSources);else Common.RemoveAll([&](auto H){return !Evidence->ContributingIlluminationSources.Contains(H);});
   }
-  if(!All || !Frame->SurfaceScene->BeamClear(Floor->FloorId,Id,V.Description.Transform.GetLocation(),World))continue;
+  if(!All || !ClearBeam(V.Description.Transform.GetLocation()))continue;
   if(V.Description.IlluminationPolicy==ESightWeaveIlluminationPolicy::BypassLegalIllumination){Value=true;return true;}
   for(const auto& L:Frame->IlluminationSources)if(Common.Contains(L.Handle) && Convex(L.Description)
-   && Frame->SurfaceScene->BeamClear(Floor->FloorId,Id,L.Description.Transform.GetLocation(),World)){Value=true;return true;}
+   && ClearBeam(L.Description.Transform.GetLocation())){Value=true;return true;}
  }
  return false;
 }
+bool USightWeaveWorldSubsystem::RejectSurfaceCellStrip(FSightWeaveKnowledgeOwnerId Owner,FName Id,ESightWeaveBoxFace Face,const FBox2D& UV,int32 Axis) const
+{
+ check(IsInGameThread());const auto Frame=AcquirePublishedSnapshot();
+ if(!CVarSurfacePreparedProofs.GetValueOnGameThread() || !Frame || Frame!=SurfaceRegionFrame || Owner!=SurfaceRegionOwner
+  || Id!=SurfaceProofReceiver || Face!=SurfaceProofFace || !UV.bIsValid || (Axis!=0 && Axis!=1))return false;
+ const auto* Receiver=Frame->SurfaceScene->Find(Id);if(!Receiver)return false;
+ FVector Point,Normal;if(!Receiver->Box.Resolve(Face,UV.Min,Point,Normal) || UV.Max.GetAbsMax()>1)return false;
+ FVector Along,Across;FVector2D LongUV=UV.Min,ThinUV=UV.Min;LongUV[1-Axis]=UV.Max[1-Axis];ThinUV[Axis]=UV.Max[Axis];
+ Receiver->Box.Resolve(Face,LongUV,Along,Normal);Receiver->Box.Resolve(Face,ThinUV,Across,Normal);
+ const bool Vertical=FVector2D(Along)==FVector2D(Point);
+ const auto& T=GetDefault<USightWeaveSettings>()->GeometryTolerances;
+ auto Blocked=[&](FVector Eye)
+ {
+  auto* Proof=SurfaceBeamProofs.FindByPredicate([&](const auto& P){return P.Origin==Eye;});
+  if(!Proof)Proof=&SurfaceBeamProofs.Add_GetRef(Frame->SurfaceScene->PrepareFaceBeam(Receiver->Box,Face,Eye));
+  return Proof->BlockedShadows.ContainsByPredicate([&](const auto& S){return S.CrossesCellStrip(UV,Axis);});
+ };
+ auto CannotCover=[&](const auto& E)
+ {
+  const auto& D=E.Description;
+  const double Near=[&](){if constexpr(requires{D.NearAwarenessRadius;})return double(D.NearAwarenessRadius);else return 0.;}();
+  // Every cell of a vertical strip contains both XY endpoints. An endpoint
+  // outside the shared nominal predicate is a witness for every cell, at any Z.
+  if(Vertical && (!SightWeave::IsPointInNominalShape(Point,E.PolarOrigin,E.NominalForward,D.Shape,D.Range,E.NominalMinimumCosine,Near,T.PointOnEdgeEpsilon)
+   || !SightWeave::IsPointInNominalShape(Across,E.PolarOrigin,E.NominalForward,D.Shape,D.Range,E.NominalMinimumCosine,Near,T.PointOnEdgeEpsilon)))return true;
+  return Blocked(D.Transform.GetLocation());
+ };
+ for(const auto& V:Frame->VisionSources)
+ {
+  const auto& D=V.Description;
+  if(!D.bActive || D.KnowledgeOwnerId!=Owner || D.FloorId!=Receiver->Box.Floor || FVector::DotProduct(Normal,D.Transform.GetLocation()-Point)<=1.e-4)continue;
+  if(CannotCover(V))continue;
+  if(D.IlluminationPolicy==ESightWeaveIlluminationPolicy::BypassLegalIllumination)return false;
+  for(int I:V.CompatibleIlluminationSourceIndices)if(Frame->IlluminationSources.IsValidIndex(I))
+  {
+   const auto& L=Frame->IlluminationSources[I].Description;
+   if(L.bActive && L.FloorId==Receiver->Box.Floor && FVector::DotProduct(Normal,L.Transform.GetLocation()-Point)>1.e-4 && !CannotCover(Frame->IlluminationSources[I]))return false;
+  }
+ }
+ return true;
+}
+
 bool USightWeaveWorldSubsystem::UpdateSurfaceBox(const FSightWeaveSurfaceBox& Box)
 {
  auto* Existing=SurfaceBoxes.Find(Box.Id);if(!bSightWeaveInitialized || !Existing || !Box.IsValid() || !Floors.Contains(Box.Floor))return false;

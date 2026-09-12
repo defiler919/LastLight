@@ -1,0 +1,28 @@
+{
+  "run": "surface_closure_pair_reference_final",
+  "source": {
+    "head": "8047a5d58ecd40e0b0909fe106f056c829ed30a6",
+    "reference": false,
+    "surface_reference": true,
+    "still": false,
+    "started": "2026-09-12T21:02:39.696414+08:00",
+    "binary_sha256": "08B263404D023F11E18CAC4CAF9570EF98095ABD0998CEC2EC2997246488280D"
+  },
+  "completion": "240 matched pose samples; scripted replay, not native WASD",
+  "diagnostic_timing": false,
+  "frames": 240,
+  "dirty_frames": 237,
+  "surface_dirty_p50_us": 31936.601,
+  "surface_dirty_p95_us": 106398.299,
+  "surface_dirty_max_us": 139914.699,
+  "observe_p95_us": 104491.394,
+  "recognition_p95_us": 1.501,
+  "publish_p95_us": 2059.4,
+  "engine_game_p95_ms": 116.4007,
+  "wall_p95_ms": 116.2977,
+  "max_authority_queries": 61325,
+  "max_upload_bytes": 11222016,
+  "domains": 23,
+  "cells": 10624516,
+  "atlas_bytes": 45231904
+}

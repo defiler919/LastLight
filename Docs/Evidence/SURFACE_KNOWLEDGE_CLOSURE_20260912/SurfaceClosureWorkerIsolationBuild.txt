@@ -1,0 +1,36 @@
+Using bundled DotNet SDK version: 10.0 win-x64
+Running UnrealBuildTool: dotnet "..\..\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.dll" DarkwellEditor Win64 Development D:\UE_pro\Darkwell\Darkwell.uproject -WaitMutex -FromMsBuild
+Log file: C:\Users\defiler\AppData\Local\UnrealBuildTool\Log.txt
+Determining max actions to execute in parallel (12 physical cores, 24 logical cores)
+  Executing up to 12 processes, one per physical core
+Using 'git status' to determine working set for adaptive non-unity build (D:\UE_pro\Darkwell).
+UbaServer - Listening on 0.0.0.0:1345
+Available x64 toolchains (1):
+ * D:\Program Files (x86)\Microsoft Visual Studio\VC\Tools\MSVC\14.51.36231
+    (Family=14.51.36231, FamilyRank=2, Version=14.51.36256, HostArchitecture=x64, ReleaseChannel=Latest, Architecture=x64)
+Visual Studio compiler version 14.51.36256 is newer than latest preferred version 14.50.35717. Please use caution as this compiler has not been heavily tested
+Building DarkwellEditor...
+===== Toolchain Information =====
+Using ISPC compiler (D:\UE_5.8\Engine\Source\ThirdParty\Intel\ISPC\bin\Windows\ispc.exe)
+  Intel(r) Implicit SPMD Program Compiler (Intel(r) ISPC), 1.24.0 (build commit  @ 20250404, LLVM 18.1.2) 
+Using Visual Studio 14.51.36256 toolchain (D:\Program Files (x86)\Microsoft Visual Studio\VC\Tools\MSVC\14.51.36231) and Windows 10.0.26100.0 SDK (C:\Program Files (x86)\Windows Kits\10).
+Warning: Visual Studio compiler 14.51.36256 is not a preferred version
+[Adaptive Build] Excluded from SightWeaveRuntime unity file: SightWeaveSurface.cpp, SightWeaveSurfaceProof.cpp, SightWeaveSurfaceRaster.cpp, SightWeaveWorldSubsystem.cpp
+[Adaptive Build] Excluded from Darkwell unity file: DarkwellGrayObjectPolicyTests.cpp, DarkwellGrayPolicyLabV2Tests.cpp, DarkwellSurfaceObservationTests.cpp, DarkwellApartmentBenchmark.cpp, DarkwellObjectMemoryScene.cpp, DarkwellStaticEnvironmentSubsystem.cpp, DarkwellSurfaceKnowledge.cpp, DarkwellSurfaceKnowledgeSubsystem.cpp
+=================================
+Using Unreal Build Accelerator local executor to run 4 action(s)
+  CPU 12 physical cores, 24 logical cores
+  Memory 31.95 GB physical, 16.24 GB/38.95 GB committed
+  UBA Storage capacity 40 GB
+[1/4] Compile [x64] SightWeaveSurfaceRaster.cpp
+[2/4] Link [x64] UnrealEditor-SightWeaveRuntime.lib
+  正在创建库 D:/UE_pro/Darkwell/Plugins/SightWeave/Intermediate/Build/Win64/x64/UnrealEditor/Development/SightWeaveRuntime/UnrealEditor-SightWeaveRuntime.lib 和对象 D:/UE_pro/Darkwell/Plugins/SightWeave/Intermediate/Build/Win64/x64/UnrealEditor/Development/SightWeaveRuntime/UnrealEditor-SightWeaveRuntime.exp
+[3/4] Link [x64] UnrealEditor-SightWeaveRuntime.dll
+[4/4] WriteMetadata DarkwellEditor.target [NoUba]
+
+Total time in Unreal Build Accelerator local executor: 5.85 seconds
+Output binary: D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe
+
+Result: Succeeded
+Total execution time: 7.11 seconds
+Trace written to file C:\Users\defiler\AppData\Local\UnrealBuildTool\Trace.uba with size 5.8kb

@@ -1,0 +1,11 @@
+{
+  "head": "8047a5d58ecd40e0b0909fe106f056c829ed30a6",
+  "started": "2026-09-12T19:07:05.9278876+08:00",
+  "editor_args": [
+    "-SurfaceApartmentParity"
+  ],
+  "rhi_args": [
+    "-d3d12",
+    "-sm6"
+  ]
+}

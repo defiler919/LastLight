@@ -1,0 +1,18 @@
+{
+  "run": "surface_closure_rules_verified",
+  "selector": "Darkwell.PropLab.GrayObjectPolicy+Darkwell.PropLab.HistoryPolicy+Darkwell.PropLab.SpatialMemory+Darkwell.PropLab.Stale+Darkwell.PropLab.Scope+Darkwell.PropLab.Runtime+Darkwell.UnknownPartial+Darkwell.UnknownRegion",
+  "exit_code": 0,
+  "wall_seconds": 126.0068848,
+  "total": 64,
+  "clean": 60,
+  "warnings": 2,
+  "failed": 2,
+  "not_run": 0,
+  "duration": 94.90706634521484,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.PropLab.GrayObjectPolicy+Darkwell.PropLab.HistoryPolicy+Darkwell.PropLab.SpatialMemory+Darkwell.PropLab.Stale+Darkwell.PropLab.Scope+Darkwell.PropLab.Runtime+Darkwell.UnknownPartial+Darkwell.UnknownRegion\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_rules_verified\\surface_closure_rules_verified_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_rules_verified\\surface_closure_rules_verified.log"
+  ],
+  "passed": false
+}

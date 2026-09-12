@@ -1,0 +1,213 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "DESKTOP-IBLNS3N",
+			"instance": "755EB99F4E852B84268D1D957E797605",
+			"instanceName": "DESKTOP-IBLNS3N-31264",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 10 (22H2) [10.0.19045.6466] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 2070 SUPER",
+			"cPUModel": "AMD Ryzen 9 3900X 12-Core Processor            ",
+			"rAMInGB": 32,
+			"renderMode": "D3D12_SM6",
+			"rHI": "D3D12 (SM6)",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.12-12.56.25",
+	"succeeded": 0,
+	"succeededWithWarnings": 0,
+	"failed": 1,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 0.48586940765380859,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "JoinedOccupancyParityAndInvalidation",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation",
+			"tags": [],
+			"state": "Fail",
+			"deviceInstance": [
+				"755EB99F4E852B84268D1D957E797605"
+			],
+			"duration": 0.48586940765380859,
+			"dateTime": "2026.09.12-12.56.24",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogStreaming: FlushAsyncLoading(364): 1 QueuedPackages, 0 AsyncPackages",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab ready furniture=0; controls: Darkwell.PropLab help",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab activated continuous coverage, no composite/stencil; 8 occluders; TSR unchanged; manualRoom=0",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellMovingPropLab: MOVING_RULES_RESET rule=SpatialEvidenceOnly enemy=0 timer=0 identities=9 inWorld=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.25"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=1 episode=1 reason=TEST_EPOCH_SCALING freezes=1 transform_rev=1 coverage_rev=0 grid_rev=1 proxy=65488 texture=240x136 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.25"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=2 episode=2 reason=TEST_EPOCH_SCALING freezes=2 transform_rev=1 coverage_rev=0 grid_rev=1 proxy=65500 texture=268x192 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.25"
+				},
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogPhysics: Scale for /Game/Maps/L_ProjectFogPropGameplayLab.GrayObjectPolicy_0:PersistentLevel.DarkwellPropLabFurniture_10.Part0 has a component set to zero, which will result in a bad body instance. Scale:X=0.000 Y=0.000 Z=0.000 Package:/Game/Maps/L_ProjectFogPropGameplayLab",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.25"
+				},
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogPhysics: Initialising Body : Scale3D is (nearly) zero: DarkwellPropLabFurniture_10 /Game/Maps/L_ProjectFogPropGameplayLab.GrayObjectPolicy_0:PersistentLevel.DarkwellPropLabFurniture_10.Part0 ",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.25"
+				},
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogPhysics: Scale for /Game/Maps/L_ProjectFogPropGameplayLab.GrayObjectPolicy_0:PersistentLevel.DarkwellPropLabFurniture_10.Part0 has a component set to zero, which will result in a bad body instance. Scale:X=0.000 Y=0.000 Z=0.000 Package:/Game/Maps/L_ProjectFogPropGameplayLab",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.25"
+				},
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogPhysics: Initialising Body : Scale3D is (nearly) zero: DarkwellPropLabFurniture_10 /Game/Maps/L_ProjectFogPropGameplayLab.GrayObjectPolicy_0:PersistentLevel.DarkwellPropLabFurniture_10.Part0 ",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.25"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Occupancy.Reuse.SingleBox epoch=1 episode=1 reason=TEST_EPOCH_SCALING freezes=1 transform_rev=1 coverage_rev=0 grid_rev=1 proxy=65558 texture=8x16 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.25"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Occupancy.Reuse.SingleBox epoch=2 episode=2 reason=TEST_EPOCH_SCALING freezes=2 transform_rev=1 coverage_rev=0 grid_rev=1 proxy=65570 texture=12x16 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.25"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Fixture explicitly selects single/compound geometry eligibility: The two values are not equal.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 1434,
+					"timestamp": "2026.09.12-12.56.25"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "OCCUPANCY_PARITY compared=31 joined=24; thin Whole/Partial, rotated/tilted/negative-scale, empty ROI/frame, cache capacity/hits, small/live fallback, duplicate indices, dirty/reuse/revision/coarse/world teardown",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.56.25"
+				}
+			],
+			"warnings": 4,
+			"errors": 1,
+			"artifacts": []
+		}
+	]
+}

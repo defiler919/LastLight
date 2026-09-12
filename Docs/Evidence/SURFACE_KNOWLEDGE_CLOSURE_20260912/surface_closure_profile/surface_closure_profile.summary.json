@@ -1,0 +1,18 @@
+{
+  "run": "surface_closure_profile",
+  "selector": "Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale",
+  "exit_code": 0,
+  "wall_seconds": 30.9616591,
+  "total": 1,
+  "clean": 1,
+  "warnings": 0,
+  "failed": 0,
+  "not_run": 0,
+  "duration": 0.61305171251297,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_profile\\surface_closure_profile_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_profile\\surface_closure_profile.log"
+  ],
+  "passed": true
+}

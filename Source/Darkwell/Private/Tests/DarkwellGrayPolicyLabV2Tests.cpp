@@ -22,14 +22,18 @@ namespace Darkwell::GrayPolicyLabV2Tests
 		explicit FScopedMap(const TCHAR* Path)
 		{
 			UPackage* Package=LoadPackage(nullptr,Path,LOAD_None);
-			World.Reset(Package?UWorld::FindWorldInPackage(Package):nullptr);
+			// Other fixtures create transient worlds in these map packages to
+			// exercise map-based activation. FindWorldInPackage can pick one of
+			// those retired fixtures instead of the asset we just loaded, leaving
+			// the real map's initialized subsystems for a later test's GC.
+			World.Reset(Package?FindObject<UWorld>(Package,*FPackageName::GetLongPackageAssetName(Path)):nullptr);
 		}
 		~FScopedMap()
 		{
 			// Raw package loading can initialize world subsystems. A later test's
 			// GC must not become responsible for tearing down this map. Never clean
 			// a user/editor world which already has an engine context.
-			if(World.IsValid() && !GEngine->GetWorldContextFromWorld(World.Get()))
+			if(World.IsValid() && World->IsInitialized() && !GEngine->GetWorldContextFromWorld(World.Get()))
 				World->DestroyWorld(false);
 		}
 	};

@@ -1,0 +1,18 @@
+{
+  "run": "surface_closure_joined_final",
+  "selector": "Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation",
+  "exit_code": 0,
+  "wall_seconds": 31.1696829,
+  "total": 1,
+  "clean": 0,
+  "warnings": 0,
+  "failed": 1,
+  "not_run": 0,
+  "duration": 0.4858694076538086,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_joined_final\\surface_closure_joined_final_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_joined_final\\surface_closure_joined_final.log"
+  ],
+  "passed": false
+}

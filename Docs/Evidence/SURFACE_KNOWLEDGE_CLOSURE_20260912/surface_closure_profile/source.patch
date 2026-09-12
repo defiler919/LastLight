@@ -1,0 +1,53 @@
+diff --git a/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp b/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp
+index e35e518..eceb554 100644
+--- a/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp
++++ b/Source/Darkwell/Private/Tests/DarkwellSurfaceObservationTests.cpp
+@@ -583,7 +583,8 @@ bool FSurfaceKnowledgeApartment::RunTest(const FString&)
+  TestNotNull(TEXT("Rotated wardrobe uses surface domain"),S->Find(TEXT("Apartment.Wardrobe.Partial37")));
+  TArray<double> Times;uint64 MaxQueries=0,MaxUpload=0;
+  for(int I=0;I<20;++I)
+- {V.Transform=FTransform(FRotator(0,I*4.,0),FVector(-160+I*2.,-260,162));W.Runtime->UpdateVisionSource(H,V);S->Tick(0);Times.Add(S->UpdateUs);MaxQueries=FMath::Max(MaxQueries,S->ExactSamples);MaxUpload=FMath::Max(MaxUpload,S->UploadBytes);}
++ {V.Transform=FTransform(FRotator(0,I*4.,0),FVector(-160+I*2.,-260,162));W.Runtime->UpdateVisionSource(H,V);S->Tick(0);Times.Add(S->UpdateUs);MaxQueries=FMath::Max(MaxQueries,S->ExactSamples);MaxUpload=FMath::Max(MaxUpload,S->UploadBytes);
++  AddInfo(FString::Printf(TEXT("SURFACE_APARTMENT_STAGE frame=%d observe_us=%.3f recognition_us=%.3f publish_us=%.3f"),I,S->ObserveUs,S->RecognitionUs,S->PublishUs));}
+  Times.Sort();AddInfo(FString::Printf(TEXT("SURFACE_APARTMENT_DIRTY p95_us=%.3f max_us=%.3f max_authority_queries=%llu max_upload_bytes=%llu"),Times[18],Times[19],MaxQueries,MaxUpload));
+  S->Tick(0);TestEqual(TEXT("Stationary apartment has no Surface query work"),S->ExactSamples,uint64(0));TestEqual(TEXT("Stationary apartment has no Surface upload work"),S->UploadBytes,uint64(0));AddInfo(TEXT("SURFACE_APARTMENT_STABLE ")+S->GetTelemetry());
+  Apartment->Destroy();return true;
+diff --git a/Source/Darkwell/Private/VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.cpp b/Source/Darkwell/Private/VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.cpp
+index c5a80e9..94ceffa 100644
+--- a/Source/Darkwell/Private/VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.cpp
++++ b/Source/Darkwell/Private/VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.cpp
+@@ -41,6 +41,7 @@ bool UDarkwellSurfaceKnowledgeSubsystem::OwnsMesh(const UStaticMeshComponent* Me
+ void UDarkwellSurfaceKnowledgeSubsystem::Tick(float)
+ {
+  const double Start=FPlatformTime::Seconds();ExactSamples=Proofs=UploadBytes=0;
++ ObserveUs=RecognitionUs=PublishUs=0;
+  auto* R=GetWorld()->GetSubsystem<USightWeaveWorldSubsystem>();FSightWeaveMemoryScopeKey Scope;
+  if(!R || !R->GetExplorationMemoryScope(Scope)){for(auto& D:Domains)D.Material->SetScalarParameterValue(TEXT("SurfaceReady"),0);return;}
+  // Register every new domain BEFORE sampling any domain from the final snapshot.
+@@ -74,9 +75,13 @@ void UDarkwellSurfaceKnowledgeSubsystem::Tick(float)
+  {
+   const bool SameScope=D.Scope.IsEquivalentTo(Scope);
+   D.Material->SetScalarParameterValue(TEXT("SurfaceReady"),SameScope?1:0);if(!SameScope)continue;
++  const double ObserveStart=FPlatformTime::Seconds();
+   D.Knowledge.Observe(*R);ExactSamples+=D.Knowledge.ExactSamples;Proofs+=D.Knowledge.Proofs;
++  const double RecognitionStart=FPlatformTime::Seconds();ObserveUs+=(RecognitionStart-ObserveStart)*1.e6;
+   if(!D.bRecognized && D.WholeSpan>0 && D.Knowledge.LiveSpanCm()>=D.WholeSpan)D.bRecognized=true;
++  const double PublishStart=FPlatformTime::Seconds();RecognitionUs+=(PublishStart-RecognitionStart)*1.e6;
+   Publish(D);
++  PublishUs+=(FPlatformTime::Seconds()-PublishStart)*1.e6;
+  }
+  UpdateUs=(FPlatformTime::Seconds()-Start)*1.e6;
+ }
+diff --git a/Source/Darkwell/Public/VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h b/Source/Darkwell/Public/VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h
+index 2339043..feee201 100644
+--- a/Source/Darkwell/Public/VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h
++++ b/Source/Darkwell/Public/VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h
+@@ -30,7 +30,7 @@ public:
+  bool IsWholeRecognized(FName Id) const;
+  UTexture2D* GetAtlas(FName Id) const;
+  uint64 ExactSamples=0,Proofs=0,UploadBytes=0;
+- double UpdateUs=0;
++ double UpdateUs=0, ObserveUs=0, RecognitionUs=0, PublishUs=0;
+ private:
+  struct FDomain
+  {

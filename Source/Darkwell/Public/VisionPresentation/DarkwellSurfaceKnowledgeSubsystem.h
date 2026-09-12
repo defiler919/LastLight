@@ -15,7 +15,8 @@ class DARKWELL_API UDarkwellSurfaceKnowledgeSubsystem : public UTickableWorldSub
 {
  GENERATED_BODY()
 public:
- bool RegisterFixedBox(UStaticMeshComponent* Mesh,FName StableDomain,FLinearColor Tint,bool StaticDomain,float WholeSpan=0,uint32 ContentVersion=1);
+ // Negative span means no Whole policy; zero means first legal contact.
+ bool RegisterFixedBox(UStaticMeshComponent* Mesh,FName StableDomain,FLinearColor Tint,bool StaticDomain,float WholeSpan=-1,uint32 ContentVersion=1);
  UFUNCTION(BlueprintPure) FString GetTelemetry() const;
  bool OwnsMesh(const UStaticMeshComponent* Mesh) const;
  void UnregisterDomain(FName Id);
@@ -29,8 +30,11 @@ public:
  const FDarkwellSurfaceKnowledge* Find(FName Id) const;
  bool IsWholeRecognized(FName Id) const;
  UTexture2D* GetAtlas(FName Id) const;
+#if WITH_DEV_AUTOMATION_TESTS
+ TArray<FName> GetDomainIdsForTesting() const {TArray<FName> Ids;for(const auto& D:Domains)Ids.Add(D.Id);return Ids;}
+#endif
  uint64 ExactSamples=0,Proofs=0,UploadBytes=0;
- double UpdateUs=0;
+ double UpdateUs=0, ObserveUs=0, RecognitionUs=0, PublishUs=0;
 private:
  struct FDomain
  {
@@ -43,7 +47,7 @@ private:
   UTexture2D* Atlas=nullptr;
   TArray<class UMaterialInterface*> OriginalMaterials;
   bool bStatic=false,bReady=false,bViolated=false,bRecognized=false;
-  float WholeSpan=0;
+  float WholeSpan=-1;
   uint32 ContentVersion=1;
  };
  TArray<FDomain> Domains;

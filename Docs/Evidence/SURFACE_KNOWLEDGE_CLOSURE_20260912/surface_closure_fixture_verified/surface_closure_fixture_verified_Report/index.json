@@ -1,0 +1,349 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "DESKTOP-IBLNS3N",
+			"instance": "70DA1D5B4508F72D50979DBECD811EC6",
+			"instanceName": "DESKTOP-IBLNS3N-32124",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 10 (22H2) [10.0.19045.6466] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 2070 SUPER",
+			"cPUModel": "AMD Ryzen 9 3900X 12-Core Processor            ",
+			"rAMInGB": 32,
+			"renderMode": "D3D12_SM6",
+			"rHI": "D3D12 (SM6)",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.12-13.00.46",
+	"succeeded": 2,
+	"succeededWithWarnings": 0,
+	"failed": 0,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 0.64354312419891357,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "JoinedOccupancyParityAndInvalidation",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"70DA1D5B4508F72D50979DBECD811EC6"
+			],
+			"duration": 0.31382268667221069,
+			"dateTime": "2026.09.12-13.00.45",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "OCCUPANCY_PARITY compared=31 joined=29; thin Whole/Partial, rotated/tilted/negative-scale, empty ROI/frame, cache capacity/hits, small/live fallback, duplicate indices, dirty/reuse/revision/coarse/world teardown",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ApartmentScale",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"70DA1D5B4508F72D50979DBECD811EC6"
+			],
+			"duration": 0.32972040772438049,
+			"dateTime": "2026.09.12-13.00.46",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_COLD {\"domains\":23,\"ready\":23,\"cells\":10624516,\"atlas_bytes\":45231904,\"authority_queries\":4171,\"certified_regions\":735,\"unresolved_cells\":1887,\"upload_bytes\":3465484,\"update_us\":36555.201,\"observe_us\":14920.209,\"recognition_us\":8.497,\"publish_us\":2102.204}",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=0 observe_us=1.401 recognition_us=5.804 publish_us=0.503",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=1 observe_us=17641.403 recognition_us=7.503 publish_us=175.502",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=2 observe_us=15995.499 recognition_us=6.802 publish_us=291.899",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=3 observe_us=16213.100 recognition_us=8.006 publish_us=397.403",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=4 observe_us=15283.994 recognition_us=8.207 publish_us=329.003",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=5 observe_us=15093.092 recognition_us=5.711 publish_us=381.697",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=6 observe_us=17467.391 recognition_us=6.307 publish_us=258.796",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=7 observe_us=10926.981 recognition_us=8.211 publish_us=429.101",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=8 observe_us=11678.606 recognition_us=10.099 publish_us=262.290",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=9 observe_us=11490.494 recognition_us=5.696 publish_us=260.301",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=10 observe_us=9877.689 recognition_us=6.001 publish_us=225.805",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=11 observe_us=9988.595 recognition_us=5.409 publish_us=235.096",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=12 observe_us=10660.794 recognition_us=5.495 publish_us=228.301",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=13 observe_us=11701.100 recognition_us=7.000 publish_us=242.002",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=14 observe_us=9669.907 recognition_us=6.307 publish_us=355.195",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=15 observe_us=9448.711 recognition_us=7.004 publish_us=363.100",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=16 observe_us=8114.297 recognition_us=6.493 publish_us=407.904",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=17 observe_us=8398.507 recognition_us=9.604 publish_us=268.906",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=18 observe_us=9835.497 recognition_us=6.512 publish_us=217.892",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=19 observe_us=7663.894 recognition_us=4.604 publish_us=149.205",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_DIRTY p95_us=17788.999 max_us=17868.400 max_authority_queries=4287 max_upload_bytes=442836",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STABLE {\"domains\":23,\"ready\":23,\"cells\":10624516,\"atlas_bytes\":45231904,\"authority_queries\":0,\"certified_regions\":0,\"unresolved_cells\":0,\"upload_bytes\":0,\"update_us\":33.498,\"observe_us\":1.300,\"recognition_us\":4.001,\"publish_us\":0.596}",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-13.00.46"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

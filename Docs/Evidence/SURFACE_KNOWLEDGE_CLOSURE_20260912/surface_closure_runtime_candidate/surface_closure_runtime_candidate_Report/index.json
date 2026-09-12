@@ -1,0 +1,2048 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "DESKTOP-IBLNS3N",
+			"instance": "8FC457B8429451C82D5211AC856C92D8",
+			"instanceName": "DESKTOP-IBLNS3N-22820",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 10 (22H2) [10.0.19045.6466] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 2070 SUPER",
+			"cPUModel": "AMD Ryzen 9 3900X 12-Core Processor            ",
+			"rAMInGB": 32,
+			"renderMode": "D3D12_SM6",
+			"rHI": "D3D12 (SM6)",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.12-12.16.23",
+	"succeeded": 75,
+	"succeededWithWarnings": 1,
+	"failed": 1,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 7.1085362434387207,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "VisionIlluminationBoundary",
+			"fullTestPath": "Darkwell.SightWeave.Closure.VisionIlluminationBoundary",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.75031548738479614,
+			"dateTime": "2026.09.12-12.16.15",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Legacy torch full-texture max error=1.000000",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.15"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Runtime area oracle pixels=10182 max error=0.000000",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.15"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "01_TorchOn_Dark: cone=2200/52 active; body bypass; target=1 far=0; GPU=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.15"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "02_TorchEmpty_Environment: cone=2200/52 active; body bypass; target=1 far=1; GPU=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.16"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "03_TorchEmpty_NoLight: cone=2200/52 active; body bypass; target=0 far=0; GPU=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.16"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "04_TorchRestored: cone=2200/52 active; body bypass; target=1 far=0; GPU=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.16"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "VisionIllumination",
+			"fullTestPath": "Darkwell.SightWeave.Differential.VisionIllumination",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 3.0238838195800781,
+			"dateTime": "2026.09.12-12.16.16",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Cross-path existing-semantics acceptance: rows=26 hard-rejected/store-positive=0; ../../../../UE_pro/Darkwell/Saved/VisionIlluminationDifferential.csv. No top-face or slab-propagation product claim.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.19"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "DefaultLegacy",
+			"fullTestPath": "Darkwell.SightWeave.M6P1.Authority.DefaultLegacy",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.013312101364135742,
+			"dateTime": "2026.09.12-12.16.19",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "VerticalSliceAuthority",
+			"fullTestPath": "Darkwell.SightWeave.M6P1.Integration.VerticalSliceAuthority",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.21412950754165649,
+			"dateTime": "2026.09.12-12.16.19",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "DuplicateFixtureRollback",
+			"fullTestPath": "Darkwell.SightWeave.M6P1.Lifecycle.DuplicateFixtureRollback",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.10901360213756561,
+			"dateTime": "2026.09.12-12.16.19",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogDarkwellRememberedProp: Duplicate RememberableProp stable id rejected: Fixture.RememberableProp.Cabinet",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.19"
+				}
+			],
+			"warnings": 1,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "MultiWorldIsolation",
+			"fullTestPath": "Darkwell.SightWeave.M6P1.Lifecycle.MultiWorldIsolation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.055665798485279083,
+			"dateTime": "2026.09.12-12.16.19",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RotatedOcclusionOracle",
+			"fullTestPath": "Darkwell.SightWeave.StaticKnowledge.RotatedOcclusionOracle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.029344700276851654,
+			"dateTime": "2026.09.12-12.16.19",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "TileEdgesSparseAndDirty",
+			"fullTestPath": "Darkwell.SightWeave.StaticKnowledge.TileEdgesSparseAndDirty",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0097921006381511688,
+			"dateTime": "2026.09.12-12.16.19",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "UnknownClearBlock",
+			"fullTestPath": "Darkwell.SightWeave.StaticKnowledge.UnknownClearBlock",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.035261798650026321,
+			"dateTime": "2026.09.12-12.16.19",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ApartmentScale",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale",
+			"tags": [],
+			"state": "Fail",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.79607540369033813,
+			"dateTime": "2026.09.12-12.16.20",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogStreaming: FlushAsyncLoading(368): 1 QueuedPackages, 0 AsyncPackages",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogTemp: APARTMENT initial=Unknown records=0 doors=3 fixedSegments=13 Whole+Partial37 bedroomBlackout=Inactive",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_COLD {\"domains\":23,\"ready\":23,\"cells\":10624516,\"atlas_bytes\":45231904,\"authority_queries\":4171,\"certified_regions\":877,\"unresolved_cells\":1887,\"upload_bytes\":3465484,\"update_us\":34449.499,\"observe_us\":16403.791,\"recognition_us\":7.384,\"publish_us\":2373.908}",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Known parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=0 observe_us=1.401 recognition_us=3.695 publish_us=1.207",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Known parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=1 observe_us=13322.905 recognition_us=4.094 publish_us=434.697",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Known parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=2 observe_us=14593.713 recognition_us=3.599 publish_us=554.599",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Known parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=3 observe_us=12997.296 recognition_us=4.802 publish_us=593.800",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=4 observe_us=12779.690 recognition_us=4.105 publish_us=610.400",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=5 observe_us=13680.372 recognition_us=3.602 publish_us=652.608",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=6 observe_us=13513.010 recognition_us=4.701 publish_us=579.298",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=7 observe_us=12046.698 recognition_us=4.508 publish_us=734.795",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=8 observe_us=9900.998 recognition_us=3.595 publish_us=445.999",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=9 observe_us=9051.606 recognition_us=3.994 publish_us=359.304",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=10 observe_us=8707.110 recognition_us=3.401 publish_us=298.291",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=11 observe_us=8893.497 recognition_us=4.102 publish_us=270.993",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=12 observe_us=8240.797 recognition_us=3.595 publish_us=217.702",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Apartment reference Live parity Apartment.Wall.1 face 3' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSurfaceObservationTests.cpp",
+					"lineNumber": 608,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=13 observe_us=7979.903 recognition_us=4.001 publish_us=269.502",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=14 observe_us=7903.315 recognition_us=3.599 publish_us=327.904",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=15 observe_us=7518.012 recognition_us=3.401 publish_us=245.601",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=16 observe_us=6884.910 recognition_us=3.997 publish_us=342.701",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=17 observe_us=6680.813 recognition_us=3.789 publish_us=254.299",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=18 observe_us=6841.604 recognition_us=3.897 publish_us=216.499",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STAGE frame=19 observe_us=7038.191 recognition_us=3.606 publish_us=143.893",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_DIRTY p95_us=14372.800 max_us=15197.601 max_authority_queries=4287 max_upload_bytes=1192332",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_STABLE {\"domains\":23,\"ready\":23,\"cells\":10624516,\"atlas_bytes\":45231904,\"authority_queries\":0,\"certified_regions\":0,\"unresolved_cells\":0,\"upload_bytes\":0,\"update_us\":27.701,\"observe_us\":1.606,\"recognition_us\":3.800,\"publish_us\":0.797}",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_APARTMENT_PARITY domains=23 compared_cells=223114836; timings include diagnostic cache interference, not a performance acceptance run",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				}
+			],
+			"warnings": 0,
+			"errors": 18,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BoundedPerformance",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.BoundedPerformance",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.056858602911233902,
+			"dateTime": "2026.09.12-12.16.20",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_KNOWLEDGE_DIRTY p95_us=21.800 p99_us=25.701 authority_corner_queries=400 unresolved=0 cells=167936",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_KNOWLEDGE_OCCLUDED us=26.099 certified_regions=6 queries=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.20"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "DomainLifecycle",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.DomainLifecycle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.10066069662570953,
+			"dateTime": "2026.09.12-12.16.20",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "FactsAndArchive",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.FactsAndArchive",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.046304900199174881,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ObjectStaticP4",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.ObjectStaticP4",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.1927931010723114,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=236,G=0,B=34,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface mesh visible=1 hidden=0 renderstate=1 position=X=0.000 Y=0.000 Z=100.000",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=255,G=254,B=247,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=193,G=193,B=193,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=0 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=196,G=196,B=196,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_KNOWLEDGE_P4 atlas=320x640 changed_upload_bytes=172032 stable_update_us=14.599",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Surface P4 camera top=1 center=(R=0,G=0,B=0,A=255)",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ObjectWholeAndModifiers",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.ObjectWholeAndModifiers",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.046356100589036942,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PreparedKnowledgeParity",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.PreparedKnowledgeParity",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.046857200562953949,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_KNOWLEDGE_PARITY compared_cells=95616",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PreparedShadowOracle",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.PreparedShadowOracle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.029476501047611237,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_SHADOW_ORACLE clear_checks=41525 blocked_checks=69850",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RegionProof",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceKnowledge.RegionProof",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.019815798848867416,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PolicyAndMemory",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.CurrentModel.PolicyAndMemory",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.016445599496364594,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "KnownGaps",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.LegacyConsumers.KnownGaps",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.017164900898933411,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Legacy XY consumer gaps reproduced. RuntimeV1 tests cover the new receiver API; Object/Static/P4 surface migration remains separate.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BatchLifecycle",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.BatchLifecycle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.020861499011516571,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BoundedPerformance",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.BoundedPerformance",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.10538309812545776,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_V1_PERF boxes=257 samples=400 cold_us=237.901 warm_p95_us=36.903 warm_p99_us=39.499 nodes=6800 primitives=400 cache_hits=40000",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "SURFACE_V1_DIRTY samples=400 query_p95_us=272.401 query_p99_us=276.100 source_publish_p95_us=206.597 source_publish_p99_us=208.300",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.21"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Geometry",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.Geometry",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.018143299967050552,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ObserverPose",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.ObserverPose",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.015889398753643036,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Policy",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.RuntimeV1.Policy",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.018263399600982666,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Geometry",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.Spec.Geometry",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0087074004113674164,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Knowledge",
+			"fullTestPath": "Darkwell.SightWeave.SurfaceObservation.Spec.Knowledge",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0085440985858440399,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ChannelOwnerAndFloorIsolation",
+			"fullTestPath": "SightWeave.M2.Query.Compatibility.ChannelOwnerAndFloorIsolation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.023387201130390167,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "GatedExtentAndProfileRevision",
+			"fullTestPath": "SightWeave.M2.Query.Compatibility.GatedExtentAndProfileRevision",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.018416501581668854,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "InfraredAndMultiChannel",
+			"fullTestPath": "SightWeave.M2.Query.Compatibility.InfraredAndMultiChannel",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.021051902323961258,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "VisibleVisible",
+			"fullTestPath": "SightWeave.M2.Query.Compatibility.VisibleVisible",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.016173500567674637,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "OpenCloseDeterminism",
+			"fullTestPath": "SightWeave.M2.Query.DynamicDoor.OpenCloseDeterminism",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.01692190021276474,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BypassWithoutCompatibility",
+			"fullTestPath": "SightWeave.M2.Query.EffectiveLive.BypassWithoutCompatibility",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.016358397901058197,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "HardSuppressionLifecycle",
+			"fullTestPath": "SightWeave.M2.Query.EffectiveLive.HardSuppressionLifecycle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.017134599387645721,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "IlluminationAlone",
+			"fullTestPath": "SightWeave.M2.Query.EffectiveLive.IlluminationAlone",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.015976298600435257,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "OcclusionHeightAndFloor",
+			"fullTestPath": "SightWeave.M2.Query.EffectiveLive.OcclusionHeightAndFloor",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.015395998954772949,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "UnionEightRemoteAndSourceSpecific",
+			"fullTestPath": "SightWeave.M2.Query.EffectiveLive.UnionEightRemoteAndSourceSpecific",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.028919298201799393,
+			"dateTime": "2026.09.12-12.16.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "AnchorAnyAllRequired",
+			"fullTestPath": "SightWeave.M2.Query.Samples.AnchorAnyAllRequired",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.013102501630783081,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BoundsBatchBoundaryAndAttribution",
+			"fullTestPath": "SightWeave.M2.Query.BoundsBatchBoundaryAndAttribution",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.015262901782989502,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ImmutableSnapshotRevisionAndDirtyRebuild",
+			"fullTestPath": "SightWeave.M2.Query.ImmutableSnapshotRevisionAndDirtyRebuild",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.014545999467372894,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "InvalidInputAndStaleHandle",
+			"fullTestPath": "SightWeave.M2.Query.InvalidInputAndStaleHandle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.012620002031326294,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PreparedHardCoverage",
+			"fullTestPath": "SightWeave.M2.Query.PreparedHardCoverage",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.036471199244260788,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "CompatibilitySeamDeterminism",
+			"fullTestPath": "SightWeave.M3P5.Memory.Authority.CompatibilitySeamDeterminism",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0090554021298885345,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ConcavePolygonDoesNotLeakAtTileEdge",
+			"fullTestPath": "SightWeave.M3P5.Memory.Authority.ConcavePolygonDoesNotLeakAtTileEdge",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0076081007719039917,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "FirstExploreNoChangeOffscreen",
+			"fullTestPath": "SightWeave.M3P5.Memory.Authority.FirstExploreNoChangeOffscreen",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0070630982518196106,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "IsolationLifecycle",
+			"fullTestPath": "SightWeave.M3P5.Memory.Authority.IsolationLifecycle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0087490007281303406,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PackedMappingNegativeAndLarge",
+			"fullTestPath": "SightWeave.M3P5.Memory.Authority.PackedMappingNegativeAndLarge",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0070637017488479614,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "D3D12PackedUploadGutterNoChange",
+			"fullTestPath": "SightWeave.M3P5.Memory.Mirror.D3D12PackedUploadGutterNoChange",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.061828296631574631,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "NullRHIFailClosedNoAllocation",
+			"fullTestPath": "SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0093363970518112183,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "NullRHI-only M3.5 memory mirror assertions skipped on rendered RHI",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.22"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BlockSuppressOverlap",
+			"fullTestPath": "SightWeave.M3P5.Memory.Modifier.BlockSuppressOverlap",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0097774006426334381,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ClearAndReexplore",
+			"fullTestPath": "SightWeave.M3P5.Memory.Modifier.ClearAndReexplore",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.010260000824928284,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ClearBlockPriority",
+			"fullTestPath": "SightWeave.M3P5.Memory.Modifier.ClearBlockPriority",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0091428980231285095,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ShapesMoveDestroyScopeHeight",
+			"fullTestPath": "SightWeave.M3P5.Memory.Modifier.ShapesMoveDestroyScopeHeight",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0091398023068904877,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ExplicitEligibilityDeterminism",
+			"fullTestPath": "SightWeave.M3P5.Memory.StaticEnvironment.ExplicitEligibilityDeterminism",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0098727010190486908,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ScopeAndHeightIsolation",
+			"fullTestPath": "SightWeave.M3P5.Memory.StaticEnvironment.ScopeAndHeightIsolation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0093914978206157684,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BypassCanonicalProfileBinding",
+			"fullTestPath": "SightWeave.M3P5.Memory.BypassCanonicalProfileBinding",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0099687986075878143,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PresentationPrecisionIntegration",
+			"fullTestPath": "SightWeave.M3P5.Memory.PresentationPrecisionIntegration",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.029271800071001053,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "AtomicSourceGroupTransform",
+			"fullTestPath": "SightWeave.ObjectPolicy.AtomicSourceGroupTransform",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.017822101712226868,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ConfigSerializationAndPublicSurface",
+			"fullTestPath": "SightWeave.ObjectPolicy.ConfigSerializationAndPublicSurface",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.005916297435760498,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "MotionApiIdempotence",
+			"fullTestPath": "SightWeave.ObjectPolicy.MotionApiIdempotence",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0080972984433174133,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ObjectOverrideResolution",
+			"fullTestPath": "SightWeave.ObjectPolicy.ObjectOverrideResolution",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0066951029002666473,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RegistrationCachesPolicyAndIsolatesObjects",
+			"fullTestPath": "SightWeave.ObjectPolicy.RegistrationCachesPolicyAndIsolatesObjects",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.023212399333715439,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WorldMemoryRasterRowCullingParity",
+			"fullTestPath": "SightWeave.ObjectPolicy.WorldMemoryRasterRowCullingParity",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.088866695761680603,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WorldMemoryRememberedRowsParity",
+			"fullTestPath": "SightWeave.ObjectPolicy.WorldMemoryRememberedRowsParity",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.52591550350189209,
+			"dateTime": "2026.09.12-12.16.22",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Compared 256 complete updates, all four precisions, illumination/bypass, clear/block/replacement; skipped rows=578532",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.16.23"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BlueprintPublicSurfaceValidation",
+			"fullTestPath": "SightWeave.RevealPolicy.BlueprintPublicSurfaceValidation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0080503001809120178,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ConfirmedSessionSurvivesLegalRigidMotion",
+			"fullTestPath": "SightWeave.RevealPolicy.ConfirmedSessionSurvivesLegalRigidMotion",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0080153010785579681,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ContiguousSpanDoesNotBridgeGaps",
+			"fullTestPath": "SightWeave.RevealPolicy.ContiguousSpanDoesNotBridgeGaps",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0081583000719547272,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "InvalidCoverageDoesNotResetTentativeSession",
+			"fullTestPath": "SightWeave.RevealPolicy.InvalidCoverageDoesNotResetTentativeSession",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.007662702351808548,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "LegacyPolicySourceMigration",
+			"fullTestPath": "SightWeave.RevealPolicy.LegacyPolicySourceMigration",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.023047097027301788,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "MinimumSpanFirstLegalContact",
+			"fullTestPath": "SightWeave.RevealPolicy.MinimumSpanFirstLegalContact",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0085651986300945282,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "MinimumSpanSmallObjectClamp",
+			"fullTestPath": "SightWeave.RevealPolicy.MinimumSpanSmallObjectClamp",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0090123973786830902,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "MinimumSpanWorldUnitSemantics",
+			"fullTestPath": "SightWeave.RevealPolicy.MinimumSpanWorldUnitSemantics",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0083955004811286926,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PerFieldObjectOverrideResolution",
+			"fullTestPath": "SightWeave.RevealPolicy.PerFieldObjectOverrideResolution",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0092243999242782593,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PluginSettingsSerialization",
+			"fullTestPath": "SightWeave.RevealPolicy.PluginSettingsSerialization",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0084611997008323669,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PolicyIsolationAcrossObjects",
+			"fullTestPath": "SightWeave.RevealPolicy.PolicyIsolationAcrossObjects",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.022934801876544952,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RevealModeDefaultResolution",
+			"fullTestPath": "SightWeave.RevealPolicy.RevealModeDefaultResolution",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0077803991734981537,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "TentativeSessionResetsOnRealViewLoss",
+			"fullTestPath": "SightWeave.RevealPolicy.TentativeSessionResetsOnRealViewLoss",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"8FC457B8429451C82D5211AC856C92D8"
+			],
+			"duration": 0.0081158019602298737,
+			"dateTime": "2026.09.12-12.16.23",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

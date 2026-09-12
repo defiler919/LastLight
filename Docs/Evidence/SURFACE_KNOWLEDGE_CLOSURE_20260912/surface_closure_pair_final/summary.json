@@ -1,0 +1,31 @@
+{
+  "run": "surface_closure_pair_final",
+  "source": {
+    "head": "8047a5d58ecd40e0b0909fe106f056c829ed30a6",
+    "reference": false,
+    "surface_reference": false,
+    "still": false,
+    "started": "2026-09-12T21:02:03.6910426+08:00",
+    "binary_sha256": "08B263404D023F11E18CAC4CAF9570EF98095ABD0998CEC2EC2997246488280D"
+  },
+  "completion": "240 matched pose samples; scripted replay, not native WASD",
+  "diagnostic_timing": false,
+  "frames": 240,
+  "dirty_frames": 237,
+  "surface_dirty_p50_us": 8218.497,
+  "surface_dirty_p95_us": 17404.903,
+  "surface_dirty_max_us": 20974.2,
+  "observe_p95_us": 16313.3,
+  "recognition_p95_us": 1.904,
+  "publish_p95_us": 2064.891,
+  "engine_game_p95_ms": 34.7074,
+  "wall_p95_ms": 35.9172,
+  "max_authority_queries": 6376,
+  "max_upload_bytes": 11222016,
+  "domains": 23,
+  "cells": 10624516,
+  "atlas_bytes": 45231904,
+  "reference_run": "surface_closure_pair_reference_final",
+  "pose_mismatches": 0,
+  "matched_poses": true
+}

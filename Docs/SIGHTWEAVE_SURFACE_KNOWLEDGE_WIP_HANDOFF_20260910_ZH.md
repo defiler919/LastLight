@@ -1,5 +1,7 @@
 # Surface Knowledge V1 — WIP 交接（2026-09-10）
 
+> 2026-09-12 续工结果见 [性能与合同复核](SIGHTWEAVE_SURFACE_KNOWLEDGE_CLOSURE_20260912_ZH.md)。保留本文历史事实；新一轮完成了保守 Runtime 批处理、最终游戏逐格差分和性能测量，但因旧快扫合同与整帧预算仍阻塞，Surface Knowledge V1 继续为 WIP。以新报告及其 Evidence 为最新状态。
+
 **未完成、未合并回工作分支。用户因周额度要求停止扩张并优先备份。**
 
 - 恢复分支：`codex/wip-surface-knowledge-v1-20260910`。

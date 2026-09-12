@@ -1,0 +1,13 @@
+{
+  "run": "surface_closure_contracts01",
+  "selector": "Darkwell.PropLab+Darkwell.FogVisual+Darkwell.ObjectMemory+Darkwell.UnknownRegion+Darkwell.UnknownPartial+Darkwell.BlackRegion+Darkwell.CurrentGrid+Darkwell.GrayPolicyLabV2+Darkwell.SightWeave.SurfaceKnowledge+Darkwell.SightWeave.SurfaceObservation+Darkwell.SightWeave.StaticKnowledge+Darkwell.SightWeave.M6P1+Darkwell.SightWeave.Differential.VisionIllumination+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+SightWeave.M2.Query+SightWeave.ObjectPolicy+SightWeave.RevealPolicy+SightWeave.M3P5.Memory",
+  "exit_code": 3,
+  "wall_seconds": 373.5737571,
+  "severe_lines": 5,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.PropLab+Darkwell.FogVisual+Darkwell.ObjectMemory+Darkwell.UnknownRegion+Darkwell.UnknownPartial+Darkwell.BlackRegion+Darkwell.CurrentGrid+Darkwell.GrayPolicyLabV2+Darkwell.SightWeave.SurfaceKnowledge+Darkwell.SightWeave.SurfaceObservation+Darkwell.SightWeave.StaticKnowledge+Darkwell.SightWeave.M6P1+Darkwell.SightWeave.Differential.VisionIllumination+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+SightWeave.M2.Query+SightWeave.ObjectPolicy+SightWeave.RevealPolicy+SightWeave.M3P5.Memory\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_contracts01\\surface_closure_contracts01_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_contracts01\\surface_closure_contracts01.log -SurfaceApartmentParity",
+    "[2026.09.12-11.07.31:863][986]LogAutomationCommandLine: Display: \tSightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation"
+  ],
+  "passed": false
+}

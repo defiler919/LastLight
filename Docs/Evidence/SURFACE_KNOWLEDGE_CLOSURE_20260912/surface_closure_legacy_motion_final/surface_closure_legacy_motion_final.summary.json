@@ -1,0 +1,12 @@
+{
+  "run": "surface_closure_legacy_motion_final",
+  "selector": "Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation+Darkwell.PropLab.MovingRules+Darkwell.PropLab.MovingLiveContinuity+Darkwell.PropLab.ManualSwitch+Darkwell.PropLab.ArchitectureAudit+Darkwell.PropLab.Comparison+Darkwell.PropLab.GrayPolicyLabV2",
+  "exit_code": 3,
+  "wall_seconds": 222.5060442,
+  "severe_lines": 3,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation+Darkwell.PropLab.MovingRules+Darkwell.PropLab.MovingLiveContinuity+Darkwell.PropLab.ManualSwitch+Darkwell.PropLab.ArchitectureAudit+Darkwell.PropLab.Comparison+Darkwell.PropLab.GrayPolicyLabV2\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_legacy_motion_final\\surface_closure_legacy_motion_final_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_legacy_motion_final\\surface_closure_legacy_motion_final.log"
+  ],
+  "passed": false
+}

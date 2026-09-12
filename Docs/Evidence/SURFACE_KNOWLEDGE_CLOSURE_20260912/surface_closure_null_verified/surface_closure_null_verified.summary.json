@@ -1,0 +1,29 @@
+{
+  "run": "surface_closure_null_verified",
+  "selector": "SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation",
+  "exit_code": 0,
+  "wall_seconds": 19.3327459,
+  "total": 1,
+  "clean": 1,
+  "warnings": 0,
+  "failed": 0,
+  "not_run": 0,
+  "duration": 0.016459200531244278,
+  "severe_lines": 0,
+  "requested_rhi": "NullRHI",
+  "rhi_evidence": [
+    "LogCsvProfiler: Display: Metadata set : commandline=\"\" D:\\UE_pro\\Darkwell/Darkwell.uproject -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_null_verified\\surface_closure_null_verified_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_null_verified\\surface_closure_null_verified.log\"\"",
+    "LogInit: Command Line: -unattended -nop4 -nosplash -NullRHI -NoSound -ExecCmds=\"Automation RunTests SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_null_verified\\surface_closure_null_verified_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_null_verified\\surface_closure_null_verified.log",
+    "[2026.09.12-13.08.46:949][  0]Cmd: Automation RunTests SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation",
+    "[2026.09.12-13.08.46:950][  0]Automation: RunTests='SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation' Queued.",
+    "[2026.09.12-13.08.52:689][589]LogAutomationCommandLine: Display: Found 1 automation tests based on 'SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation'",
+    "[2026.09.12-13.08.52:689][589]LogAutomationCommandLine: Display: \tSightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation",
+    "[2026.09.12-13.08.52:701][589]LogAutomationController: Sending RunTest NullRHIFailClosedNoAllocation to E19DDE7C47006C8E0EDC16B3BFD54050",
+    "[2026.09.12-13.08.52:701][589]LogAutomationController: Display: Test Started. Name={NullRHIFailClosedNoAllocation} Path={SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation}",
+    "[2026.09.12-13.08.52:703][590]LogAutomationWorker: Received RunTests NullRHIFailClosedNoAllocation from 4B16BD344764F85AD1D011A5662E2C06",
+    "[2026.09.12-13.08.52:727][593]LogAutomationController: Display: Test Completed. Result={Success} Name={NullRHIFailClosedNoAllocation} Path={SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation}",
+    "[2026.09.12-13.08.52:727][593]LogAutomationController: BeginEvents: SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation",
+    "[2026.09.12-13.08.52:727][593]LogAutomationController: EndEvents: SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation"
+  ],
+  "passed": true
+}

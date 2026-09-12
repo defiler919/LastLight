@@ -1,0 +1,28 @@
+{
+  "run": "surface_closure_native_final",
+  "source": {
+    "head": "8047a5d58ecd40e0b0909fe106f056c829ed30a6",
+    "reference": false,
+    "surface_reference": false,
+    "still": false,
+    "started": "2026-09-12T21:03:24.9496699+08:00",
+    "binary_sha256": "08B263404D023F11E18CAC4CAF9570EF98095ABD0998CEC2EC2997246488280D"
+  },
+  "completion": "frames=1379 moving_frames=1307 distance_cm=1445.17 yaw_travel_deg=2024.96 mode=A",
+  "diagnostic_timing": false,
+  "frames": 1379,
+  "dirty_frames": 1379,
+  "surface_dirty_p50_us": 5716.797,
+  "surface_dirty_p95_us": 13820.898,
+  "surface_dirty_max_us": 17135.501,
+  "observe_p95_us": 13570.696,
+  "recognition_p95_us": 2.906,
+  "publish_p95_us": 637.695,
+  "engine_game_p95_ms": 31.4531,
+  "wall_p95_ms": 32.2369,
+  "max_authority_queries": 5177,
+  "max_upload_bytes": 1569096,
+  "domains": 23,
+  "cells": 10624516,
+  "atlas_bytes": 45231904
+}

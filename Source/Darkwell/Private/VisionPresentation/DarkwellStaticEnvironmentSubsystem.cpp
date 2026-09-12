@@ -45,7 +45,7 @@ bool UDarkwellStaticEnvironmentSubsystem::RegisterImmutable(UMeshComponent* M,FL
  Materials.Add(MID);Meshes.Add(M);Bind();return true;
 }
 bool UDarkwellStaticEnvironmentSubsystem::RegisterImmutableSurfaceBox(UStaticMeshComponent* Mesh,FName Id,FLinearColor Tint,uint32 Version)
-{if(Meshes.Contains(Mesh))return false;const bool OK=GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->RegisterFixedBox(Mesh,Id,Tint,true,0,Version);if(OK)SurfaceDomains.Add(Id);return OK;}
+{if(Meshes.Contains(Mesh))return false;const bool OK=GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->RegisterFixedBox(Mesh,Id,Tint,true,-1,Version);if(OK)SurfaceDomains.Add(Id);return OK;}
 bool UDarkwellStaticEnvironmentSubsystem::HasSurfaceKnowledge(FName Id,ESightWeaveBoxFace Face,FVector2D UV) const
 {const auto* K=SurfaceDomains.Contains(Id)?GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->Find(Id):nullptr;return K && K->IsKnown(Face,UV);}
 void UDarkwellStaticEnvironmentSubsystem::Bind()

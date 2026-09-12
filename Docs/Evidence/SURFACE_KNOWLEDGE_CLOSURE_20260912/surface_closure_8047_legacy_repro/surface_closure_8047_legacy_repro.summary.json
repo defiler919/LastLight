@@ -1,0 +1,18 @@
+{
+  "run": "surface_closure_8047_legacy_repro",
+  "selector": "Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation+Darkwell.PropLab.GrayObjectPolicy.WholeObjectFastSlowConfirmationEquivalent+Darkwell.PropLab.Runtime.ThreeModesSpatialEvidenceAndNeverRemember",
+  "exit_code": 0,
+  "wall_seconds": 43.4817924,
+  "total": 3,
+  "clean": 0,
+  "warnings": 0,
+  "failed": 3,
+  "not_run": 0,
+  "duration": 9.786632537841797,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation+Darkwell.PropLab.GrayObjectPolicy.WholeObjectFastSlowConfirmationEquivalent+Darkwell.PropLab.Runtime.ThreeModesSpatialEvidenceAndNeverRemember\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_8047_legacy_repro\\surface_closure_8047_legacy_repro_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_8047_legacy_repro\\surface_closure_8047_legacy_repro.log"
+  ],
+  "passed": false
+}

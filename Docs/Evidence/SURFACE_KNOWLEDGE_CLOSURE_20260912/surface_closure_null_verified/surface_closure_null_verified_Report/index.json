@@ -1,0 +1,44 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "DESKTOP-IBLNS3N",
+			"instance": "133C04AB42B8B222584215BB12BF7611",
+			"instanceName": "DESKTOP-IBLNS3N-32020",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 10 (22H2) [10.0.19045.6466] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 2070 SUPER",
+			"cPUModel": "AMD Ryzen 9 3900X 12-Core Processor            ",
+			"rAMInGB": 32,
+			"renderMode": "SM6",
+			"rHI": "",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.12-13.08.52",
+	"succeeded": 1,
+	"succeededWithWarnings": 0,
+	"failed": 0,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 0.016459200531244278,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "NullRHIFailClosedNoAllocation",
+			"fullTestPath": "SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"133C04AB42B8B222584215BB12BF7611"
+			],
+			"duration": 0.016459200531244278,
+			"dateTime": "2026.09.12-13.08.52",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

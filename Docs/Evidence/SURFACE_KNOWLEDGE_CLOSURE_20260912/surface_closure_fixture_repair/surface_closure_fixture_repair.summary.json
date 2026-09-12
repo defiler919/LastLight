@@ -1,0 +1,18 @@
+{
+  "run": "surface_closure_fixture_repair",
+  "selector": "Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation+Darkwell.PropLab.Runtime.ThreeModesSpatialEvidenceAndNeverRemember+Darkwell.UnknownPartial+Darkwell.UnknownRegion",
+  "exit_code": 0,
+  "wall_seconds": 70.9883454,
+  "total": 7,
+  "clean": 5,
+  "warnings": 1,
+  "failed": 1,
+  "not_run": 0,
+  "duration": 39.69881057739258,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation+Darkwell.PropLab.Runtime.ThreeModesSpatialEvidenceAndNeverRemember+Darkwell.UnknownPartial+Darkwell.UnknownRegion\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_fixture_repair\\surface_closure_fixture_repair_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_fixture_repair\\surface_closure_fixture_repair.log"
+  ],
+  "passed": false
+}

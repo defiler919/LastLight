@@ -485,6 +485,12 @@ public:
  FSightWeaveSurfaceResult QuerySurfaceSample(FSightWeaveKnowledgeOwnerId Owner,const FSightWeaveSurfaceSample& Sample) const;
  /** Proven uniform rectangle only; false return requires subdivision/exact samples. */
  bool TrySurfaceRegion(FSightWeaveKnowledgeOwnerId Owner,FName Receiver,ESightWeaveBoxFace Face,const FBox2D& UV,bool& Value,FSightWeaveSurfaceQueryStats* Stats=nullptr) const;
+ /** After a region query: every cell in a single-cell-wide strip has a blocked
+  * witness for every possible source pair. Not a uniform point-denial proof. */
+ bool RejectSurfaceCellStrip(FSightWeaveKnowledgeOwnerId Owner,FName Receiver,ESightWeaveBoxFace Face,const FBox2D& UV,int32 SingleCellAxis) const;
+ /** Batch full-support certificates for vertical fixed faces. Unsupported geometry
+  * returns false; uncertain contact bands use the original region proof. */
+ bool BuildSurfaceFaceSpans(FSightWeaveKnowledgeOwnerId Owner,FName Receiver,ESightWeaveBoxFace Face,FIntPoint Size,TArray<FSightWeaveSurfaceCellSpan>& Out,FSightWeaveSurfaceQueryStats* Stats=nullptr) const;
  /** Exact point batch; no whole-face/region inference or memory mutation. */
  void QuerySurfaceSamples(FSightWeaveKnowledgeOwnerId Owner,TConstArrayView<FSightWeaveSurfaceSample> Samples,
   TArray<FSightWeaveSurfaceResult>& Results,FSightWeaveSurfaceQueryCache* Cache=nullptr,FSightWeaveSurfaceQueryStats* Stats=nullptr) const;
@@ -495,7 +501,13 @@ private:
  // Game-thread shared region evidence: at most 4096 exact corners, never stale.
  mutable FSightWeaveImmutableSnapshotPtr SurfaceRegionFrame;
  mutable FSightWeaveKnowledgeOwnerId SurfaceRegionOwner;
- mutable TMap<FSightWeaveSurfaceRegionCorner,FSightWeaveVisibilityQueryResult> SurfaceRegionCorners;
+ mutable bool bSurfaceRegionPrepared=true;
+ mutable TMap<FSightWeaveSurfaceRegionCorner,FSightWeaveSurfaceCornerEvidence> SurfaceRegionCorners;
+ // Only the currently visited face. Any snapshot, owner, receiver or face change
+ // discards these geometric certificates, including unregister/re-register.
+ mutable FName SurfaceProofReceiver;
+ mutable ESightWeaveBoxFace SurfaceProofFace=ESightWeaveBoxFace::Top;
+ mutable TArray<FSightWeaveSurfaceBeamProof> SurfaceBeamProofs;
  bool bSurfaceSceneDirty=true;
  FSightWeaveRevision SurfaceOccluderRevision;
  TSharedPtr<const FSightWeaveSurfaceScene,ESPMode::ThreadSafe> SurfaceScene;

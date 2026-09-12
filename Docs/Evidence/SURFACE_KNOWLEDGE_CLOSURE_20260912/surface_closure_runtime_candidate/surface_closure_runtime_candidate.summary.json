@@ -1,0 +1,26 @@
+{
+  "run": "surface_closure_runtime_candidate",
+  "selector": "Darkwell.SightWeave.SurfaceKnowledge+Darkwell.SightWeave.SurfaceObservation+Darkwell.SightWeave.StaticKnowledge+Darkwell.SightWeave.M6P1+Darkwell.SightWeave.Differential.VisionIllumination+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+SightWeave.M2.Query+SightWeave.ObjectPolicy+SightWeave.RevealPolicy+SightWeave.M3P5.Memory",
+  "exit_code": 0,
+  "wall_seconds": 36.9320544,
+  "total": 77,
+  "clean": 75,
+  "warnings": 1,
+  "failed": 1,
+  "not_run": 0,
+  "duration": 7.108536243438721,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.SightWeave.SurfaceKnowledge+Darkwell.SightWeave.SurfaceObservation+Darkwell.SightWeave.StaticKnowledge+Darkwell.SightWeave.M6P1+Darkwell.SightWeave.Differential.VisionIllumination+Darkwell.SightWeave.Closure.VisionIlluminationBoundary+SightWeave.M2.Query+SightWeave.ObjectPolicy+SightWeave.RevealPolicy+SightWeave.M3P5.Memory\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_runtime_candidate\\surface_closure_runtime_candidate_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_runtime_candidate\\surface_closure_runtime_candidate.log -SurfaceApartmentParity",
+    "[2026.09.12-12.16.15:604][997]LogAutomationCommandLine: Display: \tSightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation",
+    "[2026.09.12-12.16.22:335][101]LogAutomationController: Sending RunTest NullRHIFailClosedNoAllocation to 32FFA32A484CEEB32D7E7091E18E3285",
+    "[2026.09.12-12.16.22:335][102]LogAutomationController: Display: Test Started. Name={NullRHIFailClosedNoAllocation} Path={SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation}",
+    "[2026.09.12-12.16.22:341][102]LogAutomationWorker: Received RunTests NullRHIFailClosedNoAllocation from 1682071C41FC37487B1BD19679C81F1A",
+    "[2026.09.12-12.16.22:350][103]LogAutomationController: Display: Test Completed. Result={Success} Name={NullRHIFailClosedNoAllocation} Path={SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation}",
+    "[2026.09.12-12.16.22:350][103]LogAutomationController: BeginEvents: SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation",
+    "[2026.09.12-12.16.22:351][103]LogAutomationController: NullRHI-only M3.5 memory mirror assertions skipped on rendered RHI",
+    "[2026.09.12-12.16.22:351][103]LogAutomationController: EndEvents: SightWeave.M3P5.Memory.Mirror.NullRHIFailClosedNoAllocation"
+  ],
+  "passed": false
+}

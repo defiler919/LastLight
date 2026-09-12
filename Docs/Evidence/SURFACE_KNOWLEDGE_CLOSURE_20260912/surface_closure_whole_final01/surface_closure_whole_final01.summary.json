@@ -1,0 +1,18 @@
+{
+  "run": "surface_closure_whole_final01",
+  "selector": "Darkwell.GrayPolicyLabV2+Darkwell.ObjectMemory+Darkwell.CurrentGrid+Darkwell.PropLab.ConfirmedWholeViewEdge",
+  "exit_code": 0,
+  "wall_seconds": 58.9589165,
+  "total": 36,
+  "clean": 33,
+  "warnings": 3,
+  "failed": 0,
+  "not_run": 0,
+  "duration": 29.148906707763672,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.GrayPolicyLabV2+Darkwell.ObjectMemory+Darkwell.CurrentGrid+Darkwell.PropLab.ConfirmedWholeViewEdge\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_whole_final01\\surface_closure_whole_final01_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_whole_final01\\surface_closure_whole_final01.log"
+  ],
+  "passed": true
+}

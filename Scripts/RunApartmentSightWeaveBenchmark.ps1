@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$RunName,[switch]$Reference,[switch]$Still,[switch]$Trace,[ValidateSet('','PairGray','PairUnknown')][string]$Pair='')
+param([Parameter(Mandatory=$true)][string]$RunName,[switch]$Reference,[switch]$SurfaceReference,[switch]$SurfaceProfile,[switch]$SurfaceParity,[switch]$Still,[switch]$Trace,[ValidateSet('','PairGray','PairUnknown','PairRoute')][string]$Pair='')
 $ErrorActionPreference='Stop'
 if($RunName -notmatch '^[A-Za-z0-9_-]+$'){throw 'Use a simple unique run name'}
 $repo=Split-Path $PSScriptRoot -Parent
@@ -13,9 +13,13 @@ $mode=if($Still){'Still'}else{'A'}
 if($Pair){$mode=$Pair}
 $args=@("`"$repo/Darkwell.uproject`"",'/Game/Maps/L_SightWeaveApartmentLab','-game','-d3d12','-sm6','-windowed','-ForceRes','-ResX=1280','-ResY=720','-NoSound','-NoSplash','-NoVSync',"-ApartmentBench=$mode","-ApartmentBenchOutput=$out","-abslog=$out/game.log",'-ExecCmds="r.ScreenPercentage 100,r.DynamicRes.OperationMode 0,r.VSync 0,t.MaxFPS 0"')
 if($Reference){$args+='-ApartmentObjectArchitectureReference'}
+if($SurfaceReference){$args+='-DPCvars=SightWeave.Surface.PreparedProofs=0'}
+elseif($SurfaceProfile){$args+='-DPCvars=SightWeave.Surface.Profile=1'}
+if($SurfaceParity){$args+='-SurfaceGameParity'}
 if($Trace){$args+=@('-trace=cpu,gpu,frame,bookmark,region',"-tracefile=$out/capture.utrace")}
 $args -join ' ' | Set-Content "$out/command.txt"
-[ordered]@{head=(& git -C $repo rev-parse HEAD); reference=[bool]$Reference; still=[bool]$Still; started=(Get-Date).ToString('o'); binary_sha256=(Get-FileHash "$repo/Binaries/Win64/UnrealEditor-Darkwell.dll" -Algorithm SHA256).Hash} | ConvertTo-Json | Set-Content "$out/source.json"
+[ordered]@{head=(& git -C $repo rev-parse HEAD); reference=[bool]$Reference; surface_reference=[bool]$SurfaceReference; still=[bool]$Still; started=(Get-Date).ToString('o'); binary_sha256=(Get-FileHash "$repo/Binaries/Win64/UnrealEditor-Darkwell.dll" -Algorithm SHA256).Hash} | ConvertTo-Json | Set-Content "$out/source.json"
+& git -C $repo diff --binary | Set-Content "$out/source.patch"
 $p=$null
 try{
  $p=Start-Process "$engine/Engine/Binaries/Win64/UnrealEditor.exe" -ArgumentList $args -WindowStyle Normal -PassThru
@@ -27,6 +31,7 @@ try{
   Start-Sleep -Seconds 2
  }
  if(!(Test-Path "$out/complete.txt") -or (Test-Path "$out/invalid.txt")){throw 'Invalid benchmark; preserve evidence'}
+ if(Select-String -LiteralPath "$out/game.log" -Pattern 'SURFACE_GAME_PARITY_MISMATCH' -Quiet){throw 'Runtime cell parity failed; preserve evidence'}
  Get-Content "$out/complete.txt"
 }finally{
  if($p -and !$p.HasExited){Stop-Process -Id $p.Id}

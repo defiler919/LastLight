@@ -1,0 +1,1025 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "DESKTOP-IBLNS3N",
+			"instance": "B4EAA60A41ACA8CD7DA4339F3014F026",
+			"instanceName": "DESKTOP-IBLNS3N-27532",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 10 (22H2) [10.0.19045.6466] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 2070 SUPER",
+			"cPUModel": "AMD Ryzen 9 3900X 12-Core Processor            ",
+			"rAMInGB": 32,
+			"renderMode": "D3D12_SM6",
+			"rHI": "D3D12 (SM6)",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.12-12.32.00",
+	"succeeded": 0,
+	"succeededWithWarnings": 0,
+	"failed": 3,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 9.7866325378417969,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "JoinedOccupancyParityAndInvalidation",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation",
+			"tags": [],
+			"state": "Fail",
+			"deviceInstance": [
+				"B4EAA60A41ACA8CD7DA4339F3014F026"
+			],
+			"duration": 0.42023178935050964,
+			"dateTime": "2026.09.12-12.31.46",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogStreaming: FlushAsyncLoading(364): 1 QueuedPackages, 0 AsyncPackages",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab ready furniture=0; controls: Darkwell.PropLab help",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab activated continuous coverage, no composite/stencil; 8 occluders; TSR unchanged; manualRoom=0",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.46"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellMovingPropLab: MOVING_RULES_RESET rule=SpatialEvidenceOnly enemy=0 timer=0 identities=9 inWorld=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.47"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=1 episode=1 reason=TEST_EPOCH_SCALING freezes=1 transform_rev=1 coverage_rev=0 grid_rev=1 proxy=65446 texture=240x136 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.47"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=2 episode=2 reason=TEST_EPOCH_SCALING freezes=2 transform_rev=1 coverage_rev=0 grid_rev=1 proxy=65458 texture=268x192 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.47"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Geometry reuse dispatches no duplicate worker batch' to be 15, but it was 16.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 1458,
+					"timestamp": "2026.09.12-12.31.47"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Geometry reuse dispatches no duplicate worker batch' to be 17, but it was 18.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 1458,
+					"timestamp": "2026.09.12-12.31.47"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Geometry reuse dispatches no duplicate worker batch' to be 19, but it was 20.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 1458,
+					"timestamp": "2026.09.12-12.31.47"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Geometry reuse dispatches no duplicate worker batch' to be 21, but it was 22.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 1458,
+					"timestamp": "2026.09.12-12.31.47"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Geometry reuse dispatches no duplicate worker batch' to be 23, but it was 24.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 1458,
+					"timestamp": "2026.09.12-12.31.47"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "OCCUPANCY_PARITY compared=24 joined=24; thin Whole/Partial, rotated/tilted/negative-scale, empty ROI/frame, cache capacity/hits, small/live fallback, duplicate indices, dirty/reuse/revision/coarse/world teardown",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.47"
+				}
+			],
+			"warnings": 0,
+			"errors": 5,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WholeObjectFastSlowConfirmationEquivalent",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectFastSlowConfirmationEquivalent",
+			"tags": [],
+			"state": "Fail",
+			"deviceInstance": [
+				"B4EAA60A41ACA8CD7DA4339F3014F026"
+			],
+			"duration": 8.1530570983886719,
+			"dateTime": "2026.09.12-12.31.47",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab ready furniture=0; controls: Darkwell.PropLab help",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.47"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab activated continuous coverage, no composite/stencil; 8 occluders; TSR unchanged; manualRoom=0",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.47"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellMovingPropLab: MOVING_RULES_RESET rule=SpatialEvidenceOnly enemy=0 timer=0 identities=9 inWorld=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.47"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=1 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=1 transform_rev=1 coverage_rev=21 grid_rev=2 proxy=66241 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.48"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=1 episode=1 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=1 transform_rev=1 coverage_rev=33 grid_rev=2 proxy=66262 texture=240x136 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.49"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=2 reason=SWEPT_LEGAL_OBSERVATION freezes=1 transform_rev=1 coverage_rev=35 grid_rev=2 proxy=66277 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.49"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=2 reason=SWEPT_LEGAL_OBSERVATION freezes=2 transform_rev=1 coverage_rev=36 grid_rev=2 proxy=66241 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.49"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Stationary swept observation seals gray' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 348,
+					"timestamp": "2026.09.12-12.31.49"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Swept gray uses binary knowledge' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.31.49"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Fast/slow capture masks identical at all four rates' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.31.49"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=3 reason=SWEPT_LEGAL_OBSERVATION freezes=2 transform_rev=1 coverage_rev=37 grid_rev=2 proxy=66277 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.49"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=3 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=3 transform_rev=1 coverage_rev=56 grid_rev=2 proxy=66241 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.50"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=1 episode=1 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=1 transform_rev=1 coverage_rev=68 grid_rev=2 proxy=66390 texture=240x136 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.50"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=5 reason=SWEPT_LEGAL_OBSERVATION freezes=3 transform_rev=1 coverage_rev=70 grid_rev=2 proxy=66277 texture=256x144 uploads=3",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.51"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=4 reason=SWEPT_LEGAL_OBSERVATION freezes=4 transform_rev=1 coverage_rev=71 grid_rev=2 proxy=66241 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.51"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Stationary swept observation seals gray' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 348,
+					"timestamp": "2026.09.12-12.31.51"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Swept gray uses binary knowledge' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.31.51"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Fast/slow capture masks identical at all four rates' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.31.51"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=6 reason=SWEPT_LEGAL_OBSERVATION freezes=4 transform_rev=1 coverage_rev=72 grid_rev=2 proxy=66277 texture=256x144 uploads=3",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.51"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=5 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=5 transform_rev=1 coverage_rev=91 grid_rev=2 proxy=66241 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.52"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=1 episode=1 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=1 transform_rev=1 coverage_rev=103 grid_rev=2 proxy=66503 texture=240x136 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.52"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=8 reason=SWEPT_LEGAL_OBSERVATION freezes=5 transform_rev=1 coverage_rev=105 grid_rev=2 proxy=66277 texture=256x144 uploads=5",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.52"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=6 reason=SWEPT_LEGAL_OBSERVATION freezes=6 transform_rev=1 coverage_rev=106 grid_rev=2 proxy=66241 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.52"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Stationary swept observation seals gray' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 348,
+					"timestamp": "2026.09.12-12.31.52"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Swept gray uses binary knowledge' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.31.52"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Fast/slow capture masks identical at all four rates' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.31.52"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=9 reason=SWEPT_LEGAL_OBSERVATION freezes=6 transform_rev=1 coverage_rev=107 grid_rev=2 proxy=66277 texture=256x144 uploads=5",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.52"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=7 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=7 transform_rev=1 coverage_rev=126 grid_rev=2 proxy=66241 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.53"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=1 episode=1 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=1 transform_rev=1 coverage_rev=138 grid_rev=2 proxy=66616 texture=240x136 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.54"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=11 reason=SWEPT_LEGAL_OBSERVATION freezes=7 transform_rev=1 coverage_rev=140 grid_rev=2 proxy=66277 texture=256x144 uploads=7",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.54"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=8 reason=SWEPT_LEGAL_OBSERVATION freezes=8 transform_rev=1 coverage_rev=141 grid_rev=2 proxy=66241 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.54"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Stationary swept observation seals gray' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 348,
+					"timestamp": "2026.09.12-12.31.54"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Swept gray uses binary knowledge' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.31.54"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Fast/slow capture masks identical at all four rates' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.31.54"
+				}
+			],
+			"warnings": 0,
+			"errors": 12,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ThreeModesSpatialEvidenceAndNeverRemember",
+			"fullTestPath": "Darkwell.PropLab.Runtime.ThreeModesSpatialEvidenceAndNeverRemember",
+			"tags": [],
+			"state": "Fail",
+			"deviceInstance": [
+				"B4EAA60A41ACA8CD7DA4339F3014F026"
+			],
+			"duration": 1.2133435010910034,
+			"dateTime": "2026.09.12-12.31.58",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab ready furniture=0; controls: Darkwell.PropLab help",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab activated continuous coverage, no composite/stencil; 8 occluders; TSR unchanged; manualRoom=0",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellSightWeave: P4Subject state=Hidden actorHidden=1 authorityRevision=1 sourceRevision=5 hudSharedRevision=1 NeverRemember=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M0 currentLive=0 proxy=1 snapshotValid=1 snapshot=(-200.0,350.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab MODE=0 RULE=SpatialEvidenceOnly event=Ready: use Darkwell.PropLab help",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M0 currentLive=1 proxy=0 snapshotValid=1 snapshot=(650.0,340.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M0 currentLive=0 proxy=1 snapshotValid=1 snapshot=(650.0,340.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M0 currentLive=0 proxy=0 snapshotValid=0 snapshot=(650.0,340.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellSightWeave: P4Subject state=Live actorHidden=0 authorityRevision=7 sourceRevision=9 hudSharedRevision=7 NeverRemember=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Torch reaches the distant target beyond lantern base range: The two values are not equal.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSightWeaveAdapterTests.cpp",
+					"lineNumber": 1122,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellSightWeave: P4Subject state=Hidden actorHidden=1 authorityRevision=10 sourceRevision=12 hudSharedRevision=10 NeverRemember=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M1 currentLive=0 proxy=0 snapshotValid=1 snapshot=(-200.0,350.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab MODE=1 RULE=SpatialEvidenceOnly event=Ready: use Darkwell.PropLab help",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M1 currentLive=0 proxy=1 snapshotValid=1 snapshot=(-200.0,350.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M1 currentLive=1 proxy=0 snapshotValid=1 snapshot=(650.0,340.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M1 currentLive=0 proxy=0 snapshotValid=1 snapshot=(650.0,340.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M1 currentLive=0 proxy=0 snapshotValid=0 snapshot=(650.0,340.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellSightWeave: P4Subject state=Live actorHidden=0 authorityRevision=16 sourceRevision=16 hudSharedRevision=16 NeverRemember=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.58"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Torch reaches the distant target beyond lantern base range: The two values are not equal.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSightWeaveAdapterTests.cpp",
+					"lineNumber": 1122,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellSightWeave: P4Subject state=Hidden actorHidden=1 authorityRevision=19 sourceRevision=19 hudSharedRevision=19 NeverRemember=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M2 currentLive=0 proxy=0 snapshotValid=1 snapshot=(-200.0,350.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab MODE=2 RULE=SpatialEvidenceOnly event=Ready: use Darkwell.PropLab help",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M2 currentLive=0 proxy=1 snapshotValid=1 snapshot=(-200.0,350.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M2 currentLive=1 proxy=0 snapshotValid=1 snapshot=(650.0,340.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M2 currentLive=0 proxy=0 snapshotValid=1 snapshot=(650.0,340.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.M2 currentLive=0 proxy=0 snapshotValid=0 snapshot=(650.0,340.0,95.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellSightWeave: P4Subject state=Live actorHidden=0 authorityRevision=25 sourceRevision=23 hudSharedRevision=25 NeverRemember=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Torch reaches the distant target beyond lantern base range: The two values are not equal.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellSightWeaveAdapterTests.cpp",
+					"lineNumber": 1122,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellSightWeave: P4Subject state=Hidden actorHidden=1 authorityRevision=28 sourceRevision=26 hudSharedRevision=28 NeverRemember=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.TwinA currentLive=0 proxy=0 snapshotValid=1 snapshot=(-200.0,350.0,55.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.TwinB currentLive=0 proxy=0 snapshotValid=1 snapshot=(850.0,540.0,55.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.TwinA currentLive=0 proxy=1 snapshotValid=1 snapshot=(-200.0,350.0,55.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellRememberedProp: RememberedPropState id=Lab.Test.TwinB currentLive=1 proxy=0 snapshotValid=1 snapshot=(650.0,340.0,55.0)",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.31.59"
+				}
+			],
+			"warnings": 0,
+			"errors": 3,
+			"artifacts": []
+		}
+	]
+}

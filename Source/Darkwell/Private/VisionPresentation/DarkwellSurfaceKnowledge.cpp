@@ -3,6 +3,7 @@
 #include "SightWeaveWorldSubsystem.h"
 #include "Serialization/MemoryWriter.h"
 #include "Serialization/MemoryReader.h"
+#include "HAL/IConsoleManager.h"
 
 bool FDarkwellSurfaceKnowledge::Initialize(const FSightWeaveSurfaceBox& B,FSightWeaveKnowledgeOwnerId O,uint32 Version)
 {
@@ -41,9 +42,12 @@ bool FDarkwellSurfaceKnowledge::Observe(USightWeaveWorldSubsystem& R)
  // captured domain. Never stretch old Known onto new geometry or a new pose.
  const bool Same=Current && Current->Box.Pose.Equals(Box.Pose,0) && Current->Box.HalfExtent==Box.HalfExtent && Current->Box.Floor==Box.Floor;
  bool Changed=false;
+ static const auto* PreparedMode=IConsoleManager::Get().FindConsoleVariable(TEXT("SightWeave.Surface.PreparedProofs"));
+ const bool UseStrips=PreparedMode && PreparedMode->GetInt()!=0;
  for(int F=0;F<Faces.Num();++F)
  {
   auto& Face=Faces[F];const auto S=Face.Size;
+  static const auto* Profile=IConsoleManager::Get().FindConsoleVariable(TEXT("SightWeave.Surface.Profile"));const double FaceStart=Profile && Profile->GetInt()?FPlatformTime::Seconds():0;
   FBox FaceBounds(ForceInit);for(auto C:{FIntPoint(0,0),FIntPoint(S.X-1,0),FIntPoint(0,S.Y-1),S-FIntPoint(1,1)})FaceBounds+=Position(F,C.X,C.Y);
   const FBox2D FaceXY(FVector2D(FaceBounds.Min),FVector2D(FaceBounds.Max));
   const bool FaceBlock=Block.bIsValid && Block.Intersect(FaceXY);
@@ -56,24 +60,27 @@ bool FDarkwellSurfaceKnowledge::Observe(USightWeaveWorldSubsystem& R)
     else if(G.Shape==ESightWeaveMemoryRegionShape::AxisAlignedBox){if(!FaceXY.Intersect(FBox2D(G.Center-G.HalfExtents,G.Center+G.HalfExtents)))continue;}
     HasFaceModifiers=true;break;
    }
-  auto Visit=[&](auto&& Self,int X0,int Y0,int X1,int Y1)->void
+  auto Apply=[&](int X0,int Y0,int X1,int Y1,bool Value)
   {
-   const FBox2D UV(FVector2D(double(X0)/S.X,double(Y0)/S.Y)*2-FVector2D(1),FVector2D(double(X1)/S.X,double(Y1)/S.Y)*2-FVector2D(1));
-   bool Value=false;const bool Uniform=!Same || R.TrySurfaceRegion(Owner,Box.Id,ESightWeaveBoxFace(F),UV,Value,&QueryStats);
-   Proofs+=Uniform;
-   if(!Uniform && (X1-X0>1 || Y1-Y0>1))
-   {if(X1-X0>=Y1-Y0){const int M=(X0+X1)/2;Self(Self,X0,Y0,M,Y1);Self(Self,M,Y0,X1,Y1);}else{const int M=(Y0+Y1)/2;Self(Self,X0,Y0,X1,M);Self(Self,X0,M,X1,Y1);}return;}
-   if(!Uniform)
-   {
-    // Even five passing points cannot authorize an unsampled cell interior.
-    // Preserve sub-centimeter unresolved boundaries as Unknown, never expand.
-    ++UnresolvedCells;Value=false;
-   }
    if(!FaceBlock && !HasFaceModifiers)
    {
     for(int Y=Y0;Y<Y1;++Y)
     {
      const int I=Y*S.X+X0,End=Y*S.X+X1,Count=X1-X0;
+     if(UseStrips)
+     {
+      // One masked word pass replaces three population counts and up to three
+      // range writes. Preserve neighbouring cells and the bit-array tail.
+      auto* Live=Face.Live.GetData();auto* Known=Face.Known.GetData();auto* Hidden=Face.Hidden.GetData();bool RowChanged=false;
+      for(int W=I/32;W<=(End-1)/32;++W)
+      {
+       uint32 Mask=~uint32(0);if(W==I/32)Mask&=~uint32(0)<<(I%32);if(W==(End-1)/32 && End%32)Mask&=(uint32(1)<<(End%32))-1;
+       const uint32 NewLive=Value?Live[W]|Mask:Live[W]&~Mask,NewKnown=Value?Known[W]|Mask:Known[W],NewHidden=Hidden[W]&~Mask;
+       if(NewLive!=Live[W] || NewKnown!=Known[W] || NewHidden!=Hidden[W])
+       {RowChanged=true;Live[W]=NewLive;Known[W]=NewKnown;Hidden[W]=NewHidden;}
+      }
+      if(RowChanged){Changed=true;MarkDirty(F,X0,Y,X1,Y+1);}continue;
+     }
      const bool RowChanged=Face.Live.CountSetBits(I,End)!=(Value?Count:0) || Face.Hidden.CountSetBits(I,End)>0 || (Value && Face.Known.CountSetBits(I,End)!=Count);
      if(RowChanged){Changed=true;MarkDirty(F,X0,Y,X1,Y+1);}
      Face.Live.SetRange(I,Count,Value);Face.Hidden.SetRange(I,Count,false);if(Value)Face.Known.SetRange(I,Count,true);
@@ -91,7 +98,59 @@ bool FDarkwellSurfaceKnowledge::Observe(USightWeaveWorldSubsystem& R)
     if(Value && !Face.Known[I] && !Blocked){Face.Known[I]=true;CellChanged=true;}
     if(CellChanged){Changed=true;MarkDirty(F,X,Y,X+1,Y+1);}}
   };
-  Visit(Visit,0,0,S.X,S.Y);
+  auto Visit=[&](auto&& Self,int X0,int Y0,int X1,int Y1)->void
+  {
+   const FBox2D UV(FVector2D(double(X0)/S.X,double(Y0)/S.Y)*2-FVector2D(1),FVector2D(double(X1)/S.X,double(Y1)/S.Y)*2-FVector2D(1));
+   bool Value=false;const bool Uniform=!Same || R.TrySurfaceRegion(Owner,Box.Id,ESightWeaveBoxFace(F),UV,Value,&QueryStats);
+   Proofs+=Uniform;
+   const bool RejectedStrip=!Uniform && UseStrips && (X1-X0==1 || Y1-Y0==1)
+    && R.RejectSurfaceCellStrip(Owner,Box.Id,ESightWeaveBoxFace(F),UV,X1-X0==1?0:1);
+   if(!Uniform && !RejectedStrip && (X1-X0>1 || Y1-Y0>1))
+   {
+    const bool SplitX=X1-X0>=Y1-Y0;
+    if(SplitX){const int M=(X0+X1)/2;Self(Self,X0,Y0,M,Y1);Self(Self,M,Y0,X1,Y1);}else{const int M=(Y0+Y1)/2;Self(Self,X0,Y0,X1,M);Self(Self,X0,M,X1,Y1);}return;
+   }
+   if(!Uniform)
+   {
+    // Even five passing points cannot authorize an unsampled cell interior.
+    // Preserve sub-centimeter unresolved boundaries as Unknown, never expand.
+    UnresolvedCells+=uint64(X1-X0)*(Y1-Y0);Value=false;
+   }
+   Apply(X0,Y0,X1,Y1,Value);
+  };
+  bool WholeValue=false;TArray<FSightWeaveSurfaceCellSpan> Spans;
+  if(Same && UseStrips)
+  {
+   if(R.TrySurfaceRegion(Owner,Box.Id,ESightWeaveBoxFace(F),FBox2D({-1,-1},{1,1}),WholeValue,&QueryStats))
+   {++Proofs;Apply(0,0,S.X,S.Y,WholeValue);}
+   else if(R.BuildSurfaceFaceSpans(Owner,Box.Id,ESightWeaveBoxFace(F),S,Spans,&QueryStats))
+   {
+    for(const auto& Span:Spans){if(Span.bUnresolved)UnresolvedCells+=Span.Cells.Area();else ++Proofs;}
+    if(!FaceBlock && !HasFaceModifiers)
+    {
+     // Raster certificates can be narrow columns. Build Live once, then update
+     // the three persistent bit planes in one contiguous pass instead of doing
+     // read/modify/write on every column crossing the same storage word.
+     TBitArray<> Next(false,Face.Live.Num());
+     for(const auto& Span:Spans)if(Span.bLive)
+      for(int Y=Span.Cells.Min.Y;Y<Span.Cells.Max.Y;++Y)Next.SetRange(Y*S.X+Span.Cells.Min.X,Span.Cells.Width(),true);
+     auto* Live=Face.Live.GetData();auto* Known=Face.Known.GetData();auto* Hidden=Face.Hidden.GetData();const auto* New=Next.GetData();
+     for(int W=0;W<(Face.Live.Num()+31)/32;++W)
+     {
+      const uint32 Difference=(Live[W]^New[W])|(New[W]&~Known[W])|Hidden[W];
+      if(!Difference)continue;
+      const int First=W*32+FMath::CountTrailingZeros(Difference),Last=FMath::Min(Face.Live.Num()-1,W*32+31-int(FMath::CountLeadingZeros(Difference)));
+      if(First/S.X==Last/S.X)MarkDirty(F,First%S.X,First/S.X,Last%S.X+1,Last/S.X+1);
+      else MarkDirty(F,0,First/S.X,S.X,Last/S.X+1);
+      Live[W]=New[W];Known[W]|=New[W];Hidden[W]=0;Changed=true;
+     }
+    }
+    else for(const auto& Span:Spans)Apply(Span.Cells.Min.X,Span.Cells.Min.Y,Span.Cells.Max.X,Span.Cells.Max.Y,Span.bLive);
+   }
+   else Visit(Visit,0,0,S.X,S.Y);
+  }
+  else Visit(Visit,0,0,S.X,S.Y);
+  if(FaceStart && FPlatformTime::Seconds()-FaceStart>.0005)UE_LOG(LogTemp,Display,TEXT("SURFACE_FACE_PROFILE id=%s face=%d us=%.3f spans=%d"),*Box.Id.ToString(),F,(FPlatformTime::Seconds()-FaceStart)*1.e6,Spans.Num());
  }
  ExactSamples=QueryStats.ExactSamples;bDirty|=Changed;return Changed;
 }
@@ -110,9 +169,13 @@ void FDarkwellSurfaceKnowledge::SetBlock(const FBox2D& Region,bool Enabled)
 {Block=Enabled?Region:FBox2D(ForceInit);LastFrame=MAX_uint64;bDirty=true;}
 double FDarkwellSurfaceKnowledge::LiveSpanCm() const
 {
- double Span=0;for(int F=0;F<Faces.Num();++F){const auto& P=Faces[F];int Min=P.Size.X,Max=-1;
-  for(int I=0;I<P.Live.Num();++I)if(P.Live[I] && P.Known[I] && !P.Hidden[I]){Min=FMath::Min(Min,I%P.Size.X);Max=FMath::Max(Max,I%P.Size.X);}
-  if(Max>=Min)Span=FMath::Max(Span,(Max-Min+1)*2*Box.HalfExtent[(F/2+1)%3]/P.Size.X);}
+ double Span=0;for(int F=0;F<Faces.Num();++F){const auto& P=Faces[F];int Previous=INDEX_NONE,Run=0,Longest=0;
+  for(TConstSetBitIterator<> It(P.Live);It;++It)
+  {
+   const int I=It.GetIndex();if(!P.Known[I] || P.Hidden[I]){Previous=INDEX_NONE;Run=0;continue;}
+   Run=I==Previous+1 && I%P.Size.X!=0?Run+1:1;Previous=I;Longest=FMath::Max(Longest,Run);
+  }
+  Span=FMath::Max(Span,Longest*2*Box.HalfExtent[(F/2+1)%3]/P.Size.X);}
  return Span;
 }
 void FDarkwellSurfaceKnowledge::Pixels(TArray<FColor>& Out) const

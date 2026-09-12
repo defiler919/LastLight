@@ -1,0 +1,99 @@
+Using bundled DotNet SDK version: 10.0 win-x64
+Running UnrealBuildTool: dotnet "..\..\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.dll" DarkwellEditor Win64 Development D:\UE_pro\Darkwell\Darkwell.uproject -WaitMutex -FromMsBuild
+Log file: C:\Users\defiler\AppData\Local\UnrealBuildTool\Log.txt
+Determining max actions to execute in parallel (12 physical cores, 24 logical cores)
+  Executing up to 12 processes, one per physical core
+Using 'git status' to determine working set for adaptive non-unity build (D:\UE_pro\Darkwell).
+UbaServer - Listening on 0.0.0.0:1345
+Available x64 toolchains (1):
+ * D:\Program Files (x86)\Microsoft Visual Studio\VC\Tools\MSVC\14.51.36231
+    (Family=14.51.36231, FamilyRank=2, Version=14.51.36256, HostArchitecture=x64, ReleaseChannel=Latest, Architecture=x64)
+Visual Studio compiler version 14.51.36256 is newer than latest preferred version 14.50.35717. Please use caution as this compiler has not been heavily tested
+Building DarkwellEditor...
+===== Toolchain Information =====
+Using ISPC compiler (D:\UE_5.8\Engine\Source\ThirdParty\Intel\ISPC\bin\Windows\ispc.exe)
+  Intel(r) Implicit SPMD Program Compiler (Intel(r) ISPC), 1.24.0 (build commit  @ 20250404, LLVM 18.1.2) 
+Using Visual Studio 14.51.36256 toolchain (D:\Program Files (x86)\Microsoft Visual Studio\VC\Tools\MSVC\14.51.36231) and Windows 10.0.26100.0 SDK (C:\Program Files (x86)\Windows Kits\10).
+Warning: Visual Studio compiler 14.51.36256 is not a preferred version
+[Adaptive Build] Excluded from Darkwell unity file: DarkwellGrayObjectPolicyTests.cpp, DarkwellGrayPolicyLabV2Tests.cpp, DarkwellSightWeaveAdapterTests.cpp, DarkwellSurfaceObservationTests.cpp, DarkwellApartmentBenchmark.cpp, DarkwellObjectMemoryScene.cpp, DarkwellStaticEnvironmentSubsystem.cpp, DarkwellSurfaceKnowledge.cpp, DarkwellSurfaceKnowledgeSubsystem.cpp
+[Adaptive Build] Excluded from SightWeaveRuntime unity file: SightWeaveSurface.cpp, SightWeaveSurfaceProof.cpp, SightWeaveSurfaceRaster.cpp, SightWeaveWorldSubsystem.cpp
+=================================
+Using Unreal Build Accelerator local executor to run 4 action(s)
+  CPU 12 physical cores, 24 logical cores
+  Memory 31.95 GB physical, 17 GB/38.95 GB committed
+  UBA Storage capacity 40 GB
+[1/4] Compile [x64] DarkwellGrayObjectPolicyTests.cpp
+D:\UE_5.8\Engine\Source\Runtime\Engine\Classes\GameFramework\Character.h(798,31): warning C4996: 'APawn::GetMovementBase': GetMovementBase is deprecated. Use GetMovementBaseObject or GetMovementBaseInterfaceData instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual UPrimitiveComponent* GetMovementBase() const override final { return Cast<UPrimitiveComponent>(GetMovementBaseObject()); }
+	                             ^
+D:\UE_5.8\Engine\Source\Runtime\GeometryFramework\Public\Components\BaseDynamicMeshComponent.h(678,51): warning C4996: 'UMeshComponent::GetMaterialRelevance': Please use GetMaterialRelevance with EShaderPlatform argument and not ERHIFeatureLevel::Type - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	GEOMETRYFRAMEWORK_API virtual FMaterialRelevance GetMaterialRelevance(ERHIFeatureLevel::Type InFeatureLevel) const override;
+	                                                 ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(74,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(74,17): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(27,8): note: 在编译类模板“Chaos::TSphere”时
+	class TSphere final : public FImplicitObject
+	      ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Sphere.h(337,41): note: 查看对正在编译的 类 模板 实例化“Chaos::TSphere<Chaos::FReal,3>”的引用
+			return Chaos::FImplicitObjectPtr(new FSphere(Center, GetRadiusf()));
+			                                     ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(207,17): warning C4996: 'Chaos::FImplicitObject::GetMargin': Please use GetMarginf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetMargin() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(212,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Plane.h(42,16): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+	virtual FReal GetRadius() const override
+	              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Plane.h(42,16): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(926,5): note: 查看对正在编译的 类 模板 实例化“Chaos::TPlane<Chaos::FConvex::FRealType,3>”的引用
+				Ar << TmpPlanes;
+				^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Box.h(104,17): warning C4996: 'Chaos::FImplicitObject::GetRadius': Please use GetRadiusf instead. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+		virtual FReal GetRadius() const override
+		              ^
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Box.h(104,17): note: 模板实例化上下文(最早的实例化上下文)为
+D:\UE_5.8\Engine\Source\Runtime\Experimental\Chaos\Public\Chaos\Convex.h(966,23): note: 查看对正在编译的 类 模板 实例化“Chaos::TBox<Chaos::FConvex::FRealType,3>”的引用
+			TBox<FRealType,3>::SerializeAsAABB(Ar, LocalBoundingBox);
+			                   ^
+D:\UE_pro\Darkwell\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(823,70): warning C4305: “参数”: 从“double”到“float”截断
+  F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                                     ^
+D:\UE_pro\Darkwell\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(823,66): warning C4305: “参数”: 从“double”到“float”截断
+  F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                                 ^
+D:\UE_pro\Darkwell\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(823,62): warning C4305: “参数”: 从“double”到“float”截断
+  F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                             ^
+D:\UE_pro\Darkwell\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(1608,69): warning C4305: “参数”: 从“double”到“float”截断
+ F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                                    ^
+D:\UE_pro\Darkwell\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(1608,65): warning C4305: “参数”: 从“double”到“float”截断
+ F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                                ^
+D:\UE_pro\Darkwell\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(1608,61): warning C4305: “参数”: 从“double”到“float”截断
+ F.Room->SpawnTracked(Id,4,FVector(620,75,115),FLinearColor(.62,.42,.18),
+                                                            ^
+D:\UE_pro\Darkwell\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(2019,36): warning C4996: 'FImageUtils::CompressImageArray': Please use PNGCompressImageArray or ThumbnailCompressImageArray - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+   {TArray<uint8> PNG;FImageUtils::CompressImageArray(W,H,Data,PNG);FFileHelper::SaveArrayToFile(PNG,*Path);};
+                                   ^
+D:\UE_pro\Darkwell\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(2288,36): warning C4996: 'FImageUtils::CompressImageArray': Please use PNGCompressImageArray or ThumbnailCompressImageArray - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+   {TArray<uint8> PNG;FImageUtils::CompressImageArray(W,H,Data,PNG);FFileHelper::SaveArrayToFile(PNG,*Path);};
+                                   ^
+D:\UE_pro\Darkwell\Source\Darkwell\Private\Tests\DarkwellGrayObjectPolicyTests.cpp(2623,36): warning C4996: 'FImageUtils::CompressImageArray': Please use PNGCompressImageArray or ThumbnailCompressImageArray - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.
+   TArray<uint8> PNG; FImageUtils::CompressImageArray(768,768,View,PNG); FFileHelper::SaveArrayToFile(PNG,*(Dir/(FString(Stage)+TEXT(".png"))));
+                                   ^
+[2/4] Link [x64] UnrealEditor-Darkwell.lib
+  正在创建库 D:/UE_pro/Darkwell/Intermediate/Build/Win64/x64/UnrealEditor/Development/Darkwell/UnrealEditor-Darkwell.lib 和对象 D:/UE_pro/Darkwell/Intermediate/Build/Win64/x64/UnrealEditor/Development/Darkwell/UnrealEditor-Darkwell.exp
+[3/4] Link [x64] UnrealEditor-Darkwell.dll
+[4/4] WriteMetadata DarkwellEditor.target [NoUba]
+
+Total time in Unreal Build Accelerator local executor: 14.02 seconds
+Output binary: D:\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe
+
+Result: Succeeded
+Total execution time: 15.24 seconds
+Trace written to file C:\Users\defiler\AppData\Local\UnrealBuildTool\Trace.uba with size 6.5kb

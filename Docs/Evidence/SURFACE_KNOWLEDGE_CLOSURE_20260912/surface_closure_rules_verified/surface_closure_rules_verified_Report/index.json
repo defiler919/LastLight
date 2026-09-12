@@ -1,0 +1,2057 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "DESKTOP-IBLNS3N",
+			"instance": "71C9CE0A44CB458C6A1DE680CD75B1B6",
+			"instanceName": "DESKTOP-IBLNS3N-29004",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 10 (22H2) [10.0.19045.6466] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 2070 SUPER",
+			"cPUModel": "AMD Ryzen 9 3900X 12-Core Processor            ",
+			"rAMInGB": 32,
+			"renderMode": "D3D12_SM6",
+			"rHI": "D3D12 (SM6)",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.09.12-12.59.35",
+	"succeeded": 60,
+	"succeededWithWarnings": 2,
+	"failed": 2,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 94.907066345214844,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "CachedDiagnosticsMatchForcedDiagnostics",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.CachedDiagnosticsMatchForcedDiagnostics",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.85064119100570679,
+			"dateTime": "2026.09.12-12.57.59",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "CanonicalRasterMatchesOriginalSamples",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.CanonicalRasterMatchesOriginalSamples",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.41089999675750732,
+			"dateTime": "2026.09.12-12.58.00",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ConfirmedPersistsThroughRigidMotion",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.ConfirmedPersistsThroughRigidMotion",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.63121938705444336,
+			"dateTime": "2026.09.12-12.58.01",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ConfirmedWholeStopsSpanAndDenseObservationWork",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.ConfirmedWholeStopsSpanAndDenseObservationWork",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.4765332043170929,
+			"dateTime": "2026.09.12-12.58.01",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "CoverageEdgeNeverIsExpectedNegativeControl",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.CoverageEdgeNeverIsExpectedNegativeControl",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.29533100128173828,
+			"dateTime": "2026.09.12-12.58.02",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "CurrentLiveAtHistoryCapacity",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.CurrentLiveAtHistoryCapacity",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 2.2360935211181641,
+			"dateTime": "2026.09.12-12.58.02",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "DistantHistorySleepsAndWakesWithoutMutation",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.DistantHistorySleepsAndWakesWithoutMutation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.47290509939193726,
+			"dateTime": "2026.09.12-12.58.04",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ExistingHistoryNotIdentityCleared",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.ExistingHistoryNotIdentityCleared",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.87198460102081299,
+			"dateTime": "2026.09.12-12.58.05",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "FramePhysicalCacheMatchesGeometryOracle",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.FramePhysicalCacheMatchesGeometryOracle",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.2663131058216095,
+			"dateTime": "2026.09.12-12.58.06",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "IncrementalHistoryEvidenceMatchesFullUpdate",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.IncrementalHistoryEvidenceMatchesFullUpdate",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 3.6929550170898438,
+			"dateTime": "2026.09.12-12.58.06",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "InvalidCoverageDoesNotResetTentativeSession",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.InvalidCoverageDoesNotResetTentativeSession",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.21892419457435608,
+			"dateTime": "2026.09.12-12.58.10",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "{\"reveal_mode\":0,\"history_mode\":1,\"minimum_span_cm\":100.000,\"effective_span_cm\":100.000,\"observed_span_cm\":79.059,\"confirmed\":false,\"legal_samples\":453,\"tentative_samples\":453,\"history_eligible\":true,\"capture_eligible\":false}",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "JoinedOccupancyParityAndInvalidation",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation",
+			"tags": [],
+			"state": "Fail",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.49355730414390564,
+			"dateTime": "2026.09.12-12.58.10",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab ready furniture=0; controls: Darkwell.PropLab help",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab activated continuous coverage, no composite/stencil; 8 occluders; TSR unchanged; manualRoom=0",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellMovingPropLab: MOVING_RULES_RESET rule=SpatialEvidenceOnly enemy=0 timer=0 identities=9 inWorld=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=1 episode=1 reason=TEST_EPOCH_SCALING freezes=1 transform_rev=1 coverage_rev=0 grid_rev=1 proxy=75888 texture=240x136 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=2 episode=2 reason=TEST_EPOCH_SCALING freezes=2 transform_rev=1 coverage_rev=0 grid_rev=1 proxy=75900 texture=268x192 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogPhysics: Scale for /Game/Maps/L_ProjectFogPropGameplayLab.GrayObjectPolicy_13:PersistentLevel.DarkwellPropLabFurniture_10.Part0 has a component set to zero, which will result in a bad body instance. Scale:X=0.000 Y=0.000 Z=0.000 Package:/Game/Maps/L_ProjectFogPropGameplayLab",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogPhysics: Initialising Body : Scale3D is (nearly) zero: DarkwellPropLabFurniture_10 /Game/Maps/L_ProjectFogPropGameplayLab.GrayObjectPolicy_13:PersistentLevel.DarkwellPropLabFurniture_10.Part0 ",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogPhysics: Scale for /Game/Maps/L_ProjectFogPropGameplayLab.GrayObjectPolicy_13:PersistentLevel.DarkwellPropLabFurniture_10.Part0 has a component set to zero, which will result in a bad body instance. Scale:X=0.000 Y=0.000 Z=0.000 Package:/Game/Maps/L_ProjectFogPropGameplayLab",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogPhysics: Initialising Body : Scale3D is (nearly) zero: DarkwellPropLabFurniture_10 /Game/Maps/L_ProjectFogPropGameplayLab.GrayObjectPolicy_13:PersistentLevel.DarkwellPropLabFurniture_10.Part0 ",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Occupancy.Reuse.SingleBox epoch=1 episode=1 reason=TEST_EPOCH_SCALING freezes=1 transform_rev=1 coverage_rev=0 grid_rev=1 proxy=75958 texture=8x16 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Occupancy.Reuse.SingleBox epoch=2 episode=2 reason=TEST_EPOCH_SCALING freezes=2 transform_rev=1 coverage_rev=0 grid_rev=1 proxy=75970 texture=12x16 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Fixture explicitly selects single/compound geometry eligibility: The two values are not equal.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 1438,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Fixture retains actual single/compound physical geometry: The two values are not equal.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 1439,
+					"timestamp": "2026.09.12-12.58.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "OCCUPANCY_PARITY compared=31 joined=24; thin Whole/Partial, rotated/tilted/negative-scale, empty ROI/frame, cache capacity/hits, small/live fallback, duplicate indices, dirty/reuse/revision/coarse/world teardown",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.10"
+				}
+			],
+			"warnings": 4,
+			"errors": 2,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "MotionStateAndRevealPolicyIsolation",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.MotionStateAndRevealPolicyIsolation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.22074869275093079,
+			"dateTime": "2026.09.12-12.58.10",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PlanarProjectionMatchesOriginalSlab",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.PlanarProjectionMatchesOriginalSlab",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.097176104784011841,
+			"dateTime": "2026.09.12-12.58.11",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Planar slab parity: 65610 queries, 24 cached transforms, 66 fallbacks",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.11"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PlayStopResourceLifetime",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.PlayStopResourceLifetime",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 1.054595947265625,
+			"dateTime": "2026.09.12-12.58.11",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RepeatedHistoryEvidenceMatchesFullUpdate",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.RepeatedHistoryEvidenceMatchesFullUpdate",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 2.3277599811553955,
+			"dateTime": "2026.09.12-12.58.12",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "Repeated history geometry reuse hits=0 ownership reuse hits=0 coverage reuse hits=0 occupancy samples reused=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.14"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RepeatedPoseDiagnosticsMatchFullScan",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.RepeatedPoseDiagnosticsMatchFullScan",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 2.2921617031097412,
+			"dateTime": "2026.09.12-12.58.14",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ResetClearsOnlyTarget",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.ResetClearsOnlyTarget",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.21433639526367188,
+			"dateTime": "2026.09.12-12.58.16",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SixPolicyCombinationsCoexist",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.SixPolicyCombinationsCoexist",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.12496080249547958,
+			"dateTime": "2026.09.12-12.58.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SpatialPartialAppearanceBlendDoesNotControlKnowledge",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.SpatialPartialAppearanceBlendDoesNotControlKnowledge",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.45377200841903687,
+			"dateTime": "2026.09.12-12.58.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SpatialPartialDoesNotRequireConfirmation",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.SpatialPartialDoesNotRequireConfirmation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.20512799918651581,
+			"dateTime": "2026.09.12-12.58.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SpatialPartialFrozenMaskMatchesKnowledgeMask",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.SpatialPartialFrozenMaskMatchesKnowledgeMask",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.21007290482521057,
+			"dateTime": "2026.09.12-12.58.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SpatialPartialNeverNoHistory",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.SpatialPartialNeverNoHistory",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.18834620714187622,
+			"dateTime": "2026.09.12-12.58.18",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SpatialPartialStaticKeepsLegalCap",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsLegalCap",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.21262770891189575,
+			"dateTime": "2026.09.12-12.58.18",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SpatialPartialStaticKeepsObservedGrayRegion",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStaticKeepsObservedGrayRegion",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.21340440213680267,
+			"dateTime": "2026.09.12-12.58.18",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SpatialPartialStationaryOnlyNoMovingHistory",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.SpatialPartialStationaryOnlyNoMovingHistory",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.49708181619644165,
+			"dateTime": "2026.09.12-12.58.18",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "StaticNeverDoesNotRetainGray",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.StaticNeverDoesNotRetainGray",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.29471179842948914,
+			"dateTime": "2026.09.12-12.58.19",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "StaticPartialStationaryOnlyRetainsGray",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.StaticPartialStationaryOnlyRetainsGray",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.30362638831138611,
+			"dateTime": "2026.09.12-12.58.19",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "StaticWholeStationaryOnlyRetainsGray",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.StaticWholeStationaryOnlyRetainsGray",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.28856989741325378,
+			"dateTime": "2026.09.12-12.58.19",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WholeObjectBehindWallDoesNotConfirm",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectBehindWallDoesNotConfirm",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.20351569354534149,
+			"dateTime": "2026.09.12-12.58.20",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "{\"reveal_mode\":0,\"history_mode\":1,\"minimum_span_cm\":100.000,\"effective_span_cm\":100.000,\"observed_span_cm\":0.000,\"confirmed\":false,\"legal_samples\":0,\"tentative_samples\":0,\"history_eligible\":false,\"capture_eligible\":false}",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.20"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WholeObjectBelowThresholdNoHistory",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectBelowThresholdNoHistory",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.19896860420703888,
+			"dateTime": "2026.09.12-12.58.20",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "{\"reveal_mode\":0,\"history_mode\":1,\"minimum_span_cm\":100.000,\"effective_span_cm\":100.000,\"observed_span_cm\":79.059,\"confirmed\":false,\"legal_samples\":453,\"tentative_samples\":453,\"history_eligible\":true,\"capture_eligible\":false}",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.20"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WholeObjectConfirmedStaticHistory",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedStaticHistory",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.25560158491134644,
+			"dateTime": "2026.09.12-12.58.20",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WholeObjectConfirmedUsesLegalWallContact",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectConfirmedUsesLegalWallContact",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.26290100812911987,
+			"dateTime": "2026.09.12-12.58.20",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WholeObjectDoesNotExpandWorldCoverage",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectDoesNotExpandWorldCoverage",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.25548169016838074,
+			"dateTime": "2026.09.12-12.58.21",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WholeObjectFastSlowConfirmationEquivalent",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectFastSlowConfirmationEquivalent",
+			"tags": [],
+			"state": "Fail",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 7.1234736442565918,
+			"dateTime": "2026.09.12-12.58.21",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab ready furniture=0; controls: Darkwell.PropLab help",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellPropLab: PropLab activated continuous coverage, no composite/stencil; 8 occluders; TSR unchanged; manualRoom=0",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellMovingPropLab: MOVING_RULES_RESET rule=SpatialEvidenceOnly enemy=0 timer=0 identities=9 inWorld=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=1 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=1 transform_rev=1 coverage_rev=21 grid_rev=2 proxy=78415 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.22"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=1 episode=1 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=1 transform_rev=1 coverage_rev=33 grid_rev=2 proxy=78436 texture=240x136 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.22"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=2 reason=SWEPT_LEGAL_OBSERVATION freezes=1 transform_rev=1 coverage_rev=35 grid_rev=2 proxy=78451 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.23"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=2 reason=SWEPT_LEGAL_OBSERVATION freezes=2 transform_rev=1 coverage_rev=36 grid_rev=2 proxy=78415 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.23"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Stationary swept observation seals gray' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 348,
+					"timestamp": "2026.09.12-12.58.23"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Swept gray uses binary knowledge' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.58.23"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Fast/slow capture masks identical at all four rates' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.58.23"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=3 reason=SWEPT_LEGAL_OBSERVATION freezes=2 transform_rev=1 coverage_rev=37 grid_rev=2 proxy=78451 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.23"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=3 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=3 transform_rev=1 coverage_rev=56 grid_rev=2 proxy=78415 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=1 episode=1 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=1 transform_rev=1 coverage_rev=68 grid_rev=2 proxy=78564 texture=240x136 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=5 reason=SWEPT_LEGAL_OBSERVATION freezes=3 transform_rev=1 coverage_rev=70 grid_rev=2 proxy=78451 texture=256x144 uploads=3",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=4 reason=SWEPT_LEGAL_OBSERVATION freezes=4 transform_rev=1 coverage_rev=71 grid_rev=2 proxy=78415 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.24"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Stationary swept observation seals gray' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 348,
+					"timestamp": "2026.09.12-12.58.24"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Swept gray uses binary knowledge' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.58.24"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Fast/slow capture masks identical at all four rates' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.58.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=6 reason=SWEPT_LEGAL_OBSERVATION freezes=4 transform_rev=1 coverage_rev=72 grid_rev=2 proxy=78451 texture=256x144 uploads=3",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.24"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=5 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=5 transform_rev=1 coverage_rev=91 grid_rev=2 proxy=78415 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.25"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=1 episode=1 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=1 transform_rev=1 coverage_rev=103 grid_rev=2 proxy=78677 texture=240x136 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.25"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=8 reason=SWEPT_LEGAL_OBSERVATION freezes=5 transform_rev=1 coverage_rev=105 grid_rev=2 proxy=78451 texture=256x144 uploads=5",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.26"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=6 reason=SWEPT_LEGAL_OBSERVATION freezes=6 transform_rev=1 coverage_rev=106 grid_rev=2 proxy=78415 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.26"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Stationary swept observation seals gray' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 348,
+					"timestamp": "2026.09.12-12.58.26"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Swept gray uses binary knowledge' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.58.26"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Fast/slow capture masks identical at all four rates' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.58.26"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=9 reason=SWEPT_LEGAL_OBSERVATION freezes=6 transform_rev=1 coverage_rev=107 grid_rev=2 proxy=78451 texture=256x144 uploads=5",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.26"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=7 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=7 transform_rev=1 coverage_rev=126 grid_rev=2 proxy=78415 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Rotate.Cabinet epoch=1 episode=1 reason=VALID_OBSERVED_TO_UNOBSERVED freezes=1 transform_rev=1 coverage_rev=138 grid_rev=2 proxy=78790 texture=240x136 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.Moving.Cabinet epoch=2 episode=11 reason=SWEPT_LEGAL_OBSERVATION freezes=7 transform_rev=1 coverage_rev=140 grid_rev=2 proxy=78451 texture=256x144 uploads=7",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.27"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "LogDarkwellObjectMemory: MOVING_RULES_STALE_SEALED id=Lab.InWorld.Hidden.Cabinet epoch=1 episode=8 reason=SWEPT_LEGAL_OBSERVATION freezes=8 transform_rev=1 coverage_rev=141 grid_rev=2 proxy=78415 texture=256x144 uploads=1",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.27"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Stationary swept observation seals gray' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 348,
+					"timestamp": "2026.09.12-12.58.27"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Swept gray uses binary knowledge' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.58.27"
+				},
+				{
+					"event":
+					{
+						"type": "Error",
+						"message": "Expected 'Fast/slow capture masks identical at all four rates' to be true.",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "D:\\UE_pro\\Darkwell\\Source\\Darkwell\\Private\\Tests\\DarkwellGrayObjectPolicyTests.cpp",
+					"lineNumber": 349,
+					"timestamp": "2026.09.12-12.58.27"
+				}
+			],
+			"warnings": 0,
+			"errors": 12,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WholeObjectNeverNoHistoryResources",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectNeverNoHistoryResources",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.40156519412994385,
+			"dateTime": "2026.09.12-12.58.28",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WholeObjectStationaryOnlyNoMovingHistory",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectStationaryOnlyNoMovingHistory",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 1.3195236921310425,
+			"dateTime": "2026.09.12-12.58.28",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "WholeObjectThresholdConfirmsFullObject",
+			"fullTestPath": "Darkwell.PropLab.GrayObjectPolicy.WholeObjectThresholdConfirmsFullObject",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.27735358476638794,
+			"dateTime": "2026.09.12-12.58.30",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "AbandonCurrentObservationWithoutHistory",
+			"fullTestPath": "Darkwell.PropLab.HistoryPolicy.AbandonCurrentObservationWithoutHistory",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.008433997631072998,
+			"dateTime": "2026.09.12-12.58.30",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "AlwaysVisibleRotateParity",
+			"fullTestPath": "Darkwell.PropLab.HistoryPolicy.AlwaysVisibleRotateParity",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 9.1553535461425781,
+			"dateTime": "2026.09.12-12.58.30",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ExistingHistoryNotIdentityCleared",
+			"fullTestPath": "Darkwell.PropLab.HistoryPolicy.ExistingHistoryNotIdentityCleared",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.97996777296066284,
+			"dateTime": "2026.09.12-12.58.39",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "MultiObjectPolicyIsolation",
+			"fullTestPath": "Darkwell.PropLab.HistoryPolicy.MultiObjectPolicyIsolation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.26833310723304749,
+			"dateTime": "2026.09.12-12.58.40",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "NeverNoHistoricalResources",
+			"fullTestPath": "Darkwell.PropLab.HistoryPolicy.NeverNoHistoricalResources",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 3.3405821323394775,
+			"dateTime": "2026.09.12-12.58.41",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ProjectDefaultPreservesCurrentBehavior",
+			"fullTestPath": "Darkwell.PropLab.HistoryPolicy.ProjectDefaultPreservesCurrentBehavior",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 2.606846809387207,
+			"dateTime": "2026.09.12-12.58.44",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "StationaryOnlyContinuousLiveMotion",
+			"fullTestPath": "Darkwell.PropLab.HistoryPolicy.StationaryOnlyContinuousLiveMotion",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 2.5347824096679688,
+			"dateTime": "2026.09.12-12.58.46",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "StationaryOnlyNoMovingHistory",
+			"fullTestPath": "Darkwell.PropLab.HistoryPolicy.StationaryOnlyNoMovingHistory",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 1.0927369594573975,
+			"dateTime": "2026.09.12-12.58.49",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogRHICore: Total reserved resource allocated virtual size (258 GB) exceeds the budget (256 GB). Use `rhi.DumpMemory` and `rhi.DumpResourceMemory` console commands to investigate.",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.50"
+				}
+			],
+			"warnings": 1,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "StationaryOnlyRequiresFreshObservation",
+			"fullTestPath": "Darkwell.PropLab.HistoryPolicy.StationaryOnlyRequiresFreshObservation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 1.2919647693634033,
+			"dateTime": "2026.09.12-12.58.50",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "TransientLivePresentationPreservesAuthorityAndAA",
+			"fullTestPath": "Darkwell.PropLab.HistoryPolicy.TransientLivePresentationPreservesAuthorityAndAA",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.0085023976862430573,
+			"dateTime": "2026.09.12-12.58.51",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ThreeModesSpatialEvidenceAndNeverRemember",
+			"fullTestPath": "Darkwell.PropLab.Runtime.ThreeModesSpatialEvidenceAndNeverRemember",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.76475191116333008,
+			"dateTime": "2026.09.12-12.58.51",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "DefaultAndNoWorld",
+			"fullTestPath": "Darkwell.PropLab.Scope.DefaultAndNoWorld",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.0083227008581161499,
+			"dateTime": "2026.09.12-12.58.52",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "BoundaryOscillationAndExit",
+			"fullTestPath": "Darkwell.PropLab.SpatialMemory.BoundaryOscillationAndExit",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.026601497083902359,
+			"dateTime": "2026.09.12-12.58.52",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ConservativePresentationAA",
+			"fullTestPath": "Darkwell.PropLab.SpatialMemory.ConservativePresentationAA",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.011113900691270828,
+			"dateTime": "2026.09.12-12.58.52",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "EmptyVerificationNeverResurrects",
+			"fullTestPath": "Darkwell.PropLab.SpatialMemory.EmptyVerificationNeverResurrects",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.013710901141166687,
+			"dateTime": "2026.09.12-12.58.52",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "GenerationIsolation",
+			"fullTestPath": "Darkwell.PropLab.SpatialMemory.GenerationIsolation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.012528803199529648,
+			"dateTime": "2026.09.12-12.58.52",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "PartialDiscoveryPersists",
+			"fullTestPath": "Darkwell.PropLab.SpatialMemory.PartialDiscoveryPersists",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.010671596974134445,
+			"dateTime": "2026.09.12-12.58.52",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "IndependentLegalEvidence",
+			"fullTestPath": "Darkwell.PropLab.Stale.IndependentLegalEvidence",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.010543901473283768,
+			"dateTime": "2026.09.12-12.58.52",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "ModesShareMonotonicAuthority",
+			"fullTestPath": "Darkwell.PropLab.Stale.ModesShareMonotonicAuthority",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.011977501213550568,
+			"dateTime": "2026.09.12-12.58.52",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "OcclusionAndBoundaryJitter",
+			"fullTestPath": "Darkwell.PropLab.Stale.OcclusionAndBoundaryJitter",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.022833902388811111,
+			"dateTime": "2026.09.12-12.58.52",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "RuntimeOldSnapshotOwnership",
+			"fullTestPath": "Darkwell.PropLab.Stale.RuntimeOldSnapshotOwnership",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.38993939757347107,
+			"dateTime": "2026.09.12-12.58.52",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "AxisMembership",
+			"fullTestPath": "Darkwell.UnknownPartial.AxisMembership",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 0.015977099537849426,
+			"dateTime": "2026.09.12-12.58.53",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SampleCut",
+			"fullTestPath": "Darkwell.UnknownPartial.SampleCut",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 20.756767272949219,
+			"dateTime": "2026.09.12-12.58.53",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "OUTSIDE_FINE_REFERENCE facts=0 known_aa=0 unknown_unused_aa=1396",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.54"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.56"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=1986 unpadded_dips=1974 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.56"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_CAP_DIAGNOSTIC quads=440 axis_x=357 axis_y=177",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.56"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=A fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.57"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=1986 unpadded_dips=1974 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.58.59"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=B fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.00"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.02"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=1986 unpadded_dips=1974 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.03"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=C fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.03"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.05"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.06"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=A_Rect fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.06"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.08"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.09"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=B_Rect fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.10"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=07_rotated_resweep probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.12"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "ROTATED_FILTER stage=09_no_resurrection probes=2060 unpadded_dips=2047 submitted_dips=0",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.13"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_PARTIAL_CUT sequence=C_Rect fine=240x136 no_resurrection=1",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.13"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "TemporalSurface",
+			"fullTestPath": "Darkwell.UnknownPartial.TemporalSurface",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 11.024252891540527,
+			"dateTime": "2026.09.12-12.59.14",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=01_gray engine_frame=1165 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.17"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=07_rotated_resweep engine_frame=1260 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.21"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=08_live_transaction engine_frame=1286 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.22"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=08b_left_blocked engine_frame=1301 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.22"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=08c_unblock_first_frame engine_frame=1302 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.22"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=09_no_resurrection engine_frame=1312 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.23"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "TEMPORAL_SURFACE stage=12_rotated_reobserved engine_frame=1352 aa=4",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.25"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "SpatialPartial",
+			"fullTestPath": "Darkwell.UnknownRegion.SpatialPartial",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 4.6310062408447266,
+			"dateTime": "2026.09.12-12.59.25",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=SpatialPartial sequence=A passed_old_resurrection=0 revision=6",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.26"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=SpatialPartial sequence=B passed_old_resurrection=0 revision=6",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.28"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=SpatialPartial sequence=C passed_old_resurrection=0 revision=8",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.29"
+				}
+			],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "Whole",
+			"fullTestPath": "Darkwell.UnknownRegion.Whole",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"71C9CE0A44CB458C6A1DE680CD75B1B6"
+			],
+			"duration": 5.493746280670166,
+			"dateTime": "2026.09.12-12.59.29",
+			"entries": [
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=Whole sequence=A passed_old_resurrection=0 revision=6",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.31"
+				},
+				{
+					"event":
+					{
+						"type": "Warning",
+						"message": "LogHttp: HTTP request timed out after 3.00 seconds URL=https://www.google.com/generate_204",
+						"context": "log",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.32"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=Whole sequence=B passed_old_resurrection=0 revision=6",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.33"
+				},
+				{
+					"event":
+					{
+						"type": "Info",
+						"message": "UNKNOWN_REGION mode=Whole sequence=C passed_old_resurrection=0 revision=8",
+						"context": "",
+						"artifact": "00000000000000000000000000000000"
+					},
+					"filename": "",
+					"lineNumber": -1,
+					"timestamp": "2026.09.12-12.59.35"
+				}
+			],
+			"warnings": 1,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

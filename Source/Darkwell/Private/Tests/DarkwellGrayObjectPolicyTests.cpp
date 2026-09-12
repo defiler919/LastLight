@@ -1108,8 +1108,10 @@ bool FDarkwellPresentationResidency::RunTest(const FString&)
       TestEqual(TEXT("New texture receives current pixels"),V->Render.UploadedTextureSignature,V->TextureSignature);
       if(V->Render.Texture->GetResource())
       {
+       FlushRenderingCommands();
        TArray<FFloat16Color> Readback;
        const FTextureRHIRef Texture=V->Render.Texture->GetResource()->TextureRHI;
+       if(!TestTrue(TEXT("Rebuilt mirror RHI is initialized before readback"),Texture.IsValid()))return false;
        const FIntPoint Size=Record->FineHistory.GetSize();
        ENQUEUE_RENDER_COMMAND(A0ReadCurrentTexture)([Texture,Size,&Readback](FRHICommandListImmediate& RHICmdList)
        { RHICmdList.ReadSurfaceFloatData(Texture,FIntRect(0,0,Size.X,Size.Y),Readback,ECubeFace::CubeFace_PosX,0,0); });
@@ -1409,16 +1411,39 @@ bool FDarkwellJoinedOccupancyParity::RunTest(const FString&)
   TestEqual(TEXT("Sparse coarse mapping stays serial"),Scene.JoinedOccupancyBuildsForTesting,BeforeJoined+1);
   ++Compared;
  }
+ // Exercise BOTH the single-primitive reuse path and compound fallback. The
+ // default cabinet has three primitives and intentionally cannot reuse this
+ // single-primitive cache; it was previously the only fixture here.
+ const FName SingleId(TEXT("Occupancy.Reuse.SingleBox"));auto* Single=F.World->SpawnActor<AActor>();
+ auto* Mesh=NewObject<UStaticMeshComponent>(Single);Single->SetRootComponent(Mesh);Single->AddInstanceComponent(Mesh);
+ Mesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Cube.Cube")));Mesh->SetMobility(EComponentMobility::Movable);Mesh->RegisterComponent();Single->SetActorLocation({-300,450,50});
+ auto* Memory=NewObject<UDarkwellRememberablePropComponent>(Single);Single->AddInstanceComponent(Memory);Memory->bUseSpatialMemory=true;Memory->ConfigureStableId(SingleId);Memory->AddMemoryPrimitive(Mesh);Memory->RegisterComponent();
+ auto* Policy=NewObject<USightWeaveObjectPolicyComponent>(Single);Single->AddInstanceComponent(Policy);
+ Policy->bOverrideRevealMode=true;Policy->RevealMode=Reveal::SpatialPartial;Policy->bOverrideHistoryMode=true;Policy->HistoryMode=History::StationaryOnly;
+ Policy->RegisterComponent();Single->DispatchBeginPlay();
+ if(!TestTrue(TEXT("Explicit one-box source registered through production API"),Scene.RegisterRememberable(Memory,Policy)))return false;
+ F.Face(90);F.Step(2);Scene.bUseFrameOccupancy=true;
+ TestEqual(TEXT("Real observation initializes the one-box primitive model"),Scene.Tracked.FindChecked(SingleId).CurrentLive.Parts.Num(),1);
+ for(FName FixtureId:{Id,SingleId})
+ {
  Scene.FrameOccupancy.Reset(); Scene.FrameOccupancyPoints.Reset();
- Scene.ResetTrackedRevealPolicyForLab(Id,Reveal::SpatialPartial,100,History::StationaryOnly);
- if(!TestTrue(TEXT("Seed records for production dirty/coarse path"),Scene.ConfigureHistoricalEpochCountForTesting(Id,2))) return false;
- auto& Prop=Scene.Tracked.FindChecked(Id);
+ // Lab reset respawns its furniture archetype; keep our registered one-box actor.
+ if(FixtureId==Id)Scene.ResetTrackedRevealPolicyForLab(FixtureId,Reveal::SpatialPartial,100,History::StationaryOnly);
+ if(!TestTrue(TEXT("Seed multiple sealed records for production geometry reuse"),Scene.ConfigureHistoricalEpochCountForTesting(FixtureId,2))) return false;
+ auto& Prop=Scene.Tracked.FindChecked(FixtureId);
+ TestTrue(TEXT("Fixture enters the multiple-history reuse path"),Prop.History.GetRecords().Num()-(Prop.History.GetCurrentIndex()!=INDEX_NONE?1:0)>1);
  auto& Record=Prop.History.GetMutableRecords()[0];
  auto& Visual=Prop.Visuals.FindChecked(Record.Epoch);
+ // Synthetic SpatialPartial history may use the coarse record (zero per-part
+ // records). Match the production <=1 gate, and independently require the
+ // registered physical geometry to contain exactly one box in that fixture.
+ const bool SinglePrimitive=FixtureId==SingleId;
+ TestEqual(TEXT("Fixture explicitly selects single/compound geometry eligibility"),Record.Primitives.Num()<=1,SinglePrimitive);
+ TestEqual(TEXT("Fixture retains actual single/compound physical geometry"),Visual.PartGeometry.Num()==1,SinglePrimitive);
  const auto CaptureBefore=Record.LastLegalCaptureMask;
  const auto FineBefore=Record.FineHistory.GetSamples();
  TArray<FDarkwellHistoryGridV2::FSample> Samples; Samples.Append(FineBefore.GetData(),FineBefore.Num());
- FSnapshot Physical; Physical.StableId=Id; Physical.Bounds=Record.FineHistory.GetBounds();
+ FSnapshot Physical; Physical.StableId=FixtureId; Physical.Bounds=Record.FineHistory.GetBounds();
  Physical.Geometry=Visual.PartGeometry; Scene.FrameOccupancy.Add(Physical);
  Visual.ProcessedGeometryRevision=0; Visual.ProcessedOwnershipRevision=0;
  Visual.CachedFineOccupied.Reset(); Visual.CachedCoarseOccupied.Reset();
@@ -1454,7 +1479,8 @@ bool FDarkwellJoinedOccupancyParity::RunTest(const FString&)
   Visual=Before; TArray<int32> ReusedDirty,ReusedPhysical;
   Scene.BuildGeometryDirtyIndices(Prop,Record,Visual,ReusedDirty,ReusedPhysical);
   TestTrue(TEXT("Geometry cache replay retains exact fine output and lists"),Visual.CachedFineOccupied==SerialVisual.CachedFineOccupied && ReusedDirty==SerialDirty && ReusedPhysical==SerialPhysical);
-  TestEqual(TEXT("Geometry reuse dispatches no duplicate worker batch"),Scene.JoinedOccupancyBuildsForTesting,JoinedCount);
+  if(SinglePrimitive)TestEqual(TEXT("Geometry reuse dispatches no duplicate worker batch"),Scene.JoinedOccupancyBuildsForTesting,JoinedCount);
+  else TestEqual(TEXT("Compound geometry retains the exact worker fallback"),Scene.JoinedOccupancyBuildsForTesting,JoinedCount+(ReusedPhysical.IsEmpty()?0:1));
   Visual=SerialVisual; ++Compared;
  }
  TestTrue(TEXT("Occupancy never changes captured knowledge mask"),Record.LastLegalCaptureMask==CaptureBefore);
@@ -1463,6 +1489,7 @@ bool FDarkwellJoinedOccupancyParity::RunTest(const FString&)
   const auto& A=Samples[I]; const auto& B=Record.FineHistory.GetSamples()[I];
   if(!TestTrue(TEXT("Occupancy does not write fine authority fields"),A.State==B.State && A.Opacity==B.Opacity && A.InitialRemembered==B.InitialRemembered
    && A.FrozenAAEnvelope==B.FrozenAAEnvelope && A.EmptyDwell==B.EmptyDwell && A.bVerifiedEmpty==B.bVerifiedEmpty)) return false;
+ }
  }
  TestTrue(TEXT("Non-vacuous joined occupancy coverage"),Scene.JoinedOccupancyBuildsForTesting>=12);
  AddInfo(FString::Printf(TEXT("OCCUPANCY_PARITY compared=%d joined=%d; thin Whole/Partial, rotated/tilted/negative-scale, empty ROI/frame, cache capacity/hits, small/live fallback, duplicate indices, dirty/reuse/revision/coarse/world teardown"),Compared,Scene.JoinedOccupancyBuildsForTesting));
@@ -1969,8 +1996,10 @@ bool FDarkwellUnknownRegionContract::RunTest(const FString& ModeName)
   auto Snapshot=[&](const TCHAR* Stage)
   {
    if(GUsingNullRHI) return;
+   FlushRenderingCommands();
    const auto Size=Region->GetSize(); TArray<FColor> Pixels;
    const FTextureRHIRef Texture=Region->GetPresentationTexture()->GetResource()->TextureRHI;
+   if(!TestTrue(TEXT("Unknown region RHI is initialized before readback"),Texture.IsValid()))return;
    ENQUEUE_RENDER_COMMAND(UnknownReadAuthorityMirror)([Texture,Size,&Pixels](FRHICommandListImmediate& RHICmdList)
     {RHICmdList.ReadSurfaceData(Texture,FIntRect(0,0,Size.X,Size.Y),Pixels,FReadSurfaceDataFlags(RCM_UNorm));});
    FlushRenderingCommands();
@@ -2216,12 +2245,16 @@ bool FDarkwellUnknownPartialCut::RunTest(const FString&)
    TestTrue(*FString::Printf(TEXT("No double gray contributors %s %s"),Sequence,Stage),Scene.GetMaxOverlapContributorsForTesting(Id)<=1);
    TestTrue(*FString::Printf(TEXT("No double cap contributors %s %s"),Sequence,Stage),Scene.GetMaxCapContributorsForTesting(Id)<=1);
    if(GUsingNullRHI) return;
+   // Texture creation is queued on the render thread. Drain it BEFORE copying
+   // TextureRHI; flushing after capturing a null reference cannot repair it.
+   FlushRenderingCommands();
    for(const auto& Pair:P.Visuals)
    {
     const auto& V=Pair.Value;
     if(!V.Render.Texture.IsValid() || V.SubmittedPresentation.IsEmpty()) continue;
     const FIntPoint TS(V.Render.Texture->GetSizeX(),V.Render.Texture->GetSizeY());
     const FTextureRHIRef Tex=V.Render.Texture->GetResource()->TextureRHI;
+    if(!TestTrue(TEXT("Fine mirror RHI is initialized before readback"),Tex.IsValid()))return;
     TArray<FFloat16Color> Readback;
     ENQUEUE_RENDER_COMMAND(UnknownPartialReadFineMirror)([Tex,TS,&Readback](FRHICommandListImmediate& Cmd)
      {Cmd.ReadSurfaceFloatData(Tex,FIntRect(0,0,TS.X,TS.Y),Readback,ECubeFace::CubeFace_PosX,0,0);});

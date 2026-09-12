@@ -126,7 +126,7 @@ bool ADarkwellObjectMemoryScene::RegisterRememberable(
   if(Resolved.HistoryMode!=ESightWeaveHistoryMode::StationaryOnly)return false;
   const bool Registered=GetWorld()->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->RegisterFixedBox(
    Memory->GetMemoryPrimitives()[0],Memory->GetStableId(),Memory->GetRememberedTint(),false,
-   Resolved.RevealMode==ESightWeaveRevealMode::WholeObjectAfterSpan?Resolved.MinimumObservedSpanCm:0,uint32(Memory->SurfaceContentVersion));
+   Resolved.RevealMode==ESightWeaveRevealMode::WholeObjectAfterSpan?Resolved.MinimumObservedSpanCm:-1,uint32(Memory->SurfaceContentVersion));
   if(Registered)FixedSurfaceIds.Add(Memory->GetStableId());return Registered;
  }
 	FTrackedProp* Existing=Tracked.Find(Memory->GetStableId());

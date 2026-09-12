@@ -1,0 +1,18 @@
+{
+  "run": "surface_closure_fixture_verified",
+  "selector": "Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation+Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale",
+  "exit_code": 0,
+  "wall_seconds": 32.6829635,
+  "total": 2,
+  "clean": 2,
+  "warnings": 0,
+  "failed": 0,
+  "not_run": 0,
+  "duration": 0.6435431241989136,
+  "severe_lines": 0,
+  "requested_rhi": "D3D12/SM6",
+  "rhi_evidence": [
+    "LogInit: Command Line: -unattended -nop4 -nosplash -d3d12 -sm6 -NoSound -ExecCmds=\"Automation RunTests Darkwell.PropLab.GrayObjectPolicy.JoinedOccupancyParityAndInvalidation+Darkwell.SightWeave.SurfaceKnowledge.ApartmentScale\" -TestExit=\"Automation Test Queue Empty\" -ReportExportPath=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_fixture_verified\\surface_closure_fixture_verified_Report -abslog=D:\\UE_pro\\Darkwell\\Saved\\GrayObjectPolicy\\surface_closure_fixture_verified\\surface_closure_fixture_verified.log"
+  ],
+  "passed": true
+}

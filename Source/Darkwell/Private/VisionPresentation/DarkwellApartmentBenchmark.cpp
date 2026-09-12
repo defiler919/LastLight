@@ -1,5 +1,6 @@
 #include "VisionPresentation/DarkwellApartmentBenchmark.h"
 #include "VisionPresentation/DarkwellStaticEnvironmentSubsystem.h"
+#include "VisionPresentation/DarkwellSurfaceKnowledgeSubsystem.h"
 #include "VisionPresentation/DarkwellObjectMemoryScene.h"
 #include "VisionPresentation/DarkwellGrayPolicyLab.h"
 #include "VisionPresentation/DarkwellFogVisualSubsystem.h"
@@ -28,7 +29,7 @@ namespace
 {
 // Exact pose-paired diagnostic, separate from the real-input 30 second run.
 // Both processes build the same history before choosing the measured heading.
-bool TickPaired(UWorld* W,ADarkwellObjectMemoryScene* S,bool Gray)
+bool TickPaired(UWorld* W,ADarkwellObjectMemoryScene* S,bool Gray,bool Route)
 {
  auto* PC=Cast<ADarkwellPlayerController>(UGameplayStatics::GetPlayerController(W,0));
  auto* P=PC?Cast<ADarkwellCharacter>(PC->GetPawn()):nullptr;
@@ -64,7 +65,7 @@ bool TickPaired(UWorld* W,ADarkwellObjectMemoryScene* S,bool Gray)
   const auto* Fog=W->GetSubsystem<UDarkwellFogVisualSubsystem>();const auto& Src=Fog->GetPublishedSource();
   const auto* D=GetDefault<ADarkwellSightWeaveGrayPolicyLabDirector>();
   const auto Pos=P->GetActorLocation();
-  Lines+=FString::Printf(TEXT("{\"step\":%d,\"wall_ms\":%.4f,\"x\":%.6f,\"y\":%.6f,\"yaw\":%.4f,\"source_x\":%.6f,\"source_y\":%.6f,\"engine\":%s,\"static\":%s,\"memory\":%s}\n"),Step-360,(Now-Prev)*1000,Pos.X,Pos.Y,P->GetActorRotation().Yaw,Src.BodyCenter.X,Src.BodyCenter.Y,*D->GetFrameEnvironmentForTesting(),*W->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->GetTelemetry(),*S->GetHistoryRuntimeTelemetry());
+  Lines+=FString::Printf(TEXT("{\"step\":%d,\"wall_ms\":%.4f,\"x\":%.6f,\"y\":%.6f,\"yaw\":%.4f,\"source_x\":%.6f,\"source_y\":%.6f,\"engine\":%s,\"static\":%s,\"surface\":%s,\"memory\":%s}\n"),Step-360,(Now-Prev)*1000,Pos.X,Pos.Y,P->GetActorRotation().Yaw,Src.BodyCenter.X,Src.BodyCenter.Y,*D->GetFrameEnvironmentForTesting(),*W->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->GetTelemetry(),*W->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->GetTelemetry(),*S->GetHistoryRuntimeTelemetry());
  }
  Prev=Now;
  FVector Pos;float Yaw;
@@ -77,6 +78,11 @@ bool TickPaired(UWorld* W,ADarkwellObjectMemoryScene* S,bool Gray)
  else
  {
   Pos={-330+25*FMath::Sin((Step-360)*PI/60.0),150,92};Yaw=Gray?20:200;
+  if(Route)
+  {
+   const FVector Poses[]={{-160,-260,92},{-330,150,92},{350,100,92},{405,320,92},{-350,280,92},{0,-300,92}};
+   const int Sample=FMath::Max(0,Step-360);Pos=Poses[FMath::Min(5,Sample/40)];Pos.X+=10*FMath::Sin(Sample*PI/20.0);Yaw=Sample*9.;
+  }
  }
  const FRotator R(0,Yaw,0);P->SetActorLocationAndRotation(Pos,R,false,nullptr,ETeleportType::TeleportPhysics);P->AimAtWorldPoint(Pos+R.Vector()*1000);
  ++Step;return true;
@@ -89,7 +95,7 @@ bool Darkwell::ApartmentBenchmark::Tick(UWorld* W,ADarkwellObjectMemoryScene* S)
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
  static FString Mode; static const bool Enabled=FParse::Value(FCommandLine::Get(),TEXT("ApartmentBench="),Mode);
  if(!Enabled) return true;
- if(Mode==TEXT("PairGray") || Mode==TEXT("PairUnknown"))return TickPaired(W,S,Mode==TEXT("PairGray"));
+ if(Mode==TEXT("PairGray") || Mode==TEXT("PairUnknown") || Mode==TEXT("PairRoute"))return TickPaired(W,S,Mode==TEXT("PairGray"),Mode==TEXT("PairRoute"));
  auto* PC=Cast<ADarkwellPlayerController>(UGameplayStatics::GetPlayerController(W,0));
  auto* P=PC?Cast<ADarkwellCharacter>(PC->GetPawn()):nullptr;
  if(!P || !GEngine->GameViewport || !GEngine->GameViewport->Viewport) return true;
@@ -150,9 +156,10 @@ bool Darkwell::ApartmentBenchmark::Tick(UWorld* W,ADarkwellObjectMemoryScene* S)
   const auto* Fog=W->GetSubsystem<UDarkwellFogVisualSubsystem>();const auto& FD=Fog->GetDiagnostics();
   static uint64 PreviousComputations=0,PreviousHits=0;
   const FString StaticJson=TEXT("\"static\":")+W->GetSubsystem<UDarkwellStaticEnvironmentSubsystem>()->GetTelemetry()+TEXT(",");
+  const FString SurfaceJson=TEXT("\"surface\":")+W->GetSubsystem<UDarkwellSurfaceKnowledgeSubsystem>()->GetTelemetry()+TEXT(",");
   const FString FogJson=FString::Printf(TEXT("\"fog\":{\"authority\":%llu,\"draws\":%llu,\"segments\":%d,\"computations_delta\":%llu,\"cache_hits_delta\":%llu,\"hard_build_last_us\":%.3f,\"hard_queries\":%llu,\"hard_prepare_us\":%.3f,\"hard_raster_us\":%.3f,\"hard_upload_us\":%.3f},"),FD.LastAuthorityRevision,FD.CoverageDrawCount,FD.CachedOccluderSegmentCount,Fog->GetCoverageComputationsForTesting()-PreviousComputations,Fog->GetCoverageCacheHitsForTesting()-PreviousHits,Fog->GetHardPresentationMicroseconds(),Fog->GetHardPresentationQueries(),Fog->GetHardPresentationPhases().X,Fog->GetHardPresentationPhases().Y,Fog->GetHardPresentationPhases().Z);
   PreviousComputations=Fog->GetCoverageComputationsForTesting();PreviousHits=Fog->GetCoverageCacheHitsForTesting();
-  Lines+=FString::Printf(TEXT("{%s\"t\":%.4f,\"wall_ms\":%.4f,\"x\":%.3f,\"y\":%.3f,\"yaw\":%.3f,\"key\":\"%s\",\"engine\":%s,\"memory\":%s}\n"),*(StaticJson+FogJson),T,Wall,Last.X,Last.Y,P->GetActorRotation().Yaw,*Held.ToString(),*D->GetFrameEnvironmentForTesting(),*S->GetHistoryRuntimeTelemetry());++Frames;
+  Lines+=FString::Printf(TEXT("{%s\"t\":%.4f,\"wall_ms\":%.4f,\"x\":%.3f,\"y\":%.3f,\"yaw\":%.3f,\"key\":\"%s\",\"engine\":%s,\"memory\":%s}\n"),*(StaticJson+SurfaceJson+FogJson),T,Wall,Last.X,Last.Y,P->GetActorRotation().Yaw,*Held.ToString(),*D->GetFrameEnvironmentForTesting(),*S->GetHistoryRuntimeTelemetry());++Frames;
  }
  if(T>=60)
  {
